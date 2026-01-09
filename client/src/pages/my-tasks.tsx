@@ -85,8 +85,66 @@ export default function MyTasks() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      if (selectedTask) {
+        refetchSelectedTask();
+      }
     },
   });
+
+  const addSubtaskMutation = useMutation({
+    mutationFn: async ({ taskId, title }: { taskId: string; title: string }) => {
+      return apiRequest("POST", `/api/tasks/${taskId}/subtasks`, { title });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      if (selectedTask) {
+        refetchSelectedTask();
+      }
+    },
+  });
+
+  const toggleSubtaskMutation = useMutation({
+    mutationFn: async ({ subtaskId, completed }: { subtaskId: string; completed: boolean }) => {
+      return apiRequest("PATCH", `/api/subtasks/${subtaskId}`, { completed });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      if (selectedTask) {
+        refetchSelectedTask();
+      }
+    },
+  });
+
+  const deleteSubtaskMutation = useMutation({
+    mutationFn: async (subtaskId: string) => {
+      return apiRequest("DELETE", `/api/subtasks/${subtaskId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      if (selectedTask) {
+        refetchSelectedTask();
+      }
+    },
+  });
+
+  const addCommentMutation = useMutation({
+    mutationFn: async ({ taskId, body }: { taskId: string; body: string }) => {
+      return apiRequest("POST", `/api/tasks/${taskId}/comments`, { body });
+    },
+    onSuccess: () => {
+      if (selectedTask) {
+        refetchSelectedTask();
+      }
+    },
+  });
+
+  const refetchSelectedTask = async () => {
+    if (selectedTask) {
+      const response = await fetch(`/api/tasks/${selectedTask.id}`);
+      const updatedTask = await response.json();
+      setSelectedTask(updatedTask);
+    }
+  };
 
   const filteredTasks = tasks?.filter((task) => {
     if (statusFilter !== "all" && task.status !== statusFilter) return false;
@@ -203,6 +261,18 @@ export default function MyTasks() {
         onOpenChange={(open) => !open && setSelectedTask(null)}
         onUpdate={(taskId, data) => {
           updateTaskMutation.mutate({ taskId, data });
+        }}
+        onAddSubtask={(taskId, title) => {
+          addSubtaskMutation.mutate({ taskId, title });
+        }}
+        onToggleSubtask={(subtaskId, completed) => {
+          toggleSubtaskMutation.mutate({ subtaskId, completed });
+        }}
+        onDeleteSubtask={(subtaskId) => {
+          deleteSubtaskMutation.mutate(subtaskId);
+        }}
+        onAddComment={(taskId, body) => {
+          addCommentMutation.mutate({ taskId, body });
         }}
       />
     </div>

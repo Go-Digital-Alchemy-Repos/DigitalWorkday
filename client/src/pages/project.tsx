@@ -66,8 +66,66 @@ export default function ProjectPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      if (selectedTask) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", selectedTask.id] });
+      }
     },
   });
+
+  const addSubtaskMutation = useMutation({
+    mutationFn: async ({ taskId, title }: { taskId: string; title: string }) => {
+      return apiRequest("POST", `/api/tasks/${taskId}/subtasks`, { title });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      if (selectedTask) {
+        refetchSelectedTask();
+      }
+    },
+  });
+
+  const toggleSubtaskMutation = useMutation({
+    mutationFn: async ({ subtaskId, completed }: { subtaskId: string; completed: boolean }) => {
+      return apiRequest("PATCH", `/api/subtasks/${subtaskId}`, { completed });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      if (selectedTask) {
+        refetchSelectedTask();
+      }
+    },
+  });
+
+  const deleteSubtaskMutation = useMutation({
+    mutationFn: async (subtaskId: string) => {
+      return apiRequest("DELETE", `/api/subtasks/${subtaskId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      if (selectedTask) {
+        refetchSelectedTask();
+      }
+    },
+  });
+
+  const addCommentMutation = useMutation({
+    mutationFn: async ({ taskId, body }: { taskId: string; body: string }) => {
+      return apiRequest("POST", `/api/tasks/${taskId}/comments`, { body });
+    },
+    onSuccess: () => {
+      if (selectedTask) {
+        refetchSelectedTask();
+      }
+    },
+  });
+
+  const refetchSelectedTask = async () => {
+    if (selectedTask) {
+      const response = await fetch(`/api/tasks/${selectedTask.id}`);
+      const updatedTask = await response.json();
+      setSelectedTask(updatedTask);
+    }
+  };
 
   const handleAddTask = (sectionId?: string) => {
     setSelectedSectionId(sectionId);
@@ -257,6 +315,18 @@ export default function ProjectPage() {
         onOpenChange={(open) => !open && setSelectedTask(null)}
         onUpdate={(taskId, data) => {
           updateTaskMutation.mutate({ taskId, data });
+        }}
+        onAddSubtask={(taskId, title) => {
+          addSubtaskMutation.mutate({ taskId, title });
+        }}
+        onToggleSubtask={(subtaskId, completed) => {
+          toggleSubtaskMutation.mutate({ subtaskId, completed });
+        }}
+        onDeleteSubtask={(subtaskId) => {
+          deleteSubtaskMutation.mutate(subtaskId);
+        }}
+        onAddComment={(taskId, body) => {
+          addCommentMutation.mutate({ taskId, body });
         }}
       />
 

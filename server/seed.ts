@@ -31,17 +31,38 @@ async function seed() {
     passwordHash: "$2a$10$somehash",
   }).returning();
 
-  const [member] = await db.insert(users).values({
-    id: "member-user-id",
-    email: "member@demo.com",
-    name: "Team Member",
+  const [sarah] = await db.insert(users).values({
+    id: "sarah-user-id",
+    email: "sarah@demo.com",
+    name: "Sarah Chen",
     passwordHash: "$2a$10$somehash",
   }).returning();
 
-  const [guest] = await db.insert(users).values({
-    id: "guest-user-id",
-    email: "guest@demo.com",
-    name: "Guest User",
+  const [marcus] = await db.insert(users).values({
+    id: "marcus-user-id",
+    email: "marcus@demo.com",
+    name: "Marcus Johnson",
+    passwordHash: "$2a$10$somehash",
+  }).returning();
+
+  const [emily] = await db.insert(users).values({
+    id: "emily-user-id",
+    email: "emily@demo.com",
+    name: "Emily Rodriguez",
+    passwordHash: "$2a$10$somehash",
+  }).returning();
+
+  const [alex] = await db.insert(users).values({
+    id: "alex-user-id",
+    email: "alex@demo.com",
+    name: "Alex Kim",
+    passwordHash: "$2a$10$somehash",
+  }).returning();
+
+  const [jordan] = await db.insert(users).values({
+    id: "jordan-user-id",
+    email: "jordan@demo.com",
+    name: "Jordan Taylor",
     passwordHash: "$2a$10$somehash",
   }).returning();
 
@@ -53,8 +74,11 @@ async function seed() {
 
   await db.insert(workspaceMembers).values([
     { workspaceId: workspace.id, userId: owner.id, role: "owner", status: "active" },
-    { workspaceId: workspace.id, userId: member.id, role: "member", status: "active" },
-    { workspaceId: workspace.id, userId: guest.id, role: "guest", status: "active" },
+    { workspaceId: workspace.id, userId: sarah.id, role: "admin", status: "active" },
+    { workspaceId: workspace.id, userId: marcus.id, role: "member", status: "active" },
+    { workspaceId: workspace.id, userId: emily.id, role: "member", status: "active" },
+    { workspaceId: workspace.id, userId: alex.id, role: "member", status: "active" },
+    { workspaceId: workspace.id, userId: jordan.id, role: "guest", status: "active" },
   ]);
 
   const [engineeringTeam] = await db.insert(teams).values({
@@ -67,10 +91,19 @@ async function seed() {
     name: "Design",
   }).returning();
 
+  const [marketingTeam] = await db.insert(teams).values({
+    workspaceId: workspace.id,
+    name: "Marketing",
+  }).returning();
+
   await db.insert(teamMembers).values([
     { teamId: engineeringTeam.id, userId: owner.id },
-    { teamId: engineeringTeam.id, userId: member.id },
+    { teamId: engineeringTeam.id, userId: sarah.id },
+    { teamId: engineeringTeam.id, userId: marcus.id },
     { teamId: designTeam.id, userId: owner.id },
+    { teamId: designTeam.id, userId: emily.id },
+    { teamId: marketingTeam.id, userId: alex.id },
+    { teamId: marketingTeam.id, userId: jordan.id },
   ]);
 
   const [productLaunch] = await db.insert(projects).values({
@@ -99,19 +132,61 @@ async function seed() {
     workspaceId: workspace.id,
     teamId: engineeringTeam.id,
     name: "Mobile App",
-    description: "Mobile application development",
+    description: "Mobile application development for iOS and Android",
     visibility: "private",
     status: "active",
     color: "#10B981",
     createdBy: owner.id,
   }).returning();
 
+  const [marketingCampaign] = await db.insert(projects).values({
+    workspaceId: workspace.id,
+    teamId: marketingTeam.id,
+    name: "Marketing Campaign",
+    description: "Spring 2026 marketing campaign",
+    visibility: "workspace",
+    status: "active",
+    color: "#F59E0B",
+    createdBy: alex.id,
+  }).returning();
+
+  const [apiIntegration] = await db.insert(projects).values({
+    workspaceId: workspace.id,
+    teamId: engineeringTeam.id,
+    name: "API Integration",
+    description: "Third-party API integrations and partnerships",
+    visibility: "private",
+    status: "active",
+    color: "#EF4444",
+    createdBy: sarah.id,
+  }).returning();
+
+  const [userResearch] = await db.insert(projects).values({
+    workspaceId: workspace.id,
+    teamId: designTeam.id,
+    name: "User Research",
+    description: "User interviews and usability testing",
+    visibility: "workspace",
+    status: "active",
+    color: "#06B6D4",
+    createdBy: emily.id,
+  }).returning();
+
   await db.insert(projectMembers).values([
     { projectId: productLaunch.id, userId: owner.id, role: "admin" },
-    { projectId: productLaunch.id, userId: member.id, role: "member" },
+    { projectId: productLaunch.id, userId: sarah.id, role: "member" },
+    { projectId: productLaunch.id, userId: marcus.id, role: "member" },
     { projectId: websiteRedesign.id, userId: owner.id, role: "admin" },
+    { projectId: websiteRedesign.id, userId: emily.id, role: "member" },
     { projectId: mobileApp.id, userId: owner.id, role: "admin" },
-    { projectId: mobileApp.id, userId: member.id, role: "member" },
+    { projectId: mobileApp.id, userId: sarah.id, role: "member" },
+    { projectId: mobileApp.id, userId: marcus.id, role: "member" },
+    { projectId: marketingCampaign.id, userId: alex.id, role: "admin" },
+    { projectId: marketingCampaign.id, userId: jordan.id, role: "member" },
+    { projectId: apiIntegration.id, userId: sarah.id, role: "admin" },
+    { projectId: apiIntegration.id, userId: marcus.id, role: "member" },
+    { projectId: userResearch.id, userId: emily.id, role: "admin" },
+    { projectId: userResearch.id, userId: owner.id, role: "member" },
   ]);
 
   const [backlogSection] = await db.insert(sections).values({
@@ -156,11 +231,67 @@ async function seed() {
     orderIndex: 2,
   }).returning();
 
+  const [mobileBacklog] = await db.insert(sections).values({
+    projectId: mobileApp.id,
+    name: "Backlog",
+    orderIndex: 0,
+  }).returning();
+
+  const [mobileDev] = await db.insert(sections).values({
+    projectId: mobileApp.id,
+    name: "Development",
+    orderIndex: 1,
+  }).returning();
+
+  const [mobileTesting] = await db.insert(sections).values({
+    projectId: mobileApp.id,
+    name: "Testing",
+    orderIndex: 2,
+  }).returning();
+
+  const [marketingPlanning] = await db.insert(sections).values({
+    projectId: marketingCampaign.id,
+    name: "Planning",
+    orderIndex: 0,
+  }).returning();
+
+  const [marketingExecution] = await db.insert(sections).values({
+    projectId: marketingCampaign.id,
+    name: "Execution",
+    orderIndex: 1,
+  }).returning();
+
+  const [apiTodo] = await db.insert(sections).values({
+    projectId: apiIntegration.id,
+    name: "To Do",
+    orderIndex: 0,
+  }).returning();
+
+  const [apiInProgress] = await db.insert(sections).values({
+    projectId: apiIntegration.id,
+    name: "In Progress",
+    orderIndex: 1,
+  }).returning();
+
+  const [researchPlanning] = await db.insert(sections).values({
+    projectId: userResearch.id,
+    name: "Planning",
+    orderIndex: 0,
+  }).returning();
+
+  const [researchActive] = await db.insert(sections).values({
+    projectId: userResearch.id,
+    name: "Active",
+    orderIndex: 1,
+  }).returning();
+
   const [bugTag] = await db.insert(tags).values({ workspaceId: workspace.id, name: "Bug", color: "#EF4444" }).returning();
   const [featureTag] = await db.insert(tags).values({ workspaceId: workspace.id, name: "Feature", color: "#3B82F6" }).returning();
   const [urgentTag] = await db.insert(tags).values({ workspaceId: workspace.id, name: "Urgent", color: "#F59E0B" }).returning();
   const [backendTag] = await db.insert(tags).values({ workspaceId: workspace.id, name: "Backend", color: "#10B981" }).returning();
   const [frontendTag] = await db.insert(tags).values({ workspaceId: workspace.id, name: "Frontend", color: "#8B5CF6" }).returning();
+  const [designTag] = await db.insert(tags).values({ workspaceId: workspace.id, name: "Design", color: "#EC4899" }).returning();
+  const [docsTag] = await db.insert(tags).values({ workspaceId: workspace.id, name: "Documentation", color: "#6B7280" }).returning();
 
   const today = new Date();
   const tomorrow = new Date(today);
@@ -169,6 +300,10 @@ async function seed() {
   nextWeek.setDate(nextWeek.getDate() + 7);
   const yesterday = new Date(today);
   yesterday.setDate(yesterday.getDate() - 1);
+  const twoDaysAgo = new Date(today);
+  twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+  const inThreeDays = new Date(today);
+  inThreeDays.setDate(inThreeDays.getDate() + 3);
 
   const [task1] = await db.insert(tasks).values({
     projectId: productLaunch.id,
@@ -238,7 +373,7 @@ async function seed() {
     status: "in_progress",
     priority: "urgent",
     dueDate: today,
-    createdBy: member.id,
+    createdBy: marcus.id,
     orderIndex: 1,
   }).returning();
 
@@ -255,18 +390,6 @@ async function seed() {
   }).returning();
 
   const [task8] = await db.insert(tasks).values({
-    projectId: productLaunch.id,
-    sectionId: backlogSection.id,
-    title: "Mobile responsive design",
-    description: "Ensure all pages work well on mobile devices",
-    status: "todo",
-    priority: "medium",
-    dueDate: null,
-    createdBy: owner.id,
-    orderIndex: 1,
-  }).returning();
-
-  const [task9] = await db.insert(tasks).values({
     projectId: websiteRedesign.id,
     sectionId: redesignInProgress.id,
     title: "Design new homepage",
@@ -274,11 +397,11 @@ async function seed() {
     status: "in_progress",
     priority: "high",
     dueDate: tomorrow,
-    createdBy: owner.id,
+    createdBy: emily.id,
     orderIndex: 0,
   }).returning();
 
-  const [task10] = await db.insert(tasks).values({
+  const [task9] = await db.insert(tasks).values({
     projectId: websiteRedesign.id,
     sectionId: redesignBacklog.id,
     title: "Update brand colors",
@@ -286,47 +409,11 @@ async function seed() {
     status: "todo",
     priority: "medium",
     dueDate: nextWeek,
-    createdBy: owner.id,
+    createdBy: emily.id,
     orderIndex: 0,
   }).returning();
 
-  const [task11] = await db.insert(tasks).values({
-    projectId: productLaunch.id,
-    sectionId: todoSection.id,
-    title: "Set up monitoring and alerts",
-    description: "Configure error tracking and performance monitoring",
-    status: "todo",
-    priority: "high",
-    dueDate: tomorrow,
-    createdBy: owner.id,
-    orderIndex: 3,
-  }).returning();
-
-  const [task12] = await db.insert(tasks).values({
-    projectId: productLaunch.id,
-    sectionId: inProgressSection.id,
-    title: "Write unit tests",
-    description: "Add comprehensive unit tests for core functionality",
-    status: "in_progress",
-    priority: "medium",
-    dueDate: nextWeek,
-    createdBy: member.id,
-    orderIndex: 2,
-  }).returning();
-
-  const [task13] = await db.insert(tasks).values({
-    projectId: productLaunch.id,
-    sectionId: doneSection.id,
-    title: "Setup development environment",
-    description: "Configure local development environment with Docker",
-    status: "done",
-    priority: "high",
-    dueDate: yesterday,
-    createdBy: owner.id,
-    orderIndex: 1,
-  }).returning();
-
-  const [task14] = await db.insert(tasks).values({
+  const [task10] = await db.insert(tasks).values({
     projectId: websiteRedesign.id,
     sectionId: redesignReview.id,
     title: "Review navigation structure",
@@ -338,7 +425,139 @@ async function seed() {
     orderIndex: 0,
   }).returning();
 
+  const [task11] = await db.insert(tasks).values({
+    projectId: mobileApp.id,
+    sectionId: mobileDev.id,
+    title: "Implement push notifications",
+    description: "Add support for push notifications on iOS and Android",
+    status: "in_progress",
+    priority: "high",
+    dueDate: inThreeDays,
+    createdBy: sarah.id,
+    orderIndex: 0,
+  }).returning();
+
+  const [task12] = await db.insert(tasks).values({
+    projectId: mobileApp.id,
+    sectionId: mobileBacklog.id,
+    title: "Offline mode support",
+    description: "Enable app to work without internet connection",
+    status: "todo",
+    priority: "medium",
+    dueDate: null,
+    createdBy: sarah.id,
+    orderIndex: 0,
+  }).returning();
+
+  const [task13] = await db.insert(tasks).values({
+    projectId: mobileApp.id,
+    sectionId: mobileTesting.id,
+    title: "Beta testing round 1",
+    description: "Conduct first round of beta testing with users",
+    status: "in_progress",
+    priority: "high",
+    dueDate: tomorrow,
+    createdBy: marcus.id,
+    orderIndex: 0,
+  }).returning();
+
+  const [task14] = await db.insert(tasks).values({
+    projectId: marketingCampaign.id,
+    sectionId: marketingPlanning.id,
+    title: "Define campaign goals",
+    description: "Set clear KPIs and goals for the marketing campaign",
+    status: "todo",
+    priority: "high",
+    dueDate: today,
+    createdBy: alex.id,
+    orderIndex: 0,
+  }).returning();
+
   const [task15] = await db.insert(tasks).values({
+    projectId: marketingCampaign.id,
+    sectionId: marketingExecution.id,
+    title: "Create social media content",
+    description: "Design and write content for social media posts",
+    status: "in_progress",
+    priority: "medium",
+    dueDate: inThreeDays,
+    createdBy: jordan.id,
+    orderIndex: 0,
+  }).returning();
+
+  const [task16] = await db.insert(tasks).values({
+    projectId: apiIntegration.id,
+    sectionId: apiInProgress.id,
+    title: "Stripe payment integration",
+    description: "Integrate Stripe for payment processing",
+    status: "in_progress",
+    priority: "urgent",
+    dueDate: today,
+    createdBy: sarah.id,
+    orderIndex: 0,
+  }).returning();
+
+  const [task17] = await db.insert(tasks).values({
+    projectId: apiIntegration.id,
+    sectionId: apiTodo.id,
+    title: "Slack notifications integration",
+    description: "Send notifications to Slack channels",
+    status: "todo",
+    priority: "medium",
+    dueDate: nextWeek,
+    createdBy: marcus.id,
+    orderIndex: 0,
+  }).returning();
+
+  const [task18] = await db.insert(tasks).values({
+    projectId: userResearch.id,
+    sectionId: researchActive.id,
+    title: "Conduct user interviews",
+    description: "Interview 10 users about their workflow needs",
+    status: "in_progress",
+    priority: "high",
+    dueDate: inThreeDays,
+    createdBy: emily.id,
+    orderIndex: 0,
+  }).returning();
+
+  const [task19] = await db.insert(tasks).values({
+    projectId: userResearch.id,
+    sectionId: researchPlanning.id,
+    title: "Create usability test plan",
+    description: "Design test scenarios and success metrics",
+    status: "todo",
+    priority: "medium",
+    dueDate: tomorrow,
+    createdBy: emily.id,
+    orderIndex: 0,
+  }).returning();
+
+  const [task20] = await db.insert(tasks).values({
+    projectId: productLaunch.id,
+    sectionId: doneSection.id,
+    title: "Setup development environment",
+    description: "Configure local development environment with Docker",
+    status: "done",
+    priority: "high",
+    dueDate: twoDaysAgo,
+    createdBy: owner.id,
+    orderIndex: 1,
+  }).returning();
+
+  const [task21] = await db.insert(tasks).values({
+    projectId: productLaunch.id,
+    sectionId: inProgressSection.id,
+    title: "Write unit tests",
+    description: "Add comprehensive unit tests for core functionality",
+    status: "in_progress",
+    priority: "medium",
+    dueDate: nextWeek,
+    createdBy: marcus.id,
+    orderIndex: 2,
+  }).returning();
+
+  const [task22] = await db.insert(tasks).values({
     projectId: productLaunch.id,
     sectionId: backlogSection.id,
     title: "Implement dark mode",
@@ -347,63 +566,106 @@ async function seed() {
     priority: "low",
     dueDate: null,
     createdBy: owner.id,
-    orderIndex: 2,
+    orderIndex: 1,
   }).returning();
 
   await db.insert(taskAssignees).values([
     { taskId: task1.id, userId: owner.id },
     { taskId: task2.id, userId: owner.id },
-    { taskId: task2.id, userId: member.id },
-    { taskId: task3.id, userId: member.id },
+    { taskId: task2.id, userId: sarah.id },
+    { taskId: task3.id, userId: marcus.id },
     { taskId: task4.id, userId: owner.id },
     { taskId: task5.id, userId: owner.id },
-    { taskId: task6.id, userId: member.id },
+    { taskId: task6.id, userId: marcus.id },
     { taskId: task7.id, userId: owner.id },
-    { taskId: task8.id, userId: owner.id },
-    { taskId: task9.id, userId: owner.id },
+    { taskId: task7.id, userId: sarah.id },
+    { taskId: task8.id, userId: emily.id },
+    { taskId: task9.id, userId: emily.id },
     { taskId: task10.id, userId: owner.id },
-    { taskId: task11.id, userId: owner.id },
-    { taskId: task12.id, userId: member.id },
-    { taskId: task13.id, userId: owner.id },
-    { taskId: task14.id, userId: owner.id },
-    { taskId: task15.id, userId: owner.id },
+    { taskId: task10.id, userId: emily.id },
+    { taskId: task11.id, userId: sarah.id },
+    { taskId: task11.id, userId: marcus.id },
+    { taskId: task12.id, userId: sarah.id },
+    { taskId: task13.id, userId: marcus.id },
+    { taskId: task14.id, userId: alex.id },
+    { taskId: task15.id, userId: jordan.id },
+    { taskId: task15.id, userId: alex.id },
+    { taskId: task16.id, userId: sarah.id },
+    { taskId: task17.id, userId: marcus.id },
+    { taskId: task18.id, userId: emily.id },
+    { taskId: task19.id, userId: emily.id },
+    { taskId: task20.id, userId: owner.id },
+    { taskId: task21.id, userId: marcus.id },
+    { taskId: task22.id, userId: owner.id },
   ]);
 
   await db.insert(taskTags).values([
     { taskId: task1.id, tagId: backendTag.id },
     { taskId: task2.id, tagId: featureTag.id },
     { taskId: task2.id, tagId: backendTag.id },
-    { taskId: task3.id, tagId: featureTag.id },
+    { taskId: task3.id, tagId: docsTag.id },
     { taskId: task6.id, tagId: bugTag.id },
     { taskId: task6.id, tagId: urgentTag.id },
     { taskId: task7.id, tagId: backendTag.id },
+    { taskId: task8.id, tagId: designTag.id },
     { taskId: task8.id, tagId: frontendTag.id },
-    { taskId: task9.id, tagId: frontendTag.id },
-    { taskId: task10.id, tagId: frontendTag.id },
-    { taskId: task11.id, tagId: backendTag.id },
-    { taskId: task12.id, tagId: backendTag.id },
-    { taskId: task15.id, tagId: frontendTag.id },
-    { taskId: task15.id, tagId: featureTag.id },
+    { taskId: task9.id, tagId: designTag.id },
+    { taskId: task10.id, tagId: designTag.id },
+    { taskId: task11.id, tagId: featureTag.id },
+    { taskId: task13.id, tagId: featureTag.id },
+    { taskId: task14.id, tagId: urgentTag.id },
+    { taskId: task16.id, tagId: backendTag.id },
+    { taskId: task16.id, tagId: urgentTag.id },
+    { taskId: task17.id, tagId: backendTag.id },
+    { taskId: task18.id, tagId: designTag.id },
+    { taskId: task21.id, tagId: backendTag.id },
+    { taskId: task22.id, tagId: frontendTag.id },
+    { taskId: task22.id, tagId: featureTag.id },
   ]);
 
   await db.insert(subtasks).values([
     { taskId: task1.id, title: "Configure GitHub Actions workflow", completed: false, orderIndex: 0 },
     { taskId: task1.id, title: "Add test automation", completed: false, orderIndex: 1 },
     { taskId: task1.id, title: "Set up staging deployment", completed: true, orderIndex: 2 },
+    { taskId: task1.id, title: "Configure production deployment", completed: false, orderIndex: 3 },
     { taskId: task2.id, title: "Implement Google OAuth", completed: true, orderIndex: 0 },
     { taskId: task2.id, title: "Implement GitHub OAuth", completed: false, orderIndex: 1 },
     { taskId: task2.id, title: "Add session management", completed: false, orderIndex: 2 },
     { taskId: task2.id, title: "Create user profile page", completed: false, orderIndex: 3 },
+    { taskId: task3.id, title: "Document authentication endpoints", completed: false, orderIndex: 0 },
+    { taskId: task3.id, title: "Document task endpoints", completed: false, orderIndex: 1 },
+    { taskId: task3.id, title: "Add example requests", completed: false, orderIndex: 2 },
     { taskId: task7.id, title: "Profile slow queries", completed: false, orderIndex: 0 },
     { taskId: task7.id, title: "Add Redis caching", completed: false, orderIndex: 1 },
-    { taskId: task9.id, title: "Create wireframes", completed: true, orderIndex: 0 },
-    { taskId: task9.id, title: "Design hero section", completed: true, orderIndex: 1 },
-    { taskId: task9.id, title: "Design features section", completed: false, orderIndex: 2 },
-    { taskId: task12.id, title: "Write task service tests", completed: true, orderIndex: 0 },
-    { taskId: task12.id, title: "Write project service tests", completed: false, orderIndex: 1 },
+    { taskId: task7.id, title: "Implement connection pooling", completed: false, orderIndex: 2 },
+    { taskId: task8.id, title: "Create wireframes", completed: true, orderIndex: 0 },
+    { taskId: task8.id, title: "Design hero section", completed: true, orderIndex: 1 },
+    { taskId: task8.id, title: "Design features section", completed: false, orderIndex: 2 },
+    { taskId: task8.id, title: "Design pricing section", completed: false, orderIndex: 3 },
+    { taskId: task11.id, title: "Set up Firebase Cloud Messaging", completed: true, orderIndex: 0 },
+    { taskId: task11.id, title: "Implement iOS notifications", completed: false, orderIndex: 1 },
+    { taskId: task11.id, title: "Implement Android notifications", completed: false, orderIndex: 2 },
+    { taskId: task13.id, title: "Recruit beta testers", completed: true, orderIndex: 0 },
+    { taskId: task13.id, title: "Distribute test builds", completed: true, orderIndex: 1 },
+    { taskId: task13.id, title: "Collect feedback", completed: false, orderIndex: 2 },
+    { taskId: task14.id, title: "Define target audience", completed: false, orderIndex: 0 },
+    { taskId: task14.id, title: "Set conversion goals", completed: false, orderIndex: 1 },
+    { taskId: task14.id, title: "Determine budget allocation", completed: false, orderIndex: 2 },
+    { taskId: task16.id, title: "Create Stripe account", completed: true, orderIndex: 0 },
+    { taskId: task16.id, title: "Implement payment flow", completed: false, orderIndex: 1 },
+    { taskId: task16.id, title: "Add webhook handlers", completed: false, orderIndex: 2 },
+    { taskId: task16.id, title: "Test with sandbox", completed: false, orderIndex: 3 },
+    { taskId: task18.id, title: "Create interview guide", completed: true, orderIndex: 0 },
+    { taskId: task18.id, title: "Schedule interviews", completed: true, orderIndex: 1 },
+    { taskId: task18.id, title: "Conduct interviews", completed: false, orderIndex: 2 },
+    { taskId: task18.id, title: "Analyze findings", completed: false, orderIndex: 3 },
+    { taskId: task21.id, title: "Write task service tests", completed: true, orderIndex: 0 },
+    { taskId: task21.id, title: "Write project service tests", completed: false, orderIndex: 1 },
+    { taskId: task21.id, title: "Write user service tests", completed: false, orderIndex: 2 },
   ]);
 
   console.log("Database seeded successfully!");
+  console.log("Created 6 users, 6 projects, 22 tasks with subtasks");
 }
 
 seed().catch(console.error).finally(() => process.exit(0));
