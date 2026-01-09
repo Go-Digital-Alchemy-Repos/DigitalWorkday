@@ -8,6 +8,8 @@ import {
   Plus,
   ChevronDown,
   Hash,
+  Building2,
+  Check,
 } from "lucide-react";
 import dasanaLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -57,12 +59,9 @@ export function AppSidebar() {
       <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
         <div className="flex items-center gap-3">
           <img src={dasanaLogo} alt="DASANA" className="h-8 w-8" />
-          <div className="flex flex-col">
-            <span className="text-sm font-semibold text-sidebar-foreground">
-              {workspace?.name || "DASANA"}
-            </span>
-            <span className="text-xs text-muted-foreground">Workspace</span>
-          </div>
+          <span className="text-lg font-semibold text-sidebar-foreground">
+            DASANA
+          </span>
         </div>
       </SidebarHeader>
 
@@ -180,6 +179,42 @@ export function AppSidebar() {
                       No teams yet
                     </div>
                   )}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </CollapsibleContent>
+          </Collapsible>
+        </SidebarGroup>
+
+        <SidebarGroup>
+          <Collapsible defaultOpen className="group/collapsible">
+            <div className="flex items-center justify-between pr-2">
+              <CollapsibleTrigger asChild>
+                <SidebarGroupLabel className="cursor-pointer hover-elevate rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                  <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
+                  <span className="ml-1">Workspaces</span>
+                </SidebarGroupLabel>
+              </CollapsibleTrigger>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-6 w-6"
+                data-testid="button-add-workspace"
+              >
+                <Plus className="h-3 w-3" />
+              </Button>
+            </div>
+            <CollapsibleContent>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton className="justify-between">
+                      <div className="flex items-center gap-2">
+                        <Building2 className="h-4 w-4" />
+                        <span className="truncate">{workspace?.name || "Default Workspace"}</span>
+                      </div>
+                      <Check className="h-4 w-4 text-primary" />
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
                 </SidebarMenu>
               </SidebarGroupContent>
             </CollapsibleContent>
