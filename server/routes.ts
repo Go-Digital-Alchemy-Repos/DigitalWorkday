@@ -14,6 +14,24 @@ import {
   ALLOWED_MIME_TYPES,
   MAX_FILE_SIZE_BYTES 
 } from "./s3";
+// Import centralized event emitters for real-time updates
+import {
+  emitProjectCreated,
+  emitProjectUpdated,
+  emitSectionCreated,
+  emitSectionUpdated,
+  emitSectionDeleted,
+  emitTaskCreated,
+  emitTaskUpdated,
+  emitTaskDeleted,
+  emitTaskMoved,
+  emitTaskReordered,
+  emitSubtaskCreated,
+  emitSubtaskUpdated,
+  emitSubtaskDeleted,
+  emitAttachmentAdded,
+  emitAttachmentDeleted,
+} from "./realtime/events";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -130,6 +148,10 @@ export async function registerRoutes(
         createdBy: DEMO_USER_ID,
       });
       const project = await storage.createProject(data);
+      
+      // Emit real-time event after successful DB operation
+      emitProjectCreated(project as any);
+      
       res.status(201).json(project);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -146,6 +168,10 @@ export async function registerRoutes(
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
       }
+      
+      // Emit real-time event after successful DB operation
+      emitProjectUpdated(project.id, req.body);
+      
       res.json(project);
     } catch (error) {
       console.error("Error updating project:", error);
@@ -270,6 +296,10 @@ export async function registerRoutes(
     try {
       const data = insertSectionSchema.parse(req.body);
       const section = await storage.createSection(data);
+      
+      // Emit real-time event after successful DB operation
+      emitSectionCreated(section as any);
+      
       res.status(201).json(section);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -286,6 +316,10 @@ export async function registerRoutes(
       if (!section) {
         return res.status(404).json({ error: "Section not found" });
       }
+      
+      // Emit real-time event after successful DB operation
+      emitSectionUpdated(section.id, section.projectId, req.body);
+      
       res.json(section);
     } catch (error) {
       console.error("Error updating section:", error);
@@ -295,7 +329,17 @@ export async function registerRoutes(
 
   app.delete("/api/sections/:id", async (req, res) => {
     try {
+      // Get section before deletion to emit event with projectId
+      const section = await storage.getSection(req.params.id);
+      if (!section) {
+        return res.status(404).json({ error: "Section not found" });
+      }
+      
       await storage.deleteSection(req.params.id);
+      
+      // Emit real-time event after successful DB operation
+      emitSectionDeleted(section.id, section.projectId);
+      
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting section:", error);
@@ -441,6 +485,12 @@ export async function registerRoutes(
       await storage.addTaskAssignee({ taskId: task.id, userId: DEMO_USER_ID });
       
       const taskWithRelations = await storage.getTaskWithRelations(task.id);
+      
+      // Emit real-time event after successful DB operation
+      if (taskWithRelations) {
+        emitTaskCreated(task.projectId, taskWithRelations as any);
+      }
+      
       res.status(201).json(taskWithRelations);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -477,6 +527,12 @@ export async function registerRoutes(
       }
       
       const taskWithRelations = await storage.getTaskWithRelations(task.id);
+      
+      // Emit real-time event after successful DB operation
+      if (taskWithRelations) {
+        emitTaskCreated(parentTask.projectId, taskWithRelations as any);
+      }
+      
       res.status(201).json(taskWithRelations);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -494,6 +550,10 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Task not found" });
       }
       const taskWithRelations = await storage.getTaskWithRelations(task.id);
+      
+      // Emit real-time event after successful DB operation
+      emitTaskUpdated(task.id, task.projectId, task.parentTaskId, req.body);
+      
       res.json(taskWithRelations);
     } catch (error) {
       console.error("Error updating task:", error);
@@ -503,7 +563,17 @@ export async function registerRoutes(
 
   app.delete("/api/tasks/:id", async (req, res) => {
     try {
+      // Get task before deletion to emit event with projectId
+      const task = await storage.getTask(req.params.id);
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      
       await storage.deleteTask(req.params.id);
+      
+      // Emit real-time event after successful DB operation
+      emitTaskDeleted(task.id, task.projectId, task.sectionId, task.parentTaskId);
+      
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting task:", error);
@@ -514,8 +584,20 @@ export async function registerRoutes(
   app.post("/api/tasks/:id/move", async (req, res) => {
     try {
       const { sectionId, targetIndex } = req.body;
+      
+      // Get task before move to emit event with fromSectionId
+      const taskBefore = await storage.getTask(req.params.id);
+      if (!taskBefore) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      const fromSectionId = taskBefore.sectionId;
+      
       await storage.moveTask(req.params.id, sectionId, targetIndex);
       const task = await storage.getTaskWithRelations(req.params.id);
+      
+      // Emit real-time event after successful DB operation
+      emitTaskMoved(req.params.id, taskBefore.projectId, fromSectionId, sectionId, targetIndex);
+      
       res.json(task);
     } catch (error) {
       console.error("Error moving task:", error);
@@ -560,7 +642,17 @@ export async function registerRoutes(
         ...req.body,
         taskId: req.params.taskId,
       });
+      
+      // Get parent task to emit event with projectId
+      const parentTask = await storage.getTask(req.params.taskId);
+      
       const subtask = await storage.createSubtask(data);
+      
+      // Emit real-time event after successful DB operation
+      if (parentTask) {
+        emitSubtaskCreated(subtask as any, req.params.taskId, parentTask.projectId);
+      }
+      
       res.status(201).json(subtask);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -577,6 +669,15 @@ export async function registerRoutes(
       if (!subtask) {
         return res.status(404).json({ error: "Subtask not found" });
       }
+      
+      // Get parent task to emit event with projectId
+      const parentTask = await storage.getTask(subtask.taskId);
+      
+      // Emit real-time event after successful DB operation
+      if (parentTask) {
+        emitSubtaskUpdated(subtask.id, subtask.taskId, parentTask.projectId, req.body);
+      }
+      
       res.json(subtask);
     } catch (error) {
       console.error("Error updating subtask:", error);
@@ -586,7 +687,21 @@ export async function registerRoutes(
 
   app.delete("/api/subtasks/:id", async (req, res) => {
     try {
+      // Get subtask before deletion to emit event with taskId and projectId
+      const subtask = await storage.getSubtask(req.params.id);
+      if (!subtask) {
+        return res.status(404).json({ error: "Subtask not found" });
+      }
+      
+      const parentTask = await storage.getTask(subtask.taskId);
+      
       await storage.deleteSubtask(req.params.id);
+      
+      // Emit real-time event after successful DB operation
+      if (parentTask) {
+        emitSubtaskDeleted(subtask.id, subtask.taskId, parentTask.projectId);
+      }
+      
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting subtask:", error);
@@ -876,6 +991,24 @@ export async function registerRoutes(
         uploadStatus: "complete",
       });
       
+      // Emit real-time event after successful upload completion
+      emitAttachmentAdded(
+        {
+          id: updated!.id,
+          fileName: updated!.originalFileName,
+          fileType: updated!.mimeType,
+          fileSize: updated!.fileSizeBytes,
+          storageKey: updated!.storageKey,
+          taskId: updated!.taskId,
+          subtaskId: null,
+          uploadedBy: updated!.uploadedByUserId,
+          createdAt: updated!.createdAt!,
+        },
+        taskId,
+        null,
+        projectId
+      );
+      
       res.json(updated);
     } catch (error) {
       console.error("Error completing upload:", error);
@@ -920,6 +1053,10 @@ export async function registerRoutes(
       }
       
       await storage.deleteTaskAttachment(attachmentId);
+      
+      // Emit real-time event after successful deletion
+      emitAttachmentDeleted(attachmentId, taskId, null, projectId);
+      
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting attachment:", error);

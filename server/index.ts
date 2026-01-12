@@ -2,9 +2,13 @@ import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import { initializeSocketIO } from "./realtime/socket";
 
 const app = express();
 const httpServer = createServer(app);
+
+// Initialize Socket.IO server for real-time updates
+initializeSocketIO(httpServer);
 
 declare module "http" {
   interface IncomingMessage {
