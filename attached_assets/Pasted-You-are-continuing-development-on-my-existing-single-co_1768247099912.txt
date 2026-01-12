@@ -1,0 +1,162 @@
+You are continuing development on my existing single-codebase React + Node project management app.
+
+IMPORTANT:
+- All task, sub-task, attachment, and drag-drop functionality already exists.
+- DO NOT refactor or re-implement task logic.
+- Implement ONLY the Project Calendar View using existing task/subtask data, routes, and detail panels.
+
+===============================================================================
+GOAL
+===============================================================================
+Implement a Project Calendar view that displays BOTH tasks and sub-tasks as calendar events based on dueDate. The calendar must integrate cleanly with the existing task system and reuse all existing UI patterns for task and sub-task detail editing.
+
+===============================================================================
+1) FRONTEND CALENDAR LIBRARY (MANDATORY)
+===============================================================================
+Use FullCalendar React ONLY.
+
+Install (if not already installed):
+- @fullcalendar/react
+- @fullcalendar/daygrid
+- @fullcalendar/timegrid
+- @fullcalendar/interaction
+
+Do NOT introduce other calendar libraries.
+
+===============================================================================
+2) CALENDAR DATA SOURCE (IMPORTANT)
+===============================================================================
+Use the EXISTING task fetch logic wherever possible.
+
+Preferred:
+- Extend existing GET /api/projects/:projectId/tasks
+- Add optional query params:
+  - start (YYYY-MM-DD)
+  - end (YYYY-MM-DD)
+
+Return:
+- Parent tasks AND sub-tasks
+- Exclude archived tasks
+- Include:
+  - id
+  - parentTaskId (null = task, non-null = sub-task)
+  - title
+  - dueDate
+  - section/status
+  - assignee
+  - priority
+  - tags
+
+No new task schema.
+
+===============================================================================
+3) EVENT MAPPING RULES
+===============================================================================
+Each task/sub-task becomes a FullCalendar event:
+
+- event.id = task.id
+- event.title = task.title
+- event.start = task.dueDate
+- event.allDay = true (unless datetime already supported)
+- event.extendedProps:
+  - isSubtask (boolean)
+  - parentTaskId
+  - assignee
+  - priority
+  - tags
+  - section/status
+
+Visual distinction:
+- Sub-tasks should be visually distinguishable:
+  - prefix title with “↳”
+  - OR subtle icon/badge
+  - Do NOT create separate calendars
+
+===============================================================================
+4) CALENDAR UI REQUIREMENTS
+===============================================================================
+Calendar views:
+- Month (default)
+- Week
+
+Toolbar:
+- Today
+- Prev / Next
+- Month / Week toggle
+
+Click behavior:
+- Clicking an event opens the EXISTING task detail slide-out
+- If event is a sub-task, open sub-task detail panel
+- Use existing routing or panel manager:
+  - /projects/:projectId/tasks/:taskId
+  - /projects/:projectId/tasks/:taskId/subtasks/:subtaskId
+
+No new detail UI.
+
+===============================================================================
+5) FILTERS (REQUIRED)
+===============================================================================
+Filters must work without page reload:
+- Assignee
+- Status / Section
+- Tag
+- Toggle: Include Sub-tasks (default ON)
+
+Filters should:
+- Re-fetch calendar events OR
+- Filter client-side if data already loaded
+
+===============================================================================
+6) DRAG-TO-RESCHEDULE (REQUIRED)
+===============================================================================
+Events must be draggable to a new date.
+
+On eventDrop:
+- Update dueDate ONLY
+- Use existing PATCH /tasks/:taskId endpoint
+- Optimistically update UI
+- On error: revert and show toast
+
+Rules:
+- Works for tasks AND sub-tasks
+- Do NOT trigger full task reorder logic
+- Only dueDate changes
+
+===============================================================================
+7) QUICK CREATE (OPTIONAL BUT PREFERRED)
+===============================================================================
+Clicking an empty day cell:
+- Opens existing “Create Task” flow
+- Pre-populate dueDate
+- Task appears immediately on calendar after creation
+
+Do NOT create a special calendar-only create form.
+
+===============================================================================
+8) PERFORMANCE REQUIREMENTS
+===============================================================================
+- Fetch only tasks within visible calendar range when possible
+- Avoid refetching entire project on every view change
+- Show loading state while fetching
+
+===============================================================================
+9) ACCEPTANCE CRITERIA
+===============================================================================
+Calendar implementation is complete when:
+
+1) Tasks with due dates appear on calendar
+2) Sub-tasks with due dates appear and are visually distinct
+3) Clicking task opens task detail
+4) Clicking sub-task opens sub-task detail
+5) Dragging event updates dueDate and persists after refresh
+6) Filters work as expected
+7) No duplicate task editing UI introduced
+
+===============================================================================
+10) OUTPUT (REQUIRED)
+===============================================================================
+When finished, output:
+- Summary of changes
+- Files modified/added
+- Calendar route
+- Manual test steps (1-6 above)
