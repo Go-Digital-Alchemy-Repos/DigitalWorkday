@@ -24,6 +24,7 @@ import {
   ProjectCreatedPayload,
   ProjectUpdatedPayload,
   ProjectDeletedPayload,
+  ProjectClientAssignedPayload,
   SectionCreatedPayload,
   SectionUpdatedPayload,
   SectionDeletedPayload,
@@ -81,6 +82,40 @@ export function emitProjectDeleted(projectId: string): void {
   const payload: ProjectDeletedPayload = { projectId };
   emitToProject(projectId, PROJECT_EVENTS.DELETED, payload);
   log(`Emitted ${PROJECT_EVENTS.DELETED} for project ${projectId}`, 'events');
+}
+
+/**
+ * Emit when a project's client assignment changes.
+ * Emits to: project room, new client room (if any), and old client room (if any)
+ */
+export function emitProjectClientAssigned(
+  project: ProjectClientAssignedPayload['project'],
+  previousClientId: string | null
+): void {
+  const payload: ProjectClientAssignedPayload = {
+    projectId: project.id,
+    clientId: project.clientId,
+    previousClientId,
+    project,
+  };
+  
+  // Emit to project room
+  emitToProject(project.id, PROJECT_EVENTS.CLIENT_ASSIGNED, payload);
+  
+  // Emit to new client room if assigned
+  if (project.clientId) {
+    emitToClient(project.clientId, PROJECT_EVENTS.CLIENT_ASSIGNED, payload);
+  }
+  
+  // Emit to old client room if unassigning or changing
+  if (previousClientId && previousClientId !== project.clientId) {
+    emitToClient(previousClientId, PROJECT_EVENTS.CLIENT_ASSIGNED, payload);
+  }
+  
+  // Also emit project:updated for consistency
+  emitProjectUpdated(project.id, { clientId: project.clientId } as any);
+  
+  log(`Emitted ${PROJECT_EVENTS.CLIENT_ASSIGNED} for project ${project.id} (client: ${project.clientId || 'unassigned'})`, 'events');
 }
 
 // =============================================================================

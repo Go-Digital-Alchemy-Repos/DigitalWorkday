@@ -31,6 +31,7 @@ import { TaskCard } from "@/components/task-card";
 import { TaskDetailDrawer } from "@/components/task-detail-drawer";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
 import { ProjectCalendar } from "@/components/project-calendar";
+import { ProjectSettingsSheet } from "@/components/project-settings-sheet";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useProjectSocket } from "@/lib/realtime";
@@ -50,6 +51,7 @@ export default function ProjectPage() {
   const [view, setView] = useState<ViewType>("board");
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState<string | undefined>();
   const [localSections, setLocalSections] = useState<SectionWithTasks[] | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -355,7 +357,12 @@ export default function ProjectPage() {
             <Button variant="ghost" size="icon" data-testid="button-project-members">
               <Users className="h-4 w-4" />
             </Button>
-            <Button variant="ghost" size="icon" data-testid="button-project-settings">
+            <Button 
+              variant="ghost" 
+              size="icon" 
+              onClick={() => setSettingsOpen(true)}
+              data-testid="button-project-settings"
+            >
               <Settings className="h-4 w-4" />
             </Button>
           </div>
@@ -508,6 +515,14 @@ export default function ProjectPage() {
         sections={sections?.map((s) => ({ id: s.id, projectId: s.projectId, name: s.name, orderIndex: s.orderIndex, createdAt: s.createdAt })) || []}
         defaultSectionId={selectedSectionId}
       />
+
+      {project && (
+        <ProjectSettingsSheet
+          project={project}
+          open={settingsOpen}
+          onOpenChange={setSettingsOpen}
+        />
+      )}
     </div>
   );
 }

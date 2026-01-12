@@ -17,6 +17,7 @@ export const PROJECT_EVENTS = {
   CREATED: 'project:created',
   UPDATED: 'project:updated',
   DELETED: 'project:deleted',
+  CLIENT_ASSIGNED: 'project:clientAssigned',
 } as const;
 
 export interface ProjectCreatedPayload {
@@ -40,6 +41,13 @@ export interface ProjectUpdatedPayload {
 
 export interface ProjectDeletedPayload {
   projectId: string;
+}
+
+export interface ProjectClientAssignedPayload {
+  projectId: string;
+  clientId: string | null;
+  previousClientId: string | null;
+  project: ProjectCreatedPayload['project'] & { clientId: string | null };
 }
 
 // =============================================================================
@@ -371,6 +379,7 @@ export type ServerToClientEvents = {
   [PROJECT_EVENTS.CREATED]: (payload: ProjectCreatedPayload) => void;
   [PROJECT_EVENTS.UPDATED]: (payload: ProjectUpdatedPayload) => void;
   [PROJECT_EVENTS.DELETED]: (payload: ProjectDeletedPayload) => void;
+  [PROJECT_EVENTS.CLIENT_ASSIGNED]: (payload: ProjectClientAssignedPayload) => void;
   [SECTION_EVENTS.CREATED]: (payload: SectionCreatedPayload) => void;
   [SECTION_EVENTS.UPDATED]: (payload: SectionUpdatedPayload) => void;
   [SECTION_EVENTS.DELETED]: (payload: SectionDeletedPayload) => void;

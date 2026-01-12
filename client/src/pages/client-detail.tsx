@@ -17,6 +17,13 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import {
   Form,
   FormControl,
   FormField,
@@ -49,7 +56,11 @@ import {
   Pencil,
   Trash2,
   Send,
+  FileText,
+  Link as LinkIcon,
+  Search,
 } from "lucide-react";
+import { useLocation } from "wouter";
 import type { ClientWithContacts, Project, ClientContact } from "@shared/schema";
 
 const createContactSchema = z.object({
@@ -75,15 +86,32 @@ const updateClientSchema = z.object({
 
 type UpdateClientForm = z.infer<typeof updateClientSchema>;
 
+const createProjectSchema = z.object({
+  name: z.string().min(1, "Project name is required"),
+  description: z.string().optional(),
+  color: z.string().default("#3B82F6"),
+});
+
+type CreateProjectForm = z.infer<typeof createProjectSchema>;
+
 export default function ClientDetailPage() {
   const [, params] = useRoute("/clients/:id");
+  const [, navigate] = useLocation();
   const clientId = params?.id;
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [editClientOpen, setEditClientOpen] = useState(false);
+  const [addProjectOpen, setAddProjectOpen] = useState(false);
+  const [projectView, setProjectView] = useState<"options" | "create" | "assign">("options");
+  const [projectSearchQuery, setProjectSearchQuery] = useState("");
 
   const { data: client, isLoading } = useQuery<ClientWithContacts>({
     queryKey: ["/api/clients", clientId],
     enabled: !!clientId,
+  });
+
+  const { data: unassignedProjects = [] } = useQuery<Project[]>({
+    queryKey: ["/api/projects/unassigned", projectSearchQuery],
+    enabled: addProjectOpen && projectView === "assign",
   });
 
   const createContactMutation = useMutation({
@@ -117,6 +145,34 @@ export default function ClientDetailPage() {
     },
   });
 
+  const createProjectMutation = useMutation({
+    mutationFn: async (data: CreateProjectForm) => {
+      const response = await apiRequest("POST", `/api/clients/${clientId}/projects`, data);
+      return response.json() as Promise<Project>;
+    },
+    onSuccess: (project: Project) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      setAddProjectOpen(false);
+      setProjectView("options");
+      projectForm.reset();
+      navigate(`/projects/${project.id}`);
+    },
+  });
+
+  const assignProjectMutation = useMutation({
+    mutationFn: async (projectId: string) => {
+      return apiRequest("PATCH", `/api/projects/${projectId}/client`, { clientId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects/unassigned"] });
+      setAddProjectOpen(false);
+      setProjectView("options");
+    },
+  });
+
   const contactForm = useForm<CreateContactForm>({
     resolver: zodResolver(createContactSchema),
     defaultValues: {
@@ -142,6 +198,15 @@ export default function ClientDetailPage() {
     } : undefined,
   });
 
+  const projectForm = useForm<CreateProjectForm>({
+    resolver: zodResolver(createProjectSchema),
+    defaultValues: {
+      name: "",
+      description: "",
+      color: "#3B82F6",
+    },
+  });
+
   const handleCreateContact = (data: CreateContactForm) => {
     createContactMutation.mutate(data);
   };
@@ -149,6 +214,25 @@ export default function ClientDetailPage() {
   const handleUpdateClient = (data: UpdateClientForm) => {
     updateClientMutation.mutate(data);
   };
+
+  const handleCreateProject = (data: CreateProjectForm) => {
+    createProjectMutation.mutate(data);
+  };
+
+  const handleAssignProject = (projectId: string) => {
+    assignProjectMutation.mutate(projectId);
+  };
+
+  const handleCloseProjectSheet = () => {
+    setAddProjectOpen(false);
+    setProjectView("options");
+    setProjectSearchQuery("");
+    projectForm.reset();
+  };
+
+  const filteredUnassignedProjects = unassignedProjects.filter(
+    (p) => p.name.toLowerCase().includes(projectSearchQuery.toLowerCase())
+  );
 
   const getStatusColor = (status: string) => {
     switch (status) {
@@ -595,6 +679,10 @@ export default function ClientDetailPage() {
           <TabsContent value="projects" className="p-6">
             <div className="flex items-center justify-between mb-4">
               <h2 className="text-lg font-medium">Projects</h2>
+              <Button onClick={() => setAddProjectOpen(true)} data-testid="button-add-project">
+                <Plus className="h-4 w-4 mr-2" />
+                Add New Project
+              </Button>
             </div>
 
             {client.projects && client.projects.length > 0 ? (
@@ -626,14 +714,214 @@ export default function ClientDetailPage() {
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <FolderKanban className="h-12 w-12 text-muted-foreground/50 mb-3" />
                 <p className="text-sm text-muted-foreground mb-4">No projects linked to this client</p>
-                <p className="text-xs text-muted-foreground">
-                  Create a project and assign it to this client to see it here.
-                </p>
+                <Button onClick={() => setAddProjectOpen(true)} variant="outline">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add First Project
+                </Button>
               </div>
             )}
           </TabsContent>
         </Tabs>
       </div>
+
+      <Sheet open={addProjectOpen} onOpenChange={handleCloseProjectSheet}>
+        <SheetContent className="sm:max-w-md">
+          <SheetHeader>
+            <SheetTitle>
+              {projectView === "options" && "Add Project"}
+              {projectView === "create" && "Start a New Project"}
+              {projectView === "assign" && "Assign Existing Project"}
+            </SheetTitle>
+            <SheetDescription>
+              {projectView === "options" && "Create a new project or assign an existing one to this client."}
+              {projectView === "create" && "Create a new project that will be automatically linked to this client."}
+              {projectView === "assign" && "Select an unassigned project to link to this client."}
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6">
+            {projectView === "options" && (
+              <div className="space-y-3">
+                <Button
+                  variant="outline"
+                  className="w-full justify-start h-auto p-4"
+                  onClick={() => setProjectView("create")}
+                  data-testid="button-create-new-project"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-md bg-primary/10 flex items-center justify-center shrink-0">
+                      <FileText className="h-5 w-5 text-primary" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium">Start a New Project</p>
+                      <p className="text-xs text-muted-foreground">
+                        Create a fresh project for this client
+                      </p>
+                    </div>
+                  </div>
+                </Button>
+
+                <Button
+                  variant="outline"
+                  className="w-full justify-start h-auto p-4"
+                  onClick={() => setProjectView("assign")}
+                  data-testid="button-assign-existing-project"
+                >
+                  <div className="flex items-center gap-4">
+                    <div className="h-10 w-10 rounded-md bg-muted flex items-center justify-center shrink-0">
+                      <LinkIcon className="h-5 w-5 text-muted-foreground" />
+                    </div>
+                    <div className="text-left">
+                      <p className="font-medium">Assign an Existing Project</p>
+                      <p className="text-xs text-muted-foreground">
+                        Link an unassigned project to this client
+                      </p>
+                    </div>
+                  </div>
+                </Button>
+              </div>
+            )}
+
+            {projectView === "create" && (
+              <Form {...projectForm}>
+                <form onSubmit={projectForm.handleSubmit(handleCreateProject)} className="space-y-4">
+                  <FormField
+                    control={projectForm.control}
+                    name="name"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Project Name *</FormLabel>
+                        <FormControl>
+                          <Input placeholder="Website Redesign" {...field} data-testid="input-project-name" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={projectForm.control}
+                    name="description"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Description</FormLabel>
+                        <FormControl>
+                          <Textarea 
+                            placeholder="Brief description of the project" 
+                            {...field} 
+                            data-testid="input-project-description" 
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <FormField
+                    control={projectForm.control}
+                    name="color"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Color</FormLabel>
+                        <FormControl>
+                          <div className="flex gap-2">
+                            {["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"].map((color) => (
+                              <button
+                                key={color}
+                                type="button"
+                                className={`h-8 w-8 rounded-md border-2 ${field.value === color ? "border-foreground" : "border-transparent"}`}
+                                style={{ backgroundColor: color }}
+                                onClick={() => field.onChange(color)}
+                                data-testid={`button-color-${color.slice(1)}`}
+                              />
+                            ))}
+                          </div>
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <div className="flex justify-between pt-4">
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      onClick={() => setProjectView("options")}
+                    >
+                      Back
+                    </Button>
+                    <Button
+                      type="submit"
+                      disabled={createProjectMutation.isPending}
+                      data-testid="button-submit-create-project"
+                    >
+                      {createProjectMutation.isPending ? "Creating..." : "Create Project"}
+                    </Button>
+                  </div>
+                </form>
+              </Form>
+            )}
+
+            {projectView === "assign" && (
+              <div className="space-y-4">
+                <div className="relative">
+                  <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                  <Input
+                    placeholder="Search projects..."
+                    value={projectSearchQuery}
+                    onChange={(e) => setProjectSearchQuery(e.target.value)}
+                    className="pl-9"
+                    data-testid="input-search-unassigned-projects"
+                  />
+                </div>
+
+                <div className="space-y-2 max-h-[400px] overflow-y-auto">
+                  {filteredUnassignedProjects.length > 0 ? (
+                    filteredUnassignedProjects.map((project) => (
+                      <div
+                        key={project.id}
+                        className="flex items-center justify-between p-3 rounded-lg border hover-elevate cursor-pointer"
+                        onClick={() => handleAssignProject(project.id)}
+                        data-testid={`button-assign-project-${project.id}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div
+                            className="h-3 w-3 rounded-sm"
+                            style={{ backgroundColor: project.color || "#3B82F6" }}
+                          />
+                          <div>
+                            <p className="font-medium text-sm">{project.name}</p>
+                            {project.description && (
+                              <p className="text-xs text-muted-foreground line-clamp-1">
+                                {project.description}
+                              </p>
+                            )}
+                          </div>
+                        </div>
+                        <Plus className="h-4 w-4 text-muted-foreground" />
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center py-8">
+                      <FolderKanban className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
+                      <p className="text-sm text-muted-foreground">
+                        {projectSearchQuery ? "No matching projects found" : "No unassigned projects available"}
+                      </p>
+                    </div>
+                  )}
+                </div>
+
+                <div className="pt-4 border-t">
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    onClick={() => setProjectView("options")}
+                  >
+                    Back
+                  </Button>
+                </div>
+              </div>
+            )}
+          </div>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

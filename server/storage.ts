@@ -49,6 +49,7 @@ export interface IStorage {
   
   getProject(id: string): Promise<Project | undefined>;
   getProjectsByWorkspace(workspaceId: string): Promise<Project[]>;
+  getUnassignedProjects(workspaceId: string, searchQuery?: string): Promise<Project[]>;
   createProject(project: InsertProject): Promise<Project>;
   updateProject(id: string, project: Partial<InsertProject>): Promise<Project | undefined>;
   
@@ -220,6 +221,21 @@ export class DatabaseStorage implements IStorage {
 
   async getProjectsByWorkspace(workspaceId: string): Promise<Project[]> {
     return db.select().from(projects).where(eq(projects.workspaceId, workspaceId)).orderBy(desc(projects.createdAt));
+  }
+
+  async getUnassignedProjects(workspaceId: string, searchQuery?: string): Promise<Project[]> {
+    const conditions = [
+      eq(projects.workspaceId, workspaceId),
+      sql`${projects.clientId} IS NULL`
+    ];
+    
+    if (searchQuery && searchQuery.trim()) {
+      conditions.push(sql`LOWER(${projects.name}) LIKE LOWER(${'%' + searchQuery.trim() + '%'})`);
+    }
+    
+    return db.select().from(projects)
+      .where(and(...conditions))
+      .orderBy(desc(projects.createdAt));
   }
 
   async createProject(insertProject: InsertProject): Promise<Project> {

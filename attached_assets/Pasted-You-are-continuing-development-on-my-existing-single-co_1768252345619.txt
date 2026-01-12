@@ -1,0 +1,96 @@
+You are continuing development on my existing single-codebase React + Express app. DO NOT rewrite the app. Implement ONLY the changes described below. Preserve all existing functionality (clients/projects nesting, tasks/subtasks, time tracking, attachments+S3, sockets, etc.).
+
+CRITICAL CONSTRAINTS:
+- React frontend, Express backend.
+- ALL backend code under /server, client under /client.
+- Use existing patterns/components for slide-outs and settings screens.
+- If Drizzle is used for schema changes, use it; otherwise do not refactor ORM.
+- Realtime updates via Socket.IO must be used, and ALL emits must go through:
+/server/src/realtime/events.ts (no direct io.emit elsewhere).
+
+===============================================================================
+GOALS
+===============================================================================
+1) Project Settings: allow assigning (or changing) a Project’s Client.
+2) Client Profile > Projects tab: add “Add New Project” button that offers:
+   A) Create a brand new project for this client
+   B) Attach/assign an existing “unassigned” project to this client
+
+Unassigned projects are projects with clientId = null.
+
+===============================================================================
+1) BACKEND API (MANDATORY)
+===============================================================================
+A) List unassigned projects (for selection)
+GET /api/v1/projects/unassigned
+- Returns projects where clientId IS NULL
+- Support search query ?q=
+- Return minimal fields: id, name/title, status, createdAt, updatedAt
+
+B) Assign a project to a client (or unassign)
+PATCH /api/v1/projects/:projectId/client
+Body:
+{
+  "clientId": "uuid | null"
+}
+Rules:
+- If clientId provided: validate client exists and user has access.
+- Update projects.clientId.
+- Return updated project.
+
+C) (If needed) Create project under client endpoint (should already exist)
+POST /api/v1/clients/:clientId/projects
+- Ensure it sets clientId automatically.
+- Return created project.
+
+===============================================================================
+2) REALTIME EVENTS (MANDATORY)
+===============================================================================
+Emit ONLY via /server/src/realtime/events.ts.
+
+A) Add/extend project events:
+- project:updated must include clientId (even if null)
+- Add a specific event if helpful:
+  - project:clientAssigned -> { projectId, clientId }
+(If you add it, still also emit project:updated for consistency.)
+
+Emit to:
+- project:{projectId}
+- client:{clientId} when clientId is set
+- If unassigning, also notify old client room (include previousClientId in payload so client UI can update).
+
+Frontend should update instantly:
+- Client Projects tab list
+- Project settings view
+- Any Projects list that shows client association
+
+===============================================================================
+3) FRONTEND UI CHANGES (MANDATORY)
+===============================================================================
+A) Project Settings: Assign Client
+Location:
+- In the Project “Settings” area (where other project configuration lives)
+
+UI:
+- Add a “Client” field with:
+  - current client label (or “Unassigned”)
+  - “Assign Client” / “Change” action
+  - searchable dropdown to pick a client
+  - option to “Unassign” (set clientId = null)
+
+Behavior:
+- Selecting a client calls PATCH /projects/:projectId/client
+- On success, update UI immediately and show toast.
+
+B) Client Profile > Projects tab: Add New Project button
+Add a button: “Add New Project”
+
+On click, open a slide-out panel (NOT a modal) with two options:
+
+Option 1: “Start a New Project”
+- Shows simple create project form (name/title, optional description/status)
+- On save, call POST /clients/:clientId/projects
+- After success, navigate to the newly created project (existing project page)
+
+Option 2: “Assign an Existing Project”
+- Show list/search of existing unassigned

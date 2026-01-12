@@ -18,6 +18,7 @@ import {
 import {
   emitProjectCreated,
   emitProjectUpdated,
+  emitProjectClientAssigned,
   emitSectionCreated,
   emitSectionUpdated,
   emitSectionDeleted,
@@ -135,6 +136,17 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/projects/unassigned", async (req, res) => {
+    try {
+      const searchQuery = typeof req.query.q === 'string' ? req.query.q : undefined;
+      const projects = await storage.getUnassignedProjects(DEMO_WORKSPACE_ID, searchQuery);
+      res.json(projects);
+    } catch (error) {
+      console.error("Error fetching unassigned projects:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/projects/:id", async (req, res) => {
     try {
       const project = await storage.getProject(req.params.id);
@@ -183,6 +195,46 @@ export async function registerRoutes(
       res.json(project);
     } catch (error) {
       console.error("Error updating project:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/projects/:projectId/client", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const { clientId } = req.body;
+      
+      // Get the current project to check if it exists and get previous clientId
+      const existingProject = await storage.getProject(projectId);
+      if (!existingProject) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      
+      const previousClientId = existingProject.clientId;
+      
+      // If clientId is provided (not null), validate that client exists
+      if (clientId !== null && clientId !== undefined) {
+        const client = await storage.getClient(clientId);
+        if (!client) {
+          return res.status(400).json({ error: "Client not found" });
+        }
+      }
+      
+      // Update the project's clientId
+      const updatedProject = await storage.updateProject(projectId, { 
+        clientId: clientId === undefined ? null : clientId 
+      });
+      
+      if (!updatedProject) {
+        return res.status(500).json({ error: "Failed to update project" });
+      }
+      
+      // Emit real-time event for client assignment change
+      emitProjectClientAssigned(updatedProject as any, previousClientId);
+      
+      res.json(updatedProject);
+    } catch (error) {
+      console.error("Error assigning client to project:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
@@ -1335,6 +1387,39 @@ export async function registerRoutes(
       res.json(projects);
     } catch (error) {
       console.error("Error fetching client projects:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/clients/:clientId/projects", async (req, res) => {
+    try {
+      const { clientId } = req.params;
+      
+      // Verify client exists
+      const client = await storage.getClient(clientId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+      
+      const data = insertProjectSchema.parse({
+        ...req.body,
+        workspaceId: DEMO_WORKSPACE_ID,
+        createdBy: DEMO_USER_ID,
+        clientId: clientId,
+      });
+      
+      const project = await storage.createProject(data);
+      
+      // Emit real-time events
+      emitProjectCreated(project as any);
+      emitProjectClientAssigned(project as any, null);
+      
+      res.status(201).json(project);
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating project for client:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });

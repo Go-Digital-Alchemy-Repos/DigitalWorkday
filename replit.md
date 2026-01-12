@@ -51,6 +51,7 @@ DASANA is a fully functional Asana-inspired project management application built
   - Badge components: priority-badge, status-badge, due-date-badge, tag-badge
   - avatar-group.tsx: Assignee display
   - project-calendar.tsx: FullCalendar integration with filtering and drag-to-reschedule
+  - project-settings-sheet.tsx: Project settings including client assignment/unassignment
 
 ### Backend Structure (server/)
 - **routes.ts**: API endpoints with real-time event emissions
@@ -72,7 +73,7 @@ DASANA is a fully functional Asana-inspired project management application built
 1. Client joins project/client/workspace rooms via room:join events
 2. Server emits events after successful DB operations (never before commit)
 3. Client hooks invalidate React Query cache to trigger refetch
-4. Events: project:*, section:*, task:*, subtask:*, attachment:*, client:*
+4. Events: project:*, section:*, task:*, subtask:*, attachment:*, client:*, project:clientAssigned
 
 ## API Endpoints
 
@@ -82,8 +83,10 @@ DASANA is a fully functional Asana-inspired project management application built
 ### Projects
 - GET /api/projects - List projects
 - GET /api/projects/:id - Get project
+- GET /api/projects/unassigned - List projects not assigned to any client (supports ?search= param)
 - POST /api/projects - Create project
 - PATCH /api/projects/:id - Update project
+- PATCH /api/projects/:projectId/client - Assign/unassign client to project (body: {clientId: string | null})
 
 ### Sections
 - GET /api/projects/:projectId/sections - List sections with tasks
@@ -139,6 +142,7 @@ DASANA is a fully functional Asana-inspired project management application built
 
 ### Client Projects
 - GET /api/clients/:clientId/projects - List projects linked to client
+- POST /api/clients/:clientId/projects - Create a new project linked to client
 
 ## Design Guidelines
 Following design_guidelines.md with:
