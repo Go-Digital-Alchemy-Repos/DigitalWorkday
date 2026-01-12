@@ -1,0 +1,265 @@
+You are continuing development on my existing single-codebase project management app. DO NOT rewrite the entire app. Implement structural + infrastructure upgrades ONLY as described below, while keeping all existing features working (projects, sections, tasks, subtasks, drag/drop, attachments + S3).
+
+===============================================================================
+CRITICAL CONSTRAINTS (READ FIRST)
+===============================================================================
+- Frontend MUST remain React.
+- Backend MUST remain Express.
+- ALL Express/backend code MUST live under a /server directory.
+- Real-time updates MUST be implemented using Socket.IO.
+- ALL socket emit logic MUST go through a single module:
+  /server/src/realtime/events.ts
+  (No direct io.emit calls anywhere else in the codebase.)
+- Use Drizzle ORM for NEW schema and queries if possible.
+- Do NOT break existing functionality.
+- Add documentation and inline code comments for maintainability.
+
+===============================================================================
+PRIMARY OBJECTIVES (MUST COMPLETE ALL)
+===============================================================================
+1) REAL-TIME UPDATES VIA SOCKETS (APP-WIDE)
+- Implement real-time updates so users see changes immediately without refresh:
+  - projects
+  - sections
+  - tasks
+  - subtasks
+  - task reordering
+  - attachment add/remove
+  - (calendar events later, but structure now)
+- Use a single shared Socket.IO connection per client.
+- Emit socket events ONLY after DB operations succeed.
+- Other connected clients update state immediately.
+
+2) STACK + FILE STRUCTURE GUARANTEES
+- React frontend
+- Express backend
+- Single repo
+- Express code in /server
+- React code in /client
+
+3) ORM STANDARDIZATION
+- Use Drizzle ORM where possible.
+- If another ORM exists:
+  - Do NOT remove it immediately.
+  - Use Drizzle for all NEW tables/queries.
+  - Document a migration plan.
+
+4) DOCUMENTATION & ANNOTATION
+- Inline comments for complex logic
+- README files for major systems
+- Feature documentation for realtime, DB, and architecture
+
+===============================================================================
+A) FILE STRUCTURE (MANDATORY)
+===============================================================================
+Target structure:
+
+/server
+  /src
+    /api
+      /routes
+      /controllers
+      /services
+      /middleware
+    /db
+      /client.ts
+      /schema
+      /migrations
+      README.md
+    /realtime
+      socket.ts
+      events.ts
+      README.md
+    /utils
+    index.ts
+  README.md
+
+/client
+  /src
+    /realtime
+      socket.ts
+      events.ts
+      README.md
+    /services
+    /state
+    /components
+    /pages
+  README.md
+
+/shared
+  /types
+  /events
+  README.md
+
+IMPORTANT:
+- Move files safely and update imports.
+- Preserve existing scripts.
+- If routes change, add compatibility aliases.
+
+===============================================================================
+B) REALTIME SYSTEM (SOCKET.IO) (MANDATORY)
+===============================================================================
+Backend:
+- Install socket.io
+- Attach Socket.IO to the existing Express HTTP server.
+- Create a single socket bootstrap file:
+  /server/src/realtime/socket.ts
+- Create centralized emit helpers ONLY in:
+  /server/src/realtime/events.ts
+
+Rooms strategy:
+- project:{projectId}
+
+Clients join project rooms when viewing a project.
+
+Frontend:
+- Install socket.io-client
+- Create a singleton socket client:
+  /client/src/realtime/socket.ts
+- Provide helper utilities/hooks to subscribe to events.
+- NEVER create multiple socket connections per page.
+
+===============================================================================
+C) CENTRALIZED REALTIME EVENT CONTRACT (MANDATORY)
+===============================================================================
+Define all event names + payloads in ONE place:
+- /shared/events (or mirrored server/client)
+
+Minimum supported events:
+
+Projects:
+- project:created
+- project:updated
+- project:deleted
+
+Sections:
+- section:created
+- section:updated
+- section:deleted
+- section:reordered
+
+Tasks:
+- task:created
+- task:updated
+- task:deleted
+- task:moved
+- task:reordered
+
+Subtasks:
+- subtask:created
+- subtask:updated
+- subtask:deleted
+- subtask:reordered
+
+Attachments:
+- attachment:added
+- attachment:deleted
+
+Rules:
+- Events emitted ONLY after DB commit.
+- Payloads must be sufficient for UI updates without full refetch when possible.
+- Emit to project:{projectId} room.
+
+===============================================================================
+D) INTEGRATION POINTS (MANDATORY)
+===============================================================================
+For EVERY existing mutation endpoint:
+- create
+- update
+- delete
+- reorder
+- attachment upload/delete
+
+After success:
+- Call the appropriate event emitter in events.ts
+- Emit to project room
+
+Frontend:
+- Subscribe to events in project-level state
+- Patch local state or invalidate caches (React Query/SWR/etc.)
+- Do NOT reload the page.
+
+===============================================================================
+E) DRIZZLE ORM SETUP (MANDATORY)
+===============================================================================
+- Install drizzle-orm and drizzle-kit
+- Create DB client at:
+  /server/src/db/client.ts
+- Define schemas in:
+  /server/src/db/schema/*
+- Add migration scripts:
+  - db:generate
+  - db:migrate
+
+If another ORM exists:
+- Keep it for legacy queries.
+- Use Drizzle for new work.
+- Create:
+  /server/MIGRATION_PLAN.md
+
+===============================================================================
+F) DOCUMENTATION (MANDATORY)
+===============================================================================
+Create documentation:
+
+1) /server/README.md
+- Server setup
+- Env vars
+- API overview
+- Realtime architecture
+
+2) /client/README.md
+- Client setup
+- Socket usage
+- State update patterns
+
+3) /shared/README.md
+- Shared types and events
+
+4) /server/src/realtime/README.md
+- Socket lifecycle
+- Room strategy
+- Event emit rules
+- Why events.ts is mandatory
+
+5) /server/src/db/README.md
+- Drizzle schemas
+- Migrations
+- DB conventions
+
+Code annotation:
+- Comment socket emitters
+- Comment reorder logic
+- Comment attachment presign flow
+- Comment any non-obvious logic
+
+===============================================================================
+G) ACCEPTANCE CRITERIA (MUST WORK)
+===============================================================================
+1) Open same project in two browsers:
+   - Create task -> appears instantly
+   - Move task -> updates instantly
+   - Create subtask -> appears instantly
+   - Reorder subtasks -> updates instantly
+   - Upload/delete attachment -> updates instantly
+
+2) Structure:
+   - All Express code under /server
+   - React code under /client
+
+3) Drizzle:
+   - Migrations run successfully
+   - New schema uses Drizzle
+
+4) Documentation:
+   - All required README files exist and are accurate
+
+===============================================================================
+H) OUTPUT (REQUIRED)
+===============================================================================
+When done, output:
+- Summary of changes
+- New folder structure
+- Socket event list and emitter locations
+- How to run client + server
+- Step-by-step realtime test instructions
