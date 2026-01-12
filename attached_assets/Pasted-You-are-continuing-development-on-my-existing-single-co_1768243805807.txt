@@ -1,0 +1,178 @@
+You are continuing development on my existing single-codebase React + Node project management app. DO NOT rewrite the app. Implement ONLY Amazon S3 storage support for Task/Sub-task Attachments (plus the minimal glue needed to integrate with the existing Attachments UI + API).
+
+We are using Amazon S3 as the file storage solution. Use AWS SDK v3 ONLY.
+
+===============================================================================
+GOAL
+===============================================================================
+- Store all task/subtask attachment files in a PRIVATE S3 bucket.
+- Upload should be direct-from-browser to S3 using a presigned URL (preferred).
+- Downloads should use short-lived presigned GET URLs.
+- Attachment metadata is stored in DB (task_attachments table) referencing S3 object key.
+- Must work for BOTH parent tasks and subtasks (subtasks are tasks with parentTaskId).
+
+===============================================================================
+1) PACKAGES (MANDATORY)
+===============================================================================
+Backend (Node) install:
+- @aws-sdk/client-s3
+- @aws-sdk/s3-request-presigner
+- mime-types (or equivalent) for content-type handling
+Optional (if you implement multipart upload via server, not preferred):
+- @aws-sdk/lib-storage
+
+Frontend: no AWS SDK packages. Frontend uploads to S3 via fetch PUT to presigned URL.
+
+===============================================================================
+2) ENV VARS (MANDATORY)
+===============================================================================
+Add these env vars and ensure code reads them from process.env:
+- AWS_REGION=us-east-1 (or our configured region)
+- AWS_S3_BUCKET_NAME=your-bucket-name
+- AWS_ACCESS_KEY_ID=...
+- AWS_SECRET_ACCESS_KEY=...
+Optional:
+- AWS_S3_KEY_PREFIX=project-attachments (default if not provided)
+- AWS_S3_PRESIGN_EXPIRES_SECONDS=300  (5 minutes)
+- AWS_S3_DOWNLOAD_EXPIRES_SECONDS=300
+
+IMPORTANT:
+- Do not hardcode secrets.
+- Use IAM user/role with least privilege: PutObject, GetObject, DeleteObject for bucket prefix only.
+
+===============================================================================
+3) S3 OBJECT KEY RULES (MANDATORY)
+===============================================================================
+Store under a predictable prefix:
+{AWS_S3_KEY_PREFIX}/{projectId}/tasks/{taskId}/{attachmentId-or-uuid}-{sanitizedFileName}
+
+- Sanitize file names (no slashes, control chars).
+- Always include projectId + taskId in the key for scoping.
+- Store bucket private; no public ACL.
+
+===============================================================================
+4) BACKEND API (MANDATORY): PRESIGNED UPLOAD + METADATA
+===============================================================================
+Implement/extend these endpoints using existing service/controller patterns:
+
+A) Create presigned upload URL:
+POST /api/projects/:projectId/tasks/:taskId/attachments/presign
+Body:
+{
+  "fileName": "example.pdf",
+  "mimeType": "application/pdf",
+  "fileSizeBytes": 12345
+}
+
+Server must:
+- Validate user permission to edit task and project access
+- Validate file type + size (same rules as UI)
+- Create a DB record in task_attachments with:
+  - originalFileName, mimeType, fileSizeBytes, uploadedByUserId, projectId, taskId
+  - storageKey (S3 key) computed now
+  - OPTIONAL: uploadStatus = "pending" (if you want)
+- Generate presigned URL for PUT Object:
+  - ContentType must match mimeType
+  - Add metadata headers optionally (x-amz-meta-original-filename)
+Return:
+{
+  "attachment": { ...dbRecordSansSecrets },
+  "upload": {
+    "url": "https://s3....presigned...",
+    "method": "PUT",
+    "headers": {
+      "Content-Type": "application/pdf"
+    }
+  }
+}
+
+B) Complete upload (confirm and finalize record):
+POST /api/projects/:projectId/tasks/:taskId/attachments/:attachmentId/complete
+Body:
+{
+  "etag": "optional-etag-from-s3"
+}
+Server:
+- Optionally HEAD the object in S3 to confirm it exists
+- Mark uploadStatus = "complete" (if you track status)
+Return updated attachment record
+
+C) List attachments:
+GET /api/projects/:projectId/tasks/:taskId/attachments
+Return metadata + (optional) downloadUrl or omit and provide a download endpoint.
+
+D) Get download URL (recommended separate endpoint):
+GET /api/projects/:projectId/tasks/:taskId/attachments/:attachmentId/download
+Server:
+- Validate access
+- Generate presigned GET URL (short-lived)
+Return:
+{ "url": "https://s3....presigned..." }
+
+E) Delete attachment:
+DELETE /api/projects/:projectId/tasks/:taskId/attachments/:attachmentId
+Server:
+- Validate permission
+- Delete object from S3 (DeleteObject)
+- Delete DB record (or soft delete per existing pattern)
+
+IMPORTANT:
+- Ensure attachment.taskId matches :taskId and attachment.projectId matches :projectId.
+- Never allow cross-project access.
+
+===============================================================================
+5) FRONTEND INTEGRATION (MANDATORY)
+===============================================================================
+Update the Attachments upload flow (dropzone + Attach button) to use presign:
+
+Upload steps per file:
+1) Call presign endpoint:
+   POST /attachments/presign with fileName/mimeType/fileSizeBytes
+2) Upload directly to S3 using fetch:
+   await fetch(upload.url, { method:"PUT", headers: upload.headers, body: file })
+   - If response not ok -> show error + allow retry
+3) Call complete endpoint to finalize record:
+   POST /attachments/:attachmentId/complete
+4) Refresh attachment list or optimistically set item to “ready”
+
+Retry rules:
+- If S3 upload fails, mark attachment record as failed OR delete the pending record (choose simplest: implement a cleanup endpoint or auto-delete pending on error).
+- Provide “Retry” which requests a NEW presigned URL (presigns should be single-use/time-limited).
+
+Progress:
+- If your app already uses XHR/axios for upload progress, you can use it, but with fetch PUT progress is harder.
+- Acceptable: show “Uploading…” spinner per file without % progress.
+
+===============================================================================
+6) S3 CORS (REQUIRED NOTE)
+===============================================================================
+Add a note in final output: bucket must allow browser PUT from our app origin.
+Include a recommended CORS config example in the output (do not apply automatically):
+
+- AllowedMethods: PUT, GET, HEAD
+- AllowedHeaders: *
+- AllowedOrigins: our frontend origin(s)
+- ExposeHeaders: ETag
+
+===============================================================================
+7) SECURITY & VALIDATION (MANDATORY)
+===============================================================================
+- Enforce max file size (25MB default) server-side and client-side.
+- Enforce allowed mime types/extensions server-side.
+- Presigned URL expiry: 5 minutes.
+- Bucket remains private; downloads are always via presigned GET.
+- Never store AWS creds in frontend.
+- Use least-privilege IAM access.
+
+===============================================================================
+8) DELIVERABLES OUTPUT (REQUIRED)
+===============================================================================
+When finished, output:
+- Summary of changes
+- Key files modified/added
+- New env vars needed
+- Manual test steps:
+  1) Upload file via Attach button -> appears -> download works
+  2) Upload via dropzone -> appears -> download works
+  3) Delete -> removed from S3 + DB
+- S3 CORS config snippet we must apply

@@ -228,6 +228,31 @@ export const notifications = pgTable("notifications", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 });
 
+// Upload Status enum
+export const UploadStatus = {
+  PENDING: "pending",
+  COMPLETE: "complete",
+  FAILED: "failed",
+} as const;
+
+// Task Attachments table
+export const taskAttachments = pgTable("task_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  taskId: varchar("task_id").references(() => tasks.id).notNull(),
+  projectId: varchar("project_id").references(() => projects.id).notNull(),
+  uploadedByUserId: varchar("uploaded_by_user_id").references(() => users.id).notNull(),
+  originalFileName: text("original_file_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  fileSizeBytes: integer("file_size_bytes").notNull(),
+  storageKey: text("storage_key").notNull(),
+  uploadStatus: text("upload_status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("task_attachments_task").on(table.taskId),
+  index("task_attachments_project").on(table.projectId),
+]);
+
 // Relations
 export const usersRelations = relations(users, ({ many }) => ({
   workspaceMembers: many(workspaceMembers),
@@ -341,6 +366,22 @@ export const tasksRelations = relations(tasks, ({ one, many }) => ({
   subtasks: many(subtasks),
   tags: many(taskTags),
   comments: many(comments),
+  attachments: many(taskAttachments),
+}));
+
+export const taskAttachmentsRelations = relations(taskAttachments, ({ one }) => ({
+  task: one(tasks, {
+    fields: [taskAttachments.taskId],
+    references: [tasks.id],
+  }),
+  project: one(projects, {
+    fields: [taskAttachments.projectId],
+    references: [projects.id],
+  }),
+  uploadedByUser: one(users, {
+    fields: [taskAttachments.uploadedByUserId],
+    references: [users.id],
+  }),
 }));
 
 export const taskAssigneesRelations = relations(taskAssignees, ({ one }) => ({
@@ -481,6 +522,12 @@ export const insertNotificationSchema = createInsertSchema(notifications).omit({
   createdAt: true,
 });
 
+export const insertTaskAttachmentSchema = createInsertSchema(taskAttachments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Types
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
@@ -530,7 +577,14 @@ export type InsertActivityLog = z.infer<typeof insertActivityLogSchema>;
 export type Notification = typeof notifications.$inferSelect;
 export type InsertNotification = z.infer<typeof insertNotificationSchema>;
 
+export type TaskAttachment = typeof taskAttachments.$inferSelect;
+export type InsertTaskAttachment = z.infer<typeof insertTaskAttachmentSchema>;
+
 // Extended types for frontend use
+export type TaskAttachmentWithUser = TaskAttachment & {
+  uploadedByUser?: User;
+};
+
 export type TaskWithRelations = Task & {
   assignees?: (TaskAssignee & { user?: User })[];
   tags?: (TaskTag & { tag?: Tag })[];
@@ -539,6 +593,7 @@ export type TaskWithRelations = Task & {
   parentTask?: Task;
   section?: Section;
   project?: Project;
+  attachments?: TaskAttachmentWithUser[];
 };
 
 export type ProjectWithRelations = Project & {
