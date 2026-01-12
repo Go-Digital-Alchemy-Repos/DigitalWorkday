@@ -14,10 +14,11 @@ import {
   type TaskTag, type InsertTaskTag,
   type Comment, type InsertComment,
   type ActivityLog, type InsertActivityLog,
-  type TaskWithRelations, type SectionWithTasks,
+  type TaskAttachment, type InsertTaskAttachment,
+  type TaskWithRelations, type SectionWithTasks, type TaskAttachmentWithUser,
   users, workspaces, workspaceMembers, teams, teamMembers,
   projects, projectMembers, sections, tasks, taskAssignees,
-  subtasks, tags, taskTags, comments, activityLog,
+  subtasks, tags, taskTags, comments, activityLog, taskAttachments,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, inArray, gte, lte, sql } from "drizzle-orm";
@@ -97,6 +98,12 @@ export interface IStorage {
   
   createActivityLog(log: InsertActivityLog): Promise<ActivityLog>;
   getActivityLogByEntity(entityType: string, entityId: string): Promise<ActivityLog[]>;
+  
+  getTaskAttachment(id: string): Promise<TaskAttachment | undefined>;
+  getTaskAttachmentsByTask(taskId: string): Promise<TaskAttachmentWithUser[]>;
+  createTaskAttachment(attachment: InsertTaskAttachment): Promise<TaskAttachment>;
+  updateTaskAttachment(id: string, attachment: Partial<InsertTaskAttachment>): Promise<TaskAttachment | undefined>;
+  deleteTaskAttachment(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -599,6 +606,41 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(activityLog)
       .where(and(eq(activityLog.entityType, entityType), eq(activityLog.entityId, entityId)))
       .orderBy(desc(activityLog.createdAt));
+  }
+
+  async getTaskAttachment(id: string): Promise<TaskAttachment | undefined> {
+    const [attachment] = await db.select().from(taskAttachments).where(eq(taskAttachments.id, id));
+    return attachment || undefined;
+  }
+
+  async getTaskAttachmentsByTask(taskId: string): Promise<TaskAttachmentWithUser[]> {
+    const attachmentsList = await db.select().from(taskAttachments)
+      .where(eq(taskAttachments.taskId, taskId))
+      .orderBy(desc(taskAttachments.createdAt));
+    
+    const result: TaskAttachmentWithUser[] = [];
+    for (const attachment of attachmentsList) {
+      const user = await this.getUser(attachment.uploadedByUserId);
+      result.push({ ...attachment, uploadedByUser: user });
+    }
+    return result;
+  }
+
+  async createTaskAttachment(insertAttachment: InsertTaskAttachment): Promise<TaskAttachment> {
+    const [attachment] = await db.insert(taskAttachments).values(insertAttachment).returning();
+    return attachment;
+  }
+
+  async updateTaskAttachment(id: string, attachment: Partial<InsertTaskAttachment>): Promise<TaskAttachment | undefined> {
+    const [updated] = await db.update(taskAttachments)
+      .set({ ...attachment, updatedAt: new Date() })
+      .where(eq(taskAttachments.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteTaskAttachment(id: string): Promise<void> {
+    await db.delete(taskAttachments).where(eq(taskAttachments.id, id));
   }
 }
 

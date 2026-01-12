@@ -3,6 +3,17 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { z } from "zod";
 import { insertTaskSchema, insertSectionSchema, insertSubtaskSchema, insertCommentSchema, insertTagSchema, insertProjectSchema, insertWorkspaceSchema, insertTeamSchema, insertWorkspaceMemberSchema, insertTeamMemberSchema, insertActivityLogSchema } from "@shared/schema";
+import { 
+  isS3Configured, 
+  validateFile, 
+  generateStorageKey, 
+  createPresignedUploadUrl, 
+  createPresignedDownloadUrl, 
+  deleteS3Object, 
+  checkObjectExists,
+  ALLOWED_MIME_TYPES,
+  MAX_FILE_SIZE_BYTES 
+} from "./s3";
 
 export async function registerRoutes(
   httpServer: Server,
@@ -660,6 +671,178 @@ export async function registerRoutes(
       res.json(logs);
     } catch (error) {
       console.error("Error fetching activity log:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // =====================
+  // Task Attachments API
+  // =====================
+
+  const presignRequestSchema = z.object({
+    fileName: z.string().min(1).max(255),
+    mimeType: z.string().min(1),
+    fileSizeBytes: z.number().positive().max(MAX_FILE_SIZE_BYTES),
+  });
+
+  app.get("/api/attachments/config", async (req, res) => {
+    try {
+      res.json({
+        configured: isS3Configured(),
+        maxFileSizeBytes: MAX_FILE_SIZE_BYTES,
+        allowedMimeTypes: ALLOWED_MIME_TYPES,
+      });
+    } catch (error) {
+      console.error("Error fetching attachment config:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/projects/:projectId/tasks/:taskId/attachments", async (req, res) => {
+    try {
+      const { projectId, taskId } = req.params;
+      
+      const task = await storage.getTask(taskId);
+      if (!task || task.projectId !== projectId) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      
+      const attachments = await storage.getTaskAttachmentsByTask(taskId);
+      res.json(attachments);
+    } catch (error) {
+      console.error("Error fetching attachments:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/projects/:projectId/tasks/:taskId/attachments/presign", async (req, res) => {
+    try {
+      const { projectId, taskId } = req.params;
+      
+      if (!isS3Configured()) {
+        return res.status(503).json({ 
+          error: "File storage is not configured. Please set AWS environment variables." 
+        });
+      }
+      
+      const task = await storage.getTask(taskId);
+      if (!task || task.projectId !== projectId) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+      
+      const data = presignRequestSchema.parse(req.body);
+      
+      const validation = validateFile(data.mimeType, data.fileSizeBytes);
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
+      }
+      
+      const tempId = crypto.randomUUID();
+      const storageKey = generateStorageKey(projectId, taskId, tempId, data.fileName);
+      
+      const attachment = await storage.createTaskAttachment({
+        taskId,
+        projectId,
+        uploadedByUserId: DEMO_USER_ID,
+        originalFileName: data.fileName,
+        mimeType: data.mimeType,
+        fileSizeBytes: data.fileSizeBytes,
+        storageKey,
+        uploadStatus: "pending",
+      });
+      
+      const upload = await createPresignedUploadUrl(storageKey, data.mimeType);
+      
+      res.status(201).json({
+        attachment: {
+          id: attachment.id,
+          originalFileName: attachment.originalFileName,
+          mimeType: attachment.mimeType,
+          fileSizeBytes: attachment.fileSizeBytes,
+          uploadStatus: attachment.uploadStatus,
+          createdAt: attachment.createdAt,
+        },
+        upload,
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: error.errors });
+      }
+      console.error("Error creating presigned URL:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/projects/:projectId/tasks/:taskId/attachments/:attachmentId/complete", async (req, res) => {
+    try {
+      const { projectId, taskId, attachmentId } = req.params;
+      
+      const attachment = await storage.getTaskAttachment(attachmentId);
+      if (!attachment || attachment.taskId !== taskId || attachment.projectId !== projectId) {
+        return res.status(404).json({ error: "Attachment not found" });
+      }
+      
+      if (attachment.uploadStatus === "complete") {
+        return res.json(attachment);
+      }
+      
+      const exists = await checkObjectExists(attachment.storageKey);
+      if (!exists) {
+        await storage.deleteTaskAttachment(attachmentId);
+        return res.status(400).json({ error: "Upload was not completed. Please try again." });
+      }
+      
+      const updated = await storage.updateTaskAttachment(attachmentId, {
+        uploadStatus: "complete",
+      });
+      
+      res.json(updated);
+    } catch (error) {
+      console.error("Error completing upload:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.get("/api/projects/:projectId/tasks/:taskId/attachments/:attachmentId/download", async (req, res) => {
+    try {
+      const { projectId, taskId, attachmentId } = req.params;
+      
+      const attachment = await storage.getTaskAttachment(attachmentId);
+      if (!attachment || attachment.taskId !== taskId || attachment.projectId !== projectId) {
+        return res.status(404).json({ error: "Attachment not found" });
+      }
+      
+      if (attachment.uploadStatus !== "complete") {
+        return res.status(400).json({ error: "Attachment upload is not complete" });
+      }
+      
+      const url = await createPresignedDownloadUrl(attachment.storageKey);
+      res.json({ url });
+    } catch (error) {
+      console.error("Error creating download URL:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/projects/:projectId/tasks/:taskId/attachments/:attachmentId", async (req, res) => {
+    try {
+      const { projectId, taskId, attachmentId } = req.params;
+      
+      const attachment = await storage.getTaskAttachment(attachmentId);
+      if (!attachment || attachment.taskId !== taskId || attachment.projectId !== projectId) {
+        return res.status(404).json({ error: "Attachment not found" });
+      }
+      
+      try {
+        await deleteS3Object(attachment.storageKey);
+      } catch (s3Error) {
+        console.warn("Failed to delete S3 object:", s3Error);
+      }
+      
+      await storage.deleteTaskAttachment(attachmentId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting attachment:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
