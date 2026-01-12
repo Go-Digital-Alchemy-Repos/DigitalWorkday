@@ -17,6 +17,7 @@ import ClientsPage from "@/pages/clients";
 import ClientDetailPage from "@/pages/client-detail";
 import TimeTrackingPage from "@/pages/time-tracking";
 import LoginPage from "@/pages/login";
+import SettingsPage from "@/pages/settings";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -59,6 +60,12 @@ function Router() {
       </Route>
       <Route path="/time-tracking">
         {() => <ProtectedRoute component={TimeTrackingPage} />}
+      </Route>
+      <Route path="/settings">
+        {() => <ProtectedRoute component={SettingsPage} />}
+      </Route>
+      <Route path="/settings/:tab">
+        {() => <ProtectedRoute component={SettingsPage} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

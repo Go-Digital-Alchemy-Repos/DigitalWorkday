@@ -1,0 +1,257 @@
+You are continuing development on my existing single-codebase React + Express app. DO NOT rewrite the app. Implement ONLY the Admin “Global Settings” area (UI + routing + minimal supporting backend endpoints if missing) exactly as specified below, while preserving all existing functionality (Clients→Projects→Tasks/Subtasks, Time Tracking, attachments+S3, realtime sockets, etc.).
+
+CRITICAL CONSTRAINTS
+- React frontend under /client, Express backend under /server
+- Do NOT break existing navigation; add to it.
+- Global Settings is ADMIN ONLY.
+- If auth/roles already exist, use them. If not fully wired, add minimal route-guard placeholder that assumes current dev user is Admin.
+- Realtime: if any setting changes should be broadcast, emit ONLY via /server/src/realtime/events.ts (no direct io.emit calls elsewhere).
+- Use Drizzle for any NEW schema if needed; do not delete/rename any existing tables.
+
+===============================================================================
+GOAL
+===============================================================================
+Add an Admin-only “Global Settings” navigation item that appears in the main sidebar BELOW the “Workspaces” section header (or immediately under Workspaces navigation grouping). Global Settings opens a multi-tab settings area.
+
+Global Settings Tabs:
+1) Team
+2) Workspaces
+3) Reports
+4) Integrations
+
+The settings area must be consistent with existing UI patterns (slide-outs, panels, shadcn style if used, no disruptive redesign).
+
+===============================================================================
+1) NAVIGATION + ROUTING (MANDATORY)
+===============================================================================
+A) Sidebar Navigation
+- Add a section heading “Workspaces” (if not already present).
+- Add “Global Settings” link BELOW that Workspaces section.
+- Show “Global Settings” ONLY for Admin users.
+
+B) Routes
+- /settings (default to Team tab)
+- /settings/team
+- /settings/workspaces
+- /settings/reports
+- /settings/integrations
+
+Use your existing router (Wouter/React Router/whatever currently used).
+
+C) Admin Guard
+- Ensure all /settings/* routes are protected:
+  - Admins can access
+  - Employees/Clients are redirected to a safe page (e.g., /clients or /projects) with a “Not authorized” toast.
+
+===============================================================================
+2) SETTINGS LAYOUT (MANDATORY)
+===============================================================================
+Global Settings page layout:
+- Title: “Global Settings”
+- Left side: vertical tab menu OR top tabs (choose whichever matches current app)
+- Main content area: tab content
+
+Tabs: Team, Workspaces, Reports, Integrations
+
+===============================================================================
+3) TEAM TAB (MANDATORY)
+===============================================================================
+Purpose: Full user management + team/group assignment.
+
+UI Features:
+- Users table/list:
+  - Name, Email, Role (Admin/Employee/Client), Status (Active/Inactive), Teams, Last active (optional)
+  - Actions: Edit, Deactivate/Activate, Reset password (placeholder), Remove (optional)
+- Invite user flow:
+  - “Invite User” button opens slide-out panel
+  - Fields:
+    - email (required)
+    - role (Admin/Employee/Client)
+    - team(s) assignment (multi-select)
+    - if role=Client: select Client Account(s) to grant access (client_user_access)
+    - expiration (e.g. 7/14/30 days)
+  - On submit:
+    - creates invitation
+    - shows token link (copy button)
+    - (if Mailgun configured) sends invite email
+
+Teams (Groups):
+- Add “Teams” management section within this tab:
+  - Create team (name, description)
+  - Edit team
+  - Delete team (confirm)
+  - Assign/unassign users to team
+
+Backend endpoints (create if missing):
+- GET /api/v1/users (admin only)
+- PATCH /api/v1/users/:id
+- GET /api/v1/teams
+- POST /api/v1/teams
+- PATCH /api/v1/teams/:teamId
+- DELETE /api/v1/teams/:teamId
+- POST /api/v1/teams/:teamId/members { userId }
+- DELETE /api/v1/teams/:teamId/members/:userId
+- POST /api/v1/invitations (admin only)
+- GET /api/v1/invitations
+- POST /api/v1/invitations/:id/resend
+- DELETE /api/v1/invitations/:id
+
+Schema (only if missing):
+- teams (id, organizationId, name, description, createdAt)
+- team_members (teamId, userId, createdAt)
+
+===============================================================================
+4) WORKSPACES TAB (MANDATORY)
+===============================================================================
+Purpose: Admins can add/edit/manage different workspaces.
+
+Definitions:
+- A Workspace = Organization tenant. (If your app already uses “organization”, show it as “workspace” in UI.)
+
+UI Features:
+- Workspace list:
+  - Name, slug/key, members count, created date
+  - Actions: Open, Edit, Archive/Deactivate
+- Create Workspace button:
+  - Name (required)
+  - slug (auto-generate, editable)
+- Workspace detail slide-out:
+  - Basic info
+  - Workspace admins list
+  - (Optional) default settings placeholders
+
+Backend endpoints (create if missing):
+- GET /api/v1/workspaces
+- POST /api/v1/workspaces
+- PATCH /api/v1/workspaces/:id
+- DELETE or ARCHIVE /api/v1/workspaces/:id (soft delete preferred)
+
+IMPORTANT:
+- Do NOT break current “default org” behavior. If only one workspace exists today, show it and allow adding more without disrupting existing data.
+
+===============================================================================
+5) REPORTS TAB (MANDATORY)
+===============================================================================
+Purpose: Reporting dashboards for Time Tracking + Projects + Tasks.
+
+Requirements:
+A) Time Tracking Reports
+- Filters:
+  - date range presets: This Week, Last Week, This Month, Last Month, This Year, Custom
+  - group by: week / month / year
+  - employee filter (all or specific employee)
+  - client filter (optional)
+  - project filter (optional)
+- Outputs:
+  - total hours (in-scope vs out-of-scope)
+  - hours trend chart (line/bar)
+  - table breakdown by employee and by project
+  - export CSV button
+
+B) Project Reports (industry standard)
+- At minimum implement metrics based on data you already have:
+  - total projects, active vs inactive
+  - tasks count, completed vs open (based on status/section)
+  - time logged per project (from time entries)
+  - “Estimated vs Actual” placeholder if estimates not yet stored
+- Charts:
+  - time distribution by client/project
+  - top projects by hours
+- Export CSV
+
+C) Task Reports (productivity)
+- metrics:
+  - tasks created vs completed over time
+  - average cycle time (if you can infer from createdAt + completedAt; if not present, add completedAt column ONLY if missing and safe)
+  - productivity by employee (tasks completed + hours logged)
+- charts and breakdown tables
+
+Backend endpoints:
+- Prefer reusing existing reporting endpoints if present.
+- Otherwise add:
+  - GET /api/v1/reports/time-tracking/summary
+  - GET /api/v1/reports/time-tracking/by-employee
+  - GET /api/v1/reports/time-tracking/by-project
+  - GET /api/v1/reports/projects/summary
+  - GET /api/v1/reports/tasks/summary
+These endpoints must be admin-only and scoped to active workspace.
+
+UI Library:
+- Use existing chart library (e.g., Recharts if already installed). If none, implement basic charts but keep it lightweight.
+
+===============================================================================
+6) INTEGRATIONS TAB (MANDATORY)
+===============================================================================
+Purpose: API integrations for Mailgun now, and future integrations later.
+
+UI Sections:
+A) Mailgun
+- Domain
+- API Key (masked)
+- From Email
+- Reply-To (optional)
+- Save
+- Send Test Email (to current admin)
+
+B) Placeholder cards for future integrations
+- “Coming soon” entries (Slack, Zapier, Google Calendar, etc.) as non-functional placeholders.
+
+Backend endpoints (use existing if already built):
+- GET /api/v1/settings/mailgun
+- PUT /api/v1/settings/mailgun
+- POST /api/v1/settings/mailgun/test
+
+Security:
+- Store secrets encrypted server-side.
+- Never return raw API keys to client.
+- Show “Configured: Yes/No” status.
+
+===============================================================================
+7) REALTIME (OPTIONAL, NICE-TO-HAVE)
+===============================================================================
+If you already have realtime:
+- On user/team/workspace updates emit events via /server/src/realtime/events.ts:
+  - user:updated
+  - team:updated
+  - workspace:updated
+This is optional; the core requirement is the settings UI.
+
+===============================================================================
+8) DOCUMENTATION (MANDATORY)
+===============================================================================
+Create:
+- /client/src/pages/settings/README.md
+  - routes + tab descriptions
+- /server/src/api/README-SETTINGS.md
+  - endpoints + permissions
+- Update any existing docs to include Global Settings nav + admin-only behavior
+
+Add code comments for:
+- admin route guards
+- settings save flows
+- mailgun masking/encryption handling
+
+===============================================================================
+9) ACCEPTANCE CRITERIA (MUST WORK)
+===============================================================================
+1) Admin sees “Global Settings” under Workspaces in the nav; employees/clients do not.
+2) Admin can open /settings and navigate between Team, Workspaces, Reports, Integrations.
+3) Team tab:
+   - Admin can view users, invite a user, create teams, assign users to teams.
+4) Workspaces tab:
+   - Admin can view/create/edit workspaces (without breaking existing default workspace).
+5) Reports tab:
+   - Admin can view at least Time Tracking reports with charts + export.
+6) Integrations tab:
+   - Admin can configure Mailgun, sees masked key, and can send a test email.
+7) Existing app behavior remains intact (projects/tasks/time tracking still work).
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+When finished, output:
+- Summary of changes
+- Files modified/added
+- Endpoints added/changed
+- Any schema additions
+- Manual test steps for acceptance criteria

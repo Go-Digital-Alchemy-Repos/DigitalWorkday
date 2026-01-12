@@ -23,11 +23,14 @@ import {
   type TimeEntry, type InsertTimeEntry,
   type ActiveTimer, type InsertActiveTimer,
   type TimeEntryWithRelations, type ActiveTimerWithRelations,
+  type Invitation, type InsertInvitation,
+  type AppSetting,
   users, workspaces, workspaceMembers, teams, teamMembers,
   projects, projectMembers, sections, tasks, taskAssignees,
   subtasks, tags, taskTags, comments, activityLog, taskAttachments,
   clients, clientContacts, clientInvites,
   timeEntries, activeTimers,
+  invitations, appSettings,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, inArray, gte, lte, sql } from "drizzle-orm";
@@ -999,6 +1002,94 @@ export class DatabaseStorage implements IStorage {
 
   async deleteActiveTimer(id: string): Promise<void> {
     await db.delete(activeTimers).where(eq(activeTimers.id, id));
+  }
+
+  // =============================================================================
+  // USER MANAGEMENT
+  // =============================================================================
+
+  async getUsersByWorkspace(workspaceId: string): Promise<User[]> {
+    const members = await db.select()
+      .from(workspaceMembers)
+      .where(eq(workspaceMembers.workspaceId, workspaceId));
+    
+    if (members.length === 0) {
+      return db.select().from(users);
+    }
+    
+    const userIds = members.map(m => m.userId);
+    const result: User[] = [];
+    
+    for (const userId of userIds) {
+      const [user] = await db.select().from(users).where(eq(users.id, userId));
+      if (user) result.push(user);
+    }
+    
+    return result;
+  }
+
+  async updateUser(id: string, updates: Partial<User>): Promise<User | undefined> {
+    const { passwordHash, ...safeUpdates } = updates as any;
+    const [updated] = await db.update(users)
+      .set({ ...safeUpdates, updatedAt: new Date() })
+      .where(eq(users.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  // =============================================================================
+  // INVITATIONS
+  // =============================================================================
+
+  async getInvitationsByWorkspace(workspaceId: string): Promise<Invitation[]> {
+    return db.select().from(invitations).where(eq(invitations.workspaceId, workspaceId));
+  }
+
+  async createInvitation(invitation: InsertInvitation): Promise<Invitation> {
+    const [created] = await db.insert(invitations).values(invitation).returning();
+    return created;
+  }
+
+  async deleteInvitation(id: string): Promise<void> {
+    await db.delete(invitations).where(eq(invitations.id, id));
+  }
+
+  // =============================================================================
+  // APP SETTINGS
+  // =============================================================================
+
+  async getAppSettings(workspaceId: string, key: string): Promise<any> {
+    const [setting] = await db.select()
+      .from(appSettings)
+      .where(and(eq(appSettings.workspaceId, workspaceId), eq(appSettings.key, key)));
+    
+    if (!setting) return null;
+    
+    try {
+      return JSON.parse(setting.value);
+    } catch {
+      return setting.value;
+    }
+  }
+
+  async setAppSettings(workspaceId: string, key: string, value: any): Promise<void> {
+    const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+    
+    const [existing] = await db.select()
+      .from(appSettings)
+      .where(and(eq(appSettings.workspaceId, workspaceId), eq(appSettings.key, key)));
+    
+    if (existing) {
+      await db.update(appSettings)
+        .set({ value: stringValue, updatedAt: new Date() })
+        .where(eq(appSettings.id, existing.id));
+    } else {
+      await db.insert(appSettings).values({
+        workspaceId,
+        key,
+        value: stringValue,
+      });
+    }
   }
 }
 

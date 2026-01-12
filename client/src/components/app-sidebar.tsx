@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
+import { useAuth } from "@/lib/auth";
 import {
   Home,
   FolderKanban,
@@ -13,6 +14,7 @@ import {
   Check,
   Briefcase,
   Clock,
+  Cog,
 } from "lucide-react";
 import dasanaLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -49,6 +51,8 @@ const mainNavItems = [
 export function AppSidebar() {
   const [location] = useLocation();
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin";
 
   const { data: workspace } = useQuery<Workspace>({
     queryKey: ["/api/workspaces/current"],
@@ -243,6 +247,26 @@ export function AppSidebar() {
             </CollapsibleContent>
           </Collapsible>
         </SidebarGroup>
+
+        {isAdmin && (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location.startsWith("/settings")}
+                  >
+                    <Link href="/settings" data-testid="link-global-settings">
+                      <Cog className="h-4 w-4" />
+                      <span>Global Settings</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3">

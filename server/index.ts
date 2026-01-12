@@ -9,6 +9,9 @@ import { bootstrapAdminUser } from "./bootstrap";
 const app = express();
 const httpServer = createServer(app);
 
+// Trust the reverse proxy (needed for secure cookies in production)
+app.set("trust proxy", 1);
+
 // Initialize Socket.IO server for real-time updates
 initializeSocketIO(httpServer);
 

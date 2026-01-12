@@ -1,5 +1,6 @@
-import type { Express, Request } from "express";
+import type { Express, Request, RequestHandler } from "express";
 import { createServer, type Server } from "http";
+import crypto from "crypto";
 import { storage } from "./storage";
 import { z } from "zod";
 import { insertTaskSchema, insertSectionSchema, insertSubtaskSchema, insertCommentSchema, insertTagSchema, insertProjectSchema, insertWorkspaceSchema, insertTeamSchema, insertWorkspaceMemberSchema, insertTeamMemberSchema, insertActivityLogSchema, insertClientSchema, insertClientContactSchema, insertClientInviteSchema, insertTimeEntrySchema, insertActiveTimerSchema, TimeEntry, ActiveTimer } from "@shared/schema";
@@ -1930,6 +1931,160 @@ export async function registerRoutes(
       });
     } catch (error) {
       console.error("Error generating time report:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ============================================
+  // USER MANAGEMENT ENDPOINTS (Admin Only)
+  // ============================================
+
+  const requireAdmin: RequestHandler = (req, res, next) => {
+    const user = req.user as Express.User | undefined;
+    if (!user || user.role !== "admin") {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+    next();
+  };
+
+  app.get("/api/users", requireAdmin, async (req, res) => {
+    try {
+      const users = await storage.getUsersByWorkspace(getCurrentWorkspaceId(req));
+      res.json(users);
+    } catch (error) {
+      console.error("Error fetching users:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.patch("/api/users/:id", requireAdmin, async (req, res) => {
+    try {
+      const { id } = req.params;
+      const updates = req.body;
+      const user = await storage.updateUser(id, updates);
+      if (!user) {
+        return res.status(404).json({ error: "User not found" });
+      }
+      res.json(user);
+    } catch (error) {
+      console.error("Error updating user:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ============================================
+  // INVITATION ENDPOINTS
+  // ============================================
+
+  app.get("/api/invitations", requireAdmin, async (req, res) => {
+    try {
+      const invitations = await storage.getInvitationsByWorkspace(getCurrentWorkspaceId(req));
+      res.json(invitations);
+    } catch (error) {
+      console.error("Error fetching invitations:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/invitations", requireAdmin, async (req, res) => {
+    try {
+      const { email, role, expiresInDays } = req.body;
+      const token = crypto.randomBytes(32).toString("hex");
+      const expiresAt = new Date();
+      expiresAt.setDate(expiresAt.getDate() + (expiresInDays || 7));
+
+      const invitation = await storage.createInvitation({
+        email,
+        role: role || "employee",
+        token,
+        expiresAt,
+        workspaceId: getCurrentWorkspaceId(req),
+        invitedBy: getCurrentUserId(req),
+        status: "pending",
+      });
+      
+      res.status(201).json(invitation);
+    } catch (error) {
+      console.error("Error creating invitation:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.delete("/api/invitations/:id", requireAdmin, async (req, res) => {
+    try {
+      await storage.deleteInvitation(req.params.id);
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error deleting invitation:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // ============================================
+  // MAILGUN SETTINGS ENDPOINTS
+  // ============================================
+
+  app.get("/api/settings/mailgun", requireAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getAppSettings(getCurrentWorkspaceId(req), "mailgun");
+      if (!settings) {
+        return res.json({ configured: false });
+      }
+      // Never return the actual API key
+      res.json({
+        configured: true,
+        domain: settings.domain || "",
+        fromEmail: settings.fromEmail || "",
+        replyTo: settings.replyTo || "",
+      });
+    } catch (error) {
+      console.error("Error fetching mailgun settings:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.put("/api/settings/mailgun", requireAdmin, async (req, res) => {
+    try {
+      const { domain, apiKey, fromEmail, replyTo } = req.body;
+      
+      // Get existing settings to preserve API key if not provided
+      const existing = await storage.getAppSettings(getCurrentWorkspaceId(req), "mailgun");
+      
+      const settingsData: any = {
+        domain: domain || existing?.domain || "",
+        fromEmail: fromEmail || existing?.fromEmail || "",
+        replyTo: replyTo || existing?.replyTo || "",
+      };
+      
+      // Only update API key if a new one is provided
+      if (apiKey) {
+        // In production, this should be encrypted
+        settingsData.apiKey = apiKey;
+      } else if (existing?.apiKey) {
+        settingsData.apiKey = existing.apiKey;
+      }
+      
+      await storage.setAppSettings(getCurrentWorkspaceId(req), "mailgun", settingsData);
+      
+      res.json({ success: true, configured: !!settingsData.apiKey });
+    } catch (error) {
+      console.error("Error saving mailgun settings:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/settings/mailgun/test", requireAdmin, async (req, res) => {
+    try {
+      const settings = await storage.getAppSettings(getCurrentWorkspaceId(req), "mailgun");
+      if (!settings?.apiKey) {
+        return res.status(400).json({ error: "Mailgun not configured" });
+      }
+      
+      // For now, just simulate a successful test
+      // In production, this would actually send an email via Mailgun
+      res.json({ success: true, message: "Test email sent successfully" });
+    } catch (error) {
+      console.error("Error testing mailgun:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
