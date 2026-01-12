@@ -15,6 +15,7 @@ import {
 import { ChildTaskList } from "@/components/child-task-list";
 import { SubtaskDetailDrawer } from "@/components/subtask-detail-drawer";
 import { CommentThread } from "@/components/comment-thread";
+import { AttachmentUploader } from "@/components/attachment-uploader";
 import { StatusBadge } from "@/components/status-badge";
 import { TagBadge } from "@/components/tag-badge";
 import { AvatarGroup } from "@/components/avatar-group";
@@ -264,6 +265,10 @@ export function TaskDetailDrawer({
             onDelete={onDeleteChildTask}
             onReorder={(taskId, toIndex) => onReorderChildTasks?.(task.id, taskId, toIndex)}
           />
+
+          <Separator />
+
+          <AttachmentUploader taskId={task.id} projectId={task.projectId} />
 
           <Separator />
 

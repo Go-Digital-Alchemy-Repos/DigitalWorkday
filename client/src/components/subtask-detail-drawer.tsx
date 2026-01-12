@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/select";
 import { StatusBadge } from "@/components/status-badge";
 import { AvatarGroup } from "@/components/avatar-group";
+import { AttachmentUploader } from "@/components/attachment-uploader";
 import { format } from "date-fns";
 import type { TaskWithRelations, User } from "@shared/schema";
 
@@ -219,6 +220,10 @@ export function SubtaskDetailDrawer({
               data-testid="textarea-subtask-description"
             />
           </div>
+
+          <Separator />
+
+          <AttachmentUploader taskId={subtask.id} projectId={subtask.projectId} />
         </div>
       </SheetContent>
     </Sheet>
