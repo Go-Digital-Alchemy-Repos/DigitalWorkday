@@ -1,0 +1,187 @@
+SAFE TIME TRACKING ADD-ON PROMPT (NON-DESTRUCTIVE VERSION) — NO SCREENSHOTS
+
+You are continuing development on my existing single-codebase React + Express CRM / Project Management app.
+DO NOT rewrite, rename, or remove any existing features, tables, routes, or UI.
+This prompt is strictly ADDITIVE and must preserve all current functionality.
+
+CRITICAL SAFETY RULES (READ FIRST)
+- This is an ADD-ON, not a replacement.
+- Clients remain the top-level entity.
+- Projects remain nested under Clients (projects.clientId).
+- Tasks (including subtasks) remain nested under Projects.
+- Do NOT rename Clients to Projects or vice versa.
+- Do NOT remove or recreate existing tables.
+- Reuse existing tables (projects, tasks, time_entries, active_timers).
+- Only ADD columns/tables if missing.
+- Do NOT implement a new authentication system in this prompt.
+- Do NOT remove Socket.IO or existing realtime events.
+- ALL socket emits must go through /server/src/realtime/events.ts.
+
+GOAL
+Add advanced Time Tracking features as an add-on to the existing CRM system, enabling:
+- Task-level time tracking
+- In-scope / out-of-scope classification
+- Admin reporting and oversight
+WITHOUT breaking or replacing the current app.
+
+======================================================================
+CORE CONCEPTS (MUST MATCH EXISTING APP)
+======================================================================
+Clients
+- Top-level CRM entity
+- Contains Projects
+
+Projects
+- Belong to a Client (projects.clientId)
+- May be active/inactive
+- May have optional color and hierarchy
+
+Tasks
+- Belong to Projects
+- May be parent or subtask
+- Time is always tracked against a Task
+
+Time Entries
+- Belong to Client → Project → Task
+- Created via timer or manual entry
+
+======================================================================
+SCHEMA CHANGES (SAFE / ADDITIVE ONLY)
+======================================================================
+
+EXTEND EXISTING TABLES (DO NOT DROP OR RENAME)
+
+projects (ADD ONLY IF MISSING)
+- color (varchar, nullable)
+- isActive (boolean, default true)
+- parentProjectId (uuid nullable, FK -> projects.id)
+
+tasks (ADD ONLY IF MISSING)
+- isActive (boolean, default true)
+
+time_entries (ADD ONLY IF MISSING)
+- scope (enum: in_scope, out_of_scope, default in_scope)
+- userId (if not already present)
+- Ensure clientId, projectId, taskId remain intact
+
+active_timers (ADD ONLY IF MISSING)
+- status (enum: running, paused)
+- elapsedSeconds (int, default 0)
+- lastStartedAt (timestamp, nullable)
+
+IMPORTANT:
+- DO NOT create screenshot tables.
+- DO NOT add any screenshot capture dependencies.
+
+======================================================================
+TIME TRACKING FEATURES
+======================================================================
+
+STOPWATCH TIMER
+- Start / Pause / Resume / Stop
+- One active timer per user
+- Timer persists across navigation and refresh
+- Timer state stored in active_timers
+- Elapsed time excludes paused time
+
+FINALIZATION RULE
+- Timer cannot be stopped without selecting:
+  Client → Project → Task
+- If missing, open Finalize panel to select or create them inline
+
+MANUAL TIME ENTRY
+- Client (required)
+- Project (required)
+- Task (required)
+- Date
+- Start/end OR duration
+- Description
+- Scope toggle:
+  - In Scope (billable)
+  - Out of Scope (non-billable)
+
+TIME ENTRY DISPLAY
+- Card or table layout (match existing UI)
+- Show: Task, Project, Client, date, duration, scope badge, description
+- Edit and delete with confirmation dialogs
+- Filtering by date range and Client/Project
+
+======================================================================
+INLINE CREATION (REQUIRED)
+======================================================================
+While starting or stopping a timer, users must be able to:
+- Create a new Client
+- Create a new Project under selected Client
+- Create a new Task under selected Project
+
+All creation uses EXISTING endpoints:
+- POST /clients
+- POST /clients/:clientId/projects
+- POST /projects/:projectId/tasks
+
+No duplicate endpoints allowed.
+
+======================================================================
+REPORTING (ADMIN OVERSIGHT — NO AUTH IMPLEMENTATION)
+======================================================================
+- Total hours (in-scope vs out-of-scope)
+- Hours by Client
+- Hours by Project
+- Hours by Task
+- Employee comparisons (placeholder for later when auth/roles are wired)
+- Date range filters
+- CSV export
+
+IMPORTANT:
+- Do NOT implement new authentication/authorization in this prompt.
+- If role checks exist, reuse them; otherwise keep endpoints accessible but design them to be easy to gate later.
+
+======================================================================
+REALTIME (MANDATORY)
+======================================================================
+Emit events ONLY via /server/src/realtime/events.ts
+
+Add events:
+- timeEntry:created
+- timeEntry:updated
+- timeEntry:deleted
+- timer:started
+- timer:paused
+- timer:resumed
+- timer:stopped
+
+Emit to:
+- client:{clientId}
+- project:{projectId}
+
+Frontend must update instantly without refresh.
+
+======================================================================
+SECURITY & PERMISSIONS (PLACEHOLDERS ONLY)
+======================================================================
+- Assume Admin and Employee roles exist in the future
+- Design endpoints/services so it’s straightforward to enforce:
+  - employees only see their own time
+  - admins see everything
+- DO NOT implement auth in this prompt
+- Leave hooks for Better Auth integration later
+
+======================================================================
+ACCEPTANCE CRITERIA
+======================================================================
+1) Existing app continues to function unchanged
+2) Time tracking works at Client → Project → Task level
+3) Pausing/resuming timer excludes break time
+4) Manual and timer entries both work
+5) Inline creation works during finalize
+6) Admin oversight reporting works (totals + breakdowns + export)
+7) Realtime updates work across tabs
+
+======================================================================
+OUTPUT REQUIRED
+======================================================================
+- Summary of changes
+- Schema additions only (no drops)
+- New endpoints added
+- Socket events added
+- Manual test steps
