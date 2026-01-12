@@ -20,10 +20,14 @@ import {
   type ClientContact, type InsertClientContact,
   type ClientInvite, type InsertClientInvite,
   type ClientWithContacts,
+  type TimeEntry, type InsertTimeEntry,
+  type ActiveTimer, type InsertActiveTimer,
+  type TimeEntryWithRelations, type ActiveTimerWithRelations,
   users, workspaces, workspaceMembers, teams, teamMembers,
   projects, projectMembers, sections, tasks, taskAssignees,
   subtasks, tags, taskTags, comments, activityLog, taskAttachments,
   clients, clientContacts, clientInvites,
+  timeEntries, activeTimers,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, inArray, gte, lte, sql } from "drizzle-orm";
@@ -135,6 +139,29 @@ export interface IStorage {
   
   // Projects by client
   getProjectsByClient(clientId: string): Promise<Project[]>;
+  
+  // Time Tracking - Time Entries
+  getTimeEntry(id: string): Promise<TimeEntry | undefined>;
+  getTimeEntriesByWorkspace(workspaceId: string, filters?: {
+    userId?: string;
+    clientId?: string;
+    projectId?: string;
+    taskId?: string;
+    scope?: 'in_scope' | 'out_of_scope';
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<TimeEntryWithRelations[]>;
+  getTimeEntriesByUser(userId: string, workspaceId: string): Promise<TimeEntryWithRelations[]>;
+  createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry>;
+  updateTimeEntry(id: string, entry: Partial<InsertTimeEntry>): Promise<TimeEntry | undefined>;
+  deleteTimeEntry(id: string): Promise<void>;
+  
+  // Time Tracking - Active Timers
+  getActiveTimer(id: string): Promise<ActiveTimer | undefined>;
+  getActiveTimerByUser(userId: string): Promise<ActiveTimerWithRelations | undefined>;
+  createActiveTimer(timer: InsertActiveTimer): Promise<ActiveTimer>;
+  updateActiveTimer(id: string, timer: Partial<InsertActiveTimer>): Promise<ActiveTimer | undefined>;
+  deleteActiveTimer(id: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -823,6 +850,155 @@ export class DatabaseStorage implements IStorage {
       .from(projects)
       .where(eq(projects.clientId, clientId))
       .orderBy(asc(projects.name));
+  }
+
+  // =============================================================================
+  // TIME TRACKING - TIME ENTRIES
+  // =============================================================================
+
+  async getTimeEntry(id: string): Promise<TimeEntry | undefined> {
+    const [entry] = await db.select().from(timeEntries).where(eq(timeEntries.id, id));
+    return entry || undefined;
+  }
+
+  async getTimeEntriesByWorkspace(workspaceId: string, filters?: {
+    userId?: string;
+    clientId?: string;
+    projectId?: string;
+    taskId?: string;
+    scope?: 'in_scope' | 'out_of_scope';
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<TimeEntryWithRelations[]> {
+    let conditions = [eq(timeEntries.workspaceId, workspaceId)];
+    
+    if (filters?.userId) {
+      conditions.push(eq(timeEntries.userId, filters.userId));
+    }
+    if (filters?.clientId) {
+      conditions.push(eq(timeEntries.clientId, filters.clientId));
+    }
+    if (filters?.projectId) {
+      conditions.push(eq(timeEntries.projectId, filters.projectId));
+    }
+    if (filters?.taskId) {
+      conditions.push(eq(timeEntries.taskId, filters.taskId));
+    }
+    if (filters?.scope) {
+      conditions.push(eq(timeEntries.scope, filters.scope));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(timeEntries.startTime, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(timeEntries.startTime, filters.endDate));
+    }
+
+    const entries = await db.select()
+      .from(timeEntries)
+      .where(and(...conditions))
+      .orderBy(desc(timeEntries.startTime));
+
+    // Enrich with relations
+    const result: TimeEntryWithRelations[] = [];
+    for (const entry of entries) {
+      const enriched: TimeEntryWithRelations = { ...entry };
+      
+      if (entry.userId) {
+        const [user] = await db.select().from(users).where(eq(users.id, entry.userId));
+        if (user) enriched.user = user;
+      }
+      if (entry.clientId) {
+        const [client] = await db.select().from(clients).where(eq(clients.id, entry.clientId));
+        if (client) enriched.client = client;
+      }
+      if (entry.projectId) {
+        const [project] = await db.select().from(projects).where(eq(projects.id, entry.projectId));
+        if (project) enriched.project = project;
+      }
+      if (entry.taskId) {
+        const [task] = await db.select().from(tasks).where(eq(tasks.id, entry.taskId));
+        if (task) enriched.task = task;
+      }
+      
+      result.push(enriched);
+    }
+    
+    return result;
+  }
+
+  async getTimeEntriesByUser(userId: string, workspaceId: string): Promise<TimeEntryWithRelations[]> {
+    return this.getTimeEntriesByWorkspace(workspaceId, { userId });
+  }
+
+  async createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry> {
+    const [created] = await db.insert(timeEntries).values(entry).returning();
+    return created;
+  }
+
+  async updateTimeEntry(id: string, entry: Partial<InsertTimeEntry>): Promise<TimeEntry | undefined> {
+    const [updated] = await db.update(timeEntries)
+      .set({ ...entry, updatedAt: new Date() })
+      .where(eq(timeEntries.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteTimeEntry(id: string): Promise<void> {
+    await db.delete(timeEntries).where(eq(timeEntries.id, id));
+  }
+
+  // =============================================================================
+  // TIME TRACKING - ACTIVE TIMERS
+  // =============================================================================
+
+  async getActiveTimer(id: string): Promise<ActiveTimer | undefined> {
+    const [timer] = await db.select().from(activeTimers).where(eq(activeTimers.id, id));
+    return timer || undefined;
+  }
+
+  async getActiveTimerByUser(userId: string): Promise<ActiveTimerWithRelations | undefined> {
+    const [timer] = await db.select().from(activeTimers).where(eq(activeTimers.userId, userId));
+    
+    if (!timer) return undefined;
+    
+    const enriched: ActiveTimerWithRelations = { ...timer };
+    
+    if (timer.userId) {
+      const [user] = await db.select().from(users).where(eq(users.id, timer.userId));
+      if (user) enriched.user = user;
+    }
+    if (timer.clientId) {
+      const [client] = await db.select().from(clients).where(eq(clients.id, timer.clientId));
+      if (client) enriched.client = client;
+    }
+    if (timer.projectId) {
+      const [project] = await db.select().from(projects).where(eq(projects.id, timer.projectId));
+      if (project) enriched.project = project;
+    }
+    if (timer.taskId) {
+      const [task] = await db.select().from(tasks).where(eq(tasks.id, timer.taskId));
+      if (task) enriched.task = task;
+    }
+    
+    return enriched;
+  }
+
+  async createActiveTimer(timer: InsertActiveTimer): Promise<ActiveTimer> {
+    const [created] = await db.insert(activeTimers).values(timer).returning();
+    return created;
+  }
+
+  async updateActiveTimer(id: string, timer: Partial<InsertActiveTimer>): Promise<ActiveTimer | undefined> {
+    const [updated] = await db.update(activeTimers)
+      .set({ ...timer, updatedAt: new Date() })
+      .where(eq(activeTimers.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteActiveTimer(id: string): Promise<void> {
+    await db.delete(activeTimers).where(eq(activeTimers.id, id));
   }
 }
 
