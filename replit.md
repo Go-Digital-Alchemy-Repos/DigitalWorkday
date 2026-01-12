@@ -10,10 +10,11 @@ DASANA is a fully functional Asana-inspired project management application built
 
 ## Tech Stack
 - **Frontend**: React 18, TypeScript, Tailwind CSS, shadcn/ui, React Query (TanStack Query v5), FullCalendar
-- **Backend**: Express.js, TypeScript
+- **Backend**: Express.js, TypeScript, Socket.IO
 - **Database**: PostgreSQL with Drizzle ORM
 - **Routing**: Wouter (frontend)
 - **State Management**: React Query for server state
+- **Real-time**: Socket.IO for live updates across connected clients
 
 ## Project Architecture
 
@@ -49,10 +50,26 @@ DASANA is a fully functional Asana-inspired project management application built
   - project-calendar.tsx: FullCalendar integration with filtering and drag-to-reschedule
 
 ### Backend Structure (server/)
-- **routes.ts**: API endpoints
+- **routes.ts**: API endpoints with real-time event emissions
 - **storage.ts**: DatabaseStorage class with full CRUD operations
 - **seed.ts**: Demo data seeding script
 - **db.ts**: Database connection
+- **realtime/**: Socket.IO infrastructure
+  - socket.ts: Socket.IO server initialization and room management
+  - events.ts: Centralized event emitters (ALL socket emissions go through this module)
+
+### Real-time Architecture (shared/events/, client/src/lib/realtime/)
+- **shared/events/index.ts**: Type-safe event contracts shared between server and client
+- **client/src/lib/realtime/**: Client-side Socket.IO utilities
+  - socket.ts: Socket singleton with automatic reconnection
+  - hooks.ts: React hooks (useProjectSocket, useSocketEvent) for subscribing to events
+  - index.ts: Barrel exports
+
+### Real-time Event Flow
+1. Client joins project room via `room:join:project` event
+2. Server emits events after successful DB operations (never before commit)
+3. Client hooks invalidate React Query cache to trigger refetch
+4. Events: project:*, section:*, task:*, subtask:*, attachment:*
 
 ## API Endpoints
 

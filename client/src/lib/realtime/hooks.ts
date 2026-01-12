@@ -58,6 +58,7 @@ export function useProjectSocket(projectId: string | null | undefined) {
         queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "calendar-events"] });
         if (payload.task.parentTaskId) {
           queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.task.parentTaskId] });
+          queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.task.parentTaskId, "childtasks"] });
         }
       }
     };
@@ -70,6 +71,7 @@ export function useProjectSocket(projectId: string | null | undefined) {
         queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.taskId] });
         if (payload.parentTaskId) {
           queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.parentTaskId] });
+          queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.parentTaskId, "childtasks"] });
         }
       }
     };
@@ -81,6 +83,7 @@ export function useProjectSocket(projectId: string | null | undefined) {
         queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "calendar-events"] });
         if (payload.parentTaskId) {
           queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.parentTaskId] });
+          queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.parentTaskId, "childtasks"] });
         }
       }
     };
