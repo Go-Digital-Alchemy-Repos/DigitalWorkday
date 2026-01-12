@@ -1,7 +1,7 @@
 # DASANA - Project Management Application
 
 ## Overview
-DASANA is a fully functional Asana-inspired project management application built with React, Express, and PostgreSQL. It features workspaces, teams, projects, sections, tasks with subtasks, tags, comments, and activity tracking.
+DASANA is a fully functional Asana-inspired project management application built with React, Express, and PostgreSQL. It features workspaces, teams, clients (CRM module), projects, sections, tasks with subtasks, tags, comments, and activity tracking.
 
 ## Current State
 - **Status**: MVP Complete
@@ -24,7 +24,10 @@ DASANA is a fully functional Asana-inspired project management application built
 - **workspaceMembers**: User membership in workspaces (owner, admin, member, guest)
 - **teams**: Groups within workspaces
 - **teamMembers**: User membership in teams
-- **projects**: Projects belong to workspaces, optionally to teams
+- **clients**: CRM module - company/organization records with address, industry, status
+- **clientContacts**: Contacts associated with clients (name, email, phone, title)
+- **clientInvites**: Placeholder for future client portal invites
+- **projects**: Projects belong to workspaces, optionally to teams and clients (via clientId)
 - **projectMembers**: User roles in projects (admin, member, viewer)
 - **sections**: Kanban columns within projects
 - **tasks**: Main task entities with title, description, status, priority, dates
@@ -36,9 +39,9 @@ DASANA is a fully functional Asana-inspired project management application built
 - **activityLog**: Audit trail for changes
 
 ### Frontend Structure (client/src/)
-- **pages/**: Route components (home.tsx, my-tasks.tsx, project.tsx)
+- **pages/**: Route components (home.tsx, my-tasks.tsx, project.tsx, clients.tsx, client-detail.tsx, time-tracking.tsx)
 - **components/**: Reusable UI components
-  - app-sidebar.tsx: Navigation sidebar with workspace, projects, teams
+  - app-sidebar.tsx: Navigation sidebar with workspace, projects, teams, clients, time tracking
   - task-card.tsx: Task display for list/board views
   - task-detail-drawer.tsx: Right panel for task editing
   - section-column.tsx: Board view columns
@@ -66,10 +69,10 @@ DASANA is a fully functional Asana-inspired project management application built
   - index.ts: Barrel exports
 
 ### Real-time Event Flow
-1. Client joins project room via `room:join:project` event
+1. Client joins project/client/workspace rooms via room:join events
 2. Server emits events after successful DB operations (never before commit)
 3. Client hooks invalidate React Query cache to trigger refetch
-4. Events: project:*, section:*, task:*, subtask:*, attachment:*
+4. Events: project:*, section:*, task:*, subtask:*, attachment:*, client:*
 
 ## API Endpoints
 
@@ -115,6 +118,27 @@ DASANA is a fully functional Asana-inspired project management application built
 - POST /api/tasks/:taskId/comments - Create comment
 - PATCH /api/comments/:id - Update comment
 - DELETE /api/comments/:id - Delete comment
+
+### Clients (CRM Module)
+- GET /api/clients - List clients in workspace
+- GET /api/clients/:id - Get client with contacts and projects
+- POST /api/clients - Create client
+- PATCH /api/clients/:id - Update client
+- DELETE /api/clients/:id - Delete client
+
+### Client Contacts
+- GET /api/clients/:clientId/contacts - List contacts
+- POST /api/clients/:clientId/contacts - Create contact
+- PATCH /api/clients/:clientId/contacts/:contactId - Update contact
+- DELETE /api/clients/:clientId/contacts/:contactId - Delete contact
+
+### Client Invites (Placeholder)
+- GET /api/clients/:clientId/invites - List invites
+- POST /api/clients/:clientId/invites - Create invite
+- DELETE /api/clients/:clientId/invites/:inviteId - Delete invite
+
+### Client Projects
+- GET /api/clients/:clientId/projects - List projects linked to client
 
 ## Design Guidelines
 Following design_guidelines.md with:
