@@ -1,6 +1,18 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute } from "wouter";
+import {
+  DndContext,
+  closestCenter,
+  PointerSensor,
+  KeyboardSensor,
+  useSensor,
+  useSensors,
+  DragEndEvent,
+  DragOverEvent,
+  DragStartEvent,
+} from "@dnd-kit/core";
+import { arrayMove } from "@dnd-kit/sortable";
 import {
   LayoutGrid,
   List,
@@ -18,6 +30,7 @@ import { SectionColumn } from "@/components/section-column";
 import { TaskCard } from "@/components/task-card";
 import { TaskDetailDrawer } from "@/components/task-detail-drawer";
 import { CreateTaskDialog } from "@/components/create-task-dialog";
+import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Project, SectionWithTasks, TaskWithRelations, Section } from "@shared/schema";
 import { Link } from "wouter";
@@ -27,11 +40,19 @@ type ViewType = "board" | "list" | "calendar";
 export default function ProjectPage() {
   const [, params] = useRoute("/projects/:id");
   const projectId = params?.id;
+  const { toast } = useToast();
 
   const [view, setView] = useState<ViewType>("board");
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState<string | undefined>();
+  const [localSections, setLocalSections] = useState<SectionWithTasks[] | null>(null);
+  const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
+    useSensor(KeyboardSensor)
+  );
 
   const { data: project, isLoading: projectLoading } = useQuery<Project>({
     queryKey: ["/api/projects", projectId],
@@ -47,6 +68,8 @@ export default function ProjectPage() {
     queryKey: ["/api/projects", projectId, "tasks"],
     enabled: !!projectId,
   });
+
+  const displaySections = localSections || sections;
 
   const createTaskMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -118,6 +141,97 @@ export default function ProjectPage() {
       }
     },
   });
+
+  const reorderMutation = useMutation({
+    mutationFn: async (moves: { itemType: string; taskId: string; toSectionId: string; toIndex: number }[]) => {
+      return apiRequest("PATCH", `/api/projects/${projectId}/tasks/reorder`, { moves });
+    },
+    onSuccess: () => {
+      setLocalSections(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+    },
+    onError: () => {
+      setLocalSections(null);
+      toast({
+        title: "Failed to move task",
+        description: "The task could not be moved. Please try again.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleDragStart = useCallback((event: DragStartEvent) => {
+    setActiveTaskId(event.active.id as string);
+  }, []);
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      setActiveTaskId(null);
+
+      if (!over || !sections) return;
+
+      const activeId = active.id as string;
+      const overId = over.id as string;
+
+      const activeData = active.data.current as { type: string; task: TaskWithRelations } | undefined;
+      const overData = over.data.current as { type: string; section?: SectionWithTasks; task?: TaskWithRelations } | undefined;
+
+      if (!activeData || activeData.type !== "task") return;
+
+      const activeTask = activeData.task;
+      const fromSectionId = activeTask.sectionId;
+
+      let toSectionId: string;
+      let toIndex: number;
+
+      if (overData?.type === "section") {
+        toSectionId = overId;
+        toIndex = 0;
+      } else if (overData?.type === "task") {
+        const overTask = overData.task!;
+        toSectionId = overTask.sectionId!;
+        const targetSection = sections.find((s) => s.id === toSectionId);
+        if (!targetSection) return;
+        toIndex = targetSection.tasks?.findIndex((t) => t.id === overId) ?? 0;
+      } else {
+        return;
+      }
+
+      if (fromSectionId === toSectionId && activeId === overId) return;
+
+      const newSections = sections.map((section) => {
+        const newTasks = [...(section.tasks || [])];
+
+        if (section.id === fromSectionId) {
+          const taskIndex = newTasks.findIndex((t) => t.id === activeId);
+          if (taskIndex !== -1) {
+            newTasks.splice(taskIndex, 1);
+          }
+        }
+
+        return { ...section, tasks: newTasks };
+      });
+
+      const targetSectionIndex = newSections.findIndex((s) => s.id === toSectionId);
+      if (targetSectionIndex !== -1) {
+        const updatedTask = { ...activeTask, sectionId: toSectionId };
+        newSections[targetSectionIndex].tasks!.splice(toIndex, 0, updatedTask);
+      }
+
+      setLocalSections(newSections);
+
+      reorderMutation.mutate([
+        {
+          itemType: "task",
+          taskId: activeId,
+          toSectionId,
+          toIndex,
+        },
+      ]);
+    },
+    [sections, reorderMutation]
+  );
 
   const refetchSelectedTask = async () => {
     if (selectedTask) {
@@ -234,27 +348,34 @@ export default function ProjectPage() {
 
       <div className="flex-1 overflow-hidden">
         {view === "board" && (
-          <div className="flex gap-4 p-6 h-full overflow-x-auto">
-            {sections?.map((section) => (
-              <SectionColumn
-                key={section.id}
-                section={section}
-                onAddTask={() => handleAddTask(section.id)}
-                onTaskSelect={handleTaskSelect}
-                onTaskStatusChange={handleStatusChange}
-              />
-            ))}
-            <div className="min-w-[280px] max-w-[280px] shrink-0">
-              <Button
-                variant="outline"
-                className="w-full h-12 border-dashed justify-center"
-                data-testid="button-add-section"
-              >
-                <Plus className="h-4 w-4 mr-2" />
-                Add Section
-              </Button>
+          <DndContext
+            sensors={sensors}
+            collisionDetection={closestCenter}
+            onDragStart={handleDragStart}
+            onDragEnd={handleDragEnd}
+          >
+            <div className="flex gap-4 p-6 h-full overflow-x-auto">
+              {displaySections?.map((section) => (
+                <SectionColumn
+                  key={section.id}
+                  section={section}
+                  onAddTask={() => handleAddTask(section.id)}
+                  onTaskSelect={handleTaskSelect}
+                  onTaskStatusChange={handleStatusChange}
+                />
+              ))}
+              <div className="min-w-[280px] max-w-[280px] shrink-0">
+                <Button
+                  variant="outline"
+                  className="w-full h-12 border-dashed justify-center"
+                  data-testid="button-add-section"
+                >
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add Section
+                </Button>
+              </div>
             </div>
-          </div>
+          </DndContext>
         )}
 
         {view === "list" && (

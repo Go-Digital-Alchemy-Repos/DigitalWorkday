@@ -219,6 +219,37 @@ export async function registerRoutes(
     }
   });
 
+  app.patch("/api/projects/:projectId/tasks/reorder", async (req, res) => {
+    try {
+      const { moves } = req.body;
+      if (!Array.isArray(moves)) {
+        return res.status(400).json({ error: "moves must be an array" });
+      }
+
+      for (const move of moves) {
+        const { itemType, taskId, parentTaskId, toSectionId, toIndex } = move;
+
+        if (itemType === "task") {
+          await storage.moveTask(taskId, toSectionId, toIndex);
+        } else if (itemType === "subtask") {
+          if (!parentTaskId) {
+            return res.status(400).json({ error: "parentTaskId required for subtask moves" });
+          }
+          const subtask = await storage.getSubtask(taskId);
+          if (!subtask || subtask.taskId !== parentTaskId) {
+            return res.status(400).json({ error: "Subtask does not belong to specified parent" });
+          }
+          await storage.moveSubtask(taskId, toIndex);
+        }
+      }
+
+      res.json({ success: true });
+    } catch (error) {
+      console.error("Error reordering tasks:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.post("/api/sections", async (req, res) => {
     try {
       const data = insertSectionSchema.parse(req.body);

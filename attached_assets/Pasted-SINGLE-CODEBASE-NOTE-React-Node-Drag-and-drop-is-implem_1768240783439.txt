@@ -1,0 +1,64 @@
+SINGLE CODEBASE NOTE (React + Node):
+- Drag-and-drop is implemented ONLY in the React frontend.
+- The Node backend ONLY persists ordering/moves after drop events.
+- Do not introduce any server-side drag logic.
+
+FRONTEND DND LIBRARY (MANDATORY):
+Use ONLY the following for drag-and-drop:
+- @dnd-kit/core
+- @dnd-kit/sortable
+- @dnd-kit/modifiers
+- @dnd-kit/utilities
+Do NOT add react-beautiful-dnd, react-dnd, or any other DnD libraries.
+
+DND ARCHITECTURE:
+Board View:
+- DndContext at Board level.
+- Each section/column has a SortableContext for its parent tasks (type="task").
+- Allow cross-column drops for parent tasks only.
+
+List View:
+- DndContext at List view level (if grouped by section).
+- Each section group has a SortableContext for its parent tasks (type="task").
+- Add inline expandable subtask list per task; subtasks use their own SortableContext (type="subtask") inside the expanded area.
+
+Subtasks:
+- Subtasks are sortable ONLY within their parent task’s subtask list.
+- Subtasks cannot be dropped into columns/sections.
+- Subtasks cannot be moved to other parent tasks.
+- No nesting beyond 1 level (subtask cannot have children).
+
+DnD IMPLEMENTATION DETAILS:
+- Use pointer + keyboard sensors (dnd-kit sensors).
+- Use closestCenter collision detection.
+- Use verticalListSortingStrategy for lists.
+- Use drag handles (a grip icon/button), not whole-row drag.
+
+BACKEND PERSISTENCE:
+Create/extend a single endpoint to persist moves:
+PATCH /projects/:projectId/tasks/reorder
+
+Payload supports moves:
+{
+  "moves": [
+    {
+      "itemType": "task" | "subtask",
+      "taskId": "...",
+      "parentTaskId": null | "...",
+      "fromSectionId": "...",
+      "toSectionId": "...",
+      "fromIndex": 0,
+      "toIndex": 3
+    }
+  ]
+}
+
+Validation rules:
+- If itemType="subtask": parentTaskId is required and toSectionId must equal the parent task’s section (subtasks track parent section).
+- Reject any attempt to move a subtask to a different parentTaskId or to a different section.
+- When a parent task moves sections, update all its subtasks’ sectionId to match.
+
+UI Behavior:
+- Optimistically update the UI on drop.
+- Call reorder endpoint onDragEnd.
+- If server rejects, rollback and show a toast error.

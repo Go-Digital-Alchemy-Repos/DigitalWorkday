@@ -1,10 +1,11 @@
+import { forwardRef } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PriorityBadge } from "@/components/priority-badge";
 import { DueDateBadge } from "@/components/due-date-badge";
 import { TagBadge } from "@/components/tag-badge";
 import { AvatarGroup } from "@/components/avatar-group";
 import { cn } from "@/lib/utils";
-import { MessageSquare, Paperclip } from "lucide-react";
+import { MessageSquare, Paperclip, GripVertical } from "lucide-react";
 import type { TaskWithRelations, User, Tag } from "@shared/schema";
 
 interface TaskCardProps {
@@ -12,9 +13,14 @@ interface TaskCardProps {
   view?: "list" | "board";
   onSelect?: () => void;
   onStatusChange?: (completed: boolean) => void;
+  dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
+  isDragging?: boolean;
 }
 
-export function TaskCard({ task, view = "list", onSelect, onStatusChange }: TaskCardProps) {
+export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskCard(
+  { task, view = "list", onSelect, onStatusChange, dragHandleProps, isDragging },
+  ref
+) {
   const isCompleted = task.status === "done";
   const assigneeUsers: Partial<User>[] = task.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [];
   const taskTags: Tag[] = task.tags?.map((tt) => tt.tag).filter(Boolean) as Tag[] || [];
@@ -24,15 +30,26 @@ export function TaskCard({ task, view = "list", onSelect, onStatusChange }: Task
   if (view === "board") {
     return (
       <div
+        ref={ref}
         className={cn(
           "group w-full rounded-lg border border-card-border bg-card p-3 hover-elevate cursor-pointer transition-all duration-150",
-          isCompleted && "opacity-60"
+          isCompleted && "opacity-60",
+          isDragging && "opacity-50 shadow-lg"
         )}
         onClick={onSelect}
         data-testid={`task-card-${task.id}`}
       >
         <div className="flex flex-col gap-2">
           <div className="flex items-start gap-2">
+            {dragHandleProps && (
+              <div
+                {...dragHandleProps}
+                className="cursor-grab opacity-0 group-hover:opacity-100 transition-opacity touch-none"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <GripVertical className="h-4 w-4 text-muted-foreground" />
+              </div>
+            )}
             <Checkbox
               checked={isCompleted}
               onCheckedChange={(checked) => {
@@ -89,13 +106,25 @@ export function TaskCard({ task, view = "list", onSelect, onStatusChange }: Task
 
   return (
     <div
+      ref={ref}
       className={cn(
-        "group grid grid-cols-[auto_1fr_auto_auto_auto] items-center gap-3 px-4 py-3 min-h-[52px] border-b border-border hover-elevate cursor-pointer transition-all duration-150",
-        isCompleted && "opacity-60"
+        "group grid items-center gap-3 px-4 py-3 min-h-[52px] border-b border-border hover-elevate cursor-pointer transition-all duration-150",
+        dragHandleProps ? "grid-cols-[auto_auto_1fr_auto_auto_auto]" : "grid-cols-[auto_1fr_auto_auto_auto]",
+        isCompleted && "opacity-60",
+        isDragging && "opacity-50 shadow-lg bg-card"
       )}
       onClick={onSelect}
       data-testid={`task-card-${task.id}`}
     >
+      {dragHandleProps && (
+        <div
+          {...dragHandleProps}
+          className="cursor-grab opacity-0 group-hover:opacity-100 transition-opacity touch-none"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <GripVertical className="h-4 w-4 text-muted-foreground" />
+        </div>
+      )}
       <Checkbox
         checked={isCompleted}
         onCheckedChange={(checked) => {
@@ -146,4 +175,4 @@ export function TaskCard({ task, view = "list", onSelect, onStatusChange }: Task
       </div>
     </div>
   );
-}
+});

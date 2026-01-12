@@ -1,6 +1,8 @@
-import { Plus, MoreHorizontal, GripVertical } from "lucide-react";
+import { useDroppable } from "@dnd-kit/core";
+import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
+import { Plus, MoreHorizontal } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { TaskCard } from "@/components/task-card";
+import { SortableTaskCard } from "@/components/sortable-task-card";
 import { cn } from "@/lib/utils";
 import type { SectionWithTasks, TaskWithRelations } from "@shared/schema";
 
@@ -19,15 +21,23 @@ export function SectionColumn({
 }: SectionColumnProps) {
   const tasks = section.tasks || [];
   const taskCount = tasks.length;
+  const taskIds = tasks.map((t) => t.id);
+
+  const { setNodeRef, isOver } = useDroppable({
+    id: section.id,
+    data: { type: "section", section },
+  });
 
   return (
     <div
-      className="flex flex-col min-w-[280px] max-w-[320px] shrink-0 bg-card/50 rounded-lg"
+      className={cn(
+        "flex flex-col min-w-[280px] max-w-[320px] shrink-0 bg-card/50 rounded-lg transition-colors",
+        isOver && "ring-2 ring-primary/50 bg-primary/5"
+      )}
       data-testid={`section-column-${section.id}`}
     >
       <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border">
         <div className="flex items-center gap-2">
-          <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab opacity-0 group-hover:opacity-100 transition-opacity" />
           <h3 className="text-sm font-semibold truncate">{section.name}</h3>
           <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
             {taskCount}
@@ -54,16 +64,21 @@ export function SectionColumn({
         </div>
       </div>
 
-      <div className="flex flex-col gap-2 p-2 min-h-[200px] overflow-y-auto">
-        {tasks.map((task) => (
-          <TaskCard
-            key={task.id}
-            task={task}
-            view="board"
-            onSelect={() => onTaskSelect?.(task)}
-            onStatusChange={(completed) => onTaskStatusChange?.(task.id, completed)}
-          />
-        ))}
+      <div
+        ref={setNodeRef}
+        className="flex flex-col gap-2 p-2 min-h-[200px] overflow-y-auto"
+      >
+        <SortableContext items={taskIds} strategy={verticalListSortingStrategy}>
+          {tasks.map((task) => (
+            <SortableTaskCard
+              key={task.id}
+              task={task}
+              view="board"
+              onSelect={() => onTaskSelect?.(task)}
+              onStatusChange={(completed) => onTaskStatusChange?.(task.id, completed)}
+            />
+          ))}
+        </SortableContext>
         {tasks.length === 0 && (
           <div className="flex flex-col items-center justify-center py-8 text-center">
             <p className="text-xs text-muted-foreground">No tasks yet</p>
