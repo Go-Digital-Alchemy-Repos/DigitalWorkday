@@ -94,11 +94,120 @@ const createProjectSchema = z.object({
 
 type CreateProjectForm = z.infer<typeof createProjectSchema>;
 
+function EditContactForm({
+  contact,
+  onSubmit,
+  onCancel,
+  isPending,
+}: {
+  contact: ClientContact;
+  onSubmit: (data: CreateContactForm) => void;
+  onCancel: () => void;
+  isPending: boolean;
+}) {
+  const form = useForm<CreateContactForm>({
+    resolver: zodResolver(createContactSchema),
+    defaultValues: {
+      firstName: contact.firstName || "",
+      lastName: contact.lastName || "",
+      email: contact.email || "",
+      phone: contact.phone || "",
+      title: contact.title || "",
+      isPrimary: contact.isPrimary || false,
+      notes: contact.notes || "",
+    },
+  });
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+        <div className="grid grid-cols-2 gap-4">
+          <FormField
+            control={form.control}
+            name="firstName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>First Name *</FormLabel>
+                <FormControl>
+                  <Input {...field} data-testid="input-edit-contact-first-name" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+          <FormField
+            control={form.control}
+            name="lastName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Last Name</FormLabel>
+                <FormControl>
+                  <Input {...field} data-testid="input-edit-contact-last-name" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+        <FormField
+          control={form.control}
+          name="email"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Email</FormLabel>
+              <FormControl>
+                <Input type="email" {...field} data-testid="input-edit-contact-email" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="phone"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Phone</FormLabel>
+              <FormControl>
+                <Input {...field} data-testid="input-edit-contact-phone" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <FormField
+          control={form.control}
+          name="title"
+          render={({ field }) => (
+            <FormItem>
+              <FormLabel>Job Title</FormLabel>
+              <FormControl>
+                <Input {...field} data-testid="input-edit-contact-title" />
+              </FormControl>
+              <FormMessage />
+            </FormItem>
+          )}
+        />
+        <div className="flex justify-end gap-2 pt-4">
+          <Button type="button" variant="outline" onClick={onCancel}>
+            Cancel
+          </Button>
+          <Button type="submit" disabled={isPending} data-testid="button-update-contact">
+            {isPending ? "Saving..." : "Save Changes"}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}
+
 export default function ClientDetailPage() {
   const [, params] = useRoute("/clients/:id");
   const [, navigate] = useLocation();
   const clientId = params?.id;
   const [addContactOpen, setAddContactOpen] = useState(false);
+  const [editContactOpen, setEditContactOpen] = useState(false);
+  const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [editClientOpen, setEditClientOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [projectView, setProjectView] = useState<"options" | "create" | "assign">("options");
@@ -142,6 +251,17 @@ export default function ClientDetailPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+    },
+  });
+
+  const updateContactMutation = useMutation({
+    mutationFn: async ({ contactId, data }: { contactId: string; data: CreateContactForm }) => {
+      return apiRequest("PATCH", `/api/clients/${clientId}/contacts/${contactId}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+      setEditContactOpen(false);
+      setEditingContact(null);
     },
   });
 
@@ -634,15 +754,29 @@ export default function ClientDetailPage() {
                             )}
                           </div>
                         </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8"
-                          onClick={() => deleteContactMutation.mutate(contact.id)}
-                          data-testid={`button-delete-contact-${contact.id}`}
-                        >
-                          <Trash2 className="h-4 w-4 text-muted-foreground" />
-                        </Button>
+                        <div className="flex gap-1">
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => {
+                              setEditingContact(contact);
+                              setEditContactOpen(true);
+                            }}
+                            data-testid={`button-edit-contact-${contact.id}`}
+                          >
+                            <Pencil className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8"
+                            onClick={() => deleteContactMutation.mutate(contact.id)}
+                            data-testid={`button-delete-contact-${contact.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 text-muted-foreground" />
+                          </Button>
+                        </div>
                       </div>
                       <div className="mt-3 space-y-2">
                         {contact.email && (
@@ -674,6 +808,32 @@ export default function ClientDetailPage() {
                 </Button>
               </div>
             )}
+
+            <Dialog 
+              open={editContactOpen} 
+              onOpenChange={(open) => {
+                setEditContactOpen(open);
+                if (!open) setEditingContact(null);
+              }}
+            >
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Edit Contact</DialogTitle>
+                </DialogHeader>
+                {editingContact && (
+                  <EditContactForm 
+                    key={editingContact.id}
+                    contact={editingContact}
+                    onSubmit={(data) => updateContactMutation.mutate({ contactId: editingContact.id, data })}
+                    onCancel={() => {
+                      setEditContactOpen(false);
+                      setEditingContact(null);
+                    }}
+                    isPending={updateContactMutation.isPending}
+                  />
+                )}
+              </DialogContent>
+            </Dialog>
           </TabsContent>
 
           <TabsContent value="projects" className="p-6">

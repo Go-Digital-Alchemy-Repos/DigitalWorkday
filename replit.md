@@ -37,6 +37,8 @@ DASANA is a fully functional Asana-inspired project management application built
 - **taskTags**: Many-to-many for task tagging
 - **comments**: Discussion threads on tasks
 - **activityLog**: Audit trail for changes
+- **timeEntries**: Time tracking entries with duration, scope, client/project/task references
+- **activeTimers**: Currently running timers (one per user, enforced by unique index)
 
 ### Frontend Structure (client/src/)
 - **pages/**: Route components (home.tsx, my-tasks.tsx, project.tsx, clients.tsx, client-detail.tsx, time-tracking.tsx)
@@ -73,7 +75,7 @@ DASANA is a fully functional Asana-inspired project management application built
 1. Client joins project/client/workspace rooms via room:join events
 2. Server emits events after successful DB operations (never before commit)
 3. Client hooks invalidate React Query cache to trigger refetch
-4. Events: project:*, section:*, task:*, subtask:*, attachment:*, client:*, project:clientAssigned
+4. Events: project:*, section:*, task:*, subtask:*, attachment:*, client:*, project:clientAssigned, timer:*, timeEntry:*
 
 ## API Endpoints
 
@@ -143,6 +145,21 @@ DASANA is a fully functional Asana-inspired project management application built
 ### Client Projects
 - GET /api/clients/:clientId/projects - List projects linked to client
 - POST /api/clients/:clientId/projects - Create a new project linked to client
+
+### Time Tracking (Timer)
+- GET /api/timer/current - Get current user's active timer (or null)
+- POST /api/timer/start - Start a new timer (body: {clientId?, projectId?, taskId?, description?})
+- POST /api/timer/pause - Pause the active timer
+- POST /api/timer/resume - Resume a paused timer
+- POST /api/timer/stop - Stop timer and optionally save entry (body: {discard?, scope?, description?})
+- PATCH /api/timer/current - Update active timer (body: {clientId?, projectId?, taskId?, description?})
+
+### Time Entries
+- GET /api/time-entries - List time entries (supports ?startDate, ?endDate, ?clientId, ?projectId filters)
+- POST /api/time-entries - Create manual time entry
+- PATCH /api/time-entries/:id - Update time entry
+- DELETE /api/time-entries/:id - Delete time entry
+- GET /api/time-entries/summary - Get time summary for reporting (supports date and groupBy filters)
 
 ## Design Guidelines
 Following design_guidelines.md with:
