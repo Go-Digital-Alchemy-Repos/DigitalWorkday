@@ -559,6 +559,7 @@ export default function ProjectPage() {
         onAddComment={(taskId: string, body: string) => {
           addCommentMutation.mutate({ taskId, body });
         }}
+        workspaceId={project?.workspaceId}
       />
 
       <TaskCreateDrawer

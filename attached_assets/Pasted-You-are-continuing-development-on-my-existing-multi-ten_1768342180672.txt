@@ -1,0 +1,138 @@
+You are continuing development on my existing multi-tenant React + Express app.
+Implement ONLY user profile photo upload in the “My Account” area, and REUSE the same shared upload/dropzone component used for tenant branding uploads.
+DO NOT rewrite the app. Preserve all existing functionality.
+
+===============================================================================
+SAFETY RULES
+===============================================================================
+- Do NOT remove/rename existing endpoints.
+- Do NOT change auth/session/tenancy enforcement/onboarding/agreements.
+- Add-only schema changes only (prefer none if user table already has profileImageUrl).
+- Use Amazon S3 for storage (same solution as tenant branding/attachments).
+- Do NOT store image blobs in Postgres.
+- Never log secrets or file content.
+- Keep default initials avatar behavior when no photo is uploaded.
+
+===============================================================================
+MANDATORY REUSE REQUIREMENT
+===============================================================================
+- Create (or reuse if already created) ONE shared front-end component for file uploads:
+  /client/src/components/common/FileDropzone.tsx (or your existing shared components folder)
+- This shared component must support:
+  - click to select file
+  - drag-and-drop upload
+  - file type + size hints
+  - loading state and progress (basic spinner ok)
+  - error display
+  - optional preview rendering
+- Use this same component in:
+  A) Tenant white label branding uploads (logo/icon/favicon)
+  B) User “My Account” avatar upload
+
+Do NOT create separate bespoke dropzones for each feature.
+
+===============================================================================
+GOAL
+===============================================================================
+Users (Admin, Employee, Client, Super User) can upload a profile photo in “My Account”.
+If no photo is uploaded, show a default avatar with background color + initials.
+
+===============================================================================
+1) STORAGE & PATH CONVENTION (MANDATORY)
+===============================================================================
+Upload profile images to S3 under a tenant-safe prefix:
+- If user has tenantId:
+  tenants/{tenantId}/users/{userId}/avatar/{uuid}-{filename}
+- If super_user with no tenantId:
+  system/users/{userId}/avatar/{uuid}-{filename}
+
+Return a public URL (or signed URL if that’s your pattern, but must persist and render on refresh).
+
+===============================================================================
+2) BACKEND: ENDPOINTS (ADD-ONLY OR EXTEND EXISTING)
+===============================================================================
+A) Upload endpoint (authenticated users)
+POST /api/v1/me/avatar
+- multipart/form-data: file
+Behavior:
+- require authenticated user
+- validate file type and size
+- upload to S3 using the path convention above
+- update user.profileImageUrl (or profileImage) with the URL
+- return { url }
+
+B) Remove avatar
+DELETE /api/v1/me/avatar
+Behavior:
+- set user.profileImageUrl to null
+- (optional) do not delete from S3 for now; can add cleanup later
+- return { ok: true }
+
+C) Ensure your “me” endpoint returns the avatar URL
+- /api/v1/auth/me (or equivalent) must include profileImageUrl so UI rehydrates after refresh.
+
+===============================================================================
+3) FILE VALIDATION (MANDATORY)
+===============================================================================
+Allow:
+- image/png, image/jpeg, image/webp
+Optional:
+- image/gif
+Reject SVG for user avatars unless you already sanitize it.
+Max size: 2MB (or 5MB if consistent with your other uploads).
+Validate MIME type + extension.
+Return 400 with a clear message on invalid files.
+
+===============================================================================
+4) FRONTEND: “MY ACCOUNT” UI (MANDATORY)
+===============================================================================
+In My Account page:
+- Show current avatar:
+  - If profileImageUrl exists, render image
+  - Else show default avatar circle with initials + deterministic background color
+- Use the SHARED FileDropzone component for upload.
+- Add “Remove Photo” button when a photo exists.
+- After upload success:
+  - update local user state and invalidate auth/me query
+  - show toast success
+
+Default avatar requirements:
+- Initials from firstName/lastName (or email fallback).
+- Background color derived deterministically from userId (stable).
+
+===============================================================================
+5) TENANT & PERMISSION SAFETY
+===============================================================================
+- Users can only upload/remove their OWN avatar via /me routes.
+- Do not add endpoints allowing updating other users’ avatars in this prompt.
+
+===============================================================================
+6) TESTS (MANDATORY MINIMUM)
+===============================================================================
+- avatar_upload.test.ts
+  - authenticated user uploads image -> returns url and persists on /auth/me
+- avatar_remove.test.ts
+  - removes avatar -> profileImageUrl null
+- unauthorized_avatar_upload.test.ts
+  - unauthenticated -> 401
+Mock S3 client for tests.
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) Users can upload a profile photo in My Account and it persists after refresh.
+2) If no photo, avatar falls back to initials + background color.
+3) Users can remove their avatar and revert to default initials avatar.
+4) Uses S3 with tenant-safe prefixes.
+5) Shared FileDropzone component is used for BOTH tenant branding uploads and user avatar upload.
+6) No breaking changes to other features; tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Endpoints added
+- Schema additions (if any)
+- Shared component path + usage locations
+- UI pages updated
+- S3 path conventions used
+- Manual test checklist

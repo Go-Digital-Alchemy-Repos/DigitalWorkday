@@ -18,7 +18,7 @@ import { CommentThread } from "@/components/comment-thread";
 import { AttachmentUploader } from "@/components/attachment-uploader";
 import { StatusBadge } from "@/components/status-badge";
 import { TagBadge } from "@/components/tag-badge";
-import { AvatarGroup } from "@/components/avatar-group";
+import { MultiSelectAssignees } from "@/components/multi-select-assignees";
 import { format } from "date-fns";
 import type { TaskWithRelations, User, Tag as TagType, Comment } from "@shared/schema";
 
@@ -34,6 +34,7 @@ interface TaskDetailDrawerProps {
   onAddComment?: (taskId: string, body: string) => void;
   availableTags?: TagType[];
   availableUsers?: User[];
+  workspaceId?: string;
 }
 
 export function TaskDetailDrawer({
@@ -48,6 +49,7 @@ export function TaskDetailDrawer({
   onAddComment,
   availableTags = [],
   availableUsers = [],
+  workspaceId = "",
 }: TaskDetailDrawerProps) {
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
@@ -152,15 +154,12 @@ export function TaskDetailDrawer({
                   <Users className="h-3.5 w-3.5" />
                   Assignees
                 </label>
-                <div className="flex items-center gap-2">
-                  {assigneeUsers.length > 0 ? (
-                    <AvatarGroup users={assigneeUsers} max={3} />
-                  ) : (
-                    <span className="text-sm text-muted-foreground">None</span>
-                  )}
-                  <Button variant="ghost" size="sm" className="h-7 text-xs" data-testid="button-add-assignee">
-                    Add
-                  </Button>
+                <div className="flex items-center">
+                  <MultiSelectAssignees
+                    taskId={task.id}
+                    assignees={assigneeUsers}
+                    workspaceId={workspaceId}
+                  />
                 </div>
               </div>
 
