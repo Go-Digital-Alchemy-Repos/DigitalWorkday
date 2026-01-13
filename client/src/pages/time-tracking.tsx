@@ -154,7 +154,7 @@ function ActiveTimerPanel() {
   });
 
   const stopMutation = useMutation({
-    mutationFn: (data: { discard?: boolean; scope?: string; description?: string }) =>
+    mutationFn: (data: { discard?: boolean; scope?: string; description?: string; taskId?: string | null }) =>
       apiRequest("POST", "/api/timer/stop", data),
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
@@ -165,6 +165,7 @@ function ActiveTimerPanel() {
         toast({ title: "Time entry saved" });
       }
       setStopDialogOpen(false);
+      setStopTaskId(null);
     },
   });
 
@@ -207,6 +208,12 @@ function ActiveTimerPanel() {
       setStopDescription(timer.description);
     }
   }, [timer?.description]);
+
+  useEffect(() => {
+    if (timer?.taskId !== undefined) {
+      setStopTaskId(timer.taskId);
+    }
+  }, [timer?.taskId]);
 
   const handleStartTimer = useCallback(() => {
     startMutation.mutate({});
@@ -399,6 +406,13 @@ function ActiveTimerPanel() {
                 </SelectContent>
               </Select>
             </div>
+            {timer?.projectId && (
+              <TaskSelectorWithCreate
+                projectId={timer.projectId}
+                taskId={stopTaskId}
+                onTaskChange={setStopTaskId}
+              />
+            )}
           </div>
           <DialogFooter className="gap-2">
             <Button
@@ -411,7 +425,7 @@ function ActiveTimerPanel() {
               Discard
             </Button>
             <Button
-              onClick={() => stopMutation.mutate({ scope: stopScope, description: stopDescription })}
+              onClick={() => stopMutation.mutate({ scope: stopScope, description: stopDescription, taskId: stopTaskId })}
               disabled={stopMutation.isPending}
               data-testid="button-save-timer"
             >
