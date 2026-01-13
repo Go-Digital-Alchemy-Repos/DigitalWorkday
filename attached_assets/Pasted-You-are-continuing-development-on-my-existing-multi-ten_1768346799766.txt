@@ -1,0 +1,182 @@
+You are continuing development on my existing multi-tenant React + Express app (single codebase).
+NEXT FOLLOW-UP PROMPT: “Project Workload Forecast + Budget/Estimate Tracking” (safe, additive).
+Implement ONLY what is described below. DO NOT rewrite the app.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT remove or rename existing endpoints.
+- Do NOT change response shapes in a breaking way (add fields ok; no removals).
+- Do NOT drop or rename DB tables/columns. Add-only schema changes only.
+- Do NOT modify authentication, tenancy enforcement, onboarding, agreements, or billing systems.
+- Do NOT change existing task/project permissions; reuse existing checks.
+- Do NOT introduce small edit modals; use full-width drawers/panels.
+- Tenant isolation is mandatory: tenant users only see their tenant; super_user must act-as-tenant.
+
+===============================================================================
+GOAL
+===============================================================================
+Add “workload forecast” and “budget/estimate tracking” to Projects so admins can see:
+- Estimated effort vs time tracked
+- Remaining estimated effort
+- Over/under status
+- Forecast by due date and by assignee (basic)
+This should integrate into:
+- /projects dashboard (light indicators)
+- Project Detail Drawer → Insights/Forecast tab(s)
+
+IMPORTANT: This feature must be OPTIONAL and not break existing projects that have no estimates.
+
+===============================================================================
+FEATURE A: ESTIMATES (ADD-ONLY FIELDS)
+===============================================================================
+We need a minimal, optional estimate model.
+
+A1) Tasks: add optional estimate minutes
+Add to tasks table (ADD-ONLY):
+- estimateMinutes (int nullable)
+
+A2) Projects: add optional budget estimate
+Add to projects table (ADD-ONLY):
+- budgetMinutes (int nullable)   // total project estimate/budget
+Optional:
+- budgetDollars (numeric nullable)   // only if you already track billing rates; otherwise omit
+
+Rules:
+- If estimateMinutes is null, it is treated as “no estimate provided”.
+- If budgetMinutes is null, project budget tracking UI should show “No budget set”.
+
+===============================================================================
+FEATURE B: WORKLOAD/FORECAST METRICS (ANALYTICS ENDPOINTS)
+===============================================================================
+B1) Project forecast analytics endpoint (add-only)
+GET /api/v1/projects/:projectId/forecast
+Returns:
+{
+  projectId,
+  totals: {
+    taskEstimateMinutes: number,        // sum of task estimateMinutes (0 if none)
+    projectBudgetMinutes: number|null,  // from projects.budgetMinutes
+    trackedMinutesTotal: number,        // from time entries (0 if none)
+    trackedMinutesThisWeek: number,
+    remainingEstimateMinutes: number,   // max(taskEstimate - trackedTotal, 0) OR null if no estimates
+    budgetRemainingMinutes: number|null,// max(budget - trackedTotal, 0) if budget exists
+    overBudget: boolean|null            // null if no budget set
+  },
+  byAssignee: [
+    {
+      userId,
+      name,
+      openTasks: number,
+      overdueTasks: number,
+      estimateMinutesOpen: number,      // sum estimates for open tasks assigned to user
+      trackedMinutesTotal: number       // time entries for project by user
+    }
+  ],
+  dueForecast: [
+    {
+      bucket: "overdue"|"today"|"next7"|"next30"|"later"|"noDueDate",
+      openTasks: number,
+      estimateMinutesOpen: number
+    }
+  ]
+}
+
+Rules:
+- Tenant-scoped and permission-safe (must be able to view project).
+- Must support multi-assignee tasks if present:
+  - If multi-assignee exists, an estimated task assigned to 2 users should either:
+    (Option 1) count estimate fully for each user (not ideal), OR
+    (Option 2, preferred) split estimate evenly across assignees for byAssignee only.
+  - For totals, count estimate once per task.
+Choose Option 2 for byAssignee.
+
+B2) Projects dashboard forecast summary (lightweight)
+GET /api/v1/projects/forecast/summary
+Returns perProject:
+- trackedMinutesTotal
+- taskEstimateMinutes
+- budgetMinutes (nullable)
+- overBudget boolean/null
+- remainingEstimateMinutes null/number
+
+This should be efficient for many projects: no N+1 loops.
+
+If you already have analytics endpoints from prior prompt, you may extend them with forecast fields instead of adding new endpoints, but do NOT break response shapes (add fields only).
+
+===============================================================================
+FEATURE C: UI — TASK + PROJECT EDITORS (ESTIMATE INPUTS)
+===============================================================================
+C1) Task Detail Drawer
+Add optional field in task edit view:
+- “Estimate” (minutes/hours input)
+- store as estimateMinutes
+- show “—” if not set
+
+C2) Project Settings (in Project Detail Drawer)
+Add optional project budget field:
+- “Project Budget (hours)” → budgetMinutes
+- if not set, show “No budget set”
+
+Do NOT force users to enter estimates; optional only.
+
+===============================================================================
+FEATURE D: UI — PROJECT INSIGHTS/FORECAST
+===============================================================================
+D1) Project Detail Drawer
+Add a tab OR section under Insights:
+- “Forecast”
+Shows:
+- KPI cards:
+  - Task Estimate Total (hours)
+  - Time Tracked Total (hours)
+  - Remaining Estimate (hours) (or “N/A”)
+  - Budget (hours) (or “N/A”)
+  - Over Budget badge if applicable
+- Charts:
+  - Estimate vs Tracked (bar)
+  - By Assignee: Estimated Open vs Tracked (bar)
+  - Due Forecast buckets: Open estimate by time bucket (bar)
+- Drill down:
+  - clicking an assignee row opens a filtered task list in a drawer/panel
+  - clicking a bucket shows tasks in that bucket
+
+D2) /projects dashboard
+Add a small indicator column or badge:
+- “Budget: OK / Over / N/A”
+- “Remaining: Xh / N/A”
+Do not clutter; keep it lightweight.
+
+===============================================================================
+FEATURE E: VALIDATION & MIGRATIONS
+===============================================================================
+- Add migrations for new columns (estimateMinutes, budgetMinutes).
+- Ensure defaults are null.
+- Ensure updates validate non-negative integers.
+
+===============================================================================
+TESTS (MANDATORY MINIMUM)
+===============================================================================
+1) forecast_endpoint_permission.test.ts
+- cannot fetch forecast for project not visible to user
+2) forecast_math.test.ts
+- remaining and overBudget calculations correct with sample data
+3) multi_assignee_split.test.ts (if multi-assignee exists)
+- byAssignee splits estimates evenly; totals count once
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) Users can optionally set task estimates and project budgets.
+2) Project Forecast tab shows meaningful metrics even when some values are null.
+3) /projects shows lightweight budget/remaining indicators.
+4) Endpoints are tenant-scoped and permission-safe.
+5) No breaking changes; app remains stable; tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Schema changes (migrations)
+- Endpoints added/extended
+- UI components updated
+- Manual test checklist
