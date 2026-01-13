@@ -36,13 +36,12 @@ export async function tenantContextMiddleware(req: Request, res: Response, next:
     const headerTenantId = req.headers["x-tenant-id"] as string | undefined;
     
     if (headerTenantId) {
+      // Super users can access any tenant (active or inactive) for pre-provisioning
       const [tenant] = await db.select().from(tenants).where(eq(tenants.id, headerTenantId));
       if (!tenant) {
         return res.status(404).json({ error: "Tenant not found" });
       }
-      if (tenant.status !== "active") {
-        return res.status(403).json({ error: "Tenant is not active" });
-      }
+      // Note: Super users are NOT blocked by tenant status - they can pre-provision inactive tenants
     }
     
     req.tenant = {

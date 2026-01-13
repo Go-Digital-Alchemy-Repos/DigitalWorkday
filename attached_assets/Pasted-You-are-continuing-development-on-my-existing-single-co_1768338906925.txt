@@ -1,0 +1,162 @@
+You are continuing development on my existing single-codebase React + Express app.
+Implement ONLY the Super User “Tenant Pre-Provisioning” capability described below.
+DO NOT rewrite the app. Preserve all existing functionality and multi-tenant isolation.
+
+===============================================================================
+ABSOLUTE SAFETY RULES
+===============================================================================
+- Do NOT remove/rename existing endpoints.
+- Do NOT change response shapes in a breaking way.
+- Do NOT drop/rename tables/columns. Add-only schema changes only if necessary.
+- Do NOT change auth strategy or tenancy enforcement behavior.
+- Do NOT allow non-super users to bypass onboarding/inactive gating.
+- Any “act as tenant” capability must be super_user only.
+
+===============================================================================
+PROBLEM
+===============================================================================
+Currently, it appears tenant activation/onboarding requires the invited tenant admin to accept the invite.
+We need Super User to be able to:
+- set up a tenant end-to-end before tenant admin accepts
+- configure white label + integrations
+- invite tenant users
+- create clients/projects/tasks within tenant
+- activate tenant when ready
+All while keeping tenant inactive gating for normal tenant users.
+
+===============================================================================
+GOAL
+===============================================================================
+Enable “Super User Pre-Provisioning”:
+1) Super User can configure a tenant while it is inactive.
+2) Super User can invite tenant users (admin/employee/client) before any tenant admin accepts.
+3) Super User can create/manage tenant data (clients/projects/tasks) before tenant admin accepts.
+4) Super User can activate tenant without waiting for onboarding completion.
+5) Tenant users (non-super) remain blocked from the main app while tenant is inactive, except onboarding routes.
+
+===============================================================================
+1) TENANT STATUS GUARD UPDATE (MANDATORY)
+===============================================================================
+Update tenantStatusGuard middleware:
+- Super user is never blocked (already)
+- Non-super users remain blocked when tenant.status != "active"
+- EXCEPTION: onboarding and auth routes remain accessible as before
+
+Additionally:
+- Add a new server-side rule:
+  - tenant.onboardedAt may be null even when tenant.status="active" IF activated by super_user
+  - In that case, tenant admin can still optionally visit onboarding later, but it is not required.
+
+Do NOT change behavior for existing tenants.
+
+===============================================================================
+2) SUPER USER “ACT AS TENANT” (MANDATORY)
+===============================================================================
+Ensure Super User can “act as tenant” in a consistent way for server + client:
+- Use header X-Tenant-Id for super_user only
+- Add server-side validation that tenant exists and is active/inactive (either allowed)
+- Store effectiveTenantId based on X-Tenant-Id for super user requests
+
+The UI can include “Act as Tenant” button in /super/tenants that sets actingTenantId in localStorage
+and the API client adds X-Tenant-Id header ONLY when user.role=super_user.
+
+===============================================================================
+3) SUPER USER: TENANT PROVISIONING ENDPOINTS (ADD-ONLY)
+===============================================================================
+Add these super routes (super_user only):
+
+A) Tenant activation
+POST /api/v1/super/tenants/:tenantId/activate
+- sets tenant.status="active"
+- sets activatedBySuperUserAt=now() (add column if desired) OR log in audit events
+- does NOT require ownerUserId or onboardedAt
+
+POST /api/v1/super/tenants/:tenantId/suspend
+- sets status="suspended" (blocks tenant users, super still can access)
+
+B) Tenant user invitations (already exists partially)
+POST /api/v1/super/tenants/:tenantId/invite-user
+Body: { email, role, firstName?, lastName?, teamId?, expiresInDays? }
+- creates invitation with tenantId + role
+- returns invite URL
+
+C) (Optional but helpful) Create user directly without email invite
+POST /api/v1/super/tenants/:tenantId/users
+Body: { email, role, firstName, lastName, tempPassword? }
+- creates user in tenant; if tempPassword present, require reset on first login
+If temp password feels risky, skip and rely on invitations only.
+
+IMPORTANT:
+- Do not break existing tenant-admin invite flows.
+- Keep invitations table backward compatible.
+
+===============================================================================
+4) SUPER USER: CREATE TENANT DATA (CLIENTS/PROJECTS/TASKS) (MANDATORY)
+===============================================================================
+Super User must be able to create tenant data before tenant admin exists.
+
+Implement one of these safe approaches:
+
+Option A (preferred): Reuse existing tenant-scoped endpoints while acting-as-tenant
+- If super user sets X-Tenant-Id, then existing endpoints:
+  /clients, /projects, /tasks
+  should operate within that effectiveTenantId.
+- Ensure tenantStatusGuard does NOT block super user.
+- Ensure tenancy enforcement uses effectiveTenantId for super user in those endpoints.
+
+Option B: Add explicit super endpoints
+- /api/v1/super/tenants/:tenantId/clients etc.
+Only do this if Option A is not possible.
+
+Do NOT change endpoint paths used by normal users.
+
+===============================================================================
+5) UI CHANGES (MINIMAL)
+===============================================================================
+In /super/tenants detail page:
+- Add “Act as Tenant” button
+- Add “Activate Tenant” button (with confirmation)
+- Add “Suspend Tenant” button (with confirmation)
+- Add “Invite Users” panel:
+  - invite admin/employee/client
+  - copy invite link
+- Optional: quick links that open the tenant app views while acting-as-tenant:
+  - “Open Tenant Clients”
+  - “Open Tenant Settings”
+
+Keep UI minimal and consistent. No redesign.
+
+===============================================================================
+6) TESTS (MANDATORY)
+===============================================================================
+Add tests:
+1) super_can_configure_inactive_tenant.test.ts
+- super sets X-Tenant-Id to inactive tenant
+- can create a client (or at least call GET clients)
+2) tenant_users_blocked_when_inactive.test.ts
+- tenant admin (non-super) cannot access /clients when inactive (403 TENANT_INACTIVE)
+3) super_can_activate_without_onboarding.test.ts
+- super activates tenant
+- tenant user can now access /clients even if onboardedAt null
+4) invite_user_before_admin_accepts.test.ts
+- super invites employee/admin; invitation stores tenantId + role
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) Super user can set up tenant settings/integrations while tenant is inactive.
+2) Super user can invite tenant users before any tenant admin accepts.
+3) Super user can create clients/projects/tasks in a tenant before tenant admin exists (via act-as-tenant).
+4) Super user can activate tenant and tenant users can use the app immediately after activation.
+5) Tenant users are still blocked from the main app when tenant is inactive.
+6) No endpoint paths broken; existing workflows remain intact.
+7) Tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Summary of changes
+- Endpoints added
+- Any schema additions (add-only)
+- Files changed
+- Manual test steps

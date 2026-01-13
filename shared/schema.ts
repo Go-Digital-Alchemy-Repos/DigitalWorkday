@@ -109,6 +109,7 @@ export const tenants = pgTable("tenants", {
   status: text("status").notNull().default("inactive"),
   onboardedAt: timestamp("onboarded_at"),
   ownerUserId: varchar("owner_user_id"),
+  activatedBySuperUserAt: timestamp("activated_by_super_user_at"), // Set when super user activates tenant without requiring onboarding
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

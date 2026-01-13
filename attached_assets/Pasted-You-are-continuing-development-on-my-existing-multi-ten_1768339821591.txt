@@ -1,0 +1,81 @@
+You are continuing development on my existing multi-tenant React + Express app.
+Implement ONLY a Tenant Admin “Account Management” area (settings hub) that lets tenant admins edit onboarding-configured data and manage their tenant. Do NOT rewrite the app.
+
+===============================================================================
+SAFETY RULES
+===============================================================================
+- Do NOT remove/rename existing endpoints.
+- Additive changes only.
+- Do NOT change auth strategy or tenancy enforcement logic.
+- Tenant admin must only see/manage their own tenant data.
+- Reuse existing pages/components where possible (branding, integrations, users/team manager).
+
+===============================================================================
+GOAL
+===============================================================================
+Create a Tenant Admin accessible navigation item: “Account” (or “Tenant Settings”)
+that serves as the central hub for:
+- tenant profile info (name, support email, status)
+- white label / branding settings
+- tenant integrations (Mailgun etc.)
+- user management (existing Team/User manager but tenant-scoped)
+This area must allow tenant admins to modify onboarding data at any time.
+
+===============================================================================
+REQUIREMENTS
+===============================================================================
+1) Navigation
+- Show “Account” only for role=admin (tenant admins)
+- Do not change super admin nav
+
+2) Account page route
+- /account (or /settings/account)
+- Tabs:
+  A) Profile
+     - tenant display name / brand name
+     - support email
+     - readonly: tenant status, onboardedAt
+  B) White Label
+     - logoUrl upload
+     - primary/secondary/accent colors
+     - whiteLabelEnabled toggle
+     - hideVendorBranding toggle
+  C) Integrations
+     - Mailgun config (domain, fromEmail, apiKey write-only, test)
+     - S3 placeholder/prefix settings if present
+  D) Users & Teams
+     - embed or link to existing Team/User management UI:
+       create user, invite user, assign to teams, roles
+
+3) APIs
+- Reuse existing tenant-scoped endpoints created earlier:
+  - GET/PATCH /api/v1/tenant/settings
+  - GET/PUT/TEST /api/v1/tenant/integrations/:provider
+  - existing /api/v1/users, /api/v1/teams endpoints (tenant-scoped)
+If gaps exist, add ONLY missing tenant-scoped endpoints without breaking existing routes.
+
+4) UX
+- Each tab loads data on mount, shows loading/error states.
+- Save actions show success toast.
+- Never display secrets; show masked “configured” status.
+
+5) Authorization
+- Tenant admin only (role=admin)
+- Ensure no cross-tenant data access.
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) Tenant admins can edit all onboarding-entered fields after onboarding.
+2) Tenant admins can manage integrations from this hub.
+3) Tenant admins can manage users/teams from this hub.
+4) No super admin features affected.
+5) No breaking changes.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Files changed
+- Routes/pages added
+- Endpoints reused/added
+- Manual test steps

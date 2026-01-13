@@ -10,8 +10,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Building2, Plus, Edit2, Shield, CheckCircle, XCircle, UserPlus, Clock, Copy, AlertTriangle, Loader2, Activity, Database, RefreshCw, Play, Settings, Palette, HardDrive, Save, TestTube, Eye, EyeOff, Mail, Lock, Check, X, Upload, FileText, Users, Download } from "lucide-react";
+import { queryClient, apiRequest, setActingTenantId, getActingTenantId } from "@/lib/queryClient";
+import { useLocation } from "wouter";
+import { Building2, Plus, Edit2, Shield, CheckCircle, XCircle, UserPlus, Clock, Copy, AlertTriangle, Loader2, Activity, Database, RefreshCw, Play, Settings, Palette, HardDrive, Save, TestTube, Eye, EyeOff, Mail, Lock, Check, X, Upload, FileText, Users, Download, PlayCircle, PauseCircle, Power, ExternalLink } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { TenantSettingsDialog } from "@/components/super-admin/tenant-settings-dialog";
@@ -116,6 +117,8 @@ export default function SuperAdminPage() {
   const [importingTenant, setImportingTenant] = useState<Tenant | null>(null);
   const [csvUsers, setCsvUsers] = useState<CSVUser[]>([]);
   const [importResults, setImportResults] = useState<ImportResponse | null>(null);
+  const [confirmAction, setConfirmAction] = useState<{ type: "activate" | "suspend" | "deactivate"; tenant: Tenant } | null>(null);
+  const [, setLocation] = useLocation();
 
   const { data: tenants = [], isLoading } = useQuery<TenantWithDetails[]>({
     queryKey: ["/api/v1/super/tenants-detail"],
@@ -198,6 +201,63 @@ export default function SuperAdminPage() {
       toast({ title: "Import failed", description: error.message, variant: "destructive" });
     },
   });
+
+  const activateTenantMutation = useMutation({
+    mutationFn: async (tenantId: string) => {
+      return apiRequest("POST", `/api/v1/super/tenants/${tenantId}/activate`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants-detail"] });
+      setConfirmAction(null);
+      toast({ title: "Tenant activated", description: "The tenant is now active and users can access the app" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to activate tenant", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const suspendTenantMutation = useMutation({
+    mutationFn: async (tenantId: string) => {
+      return apiRequest("POST", `/api/v1/super/tenants/${tenantId}/suspend`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants-detail"] });
+      setConfirmAction(null);
+      toast({ title: "Tenant suspended", description: "The tenant has been suspended" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to suspend tenant", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deactivateTenantMutation = useMutation({
+    mutationFn: async (tenantId: string) => {
+      return apiRequest("POST", `/api/v1/super/tenants/${tenantId}/deactivate`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants-detail"] });
+      setConfirmAction(null);
+      toast({ title: "Tenant deactivated", description: "The tenant has been set to inactive" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to deactivate tenant", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleActAsTenant = (tenant: Tenant) => {
+    setActingTenantId(tenant.id);
+    toast({ 
+      title: "Acting as tenant", 
+      description: `You are now acting as "${tenant.name}". All actions will be scoped to this tenant.` 
+    });
+    setLocation("/dashboard");
+  };
+
+  const handleStopActingAsTenant = () => {
+    setActingTenantId(null);
+    toast({ title: "Stopped acting as tenant", description: "You are no longer acting as a specific tenant" });
+    queryClient.invalidateQueries();
+  };
 
   const parseCSV = (csvText: string): CSVUser[] => {
     const lines = csvText.trim().split("\n");
@@ -488,23 +548,83 @@ export default function SuperAdminPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3">
+                  <div className="flex items-center gap-3 flex-wrap">
                     {getStatusBadge(tenant)}
+                    
+                    {/* Act as Tenant button */}
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => handleActAsTenant(tenant)}
+                      data-testid={`button-act-as-tenant-${tenant.id}`}
+                    >
+                      <ExternalLink className="h-4 w-4 mr-2" />
+                      Act as Tenant
+                    </Button>
+                    
+                    {/* Status action buttons */}
                     {tenant.status === "inactive" && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="default"
+                          onClick={() => setConfirmAction({ type: "activate", tenant })}
+                          data-testid={`button-activate-tenant-${tenant.id}`}
+                        >
+                          <PlayCircle className="h-4 w-4 mr-2" />
+                          Activate
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setInvitingTenant(tenant);
+                            setLastInviteUrl(null);
+                            setInviteType("link");
+                          }}
+                          data-testid={`button-invite-admin-${tenant.id}`}
+                        >
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Invite Admin
+                        </Button>
+                      </>
+                    )}
+                    
+                    {tenant.status === "active" && (
+                      <>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setConfirmAction({ type: "suspend", tenant })}
+                          data-testid={`button-suspend-tenant-${tenant.id}`}
+                        >
+                          <PauseCircle className="h-4 w-4 mr-2" />
+                          Suspend
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => setConfirmAction({ type: "deactivate", tenant })}
+                          data-testid={`button-deactivate-tenant-${tenant.id}`}
+                        >
+                          <Power className="h-4 w-4 mr-2" />
+                          Deactivate
+                        </Button>
+                      </>
+                    )}
+                    
+                    {tenant.status === "suspended" && (
                       <Button
                         size="sm"
-                        variant="outline"
-                        onClick={() => {
-                          setInvitingTenant(tenant);
-                          setLastInviteUrl(null);
-                          setInviteType("link");
-                        }}
-                        data-testid={`button-invite-admin-${tenant.id}`}
+                        variant="default"
+                        onClick={() => setConfirmAction({ type: "activate", tenant })}
+                        data-testid={`button-reactivate-tenant-${tenant.id}`}
                       >
-                        <UserPlus className="h-4 w-4 mr-2" />
-                        Invite Admin
+                        <PlayCircle className="h-4 w-4 mr-2" />
+                        Reactivate
                       </Button>
                     )}
+                    
                     <Button
                       variant="outline"
                       size="sm"
@@ -1113,6 +1233,88 @@ export default function SuperAdminPage() {
         open={!!settingsTenant}
         onOpenChange={(open) => !open && setSettingsTenant(null)}
       />
+
+      {/* Confirmation Dialog for Activate/Suspend/Deactivate */}
+      <Dialog open={!!confirmAction} onOpenChange={(open) => !open && setConfirmAction(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {confirmAction?.type === "activate" && "Activate Tenant"}
+              {confirmAction?.type === "suspend" && "Suspend Tenant"}
+              {confirmAction?.type === "deactivate" && "Deactivate Tenant"}
+            </DialogTitle>
+            <DialogDescription>
+              {confirmAction?.type === "activate" && (
+                <>
+                  Are you sure you want to activate <strong>{confirmAction.tenant.name}</strong>?
+                  <br /><br />
+                  This will allow all tenant users to access the application immediately.
+                  Onboarding is not required when activated by super admin.
+                </>
+              )}
+              {confirmAction?.type === "suspend" && (
+                <>
+                  Are you sure you want to suspend <strong>{confirmAction?.tenant.name}</strong>?
+                  <br /><br />
+                  This will block all tenant users from accessing the application.
+                  Super admins can still access the tenant.
+                </>
+              )}
+              {confirmAction?.type === "deactivate" && (
+                <>
+                  Are you sure you want to deactivate <strong>{confirmAction?.tenant.name}</strong>?
+                  <br /><br />
+                  This will set the tenant back to inactive status. Users will need to complete onboarding
+                  or be re-activated by a super admin.
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setConfirmAction(null)}>
+              Cancel
+            </Button>
+            <Button
+              variant={confirmAction?.type === "suspend" || confirmAction?.type === "deactivate" ? "destructive" : "default"}
+              onClick={() => {
+                if (!confirmAction) return;
+                if (confirmAction.type === "activate") {
+                  activateTenantMutation.mutate(confirmAction.tenant.id);
+                } else if (confirmAction.type === "suspend") {
+                  suspendTenantMutation.mutate(confirmAction.tenant.id);
+                } else if (confirmAction.type === "deactivate") {
+                  deactivateTenantMutation.mutate(confirmAction.tenant.id);
+                }
+              }}
+              disabled={activateTenantMutation.isPending || suspendTenantMutation.isPending || deactivateTenantMutation.isPending}
+              data-testid={`button-confirm-${confirmAction?.type}`}
+            >
+              {(activateTenantMutation.isPending || suspendTenantMutation.isPending || deactivateTenantMutation.isPending) && (
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+              )}
+              {confirmAction?.type === "activate" && "Activate"}
+              {confirmAction?.type === "suspend" && "Suspend"}
+              {confirmAction?.type === "deactivate" && "Deactivate"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Banner when acting as a tenant */}
+      {getActingTenantId() && (
+        <div className="fixed bottom-4 right-4 bg-primary text-primary-foreground px-4 py-2 rounded-lg shadow-lg flex items-center gap-3 z-50">
+          <span className="text-sm">Acting as tenant</span>
+          <Button 
+            size="sm" 
+            variant="secondary"
+            onClick={handleStopActingAsTenant}
+            data-testid="button-stop-acting-as-tenant"
+          >
+            <XCircle className="h-4 w-4 mr-2" />
+            Stop
+          </Button>
+        </div>
+      )}
     </div>
   );
 }

@@ -1,0 +1,80 @@
+You are continuing development on my existing React + Express app.
+DO NOT rewrite the app. Implement ONLY a diagnosis + fix so the Super Admin “Tenancy Health” tab loads and displays health data.
+
+===============================================================================
+SAFETY RULES
+===============================================================================
+- No endpoint renames.
+- No schema drops/renames.
+- Only touch: super tenancy health endpoint(s), route mounting, auth/role checks, tenantStatusGuard exclusions, and the Tenancy Health UI fetch logic.
+- Add logs but never log secrets. Gate logs behind NODE_ENV !== 'production' where needed.
+
+===============================================================================
+PROBLEM
+===============================================================================
+Super Admin → Tenancy Health tab shows no data / does not load health data.
+
+===============================================================================
+DIAGNOSIS STEPS (MANDATORY)
+===============================================================================
+1) Confirm frontend is calling GET /api/v1/super/tenancy/health.
+   - If not, fix the UI to call the correct endpoint and surface errors.
+
+2) Confirm the backend route exists and is mounted.
+   - Ensure /api/v1/super/tenancy/health is registered in the main router index.
+   - Add a temporary dev-only log: “Tenancy health hit” with userId + role (no secrets).
+
+3) Confirm authorization:
+   - The endpoint must require role=super_user.
+   - If tenantStatusGuard is applied globally, ensure it NEVER blocks /api/v1/super/* routes.
+
+4) Confirm DB queries:
+   - The endpoint should compute “missing tenantId counts” using safe SELECT COUNT(*) where tenantId IS NULL on key tables.
+   - If some tables don’t exist or column missing, handle gracefully:
+     - return an error message in response like:
+       { readiness: { canEnableStrict:false, reasons:["Migration missing for table X"] } }
+     - do NOT crash without explanation.
+
+5) If TENANCY_WARN_PERSIST=false:
+   - Ensure the endpoint still returns warningsLast24h/7d based on in-memory counters or returns “warnings tracking not persisted” explicitly.
+   - UI must display that state (not blank).
+
+===============================================================================
+FIX REQUIREMENTS
+===============================================================================
+A) Backend
+- Ensure GET /api/v1/super/tenancy/health returns a complete payload even if warnings persistence is off:
+{
+  enforcementMode,
+  tables:[...],
+  warningsLast24h:{ total, byType, byRouteTop },
+  warningsLast7d:{ ... },
+  readiness:{ canEnableStrict, reasons }
+}
+
+- Ensure super routes are not blocked by tenant inactivity guard.
+- Ensure errors return consistent JSON and include a safe reason list.
+
+B) Frontend
+- On Tenancy Health page, handle these states:
+  - loading
+  - error (show status code + message)
+  - success (render table and readiness)
+- Ensure request includes auth header (same mechanism as other /super pages).
+- Ensure it doesn’t silently swallow errors.
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) Tenancy Health tab shows missingTenantId counts for key tables.
+2) Shows enforcement mode and readiness reasons.
+3) If warnings persistence is disabled, shows “warnings not persisted” but still displays table counts.
+4) Works on Railway production build.
+5) No other parts of the app are changed.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Root cause found
+- Files changed
+- Manual test steps (including what endpoint returns)

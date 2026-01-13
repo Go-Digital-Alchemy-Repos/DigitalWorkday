@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useLocation } from "wouter";
-import type { User } from "@shared/schema";
+import { type User, UserRole } from "@shared/schema";
+import { clearActingAsState, setSuperUserFlag } from "./queryClient";
 
 interface AuthContextType {
   user: Omit<User, "passwordHash"> | null;
@@ -26,11 +27,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.ok) {
         const data = await response.json();
         setUser(data.user);
+        // Set super user flag when session is restored
+        setSuperUserFlag(data.user?.role === UserRole.SUPER_USER);
       } else {
         setUser(null);
+        // Clear super user state when not authenticated
+        clearActingAsState();
       }
     } catch {
       setUser(null);
+      // Clear super user state on error
+      clearActingAsState();
     } finally {
       setIsLoading(false);
     }
@@ -42,6 +49,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
+      // Clear any acting tenant state from previous session
+      clearActingAsState();
+      
       const response = await fetch("/api/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -62,6 +72,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           const meData = await meResponse.json();
           setUser(meData.user);
           setIsLoading(false);
+          // Set super user flag based on user role
+          setSuperUserFlag(meData.user?.role === UserRole.SUPER_USER);
         }
         
         return { success: true, user: data.user };
@@ -79,6 +91,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         credentials: "include",
       });
     } finally {
+      // Clear acting tenant state to prevent it from being used by next user
+      clearActingAsState();
       setUser(null);
       setLocation("/login");
     }

@@ -232,6 +232,119 @@ router.patch("/tenants/:id", requireSuperUser, async (req, res) => {
 });
 
 // =============================================================================
+// TENANT ACTIVATION/SUSPENSION (Pre-provisioning)
+// =============================================================================
+
+// POST /api/v1/super/tenants/:tenantId/activate
+router.post("/tenants/:tenantId/activate", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    if (tenant.status === TenantStatus.ACTIVE) {
+      return res.status(400).json({ error: "Tenant is already active" });
+    }
+
+    // Activate the tenant without requiring onboarding completion
+    const updatedTenant = await db.update(tenants)
+      .set({
+        status: TenantStatus.ACTIVE,
+        activatedBySuperUserAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, tenantId))
+      .returning();
+
+    console.log(`[SuperAdmin] Tenant ${tenantId} activated by super user`);
+
+    res.json({
+      success: true,
+      message: "Tenant activated successfully",
+      tenant: updatedTenant[0],
+    });
+  } catch (error) {
+    console.error("Error activating tenant:", error);
+    res.status(500).json({ error: "Failed to activate tenant" });
+  }
+});
+
+// POST /api/v1/super/tenants/:tenantId/suspend
+router.post("/tenants/:tenantId/suspend", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    if (tenant.status === TenantStatus.SUSPENDED) {
+      return res.status(400).json({ error: "Tenant is already suspended" });
+    }
+
+    // Suspend the tenant
+    const updatedTenant = await db.update(tenants)
+      .set({
+        status: TenantStatus.SUSPENDED,
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, tenantId))
+      .returning();
+
+    console.log(`[SuperAdmin] Tenant ${tenantId} suspended by super user`);
+
+    res.json({
+      success: true,
+      message: "Tenant suspended successfully",
+      tenant: updatedTenant[0],
+    });
+  } catch (error) {
+    console.error("Error suspending tenant:", error);
+    res.status(500).json({ error: "Failed to suspend tenant" });
+  }
+});
+
+// POST /api/v1/super/tenants/:tenantId/deactivate (set back to inactive)
+router.post("/tenants/:tenantId/deactivate", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    if (tenant.status === TenantStatus.INACTIVE) {
+      return res.status(400).json({ error: "Tenant is already inactive" });
+    }
+
+    // Deactivate the tenant
+    const updatedTenant = await db.update(tenants)
+      .set({
+        status: TenantStatus.INACTIVE,
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, tenantId))
+      .returning();
+
+    console.log(`[SuperAdmin] Tenant ${tenantId} deactivated by super user`);
+
+    res.json({
+      success: true,
+      message: "Tenant deactivated successfully",
+      tenant: updatedTenant[0],
+    });
+  } catch (error) {
+    console.error("Error deactivating tenant:", error);
+    res.status(500).json({ error: "Failed to deactivate tenant" });
+  }
+});
+
+// =============================================================================
 // PHASE 3A: TENANT ADMIN INVITATION
 // =============================================================================
 
