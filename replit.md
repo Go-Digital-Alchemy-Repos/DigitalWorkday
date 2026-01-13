@@ -31,6 +31,22 @@ The database schema (`shared/schema.ts`) includes core entities like `users`, `w
 - Super Admin UI: `/super-admin` page for managing tenants (visible only to super_user role)
 - Backfill script: `server/scripts/backfillTenants.ts` to migrate existing data to default tenant
 
+### Phase 2A: Tenant Enforcement Infrastructure (Implemented)
+- **Tenant Context Middleware**: Validates X-Tenant-Id headers against active tenants asynchronously
+- **Tenant-Scoped Storage Methods**: Added to IStorage interface for:
+  - Clients: `getClientByIdAndTenant`, `getClientsByTenant`, `createClientWithTenant`, `updateClientWithTenant`, `deleteClientWithTenant`
+  - Projects: `getProjectByIdAndTenant`, `getProjectsByTenant`, `createProjectWithTenant`, `updateProjectWithTenant`
+  - Teams: `getTeamByIdAndTenant`, `getTeamsByTenant`, `createTeamWithTenant`, `updateTeamWithTenant`, `deleteTeamWithTenant`
+  - Tasks: `getTaskByIdAndTenant`, `createTaskWithTenant`, `updateTaskWithTenant`, `deleteTaskWithTenant`
+  - Users: `getUserByIdAndTenant`, `getUsersByTenant`
+  - App Settings: `getAppSettingsByTenant`, `setAppSettingsByTenant`
+- **Tenant-Scoped Routes**: Updated for clients, projects, teams with FK validation
+- **Security Enforcement**: 
+  - Only SUPER_USER role can use legacy non-scoped methods (for backward compatibility during migration)
+  - Regular users (admin, employee) MUST have tenantId assigned - routes return 500 if missing
+  - Cross-tenant data access prevented by tenant-scoped storage methods
+- **Bootstrap Changes**: Default admin user upgraded to super_user role for development
+
 ### Frontend Structure
 The frontend (`client/src/`) is organized into `pages/` for route components (e.g., home, my-tasks, project, clients, time-tracking, settings) and `components/` for reusable UI elements. Specialized components exist for settings (team, workspaces, reports, integrations), task management (task-card, task-detail-drawer, section-column, subtask-list, comment-thread, create-task-dialog), and UI elements like badges and avatars. It also features a project calendar (`project-calendar.tsx`) and project settings.
 

@@ -31,15 +31,21 @@ export async function bootstrapAdminUser(): Promise<void> {
         firstName: "Admin",
         lastName: "User",
         passwordHash,
-        role: "admin",
+        role: "super_user",
         isActive: true,
       }).returning();
       
       adminId = admin.id;
-      console.log("[bootstrap] Admin user created");
+      console.log("[bootstrap] Admin user created with super_user role");
     } else {
       adminId = existingAdmin[0].id;
-      console.log("[bootstrap] Admin user already exists");
+      
+      if (existingAdmin[0].role !== "super_user") {
+        await db.update(users).set({ role: "super_user" }).where(eq(users.id, adminId));
+        console.log("[bootstrap] Admin user upgraded to super_user role");
+      } else {
+        console.log("[bootstrap] Admin user already exists with super_user role");
+      }
     }
 
     const existingWorkspace = await db.select().from(workspaces).where(eq(workspaces.id, DEFAULT_WORKSPACE_ID)).limit(1);

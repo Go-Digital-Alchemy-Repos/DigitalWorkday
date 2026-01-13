@@ -24,6 +24,8 @@ import {
   ActiveTimer,
 } from "@shared/schema";
 import { requireAuth } from "./auth";
+import { getEffectiveTenantId, requireTenantContext } from "./middleware/tenantContext";
+import { UserRole } from "@shared/schema";
 
 function getCurrentUserId(req: Request): string {
   return req.user?.id || "demo-user-id";
@@ -31,6 +33,10 @@ function getCurrentUserId(req: Request): string {
 
 function getCurrentWorkspaceId(_req: Request): string {
   return "demo-workspace-id";
+}
+
+function isSuperUser(req: Request): boolean {
+  return (req.user as any)?.role === UserRole.SUPER_USER;
 }
 import {
   isS3Configured,
@@ -217,10 +223,24 @@ export async function registerRoutes(
 
   app.get("/api/projects", async (req, res) => {
     try {
-      const projects = await storage.getProjectsByWorkspace(
-        getCurrentWorkspaceId(req),
-      );
-      res.json(projects);
+      const tenantId = getEffectiveTenantId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      
+      // Use tenant-scoped method if tenantId is available
+      if (tenantId) {
+        const projects = await storage.getProjectsByTenant(tenantId, workspaceId);
+        return res.json(projects);
+      }
+      
+      // Only superusers can use legacy non-scoped methods (for backward compatibility)
+      if (isSuperUser(req)) {
+        const projects = await storage.getProjectsByWorkspace(workspaceId);
+        return res.json(projects);
+      }
+      
+      // Regular users must have tenantId
+      console.error(`[projects] User ${getCurrentUserId(req)} has no tenantId`);
+      return res.status(500).json({ error: "User tenant not configured" });
     } catch (error) {
       console.error("Error fetching projects:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -244,11 +264,26 @@ export async function registerRoutes(
 
   app.get("/api/projects/:id", async (req, res) => {
     try {
-      const project = await storage.getProject(req.params.id);
-      if (!project) {
-        return res.status(404).json({ error: "Project not found" });
+      const tenantId = getEffectiveTenantId(req);
+      
+      if (tenantId) {
+        const project = await storage.getProjectByIdAndTenant(req.params.id, tenantId);
+        if (!project) {
+          return res.status(404).json({ error: "Project not found" });
+        }
+        return res.json(project);
       }
-      res.json(project);
+      
+      // Only superusers can use legacy non-scoped methods
+      if (isSuperUser(req)) {
+        const project = await storage.getProject(req.params.id);
+        if (!project) {
+          return res.status(404).json({ error: "Project not found" });
+        }
+        return res.json(project);
+      }
+      
+      return res.status(500).json({ error: "User tenant not configured" });
     } catch (error) {
       console.error("Error fetching project:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -257,17 +292,38 @@ export async function registerRoutes(
 
   app.post("/api/projects", async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      
       // Convert empty string teamId to null
       const body = { ...req.body };
       if (body.teamId === "") {
         body.teamId = null;
       }
+      
+      // Validate clientId belongs to tenant if provided and tenantId available
+      if (body.clientId && tenantId) {
+        const client = await storage.getClientByIdAndTenant(body.clientId, tenantId);
+        if (!client) {
+          return res.status(400).json({ error: "Client not found or does not belong to tenant" });
+        }
+      }
+      
       const data = insertProjectSchema.parse({
         ...body,
-        workspaceId: getCurrentWorkspaceId(req),
+        workspaceId,
         createdBy: getCurrentUserId(req),
       });
-      const project = await storage.createProject(data);
+      
+      let project;
+      if (tenantId) {
+        project = await storage.createProjectWithTenant(data, tenantId);
+      } else if (isSuperUser(req)) {
+        // Only superusers can use legacy non-scoped methods
+        project = await storage.createProject(data);
+      } else {
+        return res.status(500).json({ error: "User tenant not configured" });
+      }
 
       // Emit real-time event after successful DB operation
       emitProjectCreated(project as any);
@@ -284,7 +340,26 @@ export async function registerRoutes(
 
   app.patch("/api/projects/:id", async (req, res) => {
     try {
-      const project = await storage.updateProject(req.params.id, req.body);
+      const tenantId = getEffectiveTenantId(req);
+      
+      // Validate clientId belongs to tenant if being updated and tenantId available
+      if (req.body.clientId && tenantId) {
+        const client = await storage.getClientByIdAndTenant(req.body.clientId, tenantId);
+        if (!client) {
+          return res.status(400).json({ error: "Client not found or does not belong to tenant" });
+        }
+      }
+      
+      let project;
+      if (tenantId) {
+        project = await storage.updateProjectWithTenant(req.params.id, tenantId, req.body);
+      } else if (isSuperUser(req)) {
+        // Only superusers can use legacy non-scoped methods
+        project = await storage.updateProject(req.params.id, req.body);
+      } else {
+        return res.status(500).json({ error: "User tenant not configured" });
+      }
+      
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
       }
@@ -341,10 +416,21 @@ export async function registerRoutes(
 
   app.get("/api/teams", async (req, res) => {
     try {
-      const teams = await storage.getTeamsByWorkspace(
-        getCurrentWorkspaceId(req),
-      );
-      res.json(teams);
+      const tenantId = getEffectiveTenantId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      
+      if (tenantId) {
+        const teams = await storage.getTeamsByTenant(tenantId, workspaceId);
+        return res.json(teams);
+      }
+      
+      // Only superusers can use legacy non-scoped methods
+      if (isSuperUser(req)) {
+        const teams = await storage.getTeamsByWorkspace(workspaceId);
+        return res.json(teams);
+      }
+      
+      return res.status(500).json({ error: "User tenant not configured" });
     } catch (error) {
       console.error("Error fetching teams:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -353,11 +439,26 @@ export async function registerRoutes(
 
   app.get("/api/teams/:id", async (req, res) => {
     try {
-      const team = await storage.getTeam(req.params.id);
-      if (!team) {
-        return res.status(404).json({ error: "Team not found" });
+      const tenantId = getEffectiveTenantId(req);
+      
+      if (tenantId) {
+        const team = await storage.getTeamByIdAndTenant(req.params.id, tenantId);
+        if (!team) {
+          return res.status(404).json({ error: "Team not found" });
+        }
+        return res.json(team);
       }
-      res.json(team);
+      
+      // Only superusers can use legacy non-scoped methods
+      if (isSuperUser(req)) {
+        const team = await storage.getTeam(req.params.id);
+        if (!team) {
+          return res.status(404).json({ error: "Team not found" });
+        }
+        return res.json(team);
+      }
+      
+      return res.status(500).json({ error: "User tenant not configured" });
     } catch (error) {
       console.error("Error fetching team:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -366,11 +467,24 @@ export async function registerRoutes(
 
   app.post("/api/teams", async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      
       const data = insertTeamSchema.parse({
         ...req.body,
-        workspaceId: getCurrentWorkspaceId(req),
+        workspaceId,
       });
-      const team = await storage.createTeam(data);
+      
+      let team;
+      if (tenantId) {
+        team = await storage.createTeamWithTenant(data, tenantId);
+      } else if (isSuperUser(req)) {
+        // Only superusers can use legacy non-scoped methods
+        team = await storage.createTeam(data);
+      } else {
+        return res.status(500).json({ error: "User tenant not configured" });
+      }
+      
       res.status(201).json(team);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -393,6 +507,22 @@ export async function registerRoutes(
 
   app.post("/api/teams/:teamId/members", async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
+      
+      // Validate team belongs to tenant
+      if (tenantId) {
+        const team = await storage.getTeamByIdAndTenant(req.params.teamId, tenantId);
+        if (!team) {
+          return res.status(404).json({ error: "Team not found" });
+        }
+        
+        // Validate user belongs to same tenant
+        const user = await storage.getUserByIdAndTenant(req.body.userId, tenantId);
+        if (!user) {
+          return res.status(400).json({ error: "User not found or does not belong to tenant" });
+        }
+      }
+      
       const data = insertTeamMemberSchema.parse({
         ...req.body,
         teamId: req.params.teamId,
@@ -410,7 +540,18 @@ export async function registerRoutes(
 
   app.patch("/api/teams/:id", async (req, res) => {
     try {
-      const team = await storage.updateTeam(req.params.id, req.body);
+      const tenantId = getEffectiveTenantId(req);
+      
+      let team;
+      if (tenantId) {
+        team = await storage.updateTeamWithTenant(req.params.id, tenantId, req.body);
+      } else if (isSuperUser(req)) {
+        // Only superusers can use legacy non-scoped methods
+        team = await storage.updateTeam(req.params.id, req.body);
+      } else {
+        return res.status(500).json({ error: "User tenant not configured" });
+      }
+      
       if (!team) {
         return res.status(404).json({ error: "Team not found" });
       }
@@ -423,7 +564,20 @@ export async function registerRoutes(
 
   app.delete("/api/teams/:id", async (req, res) => {
     try {
-      await storage.deleteTeam(req.params.id);
+      const tenantId = getEffectiveTenantId(req);
+      
+      if (tenantId) {
+        const deleted = await storage.deleteTeamWithTenant(req.params.id, tenantId);
+        if (!deleted) {
+          return res.status(404).json({ error: "Team not found" });
+        }
+      } else if (isSuperUser(req)) {
+        // Only superusers can use legacy non-scoped methods
+        await storage.deleteTeam(req.params.id);
+      } else {
+        return res.status(500).json({ error: "User tenant not configured" });
+      }
+      
       res.json({ success: true });
     } catch (error) {
       console.error("Error deleting team:", error);
@@ -433,6 +587,16 @@ export async function registerRoutes(
 
   app.delete("/api/teams/:teamId/members/:userId", async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
+      
+      // Validate team belongs to tenant
+      if (tenantId) {
+        const team = await storage.getTeamByIdAndTenant(req.params.teamId, tenantId);
+        if (!team) {
+          return res.status(404).json({ error: "Team not found" });
+        }
+      }
+      
       await storage.removeTeamMember(req.params.teamId, req.params.userId);
       res.json({ success: true });
     } catch (error) {
@@ -1415,15 +1579,26 @@ export async function registerRoutes(
   );
 
   // =============================================================================
-  // CLIENT (CRM) ROUTES
+  // CLIENT (CRM) ROUTES - Tenant Scoped (Phase 2A)
   // =============================================================================
 
   app.get("/api/clients", async (req, res) => {
     try {
-      const clients = await storage.getClientsByWorkspace(
-        getCurrentWorkspaceId(req),
-      );
-      res.json(clients);
+      const tenantId = getEffectiveTenantId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      
+      if (tenantId) {
+        const clients = await storage.getClientsByTenant(tenantId, workspaceId);
+        return res.json(clients);
+      }
+      
+      // Only superusers can use legacy non-scoped methods
+      if (isSuperUser(req)) {
+        const clients = await storage.getClientsByWorkspace(workspaceId);
+        return res.json(clients);
+      }
+      
+      return res.status(500).json({ error: "User tenant not configured" });
     } catch (error) {
       console.error("Error fetching clients:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -1432,11 +1607,28 @@ export async function registerRoutes(
 
   app.get("/api/clients/:id", async (req, res) => {
     try {
-      const client = await storage.getClientWithContacts(req.params.id);
-      if (!client) {
-        return res.status(404).json({ error: "Client not found" });
+      const tenantId = getEffectiveTenantId(req);
+      
+      if (tenantId) {
+        const client = await storage.getClientByIdAndTenant(req.params.id, tenantId);
+        if (!client) {
+          return res.status(404).json({ error: "Client not found" });
+        }
+        // Get full client with contacts
+        const clientWithContacts = await storage.getClientWithContacts(req.params.id);
+        return res.json(clientWithContacts);
       }
-      res.json(client);
+      
+      // Only superusers can use legacy non-scoped methods
+      if (isSuperUser(req)) {
+        const client = await storage.getClientWithContacts(req.params.id);
+        if (!client) {
+          return res.status(404).json({ error: "Client not found" });
+        }
+        return res.json(client);
+      }
+      
+      return res.status(500).json({ error: "User tenant not configured" });
     } catch (error) {
       console.error("Error fetching client:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -1445,11 +1637,23 @@ export async function registerRoutes(
 
   app.post("/api/clients", async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      
       const data = insertClientSchema.parse({
         ...req.body,
-        workspaceId: getCurrentWorkspaceId(req),
+        workspaceId,
       });
-      const client = await storage.createClient(data);
+      
+      let client;
+      if (tenantId) {
+        client = await storage.createClientWithTenant(data, tenantId);
+      } else if (isSuperUser(req)) {
+        // Only superusers can use legacy non-scoped methods
+        client = await storage.createClient(data);
+      } else {
+        return res.status(500).json({ error: "User tenant not configured" });
+      }
 
       // Emit real-time event
       emitClientCreated(
@@ -1461,7 +1665,7 @@ export async function registerRoutes(
           workspaceId: client.workspaceId,
           createdAt: client.createdAt!,
         },
-        getCurrentWorkspaceId(req),
+        workspaceId,
       );
 
       res.status(201).json(client);
@@ -1476,7 +1680,18 @@ export async function registerRoutes(
 
   app.patch("/api/clients/:id", async (req, res) => {
     try {
-      const client = await storage.updateClient(req.params.id, req.body);
+      const tenantId = getEffectiveTenantId(req);
+      
+      let client;
+      if (tenantId) {
+        client = await storage.updateClientWithTenant(req.params.id, tenantId, req.body);
+      } else if (isSuperUser(req)) {
+        // Only superusers can use legacy non-scoped methods
+        client = await storage.updateClient(req.params.id, req.body);
+      } else {
+        return res.status(500).json({ error: "User tenant not configured" });
+      }
+      
       if (!client) {
         return res.status(404).json({ error: "Client not found" });
       }
@@ -1493,15 +1708,34 @@ export async function registerRoutes(
 
   app.delete("/api/clients/:id", async (req, res) => {
     try {
-      const client = await storage.getClient(req.params.id);
-      if (!client) {
-        return res.status(404).json({ error: "Client not found" });
+      const tenantId = getEffectiveTenantId(req);
+      
+      let workspaceId = "";
+      
+      if (tenantId) {
+        const client = await storage.getClientByIdAndTenant(req.params.id, tenantId);
+        if (!client) {
+          return res.status(404).json({ error: "Client not found" });
+        }
+        workspaceId = client.workspaceId;
+        const deleted = await storage.deleteClientWithTenant(req.params.id, tenantId);
+        if (!deleted) {
+          return res.status(404).json({ error: "Client not found" });
+        }
+      } else if (isSuperUser(req)) {
+        // Only superusers can use legacy non-scoped methods
+        const client = await storage.getClient(req.params.id);
+        if (!client) {
+          return res.status(404).json({ error: "Client not found" });
+        }
+        workspaceId = client.workspaceId;
+        await storage.deleteClient(req.params.id);
+      } else {
+        return res.status(500).json({ error: "User tenant not configured" });
       }
 
-      await storage.deleteClient(req.params.id);
-
       // Emit real-time event
-      emitClientDeleted(req.params.id, client.workspaceId);
+      emitClientDeleted(req.params.id, workspaceId);
 
       res.status(204).send();
     } catch (error) {

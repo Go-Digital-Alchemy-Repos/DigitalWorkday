@@ -1,0 +1,74 @@
+You are continuing development on my existing single-codebase React + Express app.
+Implement ONLY a safe Super Admin bootstrap mechanism for production deployment (Railway). Do NOT refactor the app.
+
+===============================================================================
+ABSOLUTE SAFETY RULES
+===============================================================================
+- Do NOT change existing endpoints or auth strategy.
+- Do NOT alter tenant scoping logic beyond what is required for bootstrap.
+- Do NOT log secrets or passwords.
+- Schema changes must be add-only (ideally none).
+
+===============================================================================
+GOAL
+===============================================================================
+Ensure there is a reliable way to create the FIRST super_user account in production so I can access /super/* after deployment.
+
+===============================================================================
+REQUIREMENTS
+===============================================================================
+
+1) Bootstrap env vars (Railway)
+- SUPER_ADMIN_BOOTSTRAP_TOKEN (required to enable bootstrap endpoint)
+- SUPER_ADMIN_EMAIL
+- SUPER_ADMIN_PASSWORD
+- SUPER_ADMIN_FIRST_NAME
+- SUPER_ADMIN_LAST_NAME
+
+2) One-time bootstrap endpoint (recommended)
+- POST /api/v1/super/bootstrap
+Headers:
+  - X-Bootstrap-Token: <SUPER_ADMIN_BOOTSTRAP_TOKEN>
+Body (optional; can use env defaults):
+  { email?, password?, firstName?, lastName? }
+
+Behavior:
+- If a super_user already exists in the DB:
+  - return 409 "Super admin already initialized"
+- If token header does not match env token:
+  - return 401
+- Create user with role=super_user, isActive=true
+- Ensure user.tenantId can be null OR set to default tenant; do not break tenancy model.
+- Hash password using existing password hashing method.
+- Return success (do not include password). Optionally return the created user id.
+
+3) After bootstrap succeeds:
+- Log ONLY: "Super admin initialized" (no email/password printed)
+- Endpoint must remain locked behind token and must refuse once a super admin exists.
+
+4) Add optional CLI script too (nice-to-have):
+- /server/scripts/bootstrap_super_user.ts
+- Reads the same env vars and creates super_user if none exists.
+
+5) Documentation
+- Add /server/README-BOOTSTRAP.md with Railway instructions:
+  - required env vars
+  - curl command example for bootstrap endpoint
+  - how to verify by logging in
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) Fresh DB + app deployed to Railway:
+   - calling POST /api/v1/super/bootstrap with correct token creates a super_user
+2) Calling it again returns 409 and does nothing
+3) Incorrect token returns 401
+4) No other app behavior is changed
+5) Super user can login normally and access /super/tenants
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Files modified/added
+- Exact env vars required
+- curl command for Railway bootstrap

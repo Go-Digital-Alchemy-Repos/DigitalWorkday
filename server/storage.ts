@@ -182,6 +182,35 @@ export interface IStorage {
   getTenantBySlug(slug: string): Promise<Tenant | undefined>;
   createTenant(tenant: InsertTenant): Promise<Tenant>;
   updateTenant(id: string, tenant: Partial<InsertTenant>): Promise<Tenant | undefined>;
+
+  // Tenant-scoped methods (Phase 2A)
+  getClientByIdAndTenant(id: string, tenantId: string): Promise<Client | undefined>;
+  getClientsByTenant(tenantId: string, workspaceId: string): Promise<ClientWithContacts[]>;
+  createClientWithTenant(client: InsertClient, tenantId: string): Promise<Client>;
+  updateClientWithTenant(id: string, tenantId: string, client: Partial<InsertClient>): Promise<Client | undefined>;
+  deleteClientWithTenant(id: string, tenantId: string): Promise<boolean>;
+
+  getProjectByIdAndTenant(id: string, tenantId: string): Promise<Project | undefined>;
+  getProjectsByTenant(tenantId: string, workspaceId: string): Promise<Project[]>;
+  createProjectWithTenant(project: InsertProject, tenantId: string): Promise<Project>;
+  updateProjectWithTenant(id: string, tenantId: string, project: Partial<InsertProject>): Promise<Project | undefined>;
+
+  getTeamByIdAndTenant(id: string, tenantId: string): Promise<Team | undefined>;
+  getTeamsByTenant(tenantId: string, workspaceId: string): Promise<Team[]>;
+  createTeamWithTenant(team: InsertTeam, tenantId: string): Promise<Team>;
+  updateTeamWithTenant(id: string, tenantId: string, team: Partial<InsertTeam>): Promise<Team | undefined>;
+  deleteTeamWithTenant(id: string, tenantId: string): Promise<boolean>;
+
+  getTaskByIdAndTenant(id: string, tenantId: string): Promise<Task | undefined>;
+  createTaskWithTenant(task: InsertTask, tenantId: string): Promise<Task>;
+  updateTaskWithTenant(id: string, tenantId: string, task: Partial<InsertTask>): Promise<Task | undefined>;
+  deleteTaskWithTenant(id: string, tenantId: string): Promise<boolean>;
+
+  getUserByIdAndTenant(id: string, tenantId: string): Promise<User | undefined>;
+  getUsersByTenant(tenantId: string): Promise<User[]>;
+
+  getAppSettingsByTenant(tenantId: string, workspaceId: string, key: string): Promise<any>;
+  setAppSettingsByTenant(tenantId: string, workspaceId: string, key: string, value: any, userId?: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1161,6 +1190,230 @@ export class DatabaseStorage implements IStorage {
       console.log(`[settings] Updated existing record id=${existing.id}`);
     } else {
       const [inserted] = await db.insert(appSettings).values({
+        workspaceId,
+        key,
+        valueEncrypted: encryptedValue,
+        updatedByUserId: userId || null,
+      }).returning();
+      console.log(`[settings] Inserted new record id=${inserted.id}`);
+    }
+  }
+
+  // =============================================================================
+  // TENANT-SCOPED METHODS (Phase 2A)
+  // =============================================================================
+
+  // Clients - tenant scoped
+  async getClientByIdAndTenant(id: string, tenantId: string): Promise<Client | undefined> {
+    const [client] = await db.select().from(clients)
+      .where(and(eq(clients.id, id), eq(clients.tenantId, tenantId)));
+    return client || undefined;
+  }
+
+  async getClientsByTenant(tenantId: string, workspaceId: string): Promise<ClientWithContacts[]> {
+    const clientsList = await db.select()
+      .from(clients)
+      .where(and(eq(clients.tenantId, tenantId), eq(clients.workspaceId, workspaceId)))
+      .orderBy(asc(clients.companyName));
+    
+    const result: ClientWithContacts[] = [];
+    for (const client of clientsList) {
+      const contacts = await this.getContactsByClient(client.id);
+      const clientProjects = await this.getProjectsByClient(client.id);
+      result.push({ ...client, contacts, projects: clientProjects });
+    }
+    return result;
+  }
+
+  async createClientWithTenant(insertClient: InsertClient, tenantId: string): Promise<Client> {
+    const [client] = await db.insert(clients).values({ ...insertClient, tenantId }).returning();
+    return client;
+  }
+
+  async updateClientWithTenant(id: string, tenantId: string, client: Partial<InsertClient>): Promise<Client | undefined> {
+    const [updated] = await db.update(clients)
+      .set({ ...client, updatedAt: new Date() })
+      .where(and(eq(clients.id, id), eq(clients.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteClientWithTenant(id: string, tenantId: string): Promise<boolean> {
+    const existing = await this.getClientByIdAndTenant(id, tenantId);
+    if (!existing) return false;
+    
+    await db.delete(clientInvites).where(eq(clientInvites.clientId, id));
+    await db.delete(clientContacts).where(eq(clientContacts.clientId, id));
+    await db.update(projects).set({ clientId: null }).where(eq(projects.clientId, id));
+    await db.delete(clients).where(eq(clients.id, id));
+    return true;
+  }
+
+  // Projects - tenant scoped
+  async getProjectByIdAndTenant(id: string, tenantId: string): Promise<Project | undefined> {
+    const [project] = await db.select().from(projects)
+      .where(and(eq(projects.id, id), eq(projects.tenantId, tenantId)));
+    return project || undefined;
+  }
+
+  async getProjectsByTenant(tenantId: string, workspaceId: string): Promise<Project[]> {
+    return db.select()
+      .from(projects)
+      .where(and(eq(projects.tenantId, tenantId), eq(projects.workspaceId, workspaceId)))
+      .orderBy(desc(projects.createdAt));
+  }
+
+  async createProjectWithTenant(insertProject: InsertProject, tenantId: string): Promise<Project> {
+    const [project] = await db.insert(projects).values({ ...insertProject, tenantId }).returning();
+    return project;
+  }
+
+  async updateProjectWithTenant(id: string, tenantId: string, project: Partial<InsertProject>): Promise<Project | undefined> {
+    const [updated] = await db.update(projects)
+      .set({ ...project, updatedAt: new Date() })
+      .where(and(eq(projects.id, id), eq(projects.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  // Teams - tenant scoped
+  async getTeamByIdAndTenant(id: string, tenantId: string): Promise<Team | undefined> {
+    const [team] = await db.select().from(teams)
+      .where(and(eq(teams.id, id), eq(teams.tenantId, tenantId)));
+    return team || undefined;
+  }
+
+  async getTeamsByTenant(tenantId: string, workspaceId: string): Promise<Team[]> {
+    return db.select()
+      .from(teams)
+      .where(and(eq(teams.tenantId, tenantId), eq(teams.workspaceId, workspaceId)))
+      .orderBy(asc(teams.name));
+  }
+
+  async createTeamWithTenant(insertTeam: InsertTeam, tenantId: string): Promise<Team> {
+    const [team] = await db.insert(teams).values({ ...insertTeam, tenantId }).returning();
+    return team;
+  }
+
+  async updateTeamWithTenant(id: string, tenantId: string, team: Partial<InsertTeam>): Promise<Team | undefined> {
+    const [updated] = await db.update(teams)
+      .set({ ...team })
+      .where(and(eq(teams.id, id), eq(teams.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteTeamWithTenant(id: string, tenantId: string): Promise<boolean> {
+    const existing = await this.getTeamByIdAndTenant(id, tenantId);
+    if (!existing) return false;
+    
+    await db.delete(teamMembers).where(eq(teamMembers.teamId, id));
+    await db.delete(teams).where(eq(teams.id, id));
+    return true;
+  }
+
+  // Tasks - tenant scoped
+  async getTaskByIdAndTenant(id: string, tenantId: string): Promise<Task | undefined> {
+    const [task] = await db.select().from(tasks)
+      .where(and(eq(tasks.id, id), eq(tasks.tenantId, tenantId)));
+    return task || undefined;
+  }
+
+  async createTaskWithTenant(insertTask: InsertTask, tenantId: string): Promise<Task> {
+    let orderIndex = insertTask.orderIndex;
+    if (orderIndex === undefined && insertTask.sectionId) {
+      const existingTasks = await db.select().from(tasks).where(eq(tasks.sectionId, insertTask.sectionId));
+      orderIndex = existingTasks.length;
+    }
+    const [task] = await db.insert(tasks).values({ ...insertTask, tenantId, orderIndex: orderIndex ?? 0 }).returning();
+    return task;
+  }
+
+  async updateTaskWithTenant(id: string, tenantId: string, task: Partial<InsertTask>): Promise<Task | undefined> {
+    const [updated] = await db.update(tasks)
+      .set({ ...task, updatedAt: new Date() })
+      .where(and(eq(tasks.id, id), eq(tasks.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deleteTaskWithTenant(id: string, tenantId: string): Promise<boolean> {
+    const existing = await this.getTaskByIdAndTenant(id, tenantId);
+    if (!existing) return false;
+    
+    await db.delete(subtasks).where(eq(subtasks.taskId, id));
+    await db.delete(taskAssignees).where(eq(taskAssignees.taskId, id));
+    await db.delete(taskTags).where(eq(taskTags.taskId, id));
+    await db.delete(comments).where(eq(comments.taskId, id));
+    await db.delete(tasks).where(eq(tasks.id, id));
+    return true;
+  }
+
+  // Users - tenant scoped
+  async getUserByIdAndTenant(id: string, tenantId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users)
+      .where(and(eq(users.id, id), eq(users.tenantId, tenantId)));
+    return user || undefined;
+  }
+
+  async getUsersByTenant(tenantId: string): Promise<User[]> {
+    return db.select().from(users).where(eq(users.tenantId, tenantId));
+  }
+
+  // App Settings - tenant scoped
+  async getAppSettingsByTenant(tenantId: string, workspaceId: string, key: string): Promise<any> {
+    console.log(`[settings] GET tenantId=${tenantId} workspaceId=${workspaceId} key=${key}`);
+    
+    const [setting] = await db.select()
+      .from(appSettings)
+      .where(and(
+        eq(appSettings.tenantId, tenantId),
+        eq(appSettings.workspaceId, workspaceId),
+        eq(appSettings.key, key)
+      ));
+    
+    if (!setting) {
+      console.log(`[settings] No record found for tenantId=${tenantId} workspaceId=${workspaceId} key=${key}`);
+      return null;
+    }
+    
+    try {
+      const decrypted = decryptValue(setting.valueEncrypted);
+      const parsed = JSON.parse(decrypted);
+      console.log(`[settings] Successfully decrypted tenantId=${tenantId} workspaceId=${workspaceId} key=${key}`);
+      return parsed;
+    } catch (error) {
+      console.error(`[settings] Decryption failed for tenantId=${tenantId} workspaceId=${workspaceId} key=${key}:`, error instanceof Error ? error.message : error);
+      return null;
+    }
+  }
+
+  async setAppSettingsByTenant(tenantId: string, workspaceId: string, key: string, value: any, userId?: string): Promise<void> {
+    console.log(`[settings] PUT tenantId=${tenantId} workspaceId=${workspaceId} key=${key} userId=${userId || 'unknown'}`);
+    
+    const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+    const encryptedValue = encryptValue(stringValue);
+    
+    const [existing] = await db.select()
+      .from(appSettings)
+      .where(and(
+        eq(appSettings.tenantId, tenantId),
+        eq(appSettings.workspaceId, workspaceId),
+        eq(appSettings.key, key)
+      ));
+    
+    if (existing) {
+      await db.update(appSettings)
+        .set({ 
+          valueEncrypted: encryptedValue, 
+          updatedAt: new Date(),
+          updatedByUserId: userId || null,
+        })
+        .where(eq(appSettings.id, existing.id));
+      console.log(`[settings] Updated existing record id=${existing.id}`);
+    } else {
+      const [inserted] = await db.insert(appSettings).values({
+        tenantId,
         workspaceId,
         key,
         valueEncrypted: encryptedValue,
