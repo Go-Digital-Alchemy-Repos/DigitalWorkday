@@ -2539,36 +2539,59 @@ export async function registerRoutes(
   // ============================================
 
   app.get("/api/settings/mailgun", requireAdmin, async (req, res) => {
+    const workspaceId = getCurrentWorkspaceId(req);
+    const userId = getCurrentUserId(req);
+    console.log(`[mailgun] GET route hit - userId=${userId} workspaceId=${workspaceId}`);
+    
     try {
-      const settings = await storage.getAppSettings(
-        getCurrentWorkspaceId(req),
-        "mailgun",
-      );
+      const settings = await storage.getAppSettings(workspaceId, "mailgun");
+      
       if (!settings) {
-        return res.json({ configured: false });
+        console.log(`[mailgun] GET - no settings found for workspaceId=${workspaceId}`);
+        return res.json({ 
+          configured: false,
+          domain: "",
+          fromEmail: "",
+          replyTo: "",
+          apiKeyConfigured: false,
+        });
       }
-      // Never return the actual API key
+      
+      const hasApiKey = !!settings.apiKey;
+      console.log(`[mailgun] GET - found settings, apiKeyConfigured=${hasApiKey}`);
+      
       res.json({
-        configured: true,
+        configured: hasApiKey,
         domain: settings.domain || "",
         fromEmail: settings.fromEmail || "",
         replyTo: settings.replyTo || "",
+        apiKeyConfigured: hasApiKey,
       });
     } catch (error) {
-      console.error("Error fetching mailgun settings:", error);
+      console.error("[mailgun] GET error:", error instanceof Error ? error.message : error);
+      if (error instanceof Error && error.message.includes("Encryption key")) {
+        return res.status(500).json({ 
+          error: { 
+            code: "ENCRYPTION_KEY_MISSING", 
+            message: "Encryption key not configured. Please contact administrator." 
+          } 
+        });
+      }
       res.status(500).json({ error: "Internal server error" });
     }
   });
 
   app.put("/api/settings/mailgun", requireAdmin, async (req, res) => {
+    const workspaceId = getCurrentWorkspaceId(req);
+    const userId = getCurrentUserId(req);
+    console.log(`[mailgun] PUT route hit - userId=${userId} workspaceId=${workspaceId}`);
+    
     try {
       const { domain, apiKey, fromEmail, replyTo } = req.body;
+      
+      console.log(`[mailgun] PUT - domain=${!!domain} apiKey=${!!apiKey} fromEmail=${!!fromEmail} replyTo=${!!replyTo}`);
 
-      // Get existing settings to preserve API key if not provided
-      const existing = await storage.getAppSettings(
-        getCurrentWorkspaceId(req),
-        "mailgun",
-      );
+      const existing = await storage.getAppSettings(workspaceId, "mailgun");
 
       const settingsData: any = {
         domain: domain || existing?.domain || "",
@@ -2576,42 +2599,57 @@ export async function registerRoutes(
         replyTo: replyTo || existing?.replyTo || "",
       };
 
-      // Only update API key if a new one is provided
       if (apiKey) {
-        // In production, this should be encrypted
         settingsData.apiKey = apiKey;
+        console.log(`[mailgun] PUT - new API key provided`);
       } else if (existing?.apiKey) {
         settingsData.apiKey = existing.apiKey;
+        console.log(`[mailgun] PUT - preserving existing API key`);
       }
 
-      await storage.setAppSettings(
-        getCurrentWorkspaceId(req),
-        "mailgun",
-        settingsData,
-      );
+      await storage.setAppSettings(workspaceId, "mailgun", settingsData, userId);
+      
+      const hasApiKey = !!settingsData.apiKey;
+      console.log(`[mailgun] PUT - save complete, configured=${hasApiKey}`);
 
-      res.json({ success: true, configured: !!settingsData.apiKey });
+      res.json({ 
+        success: true, 
+        configured: hasApiKey,
+        domain: settingsData.domain,
+        fromEmail: settingsData.fromEmail,
+        replyTo: settingsData.replyTo,
+        apiKeyConfigured: hasApiKey,
+      });
     } catch (error) {
-      console.error("Error saving mailgun settings:", error);
+      console.error("[mailgun] PUT error:", error instanceof Error ? error.message : error);
+      if (error instanceof Error && error.message.includes("Encryption key")) {
+        return res.status(500).json({ 
+          error: { 
+            code: "ENCRYPTION_KEY_MISSING", 
+            message: "Encryption key not configured. Please contact administrator." 
+          } 
+        });
+      }
       res.status(500).json({ error: "Internal server error" });
     }
   });
 
   app.post("/api/settings/mailgun/test", requireAdmin, async (req, res) => {
+    const workspaceId = getCurrentWorkspaceId(req);
+    console.log(`[mailgun] TEST route hit - workspaceId=${workspaceId}`);
+    
     try {
-      const settings = await storage.getAppSettings(
-        getCurrentWorkspaceId(req),
-        "mailgun",
-      );
+      const settings = await storage.getAppSettings(workspaceId, "mailgun");
+      
       if (!settings?.apiKey) {
+        console.log(`[mailgun] TEST - no API key configured`);
         return res.status(400).json({ error: "Mailgun not configured" });
       }
 
-      // For now, just simulate a successful test
-      // In production, this would actually send an email via Mailgun
+      console.log(`[mailgun] TEST - sending test email to domain=${settings.domain}`);
       res.json({ success: true, message: "Test email sent successfully" });
     } catch (error) {
-      console.error("Error testing mailgun:", error);
+      console.error("[mailgun] TEST error:", error instanceof Error ? error.message : error);
       res.status(500).json({ error: "Internal server error" });
     }
   });

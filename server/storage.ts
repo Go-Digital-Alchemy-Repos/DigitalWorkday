@@ -35,6 +35,7 @@ import {
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, inArray, gte, lte, sql } from "drizzle-orm";
+import { encryptValue, decryptValue } from "./lib/encryption";
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -1103,25 +1104,37 @@ export class DatabaseStorage implements IStorage {
   }
 
   // =============================================================================
-  // APP SETTINGS
+  // APP SETTINGS (Encrypted)
   // =============================================================================
 
   async getAppSettings(workspaceId: string, key: string): Promise<any> {
+    console.log(`[settings] GET workspaceId=${workspaceId} key=${key}`);
+    
     const [setting] = await db.select()
       .from(appSettings)
       .where(and(eq(appSettings.workspaceId, workspaceId), eq(appSettings.key, key)));
     
-    if (!setting) return null;
+    if (!setting) {
+      console.log(`[settings] No record found for workspaceId=${workspaceId} key=${key}`);
+      return null;
+    }
     
     try {
-      return JSON.parse(setting.value);
-    } catch {
-      return setting.value;
+      const decrypted = decryptValue(setting.valueEncrypted);
+      const parsed = JSON.parse(decrypted);
+      console.log(`[settings] Successfully decrypted workspaceId=${workspaceId} key=${key}`);
+      return parsed;
+    } catch (error) {
+      console.error(`[settings] Decryption failed for workspaceId=${workspaceId} key=${key}:`, error instanceof Error ? error.message : error);
+      return null;
     }
   }
 
-  async setAppSettings(workspaceId: string, key: string, value: any): Promise<void> {
+  async setAppSettings(workspaceId: string, key: string, value: any, userId?: string): Promise<void> {
+    console.log(`[settings] PUT workspaceId=${workspaceId} key=${key} userId=${userId || 'unknown'}`);
+    
     const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
+    const encryptedValue = encryptValue(stringValue);
     
     const [existing] = await db.select()
       .from(appSettings)
@@ -1129,14 +1142,21 @@ export class DatabaseStorage implements IStorage {
     
     if (existing) {
       await db.update(appSettings)
-        .set({ value: stringValue, updatedAt: new Date() })
+        .set({ 
+          valueEncrypted: encryptedValue, 
+          updatedAt: new Date(),
+          updatedByUserId: userId || null,
+        })
         .where(eq(appSettings.id, existing.id));
+      console.log(`[settings] Updated existing record id=${existing.id}`);
     } else {
-      await db.insert(appSettings).values({
+      const [inserted] = await db.insert(appSettings).values({
         workspaceId,
         key,
-        value: stringValue,
-      });
+        valueEncrypted: encryptedValue,
+        updatedByUserId: userId || null,
+      }).returning();
+      console.log(`[settings] Inserted new record id=${inserted.id}`);
     }
   }
 }

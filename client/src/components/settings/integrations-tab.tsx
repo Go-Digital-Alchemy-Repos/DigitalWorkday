@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -15,6 +15,7 @@ interface MailgunSettings {
   domain?: string;
   fromEmail?: string;
   replyTo?: string;
+  apiKeyConfigured?: boolean;
 }
 
 export function IntegrationsTab() {
@@ -22,23 +23,37 @@ export function IntegrationsTab() {
   const [mailgunApiKey, setMailgunApiKey] = useState("");
   const [mailgunFromEmail, setMailgunFromEmail] = useState("");
   const [mailgunReplyTo, setMailgunReplyTo] = useState("");
+  const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
 
   const { data: mailgunSettings, isLoading } = useQuery<MailgunSettings>({
     queryKey: ["/api/settings/mailgun"],
   });
 
+  useEffect(() => {
+    if (mailgunSettings && !isInitialized) {
+      setMailgunDomain(mailgunSettings.domain || "");
+      setMailgunFromEmail(mailgunSettings.fromEmail || "");
+      setMailgunReplyTo(mailgunSettings.replyTo || "");
+      setIsInitialized(true);
+    }
+  }, [mailgunSettings, isInitialized]);
+
   const saveMailgunMutation = useMutation({
     mutationFn: async (data: any) => {
       return apiRequest("PUT", "/api/settings/mailgun", data);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/settings/mailgun"] });
+    onSuccess: async (response: any) => {
+      await queryClient.invalidateQueries({ queryKey: ["/api/settings/mailgun"] });
+      if (response.domain) setMailgunDomain(response.domain);
+      if (response.fromEmail) setMailgunFromEmail(response.fromEmail);
+      if (response.replyTo !== undefined) setMailgunReplyTo(response.replyTo);
       toast({ title: "Mailgun settings saved" });
       setMailgunApiKey("");
     },
-    onError: () => {
-      toast({ title: "Failed to save settings", variant: "destructive" });
+    onError: (error: any) => {
+      const message = error?.error?.message || "Failed to save settings";
+      toast({ title: message, variant: "destructive" });
     },
   });
 
@@ -57,10 +72,10 @@ export function IntegrationsTab() {
   const handleSaveMailgun = (e: React.FormEvent) => {
     e.preventDefault();
     saveMailgunMutation.mutate({
-      domain: mailgunDomain || mailgunSettings?.domain,
+      domain: mailgunDomain,
       apiKey: mailgunApiKey || undefined,
-      fromEmail: mailgunFromEmail || mailgunSettings?.fromEmail,
-      replyTo: mailgunReplyTo || mailgunSettings?.replyTo,
+      fromEmail: mailgunFromEmail,
+      replyTo: mailgunReplyTo,
     });
   };
 
@@ -122,7 +137,7 @@ export function IntegrationsTab() {
                 <Input
                   id="mailgun-domain"
                   placeholder="mg.yourdomain.com"
-                  value={mailgunDomain || mailgunSettings?.domain || ""}
+                  value={mailgunDomain}
                   onChange={(e) => setMailgunDomain(e.target.value)}
                   data-testid="input-mailgun-domain"
                 />
@@ -130,17 +145,17 @@ export function IntegrationsTab() {
               <div className="space-y-2">
                 <Label htmlFor="mailgun-api-key">
                   API Key
-                  {mailgunSettings?.configured && (
+                  {mailgunSettings?.apiKeyConfigured && (
                     <span className="ml-2 text-xs text-muted-foreground">
                       <Lock className="h-3 w-3 inline mr-1" />
-                      (hidden for security)
+                      Configured
                     </span>
                   )}
                 </Label>
                 <Input
                   id="mailgun-api-key"
                   type="password"
-                  placeholder={mailgunSettings?.configured ? "••••••••••••" : "key-xxxxxxxxxx"}
+                  placeholder={mailgunSettings?.apiKeyConfigured ? "Leave blank to keep existing" : "key-xxxxxxxxxx"}
                   value={mailgunApiKey}
                   onChange={(e) => setMailgunApiKey(e.target.value)}
                   data-testid="input-mailgun-api-key"
@@ -152,7 +167,7 @@ export function IntegrationsTab() {
                   id="mailgun-from"
                   type="email"
                   placeholder="noreply@yourdomain.com"
-                  value={mailgunFromEmail || mailgunSettings?.fromEmail || ""}
+                  value={mailgunFromEmail}
                   onChange={(e) => setMailgunFromEmail(e.target.value)}
                   data-testid="input-mailgun-from"
                 />
@@ -163,7 +178,7 @@ export function IntegrationsTab() {
                   id="mailgun-reply-to"
                   type="email"
                   placeholder="support@yourdomain.com"
-                  value={mailgunReplyTo || mailgunSettings?.replyTo || ""}
+                  value={mailgunReplyTo}
                   onChange={(e) => setMailgunReplyTo(e.target.value)}
                   data-testid="input-mailgun-reply-to"
                 />

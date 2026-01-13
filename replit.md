@@ -253,11 +253,20 @@ Following design_guidelines.md with:
 1. Create a PostgreSQL database on Railway
 2. Set the `DATABASE_URL` environment variable (Railway does this automatically when you link the database)
 3. Set `SESSION_SECRET` environment variable (a random string for session encryption)
-4. Deploy - the build script automatically runs `db:push` to create database tables
-5. On first run, the app will automatically create an admin user:
+4. Set `APP_ENCRYPTION_KEY` environment variable (32 bytes base64-encoded for AES-256-GCM encryption of sensitive settings like Mailgun API keys)
+   - Generate with: `openssl rand -base64 32`
+5. Deploy - the build script automatically runs `db:push` to create database tables
+6. On first run, the app will automatically create an admin user:
    - Email: admin@dasana.com
    - Password: admin123
-6. After login, you can change the admin password and create additional users in Settings > Team
+7. After login, you can change the admin password and create additional users in Settings > Team
+
+### Environment Variables
+| Variable | Required | Description |
+|----------|----------|-------------|
+| DATABASE_URL | Yes | PostgreSQL connection string |
+| SESSION_SECRET | Yes | Random string for session encryption |
+| APP_ENCRYPTION_KEY | Production | 32-byte base64 key for encrypting sensitive settings (generate with `openssl rand -base64 32`)
 
 ## User Preferences
 - Professional, clean Asana-like design
