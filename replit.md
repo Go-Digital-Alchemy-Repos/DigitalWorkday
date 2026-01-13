@@ -8,6 +8,8 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - Board view as primary view with list view and calendar view options
 - Calendar view displays tasks with due dates using FullCalendar, with filtering and drag-to-reschedule
 - My Tasks view with two viewing modes: date-based grouping (overdue, today, tomorrow, upcoming) and personal sections organization
+- Projects Dashboard with search, status/client/team filters, and table view showing project details via drawer
+- Workload Reports in Settings showing task distribution by employee with completion metrics
 
 ## System Architecture
 
