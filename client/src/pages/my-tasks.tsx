@@ -113,9 +113,10 @@ interface TaskSectionListProps {
   onStatusChange: (taskId: string, completed: boolean) => void;
   localOrder: string[];
   onDragEnd: (event: DragEndEvent, sectionId: string) => void;
+  onAddTask?: () => void;
 }
 
-function TaskSectionList({ section, onTaskSelect, onStatusChange, localOrder, onDragEnd }: TaskSectionListProps) {
+function TaskSectionList({ section, onTaskSelect, onStatusChange, localOrder, onDragEnd, onAddTask }: TaskSectionListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -137,13 +138,26 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, localOrder, on
 
   return (
     <Collapsible defaultOpen={section.defaultOpen}>
-      <CollapsibleTrigger className="flex items-center gap-2 w-full py-2 hover-elevate rounded-md px-2">
-        <section.icon className={`h-4 w-4 ${section.iconColor || "text-muted-foreground"}`} />
-        <span className="text-sm font-medium">{section.title}</span>
-        <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
-          {section.tasks.length}
-        </span>
-      </CollapsibleTrigger>
+      <div className="flex items-center gap-1">
+        <CollapsibleTrigger className="flex items-center gap-2 flex-1 py-2 hover-elevate rounded-md px-2">
+          <section.icon className={`h-4 w-4 ${section.iconColor || "text-muted-foreground"}`} />
+          <span className="text-sm font-medium">{section.title}</span>
+          <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+            {section.tasks.length}
+          </span>
+        </CollapsibleTrigger>
+        {onAddTask && (
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-7 w-7"
+            onClick={onAddTask}
+            data-testid={`button-add-${section.id}-task`}
+          >
+            <Plus className="h-4 w-4" />
+          </Button>
+        )}
+      </div>
       <CollapsibleContent>
         {section.tasks.length > 0 ? (
           <DndContext
@@ -428,7 +442,7 @@ export default function MyTasks() {
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 p-6 h-full">
             <ScrollArea className="h-full pr-2">
               <div className="space-y-4">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Personal & Unscheduled</h2>
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Scheduled Tasks</h2>
                 {leftColumn.map((section) => (
                   <TaskSectionList
                     key={section.id}
@@ -444,7 +458,7 @@ export default function MyTasks() {
 
             <ScrollArea className="h-full pr-2">
               <div className="space-y-4">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Scheduled Tasks</h2>
+                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Personal & Unscheduled</h2>
                 {rightColumn.map((section) => (
                   <TaskSectionList
                     key={section.id}
@@ -453,6 +467,7 @@ export default function MyTasks() {
                     onStatusChange={handleStatusChange}
                     localOrder={sectionOrders[section.id] || []}
                     onDragEnd={handleDragEnd}
+                    onAddTask={section.id === "personal" ? () => setShowNewTaskInput(true) : undefined}
                   />
                 ))}
               </div>
