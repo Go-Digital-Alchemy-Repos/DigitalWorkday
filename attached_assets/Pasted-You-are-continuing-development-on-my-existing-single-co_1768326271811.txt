@@ -1,0 +1,159 @@
+You are continuing development on my existing single-codebase React + Express app.
+This is PHASE 2A of the multi-tenant rollout: ENFORCE TENANT SCOPING for CORE CRM + SETTINGS ONLY.
+DO NOT rewrite the app. Implement ONLY the changes described below while preserving all existing functionality.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- DO NOT remove or rename any existing endpoints.
+- DO NOT change response shapes in a breaking way.
+- DO NOT drop or rename any DB tables/columns. Add-only schema changes only if absolutely necessary.
+- DO NOT overhaul authentication/session/token strategy.
+- DO NOT refactor unrelated features. Only touch: tenant context middleware, route/service query scoping for specified modules, and settings persistence.
+- DO NOT touch time tracking, reports, attachments, timers, or sockets in this phase except where explicitly allowed below.
+- Keep the app fully functional for existing users.
+
+===============================================================================
+PHASE 2A SCOPE (ONLY THESE DOMAINS)
+===============================================================================
+1) Tenant context + effectiveTenantId resolution
+2) Clients
+3) Projects
+4) Tasks/Subtasks
+5) Teams + team_members
+6) Users listing for admin “Team” tab (tenant-limited)
+7) App settings (Mailgun) tenant scoping + persistence
+
+Explicitly OUT OF SCOPE in Phase 2A:
+- Time entries / active timers
+- Reports endpoints and UI
+- Attachments metadata
+- Realtime event changes (except optional safe emits if already exist)
+
+===============================================================================
+GOAL
+===============================================================================
+Enforce tenant isolation for the above domains so:
+- Non-super users can only access records where tenantId = their effectiveTenantId
+- Super User can access /super/* and optionally “act as tenant” via X-Tenant-Id
+- Existing endpoint paths remain unchanged
+
+===============================================================================
+1) TENANT CONTEXT (MANDATORY)
+===============================================================================
+Tighten existing /server/src/middleware/tenantContext.ts:
+
+A) For non-super users:
+- req.tenant.effectiveTenantId MUST come from authenticated user.tenantId.
+- If missing tenantId -> return 500 (misconfigured user).
+
+B) For super_user:
+- allow optional acting tenant ONLY when header X-Tenant-Id is provided AND tenant is active
+- set req.tenant.effectiveTenantId to that header tenantId
+- otherwise req.tenant.effectiveTenantId may be null for super routes that are cross-tenant
+
+C) Create one helper:
+- getEffectiveTenantId(req) used by all tenant-scoped routes.
+- For non-super routes, tenantId must always be present.
+
+===============================================================================
+2) ENFORCEMENT PATTERN (MANDATORY)
+===============================================================================
+For every tenant-scoped GET/UPDATE/DELETE by ID:
+- Do NOT query by id alone.
+- Query with BOTH id AND tenantId:
+  WHERE id=:id AND tenantId=:effectiveTenantId
+If no row -> 404.
+
+For list endpoints:
+- WHERE tenantId=:effectiveTenantId
+
+When creating records:
+- Always write tenantId = effectiveTenantId
+
+For foreign keys:
+- validate parent belongs to tenant before create/update:
+  - creating project with clientId: confirm clientId is tenant-owned
+  - creating task with projectId: confirm projectId is tenant-owned
+  - creating team membership: confirm both team and user are tenant-owned
+
+===============================================================================
+3) APPLY TENANT SCOPING TO THESE ROUTES (NO ENDPOINT CHANGES)
+===============================================================================
+A) Clients
+- All CRUD scoped by tenantId
+
+B) Projects
+- All CRUD scoped by tenantId
+- Validate referenced clientId belongs to tenant
+
+C) Tasks/Subtasks
+- All CRUD scoped by tenantId
+- Validate referenced projectId belongs to tenant
+- Ensure subtasks inherit tenantId
+- Ensure project task lists filter by tenantId
+
+D) Teams + team_members
+- Teams CRUD scoped by tenantId
+- Team member add/remove:
+  - team tenantId must match effectiveTenantId
+  - user tenantId must match effectiveTenantId
+  - prevent cross-tenant team membership
+
+E) Users listing for Team tab (admin-only)
+- GET /api/v1/users returns only users in tenantId (not all users in system)
+- Creating users/invites should attach tenantId to users/invitations where applicable
+- Do not change auth; just ensure tenant scoping
+
+F) App settings (Mailgun)
+- GET/PUT /api/v1/settings/mailgun must read/write with tenantId = effectiveTenantId
+- Ensure save persists and refresh rehydrates (domain + fromEmail + masked key)
+- Ensure the API supports “write-only key” behavior:
+  - if apiKey omitted/blank on PUT, do not overwrite stored key
+- Do NOT log secrets
+
+===============================================================================
+4) VALIDATION (RECOMMENDED)
+===============================================================================
+Add minimal zod validation for tenant-scoped IDs to prevent null/empty issues:
+- validateParams: id/teamId/projectId/clientId
+- validateBody: name/email/etc.
+Do not overhaul all validation; only for endpoints touched in this phase.
+
+===============================================================================
+5) TESTS (MANDATORY)
+===============================================================================
+Add/extend tests to confirm no cross-tenant leakage for Phase 2A scopes:
+
+- tenantIsolation.clients.test.ts
+- tenantIsolation.projects.test.ts
+- tenantIsolation.tasks.test.ts
+- tenantIsolation.teams.test.ts
+- tenantIsolation.settings.mailgun.test.ts
+
+At minimum:
+- Create tenant A and tenant B (or use seeded tenants)
+- Create record under tenant A
+- Attempt to access from tenant B context -> 404
+- Save mailgun in tenant A -> tenant B sees configured=false
+
+Use super_user with X-Tenant-Id header for acting-as-tenant in tests if needed.
+
+===============================================================================
+6) ACCEPTANCE CRITERIA
+===============================================================================
+1) Non-super user can only see their tenant’s clients/projects/tasks/teams/users list.
+2) Guessing IDs from another tenant returns 404.
+3) Creating client/project/task/team writes tenantId correctly.
+4) Team membership cannot include users from another tenant.
+5) Mailgun settings persist per tenant and rehydrate on refresh.
+6) No endpoint paths changed; existing workflows still function.
+7) Tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Summary of changes by domain
+- Files changed
+- Tests added + how to run
+- Any TODOs deferred to Phase 2B
