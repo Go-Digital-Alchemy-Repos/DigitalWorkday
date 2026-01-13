@@ -9,8 +9,29 @@ import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, D
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { Building2, Plus, Edit2, Shield, CheckCircle, XCircle, UserPlus, Clock, Copy, AlertTriangle, Loader2 } from "lucide-react";
+import { Building2, Plus, Edit2, Shield, CheckCircle, XCircle, UserPlus, Clock, Copy, AlertTriangle, Loader2, Activity, Database, RefreshCw, Play } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Progress } from "@/components/ui/progress";
 import type { Tenant } from "@shared/schema";
+
+interface TenancyHealthResponse {
+  currentMode: string;
+  missingTenantIds: Array<{
+    table: string;
+    missingTenantIdCount: number;
+  }>;
+  totalMissing: number;
+  warningStats: {
+    last24Hours: number;
+    last7Days: number;
+    total: number;
+  };
+  readinessCheck: {
+    canEnableStrict: boolean;
+    blockers: string[];
+  };
+  activeTenantCount: number;
+}
 
 interface TenantWithDetails extends Tenant {
   settings?: {
@@ -41,9 +62,15 @@ export default function SuperAdminPage() {
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [invitingTenant, setInvitingTenant] = useState<Tenant | null>(null);
   const [lastInviteUrl, setLastInviteUrl] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState("tenants");
 
   const { data: tenants = [], isLoading } = useQuery<TenantWithDetails[]>({
     queryKey: ["/api/v1/super/tenants-detail"],
+  });
+
+  const { data: healthData, isLoading: healthLoading, refetch: refetchHealth } = useQuery<TenancyHealthResponse>({
+    queryKey: ["/api/v1/super/tenancy/health"],
+    enabled: activeTab === "health",
   });
 
   const createTenantMutation = useMutation({
@@ -86,6 +113,32 @@ export default function SuperAdminPage() {
     },
     onError: (error: any) => {
       toast({ title: "Failed to send invitation", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const backfillMutation = useMutation({
+    mutationFn: async ({ dryRun }: { dryRun: boolean }) => {
+      const res = await apiRequest("POST", "/api/v1/super/tenancy/backfill", { dryRun }, {
+        headers: { "X-Confirm-Backfill": "YES" }
+      });
+      return res.json();
+    },
+    onSuccess: (data, variables) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenancy/health"] });
+      if (variables.dryRun) {
+        toast({ 
+          title: "Dry Run Complete", 
+          description: `Would update ${data.results?.reduce((acc: number, r: any) => acc + r.wouldUpdate, 0) || 0} records` 
+        });
+      } else {
+        toast({ 
+          title: "Backfill Complete", 
+          description: `Updated ${data.results?.reduce((acc: number, r: any) => acc + r.updated, 0) || 0} records` 
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({ title: "Backfill failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -167,69 +220,83 @@ export default function SuperAdminPage() {
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <Shield className="h-8 w-8 text-primary" />
-          <div>
-            <h1 className="text-2xl font-semibold">Super Admin</h1>
-            <p className="text-sm text-muted-foreground">Manage all tenants in the system</p>
-          </div>
+      <div className="flex items-center gap-3">
+        <Shield className="h-8 w-8 text-primary" />
+        <div>
+          <h1 className="text-2xl font-semibold">Super Admin</h1>
+          <p className="text-sm text-muted-foreground">Manage tenants and system health</p>
         </div>
-        <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button data-testid="button-create-tenant">
-              <Plus className="h-4 w-4 mr-2" />
-              Create Tenant
-            </Button>
-          </DialogTrigger>
-          <DialogContent>
-            <DialogHeader>
-              <DialogTitle>Create New Tenant</DialogTitle>
-              <DialogDescription>Add a new organization to the system</DialogDescription>
-            </DialogHeader>
-            <form onSubmit={handleCreateTenant} className="space-y-4">
-              <div className="space-y-2">
-                <Label htmlFor="name">Organization Name</Label>
-                <Input
-                  id="name"
-                  name="name"
-                  placeholder="Acme Corporation"
-                  data-testid="input-tenant-name"
-                  required
-                  onChange={(e) => {
-                    const slugInput = document.getElementById("slug") as HTMLInputElement;
-                    if (slugInput) {
-                      slugInput.value = generateSlug(e.target.value);
-                    }
-                  }}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="slug">URL Slug</Label>
-                <Input
-                  id="slug"
-                  name="slug"
-                  placeholder="acme-corp"
-                  data-testid="input-tenant-slug"
-                  required
-                  pattern="[a-z0-9-]+"
-                />
-                <p className="text-xs text-muted-foreground">Lowercase letters, numbers, and hyphens only</p>
-              </div>
-              <DialogFooter>
-                <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
-                  Cancel
-                </Button>
-                <Button type="submit" disabled={createTenantMutation.isPending} data-testid="button-submit-tenant">
-                  {createTenantMutation.isPending ? "Creating..." : "Create Tenant"}
-                </Button>
-              </DialogFooter>
-            </form>
-          </DialogContent>
-        </Dialog>
       </div>
 
-      <Card>
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
+        <TabsList className="grid w-full grid-cols-2 max-w-md">
+          <TabsTrigger value="tenants" data-testid="tab-tenants">
+            <Building2 className="h-4 w-4 mr-2" />
+            Tenants
+          </TabsTrigger>
+          <TabsTrigger value="health" data-testid="tab-health">
+            <Activity className="h-4 w-4 mr-2" />
+            Tenancy Health
+          </TabsTrigger>
+        </TabsList>
+
+        <TabsContent value="tenants" className="space-y-6 mt-6">
+          <div className="flex justify-end">
+            <Dialog open={isCreateDialogOpen} onOpenChange={setIsCreateDialogOpen}>
+              <DialogTrigger asChild>
+                <Button data-testid="button-create-tenant">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Tenant
+                </Button>
+              </DialogTrigger>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Create New Tenant</DialogTitle>
+                  <DialogDescription>Add a new organization to the system</DialogDescription>
+                </DialogHeader>
+                <form onSubmit={handleCreateTenant} className="space-y-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Organization Name</Label>
+                    <Input
+                      id="name"
+                      name="name"
+                      placeholder="Acme Corporation"
+                      data-testid="input-tenant-name"
+                      required
+                      onChange={(e) => {
+                        const slugInput = document.getElementById("slug") as HTMLInputElement;
+                        if (slugInput) {
+                          slugInput.value = generateSlug(e.target.value);
+                        }
+                      }}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="slug">URL Slug</Label>
+                    <Input
+                      id="slug"
+                      name="slug"
+                      placeholder="acme-corp"
+                      data-testid="input-tenant-slug"
+                      required
+                      pattern="[a-z0-9-]+"
+                    />
+                    <p className="text-xs text-muted-foreground">Lowercase letters, numbers, and hyphens only</p>
+                  </div>
+                  <DialogFooter>
+                    <Button type="button" variant="outline" onClick={() => setIsCreateDialogOpen(false)}>
+                      Cancel
+                    </Button>
+                    <Button type="submit" disabled={createTenantMutation.isPending} data-testid="button-submit-tenant">
+                      {createTenantMutation.isPending ? "Creating..." : "Create Tenant"}
+                    </Button>
+                  </DialogFooter>
+                </form>
+              </DialogContent>
+            </Dialog>
+          </div>
+
+          <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
             <Building2 className="h-5 w-5" />
@@ -431,6 +498,204 @@ export default function SuperAdminPage() {
           )}
         </DialogContent>
       </Dialog>
+      </TabsContent>
+
+      <TabsContent value="health" className="space-y-6 mt-6">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-lg font-semibold">Tenancy Enforcement Health</h2>
+              <p className="text-sm text-muted-foreground">Monitor tenant isolation readiness and data integrity</p>
+            </div>
+            <Button 
+              variant="outline" 
+              onClick={() => refetchHealth()}
+              disabled={healthLoading}
+              data-testid="button-refresh-health"
+            >
+              <RefreshCw className={`h-4 w-4 mr-2 ${healthLoading ? 'animate-spin' : ''}`} />
+              Refresh
+            </Button>
+          </div>
+
+          {healthLoading ? (
+            <div className="flex items-center justify-center py-8">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : healthData ? (
+            <div className="grid gap-6 md:grid-cols-2">
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Activity className="h-4 w-4" />
+                    Enforcement Mode
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-3">
+                    <Badge 
+                      variant={healthData.currentMode === 'strict' ? 'default' : healthData.currentMode === 'soft' ? 'secondary' : 'outline'}
+                      className={healthData.currentMode === 'strict' ? 'bg-green-500/10 text-green-600 border-green-500/20' : ''}
+                    >
+                      {healthData.currentMode.toUpperCase()}
+                    </Badge>
+                    <span className="text-sm text-muted-foreground">
+                      {healthData.currentMode === 'strict' 
+                        ? 'Cross-tenant access blocked'
+                        : healthData.currentMode === 'soft'
+                          ? 'Logging violations'
+                          : 'No enforcement'}
+                    </span>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card>
+                <CardHeader className="pb-2">
+                  <CardTitle className="text-base flex items-center gap-2">
+                    {healthData.readinessCheck.canEnableStrict ? (
+                      <CheckCircle className="h-4 w-4 text-green-500" />
+                    ) : (
+                      <AlertTriangle className="h-4 w-4 text-yellow-500" />
+                    )}
+                    Strict Mode Readiness
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {healthData.readinessCheck.canEnableStrict ? (
+                    <p className="text-sm text-green-600">Ready to enable strict enforcement</p>
+                  ) : (
+                    <div className="space-y-2">
+                      <p className="text-sm text-yellow-600">Not ready - resolve blockers first</p>
+                      <ul className="text-xs text-muted-foreground list-disc list-inside">
+                        {healthData.readinessCheck.blockers.map((blocker, i) => (
+                          <li key={i}>{blocker}</li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Database className="h-4 w-4" />
+                    Missing Tenant Assignments
+                  </CardTitle>
+                  <CardDescription>
+                    Records without tenantId (must be 0 before enabling strict mode)
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {healthData.totalMissing === 0 ? (
+                    <div className="flex items-center gap-2 text-green-600">
+                      <CheckCircle className="h-4 w-4" />
+                      <span>All records have tenant assignments</span>
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="space-y-2">
+                        {healthData.missingTenantIds.filter(m => m.missingTenantIdCount > 0).map((item) => (
+                          <div key={item.table} className="flex items-center justify-between">
+                            <span className="text-sm font-medium">{item.table}</span>
+                            <div className="flex items-center gap-4">
+                              <span className="text-sm text-muted-foreground">
+                                {item.missingTenantIdCount} records
+                              </span>
+                              <Progress 
+                                value={0} 
+                                className="w-24 h-2" 
+                              />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                      <div className="flex items-center justify-between pt-4 border-t">
+                        <span className="font-medium">Total: {healthData.totalMissing} records need backfill</span>
+                        <div className="flex gap-2">
+                          <Button 
+                            variant="outline" 
+                            size="sm"
+                            onClick={() => backfillMutation.mutate({ dryRun: true })}
+                            disabled={backfillMutation.isPending}
+                            data-testid="button-dry-run-backfill"
+                          >
+                            {backfillMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : null}
+                            Dry Run
+                          </Button>
+                          <Button 
+                            size="sm"
+                            onClick={() => backfillMutation.mutate({ dryRun: false })}
+                            disabled={backfillMutation.isPending}
+                            data-testid="button-run-backfill"
+                          >
+                            <Play className="h-4 w-4 mr-2" />
+                            Run Backfill
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <AlertTriangle className="h-4 w-4" />
+                    Warning Statistics
+                  </CardTitle>
+                  <CardDescription>
+                    Tenancy violations detected in soft mode
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-3 gap-4">
+                    <div className="text-center p-4 rounded-lg bg-muted/50">
+                      <div className="text-2xl font-bold">{healthData.warningStats.last24Hours}</div>
+                      <div className="text-xs text-muted-foreground">Last 24 hours</div>
+                    </div>
+                    <div className="text-center p-4 rounded-lg bg-muted/50">
+                      <div className="text-2xl font-bold">{healthData.warningStats.last7Days}</div>
+                      <div className="text-xs text-muted-foreground">Last 7 days</div>
+                    </div>
+                    <div className="text-center p-4 rounded-lg bg-muted/50">
+                      <div className="text-2xl font-bold">{healthData.warningStats.total}</div>
+                      <div className="text-xs text-muted-foreground">Total</div>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+
+              <Card className="md:col-span-2">
+                <CardHeader>
+                  <CardTitle className="text-base">System Info</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="grid grid-cols-2 gap-4 text-sm">
+                    <div>
+                      <span className="text-muted-foreground">Active Tenants:</span>
+                      <span className="ml-2 font-medium">{healthData.activeTenantCount}</span>
+                    </div>
+                    <div>
+                      <span className="text-muted-foreground">Enforcement Mode:</span>
+                      <span className="ml-2 font-mono text-xs bg-muted px-2 py-1 rounded">
+                        TENANCY_ENFORCEMENT={healthData.currentMode}
+                      </span>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            </div>
+          ) : (
+            <Card>
+              <CardContent className="py-8 text-center text-muted-foreground">
+                Failed to load health data. Click refresh to try again.
+              </CardContent>
+            </Card>
+          )}
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
