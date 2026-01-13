@@ -257,8 +257,13 @@ export async function registerRoutes(
 
   app.post("/api/projects", async (req, res) => {
     try {
+      // Convert empty string teamId to null
+      const body = { ...req.body };
+      if (body.teamId === "") {
+        body.teamId = null;
+      }
       const data = insertProjectSchema.parse({
-        ...req.body,
+        ...body,
         workspaceId: getCurrentWorkspaceId(req),
         createdBy: getCurrentUserId(req),
       });
