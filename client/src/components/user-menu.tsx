@@ -11,6 +11,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { LogOut, User, Shield, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
+import { useLocation } from "wouter";
 
 function getRoleIcon(role: string) {
   switch (role) {
@@ -36,6 +37,7 @@ function getRoleLabel(role: string) {
 
 export function UserMenu() {
   const { user, logout, isAuthenticated } = useAuth();
+  const [, setLocation] = useLocation();
 
   if (!isAuthenticated || !user) {
     return null;
@@ -71,6 +73,14 @@ export function UserMenu() {
           </div>
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={() => setLocation("/profile")}
+          className="cursor-pointer"
+          data-testid="button-my-profile"
+        >
+          <User className="mr-2 h-4 w-4" />
+          My Profile
+        </DropdownMenuItem>
         <DropdownMenuItem
           onClick={logout}
           className="text-destructive focus:text-destructive cursor-pointer"

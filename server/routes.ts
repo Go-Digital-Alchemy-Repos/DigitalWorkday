@@ -3429,6 +3429,37 @@ export async function registerRoutes(
   });
 
   // =============================================================================
+  // USER PROFILE ENDPOINTS
+  // =============================================================================
+
+  // PATCH /api/users/me - Update current user's profile
+  app.patch("/api/users/me", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const { firstName, lastName, name } = req.body;
+      
+      const updates: Record<string, any> = {};
+      if (firstName !== undefined) updates.firstName = firstName;
+      if (lastName !== undefined) updates.lastName = lastName;
+      if (firstName && lastName && !name) {
+        updates.name = `${firstName} ${lastName}`;
+      } else if (name !== undefined) {
+        updates.name = name;
+      }
+      
+      if (Object.keys(updates).length === 0) {
+        return res.status(400).json({ error: "No valid fields to update" });
+      }
+      
+      const updatedUser = await storage.updateUser(user.id, updates);
+      res.json({ user: updatedUser });
+    } catch (error) {
+      console.error("Error updating user profile:", error);
+      res.status(500).json({ error: "Failed to update profile" });
+    }
+  });
+
+  // =============================================================================
   // USER AVATAR ENDPOINTS
   // =============================================================================
 

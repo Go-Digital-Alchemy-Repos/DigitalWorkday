@@ -9,11 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
 import { Palette, ImageIcon, Type, Save, Loader2 } from "lucide-react";
+import { FileDropzone } from "@/components/common/file-dropzone";
 
 interface TenantSettings {
   displayName?: string;
   appName?: string | null;
   logoUrl?: string | null;
+  iconUrl?: string | null;
   faviconUrl?: string | null;
   primaryColor?: string | null;
   secondaryColor?: string | null;
@@ -60,6 +62,49 @@ export function BrandingTab() {
 
   const handleChange = (field: keyof TenantSettings, value: string | boolean | null) => {
     setFormData((prev) => ({ ...prev, [field]: value || null }));
+  };
+
+  const createAssetUploader = (assetType: "logo" | "icon" | "favicon") => {
+    return async (file: File): Promise<string> => {
+      const formDataUpload = new FormData();
+      formDataUpload.append("file", file);
+      formDataUpload.append("type", assetType);
+
+      const response = await fetch("/api/v1/tenant/settings/brand-assets", {
+        method: "POST",
+        body: formDataUpload,
+        credentials: "include",
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error || "Upload failed");
+      }
+
+      const result = await response.json();
+      
+      const fieldMap: Record<string, keyof TenantSettings> = {
+        logo: "logoUrl",
+        icon: "iconUrl",
+        favicon: "faviconUrl",
+      };
+      
+      handleChange(fieldMap[assetType], result.url);
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/settings"] });
+      toast({ title: `${assetType.charAt(0).toUpperCase() + assetType.slice(1)} uploaded successfully` });
+      return result.url;
+    };
+  };
+
+  const createAssetRemover = (assetType: "logo" | "icon" | "favicon") => {
+    return async () => {
+      const fieldMap: Record<string, keyof TenantSettings> = {
+        logo: "logoUrl",
+        icon: "iconUrl",
+        favicon: "faviconUrl",
+      };
+      handleChange(fieldMap[assetType], null);
+    };
   };
 
   if (isLoading) {
@@ -147,58 +192,52 @@ export function BrandingTab() {
         <CardHeader>
           <div className="flex items-center gap-2">
             <ImageIcon className="h-5 w-5 text-primary" />
-            <CardTitle className="text-lg">Logo & Favicon</CardTitle>
+            <CardTitle className="text-lg">Brand Assets</CardTitle>
           </div>
           <CardDescription>
-            Upload your organization's branding assets
+            Upload your organization's logo, icon, and favicon
           </CardDescription>
         </CardHeader>
-        <CardContent className="space-y-4">
-          <div className="grid gap-4 sm:grid-cols-2">
+        <CardContent className="space-y-6">
+          <div className="grid gap-6 sm:grid-cols-3">
             <div className="space-y-2">
-              <Label htmlFor="logoUrl">Logo URL</Label>
-              <Input
-                id="logoUrl"
-                type="url"
-                placeholder="https://example.com/logo.png"
-                value={formData.logoUrl || ""}
-                onChange={(e) => handleChange("logoUrl", e.target.value)}
-                data-testid="input-logo-url"
+              <Label>Logo</Label>
+              <FileDropzone
+                onUpload={createAssetUploader("logo")}
+                onRemove={createAssetRemover("logo")}
+                currentUrl={formData.logoUrl}
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                maxSizeMB={5}
+                previewType="image"
+                label="Upload Logo"
+                hint="200x50px PNG or SVG"
               />
-              <p className="text-xs text-muted-foreground">Recommended: 200x50px PNG or SVG</p>
-              {formData.logoUrl && (
-                <div className="mt-2 p-2 border rounded bg-muted/50">
-                  <img 
-                    src={formData.logoUrl} 
-                    alt="Logo preview" 
-                    className="max-h-12 object-contain"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                </div>
-              )}
             </div>
             <div className="space-y-2">
-              <Label htmlFor="faviconUrl">Favicon URL</Label>
-              <Input
-                id="faviconUrl"
-                type="url"
-                placeholder="https://example.com/favicon.ico"
-                value={formData.faviconUrl || ""}
-                onChange={(e) => handleChange("faviconUrl", e.target.value)}
-                data-testid="input-favicon-url"
+              <Label>Icon</Label>
+              <FileDropzone
+                onUpload={createAssetUploader("icon")}
+                onRemove={createAssetRemover("icon")}
+                currentUrl={formData.iconUrl}
+                accept="image/png,image/jpeg,image/webp,image/svg+xml"
+                maxSizeMB={5}
+                previewType="icon"
+                label="Upload Icon"
+                hint="192x192px for PWA"
               />
-              <p className="text-xs text-muted-foreground">Recommended: 32x32px ICO or PNG</p>
-              {formData.faviconUrl && (
-                <div className="mt-2 p-2 border rounded bg-muted/50 flex items-center gap-2">
-                  <img 
-                    src={formData.faviconUrl} 
-                    alt="Favicon preview" 
-                    className="h-6 w-6 object-contain"
-                    onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
-                  />
-                  <span className="text-xs text-muted-foreground">Preview</span>
-                </div>
-              )}
+            </div>
+            <div className="space-y-2">
+              <Label>Favicon</Label>
+              <FileDropzone
+                onUpload={createAssetUploader("favicon")}
+                onRemove={createAssetRemover("favicon")}
+                currentUrl={formData.faviconUrl}
+                accept="image/png,image/x-icon,image/vnd.microsoft.icon"
+                maxSizeMB={1}
+                previewType="favicon"
+                label="Upload Favicon"
+                hint="32x32px ICO or PNG"
+              />
             </div>
           </div>
         </CardContent>
