@@ -19,6 +19,7 @@ import TimeTrackingPage from "@/pages/time-tracking";
 import LoginPage from "@/pages/login";
 import SettingsPage from "@/pages/settings";
 import SuperAdminPage from "@/pages/super-admin";
+import TenantOnboardingPage from "@/pages/tenant-onboarding";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -71,6 +72,9 @@ function Router() {
       <Route path="/super-admin">
         {() => <ProtectedRoute component={SuperAdminPage} />}
       </Route>
+      <Route path="/tenant-onboarding">
+        {() => <ProtectedRoute component={TenantOnboardingPage} />}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
@@ -80,7 +84,7 @@ function AppLayout() {
   const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
 
-  if (location === "/login") {
+  if (location === "/login" || location === "/tenant-onboarding") {
     return <Router />;
   }
 
