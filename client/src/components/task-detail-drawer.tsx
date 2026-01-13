@@ -267,7 +267,14 @@ export function TaskDetailDrawer({
 
           <Separator />
 
-          <AttachmentUploader taskId={task.id} projectId={task.projectId} />
+          {task.projectId && (
+            <AttachmentUploader taskId={task.id} projectId={task.projectId} />
+          )}
+          {!task.projectId && (
+            <div className="text-sm text-muted-foreground">
+              Attachments are available for project tasks only
+            </div>
+          )}
 
           <Separator />
 
