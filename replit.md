@@ -32,6 +32,9 @@ The database schema (`shared/schema.ts`) includes core entities like `users`, `w
 - Backfill script: `server/scripts/backfillTenants.ts` to migrate existing data to default tenant
 
 ### Phase 2A: Tenant Enforcement Infrastructure (Implemented)
+- **Global Tenant Middleware**: Applied `requireTenantContext` to all /api routes (except /auth and /health)
+  - Non-superusers without tenantId are rejected at middleware level
+  - SuperUsers can access without tenant context for backward compatibility
 - **Tenant Context Middleware**: Validates X-Tenant-Id headers against active tenants asynchronously
 - **Tenant-Scoped Storage Methods**: Added to IStorage interface for:
   - Clients: `getClientByIdAndTenant`, `getClientsByTenant`, `createClientWithTenant`, `updateClientWithTenant`, `deleteClientWithTenant`
@@ -46,6 +49,13 @@ The database schema (`shared/schema.ts`) includes core entities like `users`, `w
   - Regular users (admin, employee) MUST have tenantId assigned - routes return 500 if missing
   - Cross-tenant data access prevented by tenant-scoped storage methods
 - **Bootstrap Changes**: Default admin user upgraded to super_user role for development
+
+### Phase 2A Remaining Work (TODO)
+- Tasks/Subtasks routes need tenant-scoped storage methods
+- Sections, comments, tags routes need tenant-aware lookups
+- Timer and time-entry routes need tenant validation
+- Client contacts and team members routes need parent resource validation
+- Automated tenant isolation tests
 
 ### Frontend Structure
 The frontend (`client/src/`) is organized into `pages/` for route components (e.g., home, my-tasks, project, clients, time-tracking, settings) and `components/` for reusable UI elements. Specialized components exist for settings (team, workspaces, reports, integrations), task management (task-card, task-detail-drawer, section-column, subtask-list, comment-thread, create-task-dialog), and UI elements like badges and avatars. It also features a project calendar (`project-calendar.tsx`) and project settings.
