@@ -231,4 +231,4 @@ Key variables:
 - `SESSION_SECRET` - Session encryption key
 - `TENANCY_ENFORCEMENT` - Tenant isolation mode
 - `S3_*` - Global S3 configuration
-- `ENCRYPTION_KEY` - Tenant secret encryption
+- `APP_ENCRYPTION_KEY` - Tenant secret encryption (base64-encoded 32 bytes)

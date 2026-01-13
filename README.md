@@ -44,8 +44,10 @@ Required variables:
 ```env
 DATABASE_URL=postgres://user:pass@localhost:5432/myworkday
 SESSION_SECRET=your-secure-random-string
-ENCRYPTION_KEY=<64 hex characters>
+APP_ENCRYPTION_KEY=<32 bytes base64-encoded>
 ```
+
+Generate `APP_ENCRYPTION_KEY` with: `openssl rand -base64 32`
 
 ### Installation
 
@@ -154,7 +156,7 @@ npm run test:watch       # Watch mode
 |----------|-------------|
 | `DATABASE_URL` | PostgreSQL connection string |
 | `SESSION_SECRET` | Session encryption key |
-| `ENCRYPTION_KEY` | Tenant secret encryption (64 hex) |
+| `APP_ENCRYPTION_KEY` | Tenant secret encryption (32 bytes, base64-encoded) |
 
 ### Optional
 

@@ -18,7 +18,7 @@ MyWorkDay is deployed on Railway with a PostgreSQL database. This guide covers s
 |----------|-------------|---------|
 | `DATABASE_URL` | PostgreSQL connection string | `postgres://user:pass@host:5432/db` |
 | `SESSION_SECRET` | Session encryption key (32+ chars) | `your-secure-random-string` |
-| `ENCRYPTION_KEY` | Tenant secrets encryption (64 hex chars) | Generate with `openssl rand -hex 32` |
+| `APP_ENCRYPTION_KEY` | Tenant secrets encryption (32 bytes, base64) | Generate with `openssl rand -base64 32` |
 | `NODE_ENV` | Environment mode | `production` |
 | `PORT` | Server port (Railway sets this) | `5000` |
 
@@ -72,7 +72,7 @@ In Railway dashboard → Variables:
 ```
 DATABASE_URL=${{Postgres.DATABASE_URL}}
 SESSION_SECRET=your-secure-random-string
-ENCRYPTION_KEY=<run: openssl rand -hex 32>
+APP_ENCRYPTION_KEY=<run: openssl rand -base64 32>
 NODE_ENV=production
 ```
 
@@ -117,14 +117,19 @@ curl -X POST https://your-app.railway.app/api/v1/super/bootstrap \
 
 ### Issue: "Encryption key not configured"
 
-**Cause**: `ENCRYPTION_KEY` not set or wrong format
+**Cause**: `APP_ENCRYPTION_KEY` not set or wrong format
 
 **Solution**:
-1. Generate key: `openssl rand -hex 32`
-2. Set `ENCRYPTION_KEY` in Railway (64 hex characters)
+1. Generate key: `openssl rand -base64 32`
+2. Set `APP_ENCRYPTION_KEY` in Railway (base64-encoded 32-byte value)
 3. Redeploy
 
 **Important**: Once set, do NOT change the encryption key or you'll lose access to encrypted tenant secrets.
+
+**Validation**: The key must decode to exactly 32 bytes. Test with:
+```bash
+echo "your-base64-key-here" | base64 -d | wc -c  # Should output 32
+```
 
 ### Issue: Mailgun Settings Not Saving
 
@@ -228,7 +233,7 @@ Recommended monitoring setup:
 ## Security Checklist
 
 - [ ] `SESSION_SECRET` is unique and secure
-- [ ] `ENCRYPTION_KEY` is backed up securely
+- [ ] `APP_ENCRYPTION_KEY` is backed up securely (32 bytes, base64)
 - [ ] `SUPER_ADMIN_BOOTSTRAP_TOKEN` removed after use
 - [ ] `NODE_ENV` set to `production`
 - [ ] `TENANCY_ENFORCEMENT` set to `strict`
