@@ -77,6 +77,7 @@ export const UserRole = {
 export const TenantStatus = {
   ACTIVE: "active",
   INACTIVE: "inactive",
+  SUSPENDED: "suspended",
 } as const;
 
 // Invitation status enum
@@ -105,12 +106,31 @@ export const tenants = pgTable("tenants", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   name: text("name").notNull(),
   slug: text("slug").notNull().unique(),
-  status: text("status").notNull().default("active"),
+  status: text("status").notNull().default("inactive"),
+  onboardedAt: timestamp("onboarded_at"),
+  ownerUserId: varchar("owner_user_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   index("tenants_slug_idx").on(table.slug),
   index("tenants_status_idx").on(table.status),
+]);
+
+/**
+ * Tenant Settings table - stores per-tenant configuration
+ * One-to-one relationship with tenants
+ */
+export const tenantSettings = pgTable("tenant_settings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull().unique(),
+  displayName: text("display_name").notNull(),
+  logoUrl: text("logo_url"),
+  primaryColor: text("primary_color"),
+  supportEmail: text("support_email"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("tenant_settings_tenant_idx").on(table.tenantId),
 ]);
 
 // Users table
@@ -568,7 +588,11 @@ export const commentMentions = pgTable("comment_mentions", {
 // =============================================================================
 
 // Tenant Relations
-export const tenantsRelations = relations(tenants, ({ many }) => ({
+export const tenantsRelations = relations(tenants, ({ one, many }) => ({
+  settings: one(tenantSettings, {
+    fields: [tenants.id],
+    references: [tenantSettings.tenantId],
+  }),
   users: many(users),
   teams: many(teams),
   clients: many(clients),
@@ -578,6 +602,13 @@ export const tenantsRelations = relations(tenants, ({ many }) => ({
   activeTimers: many(activeTimers),
   invitations: many(invitations),
   appSettings: many(appSettings),
+}));
+
+export const tenantSettingsRelations = relations(tenantSettings, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [tenantSettings.tenantId],
+    references: [tenants.id],
+  }),
 }));
 
 // User Relations
@@ -921,6 +952,12 @@ export const insertTenantSchema = createInsertSchema(tenants).omit({
   updatedAt: true,
 });
 
+export const insertTenantSettingsSchema = createInsertSchema(tenantSettings).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -1078,6 +1115,9 @@ export const insertUserWithRoleSchema = insertUserSchema.extend({
 // Types
 export type Tenant = typeof tenants.$inferSelect;
 export type InsertTenant = z.infer<typeof insertTenantSchema>;
+
+export type TenantSettings = typeof tenantSettings.$inferSelect;
+export type InsertTenantSettings = z.infer<typeof insertTenantSettingsSchema>;
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
