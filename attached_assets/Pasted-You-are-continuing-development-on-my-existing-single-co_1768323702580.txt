@@ -1,0 +1,227 @@
+You are continuing development on my existing single-codebase React + Express app. DO NOT rewrite the app. Implement ONLY the maintainability + reliability improvements listed below, in a SAFE, INCREMENTAL way that preserves all existing functionality (Clients→Projects→Tasks/Subtasks, Time Tracking, Attachments+S3, sockets, Admin Settings, My Tasks, etc.).
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES (READ FIRST)
+===============================================================================
+1) NO BREAKING CHANGES
+- Do NOT remove or rename existing API endpoints.
+- Do NOT change response shapes in a breaking way. (Add fields ok; don’t remove.)
+- Do NOT change database schema unless explicitly required for one of the items below.
+
+2) INCREMENTAL REFACTOR ONLY
+- Refactor by moving code behind the same paths (router mounting) so behavior stays identical.
+- Keep the original routes.ts temporarily as a compatibility layer if needed.
+
+3) DO NOT TOUCH FRONTEND UNLESS REQUIRED
+- Focus on server maintainability and production build reliability.
+- Only change client code if required to support auth context in requests.
+
+4) ADD TESTS BEFORE RISKY REFACTOR
+- Create a minimal test harness and cover core endpoints before large restructuring.
+
+5) CONSISTENT ERROR HANDLING
+- Do NOT throw inside the global error handler.
+- Normalize error responses.
+
+===============================================================================
+GOALS / TASKS
+===============================================================================
+Implement these improvements carefully, without breaking the rest of the app:
+
+A) Split the giant routes.ts (~2000+ lines) into modular route files
+B) Remove hardcoded DEMO_USER_ID / DEMO_WORKSPACE_ID hacks and derive user/workspace from session/auth context, with a safe dev fallback
+C) Add missing input validation systematically (build on the “empty teamId” fix)
+D) Fix production build issue(s), specifically connect-pg-simple table.sql / bundling
+E) Add a minimal test suite to make refactoring safe
+F) Standardize error handling across routes
+
+===============================================================================
+A) ROUTE MODULARIZATION (SAFE SPLIT)
+===============================================================================
+Current problem: routes.ts is huge and hard to maintain.
+
+Target file structure under /server/src (DO NOT restructure unrelated folders):
+/server/src/routes/
+  index.ts              // mounts all routers
+  auth.routes.ts
+  users.routes.ts
+  teams.routes.ts
+  workspaces.routes.ts
+  clients.routes.ts
+  projects.routes.ts
+  tasks.routes.ts
+  timeTracking.routes.ts
+  reports.routes.ts
+/server/src/middleware/
+  authContext.ts        // attaches req.auth context
+  validate.ts           // zod validator helper
+  errorHandler.ts       // unified error middleware
+/server/src/lib/
+  errors.ts             // AppError helpers
+  logger.ts             // optional
+/server/src/app.ts or server.ts (where express app is created)
+
+Implementation rules:
+- Keep all endpoint paths exactly the same.
+- Move route handlers into the appropriate router file.
+- Mount them in /server/src/routes/index.ts.
+- Keep routes.ts only if needed as a thin wrapper that imports and mounts the new routers, then delete it ONLY if all tests pass.
+
+===============================================================================
+B) REMOVE HARDCODED DEMO IDs (AUTH CONTEXT)
+===============================================================================
+Current problem: DEMO_USER_ID / DEMO_WORKSPACE_ID are hacks.
+
+Implement a request auth/workspace context layer:
+- Create middleware: /server/src/middleware/authContext.ts
+- It should derive:
+  req.auth = { userId, workspaceId, role }
+from the existing auth/session mechanism in the app.
+
+Constraints:
+- Do NOT “rebuild auth” in this prompt.
+- Use the current source of truth:
+  - If you already have JWT Bearer tokens: parse them and set req.auth
+  - If you already have sessions/cookies: use session user/workspace
+- Safe dev fallback:
+  - ONLY if NODE_ENV !== 'production' AND no auth present:
+    - allow using DEMO_USER_ID/DEMO_WORKSPACE_ID from env
+  - In production, missing auth must return 401 for protected routes.
+
+Then update services/queries/routes to use:
+- req.auth.userId and req.auth.workspaceId
+instead of hardcoded DEMO_* constants.
+
+Make this change minimally:
+- Start with a helper: getAuth(req) that returns the context.
+- Update each route module to call getAuth(req).
+
+===============================================================================
+C) INPUT VALIDATION (SYSTEMATIC, NOT SPOT FIXES)
+===============================================================================
+Add a consistent validation approach using Zod (or existing validation lib if already present).
+
+1) Create middleware helper: /server/src/middleware/validate.ts
+- validateBody(schema)
+- validateQuery(schema)
+- validateParams(schema)
+Return 400 with consistent shape if invalid.
+
+2) Add validation to:
+- Teams endpoints (teamId, userId, name)
+- Invitations (email, role, expiresInDays, clientId when role=client)
+- Workspaces (name, slug)
+- Time entries (clientId/projectId/taskId/date/duration, etc.)
+- Reports endpoints (from/to dates, ids)
+- Any endpoint that currently trusts req.body/req.params
+
+Important:
+- Do NOT change business logic; only validate inputs and return clear 400 errors.
+
+===============================================================================
+D) PRODUCTION BUILD FIX (CONNECT-PG-SIMPLE table.sql / bundling)
+===============================================================================
+You mentioned: connect-pg-simple table.sql issue indicates esbuild bundling wasn’t fully tested.
+
+Implement a robust production fix WITHOUT changing app behavior:
+- Detect how sessions are set up:
+  - If connect-pg-simple is used, it requires its table schema to exist in DB.
+- Fix should include BOTH:
+  1) A documented migration path:
+     - Add a server startup check that logs a helpful error if the session table is missing.
+     - Provide a script or SQL file in repo for creating the session table.
+  2) Bundling reliability:
+     - Ensure build process includes non-js assets if required (table.sql).
+     - Prefer: do not rely on reading table.sql at runtime.
+     - Instead, include explicit SQL in a migration or a documented script.
+
+Deliverables:
+- Add /server/scripts/create_session_table.sql (or migration) that creates the connect-pg-simple table.
+- Update README with exact instructions for production.
+- Verify esbuild config does not attempt to bundle table.sql in a way that breaks.
+
+Also add a “production smoke check” script:
+- /server/scripts/smoke.ts or similar that:
+  - pings DB
+  - checks required tables exist (users, organizations/workspaces, session table if used)
+  - logs pass/fail
+
+===============================================================================
+E) TESTS (MINIMUM VIABLE SUITE)
+===============================================================================
+Add a minimal test setup to make refactoring safe.
+
+Requirements:
+- Use a lightweight Node test runner (Vitest or Jest) + Supertest for Express.
+- Create /server/tests/ with at least:
+  1) auth.test.ts:
+     - login returns token/session (if possible)
+     - /auth/me returns 200 when auth present
+  2) teams.test.ts:
+     - create team validation (reject empty name)
+     - reject empty teamId on member routes
+  3) timeEntries.test.ts:
+     - create time entry validation rejects missing required fields
+- Add a test DB strategy:
+  - Prefer using a dedicated TEST database connection string.
+  - If that’s too heavy, allow running tests with sqlite ONLY if the app already supports it.
+- Tests must run in CI-like mode: `npm test` or `pnpm test`.
+
+DO NOT try to test the entire system; just enough to prevent breakage during refactors.
+
+===============================================================================
+F) CONSISTENT ERROR HANDLING
+===============================================================================
+Problem: inconsistent errors; throwing in error handler caused cascading issues.
+
+Implement:
+1) /server/src/lib/errors.ts
+- AppError class with:
+  - statusCode
+  - code (string)
+  - message
+  - details (optional)
+
+2) /server/src/middleware/errorHandler.ts
+- Catch all errors
+- Never throw
+- Always respond with consistent JSON:
+{
+  error: {
+    code: "VALIDATION_ERROR" | "UNAUTHORIZED" | "NOT_FOUND" | "INTERNAL_ERROR" | ...
+    message: string,
+    details?: any
+  }
+}
+
+3) Update routes to:
+- use next(err) or throw AppError in async handler wrapper
+- Add asyncHandler(fn) helper to avoid try/catch in every route.
+
+Consistency:
+- 400 for validation
+- 401 unauthorized
+- 403 forbidden
+- 404 not found
+- 500 internal
+
+===============================================================================
+IMPLEMENTATION PLAN (DO IN THIS ORDER)
+===============================================================================
+1) Add test harness + 2–3 smoke tests first
+2) Add error handling + validation middleware (non-invasive)
+3) Add authContext middleware with dev fallback (no endpoint changes)
+4) Split routes.ts into modular routers WITHOUT changing paths/logic
+5) Fix production build issues + add scripts/docs
+6) Run tests and ensure everything still passes
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+When done, output:
+- Summary of changes by section A–F
+- Exact new file structure created
+- List of endpoints verified unchanged
+- Test commands and which tests were added
+- Notes on production build fix and how to run the session table script
+- Any remaining TODOs kept small and explicit
