@@ -29,7 +29,6 @@ import {
   getTenancyEnforcementMode, 
   isStrictMode, 
   isSoftMode, 
-  isEnforcementEnabled,
   addTenancyWarningHeader,
   logTenancyWarning,
   validateTenantOwnership,
@@ -2050,6 +2049,7 @@ export async function registerRoutes(
           const legacyTimer = await storage.getActiveTimerByUser(userId);
           if (legacyTimer && !legacyTimer.tenantId) {
             existingTimer = legacyTimer;
+            logTenancyWarning("timer/start", "Existing legacy timer found without tenantId", userId);
           }
         }
       } else {
@@ -2057,6 +2057,9 @@ export async function registerRoutes(
       }
       
       if (existingTimer) {
+        if (isSoftMode() && !existingTimer.tenantId) {
+          addTenancyWarningHeader(res, "Existing timer has legacy null tenantId");
+        }
         return res.status(400).json({
           error: "You already have an active timer. Stop it before starting a new one.",
           activeTimer: existingTimer,
@@ -2169,6 +2172,9 @@ export async function registerRoutes(
           status: "paused",
           elapsedSeconds: newElapsedSeconds,
         });
+        if (isSoftMode()) {
+          logTenancyWarning("timer/pause", "Updated legacy timer without tenantId", userId);
+        }
       }
 
       // Emit real-time event
@@ -2224,6 +2230,9 @@ export async function registerRoutes(
           status: "running",
           lastStartedAt: now,
         });
+        if (isSoftMode()) {
+          logTenancyWarning("timer/resume", "Resumed legacy timer without tenantId", userId);
+        }
       }
 
       // Emit real-time event
@@ -2253,7 +2262,7 @@ export async function registerRoutes(
           if (legacyTimer && !legacyTimer.tenantId) {
             timer = legacyTimer;
             addTenancyWarningHeader(res, "Timer has legacy null tenantId");
-            logTenancyWarning("timer/current", "Legacy timer without tenantId", userId);
+            logTenancyWarning("timer/update", "Legacy timer without tenantId", userId);
           }
         }
       } else {
@@ -2275,6 +2284,9 @@ export async function registerRoutes(
         updated = await storage.updateActiveTimerWithTenant(timer.id, timer.tenantId, allowedUpdates);
       } else {
         updated = await storage.updateActiveTimer(timer.id, allowedUpdates);
+        if (isSoftMode()) {
+          logTenancyWarning("timer/update", "Updated legacy timer without tenantId", userId);
+        }
       }
 
       // Emit real-time event
@@ -2358,6 +2370,7 @@ export async function registerRoutes(
         } else {
           timeEntry = await storage.createTimeEntry(entryData);
           if (isSoftMode()) {
+            addTenancyWarningHeader(res, "Time entry created without tenantId");
             logTenancyWarning("timer/stop", "Time entry created without tenantId", userId);
           }
         }
@@ -2390,6 +2403,10 @@ export async function registerRoutes(
         await storage.deleteActiveTimerWithTenant(timer.id, timer.tenantId);
       } else {
         await storage.deleteActiveTimer(timer.id);
+        if (isSoftMode()) {
+          addTenancyWarningHeader(res, "Deleted legacy timer without tenantId");
+          logTenancyWarning("timer/stop", "Deleted legacy timer without tenantId", userId);
+        }
       }
 
       // Emit timer stopped event
@@ -2440,6 +2457,10 @@ export async function registerRoutes(
         await storage.deleteActiveTimerWithTenant(timer.id, timer.tenantId);
       } else {
         await storage.deleteActiveTimer(timer.id);
+        if (isSoftMode()) {
+          addTenancyWarningHeader(res, "Deleted legacy timer without tenantId");
+          logTenancyWarning("timer/delete", "Deleted legacy timer without tenantId", userId);
+        }
       }
 
       // Emit timer stopped event (discarded)
@@ -2699,6 +2720,9 @@ export async function registerRoutes(
         updated = await storage.updateTimeEntryWithTenant(req.params.id, entry.tenantId, updates);
       } else {
         updated = await storage.updateTimeEntry(req.params.id, updates);
+        if (isSoftMode()) {
+          logTenancyWarning("time-entries/update", "Updated legacy time entry without tenantId", userId);
+        }
       }
 
       // Emit real-time event
@@ -2744,6 +2768,9 @@ export async function registerRoutes(
         await storage.deleteTimeEntryWithTenant(req.params.id, entry.tenantId);
       } else {
         await storage.deleteTimeEntry(req.params.id);
+        if (isSoftMode()) {
+          logTenancyWarning("time-entries/delete", "Deleted legacy time entry without tenantId", userId);
+        }
       }
 
       // Emit real-time event
