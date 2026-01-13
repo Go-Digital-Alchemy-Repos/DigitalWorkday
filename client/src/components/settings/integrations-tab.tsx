@@ -7,76 +7,178 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import { Mail, Send, Check, X, Lock, Slack, Calendar, Zap, Webhook } from "lucide-react";
+import { 
+  Mail, Cloud, Save, Loader2, CheckCircle2, XCircle, 
+  AlertTriangle, TestTube, Eye, EyeOff, RefreshCw, Webhook
+} from "lucide-react";
 import { SiSlack, SiZapier, SiGooglecalendar } from "react-icons/si";
 
-interface MailgunSettings {
-  configured: boolean;
-  domain?: string;
-  fromEmail?: string;
-  replyTo?: string;
-  apiKeyConfigured?: boolean;
+interface Integration {
+  provider: string;
+  status: "not_configured" | "configured" | "error";
+  publicConfig: Record<string, any> | null;
+  secretConfigured: boolean;
+  lastTestedAt: string | null;
+}
+
+interface IntegrationsListResponse {
+  integrations: Integration[];
 }
 
 export function IntegrationsTab() {
-  const [mailgunDomain, setMailgunDomain] = useState("");
-  const [mailgunApiKey, setMailgunApiKey] = useState("");
-  const [mailgunFromEmail, setMailgunFromEmail] = useState("");
-  const [mailgunReplyTo, setMailgunReplyTo] = useState("");
-  const [isInitialized, setIsInitialized] = useState(false);
   const { toast } = useToast();
+  const [showMailgunKey, setShowMailgunKey] = useState(false);
+  const [showS3Keys, setShowS3Keys] = useState(false);
 
-  const { data: mailgunSettings, isLoading } = useQuery<MailgunSettings>({
-    queryKey: ["/api/settings/mailgun"],
+  const [mailgunForm, setMailgunForm] = useState({
+    domain: "",
+    fromEmail: "",
+    replyTo: "",
+    apiKey: "",
   });
 
+  const [s3Form, setS3Form] = useState({
+    bucketName: "",
+    region: "",
+    keyPrefixTemplate: "",
+    accessKeyId: "",
+    secretAccessKey: "",
+  });
+
+  const { data, isLoading, error, refetch } = useQuery<IntegrationsListResponse>({
+    queryKey: ["/api/v1/tenant/integrations"],
+  });
+
+  const mailgunIntegration = data?.integrations?.find(i => i.provider === "mailgun");
+  const s3Integration = data?.integrations?.find(i => i.provider === "s3");
+
   useEffect(() => {
-    if (mailgunSettings && !isInitialized) {
-      setMailgunDomain(mailgunSettings.domain || "");
-      setMailgunFromEmail(mailgunSettings.fromEmail || "");
-      setMailgunReplyTo(mailgunSettings.replyTo || "");
-      setIsInitialized(true);
+    if (mailgunIntegration?.publicConfig) {
+      setMailgunForm({
+        domain: mailgunIntegration.publicConfig.domain || "",
+        fromEmail: mailgunIntegration.publicConfig.fromEmail || "",
+        replyTo: mailgunIntegration.publicConfig.replyTo || "",
+        apiKey: "",
+      });
     }
-  }, [mailgunSettings, isInitialized]);
+    if (s3Integration?.publicConfig) {
+      setS3Form({
+        bucketName: s3Integration.publicConfig.bucketName || "",
+        region: s3Integration.publicConfig.region || "",
+        keyPrefixTemplate: s3Integration.publicConfig.keyPrefixTemplate || "",
+        accessKeyId: "",
+        secretAccessKey: "",
+      });
+    }
+  }, [mailgunIntegration, s3Integration]);
 
   const saveMailgunMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return apiRequest("PUT", "/api/settings/mailgun", data);
+    mutationFn: async (formData: typeof mailgunForm) => {
+      const payload: any = {
+        domain: formData.domain || undefined,
+        fromEmail: formData.fromEmail || undefined,
+        replyTo: formData.replyTo || undefined,
+      };
+      if (formData.apiKey) {
+        payload.apiKey = formData.apiKey;
+      }
+      return apiRequest("PUT", "/api/v1/tenant/integrations/mailgun", payload);
     },
-    onSuccess: async (response: any) => {
-      await queryClient.invalidateQueries({ queryKey: ["/api/settings/mailgun"] });
-      if (response.domain) setMailgunDomain(response.domain);
-      if (response.fromEmail) setMailgunFromEmail(response.fromEmail);
-      if (response.replyTo !== undefined) setMailgunReplyTo(response.replyTo);
-      toast({ title: "Mailgun settings saved" });
-      setMailgunApiKey("");
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      setMailgunForm(prev => ({ ...prev, apiKey: "" }));
+      toast({ title: "Mailgun settings saved successfully" });
     },
-    onError: (error: any) => {
-      const message = error?.error?.message || "Failed to save settings";
+    onError: (err: any) => {
+      const message = err?.message || "Failed to save Mailgun settings";
       toast({ title: message, variant: "destructive" });
     },
   });
 
   const testMailgunMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", "/api/settings/mailgun/test");
+      return apiRequest("POST", "/api/v1/tenant/integrations/mailgun/test", {});
     },
-    onSuccess: () => {
-      toast({ title: "Test email sent successfully" });
+    onSuccess: (response: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      if (response.success) {
+        toast({ title: "Mailgun test successful" });
+      } else {
+        toast({ title: response.message || "Mailgun test failed", variant: "destructive" });
+      }
     },
     onError: () => {
-      toast({ title: "Failed to send test email", variant: "destructive" });
+      toast({ title: "Failed to test Mailgun", variant: "destructive" });
     },
   });
 
-  const handleSaveMailgun = (e: React.FormEvent) => {
-    e.preventDefault();
-    saveMailgunMutation.mutate({
-      domain: mailgunDomain,
-      apiKey: mailgunApiKey || undefined,
-      fromEmail: mailgunFromEmail,
-      replyTo: mailgunReplyTo,
-    });
+  const saveS3Mutation = useMutation({
+    mutationFn: async (formData: typeof s3Form) => {
+      const payload: any = {
+        bucketName: formData.bucketName || undefined,
+        region: formData.region || undefined,
+        keyPrefixTemplate: formData.keyPrefixTemplate || undefined,
+      };
+      if (formData.accessKeyId) {
+        payload.accessKeyId = formData.accessKeyId;
+      }
+      if (formData.secretAccessKey) {
+        payload.secretAccessKey = formData.secretAccessKey;
+      }
+      return apiRequest("PUT", "/api/v1/tenant/integrations/s3", payload);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      setS3Form(prev => ({ ...prev, accessKeyId: "", secretAccessKey: "" }));
+      toast({ title: "S3 settings saved successfully" });
+    },
+    onError: (err: any) => {
+      const message = err?.message || "Failed to save S3 settings";
+      toast({ title: message, variant: "destructive" });
+    },
+  });
+
+  const testS3Mutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", "/api/v1/tenant/integrations/s3/test", {});
+    },
+    onSuccess: (response: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
+      if (response.success) {
+        toast({ title: "S3 test successful" });
+      } else {
+        toast({ title: response.message || "S3 test failed", variant: "destructive" });
+      }
+    },
+    onError: () => {
+      toast({ title: "Failed to test S3", variant: "destructive" });
+    },
+  });
+
+  const getStatusBadge = (status: string) => {
+    switch (status) {
+      case "configured":
+        return (
+          <Badge variant="default" className="gap-1">
+            <CheckCircle2 className="h-3 w-3" />
+            Configured
+          </Badge>
+        );
+      case "error":
+        return (
+          <Badge variant="destructive" className="gap-1">
+            <XCircle className="h-3 w-3" />
+            Error
+          </Badge>
+        );
+      default:
+        return (
+          <Badge variant="outline" className="gap-1">
+            <AlertTriangle className="h-3 w-3" />
+            Not Configured
+          </Badge>
+        );
+    }
   };
 
   const futureIntegrations = [
@@ -106,102 +208,281 @@ export function IntegrationsTab() {
     },
   ];
 
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center py-12">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <Card>
+        <CardContent className="py-8">
+          <div className="text-center">
+            <p className="text-muted-foreground mb-4">Failed to load integrations.</p>
+            <Button variant="outline" onClick={() => refetch()}>
+              <RefreshCw className="h-4 w-4 mr-2" />
+              Retry
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-3">
-              <div className="h-10 w-10 rounded-lg bg-orange-500/10 flex items-center justify-center">
-                <Mail className="h-5 w-5 text-orange-500" />
-              </div>
-              <div>
-                <CardTitle className="text-lg">Mailgun</CardTitle>
-                <CardDescription>Email notifications and invitations</CardDescription>
-              </div>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Mail className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">Mailgun Email Integration</CardTitle>
             </div>
-            <Badge variant={mailgunSettings?.configured ? "default" : "secondary"}>
-              {mailgunSettings?.configured ? (
-                <><Check className="h-3 w-3 mr-1" /> Configured</>
-              ) : (
-                <><X className="h-3 w-3 mr-1" /> Not Configured</>
-              )}
-            </Badge>
+            {getStatusBadge(mailgunIntegration?.status || "not_configured")}
           </div>
+          <CardDescription>
+            Configure Mailgun to send emails from your domain
+          </CardDescription>
         </CardHeader>
-        <CardContent>
-          <form onSubmit={handleSaveMailgun} className="space-y-4">
-            <div className="grid gap-4 md:grid-cols-2">
-              <div className="space-y-2">
-                <Label htmlFor="mailgun-domain">Domain</Label>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="mailgun-domain">Domain</Label>
+              <Input
+                id="mailgun-domain"
+                placeholder="mg.yourdomain.com"
+                value={mailgunForm.domain}
+                onChange={(e) => setMailgunForm({ ...mailgunForm, domain: e.target.value })}
+                data-testid="input-mailgun-domain"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="mailgun-fromEmail">From Email</Label>
+              <Input
+                id="mailgun-fromEmail"
+                type="email"
+                placeholder="noreply@yourdomain.com"
+                value={mailgunForm.fromEmail}
+                onChange={(e) => setMailgunForm({ ...mailgunForm, fromEmail: e.target.value })}
+                data-testid="input-mailgun-from-email"
+              />
+            </div>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="mailgun-replyTo">Reply-To Email (Optional)</Label>
+              <Input
+                id="mailgun-replyTo"
+                type="email"
+                placeholder="support@yourdomain.com"
+                value={mailgunForm.replyTo}
+                onChange={(e) => setMailgunForm({ ...mailgunForm, replyTo: e.target.value })}
+                data-testid="input-mailgun-reply-to"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="mailgun-apiKey">
+                API Key {mailgunIntegration?.secretConfigured && "(Configured)"}
+              </Label>
+              <div className="flex gap-2">
                 <Input
-                  id="mailgun-domain"
-                  placeholder="mg.yourdomain.com"
-                  value={mailgunDomain}
-                  onChange={(e) => setMailgunDomain(e.target.value)}
-                  data-testid="input-mailgun-domain"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="mailgun-api-key">
-                  API Key
-                  {mailgunSettings?.apiKeyConfigured && (
-                    <span className="ml-2 text-xs text-muted-foreground">
-                      <Lock className="h-3 w-3 inline mr-1" />
-                      Configured
-                    </span>
-                  )}
-                </Label>
-                <Input
-                  id="mailgun-api-key"
-                  type="password"
-                  placeholder={mailgunSettings?.apiKeyConfigured ? "Leave blank to keep existing" : "key-xxxxxxxxxx"}
-                  value={mailgunApiKey}
-                  onChange={(e) => setMailgunApiKey(e.target.value)}
+                  id="mailgun-apiKey"
+                  type={showMailgunKey ? "text" : "password"}
+                  placeholder={mailgunIntegration?.secretConfigured ? "••••••••" : "Enter API key"}
+                  value={mailgunForm.apiKey}
+                  onChange={(e) => setMailgunForm({ ...mailgunForm, apiKey: e.target.value })}
                   data-testid="input-mailgun-api-key"
                 />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="mailgun-from">From Email</Label>
-                <Input
-                  id="mailgun-from"
-                  type="email"
-                  placeholder="noreply@yourdomain.com"
-                  value={mailgunFromEmail}
-                  onChange={(e) => setMailgunFromEmail(e.target.value)}
-                  data-testid="input-mailgun-from"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label htmlFor="mailgun-reply-to">Reply-To (optional)</Label>
-                <Input
-                  id="mailgun-reply-to"
-                  type="email"
-                  placeholder="support@yourdomain.com"
-                  value={mailgunReplyTo}
-                  onChange={(e) => setMailgunReplyTo(e.target.value)}
-                  data-testid="input-mailgun-reply-to"
-                />
-              </div>
-            </div>
-            <div className="flex items-center gap-2 pt-2">
-              <Button type="submit" disabled={saveMailgunMutation.isPending} data-testid="button-save-mailgun">
-                {saveMailgunMutation.isPending ? "Saving..." : "Save Settings"}
-              </Button>
-              {mailgunSettings?.configured && (
                 <Button
                   type="button"
                   variant="outline"
-                  onClick={() => testMailgunMutation.mutate()}
-                  disabled={testMailgunMutation.isPending}
-                  data-testid="button-test-mailgun"
+                  size="icon"
+                  onClick={() => setShowMailgunKey(!showMailgunKey)}
                 >
-                  <Send className="h-4 w-4 mr-2" />
-                  {testMailgunMutation.isPending ? "Sending..." : "Send Test Email"}
+                  {showMailgunKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </Button>
-              )}
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Leave blank to keep existing key
+              </p>
             </div>
-          </form>
+          </div>
+
+          {mailgunIntegration?.lastTestedAt && (
+            <p className="text-xs text-muted-foreground">
+              Last tested: {new Date(mailgunIntegration.lastTestedAt).toLocaleString()}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => testMailgunMutation.mutate()}
+              disabled={testMailgunMutation.isPending || mailgunIntegration?.status !== "configured"}
+              data-testid="button-test-mailgun"
+            >
+              {testMailgunMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <TestTube className="h-4 w-4 mr-2" />
+                  Test Connection
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => saveMailgunMutation.mutate(mailgunForm)}
+              disabled={saveMailgunMutation.isPending}
+              data-testid="button-save-mailgun"
+            >
+              {saveMailgunMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Mailgun
+                </>
+              )}
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <Cloud className="h-5 w-5 text-primary" />
+              <CardTitle className="text-lg">S3 Storage Integration</CardTitle>
+            </div>
+            {getStatusBadge(s3Integration?.status || "not_configured")}
+          </div>
+          <CardDescription>
+            Configure S3-compatible storage for file uploads
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="s3-bucket">Bucket Name</Label>
+              <Input
+                id="s3-bucket"
+                placeholder="my-bucket"
+                value={s3Form.bucketName}
+                onChange={(e) => setS3Form({ ...s3Form, bucketName: e.target.value })}
+                data-testid="input-s3-bucket"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="s3-region">Region</Label>
+              <Input
+                id="s3-region"
+                placeholder="us-east-1"
+                value={s3Form.region}
+                onChange={(e) => setS3Form({ ...s3Form, region: e.target.value })}
+                data-testid="input-s3-region"
+              />
+            </div>
+          </div>
+          <div className="space-y-2">
+            <Label htmlFor="s3-prefix">Key Prefix Template</Label>
+            <Input
+              id="s3-prefix"
+              placeholder="tenants/{tenantId}/"
+              value={s3Form.keyPrefixTemplate}
+              onChange={(e) => setS3Form({ ...s3Form, keyPrefixTemplate: e.target.value })}
+              data-testid="input-s3-prefix"
+            />
+            <p className="text-xs text-muted-foreground">
+              Prefix for all uploaded files. Use {"{tenantId}"} as placeholder.
+            </p>
+          </div>
+          <div className="grid gap-4 sm:grid-cols-2">
+            <div className="space-y-2">
+              <Label htmlFor="s3-accessKey">
+                Access Key ID {s3Integration?.secretConfigured && "(Configured)"}
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="s3-accessKey"
+                  type={showS3Keys ? "text" : "password"}
+                  placeholder={s3Integration?.secretConfigured ? "••••••••" : "Enter access key"}
+                  value={s3Form.accessKeyId}
+                  onChange={(e) => setS3Form({ ...s3Form, accessKeyId: e.target.value })}
+                  data-testid="input-s3-access-key"
+                />
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="s3-secretKey">Secret Access Key</Label>
+              <div className="flex gap-2">
+                <Input
+                  id="s3-secretKey"
+                  type={showS3Keys ? "text" : "password"}
+                  placeholder={s3Integration?.secretConfigured ? "••••••••" : "Enter secret key"}
+                  value={s3Form.secretAccessKey}
+                  onChange={(e) => setS3Form({ ...s3Form, secretAccessKey: e.target.value })}
+                  data-testid="input-s3-secret-key"
+                />
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="icon"
+                  onClick={() => setShowS3Keys(!showS3Keys)}
+                >
+                  {showS3Keys ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+              <p className="text-xs text-muted-foreground">
+                Leave blank to keep existing credentials
+              </p>
+            </div>
+          </div>
+
+          {s3Integration?.lastTestedAt && (
+            <p className="text-xs text-muted-foreground">
+              Last tested: {new Date(s3Integration.lastTestedAt).toLocaleString()}
+            </p>
+          )}
+
+          <div className="flex justify-end gap-2">
+            <Button
+              type="button"
+              variant="outline"
+              onClick={() => testS3Mutation.mutate()}
+              disabled={testS3Mutation.isPending || s3Integration?.status !== "configured"}
+              data-testid="button-test-s3"
+            >
+              {testS3Mutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <TestTube className="h-4 w-4 mr-2" />
+                  Test Connection
+                </>
+              )}
+            </Button>
+            <Button
+              type="button"
+              onClick={() => saveS3Mutation.mutate(s3Form)}
+              disabled={saveS3Mutation.isPending}
+              data-testid="button-save-s3"
+            >
+              {saveS3Mutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin" />
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save S3
+                </>
+              )}
+            </Button>
+          </div>
         </CardContent>
       </Card>
 

@@ -16,6 +16,7 @@ import {
   Clock,
   Cog,
   Shield,
+  UserCog,
 } from "lucide-react";
 import dasanaLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -250,10 +251,21 @@ export function AppSidebar() {
           </Collapsible>
         </SidebarGroup>
 
-        {isAdmin && (
+        {(isAdmin || isSuperUser) && (
           <SidebarGroup>
             <SidebarGroupContent>
               <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location.startsWith("/account")}
+                  >
+                    <Link href="/account" data-testid="link-account-settings">
+                      <UserCog className="h-4 w-4" />
+                      <span>Account</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild

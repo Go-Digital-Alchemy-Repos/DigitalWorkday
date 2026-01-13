@@ -21,6 +21,7 @@ import LoginPage from "@/pages/login";
 import SettingsPage from "@/pages/settings";
 import SuperAdminPage from "@/pages/super-admin";
 import TenantOnboardingPage from "@/pages/tenant-onboarding";
+import AccountPage from "@/pages/account";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -69,6 +70,12 @@ function Router() {
       </Route>
       <Route path="/settings/:tab">
         {() => <ProtectedRoute component={SettingsPage} />}
+      </Route>
+      <Route path="/account">
+        {() => <ProtectedRoute component={AccountPage} />}
+      </Route>
+      <Route path="/account/:tab">
+        {() => <ProtectedRoute component={AccountPage} />}
       </Route>
       <Route path="/super-admin">
         {() => <ProtectedRoute component={SuperAdminPage} />}
