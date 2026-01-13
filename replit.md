@@ -50,11 +50,33 @@ The database schema (`shared/schema.ts`) includes core entities like `users`, `w
   - Cross-tenant data access prevented by tenant-scoped storage methods
 - **Bootstrap Changes**: Default admin user upgraded to super_user role for development
 
-### Phase 2A Remaining Work (TODO)
+### Phase 2B: Tenancy Enforcement Safety Switch (Implemented)
+- **TENANCY_ENFORCEMENT Environment Variable**: Controls tenant isolation behavior (off|soft|strict)
+  - **off**: No enforcement, fully backward compatible (default)
+  - **soft**: Logs warnings for tenant violations, adds X-Tenancy-Warn headers
+  - **strict**: Blocks cross-tenant access completely
+- **Enforcement Utilities** (`server/middleware/tenancyEnforcement.ts`):
+  - `getTenancyEnforcementMode()`: Returns current mode from env var
+  - `isEnforcementEnabled()`: True when mode is soft or strict
+  - `isStrictMode()`, `isSoftMode()`: Mode checks
+  - `addTenancyWarningHeader()`: Adds warning headers in soft mode
+  - `logTenancyWarning()`: Logs tenant violations for monitoring
+  - `validateTenantOwnership()`: Generic resource ownership validation
+  - `handleTenancyViolation()`: Returns 403 in strict, logs in soft mode
+- **Tenant-Scoped Storage Methods** for Time Tracking:
+  - Time Entries: `getTimeEntryByIdAndTenant`, `getTimeEntriesByTenant`, `createTimeEntryWithTenant`, `updateTimeEntryWithTenant`, `deleteTimeEntryWithTenant`
+  - Active Timers: `getActiveTimerByIdAndTenant`, `getActiveTimerByUserAndTenant`, `createActiveTimerWithTenant`, `updateActiveTimerWithTenant`, `deleteActiveTimerWithTenant`
+  - Task Attachments: `getTaskAttachmentByIdAndTenant`, `getTaskAttachmentsByTaskAndTenant`
+- **Updated Routes with Tenant Enforcement**:
+  - Timer routes: GET /api/timer/current, POST /api/timer/start, POST /api/timer/pause, POST /api/timer/resume, PATCH /api/timer/current, POST /api/timer/stop, DELETE /api/timer/current
+  - Time-entry routes: GET /api/time-entries, GET /api/time-entries/my, GET /api/time-entries/:id, POST /api/time-entries, PATCH /api/time-entries/:id, DELETE /api/time-entries/:id, GET /api/time-entries/report/summary
+
+### Phase 2B Remaining Work (TODO)
 - Tasks/Subtasks routes need tenant-scoped storage methods
 - Sections, comments, tags routes need tenant-aware lookups
-- Timer and time-entry routes need tenant validation
 - Client contacts and team members routes need parent resource validation
+- Attachment metadata routes need tenant enforcement
+- Realtime event scoping for tenant isolation
 - Automated tenant isolation tests
 
 ### Frontend Structure

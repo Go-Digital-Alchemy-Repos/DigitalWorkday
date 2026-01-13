@@ -1,0 +1,248 @@
+You are continuing development on my existing single-codebase React + Express app.
+NEXT PHASE: PHASE 3B — White Label + Per-Tenant Integrations (Enterprise Tenant Controls).
+DO NOT rewrite the app. Implement ONLY the features described below in a SAFE, NON-DESTRUCTIVE, backwards-compatible way.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- DO NOT remove or rename any existing endpoints.
+- DO NOT change response shapes in a breaking way (add fields ok; don’t remove).
+- DO NOT drop or rename DB tables/columns. Add-only schema changes only.
+- DO NOT overhaul auth/session/token strategy.
+- DO NOT refactor core business logic (clients/projects/tasks/time tracking/etc.) except to READ tenant branding/integration settings.
+- Keep existing tenants working; do not lock out production tenants.
+- Never log secrets (Mailgun key, S3 keys, tokens, passwords).
+
+===============================================================================
+GOAL
+===============================================================================
+Add enterprise-grade tenant customization and per-tenant integration controls:
+1) White label branding per tenant (name, logo, colors, optional favicon)
+2) Per-tenant integrations management (Mailgun + placeholders for future integrations)
+3) Apply tenant branding to the UI (minimal theming via CSS variables; no redesign)
+4) Admin controls for tenant settings (tenant admin) + Super User overrides (super user)
+
+This phase does NOT include billing/plans or agreements/e-sign (that’s Phase 3C).
+
+===============================================================================
+SCOPE
+===============================================================================
+A) Data model: tenant_settings expanded + tenant_integrations store (encrypted where needed)
+B) APIs:
+   - tenant-admin: view/update own tenant settings
+   - super_user: view/update any tenant settings
+C) UI:
+   - Tenant Admin: “Tenant Settings” area (under Global Settings or Workspace settings)
+   - Super User: tenant settings editor inside /super/tenants/:id
+D) Theming:
+   - load tenant theme at login/session bootstrap and apply CSS variables globally
+
+Out of scope:
+- custom domains routing implementation (we can store domain fields but not route traffic)
+- agreement/e-sign gating
+- billing/Stripe
+
+===============================================================================
+1) DATA MODEL (ADD-ONLY)
+===============================================================================
+A) Expand tenant_settings (if already exists, add columns; if not, create)
+tenant_settings columns (add-only):
+- tenantId (uuid unique FK tenants.id)
+- brandName (text)                    // display brand name in UI
+- appName (text nullable)             // what the UI calls the app (optional)
+- logoUrl (text nullable)
+- faviconUrl (text nullable)
+- primaryColor (text nullable)        // hex
+- secondaryColor (text nullable)      // hex
+- accentColor (text nullable)         // hex
+- loginMessage (text nullable)        // optional message on login/onboarding
+- supportEmail (text nullable)
+- createdAt, updatedAt
+
+B) Tenant “white label toggles”
+Add columns:
+- whiteLabelEnabled (boolean default false)
+- hideVendorBranding (boolean default false)
+
+C) Tenant Integrations store (secure)
+Create table tenant_integrations (preferred) OR reuse app_settings with typed keys.
+Recommended table:
+
+tenant_integrations
+- id (uuid)
+- tenantId (uuid FK tenants.id)
+- provider (text)  // "mailgun", "s3", "stripe", etc.
+- configEncrypted (text nullable)     // encrypted JSON blob (never return raw)
+- configPublic (jsonb nullable)       // safe non-secret fields, e.g. domain, fromEmail, region
+- status (text)  // "not_configured"|"configured"|"error"
+- lastTestedAt (timestamp nullable)
+- createdAt, updatedAt
+Unique index: (tenantId, provider)
+
+Rules:
+- Secrets go only into configEncrypted.
+- Public fields go into configPublic.
+- Do not duplicate existing Mailgun storage if already implemented; you may:
+  - keep existing mailgun settings in app_settings and just expose via integration APIs
+  - OR migrate to tenant_integrations in a non-destructive way (copy forward, keep old reads in soft mode)
+
+===============================================================================
+2) ENCRYPTION RULES (MANDATORY)
+===============================================================================
+- Store secrets encrypted at rest using existing APP_ENCRYPTION_KEY mechanism.
+- Never return raw secrets to the client.
+- Support “write-only secret fields”:
+  - If the user saves settings without supplying a secret again, do NOT overwrite the stored secret.
+- If APP_ENCRYPTION_KEY missing in production, return a clear error and do not silently clear settings.
+
+===============================================================================
+3) APIs (BACKWARD-COMPATIBLE)
+===============================================================================
+A) Tenant Admin APIs (tenant-scoped, admin only)
+- GET  /api/v1/tenant/settings
+  Returns: { tenantSettings } (branding fields only)
+- PATCH /api/v1/tenant/settings
+  Body: branding fields (brandName, colors, logoUrl, etc.)
+  Returns: updated tenantSettings
+
+- GET  /api/v1/tenant/integrations
+  Returns list:
+  [
+    { provider, status, publicConfig, secretConfigured:boolean, lastTestedAt }
+  ]
+
+- GET  /api/v1/tenant/integrations/:provider
+  Returns:
+  { provider, status, publicConfig, secretConfigured, lastTestedAt }
+
+- PUT  /api/v1/tenant/integrations/:provider
+  Body: provider-specific fields (see below)
+  Behavior:
+    - validate inputs
+    - update publicConfig
+    - update encrypted secret fields only if provided
+    - set status accordingly
+  Returns masked response (no secrets)
+
+- POST /api/v1/tenant/integrations/:provider/test
+  Behavior:
+    - runs a provider test (Mailgun: send test email to current admin)
+    - updates status + lastTestedAt
+  Returns success/failure message (safe)
+
+Provider fields:
+1) mailgun:
+- public: domain, fromEmail, replyTo?
+- secret: apiKey (write-only)
+2) s3 (placeholder for later; store only):
+- public: bucketName, region, keyPrefixTemplate (e.g. "tenants/{tenantId}/")
+- secret: accessKeyId, secretAccessKey (optional, if you’re not using IAM roles)
+Note: if your current S3 uses global env creds, keep it; just store prefix strategy per tenant.
+
+B) Super User APIs (super_user only)
+- GET/PATCH /api/v1/super/tenants/:tenantId/settings
+- GET/PUT/TEST /api/v1/super/tenants/:tenantId/integrations/:provider
+These allow support staff to help configure tenants.
+
+IMPORTANT:
+- Do NOT break existing /api/v1/settings/mailgun endpoints. They can remain as-is.
+- If those exist, make them call the same underlying tenant integration service so both routes stay consistent.
+
+===============================================================================
+4) UI (MINIMAL, CONSISTENT)
+===============================================================================
+A) Tenant Admin UI
+Add a tenant admin accessible page (admin only):
+- Location suggestion: Global Settings → “Tenant Settings” tab
+Tabs:
+1) Branding
+   - Brand Name
+   - Logo upload
+   - Primary/Secondary/Accent colors (hex inputs + preview)
+   - Toggle: whiteLabelEnabled
+   - Toggle: hideVendorBranding
+2) Integrations
+   - Cards for Mailgun and S3 (S3 is placeholder)
+   - Each card shows:
+     - status (configured/not configured/error)
+     - last tested
+     - configure button
+   - Mailgun configure form:
+     - domain, fromEmail, apiKey (write-only), replyTo
+     - Save + Test button
+   - S3 configure form (placeholder):
+     - region, bucket, keyPrefixTemplate (default: "tenants/{tenantId}/")
+     - Save
+
+B) Super User UI
+Within /super/tenants tenant detail page:
+- “Branding” section (edit tenant_settings)
+- “Integrations” section (same cards + test)
+
+Constraints:
+- Use existing component library and layout patterns.
+- No redesign; keep it additive.
+
+===============================================================================
+5) FRONTEND THEME APPLICATION (MANDATORY, MINIMAL)
+===============================================================================
+Apply tenant branding at runtime without large refactors:
+
+A) Add a small theme loader:
+- On app bootstrap (after auth/me), call GET /api/v1/tenant/settings
+- Store tenant settings in a small global store (context) OR TanStack query cache.
+- Set CSS variables on :root:
+  --brand-primary, --brand-secondary, --brand-accent
+- Use these variables in a minimal way:
+  - sidebar header, top header accent, buttons (if easy)
+Do NOT recolor the entire design system. Keep changes minimal and safe.
+
+B) Login screen
+- If whiteLabelEnabled is true:
+  - show tenant logo and brandName on login screen (if tenant can be inferred; otherwise skip)
+Because tenant inference by domain is not implemented yet:
+  - Apply login branding only AFTER login, on the main app, for now.
+  - (Optional) if you already have a tenant selector or acting tenant, you may allow a “Tenant Slug” input before login, but do not add if risky.
+
+===============================================================================
+6) TENANT-SAFE STORAGE RULES
+===============================================================================
+- All tenant_settings and tenant_integrations queries must be tenant-scoped by effectiveTenantId.
+- Super routes must specify tenantId explicitly.
+- No cross-tenant leakage.
+
+===============================================================================
+7) TESTS (MANDATORY MINIMUM)
+===============================================================================
+Add tests:
+1) tenantSettings.branding.test.ts
+- tenant admin can read/update branding
+- tenant B cannot read tenant A settings
+2) tenantIntegrations.mailgun.test.ts
+- tenant admin can set mailgun public fields
+- secretConfigured flips true when apiKey provided
+- saving without apiKey does not overwrite existing key
+3) superOverrides.test.ts
+- super_user can update settings for any tenant
+- non-super cannot
+
+===============================================================================
+8) ACCEPTANCE CRITERIA (MUST WORK)
+===============================================================================
+1) Tenant admin can update branding (name/logo/colors) and see it reflected in the app (CSS vars).
+2) Tenant admin can configure Mailgun per tenant; refresh shows domain/fromEmail and masked key status persists.
+3) Tenant admin can run “Test Mailgun” and see success/failure.
+4) Super user can edit any tenant’s branding and integrations.
+5) No endpoints broken; existing workflows still function.
+6) No secrets exposed; write-only secret behavior works.
+7) Tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Summary of changes
+- Migrations added (add-only)
+- New endpoints added (and any existing endpoints internally wired to tenant_integrations)
+- UI pages/tabs added
+- Manual test steps (admin + super_user)
+- Notes on future: custom domains + Phase 3C agreement gating

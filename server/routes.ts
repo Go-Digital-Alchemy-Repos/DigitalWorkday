@@ -25,6 +25,16 @@ import {
 } from "@shared/schema";
 import { requireAuth } from "./auth";
 import { getEffectiveTenantId, requireTenantContext } from "./middleware/tenantContext";
+import { 
+  getTenancyEnforcementMode, 
+  isStrictMode, 
+  isSoftMode, 
+  isEnforcementEnabled,
+  addTenancyWarningHeader,
+  logTenancyWarning,
+  validateTenantOwnership,
+  handleTenancyViolation
+} from "./middleware/tenancyEnforcement";
 import { UserRole } from "@shared/schema";
 
 function getCurrentUserId(req: Request): string {
@@ -1994,7 +2004,29 @@ export async function registerRoutes(
   // Get current user's active timer
   app.get("/api/timer/current", async (req, res) => {
     try {
-      const timer = await storage.getActiveTimerByUser(getCurrentUserId(req));
+      const userId = getCurrentUserId(req);
+      const tenantId = getEffectiveTenantId(req);
+      
+      let timer;
+      if (tenantId && isStrictMode()) {
+        // Strict mode: only tenant-scoped access
+        timer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+      } else if (tenantId && isSoftMode()) {
+        // Soft mode: try tenant-scoped first, fallback to legacy with warning
+        timer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+        if (!timer) {
+          const legacyTimer = await storage.getActiveTimerByUser(userId);
+          if (legacyTimer && !legacyTimer.tenantId) {
+            timer = legacyTimer;
+            addTenancyWarningHeader(res, "Timer has legacy null tenantId");
+            logTenancyWarning("timer/current", "Legacy timer without tenantId", userId);
+          }
+        }
+      } else {
+        // Off mode or no tenant: use legacy storage
+        timer = await storage.getActiveTimerByUser(userId);
+      }
+      
       res.json(timer || null);
     } catch (error) {
       console.error("Error fetching active timer:", error);
@@ -2005,14 +2037,28 @@ export async function registerRoutes(
   // Start a new timer
   app.post("/api/timer/start", async (req, res) => {
     try {
+      const userId = getCurrentUserId(req);
+      const tenantId = getEffectiveTenantId(req);
+      
       // Check if user already has an active timer
-      const existingTimer = await storage.getActiveTimerByUser(
-        getCurrentUserId(req),
-      );
+      let existingTimer;
+      if (tenantId && isStrictMode()) {
+        existingTimer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+      } else if (tenantId && isSoftMode()) {
+        existingTimer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+        if (!existingTimer) {
+          const legacyTimer = await storage.getActiveTimerByUser(userId);
+          if (legacyTimer && !legacyTimer.tenantId) {
+            existingTimer = legacyTimer;
+          }
+        }
+      } else {
+        existingTimer = await storage.getActiveTimerByUser(userId);
+      }
+      
       if (existingTimer) {
         return res.status(400).json({
-          error:
-            "You already have an active timer. Stop it before starting a new one.",
+          error: "You already have an active timer. Stop it before starting a new one.",
           activeTimer: existingTimer,
         });
       }
@@ -2020,7 +2066,7 @@ export async function registerRoutes(
       const now = new Date();
       const data = insertActiveTimerSchema.parse({
         workspaceId: getCurrentWorkspaceId(req),
-        userId: getCurrentUserId(req),
+        userId: userId,
         clientId: req.body.clientId || null,
         projectId: req.body.projectId || null,
         taskId: req.body.taskId || null,
@@ -2030,12 +2076,21 @@ export async function registerRoutes(
         lastStartedAt: now,
       });
 
-      const timer = await storage.createActiveTimer(data);
+      // Create timer - always set tenant if available (for forward compatibility)
+      let timer;
+      if (tenantId) {
+        timer = await storage.createActiveTimerWithTenant(data, tenantId);
+      } else {
+        // No tenant context - use legacy storage (backward compatible)
+        timer = await storage.createActiveTimer(data);
+        if (isSoftMode()) {
+          addTenancyWarningHeader(res, "Timer created without tenant context");
+          logTenancyWarning("timer/start", "Timer created without tenantId", userId);
+        }
+      }
 
       // Get enriched timer with relations
-      const enrichedTimer = await storage.getActiveTimerByUser(
-        getCurrentUserId(req),
-      );
+      const enrichedTimer = await storage.getActiveTimerByUser(userId);
 
       // Emit real-time event
       emitTimerStarted(
@@ -2068,7 +2123,27 @@ export async function registerRoutes(
   // Pause the timer
   app.post("/api/timer/pause", async (req, res) => {
     try {
-      const timer = await storage.getActiveTimerByUser(getCurrentUserId(req));
+      const userId = getCurrentUserId(req);
+      const tenantId = getEffectiveTenantId(req);
+      
+      // Get timer using appropriate mode
+      let timer;
+      if (tenantId && isStrictMode()) {
+        timer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+      } else if (tenantId && isSoftMode()) {
+        timer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+        if (!timer) {
+          const legacyTimer = await storage.getActiveTimerByUser(userId);
+          if (legacyTimer && !legacyTimer.tenantId) {
+            timer = legacyTimer;
+            addTenancyWarningHeader(res, "Timer has legacy null tenantId");
+            logTenancyWarning("timer/pause", "Legacy timer without tenantId", userId);
+          }
+        }
+      } else {
+        timer = await storage.getActiveTimerByUser(userId);
+      }
+      
       if (!timer) {
         return res.status(404).json({ error: "No active timer found" });
       }
@@ -2079,23 +2154,25 @@ export async function registerRoutes(
       // Calculate elapsed time since last started
       const now = new Date();
       const lastStarted = timer.lastStartedAt || timer.createdAt;
-      const additionalSeconds = Math.floor(
-        (now.getTime() - lastStarted.getTime()) / 1000,
-      );
+      const additionalSeconds = Math.floor((now.getTime() - lastStarted.getTime()) / 1000);
       const newElapsedSeconds = timer.elapsedSeconds + additionalSeconds;
 
-      const updated = await storage.updateActiveTimer(timer.id, {
-        status: "paused",
-        elapsedSeconds: newElapsedSeconds,
-      });
+      // Update using appropriate storage method
+      let updated;
+      if (timer.tenantId) {
+        updated = await storage.updateActiveTimerWithTenant(timer.id, timer.tenantId, {
+          status: "paused",
+          elapsedSeconds: newElapsedSeconds,
+        });
+      } else {
+        updated = await storage.updateActiveTimer(timer.id, {
+          status: "paused",
+          elapsedSeconds: newElapsedSeconds,
+        });
+      }
 
       // Emit real-time event
-      emitTimerPaused(
-        timer.id,
-        getCurrentUserId(req),
-        newElapsedSeconds,
-        getCurrentWorkspaceId(req),
-      );
+      emitTimerPaused(timer.id, userId, newElapsedSeconds, getCurrentWorkspaceId(req));
 
       res.json(updated);
     } catch (error) {
@@ -2107,7 +2184,27 @@ export async function registerRoutes(
   // Resume the timer
   app.post("/api/timer/resume", async (req, res) => {
     try {
-      const timer = await storage.getActiveTimerByUser(getCurrentUserId(req));
+      const userId = getCurrentUserId(req);
+      const tenantId = getEffectiveTenantId(req);
+      
+      // Get timer using appropriate mode
+      let timer;
+      if (tenantId && isStrictMode()) {
+        timer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+      } else if (tenantId && isSoftMode()) {
+        timer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+        if (!timer) {
+          const legacyTimer = await storage.getActiveTimerByUser(userId);
+          if (legacyTimer && !legacyTimer.tenantId) {
+            timer = legacyTimer;
+            addTenancyWarningHeader(res, "Timer has legacy null tenantId");
+            logTenancyWarning("timer/resume", "Legacy timer without tenantId", userId);
+          }
+        }
+      } else {
+        timer = await storage.getActiveTimerByUser(userId);
+      }
+      
       if (!timer) {
         return res.status(404).json({ error: "No active timer found" });
       }
@@ -2116,18 +2213,21 @@ export async function registerRoutes(
       }
 
       const now = new Date();
-      const updated = await storage.updateActiveTimer(timer.id, {
-        status: "running",
-        lastStartedAt: now,
-      });
+      let updated;
+      if (timer.tenantId) {
+        updated = await storage.updateActiveTimerWithTenant(timer.id, timer.tenantId, {
+          status: "running",
+          lastStartedAt: now,
+        });
+      } else {
+        updated = await storage.updateActiveTimer(timer.id, {
+          status: "running",
+          lastStartedAt: now,
+        });
+      }
 
       // Emit real-time event
-      emitTimerResumed(
-        timer.id,
-        getCurrentUserId(req),
-        now,
-        getCurrentWorkspaceId(req),
-      );
+      emitTimerResumed(timer.id, userId, now, getCurrentWorkspaceId(req));
 
       res.json(updated);
     } catch (error) {
@@ -2139,33 +2239,49 @@ export async function registerRoutes(
   // Update timer details (client, project, task, description)
   app.patch("/api/timer/current", async (req, res) => {
     try {
-      const timer = await storage.getActiveTimerByUser(getCurrentUserId(req));
+      const userId = getCurrentUserId(req);
+      const tenantId = getEffectiveTenantId(req);
+      
+      // Get timer using appropriate mode
+      let timer;
+      if (tenantId && isStrictMode()) {
+        timer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+      } else if (tenantId && isSoftMode()) {
+        timer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+        if (!timer) {
+          const legacyTimer = await storage.getActiveTimerByUser(userId);
+          if (legacyTimer && !legacyTimer.tenantId) {
+            timer = legacyTimer;
+            addTenancyWarningHeader(res, "Timer has legacy null tenantId");
+            logTenancyWarning("timer/current", "Legacy timer without tenantId", userId);
+          }
+        }
+      } else {
+        timer = await storage.getActiveTimerByUser(userId);
+      }
+      
       if (!timer) {
         return res.status(404).json({ error: "No active timer found" });
       }
 
       const allowedUpdates: Partial<ActiveTimer> = {};
       if ("clientId" in req.body) allowedUpdates.clientId = req.body.clientId;
-      if ("projectId" in req.body)
-        allowedUpdates.projectId = req.body.projectId;
+      if ("projectId" in req.body) allowedUpdates.projectId = req.body.projectId;
       if ("taskId" in req.body) allowedUpdates.taskId = req.body.taskId;
-      if ("description" in req.body)
-        allowedUpdates.description = req.body.description;
+      if ("description" in req.body) allowedUpdates.description = req.body.description;
 
-      const updated = await storage.updateActiveTimer(timer.id, allowedUpdates);
+      let updated;
+      if (timer.tenantId) {
+        updated = await storage.updateActiveTimerWithTenant(timer.id, timer.tenantId, allowedUpdates);
+      } else {
+        updated = await storage.updateActiveTimer(timer.id, allowedUpdates);
+      }
 
       // Emit real-time event
-      emitTimerUpdated(
-        timer.id,
-        getCurrentUserId(req),
-        allowedUpdates as any,
-        getCurrentWorkspaceId(req),
-      );
+      emitTimerUpdated(timer.id, userId, allowedUpdates as any, getCurrentWorkspaceId(req));
 
       // Return enriched timer
-      const enrichedTimer = await storage.getActiveTimerByUser(
-        getCurrentUserId(req),
-      );
+      const enrichedTimer = await storage.getActiveTimerByUser(userId);
       res.json(enrichedTimer);
     } catch (error) {
       console.error("Error updating timer:", error);
@@ -2176,7 +2292,28 @@ export async function registerRoutes(
   // Stop and finalize timer (creates time entry or discards)
   app.post("/api/timer/stop", async (req, res) => {
     try {
-      const timer = await storage.getActiveTimerByUser(getCurrentUserId(req));
+      const userId = getCurrentUserId(req);
+      const tenantId = getEffectiveTenantId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      
+      // Get timer using appropriate mode
+      let timer;
+      if (tenantId && isStrictMode()) {
+        timer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+      } else if (tenantId && isSoftMode()) {
+        timer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+        if (!timer) {
+          const legacyTimer = await storage.getActiveTimerByUser(userId);
+          if (legacyTimer && !legacyTimer.tenantId) {
+            timer = legacyTimer;
+            addTenancyWarningHeader(res, "Timer has legacy null tenantId");
+            logTenancyWarning("timer/stop", "Legacy timer without tenantId", userId);
+          }
+        }
+      } else {
+        timer = await storage.getActiveTimerByUser(userId);
+      }
+      
       if (!timer) {
         return res.status(404).json({ error: "No active timer found" });
       }
@@ -2186,38 +2323,44 @@ export async function registerRoutes(
       if (timer.status === "running") {
         const now = new Date();
         const lastStarted = timer.lastStartedAt || timer.createdAt;
-        const additionalSeconds = Math.floor(
-          (now.getTime() - lastStarted.getTime()) / 1000,
-        );
+        const additionalSeconds = Math.floor((now.getTime() - lastStarted.getTime()) / 1000);
         finalElapsedSeconds += additionalSeconds;
       }
 
-      const { discard, scope, description, clientId, projectId, taskId } =
-        req.body;
+      const { discard, scope, description, clientId, projectId, taskId } = req.body;
 
       let timeEntryId: string | null = null;
 
       // Create time entry unless discarding
       if (!discard && finalElapsedSeconds > 0) {
         const endTime = new Date();
-        const startTime = new Date(
-          endTime.getTime() - finalElapsedSeconds * 1000,
-        );
+        const startTime = new Date(endTime.getTime() - finalElapsedSeconds * 1000);
 
-        const timeEntry = await storage.createTimeEntry({
-          workspaceId: getCurrentWorkspaceId(req),
-          userId: getCurrentUserId(req),
+        const entryData = {
+          workspaceId,
+          userId,
           clientId: clientId !== undefined ? clientId : timer.clientId,
           projectId: projectId !== undefined ? projectId : timer.projectId,
           taskId: taskId !== undefined ? taskId : timer.taskId,
-          description:
-            description !== undefined ? description : timer.description,
+          description: description !== undefined ? description : timer.description,
           startTime,
           endTime,
           durationSeconds: finalElapsedSeconds,
           scope: scope || "in_scope",
           isManual: false,
-        });
+        };
+
+        // Use timer's tenant if available, otherwise use request tenant, otherwise legacy
+        let timeEntry;
+        const effectiveTenantId = timer.tenantId || tenantId;
+        if (effectiveTenantId) {
+          timeEntry = await storage.createTimeEntryWithTenant(entryData, effectiveTenantId);
+        } else {
+          timeEntry = await storage.createTimeEntry(entryData);
+          if (isSoftMode()) {
+            logTenancyWarning("timer/stop", "Time entry created without tenantId", userId);
+          }
+        }
 
         timeEntryId = timeEntry.id;
 
@@ -2238,20 +2381,19 @@ export async function registerRoutes(
             isManual: timeEntry.isManual,
             createdAt: timeEntry.createdAt,
           },
-          getCurrentWorkspaceId(req),
+          workspaceId,
         );
       }
 
-      // Delete active timer
-      await storage.deleteActiveTimer(timer.id);
+      // Delete active timer using appropriate storage method
+      if (timer.tenantId) {
+        await storage.deleteActiveTimerWithTenant(timer.id, timer.tenantId);
+      } else {
+        await storage.deleteActiveTimer(timer.id);
+      }
 
       // Emit timer stopped event
-      emitTimerStopped(
-        timer.id,
-        getCurrentUserId(req),
-        timeEntryId,
-        getCurrentWorkspaceId(req),
-      );
+      emitTimerStopped(timer.id, userId, timeEntryId, workspaceId);
 
       res.json({
         success: true,
@@ -2268,20 +2410,40 @@ export async function registerRoutes(
   // Discard timer without saving
   app.delete("/api/timer/current", async (req, res) => {
     try {
-      const timer = await storage.getActiveTimerByUser(getCurrentUserId(req));
+      const userId = getCurrentUserId(req);
+      const tenantId = getEffectiveTenantId(req);
+      
+      // Get timer using appropriate mode
+      let timer;
+      if (tenantId && isStrictMode()) {
+        timer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+      } else if (tenantId && isSoftMode()) {
+        timer = await storage.getActiveTimerByUserAndTenant(userId, tenantId);
+        if (!timer) {
+          const legacyTimer = await storage.getActiveTimerByUser(userId);
+          if (legacyTimer && !legacyTimer.tenantId) {
+            timer = legacyTimer;
+            addTenancyWarningHeader(res, "Timer has legacy null tenantId");
+            logTenancyWarning("timer/delete", "Legacy timer without tenantId", userId);
+          }
+        }
+      } else {
+        timer = await storage.getActiveTimerByUser(userId);
+      }
+      
       if (!timer) {
         return res.status(404).json({ error: "No active timer found" });
       }
 
-      await storage.deleteActiveTimer(timer.id);
+      // Delete using appropriate storage method
+      if (timer.tenantId) {
+        await storage.deleteActiveTimerWithTenant(timer.id, timer.tenantId);
+      } else {
+        await storage.deleteActiveTimer(timer.id);
+      }
 
       // Emit timer stopped event (discarded)
-      emitTimerStopped(
-        timer.id,
-        getCurrentUserId(req),
-        null,
-        getCurrentWorkspaceId(req),
-      );
+      emitTimerStopped(timer.id, userId, null, getCurrentWorkspaceId(req));
 
       res.status(204).send();
     } catch (error) {
@@ -2297,8 +2459,9 @@ export async function registerRoutes(
   // Get time entries for workspace (with optional filters)
   app.get("/api/time-entries", async (req, res) => {
     try {
-      const { userId, clientId, projectId, taskId, scope, startDate, endDate } =
-        req.query;
+      const tenantId = getEffectiveTenantId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      const { userId, clientId, projectId, taskId, scope, startDate, endDate } = req.query;
 
       const filters: any = {};
       if (userId) filters.userId = userId as string;
@@ -2309,10 +2472,17 @@ export async function registerRoutes(
       if (startDate) filters.startDate = new Date(startDate as string);
       if (endDate) filters.endDate = new Date(endDate as string);
 
-      const entries = await storage.getTimeEntriesByWorkspace(
-        getCurrentWorkspaceId(req),
-        filters,
-      );
+      // For listing, strict mode only shows tenant-scoped, soft/off shows all
+      let entries;
+      if (tenantId && isStrictMode()) {
+        entries = await storage.getTimeEntriesByTenant(tenantId, workspaceId, filters);
+      } else {
+        // Soft mode and off mode: show all workspace entries (includes legacy with null tenantId)
+        entries = await storage.getTimeEntriesByWorkspace(workspaceId, filters);
+        if (isSoftMode() && entries.some(e => !e.tenantId)) {
+          addTenancyWarningHeader(res, "Results include entries with legacy null tenantId");
+        }
+      }
       res.json(entries);
     } catch (error) {
       console.error("Error fetching time entries:", error);
@@ -2323,10 +2493,20 @@ export async function registerRoutes(
   // Get current user's time entries
   app.get("/api/time-entries/my", async (req, res) => {
     try {
-      const entries = await storage.getTimeEntriesByUser(
-        getCurrentUserId(req),
-        getCurrentWorkspaceId(req),
-      );
+      const tenantId = getEffectiveTenantId(req);
+      const userId = getCurrentUserId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      
+      let entries;
+      if (tenantId && isStrictMode()) {
+        entries = await storage.getTimeEntriesByTenant(tenantId, workspaceId, { userId });
+      } else {
+        // Soft mode and off mode: show all user entries
+        entries = await storage.getTimeEntriesByUser(userId, workspaceId);
+        if (isSoftMode() && entries.some(e => !e.tenantId)) {
+          addTenancyWarningHeader(res, "Results include entries with legacy null tenantId");
+        }
+      }
       res.json(entries);
     } catch (error) {
       console.error("Error fetching user time entries:", error);
@@ -2337,7 +2517,26 @@ export async function registerRoutes(
   // Get single time entry
   app.get("/api/time-entries/:id", async (req, res) => {
     try {
-      const entry = await storage.getTimeEntry(req.params.id);
+      const tenantId = getEffectiveTenantId(req);
+      const userId = getCurrentUserId(req);
+      
+      let entry;
+      if (tenantId && isStrictMode()) {
+        entry = await storage.getTimeEntryByIdAndTenant(req.params.id, tenantId);
+      } else if (tenantId && isSoftMode()) {
+        entry = await storage.getTimeEntryByIdAndTenant(req.params.id, tenantId);
+        if (!entry) {
+          const legacyEntry = await storage.getTimeEntry(req.params.id);
+          if (legacyEntry && !legacyEntry.tenantId) {
+            entry = legacyEntry;
+            addTenancyWarningHeader(res, "Time entry has legacy null tenantId");
+            logTenancyWarning("time-entries/:id", "Legacy time entry without tenantId", userId);
+          }
+        }
+      } else {
+        entry = await storage.getTimeEntry(req.params.id);
+      }
+      
       if (!entry) {
         return res.status(404).json({ error: "Time entry not found" });
       }
@@ -2351,6 +2550,9 @@ export async function registerRoutes(
   // Create manual time entry
   app.post("/api/time-entries", async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      const userId = getCurrentUserId(req);
       const { startTime, endTime, durationSeconds, ...rest } = req.body;
 
       // Calculate duration from start/end if not provided
@@ -2366,8 +2568,8 @@ export async function registerRoutes(
 
       const data = insertTimeEntrySchema.parse({
         ...rest,
-        workspaceId: getCurrentWorkspaceId(req),
-        userId: getCurrentUserId(req),
+        workspaceId,
+        userId,
         startTime: start,
         endTime: end,
         durationSeconds: duration || 0,
@@ -2375,7 +2577,17 @@ export async function registerRoutes(
         scope: rest.scope || "in_scope",
       });
 
-      const entry = await storage.createTimeEntry(data);
+      // Create with tenant if available, otherwise legacy (backward compatible)
+      let entry;
+      if (tenantId) {
+        entry = await storage.createTimeEntryWithTenant(data, tenantId);
+      } else {
+        entry = await storage.createTimeEntry(data);
+        if (isSoftMode()) {
+          addTenancyWarningHeader(res, "Time entry created without tenant context");
+          logTenancyWarning("time-entries/create", "Time entry created without tenantId", userId);
+        }
+      }
 
       // Emit real-time event
       emitTimeEntryCreated(
@@ -2394,7 +2606,7 @@ export async function registerRoutes(
           isManual: entry.isManual,
           createdAt: entry.createdAt,
         },
-        getCurrentWorkspaceId(req),
+        workspaceId,
       );
 
       res.status(201).json(entry);
@@ -2410,12 +2622,32 @@ export async function registerRoutes(
   // Update time entry
   app.patch("/api/time-entries/:id", async (req, res) => {
     try {
-      const entry = await storage.getTimeEntry(req.params.id);
+      const tenantId = getEffectiveTenantId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      const userId = getCurrentUserId(req);
+      
+      // Get entry using appropriate mode
+      let entry;
+      if (tenantId && isStrictMode()) {
+        entry = await storage.getTimeEntryByIdAndTenant(req.params.id, tenantId);
+      } else if (tenantId && isSoftMode()) {
+        entry = await storage.getTimeEntryByIdAndTenant(req.params.id, tenantId);
+        if (!entry) {
+          const legacyEntry = await storage.getTimeEntry(req.params.id);
+          if (legacyEntry && !legacyEntry.tenantId) {
+            entry = legacyEntry;
+            addTenancyWarningHeader(res, "Time entry has legacy null tenantId");
+            logTenancyWarning("time-entries/update", "Legacy time entry without tenantId", userId);
+          }
+        }
+      } else {
+        entry = await storage.getTimeEntry(req.params.id);
+      }
+      
       if (!entry) {
         return res.status(404).json({ error: "Time entry not found" });
       }
 
-      const workspaceId = getCurrentWorkspaceId(req);
       const { startTime, endTime, durationSeconds, clientId, projectId, taskId, ...rest } = req.body;
 
       // Determine final values for validation
@@ -2429,11 +2661,9 @@ export async function registerRoutes(
         if (!project) {
           return res.status(400).json({ error: "Project not found" });
         }
-        // Verify project belongs to current workspace
         if (project.workspaceId !== workspaceId) {
           return res.status(403).json({ error: "Project does not belong to current workspace" });
         }
-        // Check if project belongs to client (if clientId provided)
         if (finalClientId && project.clientId !== finalClientId) {
           return res.status(400).json({ error: "Project does not belong to the selected client" });
         }
@@ -2461,10 +2691,15 @@ export async function registerRoutes(
       if (taskId !== undefined) updates.taskId = taskId;
       if (startTime) updates.startTime = new Date(startTime);
       if (endTime !== undefined) updates.endTime = endTime ? new Date(endTime) : null;
-      if (durationSeconds !== undefined)
-        updates.durationSeconds = durationSeconds;
+      if (durationSeconds !== undefined) updates.durationSeconds = durationSeconds;
 
-      const updated = await storage.updateTimeEntry(req.params.id, updates);
+      // Update using appropriate storage method based on entry's tenantId
+      let updated;
+      if (entry.tenantId) {
+        updated = await storage.updateTimeEntryWithTenant(req.params.id, entry.tenantId, updates);
+      } else {
+        updated = await storage.updateTimeEntry(req.params.id, updates);
+      }
 
       // Emit real-time event
       emitTimeEntryUpdated(req.params.id, workspaceId, updates);
@@ -2479,12 +2714,37 @@ export async function registerRoutes(
   // Delete time entry
   app.delete("/api/time-entries/:id", async (req, res) => {
     try {
-      const entry = await storage.getTimeEntry(req.params.id);
+      const tenantId = getEffectiveTenantId(req);
+      const userId = getCurrentUserId(req);
+      
+      // Get entry using appropriate mode
+      let entry;
+      if (tenantId && isStrictMode()) {
+        entry = await storage.getTimeEntryByIdAndTenant(req.params.id, tenantId);
+      } else if (tenantId && isSoftMode()) {
+        entry = await storage.getTimeEntryByIdAndTenant(req.params.id, tenantId);
+        if (!entry) {
+          const legacyEntry = await storage.getTimeEntry(req.params.id);
+          if (legacyEntry && !legacyEntry.tenantId) {
+            entry = legacyEntry;
+            addTenancyWarningHeader(res, "Time entry has legacy null tenantId");
+            logTenancyWarning("time-entries/delete", "Legacy time entry without tenantId", userId);
+          }
+        }
+      } else {
+        entry = await storage.getTimeEntry(req.params.id);
+      }
+      
       if (!entry) {
         return res.status(404).json({ error: "Time entry not found" });
       }
 
-      await storage.deleteTimeEntry(req.params.id);
+      // Delete using appropriate storage method based on entry's tenantId
+      if (entry.tenantId) {
+        await storage.deleteTimeEntryWithTenant(req.params.id, entry.tenantId);
+      } else {
+        await storage.deleteTimeEntry(req.params.id);
+      }
 
       // Emit real-time event
       emitTimeEntryDeleted(req.params.id, getCurrentWorkspaceId(req));
@@ -2503,16 +2763,24 @@ export async function registerRoutes(
   // Get time tracking summary/report
   app.get("/api/time-entries/report/summary", async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
       const { startDate, endDate, groupBy } = req.query;
 
       const filters: any = {};
       if (startDate) filters.startDate = new Date(startDate as string);
       if (endDate) filters.endDate = new Date(endDate as string);
 
-      const entries = await storage.getTimeEntriesByWorkspace(
-        getCurrentWorkspaceId(req),
-        filters,
-      );
+      // For reporting, strict mode only shows tenant-scoped, soft/off shows all
+      let entries;
+      if (tenantId && isStrictMode()) {
+        entries = await storage.getTimeEntriesByTenant(tenantId, workspaceId, filters);
+      } else {
+        entries = await storage.getTimeEntriesByWorkspace(workspaceId, filters);
+        if (isSoftMode() && entries.some(e => !e.tenantId)) {
+          addTenancyWarningHeader(res, "Report includes entries with legacy null tenantId");
+        }
+      }
 
       // Calculate totals
       let totalSeconds = 0;
