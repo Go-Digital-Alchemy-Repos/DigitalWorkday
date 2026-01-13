@@ -11,9 +11,10 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Progress } from "@/components/ui/progress";
 import {
   FolderKanban,
   Users,
@@ -25,10 +26,49 @@ import {
   Shield,
   Calendar,
   BarChart3,
+  AlertTriangle,
+  TrendingUp,
+  User,
+  CircleOff,
 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
+import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 import type { Project, Client, Team, TaskWithRelations } from "@shared/schema";
+
+interface ProjectAnalytics {
+  projectId: string;
+  metrics: {
+    openTasks: number;
+    completedTasks: number;
+    overdueTasks: number;
+    dueToday: number;
+    unassignedOpenTasks: number;
+    totalTasks: number;
+    completionPercent: number;
+  };
+  byStatus: Array<{ status: string; count: number }>;
+  byPriority: Array<{ priority: string; count: number }>;
+  dueTimeline: Array<{ date: string; count: number }>;
+  byAssignee: Array<{ userId: string; name: string; count: number }>;
+  overdueTasksList: Array<{ id: string; title: string; dueDate: string | null; priority: string | null; status: string }>;
+  dueTodayTasksList: Array<{ id: string; title: string; dueDate: string | null; priority: string | null; status: string }>;
+}
+
+const COLORS = ["#3B82F6", "#10B981", "#F59E0B", "#EF4444", "#8B5CF6", "#EC4899"];
+const STATUS_COLORS: Record<string, string> = {
+  "todo": "#9CA3AF",
+  "in_progress": "#3B82F6",
+  "in_review": "#F59E0B",
+  "done": "#10B981",
+};
+const PRIORITY_COLORS: Record<string, string> = {
+  "urgent": "#EF4444",
+  "high": "#F97316",
+  "medium": "#F59E0B",
+  "low": "#10B981",
+  "none": "#9CA3AF",
+};
 
 interface ProjectDetailDrawerProps {
   project: Project | null;
@@ -59,6 +99,12 @@ export function ProjectDetailDrawer({ project, open, onOpenChange }: ProjectDeta
   const { data: teams } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
     enabled: open,
+  });
+
+  const { data: analytics, isLoading: analyticsLoading } = useQuery<ProjectAnalytics>({
+    queryKey: ["/api/v1/projects", project?.id, "analytics"],
+    enabled: !!project?.id && open && activeTab === "insights",
+    staleTime: 30000,
   });
 
   const currentProject = projectDetails || project;
@@ -108,11 +154,12 @@ export function ProjectDetailDrawer({ project, open, onOpenChange }: ProjectDeta
         <Separator className="my-4" />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="grid w-full grid-cols-3">
+          <TabsList className={`grid w-full ${isSuperUser ? "grid-cols-4" : "grid-cols-3"}`}>
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="tasks" data-testid="tab-tasks">Tasks</TabsTrigger>
+            <TabsTrigger value="insights" data-testid="tab-insights">Insights</TabsTrigger>
             {isSuperUser && (
-              <TabsTrigger value="admin" data-testid="tab-admin">Admin Tools</TabsTrigger>
+              <TabsTrigger value="admin" data-testid="tab-admin">Admin</TabsTrigger>
             )}
           </TabsList>
 
@@ -251,6 +298,269 @@ export function ProjectDetailDrawer({ project, open, onOpenChange }: ProjectDeta
               <div className="text-center py-8 text-muted-foreground">
                 <CheckSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
                 <p>No tasks in this project</p>
+              </div>
+            )}
+          </TabsContent>
+
+          <TabsContent value="insights" className="mt-4 space-y-4">
+            {analyticsLoading ? (
+              <div className="space-y-4">
+                <div className="grid grid-cols-3 gap-3">
+                  {[1, 2, 3].map((i) => (
+                    <Skeleton key={i} className="h-20 w-full" />
+                  ))}
+                </div>
+                <Skeleton className="h-48 w-full" />
+              </div>
+            ) : analytics ? (
+              <>
+                <div className="grid grid-cols-3 gap-3">
+                  <Card>
+                    <CardContent className="pt-3 pb-2 text-center">
+                      <div className="text-xl font-bold text-primary">{analytics.metrics.openTasks}</div>
+                      <div className="text-xs text-muted-foreground">Open Tasks</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-3 pb-2 text-center">
+                      <div className="text-xl font-bold text-green-600">{analytics.metrics.completedTasks}</div>
+                      <div className="text-xs text-muted-foreground">Completed</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-3 pb-2 text-center">
+                      <div className="text-xl font-bold text-destructive">{analytics.metrics.overdueTasks}</div>
+                      <div className="text-xs text-muted-foreground">Overdue</div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid grid-cols-3 gap-3">
+                  <Card>
+                    <CardContent className="pt-3 pb-2 text-center">
+                      <div className="text-xl font-bold">{analytics.metrics.dueToday}</div>
+                      <div className="text-xs text-muted-foreground">Due Today</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-3 pb-2 text-center">
+                      <div className="text-xl font-bold">{analytics.metrics.unassignedOpenTasks}</div>
+                      <div className="text-xs text-muted-foreground">Unassigned</div>
+                    </CardContent>
+                  </Card>
+                  <Card>
+                    <CardContent className="pt-3 pb-2 text-center">
+                      <div className="flex items-center justify-center gap-2">
+                        <Progress value={analytics.metrics.completionPercent} className="h-2 w-12" />
+                        <span className="text-sm font-bold">{analytics.metrics.completionPercent}%</span>
+                      </div>
+                      <div className="text-xs text-muted-foreground mt-1">Completion</div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Tasks by Status</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[150px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <PieChart>
+                            <Pie
+                              data={analytics.byStatus}
+                              cx="50%"
+                              cy="50%"
+                              innerRadius={30}
+                              outerRadius={50}
+                              paddingAngle={2}
+                              dataKey="count"
+                              nameKey="status"
+                            >
+                              {analytics.byStatus.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={STATUS_COLORS[entry.status] || COLORS[index % COLORS.length]} />
+                              ))}
+                            </Pie>
+                            <Tooltip formatter={(value, name) => [value, name]} />
+                          </PieChart>
+                        </ResponsiveContainer>
+                      </div>
+                      <div className="flex flex-wrap gap-2 mt-2 justify-center">
+                        {analytics.byStatus.map((s, i) => (
+                          <div key={s.status} className="flex items-center gap-1 text-xs">
+                            <div 
+                              className="w-2 h-2 rounded-full" 
+                              style={{ backgroundColor: STATUS_COLORS[s.status] || COLORS[i % COLORS.length] }} 
+                            />
+                            <span className="capitalize">{s.status.replace("_", " ")}</span>
+                            <span className="text-muted-foreground">({s.count})</span>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Tasks by Priority</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[150px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <BarChart data={analytics.byPriority} layout="vertical">
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis type="number" className="text-xs" />
+                            <YAxis dataKey="priority" type="category" className="text-xs" width={50} />
+                            <Tooltip />
+                            <Bar dataKey="count">
+                              {analytics.byPriority.map((entry, index) => (
+                                <Cell key={`cell-${index}`} fill={PRIORITY_COLORS[entry.priority] || COLORS[index % COLORS.length]} />
+                              ))}
+                            </Bar>
+                          </BarChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </div>
+
+                {analytics.dueTimeline.some(d => d.count > 0) && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium">Due Date Timeline (Next 14 Days)</CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="h-[120px]">
+                        <ResponsiveContainer width="100%" height="100%">
+                          <LineChart data={analytics.dueTimeline}>
+                            <CartesianGrid strokeDasharray="3 3" className="stroke-muted" />
+                            <XAxis 
+                              dataKey="date" 
+                              className="text-xs" 
+                              tickFormatter={(v) => format(new Date(v), "MMM d")}
+                            />
+                            <YAxis className="text-xs" />
+                            <Tooltip 
+                              labelFormatter={(v) => format(new Date(v), "MMM d, yyyy")}
+                            />
+                            <Line type="monotone" dataKey="count" stroke="hsl(var(--primary))" strokeWidth={2} dot={{ r: 3 }} />
+                          </LineChart>
+                        </ResponsiveContainer>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {analytics.byAssignee.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        <Users className="h-4 w-4" />
+                        Workload by Assignee (Top 5)
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {analytics.byAssignee.map((assignee) => (
+                          <div key={assignee.userId} className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <User className="h-4 w-4 text-muted-foreground" />
+                              <span className="text-sm">{assignee.name}</span>
+                            </div>
+                            <Badge variant="secondary">{assignee.count} tasks</Badge>
+                          </div>
+                        ))}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {analytics.overdueTasksList.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2 text-destructive">
+                        <AlertTriangle className="h-4 w-4" />
+                        Overdue Tasks
+                      </CardTitle>
+                      <CardDescription>Tasks past their due date</CardDescription>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {analytics.overdueTasksList.map((task) => (
+                          <div key={task.id} className="flex items-center justify-between py-1">
+                            <span className="text-sm truncate flex-1 mr-2">{task.title}</span>
+                            <div className="flex items-center gap-2">
+                              {task.dueDate && (
+                                <span className="text-xs text-destructive">
+                                  {format(new Date(task.dueDate), "MMM d")}
+                                </span>
+                              )}
+                              {task.priority && task.priority !== "none" && (
+                                <Badge 
+                                  variant="outline" 
+                                  className="text-xs"
+                                  style={{ borderColor: PRIORITY_COLORS[task.priority] }}
+                                >
+                                  {task.priority}
+                                </Badge>
+                              )}
+                            </div>
+                          </div>
+                        ))}
+                        {analytics.metrics.overdueTasks > 10 && (
+                          <p className="text-xs text-muted-foreground text-center pt-2">
+                            +{analytics.metrics.overdueTasks - 10} more overdue tasks
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+
+                {analytics.dueTodayTasksList.length > 0 && (
+                  <Card>
+                    <CardHeader className="pb-2">
+                      <CardTitle className="text-sm font-medium flex items-center gap-2">
+                        <Clock className="h-4 w-4 text-orange-500" />
+                        Due Today
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent>
+                      <div className="space-y-2">
+                        {analytics.dueTodayTasksList.map((task) => (
+                          <div key={task.id} className="flex items-center justify-between py-1">
+                            <span className="text-sm truncate flex-1 mr-2">{task.title}</span>
+                            <div className="flex items-center gap-2">
+                              {task.priority && task.priority !== "none" && (
+                                <Badge 
+                                  variant="outline" 
+                                  className="text-xs"
+                                  style={{ borderColor: PRIORITY_COLORS[task.priority] }}
+                                >
+                                  {task.priority}
+                                </Badge>
+                              )}
+                              <Badge variant="outline" className="text-xs">
+                                {task.status}
+                              </Badge>
+                            </div>
+                          </div>
+                        ))}
+                        {analytics.metrics.dueToday > 10 && (
+                          <p className="text-xs text-muted-foreground text-center pt-2">
+                            +{analytics.metrics.dueToday - 10} more tasks due today
+                          </p>
+                        )}
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
+              </>
+            ) : (
+              <div className="text-center py-8 text-muted-foreground">
+                <BarChart3 className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                <p>Analytics unavailable</p>
               </div>
             )}
           </TabsContent>
