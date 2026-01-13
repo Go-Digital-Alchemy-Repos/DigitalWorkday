@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import crypto from "crypto";
 import { storage } from "./storage";
 import { z } from "zod";
+import subRoutes from "./routes/index";
 import {
   insertTaskSchema,
   insertSectionSchema,
@@ -101,18 +102,18 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
-  // Protect all /api routes except /api/auth/*
+  // Protect all /api routes except /api/auth/* and /api/v1/super/bootstrap
   app.use("/api", (req, res, next) => {
-    if (req.path.startsWith("/auth")) {
+    if (req.path.startsWith("/auth") || req.path === "/v1/super/bootstrap") {
       return next();
     }
     return requireAuth(req, res, next);
   });
   
-  // Enforce tenant context for all API routes except /api/auth/* and /api/health
+  // Enforce tenant context for all API routes except /api/auth/*, /api/health, and /api/v1/super/bootstrap
   // SuperUsers can access without tenant context; regular users must have tenantId
   app.use("/api", (req, res, next) => {
-    if (req.path.startsWith("/auth") || req.path === "/health") {
+    if (req.path.startsWith("/auth") || req.path === "/health" || req.path === "/v1/super/bootstrap") {
       return next();
     }
     return requireTenantContext(req, res, next);
@@ -120,6 +121,9 @@ export async function registerRoutes(
 
   const DEMO_USER_ID = "demo-user-id";
   const DEMO_WORKSPACE_ID = "demo-workspace-id";
+
+  // Mount sub-routes (timer, super admin, etc.)
+  app.use("/api", subRoutes);
 
   // Health check endpoint for Docker/Railway
   app.get("/api/health", (req, res) => {

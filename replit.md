@@ -31,6 +31,17 @@ The database schema (`shared/schema.ts`) includes core entities like `users`, `w
 - Super Admin UI: `/super-admin` page for managing tenants (visible only to super_user role)
 - Backfill script: `server/scripts/backfillTenants.ts` to migrate existing data to default tenant
 
+### Production Bootstrap (Phase 2.0.5)
+- **Bootstrap Endpoint**: `POST /api/v1/super/bootstrap` - One-time super admin creation for production
+  - Requires `X-Bootstrap-Token` header matching `SUPER_ADMIN_BOOTSTRAP_TOKEN` env var
+  - Uses timing-safe token comparison for security
+  - Returns 503 if token not configured, 401 if token mismatch, 409 if super admin exists
+  - Creates super_user from env vars or request body, passwords never logged
+- **CLI Script**: `server/scripts/bootstrap_super_user.ts` for command-line bootstrap
+- **Documentation**: `server/README-BOOTSTRAP.md` with Railway deployment instructions
+- **Required Env Vars**: `SUPER_ADMIN_BOOTSTRAP_TOKEN`, `SUPER_ADMIN_EMAIL`, `SUPER_ADMIN_PASSWORD`
+- **Optional Env Vars**: `SUPER_ADMIN_FIRST_NAME`, `SUPER_ADMIN_LAST_NAME`
+
 ### Phase 2A: Tenant Enforcement Infrastructure (Implemented)
 - **Global Tenant Middleware**: Applied `requireTenantContext` to all /api routes (except /auth and /health)
   - Non-superusers without tenantId are rejected at middleware level
