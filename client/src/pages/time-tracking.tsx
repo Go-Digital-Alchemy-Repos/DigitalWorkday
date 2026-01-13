@@ -754,14 +754,6 @@ function EditTimeEntrySheet({ entry, open, onOpenChange }: EditTimeEntrySheetPro
   };
 
   const handleSave = () => {
-    if (!clientId) {
-      toast({ title: "Client is required", variant: "destructive" });
-      return;
-    }
-    if (!projectId) {
-      toast({ title: "Project is required", variant: "destructive" });
-      return;
-    }
     if (!entryDate) {
       toast({ title: "Date is required", variant: "destructive" });
       return;
@@ -830,13 +822,13 @@ function EditTimeEntrySheet({ entry, open, onOpenChange }: EditTimeEntrySheetPro
             <Separator />
 
             <div className="space-y-2">
-              <Label>Client *</Label>
+              <Label>Client</Label>
               <Select
                 value={clientId || "none"}
                 onValueChange={(v) => handleClientChange(v === "none" ? null : v)}
               >
                 <SelectTrigger data-testid="select-edit-client">
-                  <SelectValue placeholder="Select client" />
+                  <SelectValue placeholder="Select client (optional)" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No client</SelectItem>
@@ -850,14 +842,14 @@ function EditTimeEntrySheet({ entry, open, onOpenChange }: EditTimeEntrySheetPro
             </div>
 
             <div className="space-y-2">
-              <Label>Project *</Label>
+              <Label>Project</Label>
               <Select
                 value={projectId || "none"}
                 onValueChange={(v) => handleProjectChange(v === "none" ? null : v)}
                 disabled={!clientId}
               >
                 <SelectTrigger data-testid="select-edit-project">
-                  <SelectValue placeholder={clientId ? "Select project" : "Select client first"} />
+                  <SelectValue placeholder={clientId ? "Select project (optional)" : "Select client first"} />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="none">No project</SelectItem>

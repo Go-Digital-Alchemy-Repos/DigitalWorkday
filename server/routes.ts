@@ -2172,18 +2172,59 @@ export async function registerRoutes(
         return res.status(404).json({ error: "Time entry not found" });
       }
 
-      const { startTime, endTime, durationSeconds, ...rest } = req.body;
+      const workspaceId = getCurrentWorkspaceId(req);
+      const { startTime, endTime, durationSeconds, clientId, projectId, taskId, ...rest } = req.body;
+
+      // Determine final values for validation
+      const finalClientId = clientId !== undefined ? clientId : entry.clientId;
+      const finalProjectId = projectId !== undefined ? projectId : entry.projectId;
+      const finalTaskId = taskId !== undefined ? taskId : entry.taskId;
+
+      // Validation: if projectId is provided, verify it exists and belongs to workspace
+      if (finalProjectId) {
+        const project = await storage.getProject(finalProjectId);
+        if (!project) {
+          return res.status(400).json({ error: "Project not found" });
+        }
+        // Verify project belongs to current workspace
+        if (project.workspaceId !== workspaceId) {
+          return res.status(403).json({ error: "Project does not belong to current workspace" });
+        }
+        // Check if project belongs to client (if clientId provided)
+        if (finalClientId && project.clientId !== finalClientId) {
+          return res.status(400).json({ error: "Project does not belong to the selected client" });
+        }
+      }
+
+      // Validation: if taskId is provided, verify it belongs to projectId
+      if (finalTaskId) {
+        const task = await storage.getTask(finalTaskId);
+        if (!task) {
+          return res.status(400).json({ error: "Task not found" });
+        }
+        if (task.projectId !== finalProjectId) {
+          return res.status(400).json({ error: "Task does not belong to the selected project" });
+        }
+      }
+
+      // Validation: durationSeconds must be > 0
+      if (durationSeconds !== undefined && durationSeconds <= 0) {
+        return res.status(400).json({ error: "Duration must be greater than zero" });
+      }
 
       const updates: any = { ...rest };
+      if (clientId !== undefined) updates.clientId = clientId;
+      if (projectId !== undefined) updates.projectId = projectId;
+      if (taskId !== undefined) updates.taskId = taskId;
       if (startTime) updates.startTime = new Date(startTime);
-      if (endTime) updates.endTime = new Date(endTime);
+      if (endTime !== undefined) updates.endTime = endTime ? new Date(endTime) : null;
       if (durationSeconds !== undefined)
         updates.durationSeconds = durationSeconds;
 
       const updated = await storage.updateTimeEntry(req.params.id, updates);
 
       // Emit real-time event
-      emitTimeEntryUpdated(req.params.id, getCurrentWorkspaceId(req), updates);
+      emitTimeEntryUpdated(req.params.id, workspaceId, updates);
 
       res.json(updated);
     } catch (error) {
