@@ -97,6 +97,7 @@ const updateSettingsSchema = z.object({
   displayName: z.string().min(1).optional(),
   appName: z.string().optional().nullable(),
   logoUrl: z.string().url().optional().nullable(),
+  iconUrl: z.string().url().optional().nullable(),
   faviconUrl: z.string().url().optional().nullable(),
   primaryColor: z.string().regex(hexColorRegex, "Must be valid hex color").optional().nullable(),
   secondaryColor: z.string().regex(hexColorRegex, "Must be valid hex color").optional().nullable(),

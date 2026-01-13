@@ -128,6 +128,7 @@ export const tenantSettings = pgTable("tenant_settings", {
   displayName: text("display_name").notNull(), // Also serves as brandName
   appName: text("app_name"), // Optional custom app name shown in UI
   logoUrl: text("logo_url"),
+  iconUrl: text("icon_url"), // Square icon for app shortcuts/PWA
   faviconUrl: text("favicon_url"),
   primaryColor: text("primary_color"), // Hex color
   secondaryColor: text("secondary_color"), // Hex color
