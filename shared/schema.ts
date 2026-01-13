@@ -133,6 +133,32 @@ export const tenantSettings = pgTable("tenant_settings", {
   index("tenant_settings_tenant_idx").on(table.tenantId),
 ]);
 
+// Tenancy warning type enum
+export const TenancyWarnType = {
+  MISMATCH: "mismatch",
+  MISSING_TENANT_ID: "missing-tenantId",
+} as const;
+
+/**
+ * Tenancy Warnings table - stores warnings for tenancy enforcement monitoring
+ * Used when TENANCY_WARN_PERSIST=true to track tenant isolation issues
+ */
+export const tenancyWarnings = pgTable("tenancy_warnings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  occurredAt: timestamp("occurred_at").defaultNow().notNull(),
+  route: text("route").notNull(),
+  method: text("method").notNull(),
+  warnType: text("warn_type").notNull(),
+  actorUserId: varchar("actor_user_id"),
+  effectiveTenantId: varchar("effective_tenant_id"),
+  resourceId: text("resource_id"),
+  notes: text("notes"),
+}, (table) => [
+  index("tenancy_warnings_occurred_at_idx").on(table.occurredAt),
+  index("tenancy_warnings_warn_type_idx").on(table.warnType),
+  index("tenancy_warnings_tenant_idx").on(table.effectiveTenantId),
+]);
+
 // Users table
 // Note: tenantId is nullable for backward compatibility during migration
 export const users = pgTable("users", {
@@ -958,6 +984,11 @@ export const insertTenantSettingsSchema = createInsertSchema(tenantSettings).omi
   updatedAt: true,
 });
 
+export const insertTenancyWarningSchema = createInsertSchema(tenancyWarnings).omit({
+  id: true,
+  occurredAt: true,
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -1118,6 +1149,9 @@ export type InsertTenant = z.infer<typeof insertTenantSchema>;
 
 export type TenantSettings = typeof tenantSettings.$inferSelect;
 export type InsertTenantSettings = z.infer<typeof insertTenantSettingsSchema>;
+
+export type TenancyWarning = typeof tenancyWarnings.$inferSelect;
+export type InsertTenancyWarning = z.infer<typeof insertTenancyWarningSchema>;
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;

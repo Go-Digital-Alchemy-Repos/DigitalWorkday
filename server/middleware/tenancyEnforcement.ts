@@ -1,4 +1,5 @@
 import { Request, Response, NextFunction } from "express";
+import { tenancyHealthTracker } from "./tenancyHealthTracker";
 
 export type TenancyEnforcementMode = "off" | "soft" | "strict";
 
@@ -33,6 +34,35 @@ export function addTenancyWarningHeader(res: Response, message: string): void {
 
 export function logTenancyWarning(context: string, message: string, userId?: string): void {
   console.warn(`[TENANCY:${getTenancyEnforcementMode().toUpperCase()}] ${context}: ${message}${userId ? ` (user: ${userId})` : ""}`);
+}
+
+export interface TenancyWarningContext {
+  route: string;
+  method: string;
+  warnType: "mismatch" | "missing-tenantId";
+  actorUserId?: string;
+  effectiveTenantId?: string;
+  resourceId?: string;
+  notes?: string;
+}
+
+export async function recordTenancyWarning(ctx: TenancyWarningContext): Promise<void> {
+  const mode = getTenancyEnforcementMode();
+  if (mode !== "soft") return;
+
+  try {
+    await tenancyHealthTracker.recordWarning({
+      route: ctx.route,
+      method: ctx.method,
+      warnType: ctx.warnType,
+      actorUserId: ctx.actorUserId,
+      effectiveTenantId: ctx.effectiveTenantId,
+      resourceId: ctx.resourceId,
+      notes: ctx.notes,
+    });
+  } catch (error) {
+    console.error("[TenancyEnforcement] Failed to record warning:", error);
+  }
 }
 
 export interface TenancyValidationResult {
