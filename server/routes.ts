@@ -640,7 +640,30 @@ export async function registerRoutes(
 
   app.get("/api/projects/:projectId/tasks", async (req, res) => {
     try {
-      const tasks = await storage.getTasksByProject(req.params.projectId);
+      const idValidation = validateRequiredId(req.params.projectId, "projectId");
+      if (!idValidation.valid) {
+        return res.status(400).json({ error: idValidation.error });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
+      const projectId = req.params.projectId;
+
+      // Verify project belongs to tenant first
+      const project = await tenancyScopedFetch(
+        req, res, "/api/projects/:projectId/tasks", "project", projectId,
+        () => storage.getProjectByIdAndTenant(projectId, tenantId),
+        () => storage.getProject(projectId)
+      );
+
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      const tasks = await tenancyScopedList(
+        req, res, "/api/projects/:projectId/tasks", "task",
+        () => storage.getTasksByProjectAndTenant(projectId, tenantId),
+        () => storage.getTasksByProject(projectId)
+      );
       res.json(tasks);
     } catch (error) {
       console.error("Error fetching tasks:", error);
@@ -783,11 +806,24 @@ export async function registerRoutes(
 
   app.get("/api/tasks/:id", async (req, res) => {
     try {
-      const task = await storage.getTaskWithRelations(req.params.id);
+      const idValidation = validateRequiredId(req.params.id, "taskId");
+      if (!idValidation.valid) {
+        return res.status(400).json({ error: idValidation.error });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
+      const task = await tenancyScopedFetch(
+        req, res, "/api/tasks/:id", "task", req.params.id,
+        () => storage.getTaskByIdAndTenant(req.params.id, tenantId),
+        () => storage.getTask(req.params.id)
+      );
+
       if (!task) {
         return res.status(404).json({ error: "Task not found" });
       }
-      res.json(task);
+
+      const taskWithRelations = await storage.getTaskWithRelations(task.id);
+      res.json(taskWithRelations);
     } catch (error) {
       console.error("Error fetching task:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -806,13 +842,28 @@ export async function registerRoutes(
 
   app.post("/api/tasks", async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
       const body = { ...req.body };
       if (body.sectionId === "" || body.sectionId === undefined) {
         body.sectionId = null;
       }
+
+      // If task is being added to a project, verify project belongs to tenant
+      if (body.projectId) {
+        const project = await tenancyScopedFetch(
+          req, res, "/api/tasks", "project", body.projectId,
+          () => storage.getProjectByIdAndTenant(body.projectId, tenantId),
+          () => storage.getProject(body.projectId)
+        );
+        if (!project) {
+          return res.status(400).json({ error: "Project not found" });
+        }
+      }
+
       const data = insertTaskSchema.parse({
         ...body,
         createdBy: getCurrentUserId(req),
+        tenantId: tenantId,
       });
       const task = await storage.createTask(data);
 
@@ -823,7 +874,6 @@ export async function registerRoutes(
 
       const taskWithRelations = await storage.getTaskWithRelations(task.id);
 
-      // Emit real-time event after successful DB operation
       if (taskWithRelations) {
         if (task.isPersonal && task.createdBy) {
           emitMyTaskCreated(task.createdBy, taskWithRelations as any, getCurrentWorkspaceId(req));
@@ -844,8 +894,21 @@ export async function registerRoutes(
 
   app.post("/api/tasks/:taskId/childtasks", async (req, res) => {
     try {
+      const idValidation = validateRequiredId(req.params.taskId, "taskId");
+      if (!idValidation.valid) {
+        return res.status(400).json({ error: idValidation.error });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
       const parentTaskId = req.params.taskId;
-      const parentTask = await storage.getTask(parentTaskId);
+
+      // Verify parent task belongs to tenant
+      const parentTask = await tenancyScopedFetch(
+        req, res, "/api/tasks/:taskId/childtasks", "task", parentTaskId,
+        () => storage.getTaskByIdAndTenant(parentTaskId, tenantId),
+        () => storage.getTask(parentTaskId)
+      );
+
       if (!parentTask) {
         return res.status(404).json({ error: "Parent task not found" });
       }
@@ -861,6 +924,7 @@ export async function registerRoutes(
         projectId: parentTask.projectId,
         sectionId: parentTask.sectionId,
         createdBy: getCurrentUserId(req),
+        tenantId: tenantId,
       });
 
       const task = await storage.createChildTask(parentTaskId, data);
@@ -874,7 +938,6 @@ export async function registerRoutes(
 
       const taskWithRelations = await storage.getTaskWithRelations(task.id);
 
-      // Emit real-time event after successful DB operation
       if (taskWithRelations && parentTask.projectId) {
         emitTaskCreated(parentTask.projectId, taskWithRelations as any);
       }
@@ -891,7 +954,22 @@ export async function registerRoutes(
 
   app.patch("/api/tasks/:id", async (req, res) => {
     try {
-      // If converting to personal task, force clear project ties
+      const idValidation = validateRequiredId(req.params.id, "taskId");
+      if (!idValidation.valid) {
+        return res.status(400).json({ error: idValidation.error });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
+      const existingTask = await tenancyScopedFetch(
+        req, res, "/api/tasks/:id", "task", req.params.id,
+        () => storage.getTaskByIdAndTenant(req.params.id, tenantId),
+        () => storage.getTask(req.params.id)
+      );
+
+      if (!existingTask) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
       const updateData = { ...req.body };
       if (updateData.isPersonal === true) {
         updateData.projectId = null;
@@ -905,12 +983,9 @@ export async function registerRoutes(
       }
       const taskWithRelations = await storage.getTaskWithRelations(task.id);
 
-      // Emit real-time event after successful DB operation
       if (task.isPersonal && task.createdBy) {
-        // Personal task - emit to workspace
         emitMyTaskUpdated(task.createdBy, task.id, req.body, getCurrentWorkspaceId(req));
       } else if (task.projectId) {
-        // Project task - emit to project room
         emitTaskUpdated(task.id, task.projectId, task.parentTaskId, req.body);
       }
 
@@ -923,20 +998,27 @@ export async function registerRoutes(
 
   app.delete("/api/tasks/:id", async (req, res) => {
     try {
-      // Get task before deletion to emit event with projectId
-      const task = await storage.getTask(req.params.id);
+      const idValidation = validateRequiredId(req.params.id, "taskId");
+      if (!idValidation.valid) {
+        return res.status(400).json({ error: idValidation.error });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
+      const task = await tenancyScopedFetch(
+        req, res, "/api/tasks/:id", "task", req.params.id,
+        () => storage.getTaskByIdAndTenant(req.params.id, tenantId),
+        () => storage.getTask(req.params.id)
+      );
+
       if (!task) {
         return res.status(404).json({ error: "Task not found" });
       }
 
       await storage.deleteTask(req.params.id);
 
-      // Emit real-time event after successful DB operation
       if (task.isPersonal && task.createdBy) {
-        // Personal task - emit to workspace
         emitMyTaskDeleted(task.createdBy, task.id, getCurrentWorkspaceId(req));
       } else if (task.projectId) {
-        // Project task - emit to project room
         emitTaskDeleted(
           task.id,
           task.projectId,
