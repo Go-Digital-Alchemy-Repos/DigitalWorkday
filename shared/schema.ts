@@ -65,11 +65,18 @@ export const TimerStatus = {
   PAUSED: "paused",
 } as const;
 
-// User role enum (Admin, Employee, Client)
+// User role enum (Admin, Employee, Client, Super User)
 export const UserRole = {
+  SUPER_USER: "super_user",
   ADMIN: "admin",
   EMPLOYEE: "employee",
   CLIENT: "client",
+} as const;
+
+// Tenant status enum
+export const TenantStatus = {
+  ACTIVE: "active",
+  INACTIVE: "inactive",
 } as const;
 
 // Invitation status enum
@@ -86,9 +93,31 @@ export const ClientAccessLevel = {
   COLLABORATOR: "collaborator",
 } as const;
 
+// =============================================================================
+// MULTI-TENANCY TABLES
+// =============================================================================
+
+/**
+ * Tenants table - top-level organizational unit for multi-tenancy
+ * Each tenant represents a separate organization/company using the platform
+ */
+export const tenants = pgTable("tenants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  status: text("status").notNull().default("active"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("tenants_slug_idx").on(table.slug),
+  index("tenants_status_idx").on(table.status),
+]);
+
 // Users table
+// Note: tenantId is nullable for backward compatibility during migration
 export const users = pgTable("users", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   email: text("email").notNull().unique(),
   name: text("name").notNull(),
   firstName: text("first_name"),
@@ -102,6 +131,7 @@ export const users = pgTable("users", {
 }, (table) => [
   index("users_role_idx").on(table.role),
   index("users_active_idx").on(table.isActive),
+  index("users_tenant_idx").on(table.tenantId),
 ]);
 
 // Workspaces table
@@ -126,12 +156,16 @@ export const workspaceMembers = pgTable("workspace_members", {
 ]);
 
 // Teams table
+// Note: tenantId is nullable for backward compatibility during migration
 export const teams = pgTable("teams", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
   name: text("name").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
-});
+}, (table) => [
+  index("teams_tenant_idx").on(table.tenantId),
+]);
 
 // Team Members table
 export const teamMembers = pgTable("team_members", {
@@ -150,9 +184,11 @@ export const teamMembers = pgTable("team_members", {
 /**
  * Clients table - represents companies/organizations that are clients
  * This is the core of the CRM module
+ * Note: tenantId is nullable for backward compatibility during migration
  */
 export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
   companyName: text("company_name").notNull(),
   displayName: text("display_name"),
@@ -173,6 +209,7 @@ export const clients = pgTable("clients", {
 }, (table) => [
   index("clients_workspace_idx").on(table.workspaceId),
   index("clients_status_idx").on(table.status),
+  index("clients_tenant_idx").on(table.tenantId),
 ]);
 
 /**
@@ -224,8 +261,10 @@ export const clientInvites = pgTable("client_invites", {
  * Time Entries table - records of time spent on tasks
  * Supports both timer-based and manual entries
  */
+// Note: tenantId is nullable for backward compatibility during migration
 export const timeEntries = pgTable("time_entries", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
   userId: varchar("user_id").references(() => users.id).notNull(),
   clientId: varchar("client_id").references(() => clients.id),
@@ -245,14 +284,17 @@ export const timeEntries = pgTable("time_entries", {
   index("time_entries_project_idx").on(table.projectId),
   index("time_entries_task_idx").on(table.taskId),
   index("time_entries_date_idx").on(table.startTime),
+  index("time_entries_tenant_idx").on(table.tenantId),
 ]);
 
 /**
  * Active Timers table - tracks currently running timers
  * Each user can have only one active timer at a time
+ * Note: tenantId is nullable for backward compatibility during migration
  */
 export const activeTimers = pgTable("active_timers", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
   userId: varchar("user_id").references(() => users.id).notNull(),
   clientId: varchar("client_id").references(() => clients.id),
@@ -266,12 +308,14 @@ export const activeTimers = pgTable("active_timers", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("active_timers_user_unique").on(table.userId),
+  index("active_timers_tenant_idx").on(table.tenantId),
 ]);
 
 // Projects table
-// Note: clientId is nullable for backward compatibility with existing projects
+// Note: clientId and tenantId are nullable for backward compatibility
 export const projects = pgTable("projects", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
   teamId: varchar("team_id").references(() => teams.id),
   clientId: varchar("client_id").references(() => clients.id),
@@ -285,6 +329,7 @@ export const projects = pgTable("projects", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   index("projects_client_idx").on(table.clientId),
+  index("projects_tenant_idx").on(table.tenantId),
 ]);
 
 // Project Members table
@@ -309,8 +354,10 @@ export const sections = pgTable("sections", {
 
 // Tasks table
 // Note: projectId is nullable to support personal tasks (isPersonal=true)
+// Note: tenantId is nullable for backward compatibility during migration
 export const tasks = pgTable("tasks", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   projectId: varchar("project_id").references(() => projects.id),
   sectionId: varchar("section_id").references(() => sections.id),
   parentTaskId: varchar("parent_task_id"),
@@ -330,6 +377,7 @@ export const tasks = pgTable("tasks", {
   index("tasks_due_date").on(table.dueDate),
   index("tasks_parent_order").on(table.parentTaskId, table.orderIndex),
   index("tasks_personal_user").on(table.isPersonal, table.createdBy),
+  index("tasks_tenant_idx").on(table.tenantId),
 ]);
 
 // Task Assignees table (for multiple assignees)
@@ -446,8 +494,10 @@ export const taskAttachments = pgTable("task_attachments", {
  * Invitations table - for inviting admin/employee/client users
  * Tokens are hashed before storage for security
  */
+// Note: tenantId is optional to maintain backward compatibility
 export const invitations = pgTable("invitations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
   email: text("email").notNull(),
   role: text("role").notNull().default("employee"),
@@ -462,6 +512,7 @@ export const invitations = pgTable("invitations", {
   index("invitations_email_idx").on(table.email),
   index("invitations_workspace_idx").on(table.workspaceId),
   index("invitations_status_idx").on(table.status),
+  index("invitations_tenant_idx").on(table.tenantId),
 ]);
 
 /**
@@ -484,8 +535,10 @@ export const clientUserAccess = pgTable("client_user_access", {
  * App Settings table - stores encrypted global settings (e.g., Mailgun config)
  * Values are encrypted server-side using APP_ENCRYPTION_KEY
  */
+// Note: tenantId is nullable for backward compatibility during migration
 export const appSettings = pgTable("app_settings", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
   key: varchar("key", { length: 255 }).notNull(),
   valueEncrypted: text("value_encrypted").notNull(),
@@ -493,6 +546,7 @@ export const appSettings = pgTable("app_settings", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("app_settings_workspace_key_unique").on(table.workspaceId, table.key),
+  index("app_settings_tenant_idx").on(table.tenantId),
 ]);
 
 /**
@@ -509,8 +563,29 @@ export const commentMentions = pgTable("comment_mentions", {
   index("comment_mentions_user_idx").on(table.mentionedUserId, table.createdAt),
 ]);
 
-// Relations
-export const usersRelations = relations(users, ({ many }) => ({
+// =============================================================================
+// RELATIONS
+// =============================================================================
+
+// Tenant Relations
+export const tenantsRelations = relations(tenants, ({ many }) => ({
+  users: many(users),
+  teams: many(teams),
+  clients: many(clients),
+  projects: many(projects),
+  tasks: many(tasks),
+  timeEntries: many(timeEntries),
+  activeTimers: many(activeTimers),
+  invitations: many(invitations),
+  appSettings: many(appSettings),
+}));
+
+// User Relations
+export const usersRelations = relations(users, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [users.tenantId],
+    references: [tenants.id],
+  }),
   workspaceMembers: many(workspaceMembers),
   teamMembers: many(teamMembers),
   projectMembers: many(projectMembers),
@@ -840,6 +915,12 @@ export const commentMentionsRelations = relations(commentMentions, ({ one }) => 
 }));
 
 // Insert Schemas
+export const insertTenantSchema = createInsertSchema(tenants).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -995,6 +1076,9 @@ export const insertUserWithRoleSchema = insertUserSchema.extend({
 });
 
 // Types
+export type Tenant = typeof tenants.$inferSelect;
+export type InsertTenant = z.infer<typeof insertTenantSchema>;
+
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;
 

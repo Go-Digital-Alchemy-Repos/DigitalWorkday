@@ -18,6 +18,7 @@ import ClientDetailPage from "@/pages/client-detail";
 import TimeTrackingPage from "@/pages/time-tracking";
 import LoginPage from "@/pages/login";
 import SettingsPage from "@/pages/settings";
+import SuperAdminPage from "@/pages/super-admin";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -66,6 +67,9 @@ function Router() {
       </Route>
       <Route path="/settings/:tab">
         {() => <ProtectedRoute component={SettingsPage} />}
+      </Route>
+      <Route path="/super-admin">
+        {() => <ProtectedRoute component={SuperAdminPage} />}
       </Route>
       <Route component={NotFound} />
     </Switch>

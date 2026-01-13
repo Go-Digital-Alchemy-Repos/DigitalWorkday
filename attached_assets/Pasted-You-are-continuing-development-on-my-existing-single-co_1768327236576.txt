@@ -1,0 +1,146 @@
+You are continuing development on my existing single-codebase React + Express app.
+This is PHASE 2A (SAFE) of the multi-tenant rollout: introduce tenant scoping for CORE CRM + SETTINGS behind a safety switch.
+DO NOT rewrite the app. Implement ONLY the changes described below while preserving all existing functionality.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- DO NOT remove or rename any existing endpoints.
+- DO NOT change response shapes in a breaking way.
+- DO NOT drop or rename DB tables/columns.
+- DO NOT overhaul authentication/session/token strategy.
+- DO NOT touch time tracking, reports, attachments, sockets in this phase (except settings persistence).
+- Keep app fully working after deploy, even if tenant data has gaps.
+
+===============================================================================
+SAFETY SWITCH (MANDATORY)
+===============================================================================
+Add env var:
+TENANCY_ENFORCEMENT = "off" | "soft" | "strict"
+
+Behavior:
+- off: no tenant filtering; only ensure tenantId is written on new records when possible
+- soft (DEFAULT): apply tenant filters where safe, but if a record is missing tenantId or mismatch occurs:
+  - DO NOT block the request
+  - DO log a structured warning (no secrets) with route + ids + computed tenantId
+  - Return a response header:
+    X-Tenancy-Warn: "mismatch" or "missing-tenantId"
+- strict: enforce tenantId in all targeted queries:
+  - query by id AND tenantId
+  - mismatches return 404 (preferred) or 403
+  - missing tenantId rows are treated as NOT FOUND
+
+In production, default should be soft until validated.
+
+===============================================================================
+PHASE 2A SCOPE (ONLY THESE DOMAINS)
+===============================================================================
+1) Tenant context + effectiveTenantId resolution
+2) Clients
+3) Projects
+4) Tasks/Subtasks
+5) Teams + team_members
+6) Users listing for admin “Team” tab (tenant-limited)
+7) App settings (Mailgun) tenant scoping + persistence (must be correct in all modes)
+
+Out of scope:
+- time entries / active timers
+- reports
+- attachments metadata
+- realtime changes (optional only)
+
+===============================================================================
+1) TENANT CONTEXT (MANDATORY)
+===============================================================================
+Tighten /server/src/middleware/tenantContext.ts:
+
+- Compute req.tenant = { isSuperUser, userTenantId, actingTenantId?, effectiveTenantId }
+
+Rules:
+A) Non-super users:
+- effectiveTenantId = user.tenantId (must exist; if missing, soft-mode warning; strict-mode error/deny)
+
+B) Super user:
+- allow acting tenant via X-Tenant-Id if provided and active tenant
+- effectiveTenantId = actingTenantId when present
+- super routes can run without effectiveTenantId
+
+Create one helper used everywhere:
+- getEffectiveTenantId(req)
+
+===============================================================================
+2) TENANT FILTER HELPERS (MANDATORY)
+===============================================================================
+Create helpers:
+- tenancyMode(): "off"|"soft"|"strict"
+- tenancyFilter(where, tenantId): returns a WHERE clause addition when mode != off
+- tenancyEnforceOrWarn({ route, details... }): in soft mode logs warning + sets X-Tenancy-Warn header; in strict denies
+
+Pattern for by-id fetch:
+- strict: WHERE id=:id AND tenantId=:effectiveTenantId
+- soft: try scoped query first; if not found, fallback to unscoped query and warn if found
+- off: unscoped
+
+Pattern for list:
+- strict/soft: WHERE tenantId=:effectiveTenantId (soft may fallback only if needed, but warn)
+- off: unscoped
+
+IMPORTANT:
+- Mailgun settings MUST always be tenant-scoped; do not fallback unscoped for settings.
+
+===============================================================================
+3) APPLY TO ROUTES (NO ENDPOINT CHANGES)
+===============================================================================
+A) Clients CRUD
+B) Projects CRUD (validate clientId belongs to tenant in strict; warn in soft)
+C) Tasks/Subtasks CRUD (validate projectId belongs to tenant in strict; warn in soft)
+D) Teams CRUD + team membership (strict blocks cross-tenant membership; soft warns)
+E) Admin /users list: strict/soft filter by tenant; soft may fallback for legacy rows with warnings
+F) Mailgun settings: ALWAYS scoped by tenantId, no fallback. Fix persistence/reload issues here.
+
+===============================================================================
+4) VALIDATION (LIGHTWEIGHT)
+===============================================================================
+Add minimal validation for required IDs and prevent empty strings:
+- teamId, userId, clientId, projectId, taskId
+Return consistent 400 for invalid input.
+Do not refactor all validation.
+
+===============================================================================
+5) TESTS (MANDATORY)
+===============================================================================
+Add tests that pass in SOFT mode and STRICT mode.
+
+- In soft mode:
+  - cross-tenant access should still return data ONLY if fallback is used, but must include X-Tenancy-Warn header
+- In strict mode:
+  - cross-tenant access returns 404
+
+Required tests:
+- clients isolation (soft warns, strict denies)
+- projects isolation
+- tasks isolation
+- teams membership isolation
+- mailgun settings per tenant (must never fallback, must always isolate)
+
+Provide npm script:
+- test:tenancy:soft (sets env)
+- test:tenancy:strict (sets env)
+
+===============================================================================
+6) ACCEPTANCE CRITERIA
+===============================================================================
+1) App works after deploy with TENANCY_ENFORCEMENT=soft and no major behavior regressions.
+2) In soft mode, suspected cross-tenant/missing-tenantId situations produce X-Tenancy-Warn and server warnings.
+3) In strict mode, cross-tenant access is blocked (404/403).
+4) Mailgun settings persist per tenant and rehydrate reliably; no fallback.
+5) No endpoint paths changed; workflows still function.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Summary of changes
+- Where the safety switch is implemented
+- Which routes now use soft/strict enforcement
+- Test commands + results
+- Instructions: how to flip soft -> strict safely

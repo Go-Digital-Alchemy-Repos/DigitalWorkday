@@ -6,6 +6,7 @@ import { createServer } from "http";
 import { initializeSocketIO } from "./realtime/socket";
 import { setupAuth } from "./auth";
 import { bootstrapAdminUser } from "./bootstrap";
+import { tenantContextMiddleware } from "./middleware/tenantContext";
 
 const app = express();
 const httpServer = createServer(app);
@@ -34,6 +35,9 @@ app.use(express.urlencoded({ extended: false }));
 
 // Setup authentication middleware (session + passport)
 setupAuth(app);
+
+// Setup tenant context middleware (must be after auth)
+app.use(tenantContextMiddleware);
 
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {

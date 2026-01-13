@@ -179,7 +179,12 @@ export function setupAuth(app: Express): void {
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Not authenticated" });
     }
-    res.json({ user: req.user, workspaceId: req.session.workspaceId });
+    const user = req.user as any;
+    res.json({ 
+      user: req.user, 
+      workspaceId: req.session.workspaceId,
+      tenantId: user?.tenantId || null,
+    });
   });
 }
 

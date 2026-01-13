@@ -26,12 +26,13 @@ import {
   type Invitation, type InsertInvitation,
   type AppSetting,
   type ClientUserAccess, type InsertClientUserAccess,
+  type Tenant, type InsertTenant,
   users, workspaces, workspaceMembers, teams, teamMembers,
   projects, projectMembers, sections, tasks, taskAssignees,
   subtasks, tags, taskTags, comments, activityLog, taskAttachments,
   clients, clientContacts, clientInvites, clientUserAccess,
   timeEntries, activeTimers,
-  invitations, appSettings,
+  invitations, appSettings, tenants,
 } from "@shared/schema";
 import { db } from "./db";
 import { eq, and, desc, asc, inArray, gte, lte, sql } from "drizzle-orm";
@@ -174,6 +175,13 @@ export interface IStorage {
   createActiveTimer(timer: InsertActiveTimer): Promise<ActiveTimer>;
   updateActiveTimer(id: string, timer: Partial<InsertActiveTimer>): Promise<ActiveTimer | undefined>;
   deleteActiveTimer(id: string): Promise<void>;
+
+  // Tenant management (Super Admin)
+  getAllTenants(): Promise<Tenant[]>;
+  getTenant(id: string): Promise<Tenant | undefined>;
+  getTenantBySlug(slug: string): Promise<Tenant | undefined>;
+  createTenant(tenant: InsertTenant): Promise<Tenant>;
+  updateTenant(id: string, tenant: Partial<InsertTenant>): Promise<Tenant | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -459,7 +467,7 @@ export class DatabaseStorage implements IStorage {
     );
     const personalTaskIds = personalTasks.map(t => t.id);
     
-    const allTaskIds = [...new Set([...assignedTaskIds, ...personalTaskIds])];
+    const allTaskIds = [...new Set([...Array.from(assignedTaskIds), ...personalTaskIds])];
     if (allTaskIds.length === 0) return [];
 
     const result: TaskWithRelations[] = [];
@@ -483,10 +491,12 @@ export class DatabaseStorage implements IStorage {
           eq(tasks.sectionId, insertTask.sectionId),
           sql`${tasks.parentTaskId} IS NULL`
         ))
-      : await db.select().from(tasks).where(and(
-          eq(tasks.projectId, insertTask.projectId),
-          sql`${tasks.parentTaskId} IS NULL`
-        ));
+      : insertTask.projectId 
+        ? await db.select().from(tasks).where(and(
+            eq(tasks.projectId, insertTask.projectId),
+            sql`${tasks.parentTaskId} IS NULL`
+          ))
+        : [];
     const orderIndex = insertTask.orderIndex ?? existingTasks.length;
     const [task] = await db.insert(tasks).values({ ...insertTask, orderIndex }).returning();
     return task;
@@ -1158,6 +1168,34 @@ export class DatabaseStorage implements IStorage {
       }).returning();
       console.log(`[settings] Inserted new record id=${inserted.id}`);
     }
+  }
+
+  // Tenant management (Super Admin)
+  async getAllTenants(): Promise<Tenant[]> {
+    return db.select().from(tenants).orderBy(asc(tenants.name));
+  }
+
+  async getTenant(id: string): Promise<Tenant | undefined> {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.id, id));
+    return tenant || undefined;
+  }
+
+  async getTenantBySlug(slug: string): Promise<Tenant | undefined> {
+    const [tenant] = await db.select().from(tenants).where(eq(tenants.slug, slug));
+    return tenant || undefined;
+  }
+
+  async createTenant(tenant: InsertTenant): Promise<Tenant> {
+    const [created] = await db.insert(tenants).values(tenant).returning();
+    return created;
+  }
+
+  async updateTenant(id: string, tenant: Partial<InsertTenant>): Promise<Tenant | undefined> {
+    const [updated] = await db.update(tenants)
+      .set({ ...tenant, updatedAt: new Date() })
+      .where(eq(tenants.id, id))
+      .returning();
+    return updated || undefined;
   }
 }
 

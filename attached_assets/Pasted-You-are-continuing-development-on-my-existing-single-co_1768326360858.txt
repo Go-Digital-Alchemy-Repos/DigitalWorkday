@@ -1,0 +1,134 @@
+You are continuing development on my existing single-codebase React + Express app.
+This is a MAJOR structural change (multi-tenant). You MUST implement it in a SAFE, NON-DESTRUCTIVE, backwards-compatible way.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- DO NOT rewrite the app.
+- DO NOT remove or rename any existing endpoints.
+- DO NOT drop or rename any DB tables/columns.
+- Only ADD new tables/columns + backfill in a safe migration.
+- DO NOT change existing auth/session/token strategy in this phase.
+- DO NOT refactor unrelated features (time tracking, comments, attachments, reports) except to add tenantId plumbing.
+- Keep the app fully working for existing users after deployment.
+
+===============================================================================
+GOAL (PHASE 1: Introduce Multi-Tenancy Skeleton)
+===============================================================================
+1) Add multi-tenant data model:
+   - tenants table
+   - tenantId columns on existing business tables
+2) Create a DEFAULT tenant and assign all existing data to it (backfill).
+3) Add a new user type/role: SUPER_USER (Super Admin).
+4) Add a Super Admin area (minimal UI + APIs):
+   - list tenants
+   - create tenant
+   - edit tenant basic info
+   - invite a tenant admin (invitation record only; reuse existing invitation system)
+5) Add tenant context middleware (read-only in Phase 1):
+   - resolves tenantId for requests, but does NOT yet enforce scoping everywhere
+   - existing behavior remains unchanged for the default tenant
+
+===============================================================================
+1) DATABASE / SCHEMA (ADD-ONLY + SAFE BACKFILL)
+===============================================================================
+A) New table: tenants
+- id (uuid)
+- name
+- slug (unique)
+- status (active|inactive)
+- createdAt, updatedAt
+
+B) Add tenantId columns (nullable at first, then backfilled) to:
+- users (tenantId nullable)
+- clients (tenantId nullable)
+- projects (tenantId nullable)
+- tasks (tenantId nullable)
+- time_entries (tenantId nullable)
+- active_timers (tenantId nullable)
+- teams (tenantId nullable)
+- team_members (tenantId nullable or derived)
+- app_settings (tenantId nullable)
+
+Do NOT remove existing organizationId/workspaceId fields yet. Keep them.
+
+C) Migration/backfill
+- Create a DEFAULT tenant if none exists:
+  name="Default Tenant", slug="default"
+- Backfill existing rows:
+  set tenantId = defaultTenantId where tenantId IS NULL
+This must be done in a migration script safely.
+
+===============================================================================
+2) AUTH / ROLES (MINIMAL ADDITION)
+===============================================================================
+- Add role enum value: super_user
+- Super User can access Super Admin routes and see/manage all tenants
+- Admin/Employee/Client remain tenant-scoped (default tenant for now)
+
+Do NOT change login mechanics. Just ensure /auth/me includes role and tenantId.
+
+===============================================================================
+3) TENANT CONTEXT (READ-ONLY, NO ENFORCEMENT YET)
+===============================================================================
+Create middleware:
+- /server/src/middleware/tenantContext.ts
+
+Behavior:
+- For super_user:
+  - allow optional header X-Tenant-Id to “act as tenant” (for viewing tenant dashboards later)
+- For other roles:
+  - derive tenantId from user.tenantId
+
+Attach:
+req.tenant = { tenantId, isSuperUser }
+
+In Phase 1:
+- Do NOT rewrite all queries to require tenantId yet.
+- Only ensure new tenants and new tenant-scoped records are written with tenantId.
+
+===============================================================================
+4) SUPER ADMIN APIs (ADD-ONLY)
+===============================================================================
+Routes (super_user only):
+- GET  /api/v1/super/tenants
+- POST /api/v1/super/tenants { name, slug }
+- PATCH /api/v1/super/tenants/:tenantId { name, slug, status }
+- POST /api/v1/super/tenants/:tenantId/invite-admin { email, expiresInDays? }
+  - reuse existing invitations table/system
+  - invitation includes tenantId and role=admin
+
+IMPORTANT:
+- Do not break existing /api/v1/invitations. Add tenantId support as OPTIONAL field.
+
+===============================================================================
+5) SUPER ADMIN UI (MINIMAL SKELETON)
+===============================================================================
+- Add a Super Admin navigation section visible ONLY to role=super_user:
+  - “Tenants”
+- Create page: /super/tenants
+  - list tenants
+  - create tenant
+  - edit tenant
+  - invite tenant admin (generate invite link + copy)
+
+Keep UI minimal and consistent with existing patterns.
+
+===============================================================================
+6) ACCEPTANCE CRITERIA
+===============================================================================
+1) Existing app still works for current users without any changes to their workflow.
+2) DB has tenants table and default tenant exists.
+3) Existing data is backfilled to default tenantId (no null tenantId remains after migration).
+4) Super User can list/create/edit tenants.
+5) Super User can create an admin invitation for a tenant and copy invite link.
+6) No endpoints broke; no unrelated features changed.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Summary of changes
+- Migrations added (add-only + backfill)
+- New routes added
+- New UI pages added
+- Manual test steps for acceptance criteria

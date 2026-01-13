@@ -15,6 +15,7 @@ import {
   Briefcase,
   Clock,
   Cog,
+  Shield,
 } from "lucide-react";
 import dasanaLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -53,6 +54,7 @@ export function AppSidebar() {
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const { user } = useAuth();
   const isAdmin = user?.role === "admin";
+  const isSuperUser = user?.role === "super_user";
 
   const { data: workspace } = useQuery<Workspace>({
     queryKey: ["/api/workspaces/current"],
@@ -260,6 +262,29 @@ export function AppSidebar() {
                     <Link href="/settings" data-testid="link-global-settings">
                       <Cog className="h-4 w-4" />
                       <span>Settings</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        )}
+        
+        {isSuperUser && (
+          <SidebarGroup>
+            <SidebarGroupLabel className="text-xs font-medium uppercase tracking-wide text-muted-foreground px-2">
+              Super Admin
+            </SidebarGroupLabel>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location === "/super-admin"}
+                  >
+                    <Link href="/super-admin" data-testid="link-super-admin">
+                      <Shield className="h-4 w-4" />
+                      <span>Manage Tenants</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
