@@ -172,9 +172,23 @@ export interface IStorage {
   // Time Tracking - Active Timers
   getActiveTimer(id: string): Promise<ActiveTimer | undefined>;
   getActiveTimerByUser(userId: string): Promise<ActiveTimerWithRelations | undefined>;
+  getActiveTimerByUserAndTenant(userId: string, tenantId: string | null): Promise<ActiveTimerWithRelations | undefined>;
   createActiveTimer(timer: InsertActiveTimer): Promise<ActiveTimer>;
   updateActiveTimer(id: string, timer: Partial<InsertActiveTimer>): Promise<ActiveTimer | undefined>;
   deleteActiveTimer(id: string): Promise<void>;
+
+  // Tenant-scoped time tracking
+  getTimeEntryByIdAndTenant(id: string, tenantId: string | null): Promise<TimeEntry | undefined>;
+  getTimeEntriesByWorkspaceAndTenant(workspaceId: string, tenantId: string | null, filters?: {
+    userId?: string;
+    clientId?: string;
+    projectId?: string;
+    taskId?: string;
+    scope?: 'in_scope' | 'out_of_scope';
+    startDate?: Date;
+    endDate?: Date;
+  }): Promise<TimeEntryWithRelations[]>;
+  getActiveTimerByIdAndTenant(id: string, tenantId: string | null): Promise<ActiveTimer | undefined>;
 
   // Tenant management (Super Admin)
   getAllTenants(): Promise<Tenant[]>;
