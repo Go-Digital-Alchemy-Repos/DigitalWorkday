@@ -28,12 +28,13 @@ import {
   type ClientUserAccess, type InsertClientUserAccess,
   type Tenant, type InsertTenant,
   type TenantSettings, type InsertTenantSettings,
+  type PersonalTaskSection, type InsertPersonalTaskSection,
   users, workspaces, workspaceMembers, teams, teamMembers,
   projects, projectMembers, sections, tasks, taskAssignees,
   subtasks, tags, taskTags, comments, activityLog, taskAttachments,
   clients, clientContacts, clientInvites, clientUserAccess,
   timeEntries, activeTimers,
-  invitations, appSettings, tenants, tenantSettings,
+  invitations, appSettings, tenants, tenantSettings, personalTaskSections,
   UserRole,
 } from "@shared/schema";
 import crypto from "crypto";
@@ -255,6 +256,14 @@ export interface IStorage {
     createdByUserId: string;
     workspaceId: string;
   }): Promise<{ invitation: Invitation; token: string }>;
+
+  // Personal Task Sections (My Tasks organization)
+  getPersonalTaskSection(id: string): Promise<PersonalTaskSection | undefined>;
+  getPersonalTaskSections(userId: string): Promise<PersonalTaskSection[]>;
+  createPersonalTaskSection(section: InsertPersonalTaskSection): Promise<PersonalTaskSection>;
+  updatePersonalTaskSection(id: string, section: Partial<InsertPersonalTaskSection>): Promise<PersonalTaskSection | undefined>;
+  deletePersonalTaskSection(id: string): Promise<void>;
+  clearPersonalSectionFromTasks(sectionId: string): Promise<void>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -1734,6 +1743,45 @@ export class DatabaseStorage implements IStorage {
     }).returning();
 
     return { invitation, token };
+  }
+
+  // =============================================================================
+  // PERSONAL TASK SECTIONS (My Tasks organization)
+  // =============================================================================
+
+  async getPersonalTaskSection(id: string): Promise<PersonalTaskSection | undefined> {
+    const [section] = await db.select().from(personalTaskSections).where(eq(personalTaskSections.id, id));
+    return section || undefined;
+  }
+
+  async getPersonalTaskSections(userId: string): Promise<PersonalTaskSection[]> {
+    return await db.select()
+      .from(personalTaskSections)
+      .where(eq(personalTaskSections.userId, userId))
+      .orderBy(asc(personalTaskSections.sortOrder));
+  }
+
+  async createPersonalTaskSection(section: InsertPersonalTaskSection): Promise<PersonalTaskSection> {
+    const [created] = await db.insert(personalTaskSections).values(section).returning();
+    return created;
+  }
+
+  async updatePersonalTaskSection(id: string, section: Partial<InsertPersonalTaskSection>): Promise<PersonalTaskSection | undefined> {
+    const [updated] = await db.update(personalTaskSections)
+      .set({ ...section, updatedAt: new Date() })
+      .where(eq(personalTaskSections.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async deletePersonalTaskSection(id: string): Promise<void> {
+    await db.delete(personalTaskSections).where(eq(personalTaskSections.id, id));
+  }
+
+  async clearPersonalSectionFromTasks(sectionId: string): Promise<void> {
+    await db.update(tasks)
+      .set({ personalSectionId: null })
+      .where(eq(tasks.personalSectionId, sectionId));
   }
 }
 

@@ -851,13 +851,16 @@ export async function registerRoutes(
     try {
       const userId = getCurrentUserId(req);
       const workspaceId = getCurrentWorkspaceId(req);
+      const { personalSectionId, ...restBody } = req.body;
       
       const data = insertTaskSchema.parse({
-        ...req.body,
+        ...restBody,
         projectId: null,
         sectionId: null,
         isPersonal: true,
         createdBy: userId,
+        personalSectionId: personalSectionId || null,
+        personalSortOrder: 0,
       });
       
       const task = await storage.createTask(data);
@@ -881,6 +884,156 @@ export async function registerRoutes(
         return res.status(400).json({ error: error.errors });
       }
       console.error("Error creating personal task:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // =============================================================================
+  // PERSONAL TASK SECTIONS (My Tasks organization)
+  // =============================================================================
+
+  // Get user's personal task sections
+  app.get("/api/v1/my-tasks/sections", async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const sections = await storage.getPersonalTaskSections(userId);
+      res.json(sections);
+    } catch (error) {
+      console.error("Error fetching personal task sections:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Create a personal task section
+  app.post("/api/v1/my-tasks/sections", async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const tenantId = getEffectiveTenantId(req);
+      const { name } = req.body;
+      
+      if (!name || typeof name !== "string" || name.trim() === "") {
+        return res.status(400).json({ error: "Section name is required" });
+      }
+
+      // Get current max sortOrder
+      const existingSections = await storage.getPersonalTaskSections(userId);
+      const maxSortOrder = existingSections.reduce((max, s) => Math.max(max, s.sortOrder), -1);
+
+      const section = await storage.createPersonalTaskSection({
+        tenantId,
+        userId,
+        name: name.trim(),
+        sortOrder: maxSortOrder + 1,
+      });
+      
+      res.status(201).json(section);
+    } catch (error) {
+      console.error("Error creating personal task section:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Update a personal task section
+  app.patch("/api/v1/my-tasks/sections/:id", async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const sectionId = req.params.id;
+      const { name, sortOrder } = req.body;
+
+      // Verify ownership
+      const section = await storage.getPersonalTaskSection(sectionId);
+      if (!section) {
+        return res.status(404).json({ error: "Section not found" });
+      }
+      if (section.userId !== userId) {
+        return res.status(403).json({ error: "Cannot modify another user's section" });
+      }
+
+      const updates: { name?: string; sortOrder?: number } = {};
+      if (name !== undefined) updates.name = name.trim();
+      if (sortOrder !== undefined) updates.sortOrder = sortOrder;
+
+      const updatedSection = await storage.updatePersonalTaskSection(sectionId, updates);
+      res.json(updatedSection);
+    } catch (error) {
+      console.error("Error updating personal task section:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Delete a personal task section (tasks revert to unsectioned)
+  app.delete("/api/v1/my-tasks/sections/:id", async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const sectionId = req.params.id;
+
+      // Verify ownership
+      const section = await storage.getPersonalTaskSection(sectionId);
+      if (!section) {
+        return res.status(404).json({ error: "Section not found" });
+      }
+      if (section.userId !== userId) {
+        return res.status(403).json({ error: "Cannot delete another user's section" });
+      }
+
+      // Clear personalSectionId from all tasks in this section (do not delete tasks)
+      await storage.clearPersonalSectionFromTasks(sectionId);
+      
+      await storage.deletePersonalTaskSection(sectionId);
+      res.status(204).send();
+    } catch (error) {
+      console.error("Error deleting personal task section:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Move a personal task to a section
+  app.post("/api/v1/my-tasks/tasks/:taskId/move", async (req, res) => {
+    try {
+      const userId = getCurrentUserId(req);
+      const { taskId } = req.params;
+      const { personalSectionId, newIndex } = req.body;
+
+      // Get the task
+      const task = await storage.getTask(taskId);
+      if (!task) {
+        return res.status(404).json({ error: "Task not found" });
+      }
+
+      // Task must belong to current user (check assignees or createdBy)
+      const taskWithRelations = await storage.getTaskWithRelations(taskId);
+      const isAssigned = taskWithRelations?.assignees?.some(a => a.userId === userId);
+      const isCreator = task.createdBy === userId;
+      if (!isAssigned && !isCreator) {
+        return res.status(403).json({ error: "Cannot move a task you don't own" });
+      }
+
+      // Task must be a personal task (no project/client)
+      if (task.projectId || !task.isPersonal) {
+        return res.status(400).json({ error: "Can only organize personal tasks into sections" });
+      }
+
+      // If moving to a section, verify the section belongs to the user
+      if (personalSectionId) {
+        const section = await storage.getPersonalTaskSection(personalSectionId);
+        if (!section) {
+          return res.status(404).json({ error: "Section not found" });
+        }
+        if (section.userId !== userId) {
+          return res.status(403).json({ error: "Cannot move task to another user's section" });
+        }
+      }
+
+      // Update the task's personalSectionId and personalSortOrder
+      const updatedTask = await storage.updateTask(taskId, {
+        personalSectionId: personalSectionId || null,
+        personalSortOrder: newIndex ?? 0,
+      });
+
+      const updatedWithRelations = await storage.getTaskWithRelations(taskId);
+      res.json(updatedWithRelations);
+    } catch (error) {
+      console.error("Error moving personal task:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });

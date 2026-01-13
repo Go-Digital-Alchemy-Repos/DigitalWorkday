@@ -455,6 +455,9 @@ export const tasks = pgTable("tasks", {
   isPersonal: boolean("is_personal").notNull().default(false),
   createdBy: varchar("created_by").references(() => users.id),
   orderIndex: integer("order_index").notNull().default(0),
+  // Personal task organization fields (only used when isPersonal=true)
+  personalSectionId: varchar("personal_section_id"),
+  personalSortOrder: integer("personal_sort_order"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -463,17 +466,34 @@ export const tasks = pgTable("tasks", {
   index("tasks_parent_order").on(table.parentTaskId, table.orderIndex),
   index("tasks_personal_user").on(table.isPersonal, table.createdBy),
   index("tasks_tenant_idx").on(table.tenantId),
+  index("tasks_personal_section_idx").on(table.personalSectionId, table.personalSortOrder),
 ]);
 
 // Task Assignees table (for multiple assignees)
 export const taskAssignees = pgTable("task_assignees", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   taskId: varchar("task_id").references(() => tasks.id).notNull(),
   userId: varchar("user_id").references(() => users.id).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("task_assignees_unique").on(table.taskId, table.userId),
   index("task_assignees_user").on(table.userId),
+  index("task_assignees_tenant_idx").on(table.tenantId),
+]);
+
+// Personal Task Sections table - user-defined sections for organizing personal tasks in My Tasks view
+export const personalTaskSections = pgTable("personal_task_sections", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("personal_task_sections_user_idx").on(table.userId),
+  index("personal_task_sections_tenant_idx").on(table.tenantId),
 ]);
 
 // Subtasks table
@@ -835,6 +855,21 @@ export const taskAssigneesRelations = relations(taskAssignees, ({ one }) => ({
     fields: [taskAssignees.userId],
     references: [users.id],
   }),
+  tenant: one(tenants, {
+    fields: [taskAssignees.tenantId],
+    references: [tenants.id],
+  }),
+}));
+
+export const personalTaskSectionsRelations = relations(personalTaskSections, ({ one, many }) => ({
+  user: one(users, {
+    fields: [personalTaskSections.userId],
+    references: [users.id],
+  }),
+  tenant: one(tenants, {
+    fields: [personalTaskSections.tenantId],
+    references: [tenants.id],
+  }),
 }));
 
 export const subtasksRelations = relations(subtasks, ({ one }) => ({
@@ -1096,6 +1131,12 @@ export const insertTaskAssigneeSchema = createInsertSchema(taskAssignees).omit({
   createdAt: true,
 });
 
+export const insertPersonalTaskSectionSchema = createInsertSchema(personalTaskSections).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertSubtaskSchema = createInsertSchema(subtasks).omit({
   id: true,
   createdAt: true,
@@ -1238,6 +1279,9 @@ export type InsertTask = z.infer<typeof insertTaskSchema>;
 
 export type TaskAssignee = typeof taskAssignees.$inferSelect;
 export type InsertTaskAssignee = z.infer<typeof insertTaskAssigneeSchema>;
+
+export type PersonalTaskSection = typeof personalTaskSections.$inferSelect;
+export type InsertPersonalTaskSection = z.infer<typeof insertPersonalTaskSectionSchema>;
 
 export type Subtask = typeof subtasks.$inferSelect;
 export type InsertSubtask = z.infer<typeof insertSubtaskSchema>;
