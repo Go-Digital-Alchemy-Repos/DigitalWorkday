@@ -1212,6 +1212,11 @@ function TimeEntriesList() {
       </Card>
 
       <ManualEntryDialog open={manualEntryOpen} onOpenChange={setManualEntryOpen} />
+      <EditTimeEntrySheet 
+        entry={editEntry} 
+        open={!!editEntry} 
+        onOpenChange={(open) => !open && setEditEntry(null)} 
+      />
     </>
   );
 }
