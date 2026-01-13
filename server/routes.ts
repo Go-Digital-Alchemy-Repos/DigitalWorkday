@@ -99,6 +99,15 @@ export async function registerRoutes(
     }
     return requireAuth(req, res, next);
   });
+  
+  // Enforce tenant context for all API routes except /api/auth/* and /api/health
+  // SuperUsers can access without tenant context; regular users must have tenantId
+  app.use("/api", (req, res, next) => {
+    if (req.path.startsWith("/auth") || req.path === "/health") {
+      return next();
+    }
+    return requireTenantContext(req, res, next);
+  });
 
   const DEMO_USER_ID = "demo-user-id";
   const DEMO_WORKSPACE_ID = "demo-workspace-id";

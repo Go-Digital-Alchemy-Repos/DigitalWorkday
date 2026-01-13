@@ -1,0 +1,216 @@
+You are continuing development on my existing single-codebase React + Express app.
+NEXT PHASE: “TENANCY HEALTH + READINESS” (Operational Safety) before we enable strict multi-tenant enforcement.
+DO NOT rewrite the app. Implement ONLY the features described below in a SAFE, NON-DESTRUCTIVE, backwards-compatible way.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- DO NOT remove or rename any existing endpoints.
+- DO NOT change response shapes in a breaking way.
+- DO NOT drop or rename DB tables/columns. Add-only schema changes only.
+- DO NOT overhaul authentication/session/token strategy.
+- DO NOT refactor core business logic (clients/projects/tasks/time tracking/etc.).
+- This prompt is operational/observability only: it should not change how the app functions for end users.
+- Never log secrets (Mailgun keys, JWTs, passwords).
+
+===============================================================================
+GOAL
+===============================================================================
+Create a “Tenancy Health” area that helps us safely transition from
+TENANCY_ENFORCEMENT=soft to TENANCY_ENFORCEMENT=strict by showing:
+1) counts of records with missing tenantId across key tables
+2) presence and frequency of tenancy “soft-mode warnings” (X-Tenancy-Warn)
+3) tools/scripts to safely backfill tenantId for straggler rows (Super User only)
+4) clear readiness indicators: “Safe to enable strict” or “Not ready”
+
+===============================================================================
+SCOPE
+===============================================================================
+A) Server: health endpoints + safe instrumentation
+B) DB: optional audit/metrics table (add-only) OR safe log-based stats
+C) UI: Super User Tenancy Health dashboard (and optional Tenant Admin view limited to their tenant)
+D) Admin/Super tooling: a “Backfill tenantId” operation that is NON-DESTRUCTIVE
+
+Out of scope:
+- white label theming
+- agreements/e-sign
+- billing/plans
+
+===============================================================================
+1) SERVER: TENANCY WARNINGS INSTRUMENTATION (MANDATORY)
+===============================================================================
+Assume you already implemented TENANCY_ENFORCEMENT=off|soft|strict and in soft mode
+you attach response header:
+  X-Tenancy-Warn: "mismatch" or "missing-tenantId"
+and log a structured warning.
+
+Add a lightweight middleware that (in soft mode only):
+- increments an in-memory counter per route + warn type
+- and optionally persists warning events to DB (see section 2) if enabled
+This must not crash or slow requests.
+
+Add env flag:
+- TENANCY_WARN_PERSIST="true|false" (default false)
+If false: use in-memory stats only (resets on deploy) + logs.
+If true: persist to DB.
+
+IMPORTANT: Never persist secrets, only route + tenantId + warn type + timestamp.
+
+===============================================================================
+2) DB: OPTIONAL WARNINGS TABLE (ADD-ONLY, SAFE)
+===============================================================================
+If TENANCY_WARN_PERSIST=true, add table:
+
+tenancy_warnings
+- id (uuid)
+- occurredAt (timestamp)
+- route (text)
+- method (text)
+- warnType ("mismatch"|"missing-tenantId")
+- actorUserId (uuid nullable)
+- effectiveTenantId (uuid nullable)
+- resourceId (text nullable)         // if available, e.g. requested id
+- notes (text nullable)              // safe short message, no secrets
+
+Indexes:
+- occurredAt
+- warnType
+- effectiveTenantId
+
+If you choose not to add this table, ensure dashboard still works using in-memory counts + counts of null tenantId.
+
+===============================================================================
+3) SERVER: HEALTH ENDPOINTS (MANDATORY)
+===============================================================================
+Add Super User endpoints:
+
+A) GET /api/v1/super/tenancy/health
+Returns:
+{
+  enforcementMode: "off"|"soft"|"strict",
+  tables: [
+    { table: "clients", missingTenantIdCount: number },
+    { table: "projects", missingTenantIdCount: number },
+    { table: "tasks", missingTenantIdCount: number },
+    { table: "teams", missingTenantIdCount: number },
+    { table: "users", missingTenantIdCount: number },
+    { table: "time_entries", missingTenantIdCount: number },
+    { table: "active_timers", missingTenantIdCount: number },
+    { table: "app_settings", missingTenantIdCount: number }
+  ],
+  warningsLast24h: { total: number, byType: {...}, byRouteTop: [...] },
+  warningsLast7d:  { total: number, byType: {...}, byRouteTop: [...] },
+  readiness: {
+    canEnableStrict: boolean,
+    reasons: string[]
+  }
+}
+
+Rules for readiness:
+- canEnableStrict only if:
+  - missingTenantIdCount == 0 for critical tables (clients/projects/tasks/users/teams/app_settings)
+  - AND warningsLast24h.total is below a small threshold (e.g., 0–5)
+Include reasons if not ready.
+
+B) GET /api/v1/super/tenancy/warnings?from=...&to=...&tenantId=...
+- Only if TENANCY_WARN_PERSIST=true (otherwise return 501 with message)
+- Returns a paginated list of warnings
+
+C) GET /api/v1/tenant/tenancy/health  (optional tenant-admin)
+- Tenant-scoped view: shows only their tenant’s warning counts and missing tenantId counts for rows that belong to them (or "N/A" for global)
+- Keep minimal; do not leak other tenants.
+
+All endpoints must be protected:
+- /super/* => super_user only
+- /tenant/* => tenant admin only
+
+===============================================================================
+4) SUPER USER SAFE BACKFILL TOOLING (MANDATORY)
+===============================================================================
+Add a NON-DESTRUCTIVE backfill operation for straggler rows that still have tenantId NULL.
+
+Add endpoint:
+POST /api/v1/super/tenancy/backfill
+Body:
+{
+  strategy: "defaultTenant",
+  dryRun: boolean
+}
+
+Behavior:
+- Locate default tenant (slug="default" OR the tenant that owns most legacy data)
+- For each key table (same list as above), count rows where tenantId IS NULL
+- If dryRun=true:
+  - return counts only (no updates)
+- If dryRun=false:
+  - update rows where tenantId IS NULL to defaultTenantId
+  - do NOT modify rows where tenantId is already set
+Return:
+{
+  defaultTenantId,
+  updated: [{ table, rowsUpdated }],
+  remainingNulls: [{ table, missingTenantIdCount }]
+}
+
+Safety:
+- This endpoint must be super_user only.
+- Must require an additional header confirmation:
+  X-Confirm-Backfill: "YES"
+Otherwise return 400.
+- Must run in a DB transaction per table (or all tables if safe).
+- Must not time out; if large, process in batches (limit/offset) but keep logic simple.
+
+Also add CLI script:
+- /server/scripts/tenancy_backfill_default_tenant.ts
+that performs the same operation, for Railway one-off jobs.
+
+===============================================================================
+5) UI: TENANCY HEALTH DASHBOARD (MANDATORY)
+===============================================================================
+Add a Super User page:
+- /super/tenancy-health
+
+UI sections:
+1) Current enforcement mode (off/soft/strict)
+2) “Readiness” card:
+   - “Safe to enable strict” YES/NO
+   - reasons list
+3) Missing tenantId table:
+   - table name + missing count
+4) Warnings charts/cards:
+   - last 24h total, by type
+   - top routes producing warnings
+5) Backfill tool panel:
+   - Dry run button
+   - Confirm checkbox + “Run Backfill” button
+   - show results after completion
+
+Constraints:
+- Keep UI consistent with existing patterns (shadcn/ui if used).
+- Do not redesign overall nav. Add a single “Tenancy Health” item under Super Admin section only.
+
+Optional:
+- Add tenant-admin view /tenant/tenancy-health (minimal) if easy.
+
+===============================================================================
+6) ACCEPTANCE CRITERIA (MUST WORK)
+===============================================================================
+1) Super user can open /super/tenancy-health and see:
+   - missing tenantId counts for key tables
+   - warnings totals (in-memory or persisted)
+   - readiness computed
+2) If TENANCY_WARN_PERSIST=false, dashboard still shows warning totals since process start.
+3) If TENANCY_WARN_PERSIST=true, dashboard shows last 24h/7d from DB and can list warnings.
+4) Dry run backfill shows correct counts and changes nothing.
+5) Confirmed backfill updates only rows where tenantId IS NULL and leaves all else untouched.
+6) No end-user app workflows are impacted.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Summary of changes
+- Migrations added (if warnings table added)
+- Endpoints added
+- UI pages added
+- Manual test steps
+- Railway notes: recommended env vars for this phase
