@@ -25,7 +25,7 @@ export default function SettingsPage() {
   if (user?.role !== "admin") {
     toast({
       title: "Access Denied",
-      description: "You don't have permission to access Global Settings.",
+      description: "You don't have permission to access Settings.",
       variant: "destructive",
     });
     return <Redirect to="/" />;
@@ -43,7 +43,7 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3 mb-6">
           <SettingsIcon className="h-8 w-8 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold">Global Settings</h1>
+            <h1 className="text-2xl font-bold">Settings</h1>
             <p className="text-muted-foreground text-sm">
               Manage your workspace, team, and integrations
             </p>

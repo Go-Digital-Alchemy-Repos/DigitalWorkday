@@ -259,7 +259,7 @@ export function AppSidebar() {
                   >
                     <Link href="/settings" data-testid="link-global-settings">
                       <Cog className="h-4 w-4" />
-                      <span>Global Settings</span>
+                      <span>Settings</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>
