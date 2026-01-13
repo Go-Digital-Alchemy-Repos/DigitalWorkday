@@ -24,6 +24,15 @@ import {
   ActiveTimer,
 } from "@shared/schema";
 import { requireAuth } from "./auth";
+import {
+  tenancyMode,
+  getEffectiveTenantId,
+  tenancyEnforceOrWarn,
+  tenancyScopedFetch,
+  tenancyScopedList,
+  tenancyValidateOwnership,
+  validateRequiredId,
+} from "./middleware/tenancy";
 
 function getCurrentUserId(req: Request): string {
   return req.user?.id || "demo-user-id";
@@ -215,10 +224,19 @@ export async function registerRoutes(
     }
   });
 
+  // =============================================================================
+  // PROJECT ROUTES - Tenant Scoped
+  // =============================================================================
+
   app.get("/api/projects", async (req, res) => {
     try {
-      const projects = await storage.getProjectsByWorkspace(
-        getCurrentWorkspaceId(req),
+      const workspaceId = getCurrentWorkspaceId(req);
+      const tenantId = getEffectiveTenantId(req);
+
+      const projects = await tenancyScopedList(
+        req, res, "/api/projects", "project",
+        () => storage.getProjectsByWorkspaceAndTenant(workspaceId, tenantId),
+        () => storage.getProjectsByWorkspace(workspaceId)
       );
       res.json(projects);
     } catch (error) {
@@ -244,7 +262,18 @@ export async function registerRoutes(
 
   app.get("/api/projects/:id", async (req, res) => {
     try {
-      const project = await storage.getProject(req.params.id);
+      const idValidation = validateRequiredId(req.params.id, "projectId");
+      if (!idValidation.valid) {
+        return res.status(400).json({ error: idValidation.error });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
+      const project = await tenancyScopedFetch(
+        req, res, "/api/projects/:id", "project", req.params.id,
+        () => storage.getProjectByIdAndTenant(req.params.id, tenantId),
+        () => storage.getProject(req.params.id)
+      );
+
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
       }
@@ -257,21 +286,33 @@ export async function registerRoutes(
 
   app.post("/api/projects", async (req, res) => {
     try {
-      // Convert empty string teamId to null
+      const tenantId = getEffectiveTenantId(req);
       const body = { ...req.body };
       if (body.teamId === "") {
         body.teamId = null;
       }
+
+      // Validate clientId belongs to tenant if provided
+      if (body.clientId) {
+        const client = await tenancyScopedFetch(
+          req, res, "/api/projects", "client", body.clientId,
+          () => storage.getClientByIdAndTenant(body.clientId, tenantId),
+          () => storage.getClient(body.clientId)
+        );
+        if (!client) {
+          return res.status(400).json({ error: "Client not found" });
+        }
+      }
+
       const data = insertProjectSchema.parse({
         ...body,
         workspaceId: getCurrentWorkspaceId(req),
         createdBy: getCurrentUserId(req),
+        tenantId: tenantId,
       });
       const project = await storage.createProject(data);
 
-      // Emit real-time event after successful DB operation
       emitProjectCreated(project as any);
-
       res.status(201).json(project);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -284,14 +325,28 @@ export async function registerRoutes(
 
   app.patch("/api/projects/:id", async (req, res) => {
     try {
+      const idValidation = validateRequiredId(req.params.id, "projectId");
+      if (!idValidation.valid) {
+        return res.status(400).json({ error: idValidation.error });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
+      const existingProject = await tenancyScopedFetch(
+        req, res, "/api/projects/:id", "project", req.params.id,
+        () => storage.getProjectByIdAndTenant(req.params.id, tenantId),
+        () => storage.getProject(req.params.id)
+      );
+
+      if (!existingProject) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
       const project = await storage.updateProject(req.params.id, req.body);
       if (!project) {
         return res.status(404).json({ error: "Project not found" });
       }
 
-      // Emit real-time event after successful DB operation
       emitProjectUpdated(project.id, req.body);
-
       res.json(project);
     } catch (error) {
       console.error("Error updating project:", error);
@@ -301,26 +356,38 @@ export async function registerRoutes(
 
   app.patch("/api/projects/:projectId/client", async (req, res) => {
     try {
+      const idValidation = validateRequiredId(req.params.projectId, "projectId");
+      if (!idValidation.valid) {
+        return res.status(400).json({ error: idValidation.error });
+      }
+
       const { projectId } = req.params;
       const { clientId } = req.body;
+      const tenantId = getEffectiveTenantId(req);
 
-      // Get the current project to check if it exists and get previous clientId
-      const existingProject = await storage.getProject(projectId);
+      const existingProject = await tenancyScopedFetch(
+        req, res, "/api/projects/:projectId/client", "project", projectId,
+        () => storage.getProjectByIdAndTenant(projectId, tenantId),
+        () => storage.getProject(projectId)
+      );
+
       if (!existingProject) {
         return res.status(404).json({ error: "Project not found" });
       }
 
       const previousClientId = existingProject.clientId;
 
-      // If clientId is provided (not null), validate that client exists
       if (clientId !== null && clientId !== undefined) {
-        const client = await storage.getClient(clientId);
+        const client = await tenancyScopedFetch(
+          req, res, "/api/projects/:projectId/client", "client", clientId,
+          () => storage.getClientByIdAndTenant(clientId, tenantId),
+          () => storage.getClient(clientId)
+        );
         if (!client) {
           return res.status(400).json({ error: "Client not found" });
         }
       }
 
-      // Update the project's clientId
       const updatedProject = await storage.updateProject(projectId, {
         clientId: clientId === undefined ? null : clientId,
       });
@@ -329,9 +396,7 @@ export async function registerRoutes(
         return res.status(500).json({ error: "Failed to update project" });
       }
 
-      // Emit real-time event for client assignment change
       emitProjectClientAssigned(updatedProject as any, previousClientId);
-
       res.json(updatedProject);
     } catch (error) {
       console.error("Error assigning client to project:", error);
@@ -339,10 +404,19 @@ export async function registerRoutes(
     }
   });
 
+  // =============================================================================
+  // TEAM ROUTES - Tenant Scoped
+  // =============================================================================
+
   app.get("/api/teams", async (req, res) => {
     try {
-      const teams = await storage.getTeamsByWorkspace(
-        getCurrentWorkspaceId(req),
+      const workspaceId = getCurrentWorkspaceId(req);
+      const tenantId = getEffectiveTenantId(req);
+
+      const teams = await tenancyScopedList(
+        req, res, "/api/teams", "team",
+        () => storage.getTeamsByWorkspaceAndTenant(workspaceId, tenantId),
+        () => storage.getTeamsByWorkspace(workspaceId)
       );
       res.json(teams);
     } catch (error) {
@@ -353,7 +427,18 @@ export async function registerRoutes(
 
   app.get("/api/teams/:id", async (req, res) => {
     try {
-      const team = await storage.getTeam(req.params.id);
+      const idValidation = validateRequiredId(req.params.id, "teamId");
+      if (!idValidation.valid) {
+        return res.status(400).json({ error: idValidation.error });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
+      const team = await tenancyScopedFetch(
+        req, res, "/api/teams/:id", "team", req.params.id,
+        () => storage.getTeamByIdAndTenant(req.params.id, tenantId),
+        () => storage.getTeam(req.params.id)
+      );
+
       if (!team) {
         return res.status(404).json({ error: "Team not found" });
       }
@@ -366,9 +451,11 @@ export async function registerRoutes(
 
   app.post("/api/teams", async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
       const data = insertTeamSchema.parse({
         ...req.body,
         workspaceId: getCurrentWorkspaceId(req),
+        tenantId: tenantId,
       });
       const team = await storage.createTeam(data);
       res.status(201).json(team);
@@ -1415,13 +1502,19 @@ export async function registerRoutes(
   );
 
   // =============================================================================
-  // CLIENT (CRM) ROUTES
+  // CLIENT (CRM) ROUTES - Tenant Scoped
   // =============================================================================
 
   app.get("/api/clients", async (req, res) => {
     try {
-      const clients = await storage.getClientsByWorkspace(
-        getCurrentWorkspaceId(req),
+      const workspaceId = getCurrentWorkspaceId(req);
+      const tenantId = getEffectiveTenantId(req);
+      const mode = tenancyMode();
+
+      const clients = await tenancyScopedList(
+        req, res, "/api/clients", "client",
+        () => storage.getClientsByWorkspaceAndTenant(workspaceId, tenantId),
+        () => storage.getClientsByWorkspace(workspaceId)
       );
       res.json(clients);
     } catch (error) {
@@ -1432,11 +1525,26 @@ export async function registerRoutes(
 
   app.get("/api/clients/:id", async (req, res) => {
     try {
-      const client = await storage.getClientWithContacts(req.params.id);
+      const idValidation = validateRequiredId(req.params.id, "clientId");
+      if (!idValidation.valid) {
+        return res.status(400).json({ error: idValidation.error });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
+      const mode = tenancyMode();
+
+      const client = await tenancyScopedFetch(
+        req, res, "/api/clients/:id", "client", req.params.id,
+        () => storage.getClientByIdAndTenant(req.params.id, tenantId),
+        () => storage.getClient(req.params.id)
+      );
+
       if (!client) {
         return res.status(404).json({ error: "Client not found" });
       }
-      res.json(client);
+
+      const clientWithContacts = await storage.getClientWithContacts(client.id);
+      res.json(clientWithContacts);
     } catch (error) {
       console.error("Error fetching client:", error);
       res.status(500).json({ error: "Internal server error" });
@@ -1445,13 +1553,14 @@ export async function registerRoutes(
 
   app.post("/api/clients", async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
       const data = insertClientSchema.parse({
         ...req.body,
         workspaceId: getCurrentWorkspaceId(req),
+        tenantId: tenantId,
       });
       const client = await storage.createClient(data);
 
-      // Emit real-time event
       emitClientCreated(
         {
           id: client.id,
@@ -1476,14 +1585,28 @@ export async function registerRoutes(
 
   app.patch("/api/clients/:id", async (req, res) => {
     try {
+      const idValidation = validateRequiredId(req.params.id, "clientId");
+      if (!idValidation.valid) {
+        return res.status(400).json({ error: idValidation.error });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
+      const existingClient = await tenancyScopedFetch(
+        req, res, "/api/clients/:id", "client", req.params.id,
+        () => storage.getClientByIdAndTenant(req.params.id, tenantId),
+        () => storage.getClient(req.params.id)
+      );
+
+      if (!existingClient) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
       const client = await storage.updateClient(req.params.id, req.body);
       if (!client) {
         return res.status(404).json({ error: "Client not found" });
       }
 
-      // Emit real-time event
       emitClientUpdated(client.id, client.workspaceId, req.body);
-
       res.json(client);
     } catch (error) {
       console.error("Error updating client:", error);
@@ -1493,16 +1616,24 @@ export async function registerRoutes(
 
   app.delete("/api/clients/:id", async (req, res) => {
     try {
-      const client = await storage.getClient(req.params.id);
+      const idValidation = validateRequiredId(req.params.id, "clientId");
+      if (!idValidation.valid) {
+        return res.status(400).json({ error: idValidation.error });
+      }
+
+      const tenantId = getEffectiveTenantId(req);
+      const client = await tenancyScopedFetch(
+        req, res, "/api/clients/:id", "client", req.params.id,
+        () => storage.getClientByIdAndTenant(req.params.id, tenantId),
+        () => storage.getClient(req.params.id)
+      );
+
       if (!client) {
         return res.status(404).json({ error: "Client not found" });
       }
 
       await storage.deleteClient(req.params.id);
-
-      // Emit real-time event
       emitClientDeleted(req.params.id, client.workspaceId);
-
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting client:", error);
@@ -2362,8 +2493,13 @@ export async function registerRoutes(
 
   app.get("/api/users", requireAdmin, async (req, res) => {
     try {
-      const users = await storage.getUsersByWorkspace(
-        getCurrentWorkspaceId(req),
+      const tenantId = getEffectiveTenantId(req);
+      const mode = tenancyMode();
+
+      const users = await tenancyScopedList(
+        req, res, "/api/users", "user",
+        () => storage.getUsersByTenant(tenantId),
+        () => storage.getUsersByWorkspace(getCurrentWorkspaceId(req))
       );
       res.json(users);
     } catch (error) {
@@ -2535,19 +2671,32 @@ export async function registerRoutes(
   });
 
   // ============================================
-  // MAILGUN SETTINGS ENDPOINTS
+  // MAILGUN SETTINGS ENDPOINTS - Always Tenant Scoped (No Fallback)
   // ============================================
 
   app.get("/api/settings/mailgun", requireAdmin, async (req, res) => {
     const workspaceId = getCurrentWorkspaceId(req);
     const userId = getCurrentUserId(req);
-    console.log(`[mailgun] GET route hit - userId=${userId} workspaceId=${workspaceId}`);
+    const tenantId = getEffectiveTenantId(req);
+    
+    console.log(`[mailgun] GET route hit - userId=${userId} workspaceId=${workspaceId} tenantId=${tenantId}`);
+    
+    if (!tenantId) {
+      console.warn("[mailgun] GET - no tenantId available");
+      return res.json({ 
+        configured: false,
+        domain: "",
+        fromEmail: "",
+        replyTo: "",
+        apiKeyConfigured: false,
+      });
+    }
     
     try {
-      const settings = await storage.getAppSettings(workspaceId, "mailgun");
+      const settings = await storage.getAppSettingsByTenant(tenantId, workspaceId, "mailgun");
       
       if (!settings) {
-        console.log(`[mailgun] GET - no settings found for workspaceId=${workspaceId}`);
+        console.log(`[mailgun] GET - no settings found for tenantId=${tenantId}`);
         return res.json({ 
           configured: false,
           domain: "",
@@ -2584,14 +2733,21 @@ export async function registerRoutes(
   app.put("/api/settings/mailgun", requireAdmin, async (req, res) => {
     const workspaceId = getCurrentWorkspaceId(req);
     const userId = getCurrentUserId(req);
-    console.log(`[mailgun] PUT route hit - userId=${userId} workspaceId=${workspaceId}`);
+    const tenantId = getEffectiveTenantId(req);
+    
+    console.log(`[mailgun] PUT route hit - userId=${userId} workspaceId=${workspaceId} tenantId=${tenantId}`);
+    
+    if (!tenantId) {
+      console.warn("[mailgun] PUT - no tenantId available");
+      return res.status(400).json({ error: "Tenant context required for settings" });
+    }
     
     try {
       const { domain, apiKey, fromEmail, replyTo } = req.body;
       
       console.log(`[mailgun] PUT - domain=${!!domain} apiKey=${!!apiKey} fromEmail=${!!fromEmail} replyTo=${!!replyTo}`);
 
-      const existing = await storage.getAppSettings(workspaceId, "mailgun");
+      const existing = await storage.getAppSettingsByTenant(tenantId, workspaceId, "mailgun");
 
       const settingsData: any = {
         domain: domain || existing?.domain || "",
@@ -2607,7 +2763,7 @@ export async function registerRoutes(
         console.log(`[mailgun] PUT - preserving existing API key`);
       }
 
-      await storage.setAppSettings(workspaceId, "mailgun", settingsData, userId);
+      await storage.saveAppSettingsByTenant(tenantId, workspaceId, "mailgun", settingsData);
       
       const hasApiKey = !!settingsData.apiKey;
       console.log(`[mailgun] PUT - save complete, configured=${hasApiKey}`);
@@ -2636,10 +2792,17 @@ export async function registerRoutes(
 
   app.post("/api/settings/mailgun/test", requireAdmin, async (req, res) => {
     const workspaceId = getCurrentWorkspaceId(req);
-    console.log(`[mailgun] TEST route hit - workspaceId=${workspaceId}`);
+    const tenantId = getEffectiveTenantId(req);
+    
+    console.log(`[mailgun] TEST route hit - workspaceId=${workspaceId} tenantId=${tenantId}`);
+    
+    if (!tenantId) {
+      console.warn("[mailgun] TEST - no tenantId available");
+      return res.status(400).json({ error: "Tenant context required" });
+    }
     
     try {
-      const settings = await storage.getAppSettings(workspaceId, "mailgun");
+      const settings = await storage.getAppSettingsByTenant(tenantId, workspaceId, "mailgun");
       
       if (!settings?.apiKey) {
         console.log(`[mailgun] TEST - no API key configured`);
