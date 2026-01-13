@@ -2,12 +2,17 @@ import { Request, Response, NextFunction } from "express";
 
 export type TenancyMode = "off" | "soft" | "strict";
 
-export function tenancyMode(): TenancyMode {
-  const mode = process.env.TENANCY_ENFORCEMENT || "soft";
+export function getTenancyMode(): TenancyMode {
+  const mode = process.env.TENANCY_ENFORCEMENT || "off";
   if (mode === "off" || mode === "soft" || mode === "strict") {
     return mode;
   }
-  return "soft";
+  return "off";
+}
+
+// Alias for backward compatibility - calls getTenancyMode() to get fresh value
+export function tenancyMode(): TenancyMode {
+  return getTenancyMode();
 }
 
 export function getEffectiveTenantId(req: Request): string | null {
@@ -27,27 +32,30 @@ export function tenancyEnforceOrWarn(
   res: Response,
   details: TenancyWarnDetails
 ): boolean {
-  const mode = tenancyMode();
+  const mode = getTenancyMode();
 
   if (mode === "off") {
     return false;
   }
 
-  if (mode === "soft") {
-    console.warn("[tenancy-warn]", JSON.stringify({
-      mode: "soft",
-      route: details.route,
-      resourceType: details.resourceType,
-      resourceId: details.resourceId,
-      reason: details.reason,
-      computedTenantId: details.computedTenantId,
-      actualTenantId: details.actualTenantId,
-    }));
-    res.setHeader("X-Tenancy-Warn", details.reason);
-    return false;
+  // Always emit warnings in soft and strict modes
+  console.warn("[tenancy-warn]", JSON.stringify({
+    mode,
+    route: details.route,
+    resourceType: details.resourceType,
+    resourceId: details.resourceId,
+    reason: details.reason,
+    computedTenantId: details.computedTenantId,
+    actualTenantId: details.actualTenantId,
+  }));
+  res.setHeader("X-Tenancy-Warn", details.reason);
+
+  // Return true only for strict mode with cross-tenant mismatch (not legacy data)
+  if (mode === "strict" && details.reason === "mismatch") {
+    return true;
   }
 
-  return true;
+  return false;
 }
 
 export function tenancyFilter<T extends { tenantId?: string | null }>(
@@ -95,35 +103,60 @@ export async function tenancyScopedFetch<T extends { tenantId?: string | null }>
   scopedFetch: () => Promise<T | undefined>,
   unscopedFetch: () => Promise<T | undefined>
 ): Promise<T | null> {
-  const mode = tenancyMode();
+  const mode = getTenancyMode();
   const effectiveTenantId = getEffectiveTenantId(req);
 
+  // Off mode: no tenant enforcement
   if (mode === "off") {
     const result = await unscopedFetch();
     return result || null;
   }
 
+  // First try scoped fetch
   const scopedResult = await scopedFetch();
   if (scopedResult) {
     return scopedResult;
   }
 
-  if (mode === "soft") {
-    const unscopedResult = await unscopedFetch();
-    if (unscopedResult) {
-      const reason = !unscopedResult.tenantId ? "missing-tenantId" : "mismatch";
-      tenancyEnforceOrWarn(res, {
-        route,
-        resourceType,
-        resourceId,
-        computedTenantId: effectiveTenantId,
-        actualTenantId: unscopedResult.tenantId || null,
-        reason,
-      });
-      return unscopedResult;
-    }
+  // For soft and strict: always do unscoped fetch to check if resource exists
+  const unscopedResult = await unscopedFetch();
+  if (!unscopedResult) {
+    return null; // Resource doesn't exist at all
   }
 
+  // Resource exists but wasn't returned by scoped fetch
+  // Check if this is a legacy resource (null tenantId) - allow with warning in both modes
+  if (!unscopedResult.tenantId) {
+    tenancyEnforceOrWarn(res, {
+      route,
+      resourceType,
+      resourceId,
+      computedTenantId: effectiveTenantId,
+      actualTenantId: null,
+      reason: "missing-tenantId",
+    });
+    // Allow access to legacy data (null tenantId) even in strict mode
+    // This ensures backward compatibility during rollout
+    return unscopedResult;
+  }
+
+  // Resource has a tenantId that doesn't match - this is a true cross-tenant access
+  // Always emit warning/header for observability
+  tenancyEnforceOrWarn(res, {
+    route,
+    resourceType,
+    resourceId,
+    computedTenantId: effectiveTenantId,
+    actualTenantId: unscopedResult.tenantId,
+    reason: "mismatch",
+  });
+
+  if (mode === "soft") {
+    // Soft mode: allow access with warning
+    return unscopedResult;
+  }
+
+  // Strict mode: block cross-tenant access (but not legacy data)
   return null;
 }
 
@@ -135,35 +168,63 @@ export async function tenancyScopedList<T extends { tenantId?: string | null }>(
   scopedFetch: () => Promise<T[]>,
   unscopedFetch: () => Promise<T[]>
 ): Promise<T[]> {
-  const mode = tenancyMode();
+  const mode = getTenancyMode();
   const effectiveTenantId = getEffectiveTenantId(req);
 
+  // Off mode: no tenant enforcement
   if (mode === "off") {
     return unscopedFetch();
   }
 
+  // Get both scoped and unscoped results
   const scopedResults = await scopedFetch();
+  const unscopedResults = await unscopedFetch();
 
-  if (mode === "soft" && scopedResults.length === 0) {
-    const unscopedResults = await unscopedFetch();
-    if (unscopedResults.length > 0) {
-      const hasNullTenants = unscopedResults.some(r => !r.tenantId);
-      const hasMismatch = unscopedResults.some(r => r.tenantId && r.tenantId !== effectiveTenantId);
-      
-      if (hasNullTenants || hasMismatch) {
-        tenancyEnforceOrWarn(res, {
-          route,
-          resourceType,
-          computedTenantId: effectiveTenantId,
-          actualTenantId: "mixed",
-          reason: hasNullTenants ? "missing-tenantId" : "mismatch",
-        });
-      }
-      return unscopedResults;
-    }
+  // Find legacy items (null tenantId) that weren't included in scoped results
+  const legacyItems = unscopedResults.filter(r => !r.tenantId);
+  const scopedIds = new Set(scopedResults.map((r: any) => r.id));
+  const missingLegacyItems = legacyItems.filter((r: any) => !scopedIds.has(r.id));
+
+  // Find cross-tenant items (different tenantId) 
+  const crossTenantItems = unscopedResults.filter(r => 
+    r.tenantId && r.tenantId !== effectiveTenantId
+  );
+
+  // Combine scoped results with legacy items (always include legacy data)
+  const combinedResults = [...scopedResults, ...missingLegacyItems];
+
+  // Warn about legacy data if present
+  if (missingLegacyItems.length > 0) {
+    tenancyEnforceOrWarn(res, {
+      route,
+      resourceType,
+      computedTenantId: effectiveTenantId,
+      actualTenantId: null,
+      reason: "missing-tenantId",
+    });
   }
 
-  return scopedResults;
+  // Handle cross-tenant items based on mode
+  if (crossTenantItems.length > 0) {
+    // Always emit warning/header for observability
+    tenancyEnforceOrWarn(res, {
+      route,
+      resourceType,
+      computedTenantId: effectiveTenantId,
+      actualTenantId: "mixed",
+      reason: "mismatch",
+    });
+
+    if (mode === "soft") {
+      // Soft mode: include all results (including cross-tenant) with warning
+      return unscopedResults;
+    }
+    // Strict mode: explicitly exclude cross-tenant items, return only scoped + legacy
+    return combinedResults;
+  }
+
+  // No cross-tenant items - return combined results (scoped + legacy)
+  return combinedResults;
 }
 
 export function tenancyValidateOwnership(
@@ -178,41 +239,39 @@ export function tenancyValidateOwnership(
     return false;
   }
 
-  const mode = tenancyMode();
+  const mode = getTenancyMode();
   const effectiveTenantId = getEffectiveTenantId(req);
 
   if (mode === "off") {
     return true;
   }
 
+  // Legacy data (null tenantId) is allowed in all modes with warnings
   if (!resource.tenantId) {
-    if (mode === "soft") {
-      tenancyEnforceOrWarn(res, {
-        route,
-        resourceType,
-        resourceId,
-        computedTenantId: effectiveTenantId,
-        actualTenantId: null,
-        reason: "missing-tenantId",
-      });
-      return true;
-    }
-    return false;
+    tenancyEnforceOrWarn(res, {
+      route,
+      resourceType,
+      resourceId,
+      computedTenantId: effectiveTenantId,
+      actualTenantId: null,
+      reason: "missing-tenantId",
+    });
+    // Always allow legacy data
+    return true;
   }
 
+  // Check for tenant mismatch
   if (resource.tenantId !== effectiveTenantId) {
-    if (mode === "soft") {
-      tenancyEnforceOrWarn(res, {
-        route,
-        resourceType,
-        resourceId,
-        computedTenantId: effectiveTenantId,
-        actualTenantId: resource.tenantId,
-        reason: "mismatch",
-      });
-      return true;
-    }
-    return false;
+    const shouldBlock = tenancyEnforceOrWarn(res, {
+      route,
+      resourceType,
+      resourceId,
+      computedTenantId: effectiveTenantId,
+      actualTenantId: resource.tenantId,
+      reason: "mismatch",
+    });
+    // In strict mode, block cross-tenant access; in soft mode, allow with warning
+    return !shouldBlock;
   }
 
   return true;
