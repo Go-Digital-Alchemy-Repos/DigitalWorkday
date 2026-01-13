@@ -7,7 +7,7 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - Professional, clean Asana-like design
 - Board view as primary view with list view and calendar view options
 - Calendar view displays tasks with due dates using FullCalendar, with filtering and drag-to-reschedule
-- My Tasks view with date-based grouping (overdue, today, tomorrow, upcoming)
+- My Tasks view with two viewing modes: date-based grouping (overdue, today, tomorrow, upcoming) and personal sections organization
 
 ## System Architecture
 
@@ -25,7 +25,7 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **Per-Tenant Integrations**: Tenants can configure their own Mailgun (email) and S3 (storage) integrations with AES-256-GCM encrypted secrets. Integration status tracking (not_configured/configured/error) with test endpoints.
 - **Authentication**: Session-based authentication using Passport.js.
 - **Real-time Communication**: Socket.IO is used for live updates, with shared event contracts and client-side hooks for event subscription and cache invalidation.
-- **Database Schema**: Includes entities for users, workspaces, teams, clients, projects, sections, tasks (with subtasks, tags, comments), activity logs, time tracking, tenant_settings, and tenant_integrations.
+- **Database Schema**: Includes entities for users, workspaces, teams, clients, projects, sections, tasks (with subtasks, tags, comments, multi-assignee support via task_assignees), personal_task_sections (for My Tasks organization), activity logs, time tracking, tenant_settings, and tenant_integrations.
 - **Production Bootstrap**: A secure one-time process for creating a super admin user in production environments.
 - **Tenant Onboarding Flow**: A structured 4-step wizard for new tenants to configure their organization profile, branding, and email settings, transitioning from an inactive to an active state.
 - **Flexible Tenant Invitations**: Super admins can invite tenant admins via "link" (copyable URL) or "email" (Mailgun-based delivery). Email invitations use the tenant's configured Mailgun integration with graceful fallback to link generation if email fails.
