@@ -44,3 +44,4 @@ integrations = ["javascript_database:1.0.0"]
 [userenv]
 
 [userenv.development]
+APP_ENCRYPTION_KEY = "7daNCify1MZK5HwLNw+ajASnFnSStKbgOgVmkJIWRFY="

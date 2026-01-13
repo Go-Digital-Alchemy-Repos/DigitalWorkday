@@ -1,6 +1,5 @@
 import { useLocation, useRoute, Redirect } from "wouter";
 import { useAuth } from "@/lib/auth";
-import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Users, Building2, BarChart3, Puzzle, Settings as SettingsIcon, Palette, HardDrive } from "lucide-react";
@@ -23,15 +22,10 @@ const SETTINGS_TABS = [
 export default function SettingsPage() {
   const { user } = useAuth();
   const [location, setLocation] = useLocation();
-  const { toast } = useToast();
   const [, params] = useRoute("/settings/:tab");
 
-  if (user?.role !== "admin") {
-    toast({
-      title: "Access Denied",
-      description: "You don't have permission to access Settings.",
-      variant: "destructive",
-    });
+  // Only allow admin or super_user roles to access settings
+  if (user?.role !== "admin" && user?.role !== "super_user") {
     return <Redirect to="/" />;
   }
 
