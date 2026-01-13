@@ -136,13 +136,32 @@ router.get("/api/v1/super/tenancy/health", requireAuth, requireSuperUser, async 
     }
 
     const readiness = computeReadiness(tableCounts, warnings24h);
+    const totalMissing = tableCounts.reduce((sum, t) => sum + (t.missingTenantIdCount > 0 ? t.missingTenantIdCount : 0), 0);
+    
+    const [activeTenantResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(tenants)
+      .where(eq(tenants.status, "active"));
+    const activeTenantCount = activeTenantResult?.count || 0;
+
+    const allTimeStats = tenancyHealthTracker.isPersistenceEnabled()
+      ? await tenancyHealthTracker.getDbStats(new Date(0))
+      : tenancyHealthTracker.getInMemoryStats(new Date(0));
 
     res.json({
-      enforcementMode: getTenancyEnforcementMode(),
-      tables: tableCounts,
-      warningsLast24h: warnings24h,
-      warningsLast7d: warnings7d,
-      readiness,
+      currentMode: getTenancyEnforcementMode(),
+      missingTenantIds: tableCounts,
+      totalMissing,
+      warningStats: {
+        last24Hours: warnings24h.total,
+        last7Days: warnings7d.total,
+        total: allTimeStats.total,
+      },
+      readinessCheck: {
+        canEnableStrict: readiness.canEnableStrict,
+        blockers: readiness.reasons,
+      },
+      activeTenantCount,
       persistenceEnabled: tenancyHealthTracker.isPersistenceEnabled(),
     });
   } catch (error) {
@@ -190,13 +209,7 @@ router.post("/api/v1/super/tenancy/backfill", requireAuth, requireSuperUser, asy
     });
   }
 
-  const { strategy, dryRun } = req.body;
-  if (strategy !== "defaultTenant") {
-    return res.status(400).json({
-      error: "Invalid strategy",
-      message: "Only 'defaultTenant' strategy is supported",
-    });
-  }
+  const { dryRun } = req.body;
 
   try {
     const defaultTenant = await db
@@ -260,11 +273,16 @@ router.post("/api/v1/super/tenancy/backfill", requireAuth, requireSuperUser, asy
 
     const remainingNulls = dryRun ? beforeCounts : await getMissingTenantIdCounts();
 
+    const results = updated.map(u => ({
+      table: u.table,
+      wouldUpdate: dryRun ? u.rowsUpdated : 0,
+      updated: dryRun ? 0 : u.rowsUpdated,
+    }));
+
     res.json({
       defaultTenantId,
       dryRun,
-      wouldUpdate: dryRun ? updated : undefined,
-      updated: dryRun ? undefined : updated,
+      results,
       remainingNulls,
     });
   } catch (error) {
