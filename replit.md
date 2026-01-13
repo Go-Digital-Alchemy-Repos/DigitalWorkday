@@ -93,6 +93,44 @@ The database schema (`shared/schema.ts`) includes core entities like `users`, `w
 - Realtime event scoping for tenant isolation
 - Automated tenant isolation tests
 
+### Phase 3A: Tenant Onboarding Flow (Complete)
+- **Schema Additions**:
+  - `tenants.status`: Now supports `inactive`, `active`, `suspended`
+  - `tenants.onboardedAt`: Timestamp when tenant completed onboarding
+  - `tenants.ownerUserId`: References the initial tenant admin
+  - `tenant_settings` table: Stores displayName, logoUrl, primaryColor, supportEmail per tenant
+- **tenantStatusGuard Middleware** (`server/middleware/tenantStatusGuard.ts`):
+  - Blocks inactive/suspended tenants from accessing most routes
+  - Allows: /auth routes, /api/v1/tenant/*, /api/v1/settings/mailgun*, /health, /bootstrap
+  - Returns 403 with clear message for suspended tenants
+- **Super User APIs** (`server/routes/superAdmin.ts`):
+  - `GET /api/v1/super/tenants-detail`: Returns tenants with settings and user counts
+  - `POST /api/v1/super/tenants/:id/invite-admin`: Creates invitation for tenant admin
+  - `GET /api/v1/super/tenants/:id/onboarding-status`: Returns onboarding progress
+- **Tenant Onboarding APIs** (`server/routes/tenantOnboarding.ts`):
+  - `GET /api/v1/tenant/me`: Returns current tenant info with settings
+  - `GET/PATCH /api/v1/tenant/settings`: Manage tenant branding/display settings
+  - `GET /api/v1/tenant/onboarding/status`: Returns onboarding completion status
+  - `POST /api/v1/tenant/onboarding/complete`: Activates tenant, sets onboardedAt
+- **Route Exemptions**: /api/v1/tenant/* routes bypass tenant context enforcement
+- **Frontend Components**:
+  - `/tenant-onboarding`: 4-step wizard (Organization Profile, Branding, Email Settings, Complete)
+  - Renders without sidebar for focused onboarding experience
+  - Validates required fields, updates settings progressively
+  - Redirects to home on completion
+- **Super Admin UI Enhancements**:
+  - Status badges: Active (green), Pending Onboarding (yellow), Suspended (red)
+  - "Invite Admin" button for inactive tenants
+  - Invite dialog with email, first/last name fields
+  - Copy invite URL functionality
+  - Suspended status option in edit dialog
+- **Onboarding Flow**:
+  1. Super User creates tenant (status: INACTIVE)
+  2. Super User invites admin via invite-admin endpoint
+  3. Invited admin accepts invitation (7-day expiration)
+  4. Admin completes 4-step onboarding wizard
+  5. Tenant becomes ACTIVE with onboardedAt timestamp
+
 ### Frontend Structure
 The frontend (`client/src/`) is organized into `pages/` for route components (e.g., home, my-tasks, project, clients, time-tracking, settings) and `components/` for reusable UI elements. Specialized components exist for settings (team, workspaces, reports, integrations), task management (task-card, task-detail-drawer, section-column, subtask-list, comment-thread, create-task-dialog), and UI elements like badges and avatars. It also features a project calendar (`project-calendar.tsx`) and project settings.
 
