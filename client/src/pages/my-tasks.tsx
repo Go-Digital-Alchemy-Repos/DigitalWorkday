@@ -490,6 +490,7 @@ export default function MyTasks() {
         onUpdate={(taskId: string, data: Partial<TaskWithRelations>) => {
           updateTaskMutation.mutate({ taskId, data });
         }}
+        onRefresh={refetchSelectedTask}
         onAddChildTask={(parentTaskId: string, title: string) => {
           addSubtaskMutation.mutate({ taskId: parentTaskId, title });
         }}

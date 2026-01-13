@@ -38,6 +38,7 @@ interface TaskDetailDrawerProps {
   onDeleteChildTask?: (taskId: string) => void;
   onReorderChildTasks?: (parentTaskId: string, taskId: string, toIndex: number) => void;
   onAddComment?: (taskId: string, body: string) => void;
+  onRefresh?: () => void;
   availableTags?: TagType[];
   availableUsers?: User[];
   workspaceId?: string;
@@ -53,6 +54,7 @@ export function TaskDetailDrawer({
   onDeleteChildTask,
   onReorderChildTasks,
   onAddComment,
+  onRefresh,
   availableTags = [],
   availableUsers = [],
   workspaceId = "",
@@ -202,6 +204,7 @@ export function TaskDetailDrawer({
                     taskId={task.id}
                     assignees={assigneeUsers}
                     workspaceId={workspaceId}
+                    onAssigneeChange={onRefresh}
                   />
                 </div>
               </div>

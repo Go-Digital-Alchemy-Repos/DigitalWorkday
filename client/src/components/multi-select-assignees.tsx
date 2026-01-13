@@ -16,6 +16,7 @@ interface MultiSelectAssigneesProps {
   assignees: Partial<User>[];
   workspaceId: string;
   disabled?: boolean;
+  onAssigneeChange?: () => void;
 }
 
 function getInitials(name: string): string {
@@ -31,7 +32,8 @@ export function MultiSelectAssignees({
   taskId, 
   assignees, 
   workspaceId,
-  disabled = false 
+  disabled = false,
+  onAssigneeChange
 }: MultiSelectAssigneesProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
@@ -48,6 +50,7 @@ export function MultiSelectAssignees({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      onAssigneeChange?.();
     },
   });
 
@@ -58,6 +61,7 @@ export function MultiSelectAssignees({
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      onAssigneeChange?.();
     },
   });
 
