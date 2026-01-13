@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { 
   Clock, Play, Pause, Square, Plus, Download, Filter, 
-  ChevronDown, Timer, Calendar, BarChart3, Trash2, Edit2
+  ChevronDown, Timer, Calendar, BarChart3, Trash2, Edit2, MoreHorizontal, X
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -36,7 +36,25 @@ import {
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
+  DropdownMenuSeparator,
 } from "@/components/ui/dropdown-menu";
+import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+  SheetDescription,
+} from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { TaskSelectorWithCreate } from "@/components/task-selector-with-create";
@@ -619,8 +637,405 @@ function ManualEntryDialog({
   );
 }
 
+interface EditTimeEntrySheetProps {
+  entry: TimeEntry | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}
+
+function EditTimeEntrySheet({ entry, open, onOpenChange }: EditTimeEntrySheetProps) {
+  const { toast } = useToast();
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
+  
+  const [clientId, setClientId] = useState<string | null>(null);
+  const [projectId, setProjectId] = useState<string | null>(null);
+  const [taskId, setTaskId] = useState<string | null>(null);
+  const [description, setDescription] = useState("");
+  const [entryDate, setEntryDate] = useState("");
+  const [startTime, setStartTime] = useState("");
+  const [endTime, setEndTime] = useState("");
+  const [durationHours, setDurationHours] = useState(0);
+  const [durationMinutes, setDurationMinutes] = useState(0);
+  const [scope, setScope] = useState<"in_scope" | "out_of_scope">("in_scope");
+  const [useTimeRange, setUseTimeRange] = useState(false);
+
+  useEffect(() => {
+    if (entry && open) {
+      setClientId(entry.clientId);
+      setProjectId(entry.projectId);
+      setTaskId(entry.taskId);
+      setDescription(entry.description || "");
+      setScope(entry.scope);
+      
+      const start = parseISO(entry.startTime);
+      setEntryDate(format(start, "yyyy-MM-dd"));
+      setStartTime(format(start, "HH:mm"));
+      
+      if (entry.endTime) {
+        setEndTime(format(parseISO(entry.endTime), "HH:mm"));
+        setUseTimeRange(true);
+      } else {
+        setEndTime("");
+        setUseTimeRange(false);
+      }
+      
+      const hours = Math.floor(entry.durationSeconds / 3600);
+      const minutes = Math.floor((entry.durationSeconds % 3600) / 60);
+      setDurationHours(hours);
+      setDurationMinutes(minutes);
+    }
+  }, [entry, open]);
+
+  const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
+    queryKey: ["/api/clients"],
+    enabled: open,
+  });
+
+  const { data: clientProjects = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/clients", clientId, "projects"],
+    queryFn: () => fetch(`/api/clients/${clientId}/projects`).then((r) => r.json()),
+    enabled: !!clientId && open,
+  });
+
+  const { data: projectTasks = [] } = useQuery<Array<{ id: string; title: string; parentTaskId: string | null; status: string }>>({
+    queryKey: ["/api/projects", projectId, "tasks"],
+    queryFn: () => fetch(`/api/projects/${projectId}/tasks`).then((r) => r.json()),
+    enabled: !!projectId && open,
+  });
+
+  const openTasks = projectTasks.filter((t) => t.status !== "done" && !t.parentTaskId);
+  const selectedTask = projectTasks.find((t) => t.id === taskId);
+
+  const updateMutation = useMutation({
+    mutationFn: async (data: {
+      clientId: string | null;
+      projectId: string | null;
+      taskId: string | null;
+      description: string | null;
+      startTime: string;
+      endTime: string | null;
+      durationSeconds: number;
+      scope: "in_scope" | "out_of_scope";
+    }) => {
+      return apiRequest("PATCH", `/api/time-entries/${entry?.id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      toast({ title: "Time entry updated" });
+      onOpenChange(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to update time entry", variant: "destructive" });
+    },
+  });
+
+  const deleteMutation = useMutation({
+    mutationFn: () => apiRequest("DELETE", `/api/time-entries/${entry?.id}`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      toast({ title: "Time entry deleted" });
+      setDeleteDialogOpen(false);
+      onOpenChange(false);
+    },
+    onError: () => {
+      toast({ title: "Failed to delete time entry", variant: "destructive" });
+    },
+  });
+
+  const handleClientChange = (newClientId: string | null) => {
+    setClientId(newClientId);
+    setProjectId(null);
+    setTaskId(null);
+  };
+
+  const handleProjectChange = (newProjectId: string | null) => {
+    setProjectId(newProjectId);
+    setTaskId(null);
+  };
+
+  const handleSave = () => {
+    if (!clientId) {
+      toast({ title: "Client is required", variant: "destructive" });
+      return;
+    }
+    if (!projectId) {
+      toast({ title: "Project is required", variant: "destructive" });
+      return;
+    }
+    if (!entryDate) {
+      toast({ title: "Date is required", variant: "destructive" });
+      return;
+    }
+
+    let durationSeconds: number;
+    let calculatedStartTime: Date;
+    let calculatedEndTime: Date | null = null;
+
+    if (useTimeRange && startTime && endTime) {
+      calculatedStartTime = new Date(`${entryDate}T${startTime}:00`);
+      calculatedEndTime = new Date(`${entryDate}T${endTime}:00`);
+      
+      if (calculatedEndTime <= calculatedStartTime) {
+        calculatedEndTime.setDate(calculatedEndTime.getDate() + 1);
+      }
+      
+      durationSeconds = Math.floor((calculatedEndTime.getTime() - calculatedStartTime.getTime()) / 1000);
+    } else {
+      durationSeconds = (durationHours * 3600) + (durationMinutes * 60);
+      calculatedStartTime = new Date(`${entryDate}T${startTime || "09:00"}:00`);
+    }
+
+    if (durationSeconds <= 0) {
+      toast({ title: "Duration must be greater than zero", variant: "destructive" });
+      return;
+    }
+
+    updateMutation.mutate({
+      clientId,
+      projectId,
+      taskId,
+      description: description || null,
+      startTime: calculatedStartTime.toISOString(),
+      endTime: calculatedEndTime?.toISOString() || null,
+      durationSeconds,
+      scope,
+    });
+  };
+
+  if (!entry) return null;
+
+  return (
+    <>
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent className="sm:max-w-md overflow-y-auto">
+          <SheetHeader>
+            <SheetTitle>Edit Time Entry</SheetTitle>
+            <SheetDescription>
+              Modify the details of this time entry
+            </SheetDescription>
+          </SheetHeader>
+
+          <div className="mt-6 space-y-4">
+            <div className="space-y-2">
+              <Label>Description</Label>
+              <Textarea
+                value={description}
+                onChange={(e) => setDescription(e.target.value)}
+                placeholder="What did you work on?"
+                className="resize-none"
+                data-testid="input-edit-description"
+              />
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label>Client *</Label>
+              <Select
+                value={clientId || "none"}
+                onValueChange={(v) => handleClientChange(v === "none" ? null : v)}
+              >
+                <SelectTrigger data-testid="select-edit-client">
+                  <SelectValue placeholder="Select client" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No client</SelectItem>
+                  {clients.map((client) => (
+                    <SelectItem key={client.id} value={client.id}>
+                      {client.displayName || client.companyName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Project *</Label>
+              <Select
+                value={projectId || "none"}
+                onValueChange={(v) => handleProjectChange(v === "none" ? null : v)}
+                disabled={!clientId}
+              >
+                <SelectTrigger data-testid="select-edit-project">
+                  <SelectValue placeholder={clientId ? "Select project" : "Select client first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No project</SelectItem>
+                  {clientProjects.map((project) => (
+                    <SelectItem key={project.id} value={project.id}>
+                      {project.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Task</Label>
+              <Select
+                value={taskId || "none"}
+                onValueChange={(v) => setTaskId(v === "none" ? null : v)}
+                disabled={!projectId}
+              >
+                <SelectTrigger data-testid="select-edit-task">
+                  <SelectValue placeholder={projectId ? "Select task (optional)" : "Select project first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No task</SelectItem>
+                  {openTasks.map((task) => (
+                    <SelectItem key={task.id} value={task.id}>
+                      {task.title}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Separator />
+
+            <div className="space-y-2">
+              <Label>Date *</Label>
+              <Input
+                type="date"
+                value={entryDate}
+                onChange={(e) => setEntryDate(e.target.value)}
+                data-testid="input-edit-date"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <Label>Time</Label>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setUseTimeRange(!useTimeRange)}
+                  className="text-xs"
+                  data-testid="button-toggle-time-input"
+                >
+                  {useTimeRange ? "Use duration" : "Use time range"}
+                </Button>
+              </div>
+              
+              {useTimeRange ? (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Start</Label>
+                    <Input
+                      type="time"
+                      value={startTime}
+                      onChange={(e) => setStartTime(e.target.value)}
+                      data-testid="input-edit-start-time"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">End</Label>
+                    <Input
+                      type="time"
+                      value={endTime}
+                      onChange={(e) => setEndTime(e.target.value)}
+                      data-testid="input-edit-end-time"
+                    />
+                  </div>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Hours</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      value={durationHours}
+                      onChange={(e) => setDurationHours(parseInt(e.target.value) || 0)}
+                      data-testid="input-edit-duration-hours"
+                    />
+                  </div>
+                  <div className="space-y-1">
+                    <Label className="text-xs text-muted-foreground">Minutes</Label>
+                    <Input
+                      type="number"
+                      min={0}
+                      max={59}
+                      value={durationMinutes}
+                      onChange={(e) => setDurationMinutes(parseInt(e.target.value) || 0)}
+                      data-testid="input-edit-duration-minutes"
+                    />
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label>Scope</Label>
+              <Select value={scope} onValueChange={(v) => setScope(v as "in_scope" | "out_of_scope")}>
+                <SelectTrigger data-testid="select-edit-scope">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="in_scope">In Scope (Billable)</SelectItem>
+                  <SelectItem value="out_of_scope">Out of Scope</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <Separator />
+
+            <div className="flex flex-col gap-2">
+              <Button
+                onClick={handleSave}
+                disabled={updateMutation.isPending}
+                data-testid="button-save-edit"
+              >
+                {updateMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+              <Button
+                variant="outline"
+                onClick={() => onOpenChange(false)}
+                data-testid="button-cancel-edit"
+              >
+                Cancel
+              </Button>
+              <Button
+                variant="destructive"
+                onClick={() => setDeleteDialogOpen(true)}
+                data-testid="button-delete-entry"
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete Entry
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Time Entry</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this time entry? This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteMutation.mutate()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete"
+            >
+              {deleteMutation.isPending ? "Deleting..." : "Delete"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
+  );
+}
+
 function TimeEntriesList() {
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
+  const [editEntry, setEditEntry] = useState<TimeEntry | null>(null);
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("week");
 
   const getDateRange = () => {
@@ -762,13 +1177,22 @@ function TimeEntriesList() {
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
                                 <Button variant="ghost" size="icon" data-testid={`button-entry-menu-${entry.id}`}>
-                                  <ChevronDown className="h-4 w-4" />
+                                  <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>
                               <DropdownMenuContent align="end">
                                 <DropdownMenuItem
+                                  onClick={() => setEditEntry(entry)}
+                                  data-testid={`button-edit-entry-${entry.id}`}
+                                >
+                                  <Edit2 className="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem
                                   onClick={() => deleteMutation.mutate(entry.id)}
                                   className="text-destructive"
+                                  data-testid={`button-delete-entry-${entry.id}`}
                                 >
                                   <Trash2 className="h-4 w-4 mr-2" />
                                   Delete

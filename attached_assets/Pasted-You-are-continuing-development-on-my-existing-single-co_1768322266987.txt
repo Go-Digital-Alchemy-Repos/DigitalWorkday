@@ -1,0 +1,137 @@
+You are continuing development on my existing single-codebase React + Express app. DO NOT rewrite the app. Implement ONLY the Time Tracking “Edit Timed Entry” refinements described below. Preserve all existing functionality (Clients→Projects→Tasks/Subtasks, timers/manual entries, attachments, sockets, Admin settings, My Tasks, etc.).
+
+===============================================================================
+ABSOLUTE SAFETY RULES (READ FIRST)
+===============================================================================
+- NO major refactors, no folder restructures, no framework swaps.
+- Do NOT remove/rename any endpoints or tables.
+- Schema changes must be ADD-ONLY and backward compatible (nullable + safe defaults).
+- Only touch Time Tracking UI + the time entry update/delete endpoints.
+- Do NOT change timer logic (start/pause/resume/stop) except as needed to support editing existing entries after creation.
+- If realtime events are emitted, ALL emits MUST go through /server/src/realtime/events.ts.
+
+===============================================================================
+GOAL
+===============================================================================
+After a timed entry is created (from stopwatch), a Team Member must be able to:
+- click an “Edit” action on the time entry row/card
+- open an edit panel
+- modify ALL fields of the entry
+- save changes with validation
+- delete the entry from the same edit menu (or row actions)
+
+This must apply to BOTH:
+- timer-created entries (source="timer")
+- manual entries
+
+===============================================================================
+1) UI CHANGES (MANDATORY)
+===============================================================================
+
+A) Time Entries list/table row actions
+- For each time entry row/card, add an “Edit” action.
+- Existing “Delete” action should remain available.
+- Prefer a compact actions menu (⋯) with:
+  - Edit
+  - Delete
+
+B) Edit panel (slide-out, NOT modal)
+On Edit click, open a slide-out panel that allows editing ALL time entry fields:
+- Title
+- Client (dropdown)
+- Project (dropdown filtered by client)
+- Task (dropdown filtered by project; open tasks by default)
+- If selected task has subtasks: show Sub-task dropdown
+  - If subtask selected: save taskId = subtaskId
+- Entry Date
+- Time input:
+  - Start time + End time OR
+  - Duration (hh:mm or minutes)
+- Description/Notes
+- Scope (in_scope / out_of_scope) if present
+- Billable toggle / rate if present
+
+Important cascading behavior:
+- Changing Client resets Project/Task/Sub-task.
+- Changing Project refetches tasks and resets Task/Sub-task.
+- Changing Task shows/hides Sub-task dropdown.
+
+C) Edit panel actions
+- “Save changes”
+- “Delete entry” (with confirmation dialog)
+- “Cancel”
+
+UX requirements:
+- Show current values pre-filled.
+- Validate required fields (client, project, task, date, duration or start/end).
+- Show errors inline.
+- Show success toast after save.
+
+===============================================================================
+2) BACKEND SUPPORT (BACKWARD COMPATIBLE)
+===============================================================================
+
+A) Ensure PATCH /api/v1/time-entries/:id supports editing ALL fields
+If already implemented, verify it supports these updates:
+- title
+- clientId
+- projectId
+- taskId
+- entryDate
+- startAt / endAt
+- durationMinutes
+- description
+- scope
+- isBillable / hourlyRateCents (if used)
+
+Validation rules (MANDATORY):
+- projectId must belong to clientId
+- taskId must belong to projectId
+- durationMinutes must be recomputed server-side when startAt/endAt provided
+- durationMinutes must be > 0
+- If both durationMinutes and start/end are provided, choose a canonical rule (recommended):
+  - compute from start/end and ignore duration input OR reject and ask user to choose one
+
+Permissions:
+- Employee can edit/delete their own entries
+- Admin can edit/delete any entries
+- Client users should not have access unless already supported (do not add client access in this prompt)
+
+B) DELETE /api/v1/time-entries/:id
+- Ensure delete works from edit panel
+- Prefer soft delete if already used
+
+===============================================================================
+3) REALTIME (RECOMMENDED)
+===============================================================================
+If your app uses sockets:
+- Emit via /server/src/realtime/events.ts ONLY:
+  - timeEntry:updated
+  - timeEntry:deleted
+Payload must include:
+- entry id and updated fields so UI can patch without refetch
+
+Frontend should update lists/totals immediately in other tabs/windows.
+
+===============================================================================
+4) ACCEPTANCE CRITERIA (MUST WORK)
+===============================================================================
+1) Each time entry row has an Edit action (and Delete either inline or in menu)
+2) Edit panel opens with all fields prefilled
+3) User can edit ALL fields of a time entry and save successfully
+4) Cascading dropdowns work:
+   - project change reloads tasks
+   - task change shows/hides subtasks
+   - subtask selection saves correctly (taskId=subtaskId)
+5) Delete from edit panel works with confirmation
+6) Validation prevents invalid combinations (task not in project, etc.)
+7) Existing timers and time entry creation flows continue to work unchanged
+
+===============================================================================
+5) OUTPUT REQUIRED
+===============================================================================
+When done, output:
+- Summary of changes
+- Files modified
+- Any endpoint adjustments (no breaking changes)
+- Manual test steps for acceptance criteria 1–7
