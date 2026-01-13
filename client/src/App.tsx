@@ -9,6 +9,7 @@ import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { AppSidebar } from "@/components/app-sidebar";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { UserMenu } from "@/components/user-menu";
+import { TenantThemeProvider } from "@/lib/tenant-theme-loader";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import MyTasks from "@/pages/my-tasks";
@@ -132,7 +133,9 @@ function App() {
       <ThemeProvider>
         <TooltipProvider>
           <AuthProvider>
-            <AppLayout />
+            <TenantThemeProvider>
+              <AppLayout />
+            </TenantThemeProvider>
           </AuthProvider>
           <Toaster />
         </TooltipProvider>
