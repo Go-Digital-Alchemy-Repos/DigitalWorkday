@@ -1,0 +1,194 @@
+You are continuing development on my existing single-codebase multi-tenant React + Express app.
+This task is a NON-FEATURE “Quality + Documentation Pass.” Do NOT add new product features.
+Your goal is to audit for bugs, improve organization (without risky refactors), standardize patterns, and thoroughly document the codebase.
+
+===============================================================================
+ABSOLUTE SAFETY RULES (NON-NEGOTIABLE)
+===============================================================================
+- Do NOT change database schema.
+- Do NOT remove or rename any existing endpoints.
+- Do NOT change auth strategy, tenancy enforcement behavior, onboarding flows, or role/permission logic.
+- Do NOT introduce breaking changes to API responses.
+- Do NOT perform large refactors (no sweeping rewrites). Only small, safe improvements.
+- Any behavior change must be explicitly justified, minimal, and covered by tests.
+- Never log or expose secrets (Mailgun, S3 keys, JWTs, passwords).
+
+===============================================================================
+PRIMARY GOALS
+===============================================================================
+1) Bug sweep: find and fix obvious bugs, edge cases, and broken flows
+2) Endpoint audit: verify routes, middleware, validation, error handling consistency
+3) Organizational improvements: split giant files where safe, improve folder structure, naming consistency
+4) Documentation: annotate major modules/functions, and update README docs
+5) Tests: add minimal high-value tests that reduce regression risk
+
+===============================================================================
+SCOPE (WHAT TO REVIEW)
+===============================================================================
+A) Server (Express)
+- routes, controllers/handlers, middleware, auth, tenancy scoping, validation
+- DB access layer (Drizzle) and query patterns
+- error handling consistency and status codes
+- file uploads (S3), Mailgun integration, settings persistence
+- WebSockets/real-time if present
+
+B) Client (React)
+- pages + routing
+- API client wrapper, query caching (TanStack Query)
+- slide drawer components (Task detail drawer, tenant settings drawers)
+- drag & drop areas
+- role-based navigation rendering and guards
+
+===============================================================================
+STEP 1 — CREATE AN AUDIT CHECKLIST (REQUIRED OUTPUT)
+===============================================================================
+Before making changes, create /docs/AUDIT_CHECKLIST.md containing:
+- A list of all major feature areas in the app (multi-tenant, super admin, tenant admin, tasks/subtasks, time tracking, attachments, mailgun, user mgmt, reports, dashboards, etc.)
+- For each area:
+  - what endpoints are involved
+  - what pages/components are involved
+  - common failure modes to test
+
+===============================================================================
+STEP 2 — ENDPOINT & MIDDLEWARE AUDIT
+===============================================================================
+1) Inventory routes
+- Produce /docs/ENDPOINTS.md listing ALL API endpoints with:
+  - method + path
+  - auth required? (yes/no)
+  - role requirements
+  - tenant scoping behavior
+  - request body shape (high-level)
+  - response shape (high-level)
+
+2) Verify middleware order
+- Ensure auth middleware runs before tenant scoping middleware where required.
+- Ensure super routes are never blocked by tenant status guard.
+- Ensure tenant scoping is enforced consistently.
+
+3) Input validation
+- Add/standardize validation for common endpoints:
+  - required fields
+  - ids (uuid validation)
+  - pagination params
+  - file upload constraints
+- Do NOT add heavy dependencies; if zod or similar already used, standardize on it.
+
+4) Error handling
+- Standardize error response format across routes (without breaking existing callers).
+- Ensure 4xx vs 5xx errors are consistent.
+- Remove any “throw err” patterns that can cascade or crash.
+
+===============================================================================
+STEP 3 — ORGANIZATIONAL IMPROVEMENTS (SAFE ONLY)
+===============================================================================
+If there is a large routes.ts (or similarly huge files), split it safely into:
+- server/src/routes/auth.ts
+- server/src/routes/users.ts
+- server/src/routes/tenants.ts
+- server/src/routes/super.ts
+- server/src/routes/tasks.ts
+- server/src/routes/timeTracking.ts
+- server/src/routes/settings.ts
+- server/src/routes/uploads.ts
+…and re-export/mount them in a single index without changing paths.
+
+Rules:
+- No endpoint path changes.
+- No behavior changes.
+- Add unit tests to ensure routing still works.
+
+Also ensure:
+- server code is in /server directory
+- clear separation of routes / services / db / middleware / utils
+- add README in key folders describing their purpose.
+
+===============================================================================
+STEP 4 — CODE ANNOTATION / DOCSTRINGS (MANDATORY)
+===============================================================================
+Add clear, concise comments to major functions/modules:
+- What it does
+- Inputs/outputs
+- Security/tenant scoping expectations
+- Known edge cases
+
+Target areas:
+- auth + session token handling
+- tenant scoping middleware
+- super admin “act as tenant” logic if present
+- file upload handlers (S3)
+- mailgun config + test send
+- tasks/subtasks handlers and any DnD ordering logic
+- time tracking handlers and timer persistence logic
+- report aggregations
+
+Do NOT add noisy comments. Prefer short JSDoc-style comments at module/function boundaries.
+
+===============================================================================
+STEP 5 — README UPDATES (MANDATORY)
+===============================================================================
+Update or create these docs:
+1) /README.md (top-level)
+- What the app is
+- Tech stack
+- Local setup steps
+- Required env vars (by category)
+- How to run client/server
+- How to run migrations
+- How to run tests
+- Deployment notes (Railway)
+
+2) /server/README.md
+- server folder structure
+- middleware order
+- how tenant scoping works
+- where endpoints live
+
+3) /client/README.md
+- routing overview
+- query/data fetching patterns
+- UI component patterns (drawers, DnD)
+- where role-based nav is defined
+
+4) /docs/DEPLOYMENT_RAILWAY.md
+- env vars
+- common pitfalls (encryption key persistence, mailgun saving, etc.)
+
+5) /docs/SECURITY_TENANCY.md
+- tenant isolation rules
+- what “soft vs strict” means
+- how to debug tenancy warnings
+
+===============================================================================
+STEP 6 — HIGH VALUE TESTS (MINIMUM SET)
+===============================================================================
+Add a minimal test suite that reduces risk:
+- route smoke tests: endpoints return 401 when unauthenticated
+- tenant isolation test: tenant A cannot access tenant B
+- super route test: super can access /super/* and is not blocked by tenant guard
+- settings persistence test: mailgun settings save and reload
+- upload handler unit test: rejects invalid mime/type/size
+
+Use existing test framework if present (vitest/jest). If none exists, add the lightest setup possible.
+
+===============================================================================
+STEP 7 — FINAL OUTPUT (REQUIRED)
+===============================================================================
+At the end, provide:
+- Summary of bugs found & fixed
+- List of files reorganized
+- List of new docs created/updated
+- How to run tests
+- Any “known issues” left (with TODO list in /docs/TODO.md)
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) No schema changes, no endpoint path changes.
+2) App still builds and runs.
+3) Documentation is substantially improved:
+   - ENDPOINTS.md exists and is accurate
+   - README files updated
+4) Large file(s) split safely if applicable.
+5) Tests exist and pass.
+6) No secrets exposed in logs or docs.

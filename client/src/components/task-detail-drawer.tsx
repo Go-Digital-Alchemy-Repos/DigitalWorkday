@@ -317,11 +317,13 @@ export function TaskDetailDrawer({
 
           <SubtaskList
             subtasks={task.subtasks || []}
+            taskId={task.id}
             workspaceId={workspaceId}
             onAdd={(title) => addSubtaskMutation.mutate({ taskId: task.id, title })}
             onToggle={(subtaskId, completed) => toggleSubtaskMutation.mutate({ subtaskId, completed })}
             onDelete={(subtaskId) => deleteSubtaskMutation.mutate(subtaskId)}
             onUpdate={(subtaskId, title) => updateSubtaskTitleMutation.mutate({ subtaskId, title })}
+            onSubtaskUpdate={onRefresh}
           />
 
           <Separator />

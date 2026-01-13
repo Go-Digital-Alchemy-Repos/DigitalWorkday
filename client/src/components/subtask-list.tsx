@@ -15,11 +15,13 @@ import type { Subtask, User, WorkspaceMember } from "@shared/schema";
 
 interface SubtaskListProps {
   subtasks: Subtask[];
+  taskId: string;
   workspaceId?: string;
   onAdd?: (title: string) => void;
   onToggle?: (subtaskId: string, completed: boolean) => void;
   onDelete?: (subtaskId: string) => void;
   onUpdate?: (subtaskId: string, title: string) => void;
+  onSubtaskUpdate?: () => void;
 }
 
 function getInitials(name: string): string {
@@ -33,11 +35,13 @@ function getInitials(name: string): string {
 
 export function SubtaskList({
   subtasks,
+  taskId,
   workspaceId,
   onAdd,
   onToggle,
   onDelete,
   onUpdate,
+  onSubtaskUpdate,
 }: SubtaskListProps) {
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
@@ -54,8 +58,10 @@ export function SubtaskList({
       return apiRequest("PATCH", `/api/subtasks/${subtaskId}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      onSubtaskUpdate?.();
     },
   });
 
