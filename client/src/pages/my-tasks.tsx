@@ -94,14 +94,14 @@ function categorizeTasksForTwoColumn(tasks: TaskWithRelations[]): {
   });
 
   const leftColumn: TaskSection[] = [
-    { id: "personal", title: "Personal Tasks", icon: User, tasks: personalTasks, defaultOpen: true },
-    { id: "no-date", title: "No Due Date", icon: CalendarX, tasks: noDueDate, defaultOpen: true },
-  ];
-
-  const rightColumn: TaskSection[] = [
     { id: "overdue", title: "Overdue", icon: AlertCircle, iconColor: "text-red-500", tasks: overdue, defaultOpen: true },
     { id: "today", title: "Today", icon: Clock, iconColor: "text-blue-500", tasks: today, defaultOpen: true },
     { id: "upcoming", title: "Upcoming", icon: Calendar, iconColor: "text-green-500", tasks: upcoming, defaultOpen: true },
+  ];
+
+  const rightColumn: TaskSection[] = [
+    { id: "personal", title: "Personal Tasks", icon: User, tasks: personalTasks, defaultOpen: true },
+    { id: "no-date", title: "No Due Date", icon: CalendarX, tasks: noDueDate, defaultOpen: true },
   ];
 
   return { leftColumn, rightColumn };
