@@ -3,15 +3,19 @@ import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Building2, BarChart3, Puzzle, Settings as SettingsIcon } from "lucide-react";
+import { Users, Building2, BarChart3, Puzzle, Settings as SettingsIcon, Palette, HardDrive } from "lucide-react";
 import { TeamTab } from "@/components/settings/team-tab";
 import { WorkspacesTab } from "@/components/settings/workspaces-tab";
 import { ReportsTab } from "@/components/settings/reports-tab";
 import { IntegrationsTab } from "@/components/settings/integrations-tab";
+import { BrandingTab } from "@/components/settings/branding-tab";
+import { TenantIntegrationsTab } from "@/components/settings/tenant-integrations-tab";
 
 const SETTINGS_TABS = [
   { id: "team", label: "Team", icon: Users },
   { id: "workspaces", label: "Workspaces", icon: Building2 },
+  { id: "branding", label: "Branding", icon: Palette },
+  { id: "tenant-integrations", label: "Services", icon: HardDrive },
   { id: "reports", label: "Reports", icon: BarChart3 },
   { id: "integrations", label: "Integrations", icon: Puzzle },
 ];
@@ -51,7 +55,7 @@ export default function SettingsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-6 h-auto p-1">
             {SETTINGS_TABS.map((tab) => (
               <TabsTrigger
                 key={tab.id}
@@ -71,6 +75,14 @@ export default function SettingsPage() {
 
           <TabsContent value="workspaces" className="mt-6">
             <WorkspacesTab />
+          </TabsContent>
+
+          <TabsContent value="branding" className="mt-6">
+            <BrandingTab />
+          </TabsContent>
+
+          <TabsContent value="tenant-integrations" className="mt-6">
+            <TenantIntegrationsTab />
           </TabsContent>
 
           <TabsContent value="reports" className="mt-6">
