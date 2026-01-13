@@ -72,12 +72,10 @@ function categorizeTasksForTwoColumn(tasks: TaskWithRelations[]): {
     const isPersonal = !task.projectId;
     
     if (isPersonal) {
-      if (!task.dueDate) {
-        noDueDate.push(task);
-      } else {
-        personalTasks.push(task);
-      }
+      // All personal tasks go to Personal Tasks section
+      personalTasks.push(task);
     } else {
+      // Project tasks
       if (!task.dueDate) {
         noDueDate.push(task);
       } else {
@@ -297,8 +295,8 @@ export default function MyTasks() {
       const currentOrder = prev[sectionId] || [];
       const allTasks = filteredTasks.filter(t => {
         const isPersonal = !t.projectId;
-        if (sectionId === "personal") return isPersonal && t.dueDate;
-        if (sectionId === "no-date") return !t.dueDate;
+        if (sectionId === "personal") return isPersonal;
+        if (sectionId === "no-date") return !isPersonal && !t.dueDate;
         if (sectionId === "overdue") return !isPersonal && t.dueDate && isPast(new Date(t.dueDate)) && !isToday(new Date(t.dueDate));
         if (sectionId === "today") return !isPersonal && t.dueDate && isToday(new Date(t.dueDate));
         if (sectionId === "upcoming") return !isPersonal && t.dueDate && isFuture(new Date(t.dueDate));
