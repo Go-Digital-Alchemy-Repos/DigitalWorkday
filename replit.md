@@ -105,6 +105,14 @@ Read-only scans for:
 ### Confirmation Phrases
 All destructive operations require typed confirmation phrases matching header values.
 
+## Performance Optimizations
+- **N+1 Query Fixes**: Batch fetch methods in `server/storage.ts` for critical endpoints:
+  - `getOpenTaskCountsByProjectIds()`: GROUP BY optimization for project task counts
+  - `getTasksByProjectIds()`: Batch fetch tasks with assignees for analytics
+  - `getTenantsWithDetails()`: Batch fetch tenants with settings and user counts
+- **Query Debug Utility**: Enable `QUERY_DEBUG=true` to track query counts per endpoint
+- **Documentation**: See `docs/PERFORMANCE_NOTES.md` for optimization details and recommended indexes
+
 ## External Dependencies
 - **PostgreSQL**: Primary database.
 - **Socket.IO**: Real-time communication.
