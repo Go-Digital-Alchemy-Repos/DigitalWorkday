@@ -1,0 +1,150 @@
+You are continuing development on my React + Express multi-tenant app (single codebase).
+NEXT PROMPT: Super Admin Auth Diagnostics UI + Cookie Health Verification
+This prompt builds directly on the cookie-based auth + bootstrap work.
+Goal: Give Super Admins clear, visual confirmation that auth/cookies are configured correctly in production (Railway),
+without exposing secrets or altering auth behavior.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change auth behavior, cookie flags, or login logic in this prompt.
+- Do NOT change endpoint paths or response shapes (additive only).
+- Do NOT expose secrets (cookie secret, session secret, API keys).
+- UI is read-only diagnostics + guidance only.
+- Super Admin access only.
+
+===============================================================================
+GOAL
+===============================================================================
+Add a **Super Admin → System Status → Auth Diagnostics** panel that:
+1) Confirms cookie-based auth is working
+2) Surfaces common Railway misconfigurations
+3) Helps debug login/session issues without logs
+4) Makes it obvious when auth is healthy vs broken
+
+This is a visibility and confidence tool, not a settings editor.
+
+===============================================================================
+PART A — BACKEND: AUTH DIAGNOSTICS ENDPOINT (SAFE)
+===============================================================================
+If not already created, add (or reuse) this endpoint:
+
+GET /api/v1/super/status/auth-diagnostics
+
+Response (example shape, additive only):
+{
+  authType: "cookie" | "session" | "hybrid",
+  cookies: {
+    httpOnly: true,
+    secure: true,
+    sameSite: "lax" | "none" | "strict",
+    domainConfigured: boolean
+  },
+  cors: {
+    credentialsEnabled: boolean,
+    allowedOriginConfigured: boolean
+  },
+  proxy: {
+    trustProxyEnabled: boolean
+  },
+  session: {
+    enabled: boolean,
+    storeType: "memory" | "pg" | "redis" | "none"
+  },
+  runtime: {
+    nodeEnv: "production" | "development",
+    isRailway: boolean
+  },
+  lastAuthCheck: ISO_TIMESTAMP
+}
+
+Rules:
+- Values must be derived from runtime config, NOT env var echoing.
+- Never return secrets.
+- This endpoint must never mutate state.
+- super_user only.
+
+===============================================================================
+PART B — FRONTEND: AUTH DIAGNOSTICS PANEL
+===============================================================================
+UI location:
+- Super Admin
+- System Status
+- New tab or section: “Auth Diagnostics”
+
+UI layout:
+1) Overall Status Banner
+- Green: “Cookie-based auth appears healthy”
+- Yellow: “Potential misconfiguration detected”
+- Red: “Auth misconfiguration – login may fail”
+Status is computed from diagnostics flags (document logic in code).
+
+2) Diagnostics Cards (read-only)
+- Auth Mode
+- Cookie Configuration
+- CORS Configuration
+- Proxy / Railway Configuration
+- Session Store (if applicable)
+
+Each card:
+- Shows ✔️ / ⚠️ / ❌ per item
+- Includes short explanation text (developer-friendly)
+Example:
+“Secure cookies are enabled. In production behind Railway, trustProxy must also be enabled.”
+
+3) Common Fixes (static guidance)
+Show conditional tips such as:
+- “If login works locally but not on Railway, confirm trust proxy is enabled.”
+- “If cookies are not set, ensure frontend requests include credentials: 'include'.”
+- “If SameSite=None, Secure must be true.”
+
+These are **instructions only**, not actions.
+
+===============================================================================
+PART C — SAFETY + UX DETAILS
+===============================================================================
+- This panel must be accessible even if tenant agreements are blocking tenant routes
+  (super admin bypass still applies).
+- If diagnostics endpoint fails:
+  - Show a friendly error with requestId
+  - Do NOT crash System Status page
+- Add a “Copy diagnostics summary” button (JSON, secrets excluded).
+
+===============================================================================
+PART D — TESTS (LIGHTWEIGHT)
+===============================================================================
+1) auth_diagnostics_super_only.test.ts
+- non-super users cannot access endpoint
+
+2) auth_diagnostics_shape_stable.test.ts
+- endpoint always returns expected keys
+
+3) auth_diagnostics_ui_renders.test.tsx (if UI tests exist)
+- renders status banner and cards without crashing
+
+===============================================================================
+DOCUMENTATION STANDARD (REQUIRED)
+===============================================================================
+- Update /docs/AUTHENTICATION.md with:
+  - cookie-based auth overview
+  - how diagnostics interpret health
+  - common Railway pitfalls
+- Add header comments in diagnostics route explaining:
+  - why values are derived
+  - why secrets are never exposed
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) Super Admin can see a clear Auth Diagnostics panel.
+2) Panel accurately reflects cookie + CORS + proxy state.
+3) No secrets are exposed.
+4) No auth behavior changes introduced.
+5) Tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Files added/changed (server + client)
+- How “healthy vs warning vs error” is determined
+- Manual verification steps on Railway
