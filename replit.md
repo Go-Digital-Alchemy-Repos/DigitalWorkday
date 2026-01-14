@@ -58,7 +58,23 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **API Reference**: `docs/ENDPOINTS.md` - Comprehensive endpoint inventory with auth requirements and tenant scoping
 - **Known Issues**: `docs/KNOWN_ISSUES.md` - Technical debt tracking and improvement areas
 - **Error Handling**: `server/lib/errors.ts` - Centralized error utilities with validation helpers
-- **Test Coverage**: Smoke tests for auth/admin/super-admin patterns, tenancy enforcement tests, workload reports tests
+- **Test Coverage**: Smoke tests for auth/admin/super-admin patterns, tenancy enforcement tests, workload reports tests, backfill inference tests
+
+## Tenant Data Health Remediation
+- **Backfill Script**: `server/scripts/backfill_tenant_ids.ts` - One-time remediation script for missing tenantId values
+  - Requires `BACKFILL_TENANT_IDS_ALLOWED=true` to run
+  - Default dry-run mode (`BACKFILL_DRY_RUN=true`) for safe preview
+  - Backfill order: projects → tasks → teams → users
+  - Inference paths:
+    - Projects: workspace → client → createdBy
+    - Tasks: project → createdBy
+    - Teams: workspace
+    - Users: workspace memberships → invitations → created projects (exactly one tenant = inferable)
+  - Quarantine: Ambiguous rows assigned to special "Quarantine / Legacy Data" tenant
+  - Audit logging: All backfill actions logged to tenantAuditEvents
+- **Run in Railway**: `BACKFILL_TENANT_IDS_ALLOWED=true BACKFILL_DRY_RUN=false npx tsx server/scripts/backfill_tenant_ids.ts`
+- **Guardrails**: `requireTenantIdForCreate()` utility prevents future rows without tenantId
+- **Health Check**: `/api/v1/super/tenancy/health` shows missing/quarantined counts per table
 
 ## External Dependencies
 - **PostgreSQL**: Primary database.

@@ -106,3 +106,81 @@ export function requireTenantContext(req: Request, res: Response, next: NextFunc
 
   next();
 }
+
+/**
+ * Validation utility to ensure tenantId is always set when creating tenant-scoped entities.
+ * This provides a guardrail to prevent future rows from being created without tenantId.
+ * 
+ * Returns the effective tenant ID or throws an error with detailed context.
+ * 
+ * @param req - The Express request object
+ * @param entityType - The type of entity being created (for error logging)
+ * @returns The effective tenant ID
+ * @throws Error if no tenant context is available and user is not a super user
+ */
+export function requireTenantIdForCreate(req: Request, entityType: string): string {
+  const user = req.user as any;
+  const effectiveTenantId = req.tenant?.effectiveTenantId;
+  const isSuperUser = user?.role === UserRole.SUPER_USER;
+  
+  if (effectiveTenantId) {
+    return effectiveTenantId;
+  }
+  
+  // Log a warning/error for audit purposes
+  console.error(`[tenantGuardrail] Attempted to create ${entityType} without tenantId`, {
+    userId: user?.id,
+    userRole: user?.role,
+    userTenantId: user?.tenantId,
+    headerTenantId: req.headers["x-tenant-id"],
+    endpoint: req.originalUrl,
+    method: req.method,
+    timestamp: new Date().toISOString(),
+  });
+  
+  // Super users operating without tenant context should get a clear error
+  if (isSuperUser) {
+    throw new TenantContextError(
+      `Cannot create ${entityType} without tenant context. ` +
+      `Super users must use X-Tenant-Id header when creating tenant-scoped data.`
+    );
+  }
+  
+  // Regular users without tenant context - this is a data integrity issue
+  throw new TenantContextError(
+    `User ${user?.id} has no tenant configured. Cannot create ${entityType}.`
+  );
+}
+
+/**
+ * Custom error class for tenant context issues
+ */
+export class TenantContextError extends Error {
+  public readonly code = "TENANT_CONTEXT_REQUIRED";
+  
+  constructor(message: string) {
+    super(message);
+    this.name = "TenantContextError";
+  }
+}
+
+/**
+ * Middleware version of requireTenantIdForCreate for use in route handlers
+ * Requires tenant context for all users including super users unless they provide X-Tenant-Id header
+ */
+export function requireTenantIdForCreateMiddleware(entityType: string) {
+  return (req: Request, res: Response, next: NextFunction) => {
+    try {
+      requireTenantIdForCreate(req, entityType);
+      next();
+    } catch (error) {
+      if (error instanceof TenantContextError) {
+        return res.status(400).json({ 
+          error: error.message,
+          code: error.code,
+        });
+      }
+      throw error;
+    }
+  };
+}

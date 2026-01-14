@@ -3244,32 +3244,119 @@ router.get("/status/health", requireSuperUser, async (req, res) => {
   }
 });
 
-// GET /api/v1/super/tenancy/health - Get tenant health overview
+// Quarantine tenant constants
+const QUARANTINE_TENANT_SLUG = "quarantine";
+
+// GET /api/v1/super/tenancy/health - Get comprehensive tenant health overview
 router.get("/tenancy/health", requireSuperUser, async (req, res) => {
   try {
     const tenancyMode = process.env.TENANCY_ENFORCEMENT || "soft";
     
-    // Count active tenants
-    const activeResult = await db.select({ count: count() })
+    // Get quarantine tenant ID if it exists (by slug for stability)
+    const [quarantineTenant] = await db.select({ id: tenants.id })
+      .from(tenants)
+      .where(eq(tenants.slug, QUARANTINE_TENANT_SLUG))
+      .limit(1);
+    const quarantineTenantId = quarantineTenant?.id;
+    
+    // Count active tenants (excluding quarantine)
+    let activeQuery = db.select({ count: count() })
       .from(tenants)
       .where(eq(tenants.status, TenantStatus.ACTIVE));
+    if (quarantineTenantId) {
+      activeQuery = db.select({ count: count() })
+        .from(tenants)
+        .where(and(
+          eq(tenants.status, TenantStatus.ACTIVE),
+          ne(tenants.id, quarantineTenantId)
+        ));
+    }
+    const activeResult = await activeQuery;
     const activeTenantCount = activeResult[0]?.count || 0;
     
-    // Count records with missing tenant IDs
+    // Count records with missing tenant IDs per table
     const usersWithoutTenant = await db.select({ count: count() })
       .from(users)
       .where(and(
         isNull(users.tenantId),
         ne(users.role, UserRole.SUPER_USER)
       ));
-    const totalMissing = usersWithoutTenant[0]?.count || 0;
     
-    // For warning stats, we would need a separate logging table
-    // For now return placeholder values
+    const projectsWithoutTenant = await db.select({ count: count() })
+      .from(projects)
+      .where(isNull(projects.tenantId));
+    
+    const tasksWithoutTenant = await db.select({ count: count() })
+      .from(tasks)
+      .where(isNull(tasks.tenantId));
+    
+    const teamsWithoutTenant = await db.select({ count: count() })
+      .from(teams)
+      .where(isNull(teams.tenantId));
+    
+    const clientsWithoutTenant = await db.select({ count: count() })
+      .from(clients)
+      .where(isNull(clients.tenantId));
+    
+    // Count quarantined records (assigned to quarantine tenant)
+    let quarantinedCounts = {
+      users: 0,
+      projects: 0,
+      tasks: 0,
+      teams: 0,
+    };
+    
+    if (quarantineTenantId) {
+      const quarantinedUsers = await db.select({ count: count() })
+        .from(users)
+        .where(eq(users.tenantId, quarantineTenantId));
+      quarantinedCounts.users = quarantinedUsers[0]?.count || 0;
+      
+      const quarantinedProjects = await db.select({ count: count() })
+        .from(projects)
+        .where(eq(projects.tenantId, quarantineTenantId));
+      quarantinedCounts.projects = quarantinedProjects[0]?.count || 0;
+      
+      const quarantinedTasks = await db.select({ count: count() })
+        .from(tasks)
+        .where(eq(tasks.tenantId, quarantineTenantId));
+      quarantinedCounts.tasks = quarantinedTasks[0]?.count || 0;
+      
+      const quarantinedTeams = await db.select({ count: count() })
+        .from(teams)
+        .where(eq(teams.tenantId, quarantineTenantId));
+      quarantinedCounts.teams = quarantinedTeams[0]?.count || 0;
+    }
+    
+    const missingCounts = {
+      users: usersWithoutTenant[0]?.count || 0,
+      projects: projectsWithoutTenant[0]?.count || 0,
+      tasks: tasksWithoutTenant[0]?.count || 0,
+      teams: teamsWithoutTenant[0]?.count || 0,
+      clients: clientsWithoutTenant[0]?.count || 0,
+    };
+    
+    const totalMissing = 
+      missingCounts.users + 
+      missingCounts.projects + 
+      missingCounts.tasks + 
+      missingCounts.teams + 
+      missingCounts.clients;
+    
+    const totalQuarantined = 
+      quarantinedCounts.users + 
+      quarantinedCounts.projects + 
+      quarantinedCounts.tasks + 
+      quarantinedCounts.teams;
+    
     res.json({
       currentMode: tenancyMode,
       totalMissing,
+      totalQuarantined,
       activeTenantCount,
+      missingByTable: missingCounts,
+      quarantinedByTable: quarantinedCounts,
+      hasQuarantineTenant: !!quarantineTenantId,
       warningStats: {
         last24Hours: 0,
         last7Days: 0,
