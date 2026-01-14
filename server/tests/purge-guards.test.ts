@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import request from "supertest";
 import express from "express";
 import { db } from "../db";
-import { users, UserRole } from "../../shared/schema";
+import { users, tenants, workspaces, workspaceMembers, UserRole } from "../../shared/schema";
 import { sql, eq } from "drizzle-orm";
 import { hashPassword } from "../auth";
 import { safeDeleteAllUsers } from "./fixtures";
@@ -111,16 +111,39 @@ describe("Purge Endpoint Guards", () => {
   it("should reject purge from non-super-user", async () => {
     process.env.PURGE_APP_DATA_ALLOWED = "true";
     
-    // Create a regular user
+    // Create a tenant for the regular user
+    const [tenant] = await db.insert(tenants).values({
+      name: "Regular User Tenant",
+      slug: `regular-tenant-${Date.now()}`,
+      status: "active",
+    }).returning();
+    
+    // Create a regular user with tenant
     const passwordHash = await hashPassword("regularpassword");
     const [regularUser] = await db.insert(users).values({
       email: "regular@test.com",
       name: "Regular User",
       passwordHash,
       role: UserRole.EMPLOYEE,
+      tenantId: tenant.id,
       isActive: true,
     }).returning();
     createdUserIds.push(regularUser.id);
+    
+    // Create workspace for the regular user
+    const [workspace] = await db.insert(workspaces).values({
+      name: "Regular User Workspace",
+      tenantId: tenant.id,
+      isPrimary: true,
+      createdBy: regularUser.id,
+    }).returning();
+    
+    // Add user to workspace
+    await db.insert(workspaceMembers).values({
+      workspaceId: workspace.id,
+      userId: regularUser.id,
+      role: "member",
+    });
 
     // Login as regular user
     const loginRes = await request(app)

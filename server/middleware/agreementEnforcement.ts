@@ -7,6 +7,46 @@
  * - Accept the agreement
  * - Log in/out
  * - Complete onboarding
+ * 
+ * ============================================================================
+ * SECURITY INVARIANTS
+ * ============================================================================
+ * 
+ * 1. FAIL-CLOSED BEHAVIOR:
+ *    If any error occurs during enforcement checks (database errors, unexpected
+ *    exceptions), the middleware BLOCKS access by default. This prevents
+ *    accidental bypasses due to system failures.
+ * 
+ * 2. SUPER USER BYPASS:
+ *    Users with role=super_user are ALWAYS allowed through without checking
+ *    agreement status. Super users manage the platform and aren't bound by
+ *    tenant agreements. This includes super users impersonating tenants.
+ * 
+ * 3. NO ACTIVE AGREEMENT BEHAVIOR:
+ *    If a tenant has NO active agreement (only drafts, or no agreements at all),
+ *    users are ALLOWED through. Rationale: Tenant admins configure agreements;
+ *    until one is activated, enforcement cannot apply. This is explicit policy.
+ * 
+ * 4. EXEMPT ROUTES:
+ *    Certain routes must remain accessible regardless of agreement status:
+ *    - /api/auth/* - Login, logout, session management
+ *    - /api/v1/me/agreement/* - Check status, accept agreement
+ *    - /api/v1/tenant/onboarding/* - Tenant setup flow
+ *    - /api/v1/invitations/* - Accept invitations
+ *    - /api/v1/super/* - Super admin routes (additional layer)
+ *    - Static assets (JS, CSS, images, fonts, etc.)
+ * 
+ * 5. UNAUTHENTICATED USERS:
+ *    Users who are not authenticated are ALLOWED through. Authentication
+ *    enforcement happens via separate middleware (requireAuth).
+ * 
+ * 6. NON-SUPER USERS WITHOUT TENANT:
+ *    Non-super users with no tenantId are BLOCKED with 451.
+ *    This catches orphaned users (tenant deleted/misconfigured) and prevents
+ *    them from bypassing agreement enforcement. Only super_user role bypasses.
+ *    This is fail-closed behavior for account integrity.
+ * 
+ * ============================================================================
  */
 
 import { Request, Response, NextFunction } from "express";
@@ -14,29 +54,38 @@ import { db } from "../db";
 import { tenantAgreements, tenantAgreementAcceptances, AgreementStatus, UserRole } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 
+/**
+ * EXEMPT ROUTE PATTERNS
+ * Routes matching these patterns bypass agreement enforcement.
+ * Pattern order doesn't matter - any match exempts the route.
+ */
 const EXEMPT_ROUTE_PATTERNS = [
-  /^\/api\/auth\//,
-  /^\/api\/v1\/me\/agreement\//,
-  /^\/api\/v1\/tenant\/onboarding/,
-  /^\/api\/v1\/invitations\//,
-  /^\/api\/v1\/super\//,
-  /^\/$/,
-  /^\/assets\//,
-  /^\/src\//,
-  /^\/@/,
-  /^\/node_modules\//,
-  /\.js$/,
-  /\.css$/,
-  /\.ico$/,
-  /\.png$/,
-  /\.jpg$/,
-  /\.svg$/,
-  /\.woff/,
-  /\.ttf$/,
-  /\.html$/,
-  /\.map$/,
+  /^\/api\/auth\//,                // Auth routes (login, logout, register)
+  /^\/api\/v1\/me\/agreement\//,   // Agreement status and acceptance
+  /^\/api\/v1\/tenant\/onboarding/,// Tenant onboarding flow
+  /^\/api\/v1\/invitations\//,     // Invitation acceptance
+  /^\/api\/v1\/super\//,           // Super admin routes
+  /^\/$/,                          // Root path
+  /^\/assets\//,                   // Static assets
+  /^\/src\//,                      // Dev server source
+  /^\/@/,                          // Vite internals
+  /^\/node_modules\//,             // Node modules
+  /\.js$/,                         // JavaScript files
+  /\.css$/,                        // CSS files
+  /\.ico$/,                        // Icons
+  /\.png$/,                        // Images
+  /\.jpg$/,                        // Images
+  /\.svg$/,                        // SVG files
+  /\.woff/,                        // Fonts
+  /\.ttf$/,                        // Fonts
+  /\.html$/,                       // HTML files
+  /\.map$/,                        // Source maps
 ];
 
+/**
+ * EXEMPT EXACT ROUTES
+ * Routes that must match exactly to bypass enforcement.
+ */
 const EXEMPT_EXACT_ROUTES = [
   "/api/user",
   "/api/v1/me/avatar",
@@ -61,8 +110,13 @@ interface AgreementCache {
 }
 
 const agreementCache = new Map<string, AgreementCache>();
-const CACHE_TTL_MS = 60 * 1000;
+const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
 
+/**
+ * Fetch active agreement for a tenant with caching.
+ * Returns null if no active agreement exists.
+ * Throws on database errors (caller must handle).
+ */
 async function getActiveAgreement(tenantId: string): Promise<{ id: string; version: number } | null> {
   const now = Date.now();
   const cached = agreementCache.get(tenantId);
@@ -93,41 +147,120 @@ async function getActiveAgreement(tenantId: string): Promise<{ id: string; versi
   return agreement;
 }
 
+/**
+ * Invalidate cached agreement for a tenant.
+ * Call this when an agreement is activated, deactivated, or updated.
+ */
 export function invalidateAgreementCache(tenantId: string): void {
   agreementCache.delete(tenantId);
 }
 
+/**
+ * Clear all cached agreements.
+ * Useful for testing or cache reset scenarios.
+ */
+export function clearAgreementCache(): void {
+  agreementCache.clear();
+}
+
+/**
+ * Log structured warning for agreement enforcement issues.
+ * Includes context for debugging without exposing secrets.
+ */
+function logEnforcementWarning(
+  message: string,
+  context: {
+    requestId?: string;
+    tenantId?: string;
+    userId?: string;
+    path?: string;
+    error?: Error;
+  }
+): void {
+  console.warn(JSON.stringify({
+    level: "warn",
+    component: "agreementEnforcement",
+    message,
+    requestId: context.requestId || "unknown",
+    tenantId: context.tenantId || "unknown",
+    userId: context.userId || "unknown",
+    path: context.path || "unknown",
+    errorMessage: context.error?.message,
+    errorStack: context.error?.stack,
+    timestamp: new Date().toISOString(),
+  }));
+}
+
+/**
+ * Agreement Enforcement Guard Middleware
+ * 
+ * Enforces that authenticated tenant users have accepted the active agreement.
+ * See SECURITY INVARIANTS at the top of this file for behavior documentation.
+ * 
+ * Response on enforcement: HTTP 451 (Unavailable For Legal Reasons)
+ * {
+ *   error: "Agreement acceptance required",
+ *   code: "AGREEMENT_REQUIRED",
+ *   message: "You must accept the terms of service before continuing.",
+ *   redirectTo: "/accept-terms"
+ * }
+ */
 export async function agreementEnforcementGuard(
   req: Request,
   res: Response,
   next: NextFunction
 ): Promise<void> {
+  // INVARIANT 4: Exempt routes bypass enforcement
   if (isExemptRoute(req.path)) {
     return next();
   }
 
+  // INVARIANT 5: Unauthenticated users bypass enforcement
   if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
     return next();
   }
 
   const user = req.user as any;
+  const requestId = (req as any).requestId || req.headers["x-request-id"] || "unknown";
   
+  // INVARIANT 2: Super users always bypass
   if (user.role === UserRole.SUPER_USER) {
     return next();
   }
 
   const tenantId = user.tenantId;
+  
+  // INVARIANT 6: Non-super users without tenant are BLOCKED
+  // This catches orphaned users (tenant deleted/misconfigured) and prevents
+  // them from accessing tenant-scoped APIs without proper agreement gating.
+  // Only super_user role (checked above) can proceed without a tenantId.
   if (!tenantId) {
-    return next();
+    logEnforcementWarning("Non-super user without tenantId blocked (orphaned user)", {
+      requestId,
+      tenantId: "null",
+      userId: user.id,
+      path: req.path,
+    });
+    
+    res.status(451).json({
+      error: "Account configuration error",
+      code: "NO_TENANT_ASSIGNED",
+      message: "Your account is not properly configured. Please contact your administrator.",
+      redirectTo: "/accept-terms",
+    });
+    return;
   }
 
   try {
     const activeAgreement = await getActiveAgreement(tenantId);
 
+    // INVARIANT 3: No active agreement => allow access
+    // Rationale: Until tenant admin activates an agreement, enforcement cannot apply.
     if (!activeAgreement) {
       return next();
     }
 
+    // Check if user has accepted the current active agreement version
     const acceptances = await db.select({ id: tenantAgreementAcceptances.id })
       .from(tenantAgreementAcceptances)
       .where(and(
@@ -138,10 +271,12 @@ export async function agreementEnforcementGuard(
       ))
       .limit(1);
 
+    // User has accepted current version
     if (acceptances.length > 0) {
       return next();
     }
 
+    // User has NOT accepted - block with 451
     res.status(451).json({
       error: "Agreement acceptance required",
       code: "AGREEMENT_REQUIRED",
@@ -149,7 +284,22 @@ export async function agreementEnforcementGuard(
       redirectTo: "/accept-terms",
     });
   } catch (error) {
-    console.error("Agreement enforcement error:", error);
-    next();
+    // INVARIANT 1: FAIL-CLOSED on any error
+    // Log structured warning with context for debugging
+    logEnforcementWarning("Agreement enforcement check failed - blocking access (fail-closed)", {
+      requestId,
+      tenantId,
+      userId: user.id,
+      path: req.path,
+      error: error instanceof Error ? error : new Error(String(error)),
+    });
+
+    // Block access on error - fail-closed for security
+    res.status(451).json({
+      error: "Agreement verification failed",
+      code: "AGREEMENT_CHECK_ERROR",
+      message: "Unable to verify agreement status. Please try again or contact support.",
+      redirectTo: "/accept-terms",
+    });
   }
 }
