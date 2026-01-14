@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon } from "lucide-react";
+import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -62,6 +62,9 @@ export function TaskDetailDrawer({
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
   const [description, setDescription] = useState(task?.description || "");
+  const [estimateMinutes, setEstimateMinutes] = useState<string>(
+    task?.estimateMinutes ? String(task.estimateMinutes) : ""
+  );
   const [selectedChildTask, setSelectedChildTask] = useState<TaskWithRelations | null>(null);
   const [childDrawerOpen, setChildDrawerOpen] = useState(false);
 
@@ -106,6 +109,7 @@ export function TaskDetailDrawer({
     if (task) {
       setTitle(task.title);
       setDescription(task.description || "");
+      setEstimateMinutes(task.estimateMinutes ? String(task.estimateMinutes) : "");
     }
   }, [task?.id]);
 
@@ -295,6 +299,29 @@ export function TaskDetailDrawer({
                     <SelectItem value="done">Done</SelectItem>
                   </SelectContent>
                 </Select>
+              </div>
+
+              <div className="space-y-2">
+                <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" />
+                  Estimate (min)
+                </label>
+                <Input
+                  type="number"
+                  min="0"
+                  value={estimateMinutes}
+                  onChange={(e) => setEstimateMinutes(e.target.value)}
+                  onBlur={() => {
+                    const val = estimateMinutes.trim();
+                    const parsed = val ? parseInt(val, 10) : null;
+                    if (parsed !== task.estimateMinutes) {
+                      onUpdate?.(task.id, { estimateMinutes: parsed });
+                    }
+                  }}
+                  placeholder="0"
+                  className="w-[140px] h-8"
+                  data-testid="input-estimate-minutes"
+                />
               </div>
             </div>
           </div>
