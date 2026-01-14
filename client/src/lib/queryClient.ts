@@ -1,7 +1,26 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
 
+async function handleAgreementRequired(res: Response): Promise<boolean> {
+  if (res.status === 451) {
+    try {
+      const data = await res.clone().json();
+      if (data.code === "AGREEMENT_REQUIRED" && data.redirectTo) {
+        if (window.location.pathname !== data.redirectTo) {
+          window.location.href = data.redirectTo;
+        }
+        return true;
+      }
+    } catch {
+    }
+  }
+  return false;
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
+    if (await handleAgreementRequired(res)) {
+      throw new Error("Agreement acceptance required");
+    }
     const text = (await res.text()) || res.statusText;
     throw new Error(`${res.status}: ${text}`);
   }
@@ -95,6 +114,10 @@ export const getQueryFn: <T>(options: {
 
     if (unauthorizedBehavior === "returnNull" && res.status === 401) {
       return null;
+    }
+
+    if (await handleAgreementRequired(res)) {
+      throw new Error("Agreement acceptance required");
     }
 
     await throwIfResNotOk(res);

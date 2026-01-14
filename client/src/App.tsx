@@ -24,6 +24,7 @@ import SuperAdminPage from "@/pages/super-admin";
 import TenantOnboardingPage from "@/pages/tenant-onboarding";
 import AccountPage from "@/pages/account";
 import UserProfilePage from "@/pages/user-profile";
+import AcceptTermsPage from "@/pages/accept-terms";
 import { Loader2 } from "lucide-react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
@@ -91,6 +92,9 @@ function Router() {
       <Route path="/profile">
         {() => <ProtectedRoute component={UserProfilePage} />}
       </Route>
+      <Route path="/accept-terms">
+        {() => <ProtectedRoute component={AcceptTermsPage} />}
+      </Route>
       <Route component={NotFound} />
     </Switch>
   );
@@ -100,7 +104,7 @@ function AppLayout() {
   const { isAuthenticated, isLoading } = useAuth();
   const [location] = useLocation();
 
-  if (location === "/login" || location === "/tenant-onboarding") {
+  if (location === "/login" || location === "/tenant-onboarding" || location === "/accept-terms") {
     return <Router />;
   }
 
