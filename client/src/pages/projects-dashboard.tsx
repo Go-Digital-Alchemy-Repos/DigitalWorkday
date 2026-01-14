@@ -21,7 +21,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff } from "lucide-react";
+import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, DollarSign } from "lucide-react";
 import { ProjectDetailDrawer } from "@/components/project-detail-drawer";
 import type { Project, Client, Team } from "@shared/schema";
 import { format } from "date-fns";
@@ -50,6 +50,17 @@ interface ProjectAnalyticsSummary {
   }>;
 }
 
+interface ForecastSummary {
+  perProject: Array<{
+    projectId: string;
+    trackedMinutesTotal: number;
+    taskEstimateMinutes: number;
+    budgetMinutes: number | null;
+    overBudget: boolean | null;
+    remainingEstimateMinutes: number | null;
+  }>;
+}
+
 export default function ProjectsDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
@@ -75,9 +86,19 @@ export default function ProjectsDashboard() {
     staleTime: 30000,
   });
 
+  const { data: forecastSummary } = useQuery<ForecastSummary>({
+    queryKey: ["/api/v1/projects/forecast/summary"],
+    staleTime: 30000,
+  });
+
   const getProjectStats = (projectId: string) => {
     if (!analytics?.perProject) return null;
     return analytics.perProject.find(p => p.projectId === projectId);
+  };
+
+  const getProjectForecast = (projectId: string) => {
+    if (!forecastSummary?.perProject) return null;
+    return forecastSummary.perProject.find(p => p.projectId === projectId);
   };
 
   const filteredProjects = useMemo(() => {
@@ -276,6 +297,12 @@ export default function ProjectsDashboard() {
                     </div>
                   </TableHead>
                   <TableHead className="w-[100px]">Progress</TableHead>
+                  <TableHead className="text-center">
+                    <div className="flex items-center justify-center gap-1">
+                      <DollarSign className="h-3.5 w-3.5" />
+                      Budget
+                    </div>
+                  </TableHead>
                   <TableHead>
                     <div className="flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5" />
@@ -371,6 +398,40 @@ export default function ProjectsDashboard() {
                             </TooltipTrigger>
                             <TooltipContent>
                               {stats.completedTasks} of {stats.openTasks + stats.completedTasks} tasks completed
+                            </TooltipContent>
+                          </Tooltip>
+                        );
+                      })()}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {(() => {
+                        const forecast = getProjectForecast(project.id);
+                        if (!forecast) return <span className="text-muted-foreground">-</span>;
+                        if (forecast.budgetMinutes === null) {
+                          return <span className="text-muted-foreground">No budget</span>;
+                        }
+                        if (forecast.overBudget) {
+                          return (
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge variant="destructive" className="text-xs">Over</Badge>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {Math.floor(forecast.trackedMinutesTotal / 60)}h / {Math.floor(forecast.budgetMinutes / 60)}h tracked
+                              </TooltipContent>
+                            </Tooltip>
+                          );
+                        }
+                        const percent = Math.round((forecast.trackedMinutesTotal / forecast.budgetMinutes) * 100);
+                        return (
+                          <Tooltip>
+                            <TooltipTrigger>
+                              <span className={`text-xs ${percent >= 80 ? "text-orange-500 dark:text-orange-400 font-medium" : "text-muted-foreground"}`}>
+                                {percent}%
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              {Math.floor(forecast.trackedMinutesTotal / 60)}h / {Math.floor(forecast.budgetMinutes / 60)}h tracked
                             </TooltipContent>
                           </Tooltip>
                         );
