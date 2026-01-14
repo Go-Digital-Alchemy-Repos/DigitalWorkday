@@ -6,12 +6,32 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
-import { Switch } from "@/components/ui/switch";
+import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { Redirect } from "wouter";
-import { Loader2, Users, FileText, Palette, Settings, Shield, Save, Mail, HardDrive, Check, X } from "lucide-react";
+import { 
+  Loader2, Users, FileText, Palette, Settings, Shield, Save, Mail, HardDrive, Check, X, 
+  Plus, Link, Copy, MoreHorizontal, UserCheck, UserX, Clock, AlertCircle, KeyRound
+} from "lucide-react";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import { parseApiError } from "@/lib/parseApiError";
 
 interface SystemSettings {
   id: number;
@@ -34,6 +54,9 @@ interface PlatformAdmin {
   lastName: string | null;
   isActive: boolean;
   createdAt: string;
+  hasPendingInvite?: boolean;
+  inviteExpiresAt?: string | null;
+  passwordSet?: boolean;
 }
 
 interface TenantAgreementStatus {
@@ -51,11 +74,40 @@ interface IntegrationStatus {
   s3: boolean;
 }
 
+interface InviteResponse {
+  inviteUrl: string;
+  expiresAt: string;
+  tokenMasked: string;
+  emailSent?: boolean;
+  mailgunConfigured?: boolean;
+}
+
 export default function SuperAdminSettingsPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("admins");
   const [brandingForm, setBrandingForm] = useState<Partial<SystemSettings>>({});
+  
+  const [newAdminDrawerOpen, setNewAdminDrawerOpen] = useState(false);
+  const [editAdminDrawerOpen, setEditAdminDrawerOpen] = useState(false);
+  const [selectedAdmin, setSelectedAdmin] = useState<PlatformAdmin | null>(null);
+  const [inviteLinkDialogOpen, setInviteLinkDialogOpen] = useState(false);
+  const [generatedInviteUrl, setGeneratedInviteUrl] = useState<string | null>(null);
+  const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
+  const [adminToDeactivate, setAdminToDeactivate] = useState<PlatformAdmin | null>(null);
+  
+  const [newAdminForm, setNewAdminForm] = useState({
+    email: "",
+    firstName: "",
+    lastName: "",
+  });
+  
+  const [editAdminForm, setEditAdminForm] = useState({
+    email: "",
+    firstName: "",
+    lastName: "",
+    isActive: true,
+  });
 
   if (user?.role !== "super_user") {
     return <Redirect to="/" />;
@@ -65,7 +117,7 @@ export default function SuperAdminSettingsPage() {
     queryKey: ["/api/v1/super/system-settings"],
   });
 
-  const { data: platformAdmins = [], isLoading: adminsLoading } = useQuery<PlatformAdmin[]>({
+  const { data: platformAdmins = [], isLoading: adminsLoading, refetch: refetchAdmins } = useQuery<PlatformAdmin[]>({
     queryKey: ["/api/v1/super/admins"],
     enabled: activeTab === "admins",
   });
@@ -93,8 +145,143 @@ export default function SuperAdminSettingsPage() {
     },
   });
 
+  const createAdminMutation = useMutation({
+    mutationFn: async (data: { email: string; firstName: string; lastName: string }) => {
+      return apiRequest("POST", "/api/v1/super/admins", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/admins"] });
+      toast({ title: "Platform admin created successfully" });
+      setNewAdminDrawerOpen(false);
+      setNewAdminForm({ email: "", firstName: "", lastName: "" });
+    },
+    onError: (error: any) => {
+      const parsed = parseApiError(error);
+      toast({ title: "Failed to create admin", description: parsed.message, variant: "destructive" });
+    },
+  });
+
+  const updateAdminMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: Partial<PlatformAdmin> }) => {
+      return apiRequest("PATCH", `/api/v1/super/admins/${id}`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/admins"] });
+      toast({ title: "Platform admin updated successfully" });
+      setEditAdminDrawerOpen(false);
+      setSelectedAdmin(null);
+    },
+    onError: (error: any) => {
+      const parsed = parseApiError(error);
+      toast({ title: "Failed to update admin", description: parsed.message, variant: "destructive" });
+    },
+  });
+
+  const generateInviteMutation = useMutation({
+    mutationFn: async ({ id, sendEmail }: { id: string; sendEmail: boolean }) => {
+      const response = await apiRequest("POST", `/api/v1/super/admins/${id}/invite`, { 
+        expiresInDays: 7,
+        sendEmail 
+      });
+      return response.json() as Promise<InviteResponse>;
+    },
+    onSuccess: (data) => {
+      setGeneratedInviteUrl(data.inviteUrl);
+      setInviteLinkDialogOpen(true);
+      if (data.emailSent) {
+        toast({ title: "Invite email sent successfully" });
+      }
+      refetchAdmins();
+    },
+    onError: (error: any) => {
+      const parsed = parseApiError(error);
+      toast({ title: "Failed to generate invite", description: parsed.message, variant: "destructive" });
+    },
+  });
+
   const handleSaveBranding = () => {
     updateSettingsMutation.mutate(brandingForm);
+  };
+
+  const handleCreateAdmin = () => {
+    if (!newAdminForm.email || !newAdminForm.firstName || !newAdminForm.lastName) {
+      toast({ title: "Please fill in all fields", variant: "destructive" });
+      return;
+    }
+    createAdminMutation.mutate(newAdminForm);
+  };
+
+  const handleUpdateAdmin = () => {
+    if (!selectedAdmin) return;
+    updateAdminMutation.mutate({
+      id: selectedAdmin.id,
+      data: {
+        email: editAdminForm.email,
+        firstName: editAdminForm.firstName,
+        lastName: editAdminForm.lastName,
+        isActive: editAdminForm.isActive,
+      },
+    });
+  };
+
+  const handleEditAdmin = (admin: PlatformAdmin) => {
+    setSelectedAdmin(admin);
+    setEditAdminForm({
+      email: admin.email,
+      firstName: admin.firstName || "",
+      lastName: admin.lastName || "",
+      isActive: admin.isActive,
+    });
+    setEditAdminDrawerOpen(true);
+  };
+
+  const handleGenerateInvite = (admin: PlatformAdmin, sendEmail: boolean = false) => {
+    generateInviteMutation.mutate({ id: admin.id, sendEmail });
+  };
+
+  const handleCopyInviteLink = async () => {
+    if (!generatedInviteUrl) return;
+    try {
+      await navigator.clipboard.writeText(generatedInviteUrl);
+      toast({ title: "Invite link copied to clipboard" });
+    } catch {
+      toast({ title: "Failed to copy link", variant: "destructive" });
+    }
+  };
+
+  const handleDeactivateAdmin = (admin: PlatformAdmin) => {
+    setAdminToDeactivate(admin);
+    setDeactivateDialogOpen(true);
+  };
+
+  const confirmDeactivate = () => {
+    if (!adminToDeactivate) return;
+    updateAdminMutation.mutate({
+      id: adminToDeactivate.id,
+      data: { isActive: false },
+    });
+    setDeactivateDialogOpen(false);
+    setAdminToDeactivate(null);
+  };
+
+  const handleReactivateAdmin = (admin: PlatformAdmin) => {
+    updateAdminMutation.mutate({
+      id: admin.id,
+      data: { isActive: true },
+    });
+  };
+
+  const getAdminStatusBadge = (admin: PlatformAdmin) => {
+    if (!admin.isActive) {
+      return <Badge variant="secondary"><UserX className="h-3 w-3 mr-1" />Deactivated</Badge>;
+    }
+    if (!admin.passwordSet) {
+      if (admin.hasPendingInvite) {
+        return <Badge variant="outline"><Clock className="h-3 w-3 mr-1" />Invite Pending</Badge>;
+      }
+      return <Badge variant="outline"><AlertCircle className="h-3 w-3 mr-1" />Needs Invite</Badge>;
+    }
+    return <Badge variant="default"><UserCheck className="h-3 w-3 mr-1" />Active</Badge>;
   };
 
   return (
@@ -127,9 +314,15 @@ export default function SuperAdminSettingsPage() {
 
           <TabsContent value="admins">
             <Card>
-              <CardHeader>
-                <CardTitle>Platform Administrators</CardTitle>
-                <CardDescription>Manage super user accounts with full platform access</CardDescription>
+              <CardHeader className="flex flex-row items-center justify-between gap-4">
+                <div>
+                  <CardTitle>Platform Administrators</CardTitle>
+                  <CardDescription>Manage super user accounts with full platform access</CardDescription>
+                </div>
+                <Button onClick={() => setNewAdminDrawerOpen(true)} data-testid="button-new-admin">
+                  <Plus className="h-4 w-4 mr-2" />
+                  New Platform Admin
+                </Button>
               </CardHeader>
               <CardContent>
                 {adminsLoading ? (
@@ -137,22 +330,62 @@ export default function SuperAdminSettingsPage() {
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                   </div>
                 ) : platformAdmins.length > 0 ? (
-                  <div className="space-y-4">
+                  <div className="space-y-3">
                     {platformAdmins.map((admin) => (
-                      <div key={admin.id} className="flex items-center justify-between p-4 border rounded-lg">
+                      <div key={admin.id} className="flex items-center justify-between p-4 border rounded-lg" data-testid={`admin-row-${admin.id}`}>
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                             <Shield className="h-5 w-5 text-primary" />
                           </div>
                           <div>
-                            <div className="font-medium">{admin.name || admin.email}</div>
+                            <div className="font-medium">{admin.firstName && admin.lastName ? `${admin.firstName} ${admin.lastName}` : admin.name || admin.email}</div>
                             <div className="text-sm text-muted-foreground">{admin.email}</div>
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <Badge variant={admin.isActive ? "default" : "secondary"}>
-                            {admin.isActive ? "Active" : "Inactive"}
-                          </Badge>
+                        <div className="flex items-center gap-3">
+                          {getAdminStatusBadge(admin)}
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button size="icon" variant="ghost" data-testid={`button-admin-actions-${admin.id}`}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => handleEditAdmin(admin)} data-testid={`button-edit-admin-${admin.id}`}>
+                                <Settings className="h-4 w-4 mr-2" />
+                                Edit Details
+                              </DropdownMenuItem>
+                              {admin.isActive && !admin.passwordSet && (
+                                <>
+                                  <DropdownMenuItem onClick={() => handleGenerateInvite(admin)} data-testid={`button-generate-link-${admin.id}`}>
+                                    <Link className="h-4 w-4 mr-2" />
+                                    Generate Invite Link
+                                  </DropdownMenuItem>
+                                  {integrationStatus?.mailgun && (
+                                    <DropdownMenuItem onClick={() => handleGenerateInvite(admin, true)} data-testid={`button-send-email-${admin.id}`}>
+                                      <Mail className="h-4 w-4 mr-2" />
+                                      Send Invite Email
+                                    </DropdownMenuItem>
+                                  )}
+                                </>
+                              )}
+                              {admin.isActive ? (
+                                <DropdownMenuItem 
+                                  onClick={() => handleDeactivateAdmin(admin)}
+                                  className="text-destructive"
+                                  data-testid={`button-deactivate-${admin.id}`}
+                                >
+                                  <UserX className="h-4 w-4 mr-2" />
+                                  Deactivate
+                                </DropdownMenuItem>
+                              ) : (
+                                <DropdownMenuItem onClick={() => handleReactivateAdmin(admin)} data-testid={`button-reactivate-${admin.id}`}>
+                                  <UserCheck className="h-4 w-4 mr-2" />
+                                  Reactivate
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
                       </div>
                     ))}
@@ -349,6 +582,187 @@ export default function SuperAdminSettingsPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      {/* New Platform Admin Drawer */}
+      <Sheet open={newAdminDrawerOpen} onOpenChange={setNewAdminDrawerOpen}>
+        <SheetContent className="w-full sm:max-w-xl" data-testid="drawer-new-admin">
+          <SheetHeader>
+            <SheetTitle>New Platform Admin</SheetTitle>
+            <SheetDescription>Create a new super user account with full platform access</SheetDescription>
+          </SheetHeader>
+          <div className="space-y-6 py-6">
+            <div className="space-y-2">
+              <Label htmlFor="newFirstName">First Name</Label>
+              <Input
+                id="newFirstName"
+                value={newAdminForm.firstName}
+                onChange={(e) => setNewAdminForm({ ...newAdminForm, firstName: e.target.value })}
+                placeholder="John"
+                data-testid="input-new-first-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newLastName">Last Name</Label>
+              <Input
+                id="newLastName"
+                value={newAdminForm.lastName}
+                onChange={(e) => setNewAdminForm({ ...newAdminForm, lastName: e.target.value })}
+                placeholder="Doe"
+                data-testid="input-new-last-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="newEmail">Email</Label>
+              <Input
+                id="newEmail"
+                type="email"
+                value={newAdminForm.email}
+                onChange={(e) => setNewAdminForm({ ...newAdminForm, email: e.target.value })}
+                placeholder="admin@example.com"
+                data-testid="input-new-email"
+              />
+            </div>
+            <div className="rounded-lg border border-muted p-4 bg-muted/20">
+              <div className="flex items-start gap-3">
+                <KeyRound className="h-5 w-5 text-muted-foreground mt-0.5" />
+                <div className="text-sm text-muted-foreground">
+                  <p className="font-medium text-foreground">No password required</p>
+                  <p>After creating this admin, you'll need to generate an invite link for them to set their password.</p>
+                </div>
+              </div>
+            </div>
+            <div className="flex gap-3 pt-4">
+              <Button 
+                onClick={handleCreateAdmin} 
+                disabled={createAdminMutation.isPending}
+                className="flex-1"
+                data-testid="button-create-admin"
+              >
+                {createAdminMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Plus className="h-4 w-4 mr-2" />
+                )}
+                Create Admin
+              </Button>
+              <Button variant="outline" onClick={() => setNewAdminDrawerOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Edit Platform Admin Drawer */}
+      <Sheet open={editAdminDrawerOpen} onOpenChange={setEditAdminDrawerOpen}>
+        <SheetContent className="w-full sm:max-w-xl" data-testid="drawer-edit-admin">
+          <SheetHeader>
+            <SheetTitle>Edit Platform Admin</SheetTitle>
+            <SheetDescription>Update administrator details</SheetDescription>
+          </SheetHeader>
+          <div className="space-y-6 py-6">
+            <div className="space-y-2">
+              <Label htmlFor="editFirstName">First Name</Label>
+              <Input
+                id="editFirstName"
+                value={editAdminForm.firstName}
+                onChange={(e) => setEditAdminForm({ ...editAdminForm, firstName: e.target.value })}
+                data-testid="input-edit-first-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editLastName">Last Name</Label>
+              <Input
+                id="editLastName"
+                value={editAdminForm.lastName}
+                onChange={(e) => setEditAdminForm({ ...editAdminForm, lastName: e.target.value })}
+                data-testid="input-edit-last-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="editEmail">Email</Label>
+              <Input
+                id="editEmail"
+                type="email"
+                value={editAdminForm.email}
+                onChange={(e) => setEditAdminForm({ ...editAdminForm, email: e.target.value })}
+                data-testid="input-edit-email"
+              />
+            </div>
+            <div className="flex gap-3 pt-4">
+              <Button 
+                onClick={handleUpdateAdmin} 
+                disabled={updateAdminMutation.isPending}
+                className="flex-1"
+                data-testid="button-update-admin"
+              >
+                {updateAdminMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <Save className="h-4 w-4 mr-2" />
+                )}
+                Save Changes
+              </Button>
+              <Button variant="outline" onClick={() => setEditAdminDrawerOpen(false)}>
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Invite Link Dialog */}
+      <AlertDialog open={inviteLinkDialogOpen} onOpenChange={setInviteLinkDialogOpen}>
+        <AlertDialogContent data-testid="dialog-invite-link">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Invite Link Generated</AlertDialogTitle>
+            <AlertDialogDescription>
+              Share this link with the administrator to set their password and activate their account.
+              The link expires in 7 days.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="my-4">
+            <div className="flex items-center gap-2">
+              <Input 
+                value={generatedInviteUrl || ""} 
+                readOnly 
+                className="font-mono text-sm"
+                data-testid="input-invite-url"
+              />
+              <Button size="icon" variant="outline" onClick={handleCopyInviteLink} data-testid="button-copy-link">
+                <Copy className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogAction onClick={() => setInviteLinkDialogOpen(false)} data-testid="button-close-invite-dialog">
+              Done
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Deactivate Confirmation Dialog */}
+      <AlertDialog open={deactivateDialogOpen} onOpenChange={setDeactivateDialogOpen}>
+        <AlertDialogContent data-testid="dialog-deactivate">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deactivate Platform Admin</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to deactivate {adminToDeactivate?.email}? They will no longer be able to access the platform.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-deactivate">Cancel</AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={confirmDeactivate}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-deactivate"
+            >
+              Deactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

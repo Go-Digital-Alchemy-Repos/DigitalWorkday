@@ -34,6 +34,7 @@ import TenantOnboardingPage from "@/pages/tenant-onboarding";
 import AccountPage from "@/pages/account";
 import UserProfilePage from "@/pages/user-profile";
 import AcceptTermsPage from "@/pages/accept-terms";
+import PlatformInvitePage from "@/pages/platform-invite";
 import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
 
@@ -248,7 +249,7 @@ function AppLayout() {
   const { appMode } = useAppMode();
   const [location] = useLocation();
 
-  if (location === "/login" || location === "/tenant-onboarding" || location === "/accept-terms") {
+  if (location === "/login" || location === "/tenant-onboarding" || location === "/accept-terms" || location.startsWith("/auth/platform-invite")) {
     return (
       <Switch>
         <Route path="/login" component={LoginPage} />
@@ -258,6 +259,7 @@ function AppLayout() {
         <Route path="/accept-terms">
           {() => <ProtectedRoute component={AcceptTermsPage} />}
         </Route>
+        <Route path="/auth/platform-invite" component={PlatformInvitePage} />
       </Switch>
     );
   }

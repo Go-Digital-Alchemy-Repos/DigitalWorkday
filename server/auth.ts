@@ -20,8 +20,9 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { db } from "./db";
-import { users, UserRole } from "@shared/schema";
-import { eq, sql } from "drizzle-orm";
+import { users, UserRole, platformInvitations, platformAuditEvents } from "@shared/schema";
+import { eq, sql, and, desc } from "drizzle-orm";
+import { createHash } from "crypto";
 import type { User } from "@shared/schema";
 import type { Express, RequestHandler } from "express";
 import connectPgSimple from "connect-pg-simple";
@@ -457,6 +458,241 @@ export function setupBootstrapEndpoints(app: Express): void {
         error: { code: "INTERNAL_ERROR", message: "Registration failed" },
         code: "INTERNAL_ERROR",
         message: "Registration failed"
+      });
+    }
+  });
+}
+
+/**
+ * Platform invite endpoints for onboarding new platform administrators.
+ * Allows invited admins to verify their invite token and set their password.
+ */
+export function setupPlatformInviteEndpoints(app: Express): void {
+  /**
+   * GET /api/v1/auth/platform-invite/verify
+   * Verifies a platform invite token and returns the target user's email.
+   * Does not require authentication.
+   */
+  app.get("/api/v1/auth/platform-invite/verify", async (req, res) => {
+    try {
+      const { token } = req.query;
+      
+      if (!token || typeof token !== "string") {
+        return res.status(400).json({
+          error: { code: "VALIDATION_ERROR", message: "Token is required" },
+          code: "VALIDATION_ERROR",
+          message: "Token is required"
+        });
+      }
+      
+      // Hash the token to compare with stored hash
+      const tokenHash = createHash("sha256").update(token).digest("hex");
+      
+      // Find the invite
+      const [invite] = await db.select()
+        .from(platformInvitations)
+        .where(eq(platformInvitations.tokenHash, tokenHash))
+        .limit(1);
+      
+      if (!invite) {
+        return res.status(404).json({
+          error: { code: "INVALID_TOKEN", message: "Invalid or expired invite link" },
+          code: "INVALID_TOKEN",
+          message: "Invalid or expired invite link"
+        });
+      }
+      
+      // Check if already used
+      if (invite.status === "accepted" || invite.usedAt) {
+        return res.status(410).json({
+          error: { code: "TOKEN_ALREADY_USED", message: "This invite has already been used" },
+          code: "TOKEN_ALREADY_USED",
+          message: "This invite has already been used"
+        });
+      }
+      
+      // Check if revoked
+      if (invite.status === "revoked") {
+        return res.status(410).json({
+          error: { code: "TOKEN_REVOKED", message: "This invite has been revoked" },
+          code: "TOKEN_REVOKED",
+          message: "This invite has been revoked"
+        });
+      }
+      
+      // Check if expired
+      if (new Date() > invite.expiresAt) {
+        return res.status(410).json({
+          error: { code: "TOKEN_EXPIRED", message: "This invite has expired" },
+          code: "TOKEN_EXPIRED",
+          message: "This invite has expired"
+        });
+      }
+      
+      // Get target user info
+      const [targetUser] = invite.targetUserId ? await db.select({
+        id: users.id,
+        email: users.email,
+        firstName: users.firstName,
+        lastName: users.lastName,
+      }).from(users)
+        .where(eq(users.id, invite.targetUserId)) : [];
+      
+      res.json({
+        valid: true,
+        email: invite.email,
+        expiresAt: invite.expiresAt.toISOString(),
+        role: "super_user",
+        targetUser: targetUser || null,
+      });
+    } catch (error) {
+      console.error("[auth] platform-invite/verify error:", error);
+      res.status(500).json({
+        error: { code: "INTERNAL_ERROR", message: "Failed to verify invite" },
+        code: "INTERNAL_ERROR",
+        message: "Failed to verify invite"
+      });
+    }
+  });
+
+  /**
+   * POST /api/v1/auth/platform-invite/accept
+   * Accepts a platform invite, sets the user's password, and logs them in.
+   */
+  app.post("/api/v1/auth/platform-invite/accept", async (req, res) => {
+    try {
+      const { token, password } = req.body;
+      
+      if (!token || !password) {
+        return res.status(400).json({
+          error: { code: "VALIDATION_ERROR", message: "Token and password are required" },
+          code: "VALIDATION_ERROR",
+          message: "Token and password are required"
+        });
+      }
+      
+      if (password.length < 8) {
+        return res.status(400).json({
+          error: { code: "VALIDATION_ERROR", message: "Password must be at least 8 characters" },
+          code: "VALIDATION_ERROR",
+          message: "Password must be at least 8 characters"
+        });
+      }
+      
+      // Hash the token to compare with stored hash
+      const tokenHash = createHash("sha256").update(token).digest("hex");
+      
+      // Find the invite
+      const [invite] = await db.select()
+        .from(platformInvitations)
+        .where(eq(platformInvitations.tokenHash, tokenHash))
+        .limit(1);
+      
+      if (!invite) {
+        return res.status(404).json({
+          error: { code: "INVALID_TOKEN", message: "Invalid invite link" },
+          code: "INVALID_TOKEN",
+          message: "Invalid invite link"
+        });
+      }
+      
+      // Validate invite status
+      if (invite.status === "accepted" || invite.usedAt) {
+        return res.status(410).json({
+          error: { code: "TOKEN_ALREADY_USED", message: "This invite has already been used" },
+          code: "TOKEN_ALREADY_USED",
+          message: "This invite has already been used"
+        });
+      }
+      
+      if (invite.status === "revoked") {
+        return res.status(410).json({
+          error: { code: "TOKEN_REVOKED", message: "This invite has been revoked" },
+          code: "TOKEN_REVOKED",
+          message: "This invite has been revoked"
+        });
+      }
+      
+      if (new Date() > invite.expiresAt) {
+        return res.status(410).json({
+          error: { code: "TOKEN_EXPIRED", message: "This invite has expired" },
+          code: "TOKEN_EXPIRED",
+          message: "This invite has expired"
+        });
+      }
+      
+      if (!invite.targetUserId) {
+        return res.status(400).json({
+          error: { code: "INVALID_INVITE", message: "This invite is not linked to a user" },
+          code: "INVALID_INVITE",
+          message: "This invite is not linked to a user"
+        });
+      }
+      
+      // Update user with password hash
+      const passwordHash = await hashPassword(password);
+      
+      const [updatedUser] = await db.update(users)
+        .set({ passwordHash })
+        .where(eq(users.id, invite.targetUserId))
+        .returning();
+      
+      // Mark invite as accepted
+      await db.update(platformInvitations)
+        .set({ status: "accepted", usedAt: new Date() })
+        .where(eq(platformInvitations.id, invite.id));
+      
+      // Log audit event
+      await db.insert(platformAuditEvents).values({
+        actorUserId: invite.targetUserId,
+        targetUserId: invite.targetUserId,
+        eventType: "platform_admin_invite_accepted",
+        message: `Platform admin invite accepted for ${invite.email}`,
+        metadata: { inviteId: invite.id },
+      });
+      
+      // Log in the user
+      const { passwordHash: _, ...userWithoutPassword } = updatedUser;
+      
+      req.logIn(userWithoutPassword as Express.User, (loginErr) => {
+        if (loginErr) {
+          console.error("[auth] platform-invite login error:", loginErr);
+          return res.status(200).json({
+            success: true,
+            user: userWithoutPassword,
+            message: "Password set successfully. Please log in.",
+            autoLoginFailed: true,
+          });
+        }
+        
+        req.session.save((saveErr) => {
+          if (saveErr) {
+            console.error("[auth] session save error:", saveErr);
+          }
+          
+          console.log(JSON.stringify({
+            level: "info",
+            component: "auth",
+            event: "platform_invite_accepted",
+            userId: userWithoutPassword.id,
+            email: userWithoutPassword.email,
+            timestamp: new Date().toISOString(),
+          }));
+          
+          res.json({
+            success: true,
+            user: userWithoutPassword,
+            message: "Account activated successfully.",
+            autoLoginFailed: false,
+          });
+        });
+      });
+    } catch (error) {
+      console.error("[auth] platform-invite/accept error:", error);
+      res.status(500).json({
+        error: { code: "INTERNAL_ERROR", message: "Failed to accept invite" },
+        code: "INTERNAL_ERROR",
+        message: "Failed to accept invite"
       });
     }
   });

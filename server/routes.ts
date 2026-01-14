@@ -116,9 +116,9 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
-  // Protect all /api routes except /api/auth/* and /api/v1/super/bootstrap
+  // Protect all /api routes except /api/auth/*, /api/v1/auth/* and /api/v1/super/bootstrap
   app.use("/api", (req, res, next) => {
-    if (req.path.startsWith("/auth") || req.path === "/v1/super/bootstrap") {
+    if (req.path.startsWith("/auth") || req.path.startsWith("/v1/auth/") || req.path === "/v1/super/bootstrap") {
       return next();
     }
     return requireAuth(req, res, next);
