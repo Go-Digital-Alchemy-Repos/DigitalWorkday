@@ -1,16 +1,34 @@
 import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { parseApiError, isAgreementError } from "./parseApiError";
 
+/**
+ * Handle agreement-required responses by redirecting to accept-terms page.
+ * Checks both standard envelope (error.details.redirectTo) and legacy (redirectTo) formats.
+ */
 async function handleAgreementRequired(res: Response): Promise<boolean> {
   if (res.status === 451) {
     try {
       const data = await res.clone().json();
-      if (data.code === "AGREEMENT_REQUIRED" && data.redirectTo) {
-        if (window.location.pathname !== data.redirectTo) {
-          window.location.href = data.redirectTo;
+      const parsed = parseApiError(data);
+      
+      if (isAgreementError(parsed)) {
+        // Check for redirect in both envelope and legacy formats
+        const redirectTo = 
+          (parsed.details as { redirectTo?: string })?.redirectTo ||
+          data.redirectTo ||
+          "/accept-terms";
+        
+        if (window.location.pathname !== redirectTo) {
+          window.location.href = redirectTo;
         }
         return true;
       }
     } catch {
+      // Fallback redirect if we can't parse the response
+      if (window.location.pathname !== "/accept-terms") {
+        window.location.href = "/accept-terms";
+      }
+      return true;
     }
   }
   return false;

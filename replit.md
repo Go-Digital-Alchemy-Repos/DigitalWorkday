@@ -23,95 +23,30 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **Real-time**: Socket.IO for live updates across connected clients
 
 ### Core Features and Design Patterns
-- **Multi-Tenancy**: The application supports multi-tenancy with a `tenants` table and tenant-scoped data access. A `TENANCY_ENFORCEMENT` environment variable (`off|soft|strict`) controls tenant isolation behavior, with `soft` mode logging warnings and `strict` mode blocking cross-tenant access.
-- **Expanded Super Admin Dashboard**: The Super Admin area features 4 major sections accessible from the sidebar:
-  - **Tenants** (`/super-admin`): Tenant management with drawer-based editing, onboarding status, user invitations, branding configuration
-  - **Global Reports** (`/super-admin/reports`): Cross-tenant analytics with 5 tabs: Tenants (status/config gaps), Projects (by tenant, overdue), Users (by role, active/pending), Tasks (by status, overdue/unassigned), Time Tracking (weekly/monthly totals, top performers)
-  - **System Settings** (`/super-admin/settings`): Platform administration with 4 tabs: Platform Admins (super_user listing), Agreements (tenant compliance overview), Global Branding (default app name, colors, support email), Integrations (Mailgun/S3 status)
-  - **System Status** (`/super-admin/status`): Health monitoring with 4 tabs: System Health (database latency, S3, Mailgun, WebSocket), Tenant Health (tenancy mode, missing IDs, warning stats), Logs (external logging reference), Debug Tools (recompute health, validate isolation with confirmation dialogs)
-- **System Settings Table**: A single-row `system_settings` table (id=1) stores platform-wide defaults: defaultAppName, defaultLogoUrl, defaultFaviconUrl, defaultPrimaryColor, defaultSecondaryColor, supportEmail, platformVersion, maintenanceMode, maintenanceMessage
-- **White Label Branding**: Tenants can customize their app appearance with custom app names, logos, favicons, colors (primary/secondary/accent), and login messages. White-labeling is controlled via `whiteLabelEnabled` flag, with optional `hideVendorBranding` to remove platform branding.
-- **Per-Tenant Integrations**: Tenants can configure their own Mailgun (email) and S3 (storage) integrations with AES-256-GCM encrypted secrets. Integration status tracking (not_configured/configured/error) with test endpoints.
+- **Multi-Tenancy**: Supports multi-tenancy with configurable enforcement levels (`off|soft|strict`).
+- **Expanded Super Admin Dashboard**: Features tenant management, global reports, system settings, and system status.
+- **System Settings Table**: Stores platform-wide defaults for branding and configuration.
+- **White Label Branding**: Tenants can customize app appearance (app names, logos, favicons, colors, login messages).
+- **Per-Tenant Integrations**: Tenants can configure their own Mailgun (email) and S3 (storage) integrations with encrypted secrets.
 - **Authentication**: Session-based authentication using Passport.js.
-- **Real-time Communication**: Socket.IO is used for live updates, with shared event contracts and client-side hooks for event subscription and cache invalidation.
-- **Database Schema**: Includes entities for users, workspaces, teams, clients, projects (with budgetMinutes), sections, tasks (with subtasks, tags, comments, multi-assignee support via task_assignees, estimateMinutes), personal_task_sections (for My Tasks organization), activity logs, time tracking, tenant_settings, and tenant_integrations.
-- **Workload Forecast**: Project-level forecast analytics with budget tracking. Time entries use `durationSeconds` field converted to minutes for display. Forecast endpoints provide: tracked time (total and weekly), task estimates, budget remaining, due date forecast (6 buckets: overdue, today, next 7 days, next 30 days, later, no due date), and per-assignee workload with multi-assignee task estimates split evenly.
-- **Production Bootstrap**: A secure one-time process for creating a super admin user in production environments. Alternatively, the first user to register via `/api/auth/register` automatically becomes Super Admin (determined server-side, role field ignored from client).
-- **Data Purge**: A controlled purge script (`server/scripts/purge_app_data.ts`) and API endpoint (`POST /api/v1/super/system/purge-app-data`) to delete all application data. Requires multiple safety guards: `PURGE_APP_DATA_ALLOWED=true`, `PURGE_APP_DATA_CONFIRM=YES_PURGE_APP_DATA`, and `PURGE_PROD_ALLOWED=true` for production. After purge, the first user to register becomes Super Admin.
-- **Tenant Onboarding Flow**: A structured 4-step wizard for new tenants to configure their organization profile, branding, and email settings, transitioning from an inactive to an active state.
-- **Flexible Tenant Invitations**: Super admins can invite tenant admins via "link" (copyable URL) or "email" (Mailgun-based delivery). Email invitations use the tenant's configured Mailgun integration with graceful fallback to link generation if email fails.
-- **Bulk CSV User Import**: Super admins can import users in bulk via CSV file upload. The CSV supports columns: email, firstName, lastName, role (admin/employee). After import, invite links are generated for all users and can be copied individually or in bulk.
-- **Tenant Pre-Provisioning**: Super users can fully configure tenants before any tenant admin accepts an invitation. This includes: (a) activating/suspending/deactivating tenants with dedicated endpoints, (b) using "Act as Tenant" mode via X-Tenant-Id header to access/create tenant data, (c) inviting users to inactive tenants, and (d) configuring settings/integrations before activation. The `activatedBySuperUserAt` timestamp tracks super user activations. Security: X-Tenant-Id header is only processed for verified super users on both frontend (localStorage dual-flag guard) and backend (middleware role check).
-- **Super Admin Navigation Isolation**: Super Admins see completely separate navigation depending on their mode:
-  - **Super Mode** (not impersonating): Only Super Admin navigation (Tenants, Global Reports, System Settings, System Status) with tenant switcher in header
-  - **Tenant Mode** (impersonating): Full tenant navigation with impersonation banner showing active tenant name and exit button
-  - Route guards redirect Super Admins to `/super-admin` if they try to access tenant routes without impersonating
-  - Impersonation state managed via `useAppMode` hook with localStorage persistence (`actingTenantId`, `actingTenantName`)
-  - Impersonation start/stop logged as audit events for compliance
-- **Tenant Drawer (Super Admin)**: A comprehensive drawer-based UI for viewing and managing tenant details. Features 5 tabs: Overview (edit name, view status/dates, quick actions), Onboarding (step-by-step progress tracker), Workspaces (list tenant workspaces with isPrimary badge), Users (invite admin via email or link, view invite history), and Branding (configure white-label settings). Tenant creation is transactional, atomically creating tenant + primary workspace + tenant_settings in a single database transaction.
-- **SaaS Agreement System**: Tenant admins can manage SaaS agreements (draft → active → archived lifecycle). Only one active agreement per tenant at a time. Version bumps re-gate users (must accept new version). User acceptance is tracked via `/api/v1/me/agreement/status` and `/api/v1/me/agreement/accept`. The `agreementEnforcementGuard` middleware blocks non-compliant users (returns 451 status with `redirectTo: /accept-terms`). Super users bypass agreement enforcement. Frontend `/accept-terms` page displays agreement content and handles acceptance flow with automatic redirect.
-- **Frontend Structure**: Organized into `pages/` for route components and `components/` for reusable UI elements, with specialized components for task management, settings, and project views. UI modernization uses FullScreenDrawer pattern for entity editing (Task, Client, TimeEntry, User, Team drawers) with built-in unsaved changes guards.
-- **Backend Structure**: Modular routes, a `DatabaseStorage` class for CRUD, database connection, authentication, and real-time infrastructure. Middleware handles error handling, request validation, and authentication context.
-- **Design Guidelines**: Adheres to a professional design, using Inter font for UI and JetBrains Mono for monospace, featuring a 3-column layout and dark mode support.
-
-## Documentation
-- **API Reference**: `docs/ENDPOINTS.md` - Comprehensive endpoint inventory with auth requirements and tenant scoping
-- **Known Issues**: `docs/KNOWN_ISSUES.md` - Technical debt tracking and improvement areas
-- **Error Handling**: `server/lib/errors.ts` - Centralized error utilities with validation helpers
-- **Test Coverage**: Smoke tests for auth/admin/super-admin patterns, tenancy enforcement tests, workload reports tests, backfill inference tests
-
-## Tenant Data Health Remediation
-- **Backfill Script**: `server/scripts/backfill_tenant_ids.ts` - One-time remediation script for missing tenantId values
-  - Requires `BACKFILL_TENANT_IDS_ALLOWED=true` to run
-  - Default dry-run mode (`BACKFILL_DRY_RUN=true`) for safe preview
-  - Backfill order: projects → tasks → teams → users
-  - Inference paths:
-    - Projects: workspace → client → createdBy
-    - Tasks: project → createdBy
-    - Teams: workspace
-    - Users: workspace memberships → invitations → created projects (exactly one tenant = inferable)
-  - Quarantine: Ambiguous rows assigned to special "Quarantine / Legacy Data" tenant
-  - Audit logging: All backfill actions logged to tenantAuditEvents
-- **Run in Railway**: `BACKFILL_TENANT_IDS_ALLOWED=true BACKFILL_DRY_RUN=false npx tsx server/scripts/backfill_tenant_ids.ts`
-- **Guardrails**: `requireTenantIdForCreate()` utility prevents future rows without tenantId
-- **Health Check**: `/api/v1/super/tenancy/health` shows missing/quarantined counts per table
-
-## Debug Tools (Super Admin)
-The Super Admin System Status → Debug Tools tab provides safe diagnostic and remediation capabilities:
-
-### Quarantine Manager
-- View quarantined data counts by table (projects, tasks, teams, users)
-- Browse and search quarantined rows with pagination
-- **Assign**: Move rows from quarantine to a valid tenant (validates target relationships)
-- **Archive**: Deactivate users (other tables not supported)
-- **Delete**: Permanently delete quarantined rows (requires `SUPER_DEBUG_DELETE_ALLOWED=true` + confirmation)
-
-### TenantId Backfill Tools
-- **Scan**: Count rows with missing tenantId per table
-- **Dry Run**: Simulate backfill without mutations
-- **Apply**: Execute backfill (requires `BACKFILL_TENANT_IDS_ALLOWED=true` + confirmation header)
-
-### Data Integrity Checks
-Read-only scans for:
-- Cross-tenant foreign key mismatches (tasks→projects, projects→clients, teams→workspaces)
-- Missing required relationships (projects without workspace, non-super users without tenant)
-- Duplicate primaries (multiple primary workspaces per tenant)
-
-### Environment Flags
-- `SUPER_DEBUG_DELETE_ALLOWED=true`: Enable permanent delete from quarantine
-- `SUPER_DEBUG_ACTIONS_ALLOWED=true`: Enable recompute/cache actions
-- `BACKFILL_TENANT_IDS_ALLOWED=true`: Enable backfill apply mode
-
-### Confirmation Phrases
-All destructive operations require typed confirmation phrases matching header values.
-
-## Performance Optimizations
-- **N+1 Query Fixes**: Batch fetch methods in `server/storage.ts` for critical endpoints:
-  - `getOpenTaskCountsByProjectIds()`: GROUP BY optimization for project task counts
-  - `getTasksByProjectIds()`: Batch fetch tasks with assignees for analytics
-  - `getTenantsWithDetails()`: Batch fetch tenants with settings and user counts
-- **Query Debug Utility**: Enable `QUERY_DEBUG=true` to track query counts per endpoint
-- **Documentation**: See `docs/PERFORMANCE_NOTES.md` for optimization details and recommended indexes
+- **Real-time Communication**: Socket.IO for live updates.
+- **Database Schema**: Includes entities for users, workspaces, teams, clients, projects, tasks, activity logs, time tracking, tenant settings, and integrations.
+- **Workload Forecast**: Project-level analytics with budget tracking and assignee workload distribution.
+- **Production Bootstrap**: Secure one-time super admin creation or first-user registration.
+- **Data Purge**: Controlled script and API endpoint for deleting all application data with multiple safety guards.
+- **Tenant Onboarding Flow**: Structured 4-step wizard for new tenants.
+- **Flexible Tenant Invitations**: Super admins can invite tenant admins via link or email.
+- **Bulk CSV User Import**: Super admins can import users in bulk via CSV.
+- **Tenant Pre-Provisioning**: Super users can fully configure tenants before activation, including "Act as Tenant" mode using `X-Tenant-Id` header.
+- **Super Admin Navigation Isolation**: Separate navigation for Super Mode and Tenant Impersonation Mode.
+- **Tenant Drawer (Super Admin)**: Comprehensive drawer-based UI for tenant management including overview, onboarding, workspaces, users, and branding. Tenant creation is transactional.
+- **SaaS Agreement System**: Manages tenant SaaS agreements with an active/archived lifecycle, versioning, and user acceptance tracking, enforced by middleware.
+- **Frontend Structure**: Organized into `pages/` and `components/`, utilizing FullScreenDrawer for entity editing with unsaved changes guards.
+- **Backend Structure**: Modular routes, `DatabaseStorage` class, middleware for error handling, validation, and authentication.
+- **Design Guidelines**: Professional design with Inter font, 3-column layout, and dark mode support.
+- **API Error Handling**: Standardized error envelope with stable error codes and request ID correlation.
+- **Tenant Data Health Remediation**: Tools for backfilling missing `tenantId` values, quarantine management, and data integrity checks.
+- **Performance Optimizations**: N+1 query fixes and query debugging utilities.
 
 ## External Dependencies
 - **PostgreSQL**: Primary database.
