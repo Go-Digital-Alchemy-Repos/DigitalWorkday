@@ -1,3 +1,22 @@
+/**
+ * Tenancy Enforcement Middleware
+ * 
+ * Purpose: Enforces tenant data isolation based on TENANCY_ENFORCEMENT mode.
+ * 
+ * Modes (via TENANCY_ENFORCEMENT env var):
+ * - off: No enforcement (development only)
+ * - soft: Log warnings but allow operations (migration period)
+ * - strict: Block cross-tenant operations (production)
+ * 
+ * Key Invariants:
+ * - Validates tenant ownership before data access/mutation
+ * - Records warnings to tenancyHealthTracker for soft mode
+ * - Super users bypass most checks but operations are logged
+ * 
+ * Sharp Edges:
+ * - Do NOT disable in production without explicit migration plan
+ * - Soft mode warnings indicate data that needs remediation before strict mode
+ */
 import { Request, Response, NextFunction } from "express";
 import { tenancyHealthTracker } from "./tenancyHealthTracker";
 

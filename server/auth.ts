@@ -1,3 +1,18 @@
+/**
+ * Authentication Module
+ * 
+ * Purpose: Session-based authentication using Passport.js + passport-local strategy.
+ * 
+ * Key Invariants:
+ * - Sessions stored in PostgreSQL (user_sessions table) for multi-replica support
+ * - First registered user automatically becomes Super Admin (server-determined)
+ * - Password hashing uses scrypt with 64-byte output and random salt
+ * 
+ * Sharp Edges:
+ * - SESSION_SECRET must be set in production (falls back to dev secret)
+ * - Role field in registration is ignored for first user (always super_user)
+ * - Never expose passwordHash in session or API responses
+ */
 import passport from "passport";
 import { Strategy as LocalStrategy } from "passport-local";
 import session from "express-session";

@@ -1,3 +1,17 @@
+/**
+ * Tenant Context Middleware
+ * 
+ * Purpose: Injects tenant context into every request for multi-tenancy support.
+ * 
+ * Key Invariants:
+ * - Regular users: tenantId and effectiveTenantId are always their own tenant
+ * - Super users: effectiveTenantId can be overridden via X-Tenant-Id header
+ * - Super users can access inactive tenants (for pre-provisioning)
+ * 
+ * Sharp Edges:
+ * - X-Tenant-Id header is ONLY processed for verified super users
+ * - Never expose X-Tenant-Id processing to non-super users (security risk)
+ */
 import { Request, Response, NextFunction } from "express";
 import { UserRole } from "@shared/schema";
 import { db } from "../db";

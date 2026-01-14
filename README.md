@@ -106,9 +106,13 @@ npm start
 ## Documentation
 
 - [API Endpoints](docs/ENDPOINTS.md) - Complete API reference
+- [Feature Inventory](docs/FEATURE_INVENTORY.md) - All features and modules
+- [Architecture Overview](docs/ARCHITECTURE_OVERVIEW.md) - Tech stack and flows
+- [Environment Variables](docs/ENVIRONMENT_VARIABLES.md) - All env vars reference
 - [Deployment Guide](docs/DEPLOYMENT_RAILWAY.md) - Railway deployment
 - [Security & Tenancy](docs/SECURITY_TENANCY.md) - Multi-tenant isolation
-- [Audit Checklist](docs/AUDIT_CHECKLIST.md) - Feature audit
+- [Regression Checklist](docs/REGRESSION_CHECKLIST.md) - Manual test plan
+- [Audit Findings](docs/AUDIT_FINDINGS.md) - Latest audit report
 
 ## Testing
 
