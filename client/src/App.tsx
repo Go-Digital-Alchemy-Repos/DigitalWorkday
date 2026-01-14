@@ -6,10 +6,15 @@ import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
-import { AppSidebar } from "@/components/app-sidebar";
+import { SuperSidebar } from "@/components/super-sidebar";
+import { TenantSidebar } from "@/components/tenant-sidebar";
+import { TenantSwitcher } from "@/components/tenant-switcher";
+import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { AuthProvider, useAuth } from "@/lib/auth";
 import { UserMenu } from "@/components/user-menu";
 import { TenantThemeProvider } from "@/lib/tenant-theme-loader";
+import { useAppMode } from "@/hooks/useAppMode";
+import { useToast } from "@/hooks/use-toast";
 import NotFound from "@/pages/not-found";
 import Home from "@/pages/home";
 import MyTasks from "@/pages/my-tasks";
@@ -29,10 +34,10 @@ import AccountPage from "@/pages/account";
 import UserProfilePage from "@/pages/user-profile";
 import AcceptTermsPage from "@/pages/accept-terms";
 import { Loader2 } from "lucide-react";
+import { useEffect } from "react";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
-  const [location] = useLocation();
 
   if (isLoading) {
     return (
@@ -49,75 +54,208 @@ function ProtectedRoute({ component: Component }: { component: React.ComponentTy
   return <Component />;
 }
 
-function Router() {
+function SuperRouteGuard({ component: Component }: { component: React.ComponentType }) {
+  const { isAuthenticated, isLoading, user } = useAuth();
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
+
+  if (user?.role !== "super_user") {
+    return <Redirect to="/" />;
+  }
+
+  return <Component />;
+}
+
+function TenantRouteGuard({ component: Component }: { component: React.ComponentType }) {
+  const { isAuthenticated, isLoading, user } = useAuth();
+  const { appMode } = useAppMode();
+  const { toast } = useToast();
+  const [, setLocation] = useLocation();
+
+  useEffect(() => {
+    if (!isLoading && isAuthenticated && user?.role === "super_user" && appMode === "super") {
+      toast({
+        title: "Tenant access required",
+        description: "Switch to a tenant to access this page.",
+      });
+      setLocation("/super-admin");
+    }
+  }, [isLoading, isAuthenticated, user?.role, appMode, toast, setLocation]);
+
+  if (isLoading) {
+    return (
+      <div className="flex items-center justify-center h-full">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!isAuthenticated) {
+    return <Redirect to="/login" />;
+  }
+
+  if (user?.role === "super_user" && appMode === "super") {
+    return <Redirect to="/super-admin" />;
+  }
+
+  return <Component />;
+}
+
+function SuperAdminRouter() {
   return (
     <Switch>
-      <Route path="/login" component={LoginPage} />
-      <Route path="/">
-        {() => <ProtectedRoute component={Home} />}
-      </Route>
-      <Route path="/my-tasks">
-        {() => <ProtectedRoute component={MyTasks} />}
-      </Route>
-      <Route path="/projects">
-        {() => <ProtectedRoute component={ProjectsDashboard} />}
-      </Route>
-      <Route path="/projects/:id">
-        {() => <ProtectedRoute component={ProjectPage} />}
-      </Route>
-      <Route path="/clients">
-        {() => <ProtectedRoute component={ClientsPage} />}
-      </Route>
-      <Route path="/clients/:id">
-        {() => <ProtectedRoute component={ClientDetailPage} />}
-      </Route>
-      <Route path="/time-tracking">
-        {() => <ProtectedRoute component={TimeTrackingPage} />}
-      </Route>
-      <Route path="/settings">
-        {() => <ProtectedRoute component={SettingsPage} />}
-      </Route>
-      <Route path="/settings/:tab">
-        {() => <ProtectedRoute component={SettingsPage} />}
-      </Route>
-      <Route path="/account">
-        {() => <ProtectedRoute component={AccountPage} />}
-      </Route>
-      <Route path="/account/:tab">
-        {() => <ProtectedRoute component={AccountPage} />}
-      </Route>
       <Route path="/super-admin">
-        {() => <ProtectedRoute component={SuperAdminPage} />}
+        {() => <SuperRouteGuard component={SuperAdminPage} />}
       </Route>
       <Route path="/super-admin/reports">
-        {() => <ProtectedRoute component={SuperAdminReportsPage} />}
+        {() => <SuperRouteGuard component={SuperAdminReportsPage} />}
       </Route>
       <Route path="/super-admin/settings">
-        {() => <ProtectedRoute component={SuperAdminSettingsPage} />}
+        {() => <SuperRouteGuard component={SuperAdminSettingsPage} />}
       </Route>
       <Route path="/super-admin/status">
-        {() => <ProtectedRoute component={SuperAdminStatusPage} />}
+        {() => <SuperRouteGuard component={SuperAdminStatusPage} />}
       </Route>
-      <Route path="/tenant-onboarding">
-        {() => <ProtectedRoute component={TenantOnboardingPage} />}
+      <Route>
+        {() => <Redirect to="/super-admin" />}
+      </Route>
+    </Switch>
+  );
+}
+
+function TenantRouter() {
+  return (
+    <Switch>
+      <Route path="/">
+        {() => <TenantRouteGuard component={Home} />}
+      </Route>
+      <Route path="/my-tasks">
+        {() => <TenantRouteGuard component={MyTasks} />}
+      </Route>
+      <Route path="/projects">
+        {() => <TenantRouteGuard component={ProjectsDashboard} />}
+      </Route>
+      <Route path="/projects/:id">
+        {() => <TenantRouteGuard component={ProjectPage} />}
+      </Route>
+      <Route path="/clients">
+        {() => <TenantRouteGuard component={ClientsPage} />}
+      </Route>
+      <Route path="/clients/:id">
+        {() => <TenantRouteGuard component={ClientDetailPage} />}
+      </Route>
+      <Route path="/time-tracking">
+        {() => <TenantRouteGuard component={TimeTrackingPage} />}
+      </Route>
+      <Route path="/settings">
+        {() => <TenantRouteGuard component={SettingsPage} />}
+      </Route>
+      <Route path="/settings/:tab">
+        {() => <TenantRouteGuard component={SettingsPage} />}
+      </Route>
+      <Route path="/account">
+        {() => <TenantRouteGuard component={AccountPage} />}
+      </Route>
+      <Route path="/account/:tab">
+        {() => <TenantRouteGuard component={AccountPage} />}
       </Route>
       <Route path="/profile">
-        {() => <ProtectedRoute component={UserProfilePage} />}
-      </Route>
-      <Route path="/accept-terms">
-        {() => <ProtectedRoute component={AcceptTermsPage} />}
+        {() => <TenantRouteGuard component={UserProfilePage} />}
       </Route>
       <Route component={NotFound} />
     </Switch>
   );
 }
 
+function SuperLayout() {
+  const style = {
+    "--sidebar-width": "16rem",
+    "--sidebar-width-icon": "3rem",
+  };
+
+  return (
+    <SidebarProvider style={style as React.CSSProperties}>
+      <div className="flex h-screen w-full">
+        <SuperSidebar />
+        <div className="flex flex-col flex-1 overflow-hidden">
+          <header className="flex items-center justify-between h-14 px-4 border-b border-border bg-background shrink-0">
+            <div className="flex items-center gap-4">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <TenantSwitcher />
+            </div>
+            <div className="flex items-center gap-2">
+              <ThemeToggle />
+              <UserMenu />
+            </div>
+          </header>
+          <main className="flex-1 overflow-hidden">
+            <SuperAdminRouter />
+          </main>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+}
+
+function TenantLayout() {
+  const { isImpersonating } = useAppMode();
+  
+  const style = {
+    "--sidebar-width": "16rem",
+    "--sidebar-width-icon": "3rem",
+  };
+
+  return (
+    <SidebarProvider style={style as React.CSSProperties}>
+      <div className="flex flex-col h-screen w-full">
+        {isImpersonating && <ImpersonationBanner />}
+        <div className="flex flex-1 overflow-hidden">
+          <TenantSidebar />
+          <div className="flex flex-col flex-1 overflow-hidden">
+            <header className="flex items-center justify-between h-12 px-4 border-b border-border bg-background shrink-0">
+              <SidebarTrigger data-testid="button-sidebar-toggle" />
+              <div className="flex items-center gap-2">
+                <ThemeToggle />
+                <UserMenu />
+              </div>
+            </header>
+            <main className="flex-1 overflow-hidden">
+              <TenantRouter />
+            </main>
+          </div>
+        </div>
+      </div>
+    </SidebarProvider>
+  );
+}
+
 function AppLayout() {
-  const { isAuthenticated, isLoading } = useAuth();
+  const { isAuthenticated, isLoading, user } = useAuth();
+  const { appMode } = useAppMode();
   const [location] = useLocation();
 
   if (location === "/login" || location === "/tenant-onboarding" || location === "/accept-terms") {
-    return <Router />;
+    return (
+      <Switch>
+        <Route path="/login" component={LoginPage} />
+        <Route path="/tenant-onboarding">
+          {() => <ProtectedRoute component={TenantOnboardingPage} />}
+        </Route>
+        <Route path="/accept-terms">
+          {() => <ProtectedRoute component={AcceptTermsPage} />}
+        </Route>
+      </Switch>
+    );
   }
 
   if (isLoading) {
@@ -129,33 +267,24 @@ function AppLayout() {
   }
 
   if (!isAuthenticated) {
-    return <Router />;
+    return <Redirect to="/login" />;
   }
 
-  const style = {
-    "--sidebar-width": "16rem",
-    "--sidebar-width-icon": "3rem",
-  };
+  const isSuperUser = user?.role === "super_user";
+  const isSuperRoute = location.startsWith("/super-admin");
 
-  return (
-    <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex h-screen w-full">
-        <AppSidebar />
-        <div className="flex flex-col flex-1 overflow-hidden">
-          <header className="flex items-center justify-between h-12 px-4 border-b border-border bg-background shrink-0">
-            <SidebarTrigger data-testid="button-sidebar-toggle" />
-            <div className="flex items-center gap-2">
-              <ThemeToggle />
-              <UserMenu />
-            </div>
-          </header>
-          <main className="flex-1 overflow-hidden">
-            <Router />
-          </main>
-        </div>
-      </div>
-    </SidebarProvider>
-  );
+  if (isSuperUser && appMode === "super") {
+    if (!isSuperRoute) {
+      return <Redirect to="/super-admin" />;
+    }
+    return <SuperLayout />;
+  }
+
+  if (isSuperRoute && (!isSuperUser || appMode === "tenant")) {
+    return <Redirect to="/" />;
+  }
+
+  return <TenantLayout />;
 }
 
 function App() {

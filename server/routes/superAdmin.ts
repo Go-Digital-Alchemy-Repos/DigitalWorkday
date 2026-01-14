@@ -3307,4 +3307,130 @@ router.post("/status/checks/:type", requireSuperUser, async (req, res) => {
   }
 });
 
+// =============================================================================
+// TENANT PICKER & IMPERSONATION ENDPOINTS
+// =============================================================================
+
+// GET /api/v1/super/tenants/picker - Lightweight tenant list for switcher dropdown
+router.get("/tenants/picker", requireSuperUser, async (req, res) => {
+  try {
+    const searchQuery = req.query.q as string | undefined;
+    const limit = Math.min(parseInt(req.query.limit as string) || 50, 100);
+    
+    let query = db.select({
+      id: tenants.id,
+      name: tenants.name,
+      status: tenants.status,
+    }).from(tenants);
+    
+    if (searchQuery && searchQuery.trim()) {
+      query = query.where(ilike(tenants.name, `%${searchQuery.trim()}%`)) as any;
+    }
+    
+    const results = await query.orderBy(tenants.name).limit(limit);
+    
+    res.json(results);
+  } catch (error) {
+    console.error("[tenants/picker] Failed to fetch tenants:", error);
+    res.status(500).json({ error: "Failed to fetch tenants" });
+  }
+});
+
+// Impersonation schemas
+const startImpersonationSchema = z.object({
+  tenantId: z.string().uuid(),
+});
+
+// POST /api/v1/super/impersonate/start - Start acting as a tenant
+router.post("/impersonate/start", requireSuperUser, async (req, res) => {
+  try {
+    const parseResult = startImpersonationSchema.safeParse(req.body);
+    if (!parseResult.success) {
+      return res.status(400).json({ 
+        error: "Invalid request data", 
+        details: parseResult.error.errors 
+      });
+    }
+    
+    const { tenantId } = parseResult.data;
+    const user = req.user as any;
+    
+    // Verify tenant exists
+    const [tenant] = await db.select()
+      .from(tenants)
+      .where(eq(tenants.id, tenantId))
+      .limit(1);
+    
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+    
+    // Log impersonation start as audit event
+    await db.insert(tenantAuditEvents).values({
+      tenantId,
+      userId: user.id,
+      eventType: "super_user_action",
+      eventDetails: {
+        action: "impersonation_started",
+        superUserId: user.id,
+        superUserEmail: user.email,
+        tenantName: tenant.name,
+        timestamp: new Date().toISOString(),
+      },
+    });
+    
+    console.log(`[impersonate] Super user ${user.email} started impersonating tenant ${tenant.name} (${tenantId})`);
+    
+    res.json({ 
+      success: true, 
+      tenant: {
+        id: tenant.id,
+        name: tenant.name,
+        status: tenant.status,
+      }
+    });
+  } catch (error) {
+    console.error("[impersonate/start] Failed to start impersonation:", error);
+    res.status(500).json({ error: "Failed to start impersonation" });
+  }
+});
+
+// POST /api/v1/super/impersonate/stop - Stop acting as a tenant
+router.post("/impersonate/stop", requireSuperUser, async (req, res) => {
+  try {
+    const user = req.user as any;
+    const tenantId = req.headers["x-tenant-id"] as string | undefined;
+    
+    // Log impersonation stop if we know which tenant
+    if (tenantId) {
+      const [tenant] = await db.select()
+        .from(tenants)
+        .where(eq(tenants.id, tenantId))
+        .limit(1);
+      
+      if (tenant) {
+        await db.insert(tenantAuditEvents).values({
+          tenantId,
+          userId: user.id,
+          eventType: "super_user_action",
+          eventDetails: {
+            action: "impersonation_stopped",
+            superUserId: user.id,
+            superUserEmail: user.email,
+            tenantName: tenant.name,
+            timestamp: new Date().toISOString(),
+          },
+        });
+        
+        console.log(`[impersonate] Super user ${user.email} stopped impersonating tenant ${tenant.name} (${tenantId})`);
+      }
+    }
+    
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[impersonate/stop] Failed to stop impersonation:", error);
+    res.status(500).json({ error: "Failed to stop impersonation" });
+  }
+});
+
 export default router;
