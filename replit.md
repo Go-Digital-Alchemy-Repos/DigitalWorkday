@@ -76,6 +76,35 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **Guardrails**: `requireTenantIdForCreate()` utility prevents future rows without tenantId
 - **Health Check**: `/api/v1/super/tenancy/health` shows missing/quarantined counts per table
 
+## Debug Tools (Super Admin)
+The Super Admin System Status → Debug Tools tab provides safe diagnostic and remediation capabilities:
+
+### Quarantine Manager
+- View quarantined data counts by table (projects, tasks, teams, users)
+- Browse and search quarantined rows with pagination
+- **Assign**: Move rows from quarantine to a valid tenant (validates target relationships)
+- **Archive**: Deactivate users (other tables not supported)
+- **Delete**: Permanently delete quarantined rows (requires `SUPER_DEBUG_DELETE_ALLOWED=true` + confirmation)
+
+### TenantId Backfill Tools
+- **Scan**: Count rows with missing tenantId per table
+- **Dry Run**: Simulate backfill without mutations
+- **Apply**: Execute backfill (requires `BACKFILL_TENANT_IDS_ALLOWED=true` + confirmation header)
+
+### Data Integrity Checks
+Read-only scans for:
+- Cross-tenant foreign key mismatches (tasks→projects, projects→clients, teams→workspaces)
+- Missing required relationships (projects without workspace, non-super users without tenant)
+- Duplicate primaries (multiple primary workspaces per tenant)
+
+### Environment Flags
+- `SUPER_DEBUG_DELETE_ALLOWED=true`: Enable permanent delete from quarantine
+- `SUPER_DEBUG_ACTIONS_ALLOWED=true`: Enable recompute/cache actions
+- `BACKFILL_TENANT_IDS_ALLOWED=true`: Enable backfill apply mode
+
+### Confirmation Phrases
+All destructive operations require typed confirmation phrases matching header values.
+
 ## External Dependencies
 - **PostgreSQL**: Primary database.
 - **Socket.IO**: Real-time communication.
