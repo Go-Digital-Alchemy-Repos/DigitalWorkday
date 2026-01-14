@@ -1,0 +1,156 @@
+You are continuing development on my existing multi-tenant React + Express app (single codebase).
+Implement Super Admin navigation isolation + “Act as Tenant” UI switching.
+Goal: Super Admins see ONLY Super Admin menu items in normal mode; when acting as a tenant they see the tenant menu.
+Do NOT rewrite the app. Keep this change focused to navigation/layout and impersonation state handling.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT remove or rename any endpoints.
+- Do NOT change database schema.
+- Do NOT change tenancy enforcement rules or auth strategy.
+- Do NOT change tenant role permissions.
+- No destructive refactors; change only navigation/layout and routing guards needed for UI switching.
+- Must be visually obvious when acting-as-tenant (banner required).
+
+===============================================================================
+GOAL
+===============================================================================
+A) In “Super Admin mode” (NOT acting as tenant):
+- Left nav shows ONLY Super Admin links:
+  - Super Dashboard
+  - Tenants
+  - Search (if implemented)
+  - Global Reports
+  - System Settings
+  - System Status
+- Hide tenant navigation items entirely (Projects, Clients, My Tasks, Time Tracking, Teams, Workspaces, etc.)
+- Super Admin should NOT land on tenant routes by default.
+
+B) In “Act as Tenant mode”:
+- Switch to tenant navigation layout and routes exactly as a tenant admin/employee/client would see
+- Keep an always-visible banner showing impersonation state + Exit button
+- Provide a quick return to Super Admin workspace on exit
+
+===============================================================================
+STEP 1 — DEFINE AND CENTRALIZE “APP MODE” STATE
+===============================================================================
+Create a single source of truth for layout mode:
+- appMode = "super" | "tenant"
+Rules:
+- appMode="super" when user.role=super_user AND effectiveTenantId is null
+- appMode="tenant" when effectiveTenantId is set (super acting-as-tenant) OR user is a normal tenant user
+
+Implementation:
+- Use your existing impersonation mechanism:
+  - effectiveTenantId stored in a safe place (server session, cookie, localStorage, or memory)
+- Provide a utility hook:
+  - useAppMode()
+  returns: { appMode, isSuper, isImpersonating, effectiveTenantId, effectiveTenantName }
+
+===============================================================================
+STEP 2 — LAYOUT SPLIT: SUPER LAYOUT VS TENANT LAYOUT
+===============================================================================
+Create two distinct layout shells:
+
+1) SuperLayout
+- Sidebar: Super Admin menu only
+- Header: includes Search (optional), “Act as Tenant” quick access, user menu
+- Main content: /super/* routes only
+
+2) TenantLayout
+- Sidebar: existing tenant menu (My Tasks, Projects, Clients, Time Tracking, etc.)
+- Header: existing tenant header
+- If impersonating: show the Impersonation Banner at top (sticky)
+
+Routing rules:
+- /super/* uses SuperLayout only
+- tenant routes (/, /projects, /clients, /my-tasks, etc.) use TenantLayout only
+
+IMPORTANT:
+- In SuperLayout, do not render tenant menus or tenant route links at all.
+
+===============================================================================
+STEP 3 — ROUTE GUARDS & DEFAULT LANDING
+===============================================================================
+- If user.role=super_user and NOT impersonating:
+  - redirect any accidental tenant route access to /super/dashboard (or /super/tenants)
+  - Example: if they go to /projects in super mode, redirect to /super/tenants with a toast:
+    “Switch to a tenant to access Projects.”
+
+- If impersonating (effectiveTenantId set):
+  - allow tenant routes
+  - allow exiting to return to /super/tenants
+
+- For tenant users (non-super):
+  - no change; tenant routes as normal
+  - they should never access /super/*
+
+===============================================================================
+STEP 4 — ACT-AS-TENANT SWITCHING UX (REQUIRED)
+===============================================================================
+A) Starting impersonation
+- From SuperLayout (Tenants table or Search results), allow:
+  - “Act as Tenant” button
+- Confirm dialog:
+  “You’re about to act as <TenantName>. Changes will affect their data.”
+- On confirm:
+  - set effectiveTenantId + effectiveTenantName
+  - navigate to tenant default landing page (choose one):
+    - /dashboard or /my-tasks or /projects (whatever your tenant home is)
+
+B) Impersonation Banner (sticky, always visible on TenantLayout)
+- “Acting as Tenant: <TenantName>”
+- “Exit Tenant Mode” button
+- Optional: link “Back to Super Admin Workspace”
+
+C) Exiting impersonation
+- Clear effectiveTenantId state
+- Navigate to /super/tenants
+- Ensure tenant nav disappears immediately
+
+===============================================================================
+STEP 5 — NAVIGATION CONTENT RULES
+===============================================================================
+- In SuperMode:
+  - hide tenant nav items entirely
+  - hide tenant-specific quick widgets (project picker, team picker, workspace switcher)
+  - super admin workspace is system/tenant administration only
+
+- In TenantMode:
+  - show tenant nav exactly as your app currently does based on tenant role
+  - super-only links should not appear in tenant sidebar (avoid confusion)
+  - only banner indicates they are a super admin impersonating
+
+===============================================================================
+STEP 6 — TESTS (MANDATORY MINIMUM)
+===============================================================================
+1) super_mode_sees_super_nav_only.test.tsx
+- super_user not impersonating sees only super nav items
+
+2) super_mode_redirects_tenant_routes.test.ts
+- super_user not impersonating visiting /projects redirects to /super/dashboard (or /super/tenants)
+
+3) impersonation_switches_layout.test.tsx
+- start impersonation => tenant nav appears + banner visible
+- exit => returns to super nav only
+
+4) non_super_cannot_access_super_routes.test.ts
+- tenant users blocked from /super/*
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) Super Admins (normal mode) see ONLY Super Admin menu items.
+2) Super Admins cannot access tenant pages unless acting-as-tenant.
+3) Acting-as-tenant switches UI to tenant navigation and tools.
+4) Impersonation banner is always visible and exit is one click.
+5) No schema changes or breaking endpoint changes; tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Which files handle layout and routing now
+- How appMode is determined
+- Where effectiveTenantId is stored and cleared
+- Manual test checklist

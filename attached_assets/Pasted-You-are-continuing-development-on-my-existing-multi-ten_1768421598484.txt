@@ -1,0 +1,126 @@
+You are continuing development on my existing multi-tenant React + Express app (single codebase).
+FOLLOW-UP PROMPT: Add a Super Admin “Tenant Switcher” (quick searchable selector) in SuperLayout header
+to start/stop “Act as Tenant” quickly.
+Implement ONLY this. Do NOT rewrite the app.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change database schema.
+- Do NOT remove or rename any endpoints.
+- Do NOT modify tenancy enforcement rules or auth strategy.
+- Keep changes confined to SuperLayout header + a small supporting API call (reuse existing if possible).
+- Tenant switching must be explicit, confirmable, and auditable.
+
+===============================================================================
+GOAL
+===============================================================================
+In Super Admin mode (not impersonating), Super Admins should be able to quickly:
+- Search/select a tenant from a dropdown in the header
+- Click “Act as Tenant” (with confirmation)
+- Immediately switch into TenantMode and land on tenant home page
+When impersonating, header shows:
+- active tenant name
+- “Switch tenant” action (optional)
+- “Exit tenant mode” button
+
+===============================================================================
+FEATURE 1 — HEADER TENANT SWITCHER (SUPER MODE)
+===============================================================================
+1) Add a header control in SuperLayout:
+- Label: “Select tenant…”
+- Behavior:
+  - searchable dropdown (typeahead)
+  - results show tenant name + status (active/suspended) + tenantId short
+  - selecting a tenant does NOT immediately switch; it selects tenant for action
+- Buttons:
+  - “Act as Tenant” (enabled when tenant selected)
+  - confirmation dialog on click
+
+2) Tenant list source
+- Prefer reusing an existing endpoint used by /super/tenants list:
+  - GET /api/v1/super/tenants?limit=...
+- If that endpoint is too heavy, add a lightweight add-only endpoint:
+  - GET /api/v1/super/tenants/picker
+Returns:
+[
+  { id, name, status, createdAt? }
+]
+Must be super_user only.
+
+3) Search behavior
+- If the tenant list is small (< 500), you may fetch once and filter client-side.
+- If large, support server-side query:
+  - GET /api/v1/super/tenants/picker?q=Digital&limit=20
+Pick one approach and document it.
+
+===============================================================================
+FEATURE 2 — START IMPERSONATION FROM SWITCHER
+===============================================================================
+- On “Act as Tenant”:
+  - call existing impersonation start endpoint if present:
+    - POST /api/v1/super/impersonate { tenantId }
+  - otherwise, set effectiveTenantId using the existing mechanism already built
+- Must show confirmation:
+  “You are about to act as <TenantName>. Changes will affect their data.”
+- On confirm success:
+  - navigate to tenant landing route (/projects or /my-tasks or /dashboard)
+  - tenant layout should appear with impersonation banner
+
+Audit:
+- Ensure impersonation start is logged (reuse your audit event system).
+
+===============================================================================
+FEATURE 3 — HEADER IN TENANT MODE (IMPERSONATING)
+===============================================================================
+When impersonating:
+- Replace the selector with a compact “Acting as: <TenantName>” pill
+- Provide:
+  - “Exit” button (required)
+  - Optional: “Switch Tenant” button
+    - If implemented: opens a small panel (not modal) listing tenants and requires confirm again
+    - Switching tenant should:
+      - log impersonation end for previous tenant
+      - log impersonation start for new tenant
+      - navigate to tenant landing page
+If switching adds risk, skip it for now and only support Exit.
+
+===============================================================================
+FEATURE 4 — UX DETAILS (QUALITY)
+===============================================================================
+- Show loading states while fetching tenants
+- Show error toast if impersonation fails
+- Disable acting as suspended tenant unless explicitly allowed (recommended):
+  - If status=suspended, show tooltip “Tenant suspended” and disable “Act as Tenant”
+- Remember last selected tenant in SuperLayout session (optional)
+
+===============================================================================
+TESTS (MANDATORY MINIMUM)
+===============================================================================
+1) tenant_picker_super_only.test.ts
+- non-super cannot access picker endpoint
+
+2) super_header_switcher_renders.test.tsx
+- super mode shows tenant switcher
+- tenant mode shows acting-as pill + exit
+
+3) act_as_tenant_from_switcher.test.ts
+- selecting tenant + confirm triggers impersonation and route change
+
+4) suspended_tenant_disabled.test.tsx (if you implement restriction)
+- cannot act as suspended tenant
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) Super Admin header includes a searchable tenant selector in Super mode.
+2) Super Admin can act as tenant from the selector with confirmation.
+3) When impersonating, header shows active tenant + Exit.
+4) No schema changes; no breaking endpoint changes; tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Where the tenant picker data comes from (endpoint)
+- Component path for the header switcher
+- Manual test checklist

@@ -1,12 +1,12 @@
 import { Router } from "express";
 import { storage } from "../storage";
 import { requireSuperUser } from "../middleware/tenantContext";
-import { insertTenantSchema, TenantStatus, UserRole, tenants, workspaces, invitations, tenantSettings, tenantNotes, tenantAuditEvents, NoteCategory } from "@shared/schema";
+import { insertTenantSchema, TenantStatus, UserRole, tenants, workspaces, invitations, tenantSettings, tenantNotes, tenantAuditEvents, NoteCategory, clients, clientContacts, projects } from "@shared/schema";
 import { hashPassword } from "../auth";
 import { z } from "zod";
 import { db } from "../db";
 import { users } from "@shared/schema";
-import { eq, sql, desc, and } from "drizzle-orm";
+import { eq, sql, desc, and, ilike } from "drizzle-orm";
 import { timingSafeEqual } from "crypto";
 import { tenantIntegrationService, IntegrationProvider } from "../services/tenantIntegrations";
 import multer from "multer";
@@ -1386,6 +1386,446 @@ router.get("/tenants/:tenantId/health", requireSuperUser, async (req, res) => {
   } catch (error) {
     console.error("Error fetching tenant health:", error);
     res.status(500).json({ error: "Failed to fetch tenant health" });
+  }
+});
+
+// =============================================================================
+// BULK DATA IMPORT (Clients & Projects)
+// =============================================================================
+
+// Schema for bulk client import
+const bulkClientSchema = z.object({
+  companyName: z.string().min(1),
+  industry: z.string().optional(),
+  website: z.string().optional(),
+  phone: z.string().optional(),
+  address1: z.string().optional(),
+  address2: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  zip: z.string().optional(),
+  country: z.string().optional(),
+  notes: z.string().optional(),
+  primaryContactEmail: z.string().email().optional(),
+  primaryContactFirstName: z.string().optional(),
+  primaryContactLastName: z.string().optional(),
+});
+
+const bulkClientsImportSchema = z.object({
+  clients: z.array(bulkClientSchema).min(1).max(500),
+});
+
+// POST /api/v1/super/tenants/:tenantId/clients/bulk - Bulk import clients
+router.post("/tenants/:tenantId/clients/bulk", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const data = bulkClientsImportSchema.parse(req.body);
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    // Get primary workspace
+    const primaryWorkspaceResult = await db.select()
+      .from(workspaces)
+      .where(and(eq(workspaces.tenantId, tenantId), eq(workspaces.isPrimary, true)))
+      .limit(1);
+    
+    if (!primaryWorkspaceResult.length) {
+      return res.status(400).json({ error: "No primary workspace found for tenant" });
+    }
+    const workspaceId = primaryWorkspaceResult[0].id;
+
+    // Get existing clients for deduplication
+    const existingClients = await db.select({ companyName: clients.companyName, id: clients.id })
+      .from(clients)
+      .where(eq(clients.tenantId, tenantId));
+    const existingNamesLower = new Set(existingClients.map(c => c.companyName.toLowerCase()));
+
+    // Track duplicates within CSV
+    const seenInCsv = new Set<string>();
+
+    const results: Array<{
+      companyName: string;
+      status: "created" | "skipped" | "error";
+      reason?: string;
+      clientId?: string;
+    }> = [];
+
+    let created = 0;
+    let skipped = 0;
+    let errors = 0;
+
+    for (const clientData of data.clients) {
+      const companyNameLower = clientData.companyName.trim().toLowerCase();
+
+      // Check for duplicates in tenant
+      if (existingNamesLower.has(companyNameLower)) {
+        results.push({
+          companyName: clientData.companyName,
+          status: "skipped",
+          reason: "Client already exists in tenant",
+        });
+        skipped++;
+        continue;
+      }
+
+      // Check for duplicates within CSV
+      if (seenInCsv.has(companyNameLower)) {
+        results.push({
+          companyName: clientData.companyName,
+          status: "skipped",
+          reason: "Duplicate in CSV",
+        });
+        skipped++;
+        continue;
+      }
+      seenInCsv.add(companyNameLower);
+
+      try {
+        // Create client
+        const [newClient] = await db.insert(clients).values({
+          tenantId,
+          workspaceId,
+          companyName: clientData.companyName.trim(),
+          industry: clientData.industry,
+          website: clientData.website,
+          phone: clientData.phone,
+          addressLine1: clientData.address1,
+          addressLine2: clientData.address2,
+          city: clientData.city,
+          state: clientData.state,
+          postalCode: clientData.zip,
+          country: clientData.country,
+          notes: clientData.notes,
+          status: "active",
+        }).returning();
+
+        // Create primary contact if email provided
+        if (clientData.primaryContactEmail) {
+          await db.insert(clientContacts).values({
+            clientId: newClient.id,
+            workspaceId,
+            email: clientData.primaryContactEmail,
+            firstName: clientData.primaryContactFirstName,
+            lastName: clientData.primaryContactLastName,
+            isPrimary: true,
+          });
+        }
+
+        results.push({
+          companyName: clientData.companyName,
+          status: "created",
+          clientId: newClient.id,
+        });
+        created++;
+        existingNamesLower.add(companyNameLower);
+      } catch (error: any) {
+        results.push({
+          companyName: clientData.companyName,
+          status: "error",
+          reason: error.message || "Failed to create client",
+        });
+        errors++;
+      }
+    }
+
+    // Record audit event
+    const superUser = req.user as any;
+    await recordTenantAuditEvent(
+      tenantId,
+      "clients_bulk_imported",
+      `Bulk import: ${created} clients created, ${skipped} skipped, ${errors} errors`,
+      superUser?.id,
+      { created, skipped, errors, total: data.clients.length }
+    );
+
+    res.status(201).json({
+      created,
+      skipped,
+      errors,
+      results,
+    });
+  } catch (error: any) {
+    if (error.name === "ZodError") {
+      return res.status(400).json({ error: "Invalid request", details: error.errors });
+    }
+    console.error("Error bulk importing clients:", error);
+    res.status(500).json({ error: "Failed to bulk import clients" });
+  }
+});
+
+// Schema for bulk project import
+const bulkProjectSchema = z.object({
+  projectName: z.string().min(1),
+  clientCompanyName: z.string().optional(),
+  clientId: z.string().optional(),
+  workspaceName: z.string().optional(),
+  description: z.string().optional(),
+  status: z.enum(["active", "archived"]).optional(),
+  startDate: z.string().optional(),
+  dueDate: z.string().optional(),
+  color: z.string().optional(),
+  projectOwnerEmail: z.string().email().optional(),
+});
+
+const bulkProjectsImportSchema = z.object({
+  projects: z.array(bulkProjectSchema).min(1).max(500),
+  options: z.object({
+    autoCreateMissingClients: z.boolean().optional(),
+  }).optional(),
+});
+
+// POST /api/v1/super/tenants/:tenantId/projects/bulk - Bulk import projects
+router.post("/tenants/:tenantId/projects/bulk", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const data = bulkProjectsImportSchema.parse(req.body);
+    const autoCreateClients = data.options?.autoCreateMissingClients || false;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    // Get workspaces for the tenant
+    const tenantWorkspaces = await db.select()
+      .from(workspaces)
+      .where(eq(workspaces.tenantId, tenantId));
+    
+    const primaryWorkspace = tenantWorkspaces.find(w => w.isPrimary) || tenantWorkspaces[0];
+    if (!primaryWorkspace) {
+      return res.status(400).json({ error: "No workspace found for tenant" });
+    }
+    const workspaceMap = new Map(tenantWorkspaces.map(w => [w.name.toLowerCase(), w.id]));
+
+    // Get existing clients
+    const existingClients = await db.select({ companyName: clients.companyName, id: clients.id })
+      .from(clients)
+      .where(eq(clients.tenantId, tenantId));
+    const clientMap = new Map(existingClients.map(c => [c.companyName.toLowerCase(), c.id]));
+
+    // Get existing projects for deduplication (by name + clientId)
+    const existingProjects = await db.select({ name: projects.name, clientId: projects.clientId })
+      .from(projects)
+      .where(eq(projects.tenantId, tenantId));
+    const existingProjectKeys = new Set(
+      existingProjects.map(p => `${p.name.toLowerCase()}|${p.clientId || ""}`)
+    );
+
+    // Track created items
+    const createdClients: Array<{ name: string; id: string }> = [];
+
+    const results: Array<{
+      projectName: string;
+      status: "created" | "skipped" | "error";
+      reason?: string;
+      projectId?: string;
+      clientIdUsed?: string;
+      workspaceIdUsed?: string;
+    }> = [];
+
+    let created = 0;
+    let skipped = 0;
+    let errors = 0;
+
+    for (const projectData of data.projects) {
+      const projectNameTrimmed = projectData.projectName.trim();
+      let clientIdToUse: string | null = null;
+      let workspaceIdToUse = primaryWorkspace.id;
+
+      // Resolve workspace if specified
+      if (projectData.workspaceName) {
+        const wsId = workspaceMap.get(projectData.workspaceName.toLowerCase());
+        if (wsId) {
+          workspaceIdToUse = wsId;
+        }
+        // If not found, use primary and continue (warning added to results)
+      }
+
+      // Resolve client
+      if (projectData.clientId) {
+        clientIdToUse = projectData.clientId;
+      } else if (projectData.clientCompanyName) {
+        const clientNameLower = projectData.clientCompanyName.trim().toLowerCase();
+        const existingClientId = clientMap.get(clientNameLower);
+        
+        if (existingClientId) {
+          clientIdToUse = existingClientId;
+        } else if (autoCreateClients) {
+          // Auto-create client
+          try {
+            const [newClient] = await db.insert(clients).values({
+              tenantId,
+              workspaceId: workspaceIdToUse,
+              companyName: projectData.clientCompanyName.trim(),
+              status: "active",
+            }).returning();
+            clientIdToUse = newClient.id;
+            clientMap.set(clientNameLower, newClient.id);
+            createdClients.push({ name: projectData.clientCompanyName.trim(), id: newClient.id });
+          } catch (createErr: any) {
+            results.push({
+              projectName: projectNameTrimmed,
+              status: "error",
+              reason: `Failed to create client "${projectData.clientCompanyName}": ${createErr.message}`,
+            });
+            errors++;
+            continue;
+          }
+        } else {
+          results.push({
+            projectName: projectNameTrimmed,
+            status: "error",
+            reason: `Client "${projectData.clientCompanyName}" not found. Import clients first or enable auto-create.`,
+          });
+          errors++;
+          continue;
+        }
+      }
+
+      // Check for duplicate project (name + client)
+      const projectKey = `${projectNameTrimmed.toLowerCase()}|${clientIdToUse || ""}`;
+      if (existingProjectKeys.has(projectKey)) {
+        results.push({
+          projectName: projectNameTrimmed,
+          status: "skipped",
+          reason: "Project with same name and client already exists",
+        });
+        skipped++;
+        continue;
+      }
+
+      try {
+        // Create project
+        const [newProject] = await db.insert(projects).values({
+          tenantId,
+          workspaceId: workspaceIdToUse,
+          clientId: clientIdToUse,
+          name: projectNameTrimmed,
+          description: projectData.description,
+          status: projectData.status || "active",
+          color: projectData.color || "#3B82F6",
+        }).returning();
+
+        results.push({
+          projectName: projectNameTrimmed,
+          status: "created",
+          projectId: newProject.id,
+          clientIdUsed: clientIdToUse || undefined,
+          workspaceIdUsed: workspaceIdToUse,
+        });
+        created++;
+        existingProjectKeys.add(projectKey);
+      } catch (error: any) {
+        results.push({
+          projectName: projectNameTrimmed,
+          status: "error",
+          reason: error.message || "Failed to create project",
+        });
+        errors++;
+      }
+    }
+
+    // Record audit event
+    const superUser = req.user as any;
+    await recordTenantAuditEvent(
+      tenantId,
+      "projects_bulk_imported",
+      `Bulk import: ${created} projects created, ${skipped} skipped, ${errors} errors${createdClients.length ? `, ${createdClients.length} clients auto-created` : ""}`,
+      superUser?.id,
+      { created, skipped, errors, total: data.projects.length, clientsCreated: createdClients.length }
+    );
+
+    res.status(201).json({
+      created,
+      skipped,
+      errors,
+      results,
+      clientsCreated: createdClients,
+    });
+  } catch (error: any) {
+    if (error.name === "ZodError") {
+      return res.status(400).json({ error: "Invalid request", details: error.errors });
+    }
+    console.error("Error bulk importing projects:", error);
+    res.status(500).json({ error: "Failed to bulk import projects" });
+  }
+});
+
+// GET /api/v1/super/tenants/:tenantId/clients - List clients for a tenant
+router.get("/tenants/:tenantId/clients", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const search = req.query.search as string || "";
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    let query = db.select().from(clients).where(eq(clients.tenantId, tenantId));
+    
+    if (search) {
+      query = db.select().from(clients)
+        .where(and(
+          eq(clients.tenantId, tenantId),
+          ilike(clients.companyName, `%${search}%`)
+        ));
+    }
+
+    const clientList = await query.orderBy(clients.companyName);
+
+    res.json({ clients: clientList });
+  } catch (error) {
+    console.error("Error fetching tenant clients:", error);
+    res.status(500).json({ error: "Failed to fetch clients" });
+  }
+});
+
+// GET /api/v1/super/tenants/:tenantId/projects - List projects for a tenant
+router.get("/tenants/:tenantId/projects", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const search = req.query.search as string || "";
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    let query = db.select().from(projects).where(eq(projects.tenantId, tenantId));
+    
+    if (search) {
+      query = db.select().from(projects)
+        .where(and(
+          eq(projects.tenantId, tenantId),
+          ilike(projects.name, `%${search}%`)
+        ));
+    }
+
+    const projectList = await query.orderBy(projects.name);
+
+    // Enrich with client names
+    const clientIds = Array.from(new Set(projectList.filter(p => p.clientId).map(p => p.clientId!)));
+    let clientNameMap = new Map<string, string>();
+    if (clientIds.length > 0) {
+      const clientsData = await db.select({ id: clients.id, companyName: clients.companyName })
+        .from(clients)
+        .where(sql`${clients.id} = ANY(${clientIds})`);
+      clientNameMap = new Map(clientsData.map(c => [c.id, c.companyName]));
+    }
+
+    const enrichedProjects = projectList.map(p => ({
+      ...p,
+      clientName: p.clientId ? clientNameMap.get(p.clientId) || null : null,
+    }));
+
+    res.json({ projects: enrichedProjects });
+  } catch (error) {
+    console.error("Error fetching tenant projects:", error);
+    res.status(500).json({ error: "Failed to fetch projects" });
   }
 });
 

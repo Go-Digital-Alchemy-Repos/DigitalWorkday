@@ -39,8 +39,12 @@ import {
   Send,
   Upload,
   FileSpreadsheet,
-  Heart
+  Heart,
+  FolderKanban,
+  Search,
+  Plus
 } from "lucide-react";
+import { CsvImportPanel, type ParsedRow, type ImportResult } from "@/components/common/csv-import-panel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import type { Tenant } from "@shared/schema";
 
@@ -89,6 +93,24 @@ interface TenantNote {
   };
 }
 
+interface TenantClient {
+  id: string;
+  companyName: string;
+  industry: string | null;
+  status: string;
+  createdAt: string;
+}
+
+interface TenantProject {
+  id: string;
+  name: string;
+  clientId: string | null;
+  clientName: string | null;
+  status: string;
+  color: string | null;
+  createdAt: string;
+}
+
 interface TenantAuditEvent {
   id: string;
   tenantId: string;
@@ -128,6 +150,33 @@ interface TenantHealth {
   };
   warnings: string[];
   canEnableStrict: boolean;
+}
+
+interface TenantClient {
+  id: string;
+  tenantId: string;
+  workspaceId: string;
+  companyName: string;
+  displayName?: string;
+  industry?: string;
+  website?: string;
+  phone?: string;
+  email?: string;
+  status: string;
+  createdAt: string;
+}
+
+interface TenantProject {
+  id: string;
+  tenantId: string;
+  workspaceId: string;
+  clientId?: string;
+  name: string;
+  description?: string;
+  status: string;
+  color?: string;
+  createdAt: string;
+  clientName?: string;
 }
 
 interface TenantDrawerProps {
@@ -186,6 +235,9 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
   const [csvData, setCsvData] = useState<Array<{ email: string; firstName?: string; lastName?: string; role?: string }>>([]);
   const [sendInviteEmails, setSendInviteEmails] = useState(false);
   const [bulkImportResults, setBulkImportResults] = useState<Array<{ email: string; success: boolean; inviteUrl?: string; emailSent?: boolean; error?: string }>>([]);
+  const [clientSearch, setClientSearch] = useState("");
+  const [projectSearch, setProjectSearch] = useState("");
+  const [autoCreateClients, setAutoCreateClients] = useState(false);
 
   useEffect(() => {
     if (tenant) {
@@ -222,6 +274,77 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
     queryKey: ["/api/v1/super/tenants", tenant?.id, "audit"],
     queryFn: () => fetch(`/api/v1/super/tenants/${tenant?.id}/audit?limit=50`, { credentials: "include" }).then(r => r.json()),
     enabled: !!tenant && open && activeTab === "notes",
+  });
+
+  const { data: clientsResponse, isLoading: clientsLoading } = useQuery<{ clients: TenantClient[] }>({
+    queryKey: ["/api/v1/super/tenants", tenant?.id, "clients", clientSearch],
+    queryFn: () => fetch(`/api/v1/super/tenants/${tenant?.id}/clients?search=${encodeURIComponent(clientSearch)}`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!tenant && open && activeTab === "clients",
+  });
+
+  const { data: projectsResponse, isLoading: projectsLoading } = useQuery<{ projects: TenantProject[] }>({
+    queryKey: ["/api/v1/super/tenants", tenant?.id, "projects", projectSearch],
+    queryFn: () => fetch(`/api/v1/super/tenants/${tenant?.id}/projects?search=${encodeURIComponent(projectSearch)}`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!tenant && open && activeTab === "projects",
+  });
+
+  const bulkClientsImportMutation = useMutation({
+    mutationFn: async (clientsData: ParsedRow[]) => {
+      const clients = clientsData.map(row => ({
+        companyName: row.companyName || "",
+        industry: row.industry,
+        website: row.website,
+        phone: row.phone,
+        address1: row.address1,
+        address2: row.address2,
+        city: row.city,
+        state: row.state,
+        zip: row.zip,
+        country: row.country,
+        notes: row.notes,
+        primaryContactEmail: row.primaryContactEmail,
+        primaryContactFirstName: row.primaryContactFirstName,
+        primaryContactLastName: row.primaryContactLastName,
+      }));
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenant?.id}/clients/bulk`, { clients });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenant?.id, "clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenant?.id, "audit"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Import failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const bulkProjectsImportMutation = useMutation({
+    mutationFn: async (data: { projects: ParsedRow[]; options: { autoCreateMissingClients: boolean } }) => {
+      const projects = data.projects.map(row => ({
+        projectName: row.projectName || "",
+        clientCompanyName: row.clientCompanyName,
+        clientId: row.clientId,
+        workspaceName: row.workspaceName,
+        description: row.description,
+        status: row.status,
+        startDate: row.startDate,
+        dueDate: row.dueDate,
+        color: row.color,
+      }));
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenant?.id}/projects/bulk`, { 
+        projects, 
+        options: data.options 
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenant?.id, "projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenant?.id, "clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenant?.id, "audit"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Import failed", description: error.message, variant: "destructive" });
+    },
   });
 
   const createNoteMutation = useMutation({
@@ -469,7 +592,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
         </div>
 
         <Tabs value={activeTab} onValueChange={setActiveTab} className="w-full">
-          <TabsList className="grid w-full grid-cols-6">
+          <TabsList className="grid w-full grid-cols-8">
             <TabsTrigger value="overview" data-testid="tab-overview">
               <Building2 className="h-4 w-4 mr-2" />
               Overview
@@ -478,12 +601,20 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
               <MessageSquare className="h-4 w-4 mr-2" />
               Notes
             </TabsTrigger>
+            <TabsTrigger value="clients" data-testid="tab-clients">
+              <Briefcase className="h-4 w-4 mr-2" />
+              Clients
+            </TabsTrigger>
+            <TabsTrigger value="projects" data-testid="tab-projects">
+              <FolderKanban className="h-4 w-4 mr-2" />
+              Projects
+            </TabsTrigger>
             <TabsTrigger value="onboarding" data-testid="tab-onboarding">
               <Settings className="h-4 w-4 mr-2" />
               Onboarding
             </TabsTrigger>
             <TabsTrigger value="workspaces" data-testid="tab-workspaces">
-              <Briefcase className="h-4 w-4 mr-2" />
+              <HardDrive className="h-4 w-4 mr-2" />
               Workspaces
             </TabsTrigger>
             <TabsTrigger value="users" data-testid="tab-users">
@@ -766,6 +897,221 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
                 )}
               </CardContent>
             </Card>
+          </TabsContent>
+
+          <TabsContent value="clients" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base">Clients</CardTitle>
+                    <CardDescription>Manage client companies for this tenant</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search clients..."
+                      value={clientSearch}
+                      onChange={(e) => setClientSearch(e.target.value)}
+                      className="pl-9"
+                      data-testid="input-client-search"
+                    />
+                  </div>
+                </div>
+
+                {clientsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : clientsResponse?.clients && clientsResponse.clients.length > 0 ? (
+                  <div className="border rounded-md max-h-64 overflow-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-background border-b">
+                        <tr>
+                          <th className="text-left p-2">Company Name</th>
+                          <th className="text-left p-2">Industry</th>
+                          <th className="text-left p-2">Status</th>
+                          <th className="text-left p-2">Created</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {clientsResponse.clients.map((client) => (
+                          <tr key={client.id} className="border-b last:border-0 hover:bg-muted/50">
+                            <td className="p-2 font-medium">{client.companyName}</td>
+                            <td className="p-2 text-muted-foreground">{client.industry || "-"}</td>
+                            <td className="p-2">
+                              <Badge variant={client.status === "active" ? "default" : "secondary"}>
+                                {client.status}
+                              </Badge>
+                            </td>
+                            <td className="p-2 text-muted-foreground text-xs">
+                              {new Date(client.createdAt).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No clients found. Import clients below to get started.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <CsvImportPanel
+              title="Bulk Import Clients"
+              description="Import multiple clients from a CSV file"
+              columns={[
+                { key: "companyName", label: "Company Name", required: true },
+                { key: "industry", label: "Industry" },
+                { key: "website", label: "Website" },
+                { key: "phone", label: "Phone" },
+                { key: "address1", label: "Address 1" },
+                { key: "address2", label: "Address 2" },
+                { key: "city", label: "City" },
+                { key: "state", label: "State" },
+                { key: "zip", label: "Zip" },
+                { key: "country", label: "Country" },
+                { key: "notes", label: "Notes" },
+                { key: "primaryContactEmail", label: "Contact Email" },
+                { key: "primaryContactFirstName", label: "Contact First Name" },
+                { key: "primaryContactLastName", label: "Contact Last Name" },
+              ]}
+              templateFilename="clients_template.csv"
+              onImport={async (rows) => {
+                const result = await bulkClientsImportMutation.mutateAsync(rows);
+                return {
+                  created: result.created,
+                  skipped: result.skipped,
+                  errors: result.errors,
+                  results: result.results.map((r: any) => ({
+                    name: r.companyName,
+                    status: r.status,
+                    reason: r.reason,
+                    id: r.clientId,
+                  })),
+                };
+              }}
+              isImporting={bulkClientsImportMutation.isPending}
+              nameField="companyName"
+            />
+          </TabsContent>
+
+          <TabsContent value="projects" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base">Projects</CardTitle>
+                    <CardDescription>Manage projects for this tenant</CardDescription>
+                  </div>
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center gap-2">
+                  <div className="relative flex-1">
+                    <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                    <Input
+                      placeholder="Search projects..."
+                      value={projectSearch}
+                      onChange={(e) => setProjectSearch(e.target.value)}
+                      className="pl-9"
+                      data-testid="input-project-search"
+                    />
+                  </div>
+                </div>
+
+                {projectsLoading ? (
+                  <div className="flex items-center justify-center py-8">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                ) : projectsResponse?.projects && projectsResponse.projects.length > 0 ? (
+                  <div className="border rounded-md max-h-64 overflow-auto">
+                    <table className="w-full text-sm">
+                      <thead className="sticky top-0 bg-background border-b">
+                        <tr>
+                          <th className="text-left p-2">Project Name</th>
+                          <th className="text-left p-2">Client</th>
+                          <th className="text-left p-2">Status</th>
+                          <th className="text-left p-2">Created</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {projectsResponse.projects.map((project) => (
+                          <tr key={project.id} className="border-b last:border-0 hover:bg-muted/50">
+                            <td className="p-2">
+                              <div className="flex items-center gap-2">
+                                <div 
+                                  className="w-3 h-3 rounded-sm" 
+                                  style={{ backgroundColor: project.color || "#3B82F6" }} 
+                                />
+                                <span className="font-medium">{project.name}</span>
+                              </div>
+                            </td>
+                            <td className="p-2 text-muted-foreground">{project.clientName || "-"}</td>
+                            <td className="p-2">
+                              <Badge variant={project.status === "active" ? "default" : "secondary"}>
+                                {project.status}
+                              </Badge>
+                            </td>
+                            <td className="p-2 text-muted-foreground text-xs">
+                              {new Date(project.createdAt).toLocaleDateString()}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                ) : (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No projects found. Import projects below to get started.
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            <CsvImportPanel
+              title="Bulk Import Projects"
+              description="Import multiple projects from a CSV file"
+              columns={[
+                { key: "projectName", label: "Project Name", required: true },
+                { key: "clientCompanyName", label: "Client Company Name" },
+                { key: "description", label: "Description" },
+                { key: "status", label: "Status" },
+                { key: "color", label: "Color" },
+                { key: "startDate", label: "Start Date" },
+                { key: "dueDate", label: "Due Date" },
+              ]}
+              templateFilename="projects_template.csv"
+              onImport={async (rows, options) => {
+                const result = await bulkProjectsImportMutation.mutateAsync({
+                  projects: rows,
+                  options: { autoCreateMissingClients: options.autoCreateMissingClients || false },
+                });
+                return {
+                  created: result.created,
+                  skipped: result.skipped,
+                  errors: result.errors,
+                  results: result.results.map((r: any) => ({
+                    name: r.projectName,
+                    status: r.status,
+                    reason: r.reason,
+                    id: r.projectId,
+                  })),
+                };
+              }}
+              isImporting={bulkProjectsImportMutation.isPending}
+              options={[
+                { key: "autoCreateMissingClients", label: "Auto-create missing clients", defaultValue: false },
+              ]}
+              nameField="projectName"
+            />
           </TabsContent>
 
           <TabsContent value="onboarding" className="space-y-6 mt-6">
