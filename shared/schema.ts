@@ -246,6 +246,64 @@ export const tenancyWarnings = pgTable("tenancy_warnings", {
   index("tenancy_warnings_tenant_idx").on(table.effectiveTenantId),
 ]);
 
+// Note category enum for tenant notes
+export const NoteCategory = {
+  ONBOARDING: "onboarding",
+  SUPPORT: "support",
+  BILLING: "billing",
+  TECHNICAL: "technical",
+  GENERAL: "general",
+} as const;
+
+/**
+ * Tenant Notes table - chronological notes attached to tenants (super admin only)
+ * Used for tracking onboarding work, support actions, and internal communication
+ */
+export const tenantNotes = pgTable("tenant_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  authorUserId: varchar("author_user_id").notNull(), // Super user who created the note
+  body: text("body").notNull(),
+  category: text("category").default("general"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("tenant_notes_tenant_idx").on(table.tenantId),
+  index("tenant_notes_created_at_idx").on(table.createdAt),
+]);
+
+/**
+ * Tenant Audit Events table - chronological event log for tenant lifecycle
+ * Records important changes like tenant creation, status changes, invites, etc.
+ */
+export const tenantAuditEvents = pgTable("tenant_audit_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  actorUserId: varchar("actor_user_id"), // User who triggered the event (nullable for system events)
+  eventType: text("event_type").notNull(),
+  message: text("message").notNull(),
+  metadata: jsonb("metadata"), // Optional additional structured data
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("tenant_audit_events_tenant_idx").on(table.tenantId),
+  index("tenant_audit_events_created_at_idx").on(table.createdAt),
+  index("tenant_audit_events_type_idx").on(table.eventType),
+]);
+
+// Insert schemas and types for tenant notes and audit events
+export const insertTenantNoteSchema = createInsertSchema(tenantNotes).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertTenantNote = z.infer<typeof insertTenantNoteSchema>;
+export type TenantNote = typeof tenantNotes.$inferSelect;
+
+export const insertTenantAuditEventSchema = createInsertSchema(tenantAuditEvents).omit({
+  id: true,
+  createdAt: true,
+});
+export type InsertTenantAuditEvent = z.infer<typeof insertTenantAuditEventSchema>;
+export type TenantAuditEvent = typeof tenantAuditEvents.$inferSelect;
+
 // Users table
 // Note: tenantId is nullable for backward compatibility during migration
 export const users = pgTable("users", {
