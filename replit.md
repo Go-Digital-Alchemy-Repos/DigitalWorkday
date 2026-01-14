@@ -41,6 +41,12 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **Backend Structure**: Modular routes, a `DatabaseStorage` class for CRUD, database connection, authentication, and real-time infrastructure. Middleware handles error handling, request validation, and authentication context.
 - **Design Guidelines**: Adheres to a professional design, using Inter font for UI and JetBrains Mono for monospace, featuring a 3-column layout and dark mode support.
 
+## Documentation
+- **API Reference**: `docs/ENDPOINTS.md` - Comprehensive endpoint inventory with auth requirements and tenant scoping
+- **Known Issues**: `docs/KNOWN_ISSUES.md` - Technical debt tracking and improvement areas
+- **Error Handling**: `server/lib/errors.ts` - Centralized error utilities with validation helpers
+- **Test Coverage**: Smoke tests for auth/admin/super-admin patterns, tenancy enforcement tests, workload reports tests
+
 ## External Dependencies
 - **PostgreSQL**: Primary database.
 - **Socket.IO**: Real-time communication.
