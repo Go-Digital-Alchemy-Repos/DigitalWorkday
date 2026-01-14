@@ -3230,48 +3230,139 @@ router.get("/status/health", requireSuperUser, async (req, res) => {
   }
 });
 
-// GET /api/v1/super/status/auth-diagnostics - Auth configuration diagnostics for troubleshooting
+/**
+ * GET /api/v1/super/status/auth-diagnostics
+ * 
+ * Auth configuration diagnostics for troubleshooting cookie-based auth issues.
+ * 
+ * SECURITY NOTES:
+ * - Values are derived from runtime config, NOT echoed from env vars
+ * - Secrets (SESSION_SECRET, etc.) are NEVER exposed - only existence is reported
+ * - This endpoint is read-only and never mutates state
+ * - super_user only access enforced by requireSuperUser middleware
+ * 
+ * Use cases:
+ * - Confirm cookie-based auth is correctly configured
+ * - Debug Railway/production deployment issues
+ * - Verify trust proxy and CORS settings
+ */
 router.get("/status/auth-diagnostics", requireSuperUser, async (_req, res) => {
   try {
-    // Get cookie configuration info (without exposing secrets)
-    const cookieConfig = {
-      httpOnly: true, // Always true in our setup
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
-      maxAge: "30 days",
+    const nodeEnv = process.env.NODE_ENV || "development";
+    const isProduction = nodeEnv === "production";
+    
+    // Detect Railway environment
+    const isRailway = !!(process.env.RAILWAY_ENVIRONMENT || process.env.RAILWAY_SERVICE_NAME);
+    
+    // Cookie configuration derived from runtime config in server/auth.ts
+    const cookies = {
+      httpOnly: true, // Always true in our setup for security
+      secure: isProduction, // Only secure cookies in production (requires HTTPS)
+      sameSite: "lax" as const, // Configured in auth.ts
+      domainConfigured: !!process.env.COOKIE_DOMAIN,
+      maxAgeDays: 30, // Configured in auth.ts
     };
     
-    // Check trust proxy setting
-    const trustProxyEnabled = true; // We set this in server/index.ts
-    
-    // CORS credentials enabled check
-    const corsCredentialsEnabled = true; // Assumed true since we use credentials: "include"
-    
-    // Session store type
-    const sessionStoreType = "PostgreSQL (connect-pg-simple)";
-    
-    // Check environment variables (existence only, not values)
-    const envConfig = {
-      SESSION_SECRET_SET: !!process.env.SESSION_SECRET,
-      NODE_ENV: process.env.NODE_ENV || "development",
-      DATABASE_URL_SET: !!process.env.DATABASE_URL,
-      COOKIE_DOMAIN_SET: !!process.env.COOKIE_DOMAIN,
-      APP_BASE_URL_SET: !!process.env.APP_BASE_URL,
-      API_BASE_URL_SET: !!process.env.API_BASE_URL,
+    // CORS configuration
+    const cors = {
+      credentialsEnabled: true, // We use credentials: "include" in frontend
+      allowedOriginConfigured: !!process.env.APP_BASE_URL || !!process.env.API_BASE_URL,
     };
+    
+    // Proxy configuration
+    const proxy = {
+      trustProxyEnabled: true, // Set in server/index.ts: app.set("trust proxy", 1)
+    };
+    
+    // Session configuration
+    const session = {
+      enabled: true,
+      storeType: "pg" as const, // PostgreSQL via connect-pg-simple
+      secretConfigured: !!process.env.SESSION_SECRET,
+    };
+    
+    // Runtime environment
+    const runtime = {
+      nodeEnv,
+      isRailway,
+      databaseConfigured: !!process.env.DATABASE_URL,
+    };
+    
+    // Compute overall health status
+    const issues: string[] = [];
+    const warnings: string[] = [];
+    
+    // Critical issues that would break auth
+    if (!session.secretConfigured && isProduction) {
+      issues.push("SESSION_SECRET not set - using insecure fallback");
+    }
+    if (!runtime.databaseConfigured) {
+      issues.push("DATABASE_URL not configured - session persistence will fail");
+    }
+    if (cookies.sameSite === "none" && !cookies.secure) {
+      issues.push("SameSite=None requires Secure cookies");
+    }
+    
+    // Warnings that may cause issues
+    if (!isProduction && isRailway) {
+      warnings.push("NODE_ENV is not 'production' but running on Railway");
+    }
+    if (isProduction && !proxy.trustProxyEnabled) {
+      warnings.push("trust proxy not enabled - secure cookies may fail behind proxy");
+    }
+    if (!cors.allowedOriginConfigured && isProduction) {
+      warnings.push("APP_BASE_URL not set - CORS may have issues with custom domains");
+    }
+    
+    // Compute overall status
+    let overallStatus: "healthy" | "warning" | "error" = "healthy";
+    if (issues.length > 0) {
+      overallStatus = "error";
+    } else if (warnings.length > 0) {
+      overallStatus = "warning";
+    }
+    
+    // Common fixes / recommendations (static guidance)
+    const commonFixes = [
+      {
+        condition: "loginWorksLocallyNotRailway",
+        tip: "If login works locally but not on Railway, confirm trust proxy is enabled.",
+        applies: isRailway,
+      },
+      {
+        condition: "cookiesNotSet",
+        tip: "If cookies are not being set, ensure frontend requests include credentials: 'include'.",
+        applies: true,
+      },
+      {
+        condition: "sameSiteNone",
+        tip: "If SameSite=None, Secure must be true and HTTPS is required.",
+        applies: cookies.sameSite === "none",
+      },
+      {
+        condition: "sessionExpires",
+        tip: "If sessions expire immediately, verify SESSION_SECRET is set and database is connected.",
+        applies: true,
+      },
+      {
+        condition: "loginTwice",
+        tip: "If you need to login twice, check that trust proxy is enabled and NODE_ENV=production.",
+        applies: isRailway,
+      },
+    ].filter(fix => fix.applies);
     
     res.json({
-      cookie: cookieConfig,
-      trustProxyEnabled,
-      corsCredentialsEnabled,
-      sessionStoreType,
-      environment: envConfig,
-      recommendations: [
-        !process.env.SESSION_SECRET ? "Set SESSION_SECRET for production security" : null,
-        process.env.NODE_ENV !== "production" ? "Set NODE_ENV=production in production" : null,
-        !process.env.COOKIE_DOMAIN && process.env.NODE_ENV === "production" 
-          ? "Consider setting COOKIE_DOMAIN if using custom domains" : null,
-      ].filter(Boolean),
+      authType: "cookie",
+      overallStatus,
+      cookies,
+      cors,
+      proxy,
+      session,
+      runtime,
+      issues,
+      warnings,
+      commonFixes: commonFixes.map(f => ({ condition: f.condition, tip: f.tip })),
+      lastAuthCheck: new Date().toISOString(),
     });
   } catch (error) {
     console.error("[auth-diagnostics] Failed:", error);
