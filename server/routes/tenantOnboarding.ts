@@ -501,4 +501,331 @@ router.post("/settings/brand-assets", requireAuth, requireTenantAdmin, upload.si
   }
 });
 
+// =============================================================================
+// AGREEMENT MANAGEMENT ROUTES (Tenant Admin Only)
+// =============================================================================
+
+import { tenantAgreements, tenantAgreementAcceptances, AgreementStatus, users } from "@shared/schema";
+import { and, desc } from "drizzle-orm";
+
+const agreementDraftSchema = z.object({
+  title: z.string().min(1, "Title is required"),
+  body: z.string().min(1, "Body is required"),
+});
+
+const agreementPatchSchema = z.object({
+  title: z.string().min(1).optional(),
+  body: z.string().min(1).optional(),
+});
+
+// GET /api/v1/tenant/agreement - Get current agreement state
+router.get("/agreement", requireAuth, requireTenantAdmin, async (req, res) => {
+  try {
+    const user = req.user as any;
+    const tenantId = user.tenantId;
+
+    // Get active agreement
+    const activeAgreements = await db.select()
+      .from(tenantAgreements)
+      .where(and(
+        eq(tenantAgreements.tenantId, tenantId),
+        eq(tenantAgreements.status, AgreementStatus.ACTIVE)
+      ))
+      .limit(1);
+
+    // Get draft agreement
+    const draftAgreements = await db.select()
+      .from(tenantAgreements)
+      .where(and(
+        eq(tenantAgreements.tenantId, tenantId),
+        eq(tenantAgreements.status, AgreementStatus.DRAFT)
+      ))
+      .limit(1);
+
+    const active = activeAgreements[0] || null;
+    const draft = draftAgreements[0] || null;
+
+    // Check if tenant has any agreements
+    const allAgreements = await db.select({ id: tenantAgreements.id })
+      .from(tenantAgreements)
+      .where(eq(tenantAgreements.tenantId, tenantId))
+      .limit(1);
+
+    res.json({
+      active: active ? {
+        id: active.id,
+        title: active.title,
+        body: active.body,
+        version: active.version,
+        effectiveAt: active.effectiveAt,
+      } : null,
+      draft: draft ? {
+        id: draft.id,
+        title: draft.title,
+        body: draft.body,
+        version: draft.version,
+      } : null,
+      hasAnyAgreement: allAgreements.length > 0,
+    });
+  } catch (error) {
+    console.error("Error fetching agreement:", error);
+    res.status(500).json({ error: "Failed to fetch agreement" });
+  }
+});
+
+// POST /api/v1/tenant/agreement/draft - Create or update draft
+router.post("/agreement/draft", requireAuth, requireTenantAdmin, async (req, res) => {
+  try {
+    const user = req.user as any;
+    const tenantId = user.tenantId;
+
+    const validation = agreementDraftSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ error: validation.error.errors[0].message });
+    }
+
+    const { title, body } = validation.data;
+
+    // Check for existing draft
+    const existingDrafts = await db.select()
+      .from(tenantAgreements)
+      .where(and(
+        eq(tenantAgreements.tenantId, tenantId),
+        eq(tenantAgreements.status, AgreementStatus.DRAFT)
+      ))
+      .limit(1);
+
+    if (existingDrafts.length > 0) {
+      // Update existing draft
+      const updated = await db.update(tenantAgreements)
+        .set({ title, body, updatedAt: new Date() })
+        .where(eq(tenantAgreements.id, existingDrafts[0].id))
+        .returning();
+
+      return res.json(updated[0]);
+    }
+
+    // Get current active version to determine next version number
+    const activeAgreements = await db.select()
+      .from(tenantAgreements)
+      .where(and(
+        eq(tenantAgreements.tenantId, tenantId),
+        eq(tenantAgreements.status, AgreementStatus.ACTIVE)
+      ))
+      .limit(1);
+
+    const nextVersion = activeAgreements.length > 0 ? activeAgreements[0].version + 1 : 1;
+
+    // Create new draft
+    const created = await db.insert(tenantAgreements)
+      .values({
+        tenantId,
+        title,
+        body,
+        version: nextVersion,
+        status: AgreementStatus.DRAFT,
+        createdByUserId: user.id,
+      })
+      .returning();
+
+    res.status(201).json(created[0]);
+  } catch (error) {
+    console.error("Error creating/updating draft:", error);
+    res.status(500).json({ error: "Failed to save draft" });
+  }
+});
+
+// PATCH /api/v1/tenant/agreement/draft - Update current draft
+router.patch("/agreement/draft", requireAuth, requireTenantAdmin, async (req, res) => {
+  try {
+    const user = req.user as any;
+    const tenantId = user.tenantId;
+
+    const validation = agreementPatchSchema.safeParse(req.body);
+    if (!validation.success) {
+      return res.status(400).json({ error: validation.error.errors[0].message });
+    }
+
+    const updates = validation.data;
+    if (Object.keys(updates).length === 0) {
+      return res.status(400).json({ error: "No fields to update" });
+    }
+
+    // Find existing draft
+    const existingDrafts = await db.select()
+      .from(tenantAgreements)
+      .where(and(
+        eq(tenantAgreements.tenantId, tenantId),
+        eq(tenantAgreements.status, AgreementStatus.DRAFT)
+      ))
+      .limit(1);
+
+    if (existingDrafts.length === 0) {
+      return res.status(404).json({ error: "No draft found" });
+    }
+
+    const updated = await db.update(tenantAgreements)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(tenantAgreements.id, existingDrafts[0].id))
+      .returning();
+
+    res.json(updated[0]);
+  } catch (error) {
+    console.error("Error updating draft:", error);
+    res.status(500).json({ error: "Failed to update draft" });
+  }
+});
+
+// POST /api/v1/tenant/agreement/publish - Publish draft as active
+router.post("/agreement/publish", requireAuth, requireTenantAdmin, async (req, res) => {
+  try {
+    const user = req.user as any;
+    const tenantId = user.tenantId;
+
+    // Find the draft
+    const drafts = await db.select()
+      .from(tenantAgreements)
+      .where(and(
+        eq(tenantAgreements.tenantId, tenantId),
+        eq(tenantAgreements.status, AgreementStatus.DRAFT)
+      ))
+      .limit(1);
+
+    if (drafts.length === 0) {
+      return res.status(404).json({ error: "No draft to publish" });
+    }
+
+    const draft = drafts[0];
+
+    // Archive current active agreement (if any)
+    await db.update(tenantAgreements)
+      .set({ status: AgreementStatus.ARCHIVED, updatedAt: new Date() })
+      .where(and(
+        eq(tenantAgreements.tenantId, tenantId),
+        eq(tenantAgreements.status, AgreementStatus.ACTIVE)
+      ));
+
+    // Publish the draft
+    const published = await db.update(tenantAgreements)
+      .set({
+        status: AgreementStatus.ACTIVE,
+        effectiveAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(tenantAgreements.id, draft.id))
+      .returning();
+
+    res.json({
+      agreement: published[0],
+      message: "Agreement published. All users will need to accept the new version.",
+    });
+  } catch (error) {
+    console.error("Error publishing agreement:", error);
+    res.status(500).json({ error: "Failed to publish agreement" });
+  }
+});
+
+// POST /api/v1/tenant/agreement/unpublish - Archive active agreement (disable enforcement)
+router.post("/agreement/unpublish", requireAuth, requireTenantAdmin, async (req, res) => {
+  try {
+    const user = req.user as any;
+    const tenantId = user.tenantId;
+
+    // Archive current active agreement
+    const result = await db.update(tenantAgreements)
+      .set({ status: AgreementStatus.ARCHIVED, updatedAt: new Date() })
+      .where(and(
+        eq(tenantAgreements.tenantId, tenantId),
+        eq(tenantAgreements.status, AgreementStatus.ACTIVE)
+      ))
+      .returning();
+
+    if (result.length === 0) {
+      return res.status(404).json({ error: "No active agreement to unpublish" });
+    }
+
+    res.json({
+      agreement: result[0],
+      message: "Agreement unpublished. Users are no longer required to accept terms.",
+    });
+  } catch (error) {
+    console.error("Error unpublishing agreement:", error);
+    res.status(500).json({ error: "Failed to unpublish agreement" });
+  }
+});
+
+// GET /api/v1/tenant/agreement/stats - Get acceptance statistics
+router.get("/agreement/stats", requireAuth, requireTenantAdmin, async (req, res) => {
+  try {
+    const user = req.user as any;
+    const tenantId = user.tenantId;
+
+    // Get active agreement
+    const activeAgreements = await db.select()
+      .from(tenantAgreements)
+      .where(and(
+        eq(tenantAgreements.tenantId, tenantId),
+        eq(tenantAgreements.status, AgreementStatus.ACTIVE)
+      ))
+      .limit(1);
+
+    if (activeAgreements.length === 0) {
+      return res.json({
+        hasActiveAgreement: false,
+        totalUsers: 0,
+        acceptedCount: 0,
+        pendingCount: 0,
+        pendingUsers: [],
+      });
+    }
+
+    const activeAgreement = activeAgreements[0];
+
+    // Get total tenant users (excluding super users)
+    const allUsers = await db.select({
+      id: users.id,
+      email: users.email,
+      name: users.name,
+      role: users.role,
+    })
+      .from(users)
+      .where(and(
+        eq(users.tenantId, tenantId),
+        eq(users.isActive, true)
+      ));
+
+    const tenantUsers = allUsers.filter(u => u.role !== UserRole.SUPER_USER);
+
+    // Get acceptances for current version
+    const acceptances = await db.select()
+      .from(tenantAgreementAcceptances)
+      .where(and(
+        eq(tenantAgreementAcceptances.tenantId, tenantId),
+        eq(tenantAgreementAcceptances.agreementId, activeAgreement.id),
+        eq(tenantAgreementAcceptances.version, activeAgreement.version)
+      ));
+
+    const acceptedUserIds = new Set(acceptances.map(a => a.userId));
+
+    const pendingUsers = tenantUsers.filter(u => !acceptedUserIds.has(u.id));
+
+    res.json({
+      hasActiveAgreement: true,
+      agreementVersion: activeAgreement.version,
+      totalUsers: tenantUsers.length,
+      acceptedCount: acceptances.length,
+      pendingCount: pendingUsers.length,
+      pendingUsers: pendingUsers.map(u => ({
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        role: u.role,
+      })),
+    });
+  } catch (error) {
+    console.error("Error fetching agreement stats:", error);
+    res.status(500).json({ error: "Failed to fetch statistics" });
+  }
+});
+
 export default router;
