@@ -23,7 +23,12 @@ import {
   insertActiveTimerSchema,
   TimeEntry,
   ActiveTimer,
+  tenantAgreements,
+  tenantAgreementAcceptances,
+  AgreementStatus,
 } from "@shared/schema";
+import { db } from "./db";
+import { eq, and } from "drizzle-orm";
 import { requireAuth } from "./auth";
 import { getEffectiveTenantId, requireTenantContext } from "./middleware/tenantContext";
 import { 
@@ -3519,6 +3524,162 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error removing avatar:", error);
       res.status(500).json({ error: "Failed to remove avatar" });
+    }
+  });
+
+  // =============================================================================
+  // AGREEMENT ACCEPTANCE ENDPOINTS
+  // =============================================================================
+
+  // GET /api/v1/me/agreement/status - Check if user needs to accept agreement
+  app.get("/api/v1/me/agreement/status", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const tenantId = user.tenantId;
+
+      // If no tenant, no agreement required
+      if (!tenantId) {
+        return res.json({
+          tenantId: null,
+          requiresAcceptance: false,
+          activeAgreement: null,
+          accepted: true,
+          acceptedAt: null,
+        });
+      }
+
+      // Get active agreement for tenant
+      const activeAgreements = await db.select()
+        .from(tenantAgreements)
+        .where(and(
+          eq(tenantAgreements.tenantId, tenantId),
+          eq(tenantAgreements.status, AgreementStatus.ACTIVE)
+        ))
+        .limit(1);
+
+      // No active agreement = no acceptance required
+      if (activeAgreements.length === 0) {
+        return res.json({
+          tenantId,
+          requiresAcceptance: false,
+          activeAgreement: null,
+          accepted: true,
+          acceptedAt: null,
+        });
+      }
+
+      const activeAgreement = activeAgreements[0];
+
+      // Check if user has accepted this version
+      const acceptances = await db.select()
+        .from(tenantAgreementAcceptances)
+        .where(and(
+          eq(tenantAgreementAcceptances.tenantId, tenantId),
+          eq(tenantAgreementAcceptances.userId, user.id),
+          eq(tenantAgreementAcceptances.agreementId, activeAgreement.id),
+          eq(tenantAgreementAcceptances.version, activeAgreement.version)
+        ))
+        .limit(1);
+
+      const hasAccepted = acceptances.length > 0;
+
+      res.json({
+        tenantId,
+        requiresAcceptance: !hasAccepted,
+        activeAgreement: {
+          id: activeAgreement.id,
+          title: activeAgreement.title,
+          body: activeAgreement.body,
+          version: activeAgreement.version,
+          effectiveAt: activeAgreement.effectiveAt,
+        },
+        accepted: hasAccepted,
+        acceptedAt: hasAccepted ? acceptances[0].acceptedAt : null,
+      });
+    } catch (error) {
+      console.error("Error checking agreement status:", error);
+      res.status(500).json({ error: "Failed to check agreement status" });
+    }
+  });
+
+  // POST /api/v1/me/agreement/accept - Accept the current agreement
+  app.post("/api/v1/me/agreement/accept", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const tenantId = user.tenantId;
+
+      if (!tenantId) {
+        return res.status(400).json({ error: "No tenant context" });
+      }
+
+      const { agreementId, version } = req.body;
+
+      if (!agreementId || typeof version !== "number") {
+        return res.status(400).json({ error: "agreementId and version are required" });
+      }
+
+      // Verify agreement exists and is active for this tenant
+      const activeAgreements = await db.select()
+        .from(tenantAgreements)
+        .where(and(
+          eq(tenantAgreements.id, agreementId),
+          eq(tenantAgreements.tenantId, tenantId),
+          eq(tenantAgreements.status, AgreementStatus.ACTIVE)
+        ))
+        .limit(1);
+
+      if (activeAgreements.length === 0) {
+        return res.status(404).json({ 
+          error: "Agreement not found or not active",
+          code: "AGREEMENT_NOT_FOUND"
+        });
+      }
+
+      const activeAgreement = activeAgreements[0];
+
+      // Verify version matches
+      if (activeAgreement.version !== version) {
+        return res.status(409).json({
+          error: "Agreement version mismatch. Please refresh and review the latest version.",
+          code: "VERSION_MISMATCH",
+          currentVersion: activeAgreement.version,
+        });
+      }
+
+      // Check if already accepted
+      const existingAcceptances = await db.select()
+        .from(tenantAgreementAcceptances)
+        .where(and(
+          eq(tenantAgreementAcceptances.tenantId, tenantId),
+          eq(tenantAgreementAcceptances.userId, user.id),
+          eq(tenantAgreementAcceptances.agreementId, agreementId),
+          eq(tenantAgreementAcceptances.version, version)
+        ))
+        .limit(1);
+
+      if (existingAcceptances.length > 0) {
+        return res.json({ ok: true, message: "Already accepted" });
+      }
+
+      // Record acceptance
+      const ipAddress = req.headers["x-forwarded-for"]?.toString().split(",")[0] 
+        || req.socket.remoteAddress 
+        || null;
+      const userAgent = req.headers["user-agent"] || null;
+
+      await db.insert(tenantAgreementAcceptances).values({
+        tenantId,
+        agreementId,
+        userId: user.id,
+        version,
+        ipAddress,
+        userAgent,
+      });
+
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error accepting agreement:", error);
+      res.status(500).json({ error: "Failed to accept agreement" });
     }
   });
 
