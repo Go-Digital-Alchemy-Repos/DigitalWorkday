@@ -4,6 +4,7 @@ import express from "express";
 import { db } from "../db";
 import { users, UserRole } from "../../shared/schema";
 import { sql } from "drizzle-orm";
+import { safeDeleteAllUsers } from "./fixtures";
 
 // Mock the auth module
 vi.mock("../storage", async () => {
@@ -27,14 +28,14 @@ describe("First User Bootstrap - Auto Super Admin", () => {
   let app: express.Application;
 
   beforeEach(async () => {
-    // Clean users table before each test
-    await db.execute(sql`DELETE FROM users`);
+    // Clean users table before each test (handles FK constraints)
+    await safeDeleteAllUsers();
     app = await createTestApp();
   });
 
   afterEach(async () => {
-    // Clean up after tests
-    await db.execute(sql`DELETE FROM users`);
+    // Clean up after tests (handles FK constraints)
+    await safeDeleteAllUsers();
   });
 
   it("should make first registered user a super_user", async () => {
@@ -152,7 +153,7 @@ describe("Super Admin Role Protection", () => {
   let app: express.Application;
 
   beforeEach(async () => {
-    await db.execute(sql`DELETE FROM users`);
+    await safeDeleteAllUsers();
     app = await createTestApp();
     
     // Create an existing user first
@@ -167,7 +168,7 @@ describe("Super Admin Role Protection", () => {
   });
 
   afterEach(async () => {
-    await db.execute(sql`DELETE FROM users`);
+    await safeDeleteAllUsers();
   });
 
   it("should not allow registration with role=super_user when users exist", async () => {

@@ -5,9 +5,13 @@ import { db } from "../db";
 import { users, UserRole } from "../../shared/schema";
 import { sql, eq } from "drizzle-orm";
 import { hashPassword } from "../auth";
+import { safeDeleteAllUsers } from "./fixtures";
 
 // Store original env values
 const originalEnv = { ...process.env };
+
+// Track created user IDs for cleanup
+let createdUserIds: string[] = [];
 
 describe("Purge Endpoint Guards", () => {
   let app: ReturnType<typeof express>;
@@ -16,19 +20,21 @@ describe("Purge Endpoint Guards", () => {
   beforeEach(async () => {
     // Reset env to original
     process.env = { ...originalEnv };
+    createdUserIds = [];
     
-    // Clean users table
-    await db.execute(sql`DELETE FROM users`);
+    // Clean users table safely (handles FK constraints)
+    await safeDeleteAllUsers();
     
     // Create a super user for testing
     const passwordHash = await hashPassword("testpassword123");
-    await db.insert(users).values({
+    const [superUser] = await db.insert(users).values({
       email: "superadmin@test.com",
       name: "Super Admin",
       passwordHash,
       role: UserRole.SUPER_USER,
       isActive: true,
-    });
+    }).returning();
+    createdUserIds.push(superUser.id);
 
     // Create app with routes
     app = express();
@@ -50,7 +56,7 @@ describe("Purge Endpoint Guards", () => {
 
   afterEach(async () => {
     process.env = { ...originalEnv };
-    await db.execute(sql`DELETE FROM users`);
+    await safeDeleteAllUsers();
   });
 
   it("should reject purge without PURGE_APP_DATA_ALLOWED", async () => {
@@ -107,13 +113,14 @@ describe("Purge Endpoint Guards", () => {
     
     // Create a regular user
     const passwordHash = await hashPassword("regularpassword");
-    await db.insert(users).values({
+    const [regularUser] = await db.insert(users).values({
       email: "regular@test.com",
       name: "Regular User",
       passwordHash,
       role: UserRole.EMPLOYEE,
       isActive: true,
-    });
+    }).returning();
+    createdUserIds.push(regularUser.id);
 
     // Login as regular user
     const loginRes = await request(app)

@@ -151,14 +151,24 @@ export function setupAuth(app: Express): void {
         }
         
         try {
-          const workspaces = await storage.getWorkspacesByUser(user.id);
-          const workspaceId = workspaces.length > 0 ? workspaces[0].id : null;
+          // Super users don't need workspace access - they manage the platform
+          const isSuperUser = user.role === UserRole.SUPER_USER;
           
-          if (!workspaceId) {
-            req.logout(() => {});
-            return res.status(403).json({ 
-              error: "No workspace access. Please contact your administrator." 
-            });
+          let workspaceId: string | undefined = undefined;
+          if (!isSuperUser) {
+            const workspaces = await storage.getWorkspacesByUser(user.id);
+            workspaceId = workspaces.length > 0 ? workspaces[0].id : undefined;
+            
+            if (!workspaceId) {
+              req.logout(() => {});
+              return res.status(403).json({ 
+                error: "No workspace access. Please contact your administrator." 
+              });
+            }
+          } else {
+            // Super users can optionally have a workspace from impersonation
+            const workspaces = await storage.getWorkspacesByUser(user.id);
+            workspaceId = workspaces.length > 0 ? workspaces[0].id : undefined;
           }
           
           req.session.workspaceId = workspaceId;
