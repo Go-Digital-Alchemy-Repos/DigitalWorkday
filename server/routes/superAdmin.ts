@@ -1971,4 +1971,673 @@ router.post("/system/purge-app-data", requireSuperUser, async (req, res) => {
   }
 });
 
+// ===============================================================================
+// TENANT SEEDING ENDPOINTS - Welcome Project, Task Templates, Bulk Tasks
+// ===============================================================================
+
+// Task template definitions
+const TASK_TEMPLATES: Record<string, { sections: Array<{ name: string; tasks: Array<{ title: string; description?: string; subtasks?: string[] }> }> }> = {
+  client_onboarding: {
+    sections: [
+      {
+        name: "Kickoff",
+        tasks: [
+          { title: "Schedule kickoff call", description: "Coordinate with client for initial meeting" },
+          { title: "Send welcome packet", description: "Include project overview and contact info" },
+          { title: "Collect client materials", description: "Gather logos, brand guidelines, and assets" },
+        ],
+      },
+      {
+        name: "Discovery",
+        tasks: [
+          { title: "Review client requirements", description: "Document all specifications" },
+          { title: "Conduct stakeholder interviews" },
+          { title: "Create project timeline", description: "Define milestones and deliverables" },
+        ],
+      },
+      {
+        name: "Delivery",
+        tasks: [
+          { title: "Complete deliverables" },
+          { title: "Client review and feedback" },
+          { title: "Final handoff", description: "Transfer all assets and documentation" },
+        ],
+      },
+    ],
+  },
+  website_build: {
+    sections: [
+      {
+        name: "Planning",
+        tasks: [
+          { title: "Define site structure", description: "Create sitemap and navigation flow" },
+          { title: "Gather content requirements" },
+          { title: "Review competitor sites" },
+        ],
+      },
+      {
+        name: "Design",
+        tasks: [
+          { title: "Create wireframes" },
+          { title: "Design mockups", description: "Desktop and mobile versions" },
+          { title: "Client design approval" },
+        ],
+      },
+      {
+        name: "Development",
+        tasks: [
+          { title: "Set up development environment" },
+          { title: "Build pages and components" },
+          { title: "Integrate CMS/backend" },
+          { title: "Cross-browser testing" },
+        ],
+      },
+      {
+        name: "Launch",
+        tasks: [
+          { title: "Content migration" },
+          { title: "SEO optimization" },
+          { title: "Deploy to production" },
+          { title: "Post-launch monitoring" },
+        ],
+      },
+    ],
+  },
+  general_setup: {
+    sections: [
+      {
+        name: "To Do",
+        tasks: [
+          { title: "Define project scope" },
+          { title: "Assign team members" },
+          { title: "Set project milestones" },
+        ],
+      },
+      {
+        name: "In Progress",
+        tasks: [],
+      },
+      {
+        name: "Review",
+        tasks: [],
+      },
+      {
+        name: "Done",
+        tasks: [],
+      },
+    ],
+  },
+};
+
+// Welcome project template
+const WELCOME_PROJECT_TEMPLATE = {
+  sections: [
+    {
+      name: "Getting Started",
+      tasks: [
+        {
+          title: "Invite your team",
+          description: "Add team members to collaborate on projects",
+          subtasks: ["Add employees", "Add clients", "Assign roles"],
+        },
+        { title: "Create your first client", description: "Set up a client to organize projects" },
+      ],
+    },
+    {
+      name: "Your First Workflow",
+      tasks: [
+        { title: "Create your first project", description: "Projects organize tasks for a specific goal" },
+        { title: "Add tasks and due dates", description: "Break down work into actionable items" },
+      ],
+    },
+    {
+      name: "Next Steps",
+      tasks: [
+        { title: "Track time and run reports", description: "Monitor progress and generate insights" },
+        { title: "Explore advanced features", description: "Discover templates, automations, and more" },
+      ],
+    },
+  ],
+};
+
+// Schema for bulk tasks import
+const bulkTasksImportSchema = z.object({
+  rows: z.array(z.object({
+    sectionName: z.string().min(1, "Section name is required"),
+    taskTitle: z.string().min(1, "Task title is required"),
+    description: z.string().optional(),
+    status: z.string().optional(),
+    priority: z.string().optional(),
+    dueDate: z.string().optional(),
+    assigneeEmails: z.string().optional(),
+    tags: z.string().optional(),
+    parentTaskTitle: z.string().optional(),
+    isSubtask: z.union([z.boolean(), z.string()]).optional(),
+  })),
+  options: z.object({
+    createMissingSections: z.boolean().default(true),
+    allowUnknownAssignees: z.boolean().default(false),
+  }).optional(),
+});
+
+const taskTemplateSchema = z.object({
+  templateKey: z.enum(["client_onboarding", "website_build", "general_setup"]),
+});
+
+// POST /api/v1/super/tenants/:tenantId/seed/welcome-project - Seed welcome project
+router.post("/tenants/:tenantId/seed/welcome-project", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const user = req.user as Express.User;
+
+    // Verify tenant exists
+    const tenant = await storage.getTenantById(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    // Get primary workspace
+    const workspaces = await db.select().from(schema.workspaces).where(eq(schema.workspaces.tenantId, tenantId));
+    const primaryWorkspace = workspaces.find(w => w.isPrimary) || workspaces[0];
+    if (!primaryWorkspace) {
+      return res.status(400).json({ error: "Tenant has no workspace" });
+    }
+
+    // Check for existing welcome project (idempotency)
+    const welcomeProjectName = `Welcome to ${tenant.name}`;
+    const existingProjects = await db.select()
+      .from(schema.projects)
+      .where(and(
+        eq(schema.projects.workspaceId, primaryWorkspace.id),
+        eq(schema.projects.name, welcomeProjectName)
+      ));
+
+    if (existingProjects.length > 0) {
+      return res.json({
+        status: "skipped",
+        projectId: existingProjects[0].id,
+        reason: "Welcome project already exists",
+      });
+    }
+
+    // Create welcome project
+    const [project] = await db.insert(schema.projects).values({
+      tenantId,
+      workspaceId: primaryWorkspace.id,
+      name: welcomeProjectName,
+      description: "Your introduction to the platform",
+      status: "active",
+      color: "#10B981",
+      createdBy: user.id,
+    }).returning();
+
+    // Create sections and tasks
+    let createdTasks = 0;
+    let createdSubtasks = 0;
+
+    for (let sIdx = 0; sIdx < WELCOME_PROJECT_TEMPLATE.sections.length; sIdx++) {
+      const sectionTemplate = WELCOME_PROJECT_TEMPLATE.sections[sIdx];
+      
+      const [section] = await db.insert(schema.sections).values({
+        projectId: project.id,
+        name: sectionTemplate.name,
+        orderIndex: sIdx,
+      }).returning();
+
+      for (let tIdx = 0; tIdx < sectionTemplate.tasks.length; tIdx++) {
+        const taskTemplate = sectionTemplate.tasks[tIdx];
+        
+        const [task] = await db.insert(schema.tasks).values({
+          tenantId,
+          projectId: project.id,
+          sectionId: section.id,
+          title: taskTemplate.title,
+          description: taskTemplate.description,
+          status: "todo",
+          priority: "medium",
+          createdBy: user.id,
+          orderIndex: tIdx,
+        }).returning();
+        createdTasks++;
+
+        // Create subtasks if defined
+        if (taskTemplate.subtasks && taskTemplate.subtasks.length > 0) {
+          for (let stIdx = 0; stIdx < taskTemplate.subtasks.length; stIdx++) {
+            await db.insert(schema.subtasks).values({
+              taskId: task.id,
+              title: taskTemplate.subtasks[stIdx],
+              completed: false,
+              orderIndex: stIdx,
+            });
+            createdSubtasks++;
+          }
+        }
+      }
+    }
+
+    // Record audit event
+    await db.insert(schema.tenantAuditEvents).values({
+      tenantId,
+      actorUserId: user.id,
+      eventType: "welcome_project_seeded",
+      message: `Welcome project created with ${createdTasks} tasks and ${createdSubtasks} subtasks`,
+      metadata: { projectId: project.id, projectName: welcomeProjectName, createdTasks, createdSubtasks },
+    });
+
+    res.json({
+      status: "created",
+      projectId: project.id,
+      created: {
+        sections: WELCOME_PROJECT_TEMPLATE.sections.length,
+        tasks: createdTasks,
+        subtasks: createdSubtasks,
+      },
+    });
+  } catch (error) {
+    console.error("[seed] Welcome project seed failed:", error);
+    res.status(500).json({ error: "Failed to seed welcome project" });
+  }
+});
+
+// POST /api/v1/super/tenants/:tenantId/projects/:projectId/seed/task-template - Apply task template
+router.post("/tenants/:tenantId/projects/:projectId/seed/task-template", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, projectId } = req.params;
+    const user = req.user as Express.User;
+    const data = taskTemplateSchema.parse(req.body);
+
+    // Verify tenant exists
+    const tenant = await storage.getTenantById(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    // Verify project exists and belongs to tenant
+    const [project] = await db.select()
+      .from(schema.projects)
+      .where(and(
+        eq(schema.projects.id, projectId),
+        eq(schema.projects.tenantId, tenantId)
+      ));
+
+    if (!project) {
+      return res.status(404).json({ error: "Project not found or does not belong to tenant" });
+    }
+
+    const template = TASK_TEMPLATES[data.templateKey];
+    if (!template) {
+      return res.status(400).json({ error: "Unknown template key" });
+    }
+
+    // Get existing sections for this project
+    const existingSections = await db.select()
+      .from(schema.sections)
+      .where(eq(schema.sections.projectId, projectId));
+    const existingSectionNames = new Set(existingSections.map(s => s.name.toLowerCase()));
+
+    // Get existing tasks for deduplication
+    const existingTasks = await db.select()
+      .from(schema.tasks)
+      .where(eq(schema.tasks.projectId, projectId));
+    const existingTaskTitles = new Map<string, Set<string>>();
+    for (const task of existingTasks) {
+      const sectionId = task.sectionId || "none";
+      if (!existingTaskTitles.has(sectionId)) {
+        existingTaskTitles.set(sectionId, new Set());
+      }
+      existingTaskTitles.get(sectionId)!.add(task.title.toLowerCase());
+    }
+
+    let createdSections = 0;
+    let createdTasks = 0;
+    let createdSubtasks = 0;
+    let skippedTasks = 0;
+
+    const sectionMaxOrder = existingSections.length;
+
+    for (let sIdx = 0; sIdx < template.sections.length; sIdx++) {
+      const sectionTemplate = template.sections[sIdx];
+      
+      let section: typeof existingSections[0] | undefined;
+      
+      // Check if section already exists
+      if (existingSectionNames.has(sectionTemplate.name.toLowerCase())) {
+        section = existingSections.find(s => s.name.toLowerCase() === sectionTemplate.name.toLowerCase());
+      } else {
+        // Create new section
+        const [newSection] = await db.insert(schema.sections).values({
+          projectId,
+          name: sectionTemplate.name,
+          orderIndex: sectionMaxOrder + sIdx,
+        }).returning();
+        section = newSection;
+        createdSections++;
+      }
+
+      if (!section) continue;
+
+      // Get task titles already in this section
+      const taskTitlesInSection = existingTaskTitles.get(section.id) || new Set();
+      const tasksInSection = existingTasks.filter(t => t.sectionId === section!.id);
+      let taskOrderIndex = tasksInSection.length;
+
+      for (const taskTemplate of sectionTemplate.tasks) {
+        // Skip if task with same title already exists in section
+        if (taskTitlesInSection.has(taskTemplate.title.toLowerCase())) {
+          skippedTasks++;
+          continue;
+        }
+
+        const [task] = await db.insert(schema.tasks).values({
+          tenantId,
+          projectId,
+          sectionId: section.id,
+          title: taskTemplate.title,
+          description: taskTemplate.description,
+          status: "todo",
+          priority: "medium",
+          createdBy: user.id,
+          orderIndex: taskOrderIndex++,
+        }).returning();
+        createdTasks++;
+
+        // Create subtasks if defined
+        if (taskTemplate.subtasks && taskTemplate.subtasks.length > 0) {
+          for (let stIdx = 0; stIdx < taskTemplate.subtasks.length; stIdx++) {
+            await db.insert(schema.subtasks).values({
+              taskId: task.id,
+              title: taskTemplate.subtasks[stIdx],
+              completed: false,
+              orderIndex: stIdx,
+            });
+            createdSubtasks++;
+          }
+        }
+      }
+    }
+
+    // Record audit event
+    await db.insert(schema.tenantAuditEvents).values({
+      tenantId,
+      actorUserId: user.id,
+      eventType: "task_template_applied",
+      message: `Template "${data.templateKey}" applied: ${createdSections} sections, ${createdTasks} tasks, ${createdSubtasks} subtasks created`,
+      metadata: { projectId, templateKey: data.templateKey, createdSections, createdTasks, createdSubtasks, skippedTasks },
+    });
+
+    res.json({
+      status: createdTasks > 0 || createdSections > 0 ? "applied" : "skipped",
+      created: { sections: createdSections, tasks: createdTasks, subtasks: createdSubtasks },
+      skipped: { tasks: skippedTasks },
+      reason: createdTasks === 0 && createdSections === 0 ? "All template items already exist" : undefined,
+    });
+  } catch (error) {
+    console.error("[seed] Task template apply failed:", error);
+    res.status(500).json({ error: "Failed to apply task template" });
+  }
+});
+
+// POST /api/v1/super/tenants/:tenantId/projects/:projectId/tasks/bulk - Bulk import tasks
+router.post("/tenants/:tenantId/projects/:projectId/tasks/bulk", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, projectId } = req.params;
+    const user = req.user as Express.User;
+    const data = bulkTasksImportSchema.parse(req.body);
+    const options = data.options || { createMissingSections: true, allowUnknownAssignees: false };
+
+    // Verify tenant exists
+    const tenant = await storage.getTenantById(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    // Verify project exists and belongs to tenant
+    const [project] = await db.select()
+      .from(schema.projects)
+      .where(and(
+        eq(schema.projects.id, projectId),
+        eq(schema.projects.tenantId, tenantId)
+      ));
+
+    if (!project) {
+      return res.status(404).json({ error: "Project not found or does not belong to tenant" });
+    }
+
+    // Get existing sections
+    const existingSections = await db.select()
+      .from(schema.sections)
+      .where(eq(schema.sections.projectId, projectId));
+    const sectionsByName = new Map(existingSections.map(s => [s.name.toLowerCase(), s]));
+    let sectionOrderIndex = existingSections.length;
+
+    // Get tenant users for assignee lookup
+    const tenantUsers = await db.select()
+      .from(schema.users)
+      .where(eq(schema.users.tenantId, tenantId));
+    const usersByEmail = new Map(tenantUsers.map(u => [u.email.toLowerCase(), u]));
+
+    // Valid status and priority values
+    const validStatuses = ["todo", "in_progress", "blocked", "completed"];
+    const validPriorities = ["low", "medium", "high", "urgent"];
+
+    const results: Array<{
+      rowIndex: number;
+      status: "created" | "skipped" | "error";
+      reason?: string;
+      sectionId?: string;
+      taskId?: string;
+      parentTaskId?: string;
+    }> = [];
+
+    let createdSections = 0;
+    let createdTasks = 0;
+    let createdSubtasks = 0;
+    let skipped = 0;
+    let errors = 0;
+
+    // Track created tasks by title for parent linking
+    const createdTasksByTitle = new Map<string, { id: string; sectionId: string }>();
+
+    // First pass: Create sections and regular tasks
+    for (let i = 0; i < data.rows.length; i++) {
+      const row = data.rows[i];
+      
+      // Skip subtasks in first pass
+      const isSubtask = row.isSubtask === true || row.isSubtask === "true" || !!row.parentTaskTitle;
+      if (isSubtask) continue;
+
+      try {
+        // Validate status and priority
+        if (row.status && !validStatuses.includes(row.status.toLowerCase())) {
+          results.push({ rowIndex: i, status: "error", reason: `Invalid status: ${row.status}` });
+          errors++;
+          continue;
+        }
+        if (row.priority && !validPriorities.includes(row.priority.toLowerCase())) {
+          results.push({ rowIndex: i, status: "error", reason: `Invalid priority: ${row.priority}` });
+          errors++;
+          continue;
+        }
+
+        // Get or create section
+        let section = sectionsByName.get(row.sectionName.toLowerCase());
+        if (!section) {
+          if (options.createMissingSections) {
+            const [newSection] = await db.insert(schema.sections).values({
+              projectId,
+              name: row.sectionName,
+              orderIndex: sectionOrderIndex++,
+            }).returning();
+            section = newSection;
+            sectionsByName.set(row.sectionName.toLowerCase(), section);
+            createdSections++;
+          } else {
+            results.push({ rowIndex: i, status: "error", reason: `Section not found: ${row.sectionName}` });
+            errors++;
+            continue;
+          }
+        }
+
+        // Validate assignees
+        let assigneeIds: string[] = [];
+        if (row.assigneeEmails) {
+          const emails = row.assigneeEmails.split(",").map(e => e.trim().toLowerCase());
+          for (const email of emails) {
+            const foundUser = usersByEmail.get(email);
+            if (!foundUser) {
+              if (!options.allowUnknownAssignees) {
+                results.push({ rowIndex: i, status: "error", reason: `Unknown assignee: ${email}` });
+                errors++;
+                continue;
+              }
+            } else {
+              assigneeIds.push(foundUser.id);
+            }
+          }
+          if (errors > results.filter(r => r.status === "error").length) continue;
+        }
+
+        // Parse due date
+        let dueDate: Date | null = null;
+        if (row.dueDate) {
+          dueDate = new Date(row.dueDate);
+          if (isNaN(dueDate.getTime())) {
+            results.push({ rowIndex: i, status: "error", reason: `Invalid date format: ${row.dueDate}` });
+            errors++;
+            continue;
+          }
+        }
+
+        // Get task order index
+        const tasksInSection = await db.select()
+          .from(schema.tasks)
+          .where(eq(schema.tasks.sectionId, section.id));
+        const taskOrderIndex = tasksInSection.length;
+
+        // Create task
+        const [task] = await db.insert(schema.tasks).values({
+          tenantId,
+          projectId,
+          sectionId: section.id,
+          title: row.taskTitle,
+          description: row.description,
+          status: (row.status?.toLowerCase() as "todo" | "in_progress" | "blocked" | "completed") || "todo",
+          priority: (row.priority?.toLowerCase() as "low" | "medium" | "high" | "urgent") || "medium",
+          dueDate: dueDate,
+          createdBy: user.id,
+          orderIndex: taskOrderIndex,
+        }).returning();
+
+        // Create assignees
+        for (const assigneeId of assigneeIds) {
+          await db.insert(schema.taskAssignees).values({
+            tenantId,
+            taskId: task.id,
+            userId: assigneeId,
+          });
+        }
+
+        createdTasks++;
+        createdTasksByTitle.set(row.taskTitle.toLowerCase(), { id: task.id, sectionId: section.id });
+        results.push({ rowIndex: i, status: "created", sectionId: section.id, taskId: task.id });
+      } catch (error) {
+        results.push({ rowIndex: i, status: "error", reason: "Failed to create task" });
+        errors++;
+      }
+    }
+
+    // Second pass: Create subtasks
+    for (let i = 0; i < data.rows.length; i++) {
+      const row = data.rows[i];
+      
+      const isSubtask = row.isSubtask === true || row.isSubtask === "true" || !!row.parentTaskTitle;
+      if (!isSubtask) continue;
+
+      try {
+        // Find parent task
+        const parentTitle = row.parentTaskTitle?.toLowerCase();
+        if (!parentTitle) {
+          results.push({ rowIndex: i, status: "error", reason: "Subtask requires parentTaskTitle" });
+          errors++;
+          continue;
+        }
+
+        const parentTask = createdTasksByTitle.get(parentTitle);
+        if (!parentTask) {
+          // Try to find in existing tasks
+          const existingTasks = await db.select()
+            .from(schema.tasks)
+            .where(and(
+              eq(schema.tasks.projectId, projectId),
+              sql`lower(${schema.tasks.title}) = ${parentTitle}`
+            ));
+
+          if (existingTasks.length === 0) {
+            results.push({ rowIndex: i, status: "error", reason: `Parent task not found: ${row.parentTaskTitle}` });
+            errors++;
+            continue;
+          }
+
+          // Get existing subtasks count
+          const existingSubtasks = await db.select()
+            .from(schema.subtasks)
+            .where(eq(schema.subtasks.taskId, existingTasks[0].id));
+
+          await db.insert(schema.subtasks).values({
+            taskId: existingTasks[0].id,
+            title: row.taskTitle,
+            completed: false,
+            orderIndex: existingSubtasks.length,
+          });
+
+          createdSubtasks++;
+          results.push({ rowIndex: i, status: "created", parentTaskId: existingTasks[0].id });
+        } else {
+          // Get existing subtasks count
+          const existingSubtasks = await db.select()
+            .from(schema.subtasks)
+            .where(eq(schema.subtasks.taskId, parentTask.id));
+
+          await db.insert(schema.subtasks).values({
+            taskId: parentTask.id,
+            title: row.taskTitle,
+            completed: false,
+            orderIndex: existingSubtasks.length,
+          });
+
+          createdSubtasks++;
+          results.push({ rowIndex: i, status: "created", parentTaskId: parentTask.id, sectionId: parentTask.sectionId });
+        }
+      } catch (error) {
+        results.push({ rowIndex: i, status: "error", reason: "Failed to create subtask" });
+        errors++;
+      }
+    }
+
+    // Record audit event
+    await db.insert(schema.tenantAuditEvents).values({
+      tenantId,
+      actorUserId: user.id,
+      eventType: "bulk_tasks_imported",
+      message: `Bulk tasks imported: ${createdSections} sections, ${createdTasks} tasks, ${createdSubtasks} subtasks, ${errors} errors`,
+      metadata: { projectId, createdSections, createdTasks, createdSubtasks, skipped, errors },
+    });
+
+    res.json({
+      createdSections,
+      createdTasks,
+      createdSubtasks,
+      skipped,
+      errors,
+      results,
+    });
+  } catch (error) {
+    console.error("[bulk] Bulk tasks import failed:", error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Invalid request data", details: error.errors });
+    }
+    res.status(500).json({ error: "Failed to import tasks" });
+  }
+});
+
 export default router;

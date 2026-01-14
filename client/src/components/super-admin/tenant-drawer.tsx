@@ -238,6 +238,9 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
   const [clientSearch, setClientSearch] = useState("");
   const [projectSearch, setProjectSearch] = useState("");
   const [autoCreateClients, setAutoCreateClients] = useState(false);
+  const [selectedProjectForTasks, setSelectedProjectForTasks] = useState<TenantProject | null>(null);
+  const [showTaskImportPanel, setShowTaskImportPanel] = useState(false);
+  const [selectedTemplate, setSelectedTemplate] = useState<string>("");
 
   useEffect(() => {
     if (tenant) {
@@ -344,6 +347,61 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
     },
     onError: (error: any) => {
       toast({ title: "Import failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const seedWelcomeProjectMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenant?.id}/seed/welcome-project`, {});
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.status === "created") {
+        toast({ title: "Welcome project created", description: `Created ${data.created.tasks} tasks and ${data.created.subtasks} subtasks` });
+      } else if (data.status === "skipped") {
+        toast({ title: "Already exists", description: data.reason, variant: "default" });
+      }
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenant?.id, "projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenant?.id, "audit"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to create welcome project", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const applyTaskTemplateMutation = useMutation({
+    mutationFn: async ({ projectId, templateKey }: { projectId: string; templateKey: string }) => {
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenant?.id}/projects/${projectId}/seed/task-template`, { templateKey });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.status === "applied") {
+        toast({ title: "Template applied", description: `Created ${data.created.sections} sections, ${data.created.tasks} tasks` });
+      } else {
+        toast({ title: "Template skipped", description: data.reason, variant: "default" });
+      }
+      setSelectedProjectForTasks(null);
+      setSelectedTemplate("");
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenant?.id, "audit"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to apply template", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const bulkTasksImportMutation = useMutation({
+    mutationFn: async ({ projectId, rows, options }: { projectId: string; rows: ParsedRow[]; options: { createMissingSections: boolean; allowUnknownAssignees: boolean } }) => {
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenant?.id}/projects/${projectId}/tasks/bulk`, { rows, options });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ title: "Tasks imported", description: `Created ${data.createdTasks} tasks, ${data.createdSubtasks} subtasks, ${data.errors} errors` });
+      setShowTaskImportPanel(false);
+      setSelectedProjectForTasks(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenant?.id, "audit"] });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to import tasks", description: error.message, variant: "destructive" });
     },
   });
 
@@ -1040,6 +1098,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
                           <th className="text-left p-2">Client</th>
                           <th className="text-left p-2">Status</th>
                           <th className="text-left p-2">Created</th>
+                          <th className="text-left p-2">Actions</th>
                         </tr>
                       </thead>
                       <tbody>
@@ -1062,6 +1121,34 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
                             </td>
                             <td className="p-2 text-muted-foreground text-xs">
                               {new Date(project.createdAt).toLocaleDateString()}
+                            </td>
+                            <td className="p-2">
+                              <div className="flex items-center gap-1">
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setSelectedProjectForTasks(project);
+                                    setShowTaskImportPanel(false);
+                                  }}
+                                  data-testid={`button-template-${project.id}`}
+                                >
+                                  <FileText className="h-3 w-3 mr-1" />
+                                  Template
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  onClick={() => {
+                                    setSelectedProjectForTasks(project);
+                                    setShowTaskImportPanel(true);
+                                  }}
+                                  data-testid={`button-import-tasks-${project.id}`}
+                                >
+                                  <Upload className="h-3 w-3 mr-1" />
+                                  Import
+                                </Button>
+                              </div>
                             </td>
                           </tr>
                         ))}
@@ -1112,6 +1199,149 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
               ]}
               nameField="projectName"
             />
+
+            {selectedProjectForTasks && !showTaskImportPanel && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">Apply Task Template</CardTitle>
+                      <CardDescription>
+                        Apply a template to "{selectedProjectForTasks.name}" to create sections and tasks
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setSelectedProjectForTasks(null)}
+                      data-testid="button-close-template-panel"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent className="space-y-4">
+                  <div className="grid grid-cols-3 gap-3">
+                    {[
+                      { key: "client_onboarding", name: "Client Onboarding", description: "Kickoff, Discovery, and Delivery phases" },
+                      { key: "website_build", name: "Website Build", description: "Planning, Design, Development, and Launch" },
+                      { key: "general_setup", name: "General Setup", description: "Basic To Do, In Progress, Review, Done workflow" },
+                    ].map((template) => (
+                      <div
+                        key={template.key}
+                        className={`p-3 border rounded-lg cursor-pointer transition-colors ${
+                          selectedTemplate === template.key ? "border-primary bg-primary/5" : "hover:border-muted-foreground/50"
+                        }`}
+                        onClick={() => setSelectedTemplate(template.key)}
+                        data-testid={`template-option-${template.key}`}
+                      >
+                        <div className="font-medium text-sm">{template.name}</div>
+                        <div className="text-xs text-muted-foreground mt-1">{template.description}</div>
+                      </div>
+                    ))}
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      variant="outline"
+                      onClick={() => {
+                        setSelectedProjectForTasks(null);
+                        setSelectedTemplate("");
+                      }}
+                      data-testid="button-cancel-template"
+                    >
+                      Cancel
+                    </Button>
+                    <Button
+                      onClick={() => {
+                        if (selectedTemplate && selectedProjectForTasks) {
+                          applyTaskTemplateMutation.mutate({
+                            projectId: selectedProjectForTasks.id,
+                            templateKey: selectedTemplate,
+                          });
+                        }
+                      }}
+                      disabled={!selectedTemplate || applyTaskTemplateMutation.isPending}
+                      data-testid="button-apply-template"
+                    >
+                      {applyTaskTemplateMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                      ) : null}
+                      Apply Template
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {selectedProjectForTasks && showTaskImportPanel && (
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="text-base">Bulk Import Tasks</CardTitle>
+                      <CardDescription>
+                        Import tasks from CSV into "{selectedProjectForTasks.name}"
+                      </CardDescription>
+                    </div>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedProjectForTasks(null);
+                        setShowTaskImportPanel(false);
+                      }}
+                      data-testid="button-close-task-import-panel"
+                    >
+                      <X className="h-4 w-4" />
+                    </Button>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <CsvImportPanel
+                    title=""
+                    description=""
+                    columns={[
+                      { key: "sectionName", label: "Section Name", required: true },
+                      { key: "taskTitle", label: "Task Title", required: true },
+                      { key: "description", label: "Description" },
+                      { key: "status", label: "Status" },
+                      { key: "priority", label: "Priority" },
+                      { key: "dueDate", label: "Due Date (YYYY-MM-DD)" },
+                      { key: "assigneeEmails", label: "Assignee Emails (comma-separated)" },
+                      { key: "parentTaskTitle", label: "Parent Task Title (for subtasks)" },
+                    ]}
+                    templateFilename="tasks_template.csv"
+                    onImport={async (rows, options) => {
+                      const result = await bulkTasksImportMutation.mutateAsync({
+                        projectId: selectedProjectForTasks.id,
+                        rows,
+                        options: {
+                          createMissingSections: options.createMissingSections !== false,
+                          allowUnknownAssignees: options.allowUnknownAssignees || false,
+                        },
+                      });
+                      return {
+                        created: result.createdTasks + result.createdSubtasks,
+                        skipped: result.skipped,
+                        errors: result.errors,
+                        results: result.results.map((r: any) => ({
+                          name: rows[r.rowIndex]?.taskTitle || `Row ${r.rowIndex}`,
+                          status: r.status,
+                          reason: r.reason,
+                          id: r.taskId || r.parentTaskId,
+                        })),
+                      };
+                    }}
+                    isImporting={bulkTasksImportMutation.isPending}
+                    options={[
+                      { key: "createMissingSections", label: "Create missing sections", defaultValue: true },
+                      { key: "allowUnknownAssignees", label: "Allow unknown assignees", defaultValue: false },
+                    ]}
+                    nameField="taskTitle"
+                  />
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
           <TabsContent value="onboarding" className="space-y-6 mt-6">
@@ -1152,6 +1382,35 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
                     completed={onboardingProgress.activated}
                     active={!onboardingProgress.activated}
                   />
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Data Setup</CardTitle>
+                <CardDescription>Quickly seed starter data to help the tenant get started</CardDescription>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                <div className="flex items-center justify-between p-3 border rounded-lg">
+                  <div>
+                    <div className="font-medium">Create Welcome Project</div>
+                    <div className="text-sm text-muted-foreground">
+                      Seeds a starter project with sections and sample tasks to demonstrate workflow
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => seedWelcomeProjectMutation.mutate()}
+                    disabled={seedWelcomeProjectMutation.isPending}
+                    data-testid="button-seed-welcome-project"
+                  >
+                    {seedWelcomeProjectMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Plus className="h-4 w-4 mr-2" />
+                    )}
+                    Create Welcome Project
+                  </Button>
                 </div>
               </CardContent>
             </Card>
