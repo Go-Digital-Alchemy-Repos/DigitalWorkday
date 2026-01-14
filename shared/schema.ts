@@ -173,6 +173,53 @@ export const tenantIntegrations = pgTable("tenant_integrations", {
   uniqueIndex("tenant_integrations_tenant_provider_unique").on(table.tenantId, table.provider),
 ]);
 
+// Agreement status enum
+export const AgreementStatus = {
+  DRAFT: "draft",
+  ACTIVE: "active",
+  ARCHIVED: "archived",
+} as const;
+
+/**
+ * Tenant Agreements table - stores SaaS agreement/terms versions per tenant
+ * Only ONE active agreement per tenant at a time
+ */
+export const tenantAgreements = pgTable("tenant_agreements", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  title: text("title").notNull(),
+  body: text("body").notNull(), // Markdown or HTML content
+  version: integer("version").notNull().default(1),
+  status: text("status").notNull().default(AgreementStatus.DRAFT),
+  effectiveAt: timestamp("effective_at"), // When active version became effective
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("tenant_agreements_tenant_idx").on(table.tenantId),
+  index("tenant_agreements_status_idx").on(table.status),
+]);
+
+/**
+ * Tenant Agreement Acceptances table - tracks user acceptance of agreements
+ * Each record represents a user accepting a specific version of an agreement
+ */
+export const tenantAgreementAcceptances = pgTable("tenant_agreement_acceptances", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  agreementId: varchar("agreement_id").references(() => tenantAgreements.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  version: integer("version").notNull(), // The version that was accepted
+  acceptedAt: timestamp("accepted_at").defaultNow().notNull(),
+  ipAddress: text("ip_address"),
+  userAgent: text("user_agent"),
+}, (table) => [
+  index("tenant_agreement_acceptances_tenant_idx").on(table.tenantId),
+  index("tenant_agreement_acceptances_user_idx").on(table.userId),
+  index("tenant_agreement_acceptances_agreement_idx").on(table.agreementId),
+  uniqueIndex("tenant_agreement_acceptances_unique").on(table.tenantId, table.userId, table.agreementId, table.version),
+]);
+
 // Tenancy warning type enum
 export const TenancyWarnType = {
   MISMATCH: "mismatch",
@@ -1080,6 +1127,17 @@ export const insertTenancyWarningSchema = createInsertSchema(tenancyWarnings).om
   occurredAt: true,
 });
 
+export const insertTenantAgreementSchema = createInsertSchema(tenantAgreements).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertTenantAgreementAcceptanceSchema = createInsertSchema(tenantAgreementAcceptances).omit({
+  id: true,
+  acceptedAt: true,
+});
+
 export const insertUserSchema = createInsertSchema(users).omit({
   id: true,
   createdAt: true,
@@ -1252,6 +1310,12 @@ export type InsertTenantIntegration = z.infer<typeof insertTenantIntegrationSche
 
 export type TenancyWarning = typeof tenancyWarnings.$inferSelect;
 export type InsertTenancyWarning = z.infer<typeof insertTenancyWarningSchema>;
+
+export type TenantAgreement = typeof tenantAgreements.$inferSelect;
+export type InsertTenantAgreement = z.infer<typeof insertTenantAgreementSchema>;
+
+export type TenantAgreementAcceptance = typeof tenantAgreementAcceptances.$inferSelect;
+export type InsertTenantAgreementAcceptance = z.infer<typeof insertTenantAgreementAcceptanceSchema>;
 
 export type User = typeof users.$inferSelect;
 export type InsertUser = z.infer<typeof insertUserSchema>;

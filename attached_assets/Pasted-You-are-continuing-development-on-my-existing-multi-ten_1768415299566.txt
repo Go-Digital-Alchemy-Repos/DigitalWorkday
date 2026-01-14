@@ -1,0 +1,238 @@
+You are continuing development on my existing multi-tenant React + Express app (single codebase).
+PHASE 3C: Implement tenant-scoped SaaS Agreement (Terms) management + mandatory acceptance gating.
+Implement ONLY what is described. DO NOT rewrite the app.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT remove or rename existing endpoints.
+- Do NOT change response shapes in a breaking way (add fields ok; no removals).
+- Do NOT drop or rename database tables/columns. Add-only schema changes only.
+- Do NOT modify tenancy enforcement logic (soft/strict), onboarding flows, or billing.
+- Do NOT introduce small edit modals; use full-width drawers/panels where editing is needed.
+- Must be tenant-safe: all agreement data is tenant-scoped and never leaks cross-tenant.
+- Ensure super_user routes remain accessible; super_user acting-as-tenant behavior should be explicit.
+
+===============================================================================
+GOAL
+===============================================================================
+Each tenant can configure a required SaaS Agreement (terms).
+All tenant users (Admin, Employee, Client) must accept the CURRENT active agreement version
+before accessing the application (both UI routes and protected API endpoints).
+
+Acceptance must be recorded with an audit trail. Publishing a new version requires re-acceptance.
+
+===============================================================================
+SCOPE / DECISIONS (LOCKED FOR THIS PHASE)
+===============================================================================
+- ONE enforced agreement per tenant at a time (simple and safe).
+- Enforced for ALL tenant users: Admin, Employee, Client.
+- Super User is NOT forced globally, but:
+  - If super_user is acting-as-tenant, the UI should still show agreement status;
+  - super_user may bypass gating by default (support), but server should allow optional enforcement later.
+
+===============================================================================
+PART 1 — DATABASE (ADD-ONLY)
+===============================================================================
+Create table: tenant_agreements
+- id (uuid PK)
+- tenantId (uuid, indexed, FK tenants.id)
+- title (text)                      // e.g., "Terms of Service"
+- body (text)                       // markdown or HTML, store as text
+- version (int)                     // increments on publish
+- status (text enum: "draft"|"active"|"archived")
+- effectiveAt (timestamp nullable)  // when active version became effective
+- createdByUserId (uuid nullable, FK users.id)
+- createdAt, updatedAt
+
+Rules:
+- A tenant may have many agreements but only ONE active at a time.
+
+Create table: tenant_agreement_acceptances
+- id (uuid PK)
+- tenantId (uuid, indexed)
+- agreementId (uuid FK tenant_agreements.id)
+- userId (uuid, indexed FK users.id)
+- version (int)                     // the version accepted
+- acceptedAt (timestamp)
+- ipAddress (text nullable)
+- userAgent (text nullable)
+
+Constraints:
+- Unique(tenantId, userId, agreementId, version) OR at least Unique(tenantId, userId, agreementId) with version stored
+- Safer: Unique(tenantId, userId, agreementId, version)
+
+===============================================================================
+PART 2 — SERVER: AGREEMENT SERVICE + ENDPOINTS (ADD-ONLY, TENANT-SCOPED)
+===============================================================================
+
+2A) Tenant-scoped endpoints (tenant admin only)
+GET /api/v1/tenant/agreement
+- returns the tenant’s current agreement state:
+{
+  active: { id, title, body, version, effectiveAt } | null,
+  draft: { id, title, body, version } | null,
+  hasAnyAgreement: boolean
+}
+
+POST /api/v1/tenant/agreement/draft
+Body: { title, body }
+- creates a new draft OR updates existing draft (choose a single behavior but document it)
+- status remains "draft"
+- version should be staged as next version (e.g., active.version+1) or draft.version increments only on publish
+- keep it simple: version increments on publish; draft has version = active.version + 1 (if active exists), else 1.
+
+PATCH /api/v1/tenant/agreement/draft
+Body: { title?, body? }
+- updates current draft
+
+POST /api/v1/tenant/agreement/publish
+- publishes current draft:
+  - archives any currently active agreement
+  - sets draft => active
+  - sets effectiveAt=now
+  - increments/locks version
+- IMPORTANT: publishing requires all users to re-accept new version
+
+POST /api/v1/tenant/agreement/unpublish (optional)
+- sets active => archived (or disables enforcement)
+- Only implement if you want to allow turning off agreement requirements.
+- If not implemented, enforcement is disabled if no active agreement exists.
+
+2B) User acceptance endpoints (all authenticated tenant users)
+GET /api/v1/me/agreement/status
+- returns:
+{
+  tenantId,
+  requiresAcceptance: boolean,
+  activeAgreement: { id, title, body, version, effectiveAt } | null,
+  accepted: boolean,
+  acceptedAt: string|null
+}
+
+POST /api/v1/me/agreement/accept
+Body: { agreementId, version }
+Behavior:
+- Validate agreementId is current tenant’s ACTIVE agreement AND version matches current active version
+- Create acceptance record with acceptedAt=now and capture ip/userAgent if available
+- Return { ok: true }
+
+===============================================================================
+PART 3 — SERVER: ENFORCEMENT MIDDLEWARE (CRITICAL)
+===============================================================================
+Implement middleware: agreementEnforcementGuard
+
+Behavior:
+- For tenant-scoped requests by authenticated users (Admin/Employee/Client):
+  - If tenant has NO active agreement => allow
+  - Else if user has accepted active agreement version => allow
+  - Else => block with 403 and code AGREEMENT_REQUIRED
+
+Exempt routes (MUST NOT BLOCK):
+- /api/v1/auth/*
+- /api/v1/me
+- /api/v1/me/agreement/status
+- /api/v1/me/agreement/accept
+- Any static assets routes
+- Logout route if present
+
+Placement:
+- After auth middleware (must know userId)
+- After tenant scoping middleware (must know tenantId)
+- Before most tenant-protected business routes
+
+Super User:
+- If role=super_user:
+  - do not block by default
+  - BUT if super_user is acting-as-tenant, still allow fetching agreement/status endpoints.
+(Do not enforce for super_user in this phase; document as future option.)
+
+===============================================================================
+PART 4 — FRONTEND: USER GATING FLOW (MANDATORY)
+===============================================================================
+4A) Agreement Gate behavior
+After login (and on app load), client must check /api/v1/me/agreement/status.
+If requiresAcceptance=true AND accepted=false:
+- redirect to /agreement
+- hide/disable main navigation
+- prevent access to other pages (client-side guard)
+- show agreement content + acceptance checkbox + “I Agree” button
+- on accept success:
+  - refresh status
+  - return user to their intended destination (store redirect path)
+
+4B) Agreement Page UI
+Route: /agreement
+- Show:
+  - Agreement title
+  - body rendered (markdown or safe HTML; choose one and be consistent)
+  - Version + effective date
+  - “I Agree” button (disabled until user scrolls to bottom optional, not required)
+- Must work for Admin/Employee/Client.
+
+4C) Error handling
+- If accept call fails due to version mismatch, refetch status and show “Agreement updated; please review latest version.”
+
+===============================================================================
+PART 5 — FRONTEND: TENANT ADMIN SETTINGS UI
+===============================================================================
+In Tenant Admin Account/Settings area, add a tab: “Agreement” (or “Terms”)
+
+Functions:
+- View current active agreement (read-only preview)
+- Edit draft (title + body editor)
+- Publish new version (confirmation dialog)
+- Show acceptance stats:
+  - total users (tenant users)
+  - accepted count (current version)
+  - pending count
+- Show a table of users pending acceptance (name/email/role, last login optional)
+
+Optional (if Mailgun configured):
+- “Send reminder email to pending users”
+  - Use Mailgun config from tenant settings if available
+  - Provide dry-run/dev stub if Mailgun not configured
+  - Do not block Phase 3C on reminder emails.
+
+===============================================================================
+PART 6 — SUPER ADMIN TENANT MANAGEMENT SUPPORT (OPTIONAL BUT RECOMMENDED)
+===============================================================================
+In Super Admin tenant drawer, add an “Agreement” section:
+- View active/draft agreement
+- (Optional) edit/publish if super_user acting-as-tenant OR via super endpoints
+This is to support tenants during setup.
+
+Do NOT build cross-tenant bulk agreement operations.
+
+===============================================================================
+PART 7 — TESTS (MANDATORY MINIMUM)
+===============================================================================
+1) agreement_guard_blocks.test.ts
+- with active agreement and no acceptance => protected endpoint returns 403 AGREEMENT_REQUIRED
+2) agreement_accept_unblocks.test.ts
+- accept => protected endpoint allowed
+3) agreement_version_bump_requires_reaccept.test.ts
+- publish v2 => previously accepted v1 becomes blocked until v2 accepted
+4) tenant_isolation_agreement.test.ts
+- tenant A cannot access tenant B agreement/acceptance
+5) exempt_routes_not_blocked.test.ts
+- /auth/* and agreement endpoints are not blocked
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) Tenant admin can create/edit/publish agreement.
+2) Users are blocked from the app until accepting the active agreement.
+3) Acceptance is recorded with timestamp (and optional ip/userAgent).
+4) Publishing a new version forces re-acceptance.
+5) Exempt routes remain accessible.
+6) No breaking changes to existing endpoints; tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Schema migrations added
+- Endpoints added and where mounted
+- Middleware placement (exact file and order)
+- UI routes added/updated
+- Manual test checklist (local + Railway)
