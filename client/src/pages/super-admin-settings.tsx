@@ -14,7 +14,7 @@ import { Redirect } from "wouter";
 import { 
   Loader2, Users, FileText, Palette, Settings, Shield, Save, Mail, HardDrive, Check, X, 
   Plus, Link, Copy, MoreHorizontal, UserCheck, UserX, Clock, AlertCircle, KeyRound, Image,
-  TestTube, Eye, EyeOff, Trash2, RefreshCw, Send
+  TestTube, Eye, EyeOff, Trash2, RefreshCw, Send, CreditCard
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { S3Dropzone } from "@/components/common/S3Dropzone";
@@ -76,6 +76,7 @@ interface TenantAgreementStatus {
 interface IntegrationStatus {
   mailgun: boolean;
   s3: boolean;
+  stripe: boolean;
 }
 
 interface MailgunSettings {
@@ -103,6 +104,19 @@ interface S3Settings {
   secretMasked: {
     accessKeyIdMasked: string | null;
     secretAccessKeyMasked: string | null;
+  } | null;
+  lastTestedAt: string | null;
+}
+
+interface StripeSettings {
+  status: "configured" | "not_configured";
+  config: {
+    publishableKey: string | null;
+    defaultCurrency: string | null;
+  } | null;
+  secretMasked: {
+    secretKeyMasked: string | null;
+    webhookSecretMasked: string | null;
   } | null;
   lastTestedAt: string | null;
 }
@@ -175,6 +189,11 @@ export default function SuperAdminSettingsPage() {
     enabled: activeTab === "integrations",
   });
 
+  const { data: stripeSettings, isLoading: stripeLoading } = useQuery<StripeSettings>({
+    queryKey: ["/api/v1/super/integrations/stripe"],
+    enabled: activeTab === "integrations",
+  });
+
   const [mailgunForm, setMailgunForm] = useState({
     domain: "",
     fromEmail: "",
@@ -192,10 +211,19 @@ export default function SuperAdminSettingsPage() {
     secretAccessKey: "",
   });
 
+  const [stripeForm, setStripeForm] = useState({
+    publishableKey: "",
+    secretKey: "",
+    webhookSecret: "",
+    defaultCurrency: "usd",
+  });
+
   const [showMailgunApiKey, setShowMailgunApiKey] = useState(false);
   const [showMailgunSigningKey, setShowMailgunSigningKey] = useState(false);
   const [showS3AccessKey, setShowS3AccessKey] = useState(false);
   const [showS3SecretKey, setShowS3SecretKey] = useState(false);
+  const [showStripeSecretKey, setShowStripeSecretKey] = useState(false);
+  const [showStripeWebhookSecret, setShowStripeWebhookSecret] = useState(false);
   const [testEmailAddress, setTestEmailAddress] = useState("");
   const [testEmailDialogOpen, setTestEmailDialogOpen] = useState(false);
 
@@ -310,6 +338,56 @@ export default function SuperAdminSettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/s3"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/status"] });
+      toast({ title: "Secret cleared successfully" });
+    },
+    onError: (error: any) => {
+      const parsed = parseApiError(error);
+      toast({ title: "Failed to clear secret", description: parsed.message, variant: "destructive" });
+    },
+  });
+
+  const saveStripeMutation = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest("PUT", "/api/v1/super/integrations/stripe", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/stripe"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/status"] });
+      toast({ title: "Stripe settings saved successfully" });
+      setStripeForm(prev => ({ ...prev, secretKey: "", webhookSecret: "" }));
+    },
+    onError: (error: any) => {
+      const parsed = parseApiError(error);
+      toast({ title: "Failed to save Stripe settings", description: parsed.message, variant: "destructive" });
+    },
+  });
+
+  const testStripeMutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/v1/super/integrations/stripe/test", {});
+      return response.json();
+    },
+    onSuccess: (data: { ok: boolean; error?: { code: string; message: string } }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/stripe"] });
+      if (data.ok) {
+        toast({ title: "Stripe connection successful" });
+      } else {
+        toast({ title: "Stripe test failed", description: data.error?.message || "Unknown error", variant: "destructive" });
+      }
+    },
+    onError: (error: any) => {
+      const parsed = parseApiError(error);
+      toast({ title: "Stripe test failed", description: parsed.message, variant: "destructive" });
+    },
+  });
+
+  const clearStripeSecretMutation = useMutation({
+    mutationFn: async (secretName: string) => {
+      return apiRequest("DELETE", `/api/v1/super/integrations/stripe/secret/${secretName}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/stripe"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/status"] });
       toast({ title: "Secret cleared successfully" });
     },
@@ -788,6 +866,13 @@ export default function SuperAdminSettingsPage() {
                           {integrationStatus?.s3 ? "Configured" : "Not Configured"}
                         </Badge>
                       </div>
+                      <div className="flex items-center gap-2 p-3 border rounded-lg">
+                        <CreditCard className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">Stripe</span>
+                        <Badge variant={integrationStatus?.stripe ? "default" : "secondary"} className="ml-2">
+                          {integrationStatus?.stripe ? "Configured" : "Not Configured"}
+                        </Badge>
+                      </div>
                     </div>
                   )}
                 </CardContent>
@@ -1195,6 +1280,189 @@ export default function SuperAdminSettingsPage() {
                             <Save className="h-4 w-4 mr-2" />
                           )}
                           Save S3 Settings
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* Stripe Configuration */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <CreditCard className="h-5 w-5" />
+                        Stripe Configuration
+                      </CardTitle>
+                      <CardDescription>Configure global billing and payment processing</CardDescription>
+                    </div>
+                    {stripeSettings?.lastTestedAt && (
+                      <div className="text-xs text-muted-foreground">
+                        Last tested: {new Date(stripeSettings.lastTestedAt).toLocaleString()}
+                      </div>
+                    )}
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {stripeLoading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="stripe-publishable-key">Publishable Key</Label>
+                          <Input
+                            id="stripe-publishable-key"
+                            value={stripeForm.publishableKey || stripeSettings?.config?.publishableKey || ""}
+                            onChange={(e) => setStripeForm({ ...stripeForm, publishableKey: e.target.value })}
+                            placeholder="pk_test_..."
+                            data-testid="input-stripe-publishable-key"
+                          />
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="stripe-default-currency">Default Currency</Label>
+                          <Select
+                            value={stripeForm.defaultCurrency || stripeSettings?.config?.defaultCurrency || "usd"}
+                            onValueChange={(value) => setStripeForm({ ...stripeForm, defaultCurrency: value })}
+                          >
+                            <SelectTrigger id="stripe-default-currency" data-testid="select-stripe-currency">
+                              <SelectValue placeholder="Select currency" />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="usd">USD - US Dollar</SelectItem>
+                              <SelectItem value="eur">EUR - Euro</SelectItem>
+                              <SelectItem value="gbp">GBP - British Pound</SelectItem>
+                              <SelectItem value="cad">CAD - Canadian Dollar</SelectItem>
+                              <SelectItem value="aud">AUD - Australian Dollar</SelectItem>
+                            </SelectContent>
+                          </Select>
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="stripe-secret-key">Secret Key</Label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Input
+                              id="stripe-secret-key"
+                              type={showStripeSecretKey ? "text" : "password"}
+                              value={stripeForm.secretKey}
+                              onChange={(e) => setStripeForm({ ...stripeForm, secretKey: e.target.value })}
+                              placeholder={stripeSettings?.secretMasked?.secretKeyMasked || "sk_test_..."}
+                              data-testid="input-stripe-secret-key"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-0 top-0 h-full"
+                              onClick={() => setShowStripeSecretKey(!showStripeSecretKey)}
+                            >
+                              {showStripeSecretKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                          {stripeSettings?.secretMasked?.secretKeyMasked && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => clearStripeSecretMutation.mutate("secretKey")}
+                              disabled={clearStripeSecretMutation.isPending}
+                              title="Clear Secret Key"
+                              data-testid="button-clear-stripe-secret-key"
+                            >
+                              {clearStripeSecretMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            </Button>
+                          )}
+                        </div>
+                        {stripeSettings?.secretMasked?.secretKeyMasked && !stripeForm.secretKey && (
+                          <p className="text-xs text-muted-foreground">
+                            Current: {stripeSettings.secretMasked.secretKeyMasked} (enter new value to replace)
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="stripe-webhook-secret">Webhook Signing Secret</Label>
+                        <div className="flex gap-2">
+                          <div className="relative flex-1">
+                            <Input
+                              id="stripe-webhook-secret"
+                              type={showStripeWebhookSecret ? "text" : "password"}
+                              value={stripeForm.webhookSecret}
+                              onChange={(e) => setStripeForm({ ...stripeForm, webhookSecret: e.target.value })}
+                              placeholder={stripeSettings?.secretMasked?.webhookSecretMasked || "whsec_..."}
+                              data-testid="input-stripe-webhook-secret"
+                            />
+                            <Button
+                              type="button"
+                              variant="ghost"
+                              size="icon"
+                              className="absolute right-0 top-0 h-full"
+                              onClick={() => setShowStripeWebhookSecret(!showStripeWebhookSecret)}
+                            >
+                              {showStripeWebhookSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                          {stripeSettings?.secretMasked?.webhookSecretMasked && (
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => clearStripeSecretMutation.mutate("webhookSecret")}
+                              disabled={clearStripeSecretMutation.isPending}
+                              title="Clear Webhook Secret"
+                              data-testid="button-clear-stripe-webhook-secret"
+                            >
+                              {clearStripeSecretMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : <Trash2 className="h-4 w-4" />}
+                            </Button>
+                          )}
+                        </div>
+                        {stripeSettings?.secretMasked?.webhookSecretMasked && !stripeForm.webhookSecret && (
+                          <p className="text-xs text-muted-foreground">
+                            Current: {stripeSettings.secretMasked.webhookSecretMasked} (enter new value to replace)
+                          </p>
+                        )}
+                      </div>
+
+                      <div className="flex flex-wrap justify-end gap-2 pt-4">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          onClick={() => testStripeMutation.mutate()}
+                          disabled={testStripeMutation.isPending || !integrationStatus?.stripe}
+                          data-testid="button-test-stripe"
+                        >
+                          {testStripeMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <TestTube className="h-4 w-4 mr-2" />
+                          )}
+                          Test Connection
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            const data: any = {};
+                            if (stripeForm.publishableKey) data.publishableKey = stripeForm.publishableKey;
+                            else if (stripeSettings?.config?.publishableKey) data.publishableKey = stripeSettings.config.publishableKey;
+                            data.defaultCurrency = stripeForm.defaultCurrency || stripeSettings?.config?.defaultCurrency || "usd";
+                            if (stripeForm.secretKey) data.secretKey = stripeForm.secretKey;
+                            if (stripeForm.webhookSecret) data.webhookSecret = stripeForm.webhookSecret;
+                            saveStripeMutation.mutate(data);
+                          }}
+                          disabled={saveStripeMutation.isPending}
+                          data-testid="button-save-stripe"
+                        >
+                          {saveStripeMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4 mr-2" />
+                          )}
+                          Save Stripe Settings
                         </Button>
                       </div>
                     </div>
