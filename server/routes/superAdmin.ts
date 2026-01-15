@@ -47,7 +47,7 @@ import path from "path";
 import { encryptValue, decryptValue, isEncryptionAvailable } from "../lib/encryption";
 import Mailgun from "mailgun.js";
 import FormData from "form-data";
-import { invalidateAgreementCache } from "../middleware/agreementEnforcement";
+import { invalidateAgreementCache, clearAgreementCache } from "../middleware/agreementEnforcement";
 import { AgreementStatus } from "@shared/schema";
 
 const upload = multer({ 
@@ -3780,7 +3780,7 @@ router.get("/agreements/tenants-summary", requireSuperUser, async (req, res) => 
 // =============================================================================
 
 const agreementCreateSchema = z.object({
-  tenantId: z.string().uuid(),
+  tenantId: z.string().uuid().nullable().optional(), // null = All Tenants (global default)
   title: z.string().min(1).max(200),
   body: z.string().min(1),
 });
@@ -3819,16 +3819,21 @@ router.get("/agreements", requireSuperUser, async (req, res) => {
       ? await query.where(and(...conditions)).orderBy(desc(tenantAgreements.updatedAt))
       : await query.orderBy(desc(tenantAgreements.updatedAt));
     
-    // Enrich with tenant names
-    const tenantIds = [...new Set(agreements.map(a => a.tenantId))];
+    // Enrich with tenant names and scope info
+    const tenantIds = [...new Set(agreements.map(a => a.tenantId).filter((id): id is string => id !== null))];
     const tenantData = tenantIds.length > 0 
       ? await db.select({ id: tenants.id, name: tenants.name }).from(tenants)
       : [];
     const tenantMap = new Map(tenantData.map(t => [t.id, t.name]));
     
+    // Check if there's an active global agreement (for Default badge)
+    const hasActiveGlobalAgreement = agreements.some(a => a.tenantId === null && a.status === AgreementStatus.ACTIVE);
+    
     const enrichedAgreements = agreements.map(a => ({
       ...a,
-      tenantName: tenantMap.get(a.tenantId) || "Unknown",
+      tenantName: a.tenantId ? (tenantMap.get(a.tenantId) || "Unknown") : "All Tenants",
+      scope: a.tenantId ? "tenant" : "global",
+      isGlobalDefault: a.tenantId === null && a.status === AgreementStatus.ACTIVE,
     }));
     
     res.json({ agreements: enrichedAgreements, total: enrichedAgreements.length });
@@ -3852,26 +3857,41 @@ router.get("/agreements/:id", requireSuperUser, async (req, res) => {
       return res.status(404).json({ error: "Agreement not found" });
     }
     
-    // Get tenant name
-    const [tenant] = await db.select({ name: tenants.name })
-      .from(tenants)
-      .where(eq(tenants.id, agreement.tenantId))
-      .limit(1);
+    // Get tenant name (null for global agreements)
+    let tenantName = "All Tenants";
+    let totalUsersCount = 0;
+    
+    if (agreement.tenantId) {
+      const [tenant] = await db.select({ name: tenants.name })
+        .from(tenants)
+        .where(eq(tenants.id, agreement.tenantId))
+        .limit(1);
+      tenantName = tenant?.name || "Unknown";
+      
+      const totalUsers = await db.select({ count: count() })
+        .from(users)
+        .where(eq(users.tenantId, agreement.tenantId));
+      totalUsersCount = totalUsers[0]?.count || 0;
+    } else {
+      // For global agreement, count all users across all tenants
+      const totalUsers = await db.select({ count: count() })
+        .from(users)
+        .where(isNotNull(users.tenantId));
+      totalUsersCount = totalUsers[0]?.count || 0;
+    }
     
     // Get acceptance stats
     const acceptances = await db.select({ count: count() })
       .from(tenantAgreementAcceptances)
       .where(eq(tenantAgreementAcceptances.agreementId, id));
     
-    const totalUsers = await db.select({ count: count() })
-      .from(users)
-      .where(eq(users.tenantId, agreement.tenantId));
-    
     res.json({
       ...agreement,
-      tenantName: tenant?.name || "Unknown",
+      tenantName,
+      scope: agreement.tenantId ? "tenant" : "global",
+      isGlobalDefault: agreement.tenantId === null && agreement.status === AgreementStatus.ACTIVE,
       acceptedCount: acceptances[0]?.count || 0,
-      totalUsers: totalUsers[0]?.count || 0,
+      totalUsers: totalUsersCount,
     });
   } catch (error) {
     console.error("[agreements] Failed to get agreement:", error);
@@ -3879,7 +3899,7 @@ router.get("/agreements/:id", requireSuperUser, async (req, res) => {
   }
 });
 
-// POST /api/v1/super/agreements - Create a new draft agreement for a tenant
+// POST /api/v1/super/agreements - Create a new draft agreement for a tenant or global default
 router.post("/agreements", requireSuperUser, async (req, res) => {
   try {
     const validation = agreementCreateSchema.safeParse(req.body);
@@ -3890,23 +3910,37 @@ router.post("/agreements", requireSuperUser, async (req, res) => {
     const { tenantId, title, body } = validation.data;
     const user = req.user as any;
     
-    // Verify tenant exists
-    const [tenant] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.id, tenantId)).limit(1);
-    if (!tenant) {
-      return res.status(404).json({ error: "Tenant not found" });
+    // tenantId null/undefined = "All Tenants" (global default)
+    const effectiveTenantId = tenantId || null;
+    
+    // If specific tenant, verify it exists
+    if (effectiveTenantId) {
+      const [tenant] = await db.select({ id: tenants.id }).from(tenants).where(eq(tenants.id, effectiveTenantId)).limit(1);
+      if (!tenant) {
+        return res.status(404).json({ error: "Tenant not found" });
+      }
     }
     
-    // Get next version number for this tenant
-    const existingAgreements = await db.select({ version: tenantAgreements.version })
-      .from(tenantAgreements)
-      .where(eq(tenantAgreements.tenantId, tenantId))
-      .orderBy(desc(tenantAgreements.version))
-      .limit(1);
+    // Get next version number for this scope (tenant-specific or global)
+    let existingAgreements;
+    if (effectiveTenantId) {
+      existingAgreements = await db.select({ version: tenantAgreements.version })
+        .from(tenantAgreements)
+        .where(eq(tenantAgreements.tenantId, effectiveTenantId))
+        .orderBy(desc(tenantAgreements.version))
+        .limit(1);
+    } else {
+      existingAgreements = await db.select({ version: tenantAgreements.version })
+        .from(tenantAgreements)
+        .where(isNull(tenantAgreements.tenantId))
+        .orderBy(desc(tenantAgreements.version))
+        .limit(1);
+    }
     
     const nextVersion = existingAgreements.length > 0 ? existingAgreements[0].version + 1 : 1;
     
     const [newAgreement] = await db.insert(tenantAgreements).values({
-      tenantId,
+      tenantId: effectiveTenantId,
       title,
       body,
       version: nextVersion,
@@ -3975,13 +4009,23 @@ router.post("/agreements/:id/publish", requireSuperUser, async (req, res) => {
       return res.status(400).json({ error: "Only draft agreements can be published" });
     }
     
-    // Archive any existing active agreement for this tenant
-    await db.update(tenantAgreements)
-      .set({ status: AgreementStatus.ARCHIVED, updatedAt: new Date() })
-      .where(and(
-        eq(tenantAgreements.tenantId, existing.tenantId),
-        eq(tenantAgreements.status, AgreementStatus.ACTIVE)
-      ));
+    // Archive any existing active agreement for this scope (tenant-specific or global)
+    if (existing.tenantId) {
+      await db.update(tenantAgreements)
+        .set({ status: AgreementStatus.ARCHIVED, updatedAt: new Date() })
+        .where(and(
+          eq(tenantAgreements.tenantId, existing.tenantId),
+          eq(tenantAgreements.status, AgreementStatus.ACTIVE)
+        ));
+    } else {
+      // Global agreement (tenantId = null)
+      await db.update(tenantAgreements)
+        .set({ status: AgreementStatus.ARCHIVED, updatedAt: new Date() })
+        .where(and(
+          isNull(tenantAgreements.tenantId),
+          eq(tenantAgreements.status, AgreementStatus.ACTIVE)
+        ));
+    }
     
     // Publish the new agreement
     const [published] = await db.update(tenantAgreements)
@@ -3993,8 +4037,12 @@ router.post("/agreements/:id/publish", requireSuperUser, async (req, res) => {
       .where(eq(tenantAgreements.id, id))
       .returning();
     
-    // Invalidate agreement cache for this tenant
-    invalidateAgreementCache(existing.tenantId);
+    // Invalidate agreement cache - for global agreements, clear all caches
+    if (existing.tenantId) {
+      invalidateAgreementCache(existing.tenantId);
+    } else {
+      clearAgreementCache();
+    }
     
     res.json({ agreement: published });
   } catch (error) {
@@ -4026,8 +4074,12 @@ router.post("/agreements/:id/archive", requireSuperUser, async (req, res) => {
       .where(eq(tenantAgreements.id, id))
       .returning();
     
-    // Invalidate agreement cache for this tenant
-    invalidateAgreementCache(existing.tenantId);
+    // Invalidate agreement cache - for global agreements, clear all caches
+    if (existing.tenantId) {
+      invalidateAgreementCache(existing.tenantId);
+    } else {
+      clearAgreementCache();
+    }
     
     res.json({ agreement: archived });
   } catch (error) {

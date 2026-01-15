@@ -229,11 +229,17 @@ export const AgreementStatus = {
 
 /**
  * Tenant Agreements table - stores SaaS agreement/terms versions per tenant
- * Only ONE active agreement per tenant at a time
+ * Only ONE active agreement per tenant at a time (or one global default for all tenants)
+ * 
+ * SCOPE BEHAVIOR:
+ * - tenantId = NULL: Global default agreement (applies to all tenants without override)
+ * - tenantId = <uuid>: Tenant-specific override agreement
+ * 
+ * RESOLUTION: Tenant-specific active agreement takes precedence, else global default.
  */
 export const tenantAgreements = pgTable("tenant_agreements", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  tenantId: varchar("tenant_id").references(() => tenants.id), // NULL = global/All Tenants
   title: text("title").notNull(),
   body: text("body").notNull(), // Markdown or HTML content
   version: integer("version").notNull().default(1),

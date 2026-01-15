@@ -52,7 +52,7 @@
 import { Request, Response, NextFunction } from "express";
 import { db } from "../db";
 import { tenantAgreements, tenantAgreementAcceptances, AgreementStatus, UserRole } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, sql, isNull } from "drizzle-orm";
 
 /**
  * EXEMPT ROUTE PATTERNS
@@ -114,6 +114,12 @@ const CACHE_TTL_MS = 60 * 1000; // 1 minute cache
 
 /**
  * Fetch active agreement for a tenant with caching.
+ * 
+ * RESOLUTION LOGIC:
+ * 1. First check for tenant-specific active agreement (tenantId = given ID)
+ * 2. If none, fall back to global default (tenantId = NULL, "All Tenants")
+ * 3. If still none, return null (no active agreement)
+ * 
  * Returns null if no active agreement exists.
  * Throws on database errors (caller must handle).
  */
@@ -125,7 +131,8 @@ async function getActiveAgreement(tenantId: string): Promise<{ id: string; versi
     return cached.agreement;
   }
 
-  const activeAgreements = await db.select({
+  // First: Check for tenant-specific active agreement
+  const tenantSpecificAgreements = await db.select({
     id: tenantAgreements.id,
     version: tenantAgreements.version,
   })
@@ -136,7 +143,23 @@ async function getActiveAgreement(tenantId: string): Promise<{ id: string; versi
     ))
     .limit(1);
 
-  const agreement = activeAgreements.length > 0 ? activeAgreements[0] : null;
+  let agreement = tenantSpecificAgreements.length > 0 ? tenantSpecificAgreements[0] : null;
+
+  // Second: If no tenant-specific, check for global default (tenantId = NULL)
+  if (!agreement) {
+    const globalAgreements = await db.select({
+      id: tenantAgreements.id,
+      version: tenantAgreements.version,
+    })
+      .from(tenantAgreements)
+      .where(and(
+        isNull(tenantAgreements.tenantId),
+        eq(tenantAgreements.status, AgreementStatus.ACTIVE)
+      ))
+      .limit(1);
+
+    agreement = globalAgreements.length > 0 ? globalAgreements[0] : null;
+  }
 
   agreementCache.set(tenantId, {
     tenantId,
