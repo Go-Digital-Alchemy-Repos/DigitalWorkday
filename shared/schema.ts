@@ -816,6 +816,7 @@ export const systemSettings = pgTable("system_settings", {
   id: integer("id").primaryKey().default(1), // Single-row table, id always 1
   defaultAppName: text("default_app_name"),
   defaultLogoUrl: text("default_logo_url"),
+  defaultIconUrl: text("default_icon_url"),
   defaultFaviconUrl: text("default_favicon_url"),
   defaultPrimaryColor: text("default_primary_color"),
   defaultSecondaryColor: text("default_secondary_color"),
@@ -1432,6 +1433,7 @@ export const insertSystemSettingsSchema = createInsertSchema(systemSettings).omi
 export const updateSystemSettingsSchema = z.object({
   defaultAppName: z.string().optional(),
   defaultLogoUrl: z.string().nullable().optional(),
+  defaultIconUrl: z.string().nullable().optional(),
   defaultFaviconUrl: z.string().nullable().optional(),
   defaultPrimaryColor: z.string().optional(),
   defaultSecondaryColor: z.string().nullable().optional(),

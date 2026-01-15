@@ -1,0 +1,291 @@
+You are continuing development on my React + Express multi-tenant app (single codebase).
+UNIFIED S3 UPLOAD SERVICE — UPDATED SCOPE (Fold in Branding Upload Dropzones)
+Goal: Standardize ALL uploads under one shared backend + frontend pattern, and wire it into:
+1) Super Admin → System Settings → Global Branding (logo/icon/favicon dropzones)
+2) Tenant Admin → Settings → Branding (logo/icon/favicon dropzones + inheritance preview)
+3) User “My Account” avatar upload
+4) Task Attachments panel dropzone
+
+This prompt replaces/updates the previous “Unified S3 Upload Service” prompt and now explicitly includes
+Global Branding + Tenant Branding dropzones.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change existing endpoint paths (add-only if missing).
+- Keep existing URL-based branding working (if fields already exist, do not remove them).
+- Do NOT expose S3 secrets to client.
+- Validate file types + sizes server-side.
+- Tenant isolation MUST be enforced:
+  - uploaded object keys must be namespaced by tenantId for tenant-scoped uploads
+  - global branding must be stored under a global prefix, not under a tenant
+- Do NOT change auth, tenancy, or agreement enforcement behavior.
+- No schema changes unless absolutely necessary; prefer storing URLs in existing columns.
+
+===============================================================================
+GOAL
+===============================================================================
+Create ONE consistent upload flow:
+- Backend issues presigned upload URL with strict validation
+- Frontend uploads directly to S3
+- Backend stores/updates only the resulting public fileUrl (or key->url mapping if needed)
+- UI uses a shared dropzone component for all upload contexts
+
+===============================================================================
+PART A — BACKEND: SHARED S3 UPLOAD SERVICE
+===============================================================================
+A1) Create:
+- server/services/uploads/s3UploadService.ts
+
+Responsibilities:
+- Validate category + contentType + size
+- Generate S3 key with enforced prefix rules (see below)
+- Generate presigned PUT URL
+- Return:
+  { uploadUrl, fileUrl, key, expiresInSeconds }
+
+A2) Allowed categories + rules
+Categories:
+1) "global-branding-logo"
+2) "global-branding-icon"
+3) "global-branding-favicon"
+4) "tenant-branding-logo"
+5) "tenant-branding-icon"
+6) "tenant-branding-favicon"
+7) "user-avatar"
+8) "task-attachment"
+
+Type/size limits:
+- Logos: png/jpg/jpeg/webp/svg up to 2MB
+- Icons: png/svg/ico up to 512KB
+- Favicons: png/ico/svg up to 512KB
+- User avatar: png/jpg/jpeg/webp/gif up to 2MB
+- Task attachment: pdf/doc/docx/xls/xlsx/csv/png/jpg/jpeg/webp/txt/zip up to 25MB (configurable)
+
+A3) Key conventions (MANDATORY)
+- Global branding (no tenantId in path):
+  global/branding/{assetType}/{yyyy}/{mm}/{uuid}-{sanitizedFilename}
+  where assetType in {logo, icon, favicon}
+
+- Tenant branding:
+  tenants/{tenantId}/branding/{assetType}/{yyyy}/{mm}/{uuid}-{sanitizedFilename}
+
+- User avatars:
+  tenants/{tenantId}/users/{userId}/avatar/{yyyy}/{mm}/{uuid}-{sanitizedFilename}
+
+- Task attachments:
+  tenants/{tenantId}/projects/{projectId}/tasks/{taskId}/attachments/{yyyy}/{mm}/{uuid}-{sanitizedFilename}
+
+A4) Security enforcement
+- The server must derive tenantId/userId/projectId/taskId from auth context + request body and validate they belong together.
+- The client must NOT be allowed to submit an arbitrary S3 key or tenantId.
+- For global branding categories:
+  - Only super_user may presign
+- For tenant branding categories:
+  - tenant admin or super_user impersonating tenant may presign
+- For user-avatar:
+  - user can presign only for themselves (or super_user impersonating tenant can update user avatars only via existing user management rules)
+- For task-attachment:
+  - enforce task permissions + tenant scoping
+
+===============================================================================
+PART B — BACKEND: PRESIGN ENDPOINT
+===============================================================================
+Add (or reuse) add-only endpoint:
+
+POST /api/v1/uploads/presign
+Body:
+{
+  category: string,
+  filename: string,
+  contentType: string,
+  size: number,
+  context?: {
+    projectId?: string,
+    taskId?: string,
+    assetType?: "logo"|"icon"|"favicon"
+  }
+}
+
+Response:
+{ uploadUrl, fileUrl, key, expiresInSeconds }
+
+Rules:
+- Validate inputs
+- Validate permissions
+- Derive tenantId/userId from session/cookie auth
+- Validate project/task belong to tenant when needed
+
+===============================================================================
+PART C — FRONTEND: SHARED UPLOAD HOOK + DROPZONE
+===============================================================================
+C1) Create:
+- client/src/hooks/useS3Upload.ts
+API:
+useS3Upload({ category, context? }) -> { upload(file): Promise<{fileUrl, key}>, progress, error, reset }
+
+C2) Create shared component:
+- client/src/components/common/S3Dropzone.tsx
+Props:
+- label
+- description
+- category
+- context (optional)
+- valueUrl (optional current url)
+- inheritedUrl (optional for tenant branding)
+- onUploaded(fileUrl)
+- onRemoved()
+
+Features:
+- drag/drop + click
+- previews for images
+- show current value vs inherited value (tenant branding)
+- show “Remove” button (clears override)
+- shows validation errors
+- progress indicator
+
+No small modals.
+
+===============================================================================
+PART D — WIRE INTO GLOBAL BRANDING (SUPER ADMIN)
+===============================================================================
+D1) UI location:
+Super Admin → System Settings → Global Branding tab
+
+D2) Add dropzones for:
+- Logo
+- Icon
+- Favicon (if your system supports)
+
+Behavior:
+- Upload uses categories:
+  - global-branding-logo / icon / favicon
+- On successful upload:
+  - call existing global branding save endpoint (or add minimal PATCH):
+    PATCH /api/v1/super/system-settings
+    Body: { defaultLogoUrl, defaultIconUrl, defaultFaviconUrl }
+  Keep existing URL fields working: if there is an input box already, leave it, but add “Upload” above it.
+
+Remove behavior:
+- Sets corresponding URL to null (does not delete from S3)
+
+===============================================================================
+PART E — WIRE INTO TENANT BRANDING (TENANT ADMIN)
+===============================================================================
+E1) UI location:
+Tenant Admin → Settings → Branding tab
+
+E2) Add dropzones for:
+- Logo
+- Icon
+- Favicon
+
+Behavior:
+- Upload uses categories:
+  - tenant-branding-logo / icon / favicon
+- Show inherited preview:
+  - If tenant value is null, show inheritedUrl from global branding with label “Inherited”
+- Remove tenant branding:
+  - clears tenant URL so it reverts to inherited global
+
+Save endpoint:
+- Use existing tenant settings endpoint; otherwise add minimal:
+  PATCH /api/v1/tenant/settings/branding
+  Body: { logoUrl, iconUrl, faviconUrl }
+
+Permissions:
+- tenant admin only (or super impersonating)
+
+===============================================================================
+PART F — WIRE INTO USER AVATAR (MY ACCOUNT)
+===============================================================================
+Add avatar upload in My Account:
+- Use category: user-avatar
+- Persist avatarUrl to the user profile using existing profile endpoint.
+If existing schema stores base64 profileImage:
+- Prefer switching to avatarUrl ONLY if an avatarUrl column already exists.
+- If not, add minimal additive column avatarUrl (ONLY if necessary) and keep base64 field for backward compatibility.
+- Do NOT remove existing behavior; if both exist, prefer avatarUrl display.
+
+Default:
+- If no avatarUrl, show initials-based circle.
+
+===============================================================================
+PART G — WIRE INTO TASK ATTACHMENTS PANEL
+===============================================================================
+Add dropzone inside Attachments panel only (per earlier requirement):
+- Use category: task-attachment with context { projectId, taskId }
+- On successful upload, create attachment record in backend tied to task:
+  - filename, fileUrl, contentType, size, uploadedByUserId, createdAt
+Use existing attachments table if present; otherwise add minimal add-only table:
+task_attachments:
+- id, tenantId, taskId, projectId, fileUrl, filename, contentType, size, uploadedByUserId, createdAt
+
+List attachments in task detail drawer:
+- show icon by file type
+- download/open link
+- remove attachment (soft delete if supported; otherwise delete record; do not delete S3 object)
+
+===============================================================================
+PART H — TESTS (MANDATORY MINIMUM)
+===============================================================================
+Backend:
+1) presign_validation_by_category.test.ts
+- rejects invalid types/sizes per category
+
+2) presign_permissions.test.ts
+- only super can presign global branding
+- only tenant admin can presign tenant branding
+- user can presign only their own avatar
+- task attachments require task permission
+
+3) presign_key_namespace.test.ts
+- tenant uploads always contain tenants/{tenantId}/...
+- global uploads always contain global/branding/...
+
+Frontend (if available):
+4) branding_dropzone_inheritance.test.tsx
+- tenant with no override shows inherited preview
+- remove override reverts to inherited
+
+5) avatar_default_initials.test.tsx
+- no avatar => initials
+- upload => shows avatar
+
+===============================================================================
+DOCUMENTATION STANDARD (REQUIRED)
+===============================================================================
+- Update /docs/UPLOADS_S3.md with:
+  - categories
+  - allowed types/sizes
+  - key conventions
+  - permission rules
+- Update /docs/FEATURE_INVENTORY.md:
+  - Global Branding uploads
+  - Tenant Branding uploads
+  - User Avatar uploads
+  - Task Attachments uploads
+- Add module header comments in:
+  - s3UploadService.ts
+  - presign route
+  - S3Dropzone component
+Explaining invariants and why keys are derived server-side.
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) Global Branding tab supports logo/icon/favicon drag-drop upload + preview + remove.
+2) Tenant Branding tab supports same, including inherited preview + remove to revert.
+3) My Account supports avatar upload; defaults to initials if missing.
+4) Task Attachments panel supports dropzone upload and lists attachments.
+5) All uploads are validated server-side and tenant isolated.
+6) No breaking changes; existing URL-based branding still works.
+7) Tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Endpoints added/used
+- S3 key patterns actually implemented
+- Any schema changes (only if required)
+- Manual test checklist for each upload target (local + Railway)
