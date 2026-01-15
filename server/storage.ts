@@ -231,6 +231,13 @@ export interface IStorage {
 
   getUserByIdAndTenant(id: string, tenantId: string): Promise<User | undefined>;
   getUsersByTenant(tenantId: string): Promise<User[]>;
+  createUserWithTenant(user: InsertUser & { tenantId: string }): Promise<User>;
+  updateUserWithTenant(id: string, tenantId: string, updates: Partial<InsertUser>): Promise<User | undefined>;
+  setUserPasswordWithTenant(id: string, tenantId: string, passwordHash: string): Promise<User | undefined>;
+  setUserActiveWithTenant(id: string, tenantId: string, isActive: boolean): Promise<User | undefined>;
+  getInvitationsByTenant(tenantId: string): Promise<Invitation[]>;
+  updateInvitation(id: string, updates: Partial<InsertInvitation>): Promise<Invitation | undefined>;
+  revokeInvitation(id: string): Promise<Invitation | undefined>;
 
   getAppSettingsByTenant(tenantId: string, workspaceId: string, key: string): Promise<any>;
   setAppSettingsByTenant(tenantId: string, workspaceId: string, key: string, value: any, userId?: string): Promise<void>;
@@ -1430,6 +1437,56 @@ export class DatabaseStorage implements IStorage {
 
   async getUsersByTenant(tenantId: string): Promise<User[]> {
     return db.select().from(users).where(eq(users.tenantId, tenantId));
+  }
+
+  async createUserWithTenant(user: InsertUser & { tenantId: string }): Promise<User> {
+    const [created] = await db.insert(users).values(user).returning();
+    return created;
+  }
+
+  async updateUserWithTenant(id: string, tenantId: string, updates: Partial<InsertUser>): Promise<User | undefined> {
+    const { passwordHash, ...safeUpdates } = updates as any;
+    const [updated] = await db.update(users)
+      .set({ ...safeUpdates, updatedAt: new Date() })
+      .where(and(eq(users.id, id), eq(users.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async setUserPasswordWithTenant(id: string, tenantId: string, passwordHash: string): Promise<User | undefined> {
+    const [updated] = await db.update(users)
+      .set({ passwordHash, updatedAt: new Date() })
+      .where(and(eq(users.id, id), eq(users.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async setUserActiveWithTenant(id: string, tenantId: string, isActive: boolean): Promise<User | undefined> {
+    const [updated] = await db.update(users)
+      .set({ isActive, updatedAt: new Date() })
+      .where(and(eq(users.id, id), eq(users.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getInvitationsByTenant(tenantId: string): Promise<Invitation[]> {
+    return db.select().from(invitations).where(eq(invitations.tenantId, tenantId));
+  }
+
+  async updateInvitation(id: string, updates: Partial<InsertInvitation>): Promise<Invitation | undefined> {
+    const [updated] = await db.update(invitations)
+      .set(updates)
+      .where(eq(invitations.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async revokeInvitation(id: string): Promise<Invitation | undefined> {
+    const [updated] = await db.update(invitations)
+      .set({ status: "revoked" })
+      .where(eq(invitations.id, id))
+      .returning();
+    return updated || undefined;
   }
 
   // App Settings - tenant scoped

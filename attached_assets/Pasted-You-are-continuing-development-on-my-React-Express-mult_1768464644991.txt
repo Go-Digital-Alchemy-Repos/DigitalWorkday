@@ -1,0 +1,189 @@
+You are continuing development on my React + Express multi-tenant app (single codebase).
+REFINEMENT: Centralize SaaS Agreement Management under Super Admin System Settings.
+Tenant Admins must NOT manage agreements; they only need to VIEW/DOWNLOAD their own signed agreement.
+
+We are moving functionality (UI + wiring) out of Tenant Admin Account Settings and into Super Admin System Settings.
+We must preserve agreement gating behavior: Tenant Admins are required to sign on first login (if that’s current policy).
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change endpoint paths or response shapes (add-only is OK if needed).
+- Do NOT change the existing agreement enforcement strategy or bypass rules (Phase 3C hardening stays intact).
+- Do NOT change database schema unless absolutely necessary (prefer reusing existing agreements/signatures tables).
+- Do NOT delete agreement data (existing agreements and signatures must remain).
+- Do NOT remove tenant’s ability to view/download their own signed agreement.
+- Any UI removal on tenant side must not break deep links; use redirects if necessary.
+
+===============================================================================
+GOALS
+===============================================================================
+1) Super Admin:
+- System Settings gets a new tab: “SaaS Agreements”
+- Super Admins can create, edit, publish, version, and assign SaaS agreements to tenants
+- Super Admins can view signing status per tenant (signed/pending/version)
+
+2) Tenant Admin:
+- Remove SaaS Agreement management from Tenant Admin Account Settings entirely
+- Tenant Admin can ONLY:
+  - View agreement required for their tenant (read-only)
+  - Sign it (if required, on first login / gating)
+  - Download/view the signed copy later from a “Billing/Account” or “Legal” read-only section
+- Tenant Admin cannot create/edit/publish agreements
+
+===============================================================================
+PART A — SUPER ADMIN: SYSTEM SETTINGS → “SaaS Agreements” TAB
+===============================================================================
+A1) Navigation / UI placement
+- Super Admin → System Settings
+- Add tab: “SaaS Agreements” (near Integrations/Invoice Settings)
+
+A2) Agreement library + versioning
+Provide a list/table of agreement versions:
+- Agreement Name
+- Version
+- Status: Draft / Active / Archived
+- CreatedAt / UpdatedAt
+- Actions: View/Edit, Publish/Activate, Archive, Duplicate
+
+A3) Agreement editor (full-width drawer, not small modal)
+Fields:
+- Name (required)
+- Version label (auto-increment or manual, but consistent)
+- Body content (rich text or markdown; keep simple if current implementation exists)
+- Effective date
+- Optional: require re-sign on version change (boolean)
+- Save Draft
+- Publish/Activate (with confirmation)
+
+A4) Tenant assignment controls
+Within agreement detail/editor:
+- “Applies to”:
+  - All tenants (default) OR
+  - Selected tenants (multi-select)
+- If you already have tenant scoping logic, reuse it; do NOT break it.
+
+A5) Signing status visibility (super admin)
+Add a “Tenant Signatures” panel:
+- Tenant name
+- Required version
+- Status: pending/signed
+- Signed by (user/email)
+- Signed date
+- Download signed pdf/record (if supported)
+
+===============================================================================
+PART B — TENANT ADMIN: REMOVE MANAGEMENT UI, KEEP VIEW/DOWNLOAD ONLY
+===============================================================================
+B1) Remove tenant-side agreement management pages/tools
+- In Tenant Admin Account Settings area:
+  - remove “SaaS Agreements” management UI (create/edit/publish/assign)
+  - remove any ability to change agreement configuration
+- If tenant UI has an agreement management route:
+  - keep route but redirect to a read-only “Your Agreement” view OR show 404 with a friendly message
+  - do not break navigation or crash
+
+B2) Tenant Admin “Your Agreement” page (read-only)
+Add/keep a tenant-accessible page such as:
+- Tenant Settings → Legal (or Account → Legal)
+This page must show:
+- current required agreement version (if any)
+- signed status
+- signed date
+- signer name/email
+- download link (signed doc) OR a print-friendly view
+No editing.
+
+B3) First login signing flow (preserve)
+- Keep existing agreement enforcement middleware behavior unchanged:
+  - if agreement required and not signed => block tenant routes until signed
+- Ensure the signing page is accessible even when gated:
+  - allow routes needed to view and sign agreement
+
+===============================================================================
+PART C — BACKEND WIRING (PREFER REUSE; ADD-ONLY IF NEEDED)
+===============================================================================
+C1) Reuse existing tables if present
+Likely:
+- agreements (versions)
+- tenant_agreement_requirements or tenant_required_agreement_version
+- agreement_signatures
+
+Do NOT drop or rename.
+
+C2) Ensure Super Admin endpoints exist (add-only if missing)
+Examples (use your existing patterns; keep consistent):
+- GET /api/v1/super/agreements
+- POST /api/v1/super/agreements
+- PATCH /api/v1/super/agreements/:id
+- POST /api/v1/super/agreements/:id/publish
+- POST /api/v1/super/agreements/:id/archive
+- GET /api/v1/super/agreements/:id/tenants (signing statuses)
+
+C3) Tenant endpoints (read-only)
+- GET /api/v1/tenant/agreement
+  Returns:
+  { requiredAgreementVersion, status, signedAt, signer, downloadUrl? }
+- POST /api/v1/tenant/agreement/sign
+  Body: { agreementId or versionId, accepted: true }
+  Must record signature and then allow access.
+
+IMPORTANT:
+- Do NOT change response shapes if these endpoints already exist; only add missing ones.
+
+===============================================================================
+PART D — CACHE INVALIDATION + NAV UPDATES
+===============================================================================
+- After super admin publishes/updates agreements:
+  - invalidate tenant health/readiness caches
+  - invalidate any super agreement lists
+- Remove tenant nav items that imply agreement management.
+- Ensure super admin sees SaaS Agreements in System Settings.
+
+===============================================================================
+TESTS (MANDATORY MINIMUM)
+===============================================================================
+1) super_can_create_publish_agreement.test.ts
+- creates draft
+- publishes
+- appears as active
+
+2) tenant_cannot_access_agreement_admin_endpoints.test.ts
+- tenant admin forbidden from super endpoints
+
+3) tenant_can_view_download_own_signed_agreement.test.ts
+- tenant can fetch their own agreement summary and download/view
+
+4) agreement_gating_allows_sign_route_when_blocked.test.ts
+- tenant blocked from other routes but can access agreement view/sign routes
+
+5) tenant_ui_no_management_controls.test.tsx (if UI tests exist)
+- tenant settings does not show create/edit/publish controls
+
+===============================================================================
+DOCUMENTATION STANDARD (REQUIRED)
+===============================================================================
+- Update /docs/SUPER_ADMIN_GUIDE.md:
+  - SaaS Agreements management in System Settings
+- Update /docs/TENANT_ADMIN_GUIDE.md:
+  - Tenant Admin only views/downloads signed agreement
+  - Signing required on first login (if applicable)
+- Update /docs/ARCHITECTURE_OVERVIEW.md with:
+  - agreement versioning + assignment + gating
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+- Super Admin can fully manage agreements from System Settings.
+- Tenant Admin no longer has agreement management tools anywhere.
+- Tenant Admin can still sign on first login and later view/download their signed agreement.
+- Existing gating behavior remains intact.
+- No endpoint path/response shape changes; no data loss; tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Which tenant UI routes/components were removed/redirected
+- Where the new Super Admin SaaS Agreements tab lives and what it includes
+- Endpoints used/added
+- Manual verification checklist (local + Railway)
