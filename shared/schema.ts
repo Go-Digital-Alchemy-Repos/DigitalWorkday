@@ -840,6 +840,12 @@ export const systemSettings = pgTable("system_settings", {
   s3AccessKeyIdEncrypted: text("s3_access_key_id_encrypted"),
   s3SecretAccessKeyEncrypted: text("s3_secret_access_key_encrypted"),
   s3LastTestedAt: timestamp("s3_last_tested_at"),
+  // Global Stripe Integration (platform-wide billing)
+  stripePublishableKey: text("stripe_publishable_key"),
+  stripeSecretKeyEncrypted: text("stripe_secret_key_encrypted"),
+  stripeWebhookSecretEncrypted: text("stripe_webhook_secret_encrypted"),
+  stripeDefaultCurrency: text("stripe_default_currency").default("usd"),
+  stripeLastTestedAt: timestamp("stripe_last_tested_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
