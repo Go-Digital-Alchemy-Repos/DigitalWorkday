@@ -958,6 +958,205 @@ router.post("/tenants/:tenantId/users/:userId/set-password", requireSuperUser, a
   }
 });
 
+// Get user's latest invitation status
+router.get("/tenants/:tenantId/users/:userId/invitation", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, userId } = req.params;
+    
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+    
+    const user = await storage.getUserByIdAndTenant(userId, tenantId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found in this tenant" });
+    }
+    
+    const invitation = await storage.getLatestInvitationByUserEmail(user.email, tenantId);
+    
+    res.json({
+      invitation: invitation || null,
+      hasAcceptedInvitation: !!user.passwordHash,
+    });
+  } catch (error) {
+    console.error("Error getting user invitation:", error);
+    res.status(500).json({ error: "Failed to get invitation status" });
+  }
+});
+
+// Regenerate invitation for a user
+router.post("/tenants/:tenantId/users/:userId/regenerate-invite", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, userId } = req.params;
+    const superUser = req.user as any;
+    
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+    
+    const user = await storage.getUserByIdAndTenant(userId, tenantId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found in this tenant" });
+    }
+    
+    const existingInvitation = await storage.getLatestInvitationByUserEmail(user.email, tenantId);
+    if (!existingInvitation) {
+      return res.status(404).json({ error: "No invitation found for this user. Create a new invitation instead." });
+    }
+    
+    const { invitation, token } = await storage.regenerateInvitation(existingInvitation.id, superUser?.id);
+    
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+      : process.env.APP_URL || "http://localhost:5000";
+    const inviteUrl = `${baseUrl}/accept-invite?token=${token}`;
+    
+    // Record audit event
+    await recordTenantAuditEvent(
+      tenantId,
+      "invite_regenerated",
+      `Invitation regenerated for ${user.email}`,
+      superUser?.id,
+      { userId, email: user.email, invitationId: invitation.id }
+    );
+    
+    res.json({
+      invitation,
+      inviteUrl,
+      message: "Invitation regenerated successfully",
+    });
+  } catch (error) {
+    console.error("Error regenerating invitation:", error);
+    res.status(500).json({ error: "Failed to regenerate invitation" });
+  }
+});
+
+// Send invitation email to a user
+router.post("/tenants/:tenantId/users/:userId/send-invite", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, userId } = req.params;
+    const superUser = req.user as any;
+    
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+    
+    const user = await storage.getUserByIdAndTenant(userId, tenantId);
+    if (!user) {
+      return res.status(404).json({ error: "User not found in this tenant" });
+    }
+    
+    const existingInvitation = await storage.getLatestInvitationByUserEmail(user.email, tenantId);
+    if (!existingInvitation) {
+      return res.status(404).json({ error: "No invitation found for this user. Create a new invitation first." });
+    }
+    
+    // Check if invitation is expired
+    if (existingInvitation.status === "expired" || 
+        (existingInvitation.expiresAt && new Date(existingInvitation.expiresAt) < new Date())) {
+      return res.status(400).json({ error: "Invitation has expired. Please regenerate the invitation first." });
+    }
+    
+    // Check if invitation was already used
+    if (existingInvitation.status === "accepted" || existingInvitation.usedAt) {
+      return res.status(400).json({ error: "This invitation has already been used." });
+    }
+    
+    // Regenerate the token to get a fresh one for sending
+    const { invitation, token } = await storage.regenerateInvitation(existingInvitation.id, superUser?.id);
+    
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+      : process.env.APP_URL || "http://localhost:5000";
+    const inviteUrl = `${baseUrl}/accept-invite?token=${token}`;
+    
+    // Try to send email
+    let emailSent = false;
+    try {
+      const { sendInviteEmail } = await import("../email");
+      const tenantSettings = await storage.getTenantSettings(tenantId);
+      const appName = tenantSettings?.appName || "MyWorkDay";
+      
+      await sendInviteEmail(user.email, inviteUrl, appName, tenantId);
+      emailSent = true;
+    } catch (emailError) {
+      console.error("Failed to send invitation email:", emailError);
+    }
+    
+    // Record audit event
+    await recordTenantAuditEvent(
+      tenantId,
+      "invite_sent",
+      `Invitation email ${emailSent ? "sent" : "attempted but failed"} to ${user.email}`,
+      superUser?.id,
+      { userId, email: user.email, invitationId: invitation.id, emailSent }
+    );
+    
+    res.json({
+      invitation,
+      inviteUrl,
+      emailSent,
+      message: emailSent ? "Invitation email sent successfully" : "Invitation regenerated but email sending failed",
+    });
+  } catch (error) {
+    console.error("Error sending invitation:", error);
+    res.status(500).json({ error: "Failed to send invitation" });
+  }
+});
+
+// Reset user password with must-change flag
+const resetPasswordSchema = z.object({
+  password: z.string().min(8, "Password must be at least 8 characters"),
+  mustChangeOnNextLogin: z.boolean().optional().default(true),
+});
+
+router.post("/tenants/:tenantId/users/:userId/reset-password", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, userId } = req.params;
+    const { password, mustChangeOnNextLogin } = resetPasswordSchema.parse(req.body);
+    const superUser = req.user as any;
+    
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+    
+    const existingUser = await storage.getUserByIdAndTenant(userId, tenantId);
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found in this tenant" });
+    }
+    
+    // Hash the password
+    const { hashPassword } = await import("../auth");
+    const passwordHash = await hashPassword(password);
+    
+    await storage.setUserPasswordWithMustChange(userId, tenantId, passwordHash, mustChangeOnNextLogin);
+    
+    // Record audit event
+    await recordTenantAuditEvent(
+      tenantId,
+      "user_password_reset",
+      `Password reset for user ${existingUser.email}${mustChangeOnNextLogin ? " (must change on next login)" : ""}`,
+      superUser?.id,
+      { userId, email: existingUser.email, mustChangeOnNextLogin }
+    );
+    
+    res.json({
+      message: "Password reset successfully",
+      mustChangeOnNextLogin,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors });
+    }
+    console.error("Error resetting user password:", error);
+    res.status(500).json({ error: "Failed to reset password" });
+  }
+});
+
 // Revoke an invitation
 router.post("/tenants/:tenantId/invitations/:invitationId/revoke", requireSuperUser, async (req, res) => {
   try {
