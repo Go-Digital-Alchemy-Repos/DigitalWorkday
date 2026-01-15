@@ -5356,6 +5356,7 @@ router.post("/impersonate/start", requireSuperUser, async (req, res) => {
       tenantId,
       userId: user.id,
       eventType: "super_user_action",
+      message: `Super Admin ${user.email} started impersonating tenant`,
       eventDetails: {
         action: "impersonation_started",
         superUserId: user.id,
@@ -5399,6 +5400,7 @@ router.post("/impersonate/stop", requireSuperUser, async (req, res) => {
           tenantId,
           userId: user.id,
           eventType: "super_user_action",
+          message: `Super Admin ${user.email} stopped impersonating tenant`,
           eventDetails: {
             action: "impersonation_stopped",
             superUserId: user.id,
