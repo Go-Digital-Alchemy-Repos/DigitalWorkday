@@ -417,10 +417,15 @@ export async function safeDeleteAllUsers() {
   await db.execute(sql`DELETE FROM tenancy_warnings`);
   await db.execute(sql`DELETE FROM tenants`);
   
-  // Level 10: Sessions (must clear before users in case of FK)
+  // Level 10: Platform-level tables (reference users)
+  await db.execute(sql`DELETE FROM platform_audit_events`);
+  await db.execute(sql`DELETE FROM platform_invitations`);
+  await db.execute(sql`DELETE FROM email_outbox`);
+  
+  // Level 11: Sessions (must clear before users in case of FK)
   await db.execute(sql`DELETE FROM user_sessions`);
   
-  // Level 11: Users (no more FK references)
+  // Level 12: Users (no more FK references)
   await db.execute(sql`DELETE FROM users`);
 }
 
