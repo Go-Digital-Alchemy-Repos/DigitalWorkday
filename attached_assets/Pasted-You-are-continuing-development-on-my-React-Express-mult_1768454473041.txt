@@ -1,0 +1,211 @@
+You are continuing development on my React + Express multi-tenant app (single codebase).
+REFINEMENT: Super Admin → Tenant Management UX Unification + Onboarding Flow Fixes
+
+Current problem:
+- Tenant management has 3 entry/edit surfaces:
+  1) Tenant settings modal
+  2) Edit tenant small modal
+  3) Full tenant details slide-out drawer (best)
+We want ONE unified editor: the full slide-out drawer, wider, with ALL edit capabilities inside it.
+Also: Onboarding Wizard tab must be first/left-most and the default tab.
+Also: Inviting a tenant admin currently does not persist the entry or the invite link.
+
+This prompt should also include a careful review of the tenant management area for other low-risk improvements,
+but DO NOT redesign the entire app.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change endpoint paths or response shapes.
+- Do NOT change tenancy/auth/agreement enforcement behavior.
+- Do NOT change DB schema unless absolutely necessary to fix broken invite persistence.
+- Do NOT remove functionality; consolidate UI entry points while preserving capabilities.
+- No destructive actions without confirmation.
+- Replace small modals with slide-out drawer pages for tenant management; confirm dialogs are OK.
+- Keep changes isolated to Super Admin tenant management screens, related components, and the invite save flow.
+
+===============================================================================
+GOALS
+===============================================================================
+1) Unify tenant editing into ONE slide-out drawer.
+2) Make the drawer wider (more workspace) and remove reliance on small modals.
+3) Move Onboarding Wizard tab to far left and make it the default initial tab.
+4) Fix tenant admin invite flow so it:
+   - persists invite record
+   - generates and displays a copyable invite link
+   - optionally sends email (if Mailgun configured)
+5) Audit tenant management area for broken/awkward behaviors and improve them safely.
+
+===============================================================================
+PART A — REMOVE DUPLICATE ENTRY POINTS (UI CONSOLIDATION)
+===============================================================================
+A1) Tenant list/table actions
+- Replace “Tenant Settings” and “Edit Tenant” modal triggers with ONE action:
+  - “Manage Tenant” (or clicking tenant row/name)
+  which opens the TenantDrawer.
+
+A2) Remove/disable small modals
+- If modals are used for tenant edit/settings, change their buttons to open TenantDrawer instead.
+- Keep the same navigation user intent:
+  - any path that previously opened a modal must now open the drawer on the appropriate tab.
+- Do not delete components immediately; deprecate safely or leave unused but not invoked.
+
+A3) Deep link behavior (nice to have)
+- If the UI supports it, allow direct open:
+  /super/tenants/:tenantId?tab=onboarding
+But do not add new routing complexity unless already present.
+
+===============================================================================
+PART B — WIDEN TENANT DRAWER + IMPROVE LAYOUT
+===============================================================================
+B1) Increase drawer width substantially
+- Use a responsive width:
+  - desktop: ~80–90vw maxWidth ~1200–1400px
+  - smaller screens: full width
+- Ensure internal scrolling works reliably and doesn’t double-scroll.
+
+B2) Make drawer the primary editor surface
+- All edit forms and settings should live inside this drawer (tabs).
+- No nested modals for editing tenant fields.
+
+===============================================================================
+PART C — TAB ORDER + DEFAULT TAB
+===============================================================================
+C1) Reorder tabs so:
+- Onboarding Wizard is first/left-most
+- On opening TenantDrawer, Onboarding Wizard is the default selected tab
+Unless a caller explicitly requests another tab (optional support).
+
+C2) Preserve current tab content but adjust navigation logic:
+- Default = onboarding
+- If a user clicks specific action like “Branding”, open drawer and land on “Branding” tab
+
+===============================================================================
+PART D — FIX TENANT ADMIN INVITE FLOW (PERSISTENCE + LINK)
+===============================================================================
+Current issue:
+- inviting a tenant admin does not save the entry or the invitation link.
+
+D1) Identify existing invite mechanism
+- Determine which backend endpoint is responsible:
+  - likely /api/v1/super/tenants/:id/invite-admin or similar
+- Verify it writes an invitation token record to DB and returns a usable invite URL.
+
+D2) Correct behavior (required)
+When Super Admin invites a tenant admin from the Onboarding tab:
+- Validate inputs:
+  - email required
+  - role should be Tenant Admin (not super)
+- Create invitation record:
+  - tenantId set properly
+  - role set properly
+  - expiresAt set (default 7 days)
+  - createdBy set to current super admin
+- Generate inviteUrl:
+  - points to app frontend invite acceptance page (/auth/invite?token=...)
+- Return and display:
+  - inviteUrl
+  - expiresAt
+  - emailSent (boolean)
+- UI must:
+  - show inviteUrl in a copyable field
+  - also provide “Copy Link” button
+  - persist and display the invite in an “Invitations” list within the tenant drawer
+
+D3) Persisting visibility
+Inside TenantDrawer → Onboarding tab:
+- Show a section: “Invited Tenant Admins”
+- Table rows:
+  - email
+  - status (pending/accepted/expired)
+  - createdAt
+  - expiresAt
+  - actions: Copy Link, Resend (if configured), Revoke (optional; safe)
+- The invite list must load from DB (GET endpoint). If none exists, create it.
+
+D4) If Mailgun configured
+- Allow optional “Send email invite” checkbox
+- If Mailgun not configured, disable the checkbox but still allow link generation
+
+D5) Do NOT change existing tenant invite acceptance behavior
+- The invite acceptance page should already exist. If not, reuse the one implemented for tenant users.
+- Ensure tenant invites continue to work.
+
+===============================================================================
+PART E — OTHER SAFE IMPROVEMENTS (AUDIT & CLEANUP)
+===============================================================================
+Perform a targeted audit of tenant management for:
+- broken save buttons, missing refetch/invalidation after save
+- confusing action naming
+- missing loading states/spinners
+- missing success/error feedback toasts
+- inconsistent error handling (show requestId)
+- focus/scroll issues in drawer
+- ensuring “Recently viewed tenants” in switcher (client-side) still works and is not broken
+
+Implement only low-risk, localized improvements.
+Do NOT introduce new features beyond the tenant management scope.
+
+===============================================================================
+PART F — CACHE + QUERY INVALIDATION (IMPORTANT)
+===============================================================================
+Ensure when tenant details are edited:
+- tenant list refreshes
+- tenant drawer refetches latest data
+- invitations list updates immediately after invite creation
+Use TanStack Query invalidations appropriately.
+
+===============================================================================
+TESTS (MANDATORY MINIMUM)
+===============================================================================
+Backend:
+1) super_invite_tenant_admin_persists_and_returns_link.test.ts
+- creates invitation
+- returns inviteUrl
+- invitation retrievable via list endpoint
+
+2) invite_list_scoped_to_tenant.test.ts
+- tenant A invites not visible in tenant B drawer
+
+Frontend:
+3) tenant_drawer_default_tab_onboarding.test.tsx
+- opens drawer defaults to onboarding
+
+4) invite_flow_shows_copyable_link.test.tsx
+- after invite creation, link appears and persists on refresh
+
+If UI tests are limited, add manual checklist to /docs/REGRESSION_CHECKLIST.md.
+
+===============================================================================
+DOCUMENTATION STANDARD (REQUIRED)
+===============================================================================
+- Update /docs/FEATURE_INVENTORY.md (Super Admin Tenant Management)
+- Add /docs/SUPER_TENANT_MANAGEMENT.md:
+  - unified drawer approach
+  - tab order/default
+  - invite workflow + where invites are listed
+- Add header comments in TenantDrawer component explaining:
+  - why modals are avoided
+  - how tab routing works
+  - how invite persistence is handled
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) Tenant Settings/Edit modals no longer used; actions open the TenantDrawer instead.
+2) TenantDrawer is wider and serves as the single editing surface.
+3) Onboarding Wizard is first tab and default starting tab.
+4) Inviting a tenant admin:
+   - creates a saved invitation
+   - returns and displays a copyable invite link
+   - invitation persists and is visible in an invites list
+5) Tenant management area has consistent loading states and success/error feedback.
+6) No breaking changes to endpoints/schema; tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Which modal entry points were removed/redirected and where they now route
+- Drawer width settings implemented
+- Invite endpoints used and payload shape
+- Manual test checklist (local + Railway)

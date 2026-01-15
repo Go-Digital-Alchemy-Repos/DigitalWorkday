@@ -734,7 +734,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
       title={tenant.settings?.displayName || tenant.name}
       description={`/${tenant.slug}`}
       hasUnsavedChanges={hasUnsavedChanges}
-      width="2xl"
+      width="3xl"
     >
       <div className="space-y-6">
         <div className="flex items-center justify-between">
@@ -778,26 +778,14 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
         </div>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-8">
+          <TabsList className="grid w-full grid-cols-9">
+            <TabsTrigger value="onboarding" data-testid="tab-onboarding">
+              <Settings className="h-4 w-4 mr-2" />
+              Setup
+            </TabsTrigger>
             <TabsTrigger value="overview" data-testid="tab-overview">
               <Building2 className="h-4 w-4 mr-2" />
               Overview
-            </TabsTrigger>
-            <TabsTrigger value="notes" data-testid="tab-notes">
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Notes
-            </TabsTrigger>
-            <TabsTrigger value="clients" data-testid="tab-clients">
-              <Briefcase className="h-4 w-4 mr-2" />
-              Clients
-            </TabsTrigger>
-            <TabsTrigger value="projects" data-testid="tab-projects">
-              <FolderKanban className="h-4 w-4 mr-2" />
-              Projects
-            </TabsTrigger>
-            <TabsTrigger value="onboarding" data-testid="tab-onboarding">
-              <Settings className="h-4 w-4 mr-2" />
-              Onboarding
             </TabsTrigger>
             <TabsTrigger value="workspaces" data-testid="tab-workspaces">
               <HardDrive className="h-4 w-4 mr-2" />
@@ -807,9 +795,25 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
               <Users className="h-4 w-4 mr-2" />
               Users
             </TabsTrigger>
+            <TabsTrigger value="clients" data-testid="tab-clients">
+              <Briefcase className="h-4 w-4 mr-2" />
+              Clients
+            </TabsTrigger>
+            <TabsTrigger value="projects" data-testid="tab-projects">
+              <FolderKanban className="h-4 w-4 mr-2" />
+              Projects
+            </TabsTrigger>
             <TabsTrigger value="branding" data-testid="tab-branding">
               <Palette className="h-4 w-4 mr-2" />
               Branding
+            </TabsTrigger>
+            <TabsTrigger value="integrations" data-testid="tab-integrations">
+              <HardDrive className="h-4 w-4 mr-2" />
+              Integrations
+            </TabsTrigger>
+            <TabsTrigger value="notes" data-testid="tab-notes">
+              <MessageSquare className="h-4 w-4 mr-2" />
+              Notes
             </TabsTrigger>
           </TabsList>
 

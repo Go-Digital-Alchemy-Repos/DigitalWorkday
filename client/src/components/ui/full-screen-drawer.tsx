@@ -26,7 +26,7 @@ interface FullScreenDrawerProps {
   hasUnsavedChanges?: boolean
   onConfirmClose?: () => void
   side?: "left" | "right"
-  width?: "md" | "lg" | "xl" | "2xl" | "full"
+  width?: "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "full"
 }
 
 const widthClasses = {
@@ -34,6 +34,8 @@ const widthClasses = {
   lg: "w-full sm:max-w-lg",
   xl: "w-full sm:max-w-xl",
   "2xl": "w-full sm:max-w-2xl",
+  "3xl": "w-full sm:max-w-[1400px]",
+  "4xl": "w-full sm:max-w-[1600px]",
   full: "w-full sm:max-w-[90vw]",
 }
 
