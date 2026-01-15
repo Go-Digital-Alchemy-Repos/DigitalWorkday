@@ -208,15 +208,29 @@ router.post("/billing/portal-session", requireTenantAdmin, async (req, res) => {
       });
     }
     
-    const host = req.get("host");
-    const protocol = req.protocol;
-    const returnUrl = `${protocol}://${host}/settings?tab=billing`;
+    const allowedHosts = [
+      ".replit.dev",
+      ".repl.co",
+      "localhost",
+      "127.0.0.1",
+    ];
     
-    if (!host || !returnUrl.includes(host)) {
+    const host = req.get("host") || "";
+    const hostWithoutPort = host.split(":")[0];
+    const isAllowedHost = allowedHosts.some(allowed => 
+      hostWithoutPort.endsWith(allowed) || hostWithoutPort.startsWith(allowed.slice(1))
+    );
+    
+    if (!host || !isAllowedHost) {
       return res.status(400).json({ 
-        error: { code: "invalid_return_url", message: "Invalid return URL" } 
+        error: { code: "invalid_host", message: "Cannot determine valid return URL" } 
       });
     }
+    
+    const protocol = req.protocol === "https" || host.endsWith(".replit.dev") || host.endsWith(".repl.co") 
+      ? "https" 
+      : req.protocol;
+    const returnUrl = `${protocol}://${host}/settings?tab=billing`;
     
     const session = await stripe.billingPortal.sessions.create({
       customer: tenant.stripeCustomerId,
