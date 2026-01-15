@@ -1,0 +1,169 @@
+You are continuing development on my React + Express multi-tenant app (single codebase).
+BUG/REFINEMENT: “Act as Client” should fully switch the UI into the Tenant experience (projects/tasks/time tracking/etc.)
+and provide an always-visible banner to exit back to Super Admin mode.
+
+Right now, acting as client does not change the interface into the tenant view. We must implement full impersonation UX.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change endpoint paths or response shapes.
+- Do NOT weaken auth, tenancy, or agreement enforcement.
+- Do NOT allow non-super users to impersonate.
+- Do NOT store secrets in client-side storage.
+- Keep changes scoped to impersonation flow, session/effective context, nav rendering, and cache invalidation.
+- No DB schema changes.
+
+===============================================================================
+GOALS
+===============================================================================
+1) When a Super Admin clicks “Act as Client” (impersonate tenant/admin user):
+- The app must switch to the Tenant Admin interface (Projects, Clients, Tasks, Time Tracking, etc.)
+- The sidebar/nav must render exactly as it does for a real Tenant Admin (subject to role)
+- All data queries must scope to the impersonated tenant context
+- Agreement gating must behave as it currently does for tenant admins (do not change)
+
+2) While impersonating:
+- Display a persistent top banner: “Acting as Tenant: <TenantName>”
+- Include:
+  - “Exit impersonation” button (returns to Super Admin workspace)
+  - “Open Tenant Settings” shortcut (optional)
+- Banner must appear on all tenant pages and not be dismissible (except by exiting impersonation).
+
+===============================================================================
+PART A — DIAGNOSE WHY UI DOES NOT SWITCH
+===============================================================================
+1) Identify current “Act as Client” implementation:
+- Is it setting effectiveTenantId in server session/cookie?
+- Is it storing tenantId only client-side (which would be insufficient)?
+- Does /api/v1/auth/me reflect impersonation state (effectiveTenantId + isImpersonating)?
+2) Confirm whether frontend determines appMode from:
+- user.role (super_user) only
+or
+- effectiveTenantId presence (should be the deciding factor)
+
+Root likely issue:
+- UI is still rendering Super Admin layout because it’s only checking role==super_user,
+  ignoring effectiveTenantId/isImpersonating.
+
+===============================================================================
+PART B — SINGLE SOURCE OF TRUTH: APP MODE DETERMINATION
+===============================================================================
+Implement/confirm these invariants:
+- If user.role == "super_user" AND effectiveTenantId is NULL → appMode="super"
+- If effectiveTenantId exists → appMode="tenant" AND isImpersonating=true
+- If user.role != "super_user" → appMode="tenant" AND isImpersonating=false
+
+IMPORTANT:
+- appMode must be computed from auth/me response (cookie session), not localStorage.
+
+Ensure /api/v1/auth/me already returns:
+- user role
+- effectiveTenantId (nullable)
+- effectiveTenantName (optional)
+- isImpersonating (optional)
+If fields already exist, use them.
+If they do not exist, do NOT change response shape; instead derive isImpersonating in client from effectiveTenantId presence.
+
+===============================================================================
+PART C — IMPERSONATION ENTRY FLOW (NO ENDPOINT CHANGES)
+===============================================================================
+1) When Super Admin chooses “Act as Client”
+- Call the existing impersonation endpoint (whatever it is today)
+- On success:
+  - Immediately refetch /api/v1/auth/me
+  - Clear/invalidate ALL tenant-scoped caches (TanStack Query) before rendering tenant UI
+  - Navigate to a tenant landing route:
+    - /my-tasks or /projects (whatever is standard)
+  - Ensure tenant layout renders because appMode becomes "tenant"
+
+2) Tenant landing route behavior:
+- If agreement gating blocks tenant content, redirect to the agreement signing flow as it currently does.
+
+===============================================================================
+PART D — EXIT IMPERSONATION FLOW
+===============================================================================
+1) Exit button in banner calls existing “stop impersonation” endpoint (whatever exists)
+2) On success:
+- Refetch /api/v1/auth/me
+- Clear tenant caches + tenant context
+- Navigate to /super/dashboard (or /super/tenants)
+- Ensure Super Admin layout renders again (appMode="super")
+
+Also clear:
+- lastAttemptedTenantUrl (if implemented)
+- any tenant context stores
+
+===============================================================================
+PART E — NAV + LAYOUT RENDERING (CRITICAL)
+===============================================================================
+1) Sidebar rendering must follow appMode:
+- appMode="super" → SuperSidebar only
+- appMode="tenant" → TenantSidebar (Tenant Admin menu if impersonating tenant admin)
+
+2) Prevent flicker/stale UI:
+- Wrap TenantLayout routes in TenantContextGate (if implemented)
+- Only render tenant pages once tenant context matches effectiveTenantId
+
+3) Title indicator (optional, safe):
+- Prefix browser title with “[Tenant: <name>]” while impersonating
+
+===============================================================================
+PART F — PERSISTENT IMPERSONATION BANNER
+===============================================================================
+Add a non-dismissible banner component mounted at the top of TenantLayout:
+- visible only when isImpersonating==true
+- displays tenant name
+- has “Exit” button
+- optional “Switch tenant” shortcut to /super/tenants (exit first if required)
+
+Ensure it is visible:
+- on all tenant pages
+- above drawers/panels
+- does not scroll away (sticky)
+
+===============================================================================
+PART G — TESTS (MANDATORY MINIMUM)
+===============================================================================
+Frontend tests (preferred):
+1) act_as_client_switches_to_tenant_sidebar.test.tsx
+- super user clicks act as client → appMode becomes tenant → tenant nav renders
+
+2) impersonation_banner_visible_and_exit_restores_super_nav.test.tsx
+- banner shows during impersonation
+- clicking exit returns to super nav
+
+3) cache_cleared_on_impersonation_switch.test.tsx
+- switching tenants does not show stale data
+
+Backend tests (if available):
+4) impersonation_sets_effective_tenant_in_session.test.ts
+- after actAs call, /auth/me reflects effectiveTenantId
+
+If UI tests not available, update /docs/REGRESSION_CHECKLIST.md with manual steps.
+
+===============================================================================
+DOCUMENTATION STANDARD (REQUIRED)
+===============================================================================
+- Update /docs/SUPER_ADMIN_GUIDE.md:
+  - Acting as tenant behavior
+  - banner + exit process
+- Update /docs/TENANCY_MODEL.md:
+  - effectiveTenantId driving appMode
+  - cache clearing rules
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+- “Act as Client” fully switches the experience to Tenant Admin UI (projects/tasks/time tracking visible).
+- Tenant data is scoped correctly and no stale data appears.
+- Persistent banner is visible during impersonation and provides exit back to Super Admin.
+- Exiting impersonation returns to Super Admin Dashboard and restores super-only sidebar.
+- No endpoint changes, no schema changes, tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Where appMode is determined and what signals are used
+- Which components were updated (sidebar/layout/banner)
+- Manual test checklist (local + Railway)

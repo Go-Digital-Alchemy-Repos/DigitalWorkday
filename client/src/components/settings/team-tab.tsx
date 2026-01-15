@@ -45,6 +45,7 @@ export function TeamTab() {
   
   const [editingUserTeamIds, setEditingUserTeamIds] = useState<string[]>([]);
   const [editingUserClientIds, setEditingUserClientIds] = useState<string[]>([]);
+  const [lastInviteLink, setLastInviteLink] = useState<string | null>(null);
 
   const { toast } = useToast();
 
@@ -131,11 +132,18 @@ export function TeamTab() {
 
   const createInvitationMutation = useMutation({
     mutationFn: async (data: { userId: string; expiresInDays?: number; sendEmail?: boolean }) => {
-      return apiRequest("POST", "/api/invitations/for-user", data);
+      const res = await apiRequest("POST", "/api/invitations/for-user", data);
+      return res.json();
     },
-    onSuccess: () => {
+    onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ["/api/invitations"] });
-      toast({ title: "Invitation created" });
+      if (data?.inviteLink) {
+        setLastInviteLink(data.inviteLink);
+        navigator.clipboard.writeText(data.inviteLink);
+        toast({ title: "Invitation created", description: "Invite link copied to clipboard" });
+      } else {
+        toast({ title: "Invitation created" });
+      }
     },
     onError: () => {
       toast({ title: "Failed to create invitation", variant: "destructive" });
@@ -239,8 +247,12 @@ export function TeamTab() {
   };
 
   const handleCopyInviteLink = (invitation: Invitation) => {
-    navigator.clipboard.writeText(`${window.location.origin}/accept-invite/${invitation.token}`);
-    toast({ title: "Invite link copied to clipboard" });
+    if (lastInviteLink && invitation.tokenHash) {
+      navigator.clipboard.writeText(lastInviteLink);
+      toast({ title: "Invite link copied to clipboard" });
+    } else {
+      toast({ title: "Invite link unavailable", description: "The link is only available immediately after creation", variant: "destructive" });
+    }
   };
 
   const handleRevokeInvite = (invitationId: string) => {

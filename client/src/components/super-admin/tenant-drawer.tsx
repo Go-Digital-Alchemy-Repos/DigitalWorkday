@@ -464,7 +464,17 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
   const [inviteEmail, setInviteEmail] = useState("");
   const [inviteFirstName, setInviteFirstName] = useState("");
   const [inviteLastName, setInviteLastName] = useState("");
+  const [inviteRole, setInviteRole] = useState<"admin" | "employee">("admin");
   const [lastInviteUrl, setLastInviteUrl] = useState<string | null>(null);
+  
+  // Manual user creation state
+  const [manualUserMode, setManualUserMode] = useState(false);
+  const [manualUserEmail, setManualUserEmail] = useState("");
+  const [manualUserFirstName, setManualUserFirstName] = useState("");
+  const [manualUserLastName, setManualUserLastName] = useState("");
+  const [manualUserRole, setManualUserRole] = useState<"admin" | "employee">("employee");
+  const [manualUserPassword, setManualUserPassword] = useState("");
+  const [showManualPassword, setShowManualPassword] = useState(false);
   const [newNoteBody, setNewNoteBody] = useState("");
   const [newNoteCategory, setNewNoteCategory] = useState("general");
   const [csvData, setCsvData] = useState<Array<{ email: string; firstName?: string; lastName?: string; role?: string }>>([]);
@@ -583,6 +593,42 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
     queryKey: ["/api/v1/super/tenants", activeTenant?.id, "integrations", "s3"],
     queryFn: () => fetch(`/api/v1/super/tenants/${activeTenant?.id}/integrations/s3`, { credentials: "include" }).then(r => r.json()),
     enabled: !!activeTenant && open && activeTab === "integrations",
+  });
+
+  // Users and invitations queries
+  interface TenantUser {
+    id: string;
+    email: string;
+    name: string | null;
+    firstName: string | null;
+    lastName: string | null;
+    role: string;
+    isActive: boolean;
+    avatarUrl: string | null;
+    createdAt: string;
+    updatedAt: string;
+  }
+
+  interface TenantInvitation {
+    id: string;
+    email: string;
+    role: string;
+    status: string;
+    expiresAt: string;
+    createdAt: string;
+    usedAt: string | null;
+  }
+
+  const { data: usersResponse, isLoading: usersLoading } = useQuery<{ users: TenantUser[]; total: number }>({
+    queryKey: ["/api/v1/super/tenants", activeTenant?.id, "users"],
+    queryFn: () => fetch(`/api/v1/super/tenants/${activeTenant?.id}/users`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!activeTenant && open && activeTab === "users",
+  });
+
+  const { data: invitationsResponse, isLoading: invitationsLoading } = useQuery<{ invitations: TenantInvitation[]; total: number }>({
+    queryKey: ["/api/v1/super/tenants", activeTenant?.id, "invitations"],
+    queryFn: () => fetch(`/api/v1/super/tenants/${activeTenant?.id}/invitations`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!activeTenant && open && activeTab === "users",
   });
 
   // Sync branding form data with fetched settings
@@ -961,25 +1007,103 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
   };
 
   const inviteAdminMutation = useMutation({
-    mutationFn: async (data: { email: string; firstName?: string; lastName?: string; inviteType: "link" | "email" }) => {
+    mutationFn: async (data: { email: string; firstName?: string; lastName?: string; role?: "admin" | "employee"; inviteType: "link" | "email" }) => {
       const res = await apiRequest("POST", `/api/v1/super/tenants/${activeTenant?.id}/invite-admin`, data);
       return res.json();
     },
     onSuccess: (data, variables) => {
       setLastInviteUrl(data.inviteUrl);
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants-detail"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "invitations"] });
       toast({ 
         title: "Invitation created", 
-        description: `Invite link generated for ${variables.email}. Copy and share with the administrator.` 
+        description: `Invite link generated for ${variables.email}. Copy and share with the user.` 
       });
       setInviteEmail("");
       setInviteFirstName("");
       setInviteLastName("");
+      setInviteRole("admin");
     },
     onError: (error: any) => {
       const message = error?.message || "An unexpected error occurred. Please try again.";
       toast({ 
-        title: "Failed to invite admin", 
+        title: "Failed to create invitation", 
+        description: message, 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  // Create a user directly (manual activation)
+  const createManualUserMutation = useMutation({
+    mutationFn: async (data: { email: string; firstName: string; lastName: string; role: "admin" | "employee"; password: string }) => {
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${activeTenant?.id}/users`, data);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants-detail"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "users"] });
+      toast({ 
+        title: "User created", 
+        description: `${data.user.email} has been added to the tenant and can now log in.` 
+      });
+      setManualUserEmail("");
+      setManualUserFirstName("");
+      setManualUserLastName("");
+      setManualUserPassword("");
+      setManualUserRole("employee");
+      setManualUserMode(false);
+    },
+    onError: (error: any) => {
+      const message = error?.message || "An unexpected error occurred. Please try again.";
+      toast({ 
+        title: "Failed to create user", 
+        description: message, 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  // Activate/deactivate user mutation
+  const toggleUserActiveMutation = useMutation({
+    mutationFn: async ({ userId, isActive }: { userId: string; isActive: boolean }) => {
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${activeTenant?.id}/users/${userId}/activate`, { isActive });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "users"] });
+      toast({ 
+        title: data.user.isActive ? "User activated" : "User deactivated", 
+        description: `${data.user.email} has been ${data.user.isActive ? "activated" : "deactivated"}.` 
+      });
+    },
+    onError: (error: any) => {
+      const message = error?.message || "An unexpected error occurred. Please try again.";
+      toast({ 
+        title: "Failed to update user", 
+        description: message, 
+        variant: "destructive" 
+      });
+    },
+  });
+
+  // Revoke invitation mutation
+  const revokeInvitationMutation = useMutation({
+    mutationFn: async (invitationId: string) => {
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${activeTenant?.id}/invitations/${invitationId}/revoke`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "invitations"] });
+      toast({ 
+        title: "Invitation revoked", 
+        description: "The invitation has been revoked and can no longer be used." 
+      });
+    },
+    onError: (error: any) => {
+      const message = error?.message || "An unexpected error occurred. Please try again.";
+      toast({ 
+        title: "Failed to revoke invitation", 
         description: message, 
         variant: "destructive" 
       });
@@ -1003,7 +1127,19 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
       email: inviteEmail,
       firstName: inviteFirstName || undefined,
       lastName: inviteLastName || undefined,
+      role: inviteRole,
       inviteType: "link",
+    });
+  };
+
+  const handleCreateManualUser = () => {
+    if (!manualUserEmail || !manualUserFirstName || !manualUserLastName || !manualUserPassword) return;
+    createManualUserMutation.mutate({
+      email: manualUserEmail,
+      firstName: manualUserFirstName,
+      lastName: manualUserLastName,
+      role: manualUserRole,
+      password: manualUserPassword,
     });
   };
 
@@ -1320,27 +1456,41 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
             </Card>
           )}
 
-          {/* Step 5: Invite Admin (recommended) */}
+          {/* Step 5: Invite User (recommended) */}
           {wizardStep === "invite" && createdTenant && (
             <Card>
               <CardHeader>
-                <CardTitle>Invite Tenant Admin (Recommended)</CardTitle>
+                <CardTitle>Invite User (Recommended)</CardTitle>
                 <CardDescription>
-                  Invite an administrator for this tenant. Invite acceptance is not required to finish setup.
+                  Invite a user for this tenant. Invite acceptance is not required to finish setup.
                 </CardDescription>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="wizard-invite-email">Email Address</Label>
-                    <Input
-                      id="wizard-invite-email"
-                      type="email"
-                      value={inviteEmail}
-                      onChange={(e) => setInviteEmail(e.target.value)}
-                      placeholder="admin@example.com"
-                      data-testid="input-wizard-invite-email"
-                    />
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="wizard-invite-email">Email Address *</Label>
+                      <Input
+                        id="wizard-invite-email"
+                        type="email"
+                        value={inviteEmail}
+                        onChange={(e) => setInviteEmail(e.target.value)}
+                        placeholder="user@example.com"
+                        data-testid="input-wizard-invite-email"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="wizard-invite-role">Role</Label>
+                      <Select value={inviteRole} onValueChange={(v: "admin" | "employee") => setInviteRole(v)}>
+                        <SelectTrigger id="wizard-invite-role" data-testid="select-wizard-invite-role">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="employee">Employee</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
                   </div>
                   <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
@@ -1365,7 +1515,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                     </div>
                   </div>
                   <Button
-                    onClick={() => inviteAdminMutation.mutate({ email: inviteEmail, firstName: inviteFirstName || undefined, lastName: inviteLastName || undefined, inviteType: "link" })}
+                    onClick={() => inviteAdminMutation.mutate({ email: inviteEmail, firstName: inviteFirstName || undefined, lastName: inviteLastName || undefined, role: inviteRole, inviteType: "link" })}
                     disabled={inviteAdminMutation.isPending || !inviteEmail}
                     data-testid="button-wizard-send-invite"
                   >
@@ -2369,97 +2519,343 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
           </TabsContent>
 
           <TabsContent value="users" className="space-y-6 mt-6">
+            {/* Add User Card - Toggle between Invite and Manual Creation */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <UserPlus className="h-4 w-4" />
-                  Invite Administrator
-                </CardTitle>
-                <CardDescription>Invite a tenant admin to manage this organization</CardDescription>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <UserPlus className="h-4 w-4" />
+                      {manualUserMode ? "Create User Manually" : "Invite User"}
+                    </CardTitle>
+                    <CardDescription>
+                      {manualUserMode 
+                        ? "Create a user account with a password for immediate access" 
+                        : "Send an invitation link for self-registration"}
+                    </CardDescription>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">Invite</span>
+                    <Switch
+                      checked={manualUserMode}
+                      onCheckedChange={setManualUserMode}
+                      data-testid="switch-manual-user-mode"
+                    />
+                    <span className="text-xs text-muted-foreground">Manual</span>
+                  </div>
+                </div>
               </CardHeader>
               <CardContent className="space-y-4">
-                <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="invite-first-name">First Name</Label>
-                    <Input
-                      id="invite-first-name"
-                      value={inviteFirstName}
-                      onChange={(e) => setInviteFirstName(e.target.value)}
-                      placeholder="John"
-                      data-testid="input-invite-first-name"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="invite-last-name">Last Name</Label>
-                    <Input
-                      id="invite-last-name"
-                      value={inviteLastName}
-                      onChange={(e) => setInviteLastName(e.target.value)}
-                      placeholder="Doe"
-                      data-testid="input-invite-last-name"
-                    />
-                  </div>
-                </div>
-                <div className="space-y-2">
-                  <Label htmlFor="invite-email">Email Address</Label>
-                  <Input
-                    id="invite-email"
-                    type="email"
-                    value={inviteEmail}
-                    onChange={(e) => setInviteEmail(e.target.value)}
-                    placeholder="admin@example.com"
-                    data-testid="input-invite-email"
-                  />
-                </div>
-                <Button 
-                  onClick={handleInviteAdmin}
-                  disabled={!inviteEmail || inviteAdminMutation.isPending}
-                  data-testid="button-invite-admin"
-                >
-                  {inviteAdminMutation.isPending ? (
-                    <>
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      Creating...
-                    </>
-                  ) : (
-                    <>
-                      <UserPlus className="h-4 w-4 mr-2" />
-                      Create Invite Link
-                    </>
-                  )}
-                </Button>
-
-                {lastInviteUrl && (
-                  <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center gap-2">
-                        <Check className="h-4 w-4 text-green-600" />
-                        <span className="text-sm text-green-700">Invitation created</span>
+                {manualUserMode ? (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="manual-first-name">First Name *</Label>
+                        <Input
+                          id="manual-first-name"
+                          value={manualUserFirstName}
+                          onChange={(e) => setManualUserFirstName(e.target.value)}
+                          placeholder="John"
+                          data-testid="input-manual-first-name"
+                        />
                       </div>
-                      <Button size="sm" variant="ghost" onClick={copyInviteUrl} data-testid="button-copy-invite">
-                        <Copy className="h-4 w-4 mr-2" />
-                        Copy Link
-                      </Button>
+                      <div className="space-y-2">
+                        <Label htmlFor="manual-last-name">Last Name *</Label>
+                        <Input
+                          id="manual-last-name"
+                          value={manualUserLastName}
+                          onChange={(e) => setManualUserLastName(e.target.value)}
+                          placeholder="Doe"
+                          data-testid="input-manual-last-name"
+                        />
+                      </div>
                     </div>
-                    <div className="mt-2 text-xs text-muted-foreground font-mono truncate">
-                      {lastInviteUrl}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="manual-email">Email Address *</Label>
+                        <Input
+                          id="manual-email"
+                          type="email"
+                          value={manualUserEmail}
+                          onChange={(e) => setManualUserEmail(e.target.value)}
+                          placeholder="user@example.com"
+                          data-testid="input-manual-email"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="manual-role">Role *</Label>
+                        <Select value={manualUserRole} onValueChange={(v: "admin" | "employee") => setManualUserRole(v)}>
+                          <SelectTrigger id="manual-role" data-testid="select-manual-role">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="employee">Employee</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
                     </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="manual-password">Password *</Label>
+                      <div className="relative">
+                        <Input
+                          id="manual-password"
+                          type={showManualPassword ? "text" : "password"}
+                          value={manualUserPassword}
+                          onChange={(e) => setManualUserPassword(e.target.value)}
+                          placeholder="Minimum 8 characters"
+                          className="pr-10"
+                          data-testid="input-manual-password"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-full"
+                          onClick={() => setShowManualPassword(!showManualPassword)}
+                          data-testid="button-toggle-password"
+                        >
+                          {showManualPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                        </Button>
+                      </div>
+                      <p className="text-xs text-muted-foreground">Password must be at least 8 characters</p>
+                    </div>
+                    <Button 
+                      onClick={handleCreateManualUser}
+                      disabled={!manualUserEmail || !manualUserFirstName || !manualUserLastName || !manualUserPassword || manualUserPassword.length < 8 || createManualUserMutation.isPending}
+                      data-testid="button-create-manual-user"
+                    >
+                      {createManualUserMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Create User Account
+                        </>
+                      )}
+                    </Button>
+                  </>
+                ) : (
+                  <>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="invite-first-name">First Name</Label>
+                        <Input
+                          id="invite-first-name"
+                          value={inviteFirstName}
+                          onChange={(e) => setInviteFirstName(e.target.value)}
+                          placeholder="John"
+                          data-testid="input-invite-first-name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="invite-last-name">Last Name</Label>
+                        <Input
+                          id="invite-last-name"
+                          value={inviteLastName}
+                          onChange={(e) => setInviteLastName(e.target.value)}
+                          placeholder="Doe"
+                          data-testid="input-invite-last-name"
+                        />
+                      </div>
+                    </div>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="invite-email">Email Address *</Label>
+                        <Input
+                          id="invite-email"
+                          type="email"
+                          value={inviteEmail}
+                          onChange={(e) => setInviteEmail(e.target.value)}
+                          placeholder="user@example.com"
+                          data-testid="input-invite-email"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="invite-role">Role</Label>
+                        <Select value={inviteRole} onValueChange={(v: "admin" | "employee") => setInviteRole(v)}>
+                          <SelectTrigger id="invite-role" data-testid="select-invite-role">
+                            <SelectValue />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="admin">Admin</SelectItem>
+                            <SelectItem value="employee">Employee</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    </div>
+                    <Button 
+                      onClick={handleInviteAdmin}
+                      disabled={!inviteEmail || inviteAdminMutation.isPending}
+                      data-testid="button-invite-admin"
+                    >
+                      {inviteAdminMutation.isPending ? (
+                        <>
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          Creating...
+                        </>
+                      ) : (
+                        <>
+                          <UserPlus className="h-4 w-4 mr-2" />
+                          Create Invite Link
+                        </>
+                      )}
+                    </Button>
+
+                    {lastInviteUrl && (
+                      <div className="p-3 rounded-lg bg-green-500/10 border border-green-500/20">
+                        <div className="flex items-center justify-between">
+                          <div className="flex items-center gap-2">
+                            <Check className="h-4 w-4 text-green-600" />
+                            <span className="text-sm text-green-700 dark:text-green-400">Invitation created</span>
+                          </div>
+                          <Button size="sm" variant="ghost" onClick={copyInviteUrl} data-testid="button-copy-invite">
+                            <Copy className="h-4 w-4 mr-2" />
+                            Copy Link
+                          </Button>
+                        </div>
+                        <div className="mt-2 text-xs text-muted-foreground font-mono truncate">
+                          {lastInviteUrl}
+                        </div>
+                      </div>
+                    )}
+                  </>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Current Users List */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Current Users</CardTitle>
+                <CardDescription>
+                  {usersResponse?.total || 0} user{(usersResponse?.total || 0) === 1 ? '' : 's'} in this tenant
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                {usersLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2, 3].map(i => (
+                      <Skeleton key={i} className="h-16 w-full" />
+                    ))}
+                  </div>
+                ) : !usersResponse?.users?.length ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    No users yet. Create or invite users above.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {usersResponse.users.map(user => (
+                      <div
+                        key={user.id}
+                        className="flex items-center justify-between p-3 rounded-lg border"
+                        data-testid={`user-row-${user.id}`}
+                      >
+                        <div className="flex items-center gap-3">
+                          <div className="h-8 w-8 rounded-full bg-muted flex items-center justify-center text-sm font-medium">
+                            {user.firstName?.[0] || user.email[0].toUpperCase()}
+                          </div>
+                          <div>
+                            <div className="font-medium flex items-center gap-2">
+                              {user.name || user.email}
+                              {!user.isActive && (
+                                <Badge variant="secondary" className="text-xs">Inactive</Badge>
+                              )}
+                            </div>
+                            <div className="text-xs text-muted-foreground">{user.email}</div>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <Badge variant="outline" className="text-xs">{user.role}</Badge>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            onClick={() => toggleUserActiveMutation.mutate({ userId: user.id, isActive: !user.isActive })}
+                            disabled={toggleUserActiveMutation.isPending}
+                            title={user.isActive ? "Deactivate user" : "Activate user"}
+                            data-testid={`button-toggle-user-${user.id}`}
+                          >
+                            {user.isActive ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 )}
               </CardContent>
             </Card>
 
+            {/* Pending Invitations */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Current Users</CardTitle>
+                <CardTitle className="text-base">Pending Invitations</CardTitle>
                 <CardDescription>
-                  {activeTenant.userCount || 0} user{(activeTenant.userCount || 0) === 1 ? '' : 's'} in this tenant
+                  {invitationsResponse?.invitations?.filter(i => i.status === "pending").length || 0} pending invitation(s)
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8 text-muted-foreground">
-                  User list coming soon
-                </div>
+                {invitationsLoading ? (
+                  <div className="space-y-3">
+                    {[1, 2].map(i => (
+                      <Skeleton key={i} className="h-12 w-full" />
+                    ))}
+                  </div>
+                ) : !invitationsResponse?.invitations?.length ? (
+                  <div className="text-center py-6 text-muted-foreground text-sm">
+                    No invitations sent yet.
+                  </div>
+                ) : (
+                  <div className="space-y-2">
+                    {invitationsResponse.invitations.map(invitation => {
+                      const isExpired = new Date(invitation.expiresAt) < new Date();
+                      const isPending = invitation.status === "pending" && !isExpired;
+                      return (
+                        <div
+                          key={invitation.id}
+                          className="flex items-center justify-between p-3 rounded-lg border"
+                          data-testid={`invitation-row-${invitation.id}`}
+                        >
+                          <div className="flex items-center gap-3">
+                            <Mail className="h-4 w-4 text-muted-foreground" />
+                            <div>
+                              <div className="font-medium text-sm">{invitation.email}</div>
+                              <div className="text-xs text-muted-foreground">
+                                Expires: {new Date(invitation.expiresAt).toLocaleDateString()}
+                              </div>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-2">
+                            <Badge variant="outline" className="text-xs">{invitation.role}</Badge>
+                            {invitation.status === "accepted" ? (
+                              <Badge className="bg-green-600 text-xs">Accepted</Badge>
+                            ) : isExpired ? (
+                              <Badge variant="secondary" className="text-xs">Expired</Badge>
+                            ) : invitation.status === "revoked" ? (
+                              <Badge variant="destructive" className="text-xs">Revoked</Badge>
+                            ) : (
+                              <>
+                                <Badge className="text-xs">Pending</Badge>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => revokeInvitationMutation.mutate(invitation.id)}
+                                  disabled={revokeInvitationMutation.isPending}
+                                  title="Revoke invitation"
+                                  data-testid={`button-revoke-invitation-${invitation.id}`}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </CardContent>
             </Card>
 
