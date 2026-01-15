@@ -64,12 +64,14 @@ import {
 import { CsvImportPanel, type ParsedRow, type ImportResult } from "@/components/common/csv-import-panel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TenantUserDrawer } from "./tenant-user-drawer";
+import { S3Dropzone } from "@/components/common/S3Dropzone";
 import type { Tenant } from "@shared/schema";
 
 interface TenantSettings {
   displayName?: string;
   appName?: string | null;
   logoUrl?: string | null;
+  iconUrl?: string | null;
   faviconUrl?: string | null;
   primaryColor?: string | null;
   secondaryColor?: string | null;
@@ -549,6 +551,20 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
     queryKey: ["/api/v1/super/tenants", activeTenant?.id, "settings"],
     queryFn: () => fetch(`/api/v1/super/tenants/${activeTenant?.id}/settings`, { credentials: "include" }).then(r => r.json()),
     enabled: !!activeTenant && open,
+  });
+
+  // System settings for inherited defaults
+  interface SystemSettings {
+    id: number;
+    defaultAppName: string | null;
+    defaultLogoUrl: string | null;
+    defaultIconUrl: string | null;
+    defaultFaviconUrl: string | null;
+  }
+
+  const { data: systemSettings } = useQuery<SystemSettings>({
+    queryKey: ["/api/v1/super/system-settings"],
+    enabled: open && activeTab === "branding",
   });
 
   const { data: healthData, isLoading: healthLoading } = useQuery<TenantHealth>({
@@ -3143,27 +3159,34 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                       />
                     </div>
                   </div>
-                  <div className="grid gap-4 sm:grid-cols-2">
-                    <div className="space-y-2">
-                      <Label htmlFor="logoUrl">Logo URL</Label>
-                      <Input
-                        id="logoUrl"
-                        type="url"
-                        value={brandingData.logoUrl || ""}
-                        onChange={(e) => handleBrandingChange("logoUrl", e.target.value)}
-                        data-testid="input-tenant-logo-url"
-                      />
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="faviconUrl">Favicon URL</Label>
-                      <Input
-                        id="faviconUrl"
-                        type="url"
-                        value={brandingData.faviconUrl || ""}
-                        onChange={(e) => handleBrandingChange("faviconUrl", e.target.value)}
-                        data-testid="input-tenant-favicon-url"
-                      />
-                    </div>
+                  <div className="grid gap-6 sm:grid-cols-3">
+                    <S3Dropzone
+                      category="tenant-branding-logo"
+                      label="Logo"
+                      description="Full logo for headers (max 2MB, PNG or SVG)"
+                      valueUrl={brandingData.logoUrl}
+                      inheritedUrl={systemSettings?.defaultLogoUrl}
+                      onUploaded={(fileUrl) => handleBrandingChange("logoUrl", fileUrl)}
+                      onRemoved={() => handleBrandingChange("logoUrl", null)}
+                    />
+                    <S3Dropzone
+                      category="tenant-branding-icon"
+                      label="Icon"
+                      description="Square icon for PWA (max 512KB, 192x192px)"
+                      valueUrl={brandingData.iconUrl}
+                      inheritedUrl={systemSettings?.defaultIconUrl}
+                      onUploaded={(fileUrl) => handleBrandingChange("iconUrl", fileUrl)}
+                      onRemoved={() => handleBrandingChange("iconUrl", null)}
+                    />
+                    <S3Dropzone
+                      category="tenant-branding-favicon"
+                      label="Favicon"
+                      description="Browser tab icon (max 512KB, 32x32px)"
+                      valueUrl={brandingData.faviconUrl}
+                      inheritedUrl={systemSettings?.defaultFaviconUrl}
+                      onUploaded={(fileUrl) => handleBrandingChange("faviconUrl", fileUrl)}
+                      onRemoved={() => handleBrandingChange("faviconUrl", null)}
+                    />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-3">
                     <div className="space-y-2">
