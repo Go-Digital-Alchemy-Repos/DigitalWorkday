@@ -112,6 +112,11 @@ export const tenants = pgTable("tenants", {
   activatedBySuperUserAt: timestamp("activated_by_super_user_at"), // Set when super user activates tenant without requiring onboarding
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  // Billing fields (Stripe integration)
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeDefaultPaymentMethodId: text("stripe_default_payment_method_id"),
+  billingEmail: text("billing_email"),
+  billingStatus: text("billing_status").default("none"), // "none" | "active" | "past_due" | "canceled"
 }, (table) => [
   index("tenants_slug_idx").on(table.slug),
   index("tenants_status_idx").on(table.status),
