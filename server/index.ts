@@ -11,7 +11,7 @@ import { agreementEnforcementGuard } from "./middleware/agreementEnforcement";
 import { requestIdMiddleware } from "./middleware/requestId";
 import { errorHandler } from "./middleware/errorHandler";
 
-const app = express();
+export const app = express();
 const httpServer = createServer(app);
 
 // Trust the reverse proxy (needed for secure cookies in production)
