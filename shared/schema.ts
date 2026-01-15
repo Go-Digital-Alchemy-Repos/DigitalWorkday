@@ -178,6 +178,48 @@ export const tenantIntegrations = pgTable("tenant_integrations", {
   uniqueIndex("tenant_integrations_tenant_provider_unique").on(table.tenantId, table.provider),
 ]);
 
+// Email outbox status enum
+export const EmailOutboxStatus = {
+  QUEUED: "queued",
+  SENT: "sent",
+  FAILED: "failed",
+} as const;
+
+// Email message type enum
+export const EmailMessageType = {
+  INVITATION: "invitation",
+  MENTION_NOTIFICATION: "mention_notification",
+  FORGOT_PASSWORD: "forgot_password",
+  TEST_EMAIL: "test_email",
+  SYSTEM_NOTIFICATION: "system_notification",
+} as const;
+
+/**
+ * Email Outbox table - tracks all outgoing emails with status and error information
+ * Enables observability, debugging, and resend functionality
+ */
+export const emailOutbox = pgTable("email_outbox", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id), // Nullable for global/system emails
+  messageType: text("message_type").notNull(), // invitation, mention_notification, forgot_password, test_email
+  toEmail: text("to_email").notNull(),
+  subject: text("subject").notNull(),
+  status: text("status").notNull().default("queued"), // queued, sent, failed
+  providerMessageId: text("provider_message_id"), // Mailgun message ID for tracking
+  lastError: text("last_error"), // Error message if failed
+  requestId: text("request_id"), // Correlation ID for debugging
+  resendCount: integer("resend_count").default(0),
+  lastResendAt: timestamp("last_resend_at"),
+  metadata: jsonb("metadata"), // Additional context (userId, inviteId, etc.)
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("email_outbox_tenant_idx").on(table.tenantId),
+  index("email_outbox_status_idx").on(table.status),
+  index("email_outbox_type_idx").on(table.messageType),
+  index("email_outbox_created_idx").on(table.createdAt),
+]);
+
 // Agreement status enum
 export const AgreementStatus = {
   DRAFT: "draft",
@@ -1273,6 +1315,12 @@ export const insertTenantIntegrationSchema = createInsertSchema(tenantIntegratio
   updatedAt: true,
 });
 
+export const insertEmailOutboxSchema = createInsertSchema(emailOutbox).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertTenancyWarningSchema = createInsertSchema(tenancyWarnings).omit({
   id: true,
   occurredAt: true,
@@ -1489,6 +1537,9 @@ export type InsertTenantSettings = z.infer<typeof insertTenantSettingsSchema>;
 
 export type TenantIntegration = typeof tenantIntegrations.$inferSelect;
 export type InsertTenantIntegration = z.infer<typeof insertTenantIntegrationSchema>;
+
+export type EmailOutbox = typeof emailOutbox.$inferSelect;
+export type InsertEmailOutbox = z.infer<typeof insertEmailOutboxSchema>;
 
 export type TenancyWarning = typeof tenancyWarnings.$inferSelect;
 export type InsertTenancyWarning = z.infer<typeof insertTenancyWarningSchema>;
