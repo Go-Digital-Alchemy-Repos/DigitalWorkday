@@ -6,9 +6,11 @@ import { tenancyHealthTracker } from "../middleware/tenancyHealthTracker";
 import { db } from "../db";
 import { 
   clients, projects, tasks, teams, users, 
-  timeEntries, activeTimers, appSettings, tenants
+  timeEntries, activeTimers, appSettings, tenants,
+  workspaces, invitations, subtasks, taskAttachments,
+  tenantAuditEvents, TenantStatus
 } from "@shared/schema";
-import { sql, eq, isNull } from "drizzle-orm";
+import { sql, eq, isNull, and } from "drizzle-orm";
 
 const router = Router();
 
@@ -342,6 +344,304 @@ router.get("/v1/tenant/tenancy/health", requireAuth, async (req: Request, res: R
   } catch (error) {
     console.error("[TenancyHealth] Error getting tenant health:", error);
     res.status(500).json({ error: "Failed to get tenant health" });
+  }
+});
+
+const QUARANTINE_TENANT_SLUG = "quarantine";
+const QUARANTINE_TENANT_NAME = "Quarantine / Legacy Data";
+
+interface OrphanTableInfo {
+  name: string;
+  table: any;
+  idField: string;
+  displayField: string;
+}
+
+const orphanTables: OrphanTableInfo[] = [
+  { name: "clients", table: clients, idField: "id", displayField: "name" },
+  { name: "projects", table: projects, idField: "id", displayField: "name" },
+  { name: "tasks", table: tasks, idField: "id", displayField: "title" },
+  { name: "teams", table: teams, idField: "id", displayField: "name" },
+  { name: "users", table: users, idField: "id", displayField: "email" },
+  { name: "workspaces", table: workspaces, idField: "id", displayField: "name" },
+  { name: "time_entries", table: timeEntries, idField: "id", displayField: "id" },
+  { name: "active_timers", table: activeTimers, idField: "id", displayField: "id" },
+  { name: "invitations", table: invitations, idField: "id", displayField: "email" },
+  { name: "subtasks", table: subtasks, idField: "id", displayField: "title" },
+  { name: "task_attachments", table: taskAttachments, idField: "id", displayField: "fileName" },
+];
+
+async function getOrCreateQuarantineTenant(): Promise<{ id: string; created: boolean }> {
+  const [existing] = await db.select()
+    .from(tenants)
+    .where(eq(tenants.slug, QUARANTINE_TENANT_SLUG))
+    .limit(1);
+  
+  if (existing) {
+    return { id: existing.id, created: false };
+  }
+  
+  const [created] = await db.insert(tenants).values({
+    name: QUARANTINE_TENANT_NAME,
+    slug: QUARANTINE_TENANT_SLUG,
+    status: TenantStatus.SUSPENDED,
+  }).returning();
+  
+  return { id: created.id, created: true };
+}
+
+async function writeAuditEvent(
+  tenantId: string,
+  userId: string | null,
+  eventType: string,
+  message: string,
+  metadata?: Record<string, unknown>
+) {
+  await db.insert(tenantAuditEvents).values({
+    tenantId,
+    actorUserId: userId,
+    eventType,
+    message,
+    metadata,
+  });
+}
+
+router.get("/v1/super/health/orphans", requireAuth, requireSuperUser, async (req: Request, res: Response) => {
+  try {
+    const sampleLimit = Math.min(parseInt(req.query.sampleLimit as string) || 10, 50);
+    
+    const results: Array<{
+      table: string;
+      count: number;
+      sampleIds: Array<{ id: string; display: string }>;
+      recommendedAction: string;
+    }> = [];
+    
+    for (const tableInfo of orphanTables) {
+      try {
+        const [countResult] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(tableInfo.table)
+          .where(isNull(tableInfo.table.tenantId));
+        
+        const count = countResult?.count || 0;
+        
+        let sampleIds: Array<{ id: string; display: string }> = [];
+        if (count > 0) {
+          const samples = await db
+            .select({
+              id: tableInfo.table[tableInfo.idField],
+              display: tableInfo.table[tableInfo.displayField] || tableInfo.table[tableInfo.idField],
+            })
+            .from(tableInfo.table)
+            .where(isNull(tableInfo.table.tenantId))
+            .limit(sampleLimit);
+          
+          sampleIds = samples.map(s => ({
+            id: String(s.id),
+            display: String(s.display || s.id),
+          }));
+        }
+        
+        results.push({
+          table: tableInfo.name,
+          count,
+          sampleIds,
+          recommendedAction: count > 0 ? "quarantine" : "skip",
+        });
+      } catch (error) {
+        console.error(`[OrphanDetection] Error checking ${tableInfo.name}:`, error);
+        results.push({
+          table: tableInfo.name,
+          count: -1,
+          sampleIds: [],
+          recommendedAction: "error",
+        });
+      }
+    }
+    
+    const totalOrphans = results.reduce((sum, r) => sum + (r.count > 0 ? r.count : 0), 0);
+    const tablesWithOrphans = results.filter(r => r.count > 0).length;
+    
+    const [quarantineTenant] = await db.select({ id: tenants.id, name: tenants.name })
+      .from(tenants)
+      .where(eq(tenants.slug, QUARANTINE_TENANT_SLUG))
+      .limit(1);
+    
+    res.json({
+      totalOrphans,
+      tablesWithOrphans,
+      tables: results,
+      quarantineTenant: quarantineTenant ? { 
+        id: quarantineTenant.id, 
+        name: quarantineTenant.name,
+        exists: true 
+      } : { exists: false },
+    });
+  } catch (error) {
+    console.error("[OrphanDetection] Error:", error);
+    res.status(500).json({ error: { code: "internal_error", message: "Failed to detect orphans" } });
+  }
+});
+
+router.post("/v1/super/health/orphans/fix", requireAuth, requireSuperUser, async (req: Request, res: Response) => {
+  const { dryRun = true, confirmText, plan } = req.body;
+  const user = req.user as any;
+  
+  if (!dryRun && confirmText !== "FIX_ORPHANS") {
+    return res.status(400).json({
+      error: {
+        code: "confirmation_required",
+        message: "To execute orphan fix, set dryRun=false and confirmText='FIX_ORPHANS'",
+      },
+    });
+  }
+  
+  try {
+    const results: Array<{
+      table: string;
+      action: string;
+      countBefore: number;
+      countFixed: number;
+      targetTenantId: string | null;
+    }> = [];
+    
+    let quarantineTenantId: string | null = null;
+    let quarantineCreated = false;
+    
+    if (!dryRun) {
+      const qt = await getOrCreateQuarantineTenant();
+      quarantineTenantId = qt.id;
+      quarantineCreated = qt.created;
+      
+      if (quarantineCreated) {
+        await writeAuditEvent(
+          quarantineTenantId,
+          user.id,
+          "quarantine_tenant_created",
+          "Created quarantine tenant for orphan data remediation",
+          { createdBy: user.email }
+        );
+      }
+      
+      await writeAuditEvent(
+        quarantineTenantId,
+        user.id,
+        "orphan_fix_planned",
+        `Orphan fix execution started by ${user.email}`,
+        { dryRun: false, tablesInPlan: plan?.length || orphanTables.length }
+      );
+    } else {
+      const [existing] = await db.select({ id: tenants.id })
+        .from(tenants)
+        .where(eq(tenants.slug, QUARANTINE_TENANT_SLUG))
+        .limit(1);
+      quarantineTenantId = existing?.id || null;
+    }
+    
+    const tablesToProcess = plan?.map((p: any) => p.table) || orphanTables.map(t => t.name);
+    
+    for (const tableInfo of orphanTables) {
+      if (!tablesToProcess.includes(tableInfo.name)) {
+        continue;
+      }
+      
+      const planItem = plan?.find((p: any) => p.table === tableInfo.name);
+      const action = planItem?.action || "quarantine";
+      const targetTenantId = planItem?.tenantIdTarget || quarantineTenantId;
+      
+      if (action === "skip") {
+        results.push({
+          table: tableInfo.name,
+          action: "skipped",
+          countBefore: 0,
+          countFixed: 0,
+          targetTenantId: null,
+        });
+        continue;
+      }
+      
+      try {
+        const [countResult] = await db
+          .select({ count: sql<number>`count(*)::int` })
+          .from(tableInfo.table)
+          .where(isNull(tableInfo.table.tenantId));
+        
+        const countBefore = countResult?.count || 0;
+        
+        if (countBefore === 0) {
+          results.push({
+            table: tableInfo.name,
+            action: "no_orphans",
+            countBefore: 0,
+            countFixed: 0,
+            targetTenantId: null,
+          });
+          continue;
+        }
+        
+        if (!dryRun && targetTenantId) {
+          await db
+            .update(tableInfo.table)
+            .set({ tenantId: targetTenantId })
+            .where(isNull(tableInfo.table.tenantId));
+          
+          results.push({
+            table: tableInfo.name,
+            action: "fixed",
+            countBefore,
+            countFixed: countBefore,
+            targetTenantId,
+          });
+        } else {
+          results.push({
+            table: tableInfo.name,
+            action: dryRun ? "would_fix" : "skipped_no_target",
+            countBefore,
+            countFixed: 0,
+            targetTenantId: dryRun ? (targetTenantId || "quarantine") : null,
+          });
+        }
+      } catch (error) {
+        console.error(`[OrphanFix] Error processing ${tableInfo.name}:`, error);
+        results.push({
+          table: tableInfo.name,
+          action: "error",
+          countBefore: -1,
+          countFixed: 0,
+          targetTenantId: null,
+        });
+      }
+    }
+    
+    const totalFixed = results.reduce((sum, r) => sum + r.countFixed, 0);
+    const totalWouldFix = results.reduce((sum, r) => 
+      r.action === "would_fix" ? sum + r.countBefore : sum, 0);
+    
+    if (!dryRun && quarantineTenantId && totalFixed > 0) {
+      await writeAuditEvent(
+        quarantineTenantId,
+        user.id,
+        "orphan_fix_executed",
+        `Fixed ${totalFixed} orphan rows across ${results.filter(r => r.action === "fixed").length} tables`,
+        { 
+          results: results.map(r => ({ table: r.table, action: r.action, count: r.countFixed })),
+          executedBy: user.email,
+        }
+      );
+    }
+    
+    res.json({
+      dryRun,
+      quarantineTenantId,
+      quarantineCreated,
+      totalFixed: dryRun ? 0 : totalFixed,
+      totalWouldFix: dryRun ? totalWouldFix : 0,
+      results,
+    });
+  } catch (error) {
+    console.error("[OrphanFix] Error:", error);
+    res.status(500).json({ error: { code: "internal_error", message: "Failed to fix orphans" } });
   }
 });
 
