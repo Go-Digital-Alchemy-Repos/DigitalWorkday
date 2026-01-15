@@ -50,6 +50,11 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **Tenant Pre-Provisioning**: Super users can fully configure tenants before activation, including "Act as Tenant" mode using `X-Tenant-Id` header.
 - **Super Admin Navigation Isolation**: Separate navigation for Super Mode and Tenant Impersonation Mode.
 - **Tenant Drawer (Super Admin)**: Comprehensive drawer-based UI for tenant management including overview, onboarding, workspaces, users, and branding. Tenant creation is transactional.
+- **Tenant User Management (Super Admin)**: TenantUserDrawer component for managing individual tenant users with tabbed views:
+  - Overview tab: User details, role, account status, activity timestamps
+  - Invitation tab: View invitation status, regenerate invite links, resend invitation emails
+  - Security tab: Reset user password with `mustChangePasswordOnNextLogin` flag enforcement
+- **Password Security**: Users table includes `mustChangePasswordOnNextLogin` boolean field for forced password changes on next login
 - **SaaS Agreement System**: Manages tenant SaaS agreements with an active/archived lifecycle, versioning, and user acceptance tracking, enforced by middleware.
 - **Frontend Structure**: Organized into `pages/` and `components/`, utilizing FullScreenDrawer for entity editing with unsaved changes guards.
 - **Backend Structure**: Modular routes, `DatabaseStorage` class, middleware for error handling, validation, and authentication.
