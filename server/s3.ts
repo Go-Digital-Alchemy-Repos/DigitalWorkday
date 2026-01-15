@@ -94,6 +94,32 @@ export function isS3Configured(): boolean {
   return getS3Client() !== null && !!process.env.AWS_S3_BUCKET_NAME;
 }
 
+export async function testS3Presign(): Promise<{ ok: boolean; error?: string }> {
+  try {
+    const client = getS3Client();
+    if (!client) {
+      return { ok: false, error: "S3 client not configured" };
+    }
+    
+    const testKey = `__health-check__/presign-test-${Date.now()}.txt`;
+    const command = new PutObjectCommand({
+      Bucket: getBucketName(),
+      Key: testKey,
+      ContentType: "text/plain",
+    });
+    
+    const url = await getSignedUrl(client, command, { expiresIn: 60 });
+    
+    if (!url || !url.startsWith("https://")) {
+      return { ok: false, error: "Generated URL is invalid" };
+    }
+    
+    return { ok: true };
+  } catch (e: any) {
+    return { ok: false, error: e.message || "Presign test failed" };
+  }
+}
+
 export async function createPresignedUploadUrl(
   storageKey: string,
   mimeType: string

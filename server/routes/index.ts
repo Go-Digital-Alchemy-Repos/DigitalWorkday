@@ -9,12 +9,14 @@ import projectsDashboardRoutes from "./projectsDashboard";
 import workloadReportsRoutes from "./workloadReports";
 import uploadRoutes from "./uploads";
 import emailOutboxRoutes from "./emailOutbox";
+import systemStatusRoutes from "./systemStatus";
 
 const router = Router();
 
 router.use("/timer", timerRoutes);
 router.use("/v1/super", superAdminRoutes);
 router.use("/v1/super/debug", superDebugRoutes);
+router.use("/v1/super/status", systemStatusRoutes);
 router.use("/v1/tenant", tenantOnboardingRoutes);
 router.use("/v1/tenant", tenantBillingRoutes);
 router.use("/v1", projectsDashboardRoutes);
