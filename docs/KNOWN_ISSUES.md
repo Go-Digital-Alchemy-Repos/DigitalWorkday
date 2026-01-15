@@ -68,11 +68,36 @@ This document tracks known issues, technical debt, and areas for improvement.
 
 ## Low Priority
 
-### 6. Test Coverage Gaps
+### 6. Test Environment Port Conflicts
+**Impact**: Test reliability, CI/CD
+
+**Description**: Several test files fail when the development workflow is running because they import modules that attempt to bind to port 5000. This causes `EADDRINUSE` errors.
+
+**Affected Tests**:
+- `super-only-integrations.test.ts`
+- `platform-admins.test.ts`
+- `bootstrap-registration.test.ts`
+- `global-integrations-persist.test.ts`
+- `seed-endpoints.test.ts`
+
+**Root Cause**: Tests import files that eventually import `server/index.ts`, which contains `httpServer.listen(5000, ...)`.
+
+**Workaround**: Stop the development workflow before running tests:
+```bash
+# Stop workflow, then run tests
+npx vitest run
+```
+
+**Recommended Action**: Refactor test files to import a test-specific app factory instead of the production server entry point.
+
+---
+
+### 7. Test Coverage Gaps
 **Impact**: Reliability
 
 **Description**: Current test coverage focuses on:
-- ✅ Tenancy enforcement
+- ✅ Tenancy enforcement (22 tests)
+- ✅ Permissions audit
 - ✅ Workload reports
 - ✅ Tenant integrations
 - ✅ Bootstrap/registration flow
@@ -85,7 +110,7 @@ This document tracks known issues, technical debt, and areas for improvement.
 
 ---
 
-### 7. No Rate Limiting
+### 8. No Rate Limiting
 **Impact**: Security, reliability
 
 **Description**: No rate limiting is currently implemented for API endpoints.
@@ -94,7 +119,7 @@ This document tracks known issues, technical debt, and areas for improvement.
 
 ---
 
-### 8. Activity Log Coverage
+### 9. Activity Log Coverage
 **Impact**: Audit trail completeness
 
 **Description**: Not all entity changes are logged to the activity log. Coverage is inconsistent across different entity types.
