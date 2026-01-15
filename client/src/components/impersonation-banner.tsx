@@ -30,17 +30,13 @@ export function ImpersonationBanner() {
     try {
       await apiRequest("POST", "/api/v1/super/impersonate/stop", {});
     } catch (error) {
-    } finally {
-      clearLastAttemptedTenantUrl();
-      clearTenantScopedCaches();
-      stopImpersonation();
-      setLocation("/super-admin/tenants");
-      toast({
-        title: "Exited tenant mode",
-        description: "You are back in Super Admin mode",
-      });
-      setIsExiting(false);
+      // Continue with exit even if API call fails
     }
+    clearLastAttemptedTenantUrl();
+    clearTenantScopedCaches();
+    stopImpersonation();
+    // Force full page reload to ensure all components pick up the new app mode
+    window.location.href = "/super-admin/tenants";
   };
 
   const handleOpenTenantSettings = () => {

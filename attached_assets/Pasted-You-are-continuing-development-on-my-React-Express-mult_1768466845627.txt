@@ -1,0 +1,197 @@
+You are continuing development on my React + Express multi-tenant app (single codebase) deployed on Railway.
+FEATURE: Add “Sign in with Google” as an additional authentication option, while preserving the existing auth system.
+
+We currently use cookie-based auth. Google auth must integrate into the same session/cookie model.
+Do NOT remove or break existing email/password (or existing auth) flows.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change existing endpoint paths or response shapes for current auth endpoints.
+- Do NOT weaken tenancy/role enforcement.
+- Do NOT store Google access tokens in the client.
+- Do NOT store Google refresh tokens unless absolutely required (avoid if possible).
+- No destructive DB changes; additive schema changes only if needed.
+- Ensure login works on Railway with correct proxy/cookie settings.
+
+===============================================================================
+GOAL
+===============================================================================
+1) Add “Continue with Google” button on the login (and optionally register) screen.
+2) Support Google OAuth for:
+   - Existing users linking by matching email (safe linking rules)
+   - New users creating an account from Google profile (subject to your invitation + tenant rules)
+3) After Google login, establish the same cookie-based session as normal login.
+4) Ensure multi-tenant constraints remain correct:
+   - Super Admin bootstrap behavior remains unchanged
+   - Tenant users may still require invitation (if that’s your policy)
+   - No unauthorized tenant auto-join
+
+===============================================================================
+PART A — CHOOSE IMPLEMENTATION APPROACH
+===============================================================================
+Use one of these approaches (choose the one that best fits existing auth stack):
+
+Option 1 (Recommended for Express): Passport Google OAuth 2.0
+- passport + passport-google-oauth20
+- integrates well with cookie sessions
+
+Option 2: google-auth-library + manual OAuth flow
+- fewer deps, more custom code
+
+If the project already uses Better Auth or similar:
+- Prefer its official Google provider integration IF ALREADY INSTALLED.
+- Otherwise use Passport to avoid deep refactors.
+
+IMPORTANT: Keep existing auth intact; Google is additive.
+
+===============================================================================
+PART B — ENV VARS + CONFIG (RAILWAY-SAFE)
+===============================================================================
+Add env vars (document them; do NOT hardcode):
+- GOOGLE_CLIENT_ID
+- GOOGLE_CLIENT_SECRET
+- GOOGLE_OAUTH_REDIRECT_URL   (e.g. https://<your-domain>/api/v1/auth/google/callback)
+- APP_PUBLIC_URL              (e.g. https://<your-domain>)
+- OPTIONAL: GOOGLE_HOSTED_DOMAIN (if you want to restrict to a Workspace later)
+
+Ensure CORS + cookies:
+- frontend requests use credentials
+- trust proxy settings remain correct
+
+===============================================================================
+PART C — DATABASE CHANGES (ADDITIVE ONLY IF NEEDED)
+===============================================================================
+We need a way to link a user to Google.
+Prefer additive columns to existing users table if no auth-identities table exists.
+
+Add one of:
+Option A: users.googleId (unique, nullable)
+Option B (more extensible): auth_identities table:
+- id, userId, provider ("google"), providerUserId, providerEmail, createdAt
+
+Also ensure:
+- users.email remains canonical and unique (if already enforced)
+
+Do NOT remove existing password fields; keep current login.
+
+===============================================================================
+PART D — BACKEND ENDPOINTS (ADD-ONLY)
+===============================================================================
+Add these endpoints (do not modify existing ones):
+
+1) GET /api/v1/auth/google
+- Redirect user to Google OAuth consent screen
+
+2) GET /api/v1/auth/google/callback
+- Handle OAuth callback
+- Validate state/nonce
+- Fetch profile (googleId, email, name, avatar)
+- Determine whether to:
+  A) log into an existing user (if safe)
+  B) create a new user (if allowed by your app rules)
+  C) block and show a friendly error
+
+3) POST /api/v1/auth/google/link (optional)
+- For logged-in users: link their Google account to current profile
+
+4) POST /api/v1/auth/google/unlink (optional)
+- Allow unlink only if user has another login method configured
+- Prevent account lockout
+
+SESSION HANDOFF:
+- After successful Google auth, create the same server-side session/cookie as normal login.
+- Redirect to the correct landing route:
+  - super user not impersonating: /super/dashboard
+  - tenant users: normal tenant landing
+  - if agreement gating applies: let existing gating logic handle it
+
+===============================================================================
+PART E — ACCOUNT LINKING RULES (SECURITY-CRITICAL)
+===============================================================================
+When Google returns an email:
+
+1) If a user exists with same email:
+- Only link automatically if your policy allows it AND email is verified by Google.
+- Prefer safe rule:
+  - if google email verified AND existing user has no googleId yet => link and login
+  - if existing user already linked to a different googleId => block and show support message
+
+2) If user does not exist:
+- Creating a new user must respect your system rules:
+  - If your platform requires invitation for tenants, DO NOT auto-create tenant access.
+  - Allowed cases:
+    A) Super Admin bootstrap: ONLY if there are zero users in DB AND bootstrap flow allows it
+       (but do NOT accidentally create super admins via Google unless explicitly intended)
+    B) If an invitation token exists in session/query params:
+       - allow create and attach the invited role/tenant context
+    C) Otherwise:
+       - create a “pending” user or block with “Invite required” message (match existing behavior)
+
+3) Tenant context must not be guessed:
+- Never assign tenantId based on email domain unless you explicitly build that later.
+
+===============================================================================
+PART F — FRONTEND UI CHANGES
+===============================================================================
+1) Login screen:
+- Add “Continue with Google” button
+- Clicking it navigates to /api/v1/auth/google (full redirect flow)
+
+2) Optional: Account page
+- Show “Linked accounts”
+- “Link Google” / “Unlink Google”
+- Show google profile image only if user has no avatar set (optional)
+
+3) Error handling:
+- If Google login blocked due to invite required, show a clear message and link back to login.
+- If callback fails, show requestId (from X-Request-Id header) in the UI.
+
+===============================================================================
+PART G — TESTING (MANDATORY MINIMUM)
+===============================================================================
+Backend tests (mock google provider):
+1) google_auth_existing_user_links_by_verified_email.test.ts
+2) google_auth_rejects_unverified_email_or_conflicting_googleid.test.ts
+3) google_auth_new_user_requires_invite_when_policy_enabled.test.ts
+4) google_auth_creates_session_cookie_and_redirects.test.ts
+
+Frontend (if infra exists):
+5) google_button_redirects_to_google_route.test.tsx
+
+Also add a short manual checklist for Railway:
+- login via google in production
+- cookie persists
+- logout works
+- switching between google login and password login works
+
+===============================================================================
+DOCUMENTATION (REQUIRED)
+===============================================================================
+Update /docs/AUTHENTICATION.md:
+- Google OAuth flow
+- env vars required
+- linking rules
+- invite-required behavior
+Update /docs/DEPLOYMENT_RAILWAY.md:
+- callback URL requirements
+- trusted proxy / secure cookies
+Update /docs/SECURITY_NOTES.md:
+- why we don’t store tokens client-side
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+- Existing auth continues to work unchanged.
+- “Continue with Google” works end-to-end and results in the same cookie-based session.
+- Existing users can log in via Google safely (email verified, no conflicts).
+- New user creation respects invitation/tenant rules and does not create unauthorized access.
+- No secrets exposed; tests pass; docs updated.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Which option was implemented (Passport vs manual vs BetterAuth provider)
+- DB changes made (if any)
+- New endpoints added
+- Manual Railway config checklist (redirect URL, env vars, cookies)

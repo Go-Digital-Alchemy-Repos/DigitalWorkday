@@ -244,19 +244,15 @@ export default function SuperAdminPage() {
       clearTenantScopedCaches();
       startImpersonation(tenant.id, tenant.name);
       
-      toast({ 
-        title: "Acting as tenant", 
-        description: `You are now acting as "${tenant.name}". All actions will be scoped to this tenant.` 
-      });
-      
-      setLocation("/");
+      // Force full page reload to ensure all components pick up the new app mode
+      // Client-side navigation doesn't remount AppLayout, so useAppMode state doesn't sync
+      window.location.href = "/";
     } catch (error) {
       toast({ 
         title: "Failed to act as tenant", 
         description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive"
       });
-    } finally {
       setIsActingAsTenant(false);
     }
   };
