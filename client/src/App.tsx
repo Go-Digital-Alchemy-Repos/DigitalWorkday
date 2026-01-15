@@ -243,13 +243,20 @@ function TenantLayout() {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
-      <div className="flex flex-col h-screen w-full">
+      <div className={`flex flex-col h-screen w-full ${isImpersonating ? "ring-2 ring-amber-500 ring-inset" : ""}`}>
         {isImpersonating && <ImpersonationBanner />}
         <div className="flex flex-1 overflow-hidden">
           <TenantSidebar />
           <div className="flex flex-col flex-1 overflow-hidden">
-            <header className="flex items-center justify-between h-12 px-4 border-b border-border bg-background shrink-0">
-              <SidebarTrigger data-testid="button-sidebar-toggle" />
+            <header className={`flex items-center justify-between h-12 px-4 border-b shrink-0 ${isImpersonating ? "border-amber-400 bg-amber-50/30 dark:bg-amber-900/10" : "border-border bg-background"}`}>
+              <div className="flex items-center gap-2">
+                <SidebarTrigger data-testid="button-sidebar-toggle" />
+                {isImpersonating && (
+                  <span className="text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded" data-testid="badge-impersonating">
+                    IMPERSONATING
+                  </span>
+                )}
+              </div>
               <div className="flex items-center gap-2">
                 <ThemeToggle />
                 <UserMenu />
