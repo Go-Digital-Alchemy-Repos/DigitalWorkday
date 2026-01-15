@@ -285,6 +285,7 @@ export interface IStorage {
   }): Promise<{ invitation: Invitation; token: string }>;
 
   // User invite management for Super Admin
+  getInvitationById(invitationId: string): Promise<Invitation | undefined>;
   getLatestInvitationByUserEmail(email: string, tenantId: string): Promise<Invitation | undefined>;
   regenerateInvitation(invitationId: string, createdByUserId: string): Promise<{ invitation: Invitation; token: string }>;
   setUserMustChangePassword(userId: string, tenantId: string, mustChange: boolean): Promise<User | undefined>;
@@ -1827,6 +1828,14 @@ export class DatabaseStorage implements IStorage {
     }).returning();
 
     return { invitation, token };
+  }
+
+  async getInvitationById(invitationId: string): Promise<Invitation | undefined> {
+    const [invitation] = await db.select()
+      .from(invitations)
+      .where(eq(invitations.id, invitationId))
+      .limit(1);
+    return invitation || undefined;
   }
 
   async getLatestInvitationByUserEmail(email: string, tenantId: string): Promise<Invitation | undefined> {

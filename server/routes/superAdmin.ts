@@ -698,6 +698,8 @@ router.get("/tenants/:tenantId/invitations", requireSuperUser, async (req, res) 
     
     const tenantInvitations = await storage.getInvitationsByTenant(tenantId);
     
+    // Note: inviteUrl is not included because we only store tokenHash, not raw tokens.
+    // To get a copyable invite link, use the regenerate endpoint which returns a fresh token.
     res.json({
       invitations: tenantInvitations.map(inv => ({
         id: inv.id,
@@ -1189,6 +1191,125 @@ router.post("/tenants/:tenantId/invitations/:invitationId/revoke", requireSuperU
   } catch (error) {
     console.error("Error revoking invitation:", error);
     res.status(500).json({ error: "Failed to revoke invitation" });
+  }
+});
+
+// Resend invitation email (regenerates token first since we don't store raw tokens)
+router.post("/tenants/:tenantId/invitations/:invitationId/resend", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, invitationId } = req.params;
+    const superUser = req.user as any;
+    
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+    
+    const invitation = await storage.getInvitationById(invitationId);
+    if (!invitation) {
+      return res.status(404).json({ error: "Invitation not found" });
+    }
+    
+    // Verify invitation belongs to this tenant
+    if (invitation.tenantId !== tenantId) {
+      return res.status(404).json({ error: "Invitation not found in this tenant" });
+    }
+    
+    if (invitation.status !== "pending") {
+      return res.status(400).json({ error: "Can only resend pending invitations" });
+    }
+    
+    // Regenerate the token (since we don't store raw tokens, only hashes)
+    const { invitation: updatedInvitation, token } = await storage.regenerateInvitation(invitationId, superUser?.id || "");
+    
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+      : process.env.APP_URL || "http://localhost:5000";
+    const inviteUrl = `${baseUrl}/accept-invite?token=${token}`;
+    
+    // Try to send email
+    let emailSent = false;
+    try {
+      const { sendInviteEmail } = await import("../email");
+      const tenantSettingsData = await storage.getTenantSettings(tenantId);
+      const appName = tenantSettingsData?.appName || "MyWorkDay";
+      
+      await sendInviteEmail(invitation.email, inviteUrl, appName, tenantId);
+      emailSent = true;
+    } catch (emailError) {
+      console.error("Failed to resend invitation email:", emailError);
+    }
+    
+    // Record audit event
+    await recordTenantAuditEvent(
+      tenantId,
+      "invite_resent",
+      `Invitation email ${emailSent ? "resent" : "resend attempted but failed"} to ${invitation.email}`,
+      superUser?.id,
+      { invitationId, email: invitation.email, emailSent }
+    );
+    
+    res.json({
+      inviteUrl,
+      emailSent,
+      message: emailSent ? "Invitation email resent successfully" : "Email sending failed. Copy the link manually.",
+    });
+  } catch (error) {
+    console.error("Error resending invitation:", error);
+    res.status(500).json({ error: "Failed to resend invitation" });
+  }
+});
+
+// Regenerate invitation link (creates new token and extends expiry)
+router.post("/tenants/:tenantId/invitations/:invitationId/regenerate", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, invitationId } = req.params;
+    const superUser = req.user as any;
+    
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+    
+    const existingInvitation = await storage.getInvitationById(invitationId);
+    if (!existingInvitation) {
+      return res.status(404).json({ error: "Invitation not found" });
+    }
+    
+    // Verify invitation belongs to this tenant
+    if (existingInvitation.tenantId !== tenantId) {
+      return res.status(404).json({ error: "Invitation not found in this tenant" });
+    }
+    
+    if (existingInvitation.status === "accepted") {
+      return res.status(400).json({ error: "Cannot regenerate an accepted invitation" });
+    }
+    
+    // Regenerate the token using the storage method
+    const { invitation: updatedInvitation, token } = await storage.regenerateInvitation(invitationId, superUser?.id || "");
+    
+    const baseUrl = process.env.REPLIT_DEV_DOMAIN 
+      ? `https://${process.env.REPLIT_DEV_DOMAIN}` 
+      : process.env.APP_URL || "http://localhost:5000";
+    const inviteUrl = `${baseUrl}/accept-invite?token=${token}`;
+    
+    // Record audit event
+    await recordTenantAuditEvent(
+      tenantId,
+      "invite_regenerated",
+      `Invitation link regenerated for ${existingInvitation.email}`,
+      superUser?.id,
+      { invitationId, email: existingInvitation.email }
+    );
+    
+    res.json({
+      invitation: updatedInvitation,
+      inviteUrl,
+      message: "Invitation link regenerated successfully",
+    });
+  } catch (error) {
+    console.error("Error regenerating invitation:", error);
+    res.status(500).json({ error: "Failed to regenerate invitation" });
   }
 });
 

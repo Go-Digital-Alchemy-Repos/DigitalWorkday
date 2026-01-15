@@ -58,7 +58,8 @@ import {
   TestTube,
   Eye,
   EyeOff,
-  Lock
+  Lock,
+  RefreshCw
 } from "lucide-react";
 import { CsvImportPanel, type ParsedRow, type ImportResult } from "@/components/common/csv-import-panel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -1111,6 +1112,50 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
         description: message, 
         variant: "destructive" 
       });
+    },
+  });
+
+  // Resend invitation email mutation
+  const resendInvitationMutation = useMutation({
+    mutationFn: async (invitationId: string) => {
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${activeTenant?.id}/invitations/${invitationId}/resend`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "invitations"] });
+      if (data.emailSent) {
+        toast({ title: "Invitation resent", description: "The invitation email has been sent successfully." });
+      } else {
+        toast({ 
+          title: "Email failed", 
+          description: "Link regenerated but email failed. Copy the link manually.", 
+          variant: "destructive" 
+        });
+      }
+    },
+    onError: (error: any) => {
+      const message = error?.message || "An unexpected error occurred. Please try again.";
+      toast({ title: "Failed to resend invitation", description: message, variant: "destructive" });
+    },
+  });
+
+  // Regenerate invitation link mutation
+  const regenerateInvitationMutation = useMutation({
+    mutationFn: async (invitationId: string) => {
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${activeTenant?.id}/invitations/${invitationId}/regenerate`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "invitations"] });
+      toast({ title: "Link regenerated", description: "A new invitation link has been created." });
+      if (data.inviteUrl) {
+        navigator.clipboard.writeText(data.inviteUrl);
+        toast({ title: "Link copied", description: "New invite link copied to clipboard." });
+      }
+    },
+    onError: (error: any) => {
+      const message = error?.message || "An unexpected error occurred. Please try again.";
+      toast({ title: "Failed to regenerate link", description: message, variant: "destructive" });
     },
   });
 
@@ -2844,13 +2889,45 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                             <Badge variant="outline" className="text-xs">{invitation.role}</Badge>
                             {invitation.status === "accepted" ? (
                               <Badge className="bg-green-600 text-xs">Accepted</Badge>
-                            ) : isExpired ? (
-                              <Badge variant="secondary" className="text-xs">Expired</Badge>
                             ) : invitation.status === "revoked" ? (
                               <Badge variant="destructive" className="text-xs">Revoked</Badge>
+                            ) : isExpired ? (
+                              <>
+                                <Badge variant="secondary" className="text-xs">Expired</Badge>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => regenerateInvitationMutation.mutate(invitation.id)}
+                                  disabled={regenerateInvitationMutation.isPending}
+                                  title="Regenerate invitation link"
+                                  data-testid={`button-regenerate-invitation-${invitation.id}`}
+                                >
+                                  <RefreshCw className="h-4 w-4" />
+                                </Button>
+                              </>
                             ) : (
                               <>
                                 <Badge className="text-xs">Pending</Badge>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => regenerateInvitationMutation.mutate(invitation.id)}
+                                  disabled={regenerateInvitationMutation.isPending}
+                                  title="Get invite link (regenerate & copy)"
+                                  data-testid={`button-get-link-${invitation.id}`}
+                                >
+                                  <Copy className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => resendInvitationMutation.mutate(invitation.id)}
+                                  disabled={resendInvitationMutation.isPending}
+                                  title="Resend invitation email"
+                                  data-testid={`button-resend-invitation-${invitation.id}`}
+                                >
+                                  <Send className="h-4 w-4" />
+                                </Button>
                                 <Button
                                   size="icon"
                                   variant="ghost"
