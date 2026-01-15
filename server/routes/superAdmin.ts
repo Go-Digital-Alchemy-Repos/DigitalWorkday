@@ -220,23 +220,40 @@ const createTenantSchema = insertTenantSchema.extend({
 });
 
 router.post("/tenants", requireSuperUser, async (req, res) => {
+  const requestId = req.requestId || "unknown";
+  const superUser = req.user as any;
+  const debugEnabled = process.env.SUPER_TENANT_CREATE_DEBUG === "true";
+  
   try {
+    // Validate input
     const data = createTenantSchema.parse(req.body);
     
+    if (debugEnabled) {
+      console.log(`[TenantCreate] requestId=${requestId} actor=${superUser?.id} input=${JSON.stringify({ name: data.name, slug: data.slug })}`);
+    }
+    
+    // Check for existing slug
     const existingTenant = await storage.getTenantBySlug(data.slug);
     if (existingTenant) {
+      console.log(`[TenantCreate] requestId=${requestId} slug collision: ${data.slug}`);
       return res.status(409).json({ error: "A tenant with this slug already exists" });
     }
     
     // Transactional: Create tenant + primary workspace + tenant_settings
     const result = await db.transaction(async (tx) => {
       // 1. Create tenant (inactive by default)
+      if (debugEnabled) {
+        console.log(`[TenantCreate] requestId=${requestId} step=tenant_insert`);
+      }
       const [tenant] = await tx.insert(tenants).values({
         ...data,
         status: TenantStatus.INACTIVE,
       }).returning();
 
       // 2. Create primary workspace with exact business name
+      if (debugEnabled) {
+        console.log(`[TenantCreate] requestId=${requestId} step=workspace_insert tenantId=${tenant.id}`);
+      }
       const [primaryWorkspace] = await tx.insert(workspaces).values({
         name: data.name.trim(),
         tenantId: tenant.id,
@@ -244,6 +261,9 @@ router.post("/tenants", requireSuperUser, async (req, res) => {
       }).returning();
 
       // 3. Create tenant_settings record (inside transaction for rollback safety)
+      if (debugEnabled) {
+        console.log(`[TenantCreate] requestId=${requestId} step=settings_insert tenantId=${tenant.id}`);
+      }
       await tx.insert(tenantSettings).values({
         tenantId: tenant.id,
         displayName: tenant.name,
@@ -255,7 +275,6 @@ router.post("/tenants", requireSuperUser, async (req, res) => {
     console.log(`[SuperAdmin] Created tenant ${result.tenant.id} with primary workspace ${result.primaryWorkspace.id}`);
 
     // Record audit events
-    const superUser = req.user as any;
     await recordTenantAuditEvent(
       result.tenant.id,
       "tenant_created",
@@ -281,9 +300,22 @@ router.post("/tenants", requireSuperUser, async (req, res) => {
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
+      console.log(`[TenantCreate] requestId=${requestId} validation_error details=${JSON.stringify(error.errors)}`);
       return res.status(400).json({ error: "Validation error", details: error.errors });
     }
-    console.error("Error creating tenant:", error);
+    
+    // Enhanced error logging with requestId
+    const dbError = error as any;
+    const errorInfo = {
+      code: dbError?.code,
+      constraint: dbError?.constraint,
+      table: dbError?.table,
+      detail: dbError?.detail,
+    };
+    
+    console.error(`[TenantCreate] requestId=${requestId} failed actor=${superUser?.id} dbInfo=${JSON.stringify(errorInfo)}`, error);
+    
+    // Keep response body unchanged - requestId is in X-Request-Id header
     res.status(500).json({ error: "Failed to create tenant" });
   }
 });

@@ -34,13 +34,32 @@ async function handleAgreementRequired(res: Response): Promise<boolean> {
   return false;
 }
 
+/**
+ * Custom error class that includes request ID for correlation.
+ * This allows UI components to display the request ID for support purposes.
+ */
+export class ApiError extends Error {
+  readonly status: number;
+  readonly requestId: string | null;
+  readonly body: string;
+
+  constructor(status: number, body: string, requestId: string | null) {
+    super(`${status}: ${body}`);
+    this.name = "ApiError";
+    this.status = status;
+    this.body = body;
+    this.requestId = requestId;
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     if (await handleAgreementRequired(res)) {
       throw new Error("Agreement acceptance required");
     }
     const text = (await res.text()) || res.statusText;
-    throw new Error(`${res.status}: ${text}`);
+    const requestId = res.headers.get("X-Request-Id");
+    throw new ApiError(res.status, text, requestId);
   }
 }
 

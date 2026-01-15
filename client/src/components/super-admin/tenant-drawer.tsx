@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { ApiError } from "@/lib/queryClient";
 import { FullScreenDrawer, FullScreenDrawerFooter } from "@/components/ui/full-screen-drawer";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -377,10 +378,21 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
       });
     },
     onError: (error: Error) => {
-      setCreateError(error.message || "Failed to create tenant");
+      // Extract requestId from ApiError for support correlation
+      const requestId = error instanceof ApiError ? error.requestId : null;
+      const errorMessage = error.message || "Failed to create tenant";
+      
+      // Show error with requestId for support
+      const displayMessage = requestId 
+        ? `${errorMessage}\n\nRequest ID: ${requestId}` 
+        : errorMessage;
+      
+      setCreateError(displayMessage);
       toast({ 
         title: "Failed to create tenant", 
-        description: error.message, 
+        description: requestId 
+          ? `${errorMessage}. Request ID: ${requestId}` 
+          : errorMessage, 
         variant: "destructive" 
       });
     },

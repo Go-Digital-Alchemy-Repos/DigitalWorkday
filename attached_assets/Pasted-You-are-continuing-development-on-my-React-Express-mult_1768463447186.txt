@@ -1,0 +1,166 @@
+You are continuing development on my React + Express multi-tenant app (single codebase) deployed on Railway.
+BUG: Creating a new tenant fails with 500: {"error":"Failed to create tenant"} and the tenant is not saved.
+
+Goal: Diagnose the root cause and fix tenant creation in a SAFE, non-destructive way.
+Also add a client-visible requestId on tenant-create failure so we can correlate Railway logs instantly,
+WITHOUT changing existing endpoint paths or response shapes.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change endpoint paths.
+- Do NOT change API response shapes (error body stays exactly the same as today).
+- Do NOT change auth/tenancy/agreement enforcement behavior.
+- Do NOT wipe or reset production data.
+- Avoid DB schema changes unless absolutely required to fix a clear constraint issue.
+- Add logging ONLY in a safe way (no secrets) and ideally behind an env flag.
+- Any fix must include a regression test.
+
+===============================================================================
+STEP 1 — FIND THE EXACT FAILING CODE PATH
+===============================================================================
+1) Locate the backend endpoint that handles creating tenants (likely):
+- POST /api/v1/super/tenants  OR  POST /api/v1/super/tenant
+2) Identify whether tenant creation also does any of these in the same request:
+- creates primary workspace
+- creates default teams
+- creates default settings/branding rows
+- seeds anything else (agreements, status, etc.)
+3) Confirm the frontend is calling the expected endpoint and not an outdated path.
+
+===============================================================================
+STEP 2 — ADD SAFE DIAGNOSTIC LOGGING (TEMPORARY, FLAGGED)
+===============================================================================
+Add minimal try/catch diagnostic logging in the tenant creation route:
+- Only when SUPER_TENANT_CREATE_DEBUG=true
+- Log:
+  - requestId
+  - actor userId
+  - validated input fields (businessName, slug if present, etc. — NO secrets)
+  - which sub-step failed (tenant insert vs workspace insert vs settings insert)
+  - sanitized DB error details (code/constraint/table), and stack trace only in server logs
+- Keep the client error body EXACTLY the same as now:
+  500: {"error":"Failed to create tenant"}
+
+Ensure requestId is always present in logs (even when debug flag is off, at least log requestId + “create tenant failed”).
+
+===============================================================================
+STEP 3 — CLIENT-SIDE REQUEST ID SURFACING (NO RESPONSE SHAPE CHANGES)
+===============================================================================
+We cannot change the error response JSON shape.
+So, add requestId surfacing via headers and UI:
+
+A) Server: ensure every response includes an X-Request-Id header (if not already)
+- If requestId middleware exists, confirm it sets:
+  - req.requestId
+  - res.setHeader("X-Request-Id", requestId)
+- On tenant create failure, this header must still be present.
+
+B) Client: when tenant create fails:
+- Read X-Request-Id header from the failed response
+- Show toast/banner:
+  “Failed to create tenant. Request ID: <id>”
+- Also show a small “Copy Request ID” action (client-only).
+- Do NOT display stack traces or internal errors.
+
+C) Ensure the UI keeps the same error messaging plus the requestId line.
+
+===============================================================================
+STEP 4 — COMMON ROOT CAUSES TO CHECK (FIX THE REAL ONE FOUND)
+===============================================================================
+Using the server logs + requestId correlation, identify the real cause and fix it.
+Common root causes to check:
+
+A) DB constraint / required fields
+- Tenant insert missing required field (businessName/slug/createdBy/etc.)
+- Workspace insert missing tenantId or name
+- Unique constraint collision (slug/businessName unique)
+Fix:
+- Validate required fields before DB insert.
+- If your route already returns 400 for validation errors, return 400; otherwise keep current behavior but prevent DB crash.
+- Ensure slug/status defaults are set before insert.
+- Ensure tenantId is correctly passed to dependent inserts.
+
+B) Transaction / ordering issue
+- Dependent insert runs before tenant commit
+Fix:
+- Wrap tenant + workspace creation in a single DB transaction.
+- Insert tenant first, then create workspace using returned tenantId.
+
+C) Primary workspace naming rule edge case
+- Workspace name invalid/empty/too long
+- Attempting to create workspace twice
+Fix:
+- Trim and validate businessName
+- Enforce safe max length (truncate with suffix only if needed)
+- Add idempotency:
+  - if a primary workspace already exists for tenant, reuse it (do not create duplicate)
+
+D) Tenancy scoping mistakenly applied to super routes
+- Super route requires effectiveTenantId or applies tenant middleware incorrectly
+Fix:
+- Super tenant creation must not require effectiveTenantId.
+- Ensure super-only route bypasses tenant scoping middleware appropriately.
+
+E) Drizzle schema mismatch / migrations missing on Railway
+- Code references columns not present in prod
+Fix:
+- Confirm migrations run on Railway.
+- If missing columns are required, add additive migration.
+- If optional, guard the write.
+
+F) Error handler swallowing real error
+Fix:
+- Keep the client message the same.
+- Ensure server logs include the real underlying error + requestId.
+
+===============================================================================
+STEP 5 — IMPLEMENT A SAFE FIX
+===============================================================================
+Once root cause is confirmed:
+1) Patch tenant creation flow to:
+- validate minimal required fields
+- create tenant row
+- create primary workspace (if required) with correct tenantId
+- commit transaction
+- return the SAME success payload as before (no response changes)
+
+2) Add safe idempotency if needed:
+- Prevent double-click/retry creating duplicates (especially workspace).
+- Only implement if logs indicate duplicates are happening.
+
+3) Ensure UI refetch:
+- After successful creation, invalidate/refetch tenant list and tenant detail.
+
+===============================================================================
+STEP 6 — REGRESSION TESTS (MANDATORY)
+===============================================================================
+Add/update tests:
+1) super_create_tenant_success_creates_workspace.test.ts
+- creates tenant successfully
+- creates primary workspace named exactly businessName
+- response status matches current behavior
+
+2) super_create_tenant_does_not_require_effectiveTenantId.test.ts
+- super user not impersonating can create tenant
+
+3) tenant_create_failure_includes_request_id_header.test.ts
+- simulate a forced failure
+- assert response includes X-Request-Id header
+
+4) (If unique collisions are the cause) super_create_tenant_duplicate_name_handling.test.ts
+- ensures failure is handled gracefully and logged with requestId
+
+===============================================================================
+STEP 7 — OUTPUT REQUIRED
+===============================================================================
+Provide:
+- Root cause found (exact DB error / failing step) linked to requestId usage
+- Fix applied (transaction/order/validation/etc.)
+- Files changed
+- Tests added/updated
+- Manual verification checklist for Railway:
+  - create tenant (success)
+  - tenant appears after refresh
+  - primary workspace created and named correctly
+  - on failure, UI shows requestId and it matches server logs
