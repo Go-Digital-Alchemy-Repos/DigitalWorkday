@@ -2,7 +2,7 @@ import { useLocation, useRoute, Redirect } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Users, Building2, BarChart3, Puzzle, Settings as SettingsIcon, Palette, HardDrive, FileText, ClipboardList, CreditCard } from "lucide-react";
+import { Users, Building2, BarChart3, Puzzle, Settings as SettingsIcon, Palette, HardDrive, FileText, ClipboardList, CreditCard, Mail } from "lucide-react";
 import { TeamTab } from "@/components/settings/team-tab";
 import { WorkspacesTab } from "@/components/settings/workspaces-tab";
 import { ReportsTab } from "@/components/settings/reports-tab";
@@ -12,6 +12,7 @@ import { TenantIntegrationsTab } from "@/components/settings/tenant-integrations
 import { AgreementTab } from "@/components/settings/agreement-tab";
 import { WorkloadTab } from "@/components/settings/workload-tab";
 import { BillingTab } from "@/components/settings/billing-tab";
+import { EmailLogsTab } from "@/components/settings/email-logs-tab";
 
 const SETTINGS_TABS = [
   { id: "team", label: "Team", icon: Users },
@@ -19,6 +20,7 @@ const SETTINGS_TABS = [
   { id: "branding", label: "Branding", icon: Palette },
   { id: "tenant-integrations", label: "Services", icon: HardDrive },
   { id: "billing", label: "Billing", icon: CreditCard },
+  { id: "email-logs", label: "Email Logs", icon: Mail },
   { id: "agreement", label: "Agreement", icon: FileText },
   { id: "workload", label: "Workload", icon: ClipboardList },
   { id: "reports", label: "Reports", icon: BarChart3 },
@@ -55,7 +57,7 @@ export default function SettingsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-9 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-10 h-auto p-1">
             {SETTINGS_TABS.map((tab) => (
               <TabsTrigger
                 key={tab.id}
@@ -87,6 +89,10 @@ export default function SettingsPage() {
 
           <TabsContent value="billing" className="mt-6">
             <BillingTab />
+          </TabsContent>
+
+          <TabsContent value="email-logs" className="mt-6">
+            <EmailLogsTab />
           </TabsContent>
 
           <TabsContent value="agreement" className="mt-6">

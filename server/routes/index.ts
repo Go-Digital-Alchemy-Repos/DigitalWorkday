@@ -8,6 +8,7 @@ import tenancyHealthRoutes from "./tenancyHealth";
 import projectsDashboardRoutes from "./projectsDashboard";
 import workloadReportsRoutes from "./workloadReports";
 import uploadRoutes from "./uploads";
+import emailOutboxRoutes from "./emailOutbox";
 
 const router = Router();
 
@@ -19,6 +20,7 @@ router.use("/v1/tenant", tenantBillingRoutes);
 router.use("/v1", projectsDashboardRoutes);
 router.use("/v1", workloadReportsRoutes);
 router.use("/v1/uploads", uploadRoutes);
+router.use("/v1", emailOutboxRoutes);
 router.use(tenancyHealthRoutes);
 
 export default router;
