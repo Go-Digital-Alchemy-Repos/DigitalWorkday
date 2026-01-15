@@ -1,0 +1,101 @@
+You are continuing development on my React + Express multi-tenant app (single codebase).
+REFINEMENT: Super Admin “Global Reports” → move contents to “Dashboard” and make it the default landing page.
+
+Goal:
+- Everything currently inside the Super Admin “Global Reports” tab should be moved into a standalone page called “Dashboard”.
+- Super Admins should land on this Dashboard by default after login.
+- Remove “Global Reports” from the Super Admin navigation once migrated.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change API endpoints or response shapes.
+- Do NOT change auth/tenancy/impersonation logic.
+- Do NOT remove any reporting functionality; only relocate UI.
+- No DB schema changes.
+- Avoid large UI redesign; keep visuals similar, just re-home content.
+- Ensure the change is reversible and does not break deep links.
+
+===============================================================================
+PART A — CREATE SUPER ADMIN DASHBOARD PAGE
+===============================================================================
+1) Create a new route/page for Super Admin:
+- Route: /super/dashboard
+- Navigation item label: “Dashboard” (Super Admin menu area)
+
+2) Move all existing Global Reports tab UI/content into this new page:
+- Keep the same components and query hooks if possible.
+- Preserve filters, charts, and data layout exactly as-is unless minor layout tweaks are needed due to page context.
+
+3) If the Global Reports content is currently embedded inside a Settings tab component:
+- Extract the reports UI into a shared component/module:
+  - e.g. client/src/features/super/reports/SuperReportsPanel.tsx
+- Then render it in /super/dashboard.
+
+===============================================================================
+PART B — MAKE DASHBOARD DEFAULT LANDING FOR SUPER ADMINS
+===============================================================================
+1) After successful login (cookie-based):
+- If user.role == "super_user" AND NOT impersonating (effectiveTenantId is null):
+  - redirect to /super/dashboard
+
+2) If super admin is impersonating a tenant:
+- preserve current behavior (do not force /super/dashboard).
+
+3) Update routing fallback:
+- /super should redirect to /super/dashboard
+- Any old default super landing route should remain valid but redirect to dashboard.
+
+===============================================================================
+PART C — REMOVE “GLOBAL REPORTS” TAB / NAV ITEM SAFELY
+===============================================================================
+1) Remove the “Global Reports” tab from Super Admin settings UI navigation.
+- Do not delete the underlying components yet; they are now used by Dashboard.
+
+2) If any links exist pointing to the old tab route:
+- Keep a redirect route (client-side) from the old path to /super/dashboard
+- Show a short toast: “Global Reports moved to Dashboard.”
+
+===============================================================================
+PART D — CACHE / QUERY KEYS
+===============================================================================
+- Ensure all query keys used by reports remain super-scoped (no tenantId required).
+- If any reports queries were mistakenly tenant-scoped, do not change their behavior here; only ensure they still render.
+
+===============================================================================
+TESTS (LIGHTWEIGHT BUT REQUIRED)
+===============================================================================
+1) super_login_redirects_to_dashboard.test.tsx
+- super user logs in => lands on /super/dashboard (not impersonating)
+
+2) dashboard_renders_reports_panel.test.tsx
+- confirms reports panel renders on the dashboard
+
+3) global_reports_redirects_to_dashboard.test.tsx
+- visiting old Global Reports route redirects to /super/dashboard
+
+If UI test infra is limited, add manual checklist to /docs/REGRESSION_CHECKLIST.md.
+
+===============================================================================
+DOCUMENTATION
+===============================================================================
+- Update /docs/SUPER_ADMIN_GUIDE.md:
+  - Dashboard is the landing page
+  - Reports are accessed via Dashboard
+- Update any navigation screenshots/notes if present.
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+- Super Admins land on /super/dashboard immediately after login.
+- Dashboard shows all content previously in Global Reports (no loss).
+- “Global Reports” is removed from navigation/settings tabs.
+- Old deep links redirect to Dashboard gracefully.
+- No backend/API changes, no schema changes, tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Which files/components were moved/extracted
+- Which old route(s) were redirected
+- Manual test checklist (local + Railway)
