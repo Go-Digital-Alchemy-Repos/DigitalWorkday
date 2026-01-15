@@ -376,6 +376,34 @@ validateTenantExists(id)   // Validates tenant before impersonation restoration
    - Validate stored tenant ID still exists
    - If invalid, force exit impersonation with cache clear
 
+### Impersonation UI Safeguards
+
+To prevent accidental edits while impersonating a tenant, the following visual indicators are implemented:
+
+**Persistent Banner** (`impersonation-banner.tsx`):
+- Sticky amber banner at top of all tenant pages
+- Shows "Acting as Tenant: <TenantName>"
+- Buttons: "Open Tenant Settings", "Exit"
+- Visible on every tenant page while impersonating
+
+**Browser Title Indicator**:
+- Prefix document title with `[Tenant: <name>]` while impersonating
+- Automatically reverts to normal title when exiting impersonation
+
+**Visual Theme Tint**:
+- Amber ring border (2px) around entire viewport
+- Header background tinted amber
+- "IMPERSONATING" badge next to sidebar toggle
+
+**Exit Behavior**:
+When clicking "Exit" in the impersonation banner:
+1. Call `POST /api/v1/super/impersonate/stop`
+2. Clear `lastAttemptedTenantUrl` from sessionStorage
+3. Clear all tenant-scoped caches
+4. Call `stopImpersonation()` to clear localStorage state
+5. Navigate to `/super/tenants`
+6. Show toast: "Exited tenant mode - You are back in Super Admin mode"
+
 ### Key Navigation Files
 
 | File | Purpose |
