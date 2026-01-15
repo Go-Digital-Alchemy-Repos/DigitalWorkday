@@ -53,7 +53,11 @@ import {
   Heart,
   FolderKanban,
   Search,
-  Plus
+  Plus,
+  TestTube,
+  Eye,
+  EyeOff,
+  Lock
 } from "lucide-react";
 import { CsvImportPanel, type ParsedRow, type ImportResult } from "@/components/common/csv-import-panel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -207,6 +211,50 @@ interface OnboardingProgress {
   activated: boolean;
 }
 
+type IntegrationStatus = "not_configured" | "configured" | "error";
+
+interface IntegrationSummary {
+  provider: string;
+  status: IntegrationStatus;
+  secretConfigured: boolean;
+  lastTestedAt: string | null;
+}
+
+interface MailgunConfig {
+  domain?: string;
+  fromEmail?: string;
+  replyTo?: string;
+  apiKey?: string;
+}
+
+interface S3Config {
+  bucketName?: string;
+  region?: string;
+  keyPrefixTemplate?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+}
+
+function IntegrationStatusBadge({ status }: { status: IntegrationStatus }) {
+  if (status === "configured") {
+    return (
+      <Badge variant="default" className="bg-green-600">
+        <Check className="h-3 w-3 mr-1" />
+        Configured
+      </Badge>
+    );
+  }
+  if (status === "error") {
+    return (
+      <Badge variant="destructive">
+        <X className="h-3 w-3 mr-1" />
+        Error
+      </Badge>
+    );
+  }
+  return <Badge variant="secondary">Not Configured</Badge>;
+}
+
 function getStatusBadge(status: string) {
   if (status === "active") {
     return (
@@ -280,6 +328,15 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
   const [selectedProjectForTasks, setSelectedProjectForTasks] = useState<TenantProject | null>(null);
   const [showTaskImportPanel, setShowTaskImportPanel] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string>("");
+
+  // Branding form state
+  const [brandingData, setBrandingData] = useState<TenantSettings>({});
+  
+  // Integrations form state
+  const [mailgunData, setMailgunData] = useState<MailgunConfig>({});
+  const [s3Data, setS3Data] = useState<S3Config>({});
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [showSecretKey, setShowSecretKey] = useState(false);
 
   // Confirmation dialog state for destructive actions
   // action: null = closed, "suspend" | "activate" | "reactivate" = which action to confirm
@@ -360,6 +417,160 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
     queryFn: () => fetch(`/api/v1/super/tenants/${tenant?.id}/projects?search=${encodeURIComponent(projectSearch)}`, { credentials: "include" }).then(r => r.json()),
     enabled: !!tenant && open && activeTab === "projects",
   });
+
+  // Integrations queries (lazy-loaded when integrations tab is active)
+  const { data: integrationsResponse } = useQuery<{ integrations: IntegrationSummary[] }>({
+    queryKey: ["/api/v1/super/tenants", tenant?.id, "integrations"],
+    queryFn: () => fetch(`/api/v1/super/tenants/${tenant?.id}/integrations`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!tenant && open && activeTab === "integrations",
+  });
+
+  const { data: mailgunIntegration } = useQuery<any>({
+    queryKey: ["/api/v1/super/tenants", tenant?.id, "integrations", "mailgun"],
+    queryFn: () => fetch(`/api/v1/super/tenants/${tenant?.id}/integrations/mailgun`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!tenant && open && activeTab === "integrations",
+  });
+
+  const { data: s3Integration } = useQuery<any>({
+    queryKey: ["/api/v1/super/tenants", tenant?.id, "integrations", "s3"],
+    queryFn: () => fetch(`/api/v1/super/tenants/${tenant?.id}/integrations/s3`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!tenant && open && activeTab === "integrations",
+  });
+
+  // Sync branding form data with fetched settings
+  useEffect(() => {
+    if (settingsResponse?.tenantSettings) {
+      setBrandingData(settingsResponse.tenantSettings);
+    }
+  }, [settingsResponse]);
+
+  // Sync mailgun form data with fetched integration
+  useEffect(() => {
+    if (mailgunIntegration?.publicConfig) {
+      setMailgunData({
+        domain: mailgunIntegration.publicConfig.domain || "",
+        fromEmail: mailgunIntegration.publicConfig.fromEmail || "",
+        replyTo: mailgunIntegration.publicConfig.replyTo || "",
+      });
+    }
+  }, [mailgunIntegration]);
+
+  // Sync S3 form data with fetched integration
+  useEffect(() => {
+    if (s3Integration?.publicConfig) {
+      setS3Data({
+        bucketName: s3Integration.publicConfig.bucketName || "",
+        region: s3Integration.publicConfig.region || "",
+        keyPrefixTemplate: s3Integration.publicConfig.keyPrefixTemplate || "",
+      });
+    }
+  }, [s3Integration]);
+
+  // Helper to get integration status
+  const getIntegrationStatus = (provider: string): IntegrationStatus => {
+    const integration = integrationsResponse?.integrations?.find(i => i.provider === provider);
+    return integration?.status || "not_configured";
+  };
+
+  // Branding mutation
+  const saveBrandingMutation = useMutation({
+    mutationFn: async (settings: Partial<TenantSettings>) => {
+      return apiRequest("PATCH", `/api/v1/super/tenants/${tenant?.id}/settings`, settings);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenant?.id, "settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants-detail"] });
+      toast({ title: "Branding settings saved" });
+    },
+    onError: () => {
+      toast({ title: "Failed to save settings", variant: "destructive" });
+    },
+  });
+
+  // Mailgun mutation
+  const saveMailgunMutation = useMutation({
+    mutationFn: async (data: MailgunConfig) => {
+      return apiRequest("PUT", `/api/v1/super/tenants/${tenant?.id}/integrations/mailgun`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenant?.id, "integrations"] });
+      toast({ title: "Mailgun configuration saved" });
+      setMailgunData(prev => ({ ...prev, apiKey: "" }));
+    },
+    onError: () => {
+      toast({ title: "Failed to save Mailgun configuration", variant: "destructive" });
+    },
+  });
+
+  // Test Mailgun mutation
+  const testMailgunMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", `/api/v1/super/tenants/${tenant?.id}/integrations/mailgun/test`);
+    },
+    onSuccess: (response: any) => {
+      if (response.success) {
+        toast({ title: response.message || "Mailgun test successful" });
+      } else {
+        toast({ title: response.message || "Test failed", variant: "destructive" });
+      }
+    },
+    onError: () => {
+      toast({ title: "Failed to test Mailgun", variant: "destructive" });
+    },
+  });
+
+  // S3 mutation
+  const saveS3Mutation = useMutation({
+    mutationFn: async (data: S3Config) => {
+      return apiRequest("PUT", `/api/v1/super/tenants/${tenant?.id}/integrations/s3`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenant?.id, "integrations"] });
+      toast({ title: "S3 configuration saved" });
+      setS3Data(prev => ({ ...prev, accessKeyId: "", secretAccessKey: "" }));
+    },
+    onError: () => {
+      toast({ title: "Failed to save S3 configuration", variant: "destructive" });
+    },
+  });
+
+  // Test S3 mutation
+  const testS3Mutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", `/api/v1/super/tenants/${tenant?.id}/integrations/s3/test`);
+    },
+    onSuccess: (response: any) => {
+      if (response.success) {
+        toast({ title: response.message || "S3 test successful" });
+      } else {
+        toast({ title: response.message || "Test failed", variant: "destructive" });
+      }
+    },
+    onError: () => {
+      toast({ title: "Failed to test S3", variant: "destructive" });
+    },
+  });
+
+  // Branding form handlers
+  const handleBrandingChange = (field: keyof TenantSettings, value: string | boolean | null) => {
+    setBrandingData((prev) => ({ ...prev, [field]: value || null }));
+  };
+
+  const handleSaveBranding = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveBrandingMutation.mutate(brandingData);
+  };
+
+  // Integration form handlers
+  const handleSaveMailgun = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveMailgunMutation.mutate(mailgunData);
+  };
+
+  const handleSaveS3 = (e: React.FormEvent) => {
+    e.preventDefault();
+    saveS3Mutation.mutate(s3Data);
+  };
 
   const bulkClientsImportMutation = useMutation({
     mutationFn: async (clientsData: ParsedRow[]) => {
@@ -1860,18 +2071,370 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
                 <CardDescription>Configure branding and appearance for this tenant</CardDescription>
               </CardHeader>
               <CardContent>
-                <div className="text-center py-8 text-muted-foreground">
-                  Branding configuration coming soon.
-                  <Button 
-                    variant="ghost" 
-                    size="sm"
-                    className="ml-2"
-                    onClick={() => onOpenChange(false)}
-                    data-testid="button-use-settings-dialog"
-                  >
-                    Use existing settings dialog
-                  </Button>
+                <form onSubmit={handleSaveBranding} className="space-y-4">
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="displayName">Display Name</Label>
+                      <Input
+                        id="displayName"
+                        value={brandingData.displayName || ""}
+                        onChange={(e) => handleBrandingChange("displayName", e.target.value)}
+                        data-testid="input-tenant-display-name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="appName">App Name</Label>
+                      <Input
+                        id="appName"
+                        value={brandingData.appName || ""}
+                        onChange={(e) => handleBrandingChange("appName", e.target.value)}
+                        data-testid="input-tenant-app-name"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-2">
+                    <div className="space-y-2">
+                      <Label htmlFor="logoUrl">Logo URL</Label>
+                      <Input
+                        id="logoUrl"
+                        type="url"
+                        value={brandingData.logoUrl || ""}
+                        onChange={(e) => handleBrandingChange("logoUrl", e.target.value)}
+                        data-testid="input-tenant-logo-url"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="faviconUrl">Favicon URL</Label>
+                      <Input
+                        id="faviconUrl"
+                        type="url"
+                        value={brandingData.faviconUrl || ""}
+                        onChange={(e) => handleBrandingChange("faviconUrl", e.target.value)}
+                        data-testid="input-tenant-favicon-url"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-4 sm:grid-cols-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="primaryColor">Primary Color</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="primaryColor"
+                          placeholder="#3b82f6"
+                          value={brandingData.primaryColor || ""}
+                          onChange={(e) => handleBrandingChange("primaryColor", e.target.value)}
+                          className="flex-1"
+                        />
+                        <Input
+                          type="color"
+                          value={brandingData.primaryColor || "#3b82f6"}
+                          onChange={(e) => handleBrandingChange("primaryColor", e.target.value)}
+                          className="w-10 p-1 h-9"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="secondaryColor">Secondary Color</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="secondaryColor"
+                          placeholder="#64748b"
+                          value={brandingData.secondaryColor || ""}
+                          onChange={(e) => handleBrandingChange("secondaryColor", e.target.value)}
+                          className="flex-1"
+                        />
+                        <Input
+                          type="color"
+                          value={brandingData.secondaryColor || "#64748b"}
+                          onChange={(e) => handleBrandingChange("secondaryColor", e.target.value)}
+                          className="w-10 p-1 h-9"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="accentColor">Accent Color</Label>
+                      <div className="flex gap-2">
+                        <Input
+                          id="accentColor"
+                          placeholder="#10b981"
+                          value={brandingData.accentColor || ""}
+                          onChange={(e) => handleBrandingChange("accentColor", e.target.value)}
+                          className="flex-1"
+                        />
+                        <Input
+                          type="color"
+                          value={brandingData.accentColor || "#10b981"}
+                          onChange={(e) => handleBrandingChange("accentColor", e.target.value)}
+                          className="w-10 p-1 h-9"
+                        />
+                      </div>
+                    </div>
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="supportEmail">Support Email</Label>
+                    <Input
+                      id="supportEmail"
+                      type="email"
+                      value={brandingData.supportEmail || ""}
+                      onChange={(e) => handleBrandingChange("supportEmail", e.target.value)}
+                      data-testid="input-tenant-support-email"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="loginMessage">Login Message</Label>
+                    <Textarea
+                      id="loginMessage"
+                      value={brandingData.loginMessage || ""}
+                      onChange={(e) => handleBrandingChange("loginMessage", e.target.value)}
+                      className="min-h-[60px] resize-none"
+                      data-testid="input-tenant-login-message"
+                    />
+                  </div>
+                  <div className="flex items-center justify-between border-t pt-4">
+                    <div className="flex items-center gap-4">
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="whiteLabelEnabled"
+                          checked={brandingData.whiteLabelEnabled || false}
+                          onCheckedChange={(checked) => handleBrandingChange("whiteLabelEnabled", checked)}
+                          data-testid="switch-white-label"
+                        />
+                        <Label htmlFor="whiteLabelEnabled" className="text-sm">White Label</Label>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Switch
+                          id="hideVendorBranding"
+                          checked={brandingData.hideVendorBranding || false}
+                          onCheckedChange={(checked) => handleBrandingChange("hideVendorBranding", checked)}
+                          data-testid="switch-hide-vendor"
+                        />
+                        <Label htmlFor="hideVendorBranding" className="text-sm">Hide Vendor</Label>
+                      </div>
+                    </div>
+                    <Button type="submit" disabled={saveBrandingMutation.isPending} data-testid="button-save-tenant-branding">
+                      {saveBrandingMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <>
+                          <Save className="h-4 w-4 mr-2" />
+                          Save
+                        </>
+                      )}
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+          </TabsContent>
+
+          <TabsContent value="integrations" className="space-y-6 mt-6">
+            <Card>
+              <CardHeader className="py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Mail className="h-4 w-4 text-primary" />
+                    <CardTitle className="text-base">Mailgun</CardTitle>
+                  </div>
+                  <IntegrationStatusBadge status={getIntegrationStatus("mailgun")} />
                 </div>
+                <CardDescription>Configure email sending for this tenant</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSaveMailgun} className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="mg-domain" className="text-xs">Domain</Label>
+                      <Input
+                        id="mg-domain"
+                        placeholder="mg.example.com"
+                        value={mailgunData.domain || ""}
+                        onChange={(e) => setMailgunData(prev => ({ ...prev, domain: e.target.value }))}
+                        className="h-8"
+                        data-testid="input-mailgun-domain"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="mg-from" className="text-xs">From Email</Label>
+                      <Input
+                        id="mg-from"
+                        type="email"
+                        placeholder="noreply@example.com"
+                        value={mailgunData.fromEmail || ""}
+                        onChange={(e) => setMailgunData(prev => ({ ...prev, fromEmail: e.target.value }))}
+                        className="h-8"
+                        data-testid="input-mailgun-from"
+                      />
+                    </div>
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="mg-reply" className="text-xs">Reply-To</Label>
+                      <Input
+                        id="mg-reply"
+                        type="email"
+                        value={mailgunData.replyTo || ""}
+                        onChange={(e) => setMailgunData(prev => ({ ...prev, replyTo: e.target.value }))}
+                        className="h-8"
+                        data-testid="input-mailgun-reply"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="mg-key" className="text-xs">
+                        API Key
+                        {mailgunIntegration?.secretConfigured && (
+                          <Lock className="h-3 w-3 inline ml-1 text-muted-foreground" />
+                        )}
+                      </Label>
+                      <div className="relative">
+                        <Input
+                          id="mg-key"
+                          type={showApiKey ? "text" : "password"}
+                          placeholder={mailgunIntegration?.secretConfigured ? "••••••••" : "key-xxx..."}
+                          value={mailgunData.apiKey || ""}
+                          onChange={(e) => setMailgunData(prev => ({ ...prev, apiKey: e.target.value }))}
+                          className="h-8 pr-8"
+                          data-testid="input-mailgun-key"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-8 w-8"
+                          onClick={() => setShowApiKey(!showApiKey)}
+                        >
+                          {showApiKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => testMailgunMutation.mutate()}
+                      disabled={testMailgunMutation.isPending || getIntegrationStatus("mailgun") === "not_configured"}
+                      data-testid="button-test-mailgun"
+                    >
+                      {testMailgunMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <TestTube className="h-3 w-3 mr-1" />}
+                      Test
+                    </Button>
+                    <Button type="submit" size="sm" disabled={saveMailgunMutation.isPending} data-testid="button-save-mailgun">
+                      {saveMailgunMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3 mr-1" />}
+                      Save
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="py-3">
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <HardDrive className="h-4 w-4 text-primary" />
+                    <CardTitle className="text-base">S3 Storage</CardTitle>
+                  </div>
+                  <IntegrationStatusBadge status={getIntegrationStatus("s3")} />
+                </div>
+                <CardDescription>Configure file storage for this tenant</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form onSubmit={handleSaveS3} className="space-y-3">
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="s3-bucket" className="text-xs">Bucket Name</Label>
+                      <Input
+                        id="s3-bucket"
+                        placeholder="my-bucket"
+                        value={s3Data.bucketName || ""}
+                        onChange={(e) => setS3Data(prev => ({ ...prev, bucketName: e.target.value }))}
+                        className="h-8"
+                        data-testid="input-s3-bucket"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="s3-region" className="text-xs">Region</Label>
+                      <Input
+                        id="s3-region"
+                        placeholder="us-east-1"
+                        value={s3Data.region || ""}
+                        onChange={(e) => setS3Data(prev => ({ ...prev, region: e.target.value }))}
+                        className="h-8"
+                        data-testid="input-s3-region"
+                      />
+                    </div>
+                  </div>
+                  <div className="space-y-1">
+                    <Label htmlFor="s3-prefix" className="text-xs">Key Prefix</Label>
+                    <Input
+                      id="s3-prefix"
+                      placeholder="tenants/{tenantId}/"
+                      value={s3Data.keyPrefixTemplate || ""}
+                      onChange={(e) => setS3Data(prev => ({ ...prev, keyPrefixTemplate: e.target.value }))}
+                      className="h-8"
+                      data-testid="input-s3-prefix"
+                    />
+                  </div>
+                  <div className="grid gap-3 sm:grid-cols-2">
+                    <div className="space-y-1">
+                      <Label htmlFor="s3-access" className="text-xs">
+                        Access Key ID
+                        {s3Integration?.secretConfigured && (
+                          <Lock className="h-3 w-3 inline ml-1 text-muted-foreground" />
+                        )}
+                      </Label>
+                      <Input
+                        id="s3-access"
+                        placeholder={s3Integration?.secretConfigured ? "••••••••" : "AKIA..."}
+                        value={s3Data.accessKeyId || ""}
+                        onChange={(e) => setS3Data(prev => ({ ...prev, accessKeyId: e.target.value }))}
+                        className="h-8"
+                        data-testid="input-s3-access"
+                      />
+                    </div>
+                    <div className="space-y-1">
+                      <Label htmlFor="s3-secret" className="text-xs">Secret Access Key</Label>
+                      <div className="relative">
+                        <Input
+                          id="s3-secret"
+                          type={showSecretKey ? "text" : "password"}
+                          placeholder={s3Integration?.secretConfigured ? "••••••••" : "Secret..."}
+                          value={s3Data.secretAccessKey || ""}
+                          onChange={(e) => setS3Data(prev => ({ ...prev, secretAccessKey: e.target.value }))}
+                          className="h-8 pr-8"
+                          data-testid="input-s3-secret"
+                        />
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          className="absolute right-0 top-0 h-8 w-8"
+                          onClick={() => setShowSecretKey(!showSecretKey)}
+                        >
+                          {showSecretKey ? <EyeOff className="h-3 w-3" /> : <Eye className="h-3 w-3" />}
+                        </Button>
+                      </div>
+                    </div>
+                  </div>
+                  <div className="flex justify-end gap-2">
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => testS3Mutation.mutate()}
+                      disabled={testS3Mutation.isPending || getIntegrationStatus("s3") === "not_configured"}
+                      data-testid="button-test-s3"
+                    >
+                      {testS3Mutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <TestTube className="h-3 w-3 mr-1" />}
+                      Test
+                    </Button>
+                    <Button type="submit" size="sm" disabled={saveS3Mutation.isPending} data-testid="button-save-s3">
+                      {saveS3Mutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : <Save className="h-3 w-3 mr-1" />}
+                      Save
+                    </Button>
+                  </div>
+                </form>
               </CardContent>
             </Card>
           </TabsContent>
