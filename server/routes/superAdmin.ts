@@ -4160,10 +4160,14 @@ router.get("/integrations/status", requireSuperUser, async (req, res) => {
       settings?.stripeSecretKeyEncrypted
     );
     
+    // Check if encryption is configured (needed for storing secrets)
+    const encryptionConfigured = isEncryptionAvailable();
+    
     res.json({
       mailgun: mailgunConfigured,
       s3: s3Configured,
       stripe: stripeConfigured,
+      encryptionConfigured,
     });
   } catch (error) {
     console.error("[integrations] Failed to check integration status:", error);
@@ -5173,6 +5177,9 @@ router.get("/status/health", requireSuperUser, async (req, res) => {
     const mailgunConfigured = !!(process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN);
     const mailgunStatus: "healthy" | "not_configured" = mailgunConfigured ? "healthy" : "not_configured";
     
+    // Encryption check - needed for storing integration secrets
+    const encryptionStatus: "configured" | "not_configured" = isEncryptionAvailable() ? "configured" : "not_configured";
+    
     // WebSocket status (placeholder - would need actual implementation)
     const websocketStatus = {
       status: "healthy" as const,
@@ -5190,6 +5197,10 @@ router.get("/status/health", requireSuperUser, async (req, res) => {
       websocket: websocketStatus,
       s3: { status: s3Status },
       mailgun: { status: mailgunStatus },
+      encryption: { 
+        status: encryptionStatus,
+        keyConfigured: isEncryptionAvailable(),
+      },
       app: {
         version: process.env.APP_VERSION || "1.0.0",
         uptime: Math.round(uptime),

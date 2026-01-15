@@ -1,0 +1,214 @@
+You are continuing development on my React + Express multi-tenant app (single codebase) deployed on Railway.
+BUG: Super Admin → System Settings → Integrations cannot save API credentials. Error indicates:
+“without an established encryption the data cannot be saved.”
+
+Goal: Implement a proper, production-safe encryption-at-rest mechanism for integration secrets so saving works,
+while keeping secrets write-only/masked in UI. Fix the error and make persistence reliable on Railway.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change existing endpoint paths or response shapes.
+- Do NOT log secrets (ever).
+- Do NOT expose raw secrets to the client after save.
+- Do NOT break existing settings data that may already exist.
+- Additive DB schema changes only if required.
+- Keep changes scoped to:
+  - encryption utility/service
+  - secret settings storage/retrieval
+  - system settings integrations save/load
+  - docs + system status checks
+
+===============================================================================
+STEP 1 — DIAGNOSE CURRENT FAILURE
+===============================================================================
+1) Find where the error is thrown:
+- Search for messages like:
+  - “encryption not established”
+  - “ENCRYPTION_KEY missing”
+  - “cannot save secret”
+2) Identify which codepath blocks saving:
+- settings repository layer?
+- integrations service?
+- db write wrapper?
+3) Confirm whether the app currently:
+- expects an env var encryption key, but it’s missing in Railway
+- or expects a DB key table that was never created
+
+IMPORTANT:
+- We must fix both:
+  A) provide an encryption implementation that works
+  B) make it discoverable/configurable for Railway (env vars + docs)
+
+===============================================================================
+STEP 2 — ENCRYPTION IMPLEMENTATION (NODE CRYPTO, AES-256-GCM)
+===============================================================================
+Implement a simple, robust encryption helper using Node’s built-in crypto:
+- Algorithm: AES-256-GCM
+- Key: 32 bytes (256-bit), loaded from env var:
+  SETTINGS_ENCRYPTION_KEY (base64-encoded 32 bytes)
+
+Create:
+- server/security/encryption.ts
+Exports:
+- isEncryptionConfigured(): boolean
+- encryptSecret(plaintext: string) -> { ciphertextB64, ivB64, tagB64, version: 1 }
+- decryptSecret(payload) -> plaintext
+
+Rules:
+- If SETTINGS_ENCRYPTION_KEY missing/invalid length:
+  - For SECRET FIELDS: saving must fail with a clear server error
+  - BUT we must return the same API error response shape as currently (no breaking changes).
+- Never include plaintext or key material in logs.
+
+Key validation:
+- On startup, validate base64 decodes to 32 bytes.
+- If invalid, log a single warning (no details) and mark encryption “not configured”.
+
+===============================================================================
+STEP 3 — DATABASE STORAGE FOR SECRETS (ADD-ONLY, MINIMAL)
+===============================================================================
+We need a place to store encrypted payloads (ciphertext + iv + tag + version).
+
+Option A (preferred): Add columns to existing integrations/settings table(s) used for secrets
+For each secret field currently stored (e.g., mailgunApiKey, s3SecretAccessKey):
+- Replace the storage to store encrypted payload instead of plaintext.
+
+If you cannot change existing column type safely, add new columns:
+- <fieldName>Enc (text/json)
+and keep old plaintext column unused (do not drop; do not read it once migrated).
+
+Encryption payload format (JSON string stored in text):
+{
+  "v": 1,
+  "ct": "<base64>",
+  "iv": "<base64>",
+  "tag": "<base64>"
+}
+
+Option B: Create a new table for secrets (only if existing structure makes A impossible)
+- integration_secrets: id, scope(super|tenant), tenantId nullable, keyName, payloadJson, createdAt, updatedAt
+
+Keep this additive and minimal.
+
+===============================================================================
+STEP 4 — MIGRATION / BACKWARD COMPATIBILITY
+===============================================================================
+1) If any plaintext secrets exist in DB already:
+- If encryption is configured, migrate-on-read or migrate-with-script:
+  - Read plaintext
+  - Encrypt
+  - Write encrypted payload
+  - Null out plaintext (optional, safer) OR leave but stop reading it
+- If encryption is NOT configured:
+  - Do not attempt migration
+  - Keep read-only behavior, but block saving secrets until key is set
+
+2) Add a safe one-time migration:
+- server/migrations/* (Drizzle)
+- Must be additive only.
+
+===============================================================================
+STEP 5 — SETTINGS SAVE/LOAD BEHAVIOR (WRITE-ONLY SECRETS)
+===============================================================================
+Update the integrations settings service so that:
+- On SAVE:
+  - Non-secret fields (domain, region, bucket, fromEmail, etc.) save as normal
+  - Secret fields are encrypted before DB write
+- On LOAD:
+  - Do NOT return secret plaintext
+  - Return:
+    - “configured” boolean
+    - masked last4 (computed server-side from plaintext BEFORE encryption if available, or store last4 separately)
+Preferred:
+- store last4 separately in a non-secret column so you never need to decrypt just to mask:
+  - <fieldName>Last4
+- Only decrypt when the integration is actually used (sending email, S3 signing, etc.)
+
+If integration runtime requires plaintext secret:
+- Decrypt server-side at runtime only (never send to client).
+
+===============================================================================
+STEP 6 — UI: CLEAR ERROR + GUIDANCE + MASKED DISPLAY
+===============================================================================
+In Super Admin → System Settings → Integrations UI:
+- If encryption not configured:
+  - Show a prominent warning banner:
+    “Secrets can’t be saved until SETTINGS_ENCRYPTION_KEY is configured.”
+  - Still allow editing non-secret fields and saving them.
+  - Disable secret save controls (or allow entry but show blocking error on save).
+- When encryption is configured:
+  - Secrets fields behave write-only:
+    - show “Configured ••••1234”
+    - allow “Replace” and “Clear” actions
+- On failure:
+  - Show requestId from X-Request-Id header for debugging.
+
+===============================================================================
+STEP 7 — SYSTEM STATUS CHECK (SUPER ADMIN)
+===============================================================================
+Add/extend Super Admin → System Status:
+- “Encryption configured” = true/false
+- “Key valid length” = true/false (no details)
+- If false, show short instructions (no secret leakage):
+  - generate base64 32-byte key
+  - set env var in Railway
+Do NOT print the key anywhere.
+
+===============================================================================
+STEP 8 — TESTS (MANDATORY MINIMUM)
+===============================================================================
+Backend:
+1) encryption_roundtrip_aes_gcm.test.ts
+- encrypt + decrypt returns original
+
+2) saving_secret_requires_encryption_key.test.ts
+- without env key, secret save fails (same response shape)
+- non-secret save still works
+
+3) integrations_save_stores_encrypted_payload.test.ts
+- verify DB stores JSON payload, not plaintext
+- verify last4 stored if implemented
+
+4) integrations_load_returns_masked_only.test.ts
+- ensure secret not present in response
+
+5) runtime_decrypt_used_only_server_side.test.ts
+- when sending mail or presigning S3, secret is decrypted server-side only
+
+===============================================================================
+DOCUMENTATION (REQUIRED)
+===============================================================================
+Update:
+- /docs/DEPLOYMENT_RAILWAY.md
+  - add SETTINGS_ENCRYPTION_KEY requirement
+  - example command to generate it (no key printed in docs beyond “how to generate”)
+- /docs/INTEGRATIONS.md
+  - explain write-only masked secrets
+- /docs/SECURITY_NOTES.md
+  - encryption-at-rest approach (AES-256-GCM) + key handling policy
+
+Provide a short “how to generate key” snippet (example):
+- Node or openssl command that outputs base64 32-byte string
+But do not embed any real key.
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+- With SETTINGS_ENCRYPTION_KEY set in Railway, Super Admin can save integration secrets successfully.
+- Without the key, the UI clearly explains why secrets can’t be saved (non-secret fields still save).
+- Secrets are encrypted at rest (no plaintext in DB).
+- Secrets never returned to client, only masked indicators.
+- Tests pass, docs updated, system status shows encryption state.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Root cause (exact code location of the “encryption not established” block)
+- Files changed
+- Migration details (if any)
+- Manual Railway checklist:
+  - set env var
+  - redeploy
+  - save mailgun + s3 secrets
+  - refresh page and confirm masked persistence

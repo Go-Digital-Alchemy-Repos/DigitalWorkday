@@ -1,0 +1,124 @@
+You are continuing development on my React + Express multi-tenant app (single codebase).
+REFINEMENT: Super Admin → System Settings → Agreements tab
+Add “All Tenants” as the first dropdown option when assigning an agreement, and implement correct default-vs-tenant-specific behavior.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change endpoint paths or response shapes (add-only is OK if needed).
+- Do NOT break existing agreement enforcement/gating behavior.
+- Do NOT delete or overwrite existing agreements or signatures.
+- Prefer no DB schema changes; if necessary, make additive changes only.
+- Keep changes scoped to Agreements UI + assignment logic.
+
+===============================================================================
+GOAL
+===============================================================================
+1) In the “Assign Agreement to Tenant” dropdown:
+- First option is: “All Tenants”
+- Below that list every tenant in the system (alphabetical if possible)
+
+2) Behavior rules:
+- If “All Tenants” is selected:
+  - the agreement created/published becomes the DEFAULT agreement for all tenants (unless a tenant has an override)
+- If a specific tenant is selected:
+  - the agreement created/published applies ONLY to that tenant (tenant-specific override)
+  - the “All Tenants” agreement remains the default for all other tenants
+- Enforcement logic should resolve agreement requirement as:
+  - tenant-specific active agreement override (if exists) ELSE
+  - global default active agreement (“All Tenants”)
+
+===============================================================================
+PART A — UI CHANGES (DROPDOWN)
+===============================================================================
+1) In the Agreements editor form (create/edit):
+- Replace current tenant dropdown options with:
+  - Option value: "ALL" (or null) labeled “All Tenants”
+  - Divider (optional)
+  - Tenant options: <tenantId> labeled with tenant business name
+
+2) Default selection:
+- Default the dropdown to “All Tenants” for new agreement creation.
+
+3) Helpful UI text:
+- If “All Tenants” selected:
+  “This agreement will be the default for all tenants unless a tenant-specific agreement is set.”
+- If tenant selected:
+  “This agreement applies only to <TenantName>. Other tenants will use the default All Tenants agreement.”
+
+===============================================================================
+PART B — ASSIGNMENT MODEL (NO BREAKING CHANGES)
+===============================================================================
+We need a clear storage rule:
+- Global/default agreement: tenantId is NULL (or a dedicated scope flag if it already exists)
+- Tenant-specific agreement: tenantId = that tenant’s id
+
+Implement using existing schema if possible.
+If current schema requires tenantId always present:
+- Add an additive nullable tenantId OR “scope” column (only if required)
+- Do NOT migrate/delete old data; keep backward compatibility.
+
+===============================================================================
+PART C — RESOLUTION LOGIC (DEFAULT VS OVERRIDE)
+===============================================================================
+Wherever “required agreement for a tenant” is determined (middleware/service):
+- First check for active agreement where tenantId == effectiveTenantId
+- If none, fall back to active agreement where tenantId is NULL (All Tenants)
+- If still none, follow existing “no active agreement” policy (do not change policy here)
+
+IMPORTANT:
+- Do NOT change the 451 behavior or enforcement strategy; only ensure correct agreement is chosen.
+
+===============================================================================
+PART D — SUPER ADMIN AGREEMENTS LIST + CLARITY (SMALL UX IMPROVEMENT)
+===============================================================================
+In the agreements list/table:
+- Add a column “Scope”
+  - “All Tenants” if tenantId is null
+  - otherwise the tenant name
+- Add a “Default” badge on the active All Tenants agreement (if there is one)
+
+Do NOT add major new features here—just clarity.
+
+===============================================================================
+TESTS (MANDATORY MINIMUM)
+===============================================================================
+Backend:
+1) agreement_resolution_prefers_tenant_specific_then_global.test.ts
+- tenant has override => override returned
+- tenant no override => global returned
+
+2) global_agreement_has_null_tenantId.test.ts
+- creating All Tenants agreement stores tenantId null (or scope=global)
+
+Frontend:
+3) agreement_dropdown_shows_all_tenants_first.test.tsx
+- first option label is “All Tenants”
+- tenants listed below
+
+4) agreement_form_defaults_to_all_tenants.test.tsx
+
+===============================================================================
+DOCUMENTATION
+===============================================================================
+Update /docs/SUPER_ADMIN_GUIDE.md:
+- Explain “All Tenants” default agreement + tenant-specific override behavior.
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+- Dropdown shows “All Tenants” first, then tenant list.
+- Selecting “All Tenants” creates/updates the global default agreement.
+- Selecting a tenant creates/updates a tenant-specific agreement without affecting the global default.
+- Agreement enforcement selects tenant-specific first, otherwise global default.
+- No data loss, no breaking changes; tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Which field represents “All Tenants” (tenantId null vs scope flag)
+- Where resolution logic lives and what was changed
+- Manual test checklist:
+  - set global agreement
+  - set tenant override
+  - verify other tenants still use global

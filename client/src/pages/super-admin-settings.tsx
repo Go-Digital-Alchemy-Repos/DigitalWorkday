@@ -77,6 +77,7 @@ interface IntegrationStatus {
   mailgun: boolean;
   s3: boolean;
   stripe: boolean;
+  encryptionConfigured: boolean;
 }
 
 interface MailgunSettings {
@@ -1288,6 +1289,29 @@ export default function SuperAdminSettingsPage() {
 
           <TabsContent value="integrations">
             <div className="space-y-6">
+              {/* Encryption Warning Banner */}
+              {!integrationsLoading && integrationStatus && !integrationStatus.encryptionConfigured && (
+                <Card className="border-yellow-500/50 bg-yellow-500/5">
+                  <CardContent className="py-4">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="h-5 w-5 text-yellow-600 dark:text-yellow-500 mt-0.5" />
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium text-yellow-800 dark:text-yellow-200">
+                          Encryption Not Configured
+                        </p>
+                        <p className="text-sm text-yellow-700 dark:text-yellow-300">
+                          API keys and secrets cannot be saved until the APP_ENCRYPTION_KEY environment variable is set. 
+                          Generate a 32-byte base64 key and add it to your deployment environment.
+                        </p>
+                        <p className="text-xs text-yellow-600 dark:text-yellow-400 font-mono mt-2">
+                          Generate key: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+                        </p>
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+
               {/* Integration Status Overview */}
               <Card>
                 <CardHeader>
