@@ -62,6 +62,7 @@ import {
 } from "lucide-react";
 import { CsvImportPanel, type ParsedRow, type ImportResult } from "@/components/common/csv-import-panel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { TenantUserDrawer } from "./tenant-user-drawer";
 import type { Tenant } from "@shared/schema";
 
 interface TenantSettings {
@@ -504,6 +505,9 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
     title: string;
     description: string;
   }>({ open: false, action: null, title: "", description: "" });
+  
+  // User drawer state
+  const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
 
   // Reset form state when tenant changes, restore persisted tab for this tenant
   useEffect(() => {
@@ -2771,6 +2775,15 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                         <div className="flex items-center gap-2">
                           <Badge variant="outline" className="text-xs">{user.role}</Badge>
                           <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => setSelectedUserId(user.id)}
+                            data-testid={`button-manage-user-${user.id}`}
+                          >
+                            <Settings className="h-3 w-3 mr-1" />
+                            Manage
+                          </Button>
+                          <Button
                             size="icon"
                             variant="ghost"
                             onClick={() => toggleUserActiveMutation.mutate({ userId: user.id, isActive: !user.isActive })}
@@ -3447,6 +3460,17 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* User Management Drawer */}
+      {activeTenant && selectedUserId && (
+        <TenantUserDrawer
+          open={!!selectedUserId}
+          onClose={() => setSelectedUserId(null)}
+          tenantId={activeTenant.id}
+          userId={selectedUserId}
+          tenantName={activeTenant.name}
+        />
+      )}
     </FullScreenDrawer>
   );
 }
