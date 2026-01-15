@@ -1,0 +1,178 @@
+You are continuing development on my React + Express multi-tenant app (single codebase).
+SEPARATE SAFE PROMPT: Unify “New Tenant” creation into the same full-width TenantDrawer with a multi-step onboarding wizard.
+
+Context:
+We previously unified tenant editing into one wide drawer. Now we want “New Tenant” to use the SAME drawer
+instead of small modals. This prompt ONLY addresses NEW tenant creation UX and the onboarding wizard flow.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change existing endpoint paths or response shapes.
+- Do NOT change auth/tenancy/agreement enforcement behavior.
+- Do NOT break existing tenant creation API.
+- Do NOT introduce destructive DB operations.
+- Avoid schema changes; if needed, must be additive and minimal.
+- No nested modals; confirm dialogs are OK.
+- Keep changes isolated to Super Admin tenant creation UI + wiring.
+
+===============================================================================
+GOAL
+===============================================================================
+Replace the “New Tenant” modal with the full-width TenantDrawer in “Create” mode:
+- The drawer opens with Onboarding Wizard as the first and default tab.
+- Wizard is multi-step (progress indicator + Next/Back).
+- After tenant is created, the drawer seamlessly becomes “Edit/Manage” mode for that new tenant.
+- Tenant’s primary workspace is automatically created and named exactly the same as the tenant’s business name.
+
+===============================================================================
+PART A — ENTRY POINT CONSOLIDATION
+===============================================================================
+A1) Replace “New Tenant” modal trigger with:
+- “New Tenant” button opens TenantDrawer in CREATE mode.
+
+A2) TenantDrawer supports two modes:
+- mode="create" (no tenantId initially)
+- mode="edit" (tenantId present)
+In create mode:
+- Only show tabs relevant to onboarding (others disabled until tenant exists).
+
+===============================================================================
+PART B — WIZARD STEPS (MULTI-STEP)
+===============================================================================
+Implement wizard with clear steps and required validation:
+
+Step 1: Tenant Basics (required)
+- Business name (required)
+- Optional: legal name, industry, website, phone, address (if your model supports)
+- Optional: status (default active)
+On “Create Tenant”:
+- Call existing create tenant endpoint.
+- On success:
+  - store tenantId
+  - immediately create primary workspace (see Part C)
+  - transition drawer to edit mode and proceed to Step 2 automatically.
+
+Step 2: Primary Workspace (auto-created)
+- Show read-only summary:
+  - Workspace name = tenant business name (exact match)
+- Allow optional edits ONLY if your system supports renaming later, but default is exact match.
+- Ensure workspace exists before moving on.
+
+Step 3: Branding (optional)
+- Show tenant branding controls (logo/icon/favicon) if already built
+- If not built yet, show placeholder section but do not block completion.
+
+Step 4: Integrations (optional)
+- Mailgun config (if tenant integrations exist)
+- Do not require for completion.
+
+Step 5: Invite Tenant Admin (recommended)
+- Invite tenant admin email
+- Generate invite link and persist it
+- Show copy link + invitations list
+- Allow skipping, BUT do not block publishing tenant account based on acceptance.
+  (Invite acceptance should not be required to “publish” tenant.)
+
+Step 6: Review & Finish
+- Summary of:
+  - tenant created
+  - primary workspace created
+  - invites created (if any)
+  - branding/integrations status
+- Finish button closes drawer and returns to tenant list with success toast.
+
+Wizard UX:
+- Stepper at top
+- Next/Back
+- Save progress
+- Clear validation messages
+
+===============================================================================
+PART C — PRIMARY WORKSPACE AUTO-CREATION (REQUIRED)
+===============================================================================
+When tenant is created:
+- Immediately create a primary workspace:
+  - name EXACTLY equals tenant business name
+  - isPrimary=true if such a field exists
+  - tenantId set
+- This must happen even if no tenant admin has accepted an invite.
+- If workspace creation fails:
+  - show blocking error with Retry
+  - do not proceed to later steps
+
+Implementation:
+- Prefer calling existing backend logic that creates workspaces.
+- If tenant creation endpoint already creates a workspace, ensure it matches the requirement:
+  “Workspace name must match tenant business name exactly.”
+- Do not create duplicates if the endpoint already created it—detect and reuse.
+
+===============================================================================
+PART D — “PUBLISH TENANT” DOES NOT DEPEND ON INVITE ACCEPTANCE
+===============================================================================
+Ensure tenant onboarding completion is not gated by invite acceptance:
+- Super Admin can complete creation, configure branding/integrations, add clients, etc.
+- Invitation remains pending until accepted, but tenant is usable.
+
+If there is a “tenantReady” flag that currently waits for invite acceptance:
+- Do NOT change readiness logic broadly in this prompt.
+- Only ensure onboarding flow does not block “Finish” due to invite acceptance.
+- Surface warnings instead: “Tenant admin invite is pending.”
+
+===============================================================================
+PART E — DATA REFRESH + CACHE INVALIDATION
+===============================================================================
+After creating tenant and workspace:
+- refresh tenant list
+- refresh tenant details in drawer
+- refresh workspaces tab data
+- refresh invites list
+
+===============================================================================
+TESTS (MANDATORY MINIMUM)
+===============================================================================
+Backend:
+1) create_tenant_creates_primary_workspace_named_same.test.ts
+- tenant businessName => workspace name matches exactly
+- no duplicate workspace on retry/idempotency
+
+Frontend:
+2) new_tenant_opens_drawer_in_create_mode.test.tsx
+- New Tenant opens drawer, onboarding wizard is first/default
+
+3) wizard_transitions_to_edit_mode_after_create.test.tsx
+- after create, drawer loads tenantId and enables other steps
+
+4) invite_step_generates_persistent_link.test.tsx
+- link appears and is listed as pending
+
+If UI tests are limited, update /docs/REGRESSION_CHECKLIST.md with manual steps.
+
+===============================================================================
+DOCUMENTATION STANDARD (REQUIRED)
+===============================================================================
+- Update /docs/SUPER_TENANT_MANAGEMENT.md with:
+  - Create-mode wizard steps
+  - Primary workspace naming rule
+  - Invite acceptance not required to finish onboarding
+- Add header comments in TenantDrawer/Wizard explaining:
+  - mode switching (create -> edit)
+  - idempotency and retries
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+1) “New Tenant” uses the full-width drawer (no modal).
+2) Onboarding Wizard is the default first tab and opens on Step 1.
+3) Creating a tenant automatically creates a primary workspace named exactly as tenant business name.
+4) Super Admin can finish onboarding without waiting for invite acceptance.
+5) Wizard transitions smoothly to managing the new tenant in the same drawer.
+6) No breaking changes; tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Wizard steps and validation rules implemented
+- How workspace auto-creation is triggered and kept idempotent
+- Files changed
+- Manual test checklist (local + Railway)

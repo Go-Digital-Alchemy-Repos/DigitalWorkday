@@ -257,9 +257,9 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
   const getStorageKey = (tenantId: string) => `tenantDrawerTab_${tenantId}`;
   const [activeTab, setActiveTab] = useState(() => {
     if (typeof window !== "undefined" && tenant?.id) {
-      return localStorage.getItem(getStorageKey(tenant.id)) || "overview";
+      return localStorage.getItem(getStorageKey(tenant.id)) || "onboarding";
     }
-    return "overview";
+    return "onboarding";
   });
   
   // Form state
@@ -295,9 +295,9 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated }: Te
     if (tenant) {
       setEditedName(tenant.name);
       setHasUnsavedChanges(false);
-      // Load persisted tab for this specific tenant, or default to overview
+      // Load persisted tab for this specific tenant, or default to onboarding
       const storedTab = localStorage.getItem(getStorageKey(tenant.id));
-      setActiveTab(storedTab || "overview");
+      setActiveTab(storedTab || "onboarding");
     }
   }, [tenant?.id]);
 
