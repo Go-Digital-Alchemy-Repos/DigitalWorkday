@@ -811,6 +811,7 @@ export const appSettings = pgTable("app_settings", {
 /**
  * System Settings table - platform-wide configuration (single-row)
  * Stores global defaults used when tenants haven't configured their own settings
+ * Also stores global Mailgun and S3 integration configuration
  */
 export const systemSettings = pgTable("system_settings", {
   id: integer("id").primaryKey().default(1), // Single-row table, id always 1
@@ -824,6 +825,21 @@ export const systemSettings = pgTable("system_settings", {
   platformVersion: text("platform_version"),
   maintenanceMode: boolean("maintenance_mode").default(false),
   maintenanceMessage: text("maintenance_message"),
+  // Global Mailgun Integration (platform-wide)
+  mailgunDomain: text("mailgun_domain"),
+  mailgunFromEmail: text("mailgun_from_email"),
+  mailgunRegion: text("mailgun_region"), // "US" or "EU"
+  mailgunApiKeyEncrypted: text("mailgun_api_key_encrypted"),
+  mailgunSigningKeyEncrypted: text("mailgun_signing_key_encrypted"),
+  mailgunLastTestedAt: timestamp("mailgun_last_tested_at"),
+  // Global S3 Integration (platform-wide)
+  s3Region: text("s3_region"),
+  s3BucketName: text("s3_bucket_name"),
+  s3PublicBaseUrl: text("s3_public_base_url"),
+  s3CloudfrontUrl: text("s3_cloudfront_url"),
+  s3AccessKeyIdEncrypted: text("s3_access_key_id_encrypted"),
+  s3SecretAccessKeyEncrypted: text("s3_secret_access_key_encrypted"),
+  s3LastTestedAt: timestamp("s3_last_tested_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
