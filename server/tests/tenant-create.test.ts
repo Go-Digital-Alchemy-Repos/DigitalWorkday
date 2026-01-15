@@ -9,42 +9,98 @@
  * 4. Duplicate slug handling returns 409
  */
 
-import { describe, it, expect, beforeAll, afterAll } from "vitest";
-import request from "supertest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import express from "express";
+import request from "supertest";
 import session from "express-session";
-import { randomUUID } from "crypto";
+import passport from "passport";
+import { db } from "../db";
 import { 
-  setupTestFixtures, 
-  cleanupTestFixtures, 
-  TestContext 
-} from "./fixtures";
+  users, tenants, workspaces, tenantSettings, tenantAuditEvents,
+  UserRole 
+} from "../../shared/schema";
+import { sql, eq, like } from "drizzle-orm";
 import { requestIdMiddleware } from "../middleware/requestId";
+import { hashPassword } from "../auth";
+import superAdminRoutes from "../routes/superAdmin";
+import crypto from "crypto";
+
+const TEST_EMAIL_PREFIX = "test-tenant-create-";
+
+function createTestApp() {
+  const app = express();
+  app.use(requestIdMiddleware);
+  app.use(express.json());
+  
+  app.use(session({
+    secret: "test-secret",
+    resave: false,
+    saveUninitialized: false,
+    cookie: { secure: false },
+  }));
+  
+  app.use(passport.initialize());
+  app.use(passport.session());
+  
+  return app;
+}
+
+async function clearTestData() {
+  await db.delete(tenantAuditEvents).where(sql`1=1`);
+  await db.delete(tenantSettings).where(sql`tenant_id IN (SELECT id FROM tenants WHERE slug LIKE 'test-create-%')`);
+  await db.delete(workspaces).where(sql`tenant_id IN (SELECT id FROM tenants WHERE slug LIKE 'test-create-%')`);
+  await db.delete(tenants).where(like(tenants.slug, "test-create-%"));
+  await db.delete(users).where(like(users.email, `${TEST_EMAIL_PREFIX}%`));
+}
+
+async function createSuperUser(email?: string) {
+  const passwordHash = await hashPassword("superpass123");
+  const [user] = await db.insert(users).values({
+    id: crypto.randomUUID(),
+    email: email || `${TEST_EMAIL_PREFIX}super-${Date.now()}@example.com`,
+    name: "Test Super User",
+    firstName: "Test",
+    lastName: "Super",
+    role: UserRole.SUPER_USER,
+    isActive: true,
+    passwordHash,
+    tenantId: null,
+  }).returning();
+  return user;
+}
+
+function createAuthenticatedApp(user: any) {
+  const app = createTestApp();
+  
+  app.use((req, res, next) => {
+    (req as any).user = user;
+    (req as any).isAuthenticated = () => true;
+    next();
+  });
+  
+  app.use("/api/v1/super", superAdminRoutes);
+  
+  return app;
+}
 
 describe("Tenant Creation", () => {
-  let ctx: TestContext;
-  let app: express.Express;
-  let superAgent: request.Agent;
+  let superUser: any;
 
-  beforeAll(async () => {
-    ctx = await setupTestFixtures({
-      createSuperUser: true,
-      createTenant: false,
-    });
-
-    app = ctx.app;
-    superAgent = ctx.superAgent!;
+  beforeEach(async () => {
+    await clearTestData();
+    superUser = await createSuperUser();
   });
 
-  afterAll(async () => {
-    await cleanupTestFixtures(ctx);
+  afterEach(async () => {
+    await clearTestData();
   });
 
   describe("POST /api/v1/super/tenants", () => {
     it("creates tenant successfully with primary workspace", async () => {
-      const uniqueSlug = `test-tenant-${Date.now()}`;
+      const app = createAuthenticatedApp(superUser);
+      const uniqueSlug = `test-create-${Date.now()}`;
       
-      const response = await superAgent
+      const response = await request(app)
         .post("/api/v1/super/tenants")
         .send({
           name: "Test Tenant Inc",
@@ -61,9 +117,10 @@ describe("Tenant Creation", () => {
     });
 
     it("creates tenant without requiring effectiveTenantId (super user)", async () => {
-      const uniqueSlug = `super-tenant-${Date.now()}`;
+      const app = createAuthenticatedApp(superUser);
+      const uniqueSlug = `test-create-super-${Date.now()}`;
       
-      const response = await superAgent
+      const response = await request(app)
         .post("/api/v1/super/tenants")
         .send({
           name: "Super Created Tenant",
@@ -74,10 +131,11 @@ describe("Tenant Creation", () => {
       expect(response.body.id).toBeDefined();
     });
 
-    it("includes X-Request-Id header in response", async () => {
-      const uniqueSlug = `requestid-test-${Date.now()}`;
+    it("includes X-Request-Id header in success response", async () => {
+      const app = createAuthenticatedApp(superUser);
+      const uniqueSlug = `test-create-rid-${Date.now()}`;
       
-      const response = await superAgent
+      const response = await request(app)
         .post("/api/v1/super/tenants")
         .send({
           name: "Request ID Test",
@@ -88,19 +146,33 @@ describe("Tenant Creation", () => {
       expect(typeof response.headers["x-request-id"]).toBe("string");
     });
 
-    it("returns 409 for duplicate slug", async () => {
-      const uniqueSlug = `duplicate-test-${Date.now()}`;
+    it("includes X-Request-Id header in error response", async () => {
+      const app = createAuthenticatedApp(superUser);
       
-      // Create first tenant
-      await superAgent
+      const response = await request(app)
+        .post("/api/v1/super/tenants")
+        .send({
+          name: "",  // Invalid - empty name
+          slug: "test-create-invalid",
+        });
+
+      expect(response.status).toBe(400);
+      expect(response.headers["x-request-id"]).toBeDefined();
+      expect(typeof response.headers["x-request-id"]).toBe("string");
+    });
+
+    it("returns 409 for duplicate slug", async () => {
+      const app = createAuthenticatedApp(superUser);
+      const uniqueSlug = `test-create-dup-${Date.now()}`;
+      
+      await request(app)
         .post("/api/v1/super/tenants")
         .send({
           name: "First Tenant",
           slug: uniqueSlug,
         });
 
-      // Try to create second tenant with same slug
-      const response = await superAgent
+      const response = await request(app)
         .post("/api/v1/super/tenants")
         .send({
           name: "Second Tenant",
@@ -112,10 +184,12 @@ describe("Tenant Creation", () => {
     });
 
     it("returns 400 for validation errors with details", async () => {
-      const response = await superAgent
+      const app = createAuthenticatedApp(superUser);
+      
+      const response = await request(app)
         .post("/api/v1/super/tenants")
         .send({
-          name: "",  // Empty name
+          name: "",
           slug: "valid-slug",
         });
 
@@ -125,11 +199,13 @@ describe("Tenant Creation", () => {
     });
 
     it("returns 400 for invalid slug format", async () => {
-      const response = await superAgent
+      const app = createAuthenticatedApp(superUser);
+      
+      const response = await request(app)
         .post("/api/v1/super/tenants")
         .send({
           name: "Valid Name",
-          slug: "INVALID SLUG!",  // Has spaces and uppercase
+          slug: "INVALID SLUG!",
         });
 
       expect(response.status).toBe(400);
