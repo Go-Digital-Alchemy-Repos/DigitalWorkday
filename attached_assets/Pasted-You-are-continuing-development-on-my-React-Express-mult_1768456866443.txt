@@ -1,0 +1,59 @@
+You are continuing development on my React + Express multi-tenant app.
+PROMPT 1: Tenant Readiness + Data Integrity Repair Tools (Super Admin)
+
+Problem: Tenant Health shows rows missing tenantId (projects/tasks/teams/users, etc.). We need safe tools to diagnose and fix.
+
+SAFETY RULES
+- Do NOT change endpoint paths/response shapes.
+- Additive changes only.
+- No destructive operations without explicit confirmation.
+- Must include DRY-RUN mode and audit logging.
+- Must not weaken tenancy enforcement.
+
+REQUIREMENTS
+A) Super Admin → System Status (or Tenant Health tab): “Fix Orphans” wizard
+1) Detection API (read-only):
+- GET /api/v1/super/health/orphans
+Returns counts and sample IDs per table where tenantId IS NULL (or invalid).
+Include tables: tenants, workspaces, users, teams, clients, projects, tasks, subtasks, timeEntries, attachments, invitations (whatever exists).
+
+2) Dry-run UI:
+- Show counts and sample rows
+- For each table provide safe recommended action:
+  - Assign to a chosen tenant
+  - Move to “Quarantine/Legacy” tenant
+  - Skip
+
+3) Execute API (write):
+- POST /api/v1/super/health/orphans/fix
+Body includes:
+  { plan: [{ table, action, tenantIdTarget, ids? or "all" }] , dryRun: boolean }
+Rules:
+- Must support dryRun=true with zero writes.
+- If dryRun=false, require explicit confirm flag: confirmText="FIX_ORPHANS"
+- Writes must be transactional per table (or safe batching) with progress reporting.
+- Write audit events: orphan_fix_planned, orphan_fix_executed.
+
+B) Create “Quarantine/Legacy” tenant (if missing)
+- If a quarantine tenant doesn’t exist, create one (super-only) with clear naming.
+- Never auto-assign without user choosing.
+
+C) Prevent future orphans
+- Audit create/update routes for these entities and ensure tenantId is derived server-side from effectiveTenantId, never trusted from client.
+- Add guardrails:
+  - If tenant context is required and missing -> reject with code TENANT_REQUIRED
+- Do NOT refactor; patch only the routes found to be allowing null tenantId.
+
+TESTS
+- orphans_detection_returns_counts.test.ts
+- fix_orphans_dryrun_no_writes.test.ts
+- fix_orphans_requires_confirm_phrase.test.ts
+- create_entity_without_tenant_context_rejected.test.ts (for one representative entity)
+
+DOCS
+- /docs/SUPER_TENANT_HEALTH.md describing dry-run, quarantine tenant, and safety rules.
+
+OUTPUT
+- Tables checked
+- Root cause route(s) that created orphan rows and how prevented
+- Manual checklist
