@@ -334,7 +334,42 @@ router.post("/onboarding/complete", requireAuth, requireTenantAdmin, async (req,
 });
 
 // =============================================================================
-// GET /api/v1/tenant/settings - Get tenant settings (branding)
+// GET /api/v1/tenant/branding - Get tenant branding (accessible by all tenant users)
+// This endpoint is used by the theme loader and should be accessible by employees
+// =============================================================================
+
+router.get("/branding", requireAuth, requireTenantContext, async (req, res) => {
+  try {
+    const tenantId = req.effectiveTenantId;
+
+    const settings = await storage.getTenantSettings(tenantId);
+    
+    if (!settings) {
+      return res.json({ tenantSettings: null });
+    }
+
+    // Return only branding-related settings (no sensitive info)
+    res.json({
+      tenantSettings: {
+        displayName: settings.displayName,
+        appName: settings.appName,
+        logoUrl: settings.logoUrl,
+        faviconUrl: settings.faviconUrl,
+        primaryColor: settings.primaryColor,
+        secondaryColor: settings.secondaryColor,
+        accentColor: settings.accentColor,
+        whiteLabelEnabled: settings.whiteLabelEnabled,
+        hideVendorBranding: settings.hideVendorBranding,
+      },
+    });
+  } catch (error) {
+    console.error("Error fetching tenant branding:", error);
+    res.status(500).json({ error: "Failed to fetch branding" });
+  }
+});
+
+// =============================================================================
+// GET /api/v1/tenant/settings - Get tenant settings (admin only)
 // =============================================================================
 
 router.get("/settings", requireAuth, requireTenantAdmin, async (req, res) => {

@@ -1,0 +1,560 @@
+# CRITICAL FIX: Tenant Association & API Errors for Tenant Employees
+
+I'm working on MyWorkDay, a multi-tenant project management SaaS application deployed on Railway.
+
+## Tech Stack Context
+- Frontend: React 18 + TypeScript + TanStack Query
+- Backend: Express.js + TypeScript + Drizzle ORM
+- Database: PostgreSQL
+- Session Auth: Passport.js
+- Deployment: Railway
+
+## Current Critical Issues
+
+### Issue 1: HTML Response Instead of JSON
+**Error Message:**
+```
+"Unable to Load Tenant"
+"Unexpected token '<', "<!DOCTYPE "... is not valid JSON"
+```
+
+**What This Means:**
+- Frontend is making an API request expecting JSON
+- Backend is returning HTML (likely the React app's index.html or an error page)
+- This happens when an API endpoint doesn't exist, returns 404, or has an error
+
+**Affected Users:** Tenant employees (role: 'employee')
+
+**Where It Happens:** All pages - dashboard, tasks, projects, etc.
+
+### Issue 2: Tenant Association Not Working
+Users can login but their tenant context is not loading, meaning:
+- User has `tenantId` in database ✓
+- User can authenticate ✓
+- Tenant context is not being established ✗
+- API endpoints can't load tenant data ✗
+
+## Root Cause Investigation
+
+### Step 1: Identify Which API Endpoint is Failing
+
+**Add Network Tab Debugging:**
+
+In browser DevTools → Network tab, filter by "Fetch/XHR" and look for:
+- Requests returning 200 but with HTML content (should be JSON)
+- Requests returning 404
+- Requests returning 500
+
+**Common culprits:**
+```
+GET /api/v1/tenant-settings          ← Loading tenant branding/config
+GET /api/auth/me                     ← Loading current user
+GET /api/v1/workspaces               ← Loading user's workspaces
+GET /api/v1/tenant-context           ← If this exists
+```
+
+**Add console logging to find the failing request:**
+
+In `/client/src/lib/auth.tsx` or wherever tenant data is loaded:
+```typescript
+export function useTenantSettings() {
+  return useQuery({
+    queryKey: ['tenant', 'settings'],
+    queryFn: async () => {
+      console.log('[TenantSettings] Fetching tenant settings...');
+      const res = await fetch('/api/v1/tenant-settings', {
+        credentials: 'include'
+      });
+      
+      console.log('[TenantSettings] Response status:', res.status);
+      console.log('[TenantSettings] Content-Type:', res.headers.get('content-type'));
+      
+      const text = await res.text();
+      console.log('[TenantSettings] Response text:', text.substring(0, 200));
+      
+      if (!res.ok) {
+        throw new Error(`Failed to load tenant settings: ${res.status}`);
+      }
+      
+      try {
+        return JSON.parse(text);
+      } catch (e) {
+        console.error('[TenantSettings] Failed to parse JSON:', e);
+        console.error('[TenantSettings] Received HTML instead of JSON');
+        throw new Error('Server returned HTML instead of JSON');
+      }
+    },
+  });
+}
+```
+
+### Step 2: Verify Backend API Endpoint Exists
+
+**Check if tenant settings endpoint exists:**
+
+Search in `/server/routes.ts` or `/server/routes/tenantOnboarding.ts` for:
+```typescript
+// Should exist:
+app.get('/api/v1/tenant-settings', requireAuth, requireTenantContext, async (req, res) => {
+  try {
+    const settings = await db.query.tenantSettings.findFirst({
+      where: eq(tenantSettings.tenantId, req.tenantId!),
+    });
+    
+    if (!settings) {
+      // IMPORTANT: Return JSON, not HTML
+      return res.status(404).json({
+        ok: false,
+        code: 'NOT_FOUND',
+        message: 'Tenant settings not found'
+      });
+    }
+    
+    res.json(settings);
+  } catch (error) {
+    console.error('[API] Error loading tenant settings:', error);
+    res.status(500).json({
+      ok: false,
+      code: 'INTERNAL_ERROR',
+      message: 'Failed to load tenant settings'
+    });
+  }
+});
+```
+
+**If endpoint doesn't exist, CREATE IT:**
+```typescript
+// In /server/routes.ts or appropriate routes file
+
+/**
+ * GET /api/v1/tenant-settings
+ * Returns the current user's tenant settings (branding, config, etc.)
+ * Requires: Authentication + Tenant Context
+ */
+app.get('/api/v1/tenant-settings',
+  requireAuth,
+  requireTenantContext,
+  asyncHandler(async (req, res) => {
+    const tenantId = req.tenantId;
+    
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        code: 'NO_TENANT_CONTEXT',
+        message: 'Tenant context not available'
+      });
+    }
+
+    // Load tenant settings
+    const settings = await db.query.tenantSettings.findFirst({
+      where: eq(tenantSettings.tenantId, tenantId),
+    });
+
+    // If no settings exist, create default ones
+    if (!settings) {
+      const tenant = await db.query.tenants.findFirst({
+        where: eq(tenants.id, tenantId),
+      });
+
+      if (!tenant) {
+        return res.status(404).json({
+          ok: false,
+          code: 'TENANT_NOT_FOUND',
+          message: 'Tenant not found'
+        });
+      }
+
+      // Create default settings
+      const [newSettings] = await db.insert(tenantSettings).values({
+        tenantId: tenantId,
+        displayName: tenant.name,
+      }).returning();
+
+      return res.json(newSettings);
+    }
+
+    res.json(settings);
+  })
+);
+
+/**
+ * GET /api/v1/tenant-info
+ * Returns basic tenant information
+ */
+app.get('/api/v1/tenant-info',
+  requireAuth,
+  requireTenantContext,
+  asyncHandler(async (req, res) => {
+    const tenantId = req.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        code: 'NO_TENANT_CONTEXT',
+        message: 'Tenant context not available'
+      });
+    }
+
+    const tenant = await db.query.tenants.findFirst({
+      where: eq(tenants.id, tenantId),
+      with: {
+        settings: true,
+      },
+    });
+
+    if (!tenant) {
+      return res.status(404).json({
+        ok: false,
+        code: 'TENANT_NOT_FOUND',
+        message: 'Tenant not found'
+      });
+    }
+
+    res.json(tenant);
+  })
+);
+```
+
+### Step 3: Fix Express Route Order Issue
+
+**CRITICAL: API routes must come BEFORE the catch-all frontend route**
+
+In `/server/index.ts`, verify route order:
+```typescript
+// ❌ WRONG ORDER - Frontend route catches API requests
+app.use(express.static(path.join(__dirname, '../dist/public')));
+app.get('*', (req, res) => {
+  res.sendFile(path.join(__dirname, '../dist/public/index.html'));
+});
+app.use('/api', routes); // ← Too late! Already sent HTML
+
+// ✅ CORRECT ORDER - API routes first
+import { registerRoutes } from './routes';
+
+// API routes MUST be registered first
+registerRoutes(app);
+
+// Frontend static files and SPA fallback LAST
+if (process.env.NODE_ENV === 'production') {
+  app.use(express.static(path.join(__dirname, '../dist/public')));
+  app.get('*', (req, res) => {
+    res.sendFile(path.join(__dirname, '../dist/public/index.html'));
+  });
+}
+```
+
+### Step 4: Verify Tenant Context Middleware
+
+**Check `/server/middleware/tenantContext.ts`:**
+```typescript
+export const tenantContextMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  // Extract user from session
+  const user = req.user as any;
+  
+  console.log('[TenantContext] User:', user?.id, 'Role:', user?.role, 'TenantId:', user?.tenantId);
+
+  // Super users don't have tenantId (they can impersonate)
+  if (user?.role === 'super_user') {
+    // Check for X-Tenant-Id header (impersonation)
+    const headerTenantId = req.headers['x-tenant-id'] as string;
+    if (headerTenantId) {
+      req.tenantId = headerTenantId;
+      req.effectiveTenantId = headerTenantId;
+      console.log('[TenantContext] Super user acting as tenant:', headerTenantId);
+    } else {
+      req.tenantId = undefined;
+      req.effectiveTenantId = undefined;
+      console.log('[TenantContext] Super user with no tenant context');
+    }
+  } else if (user?.tenantId) {
+    // Regular user - use their tenantId
+    req.tenantId = user.tenantId;
+    req.effectiveTenantId = user.tenantId;
+    console.log('[TenantContext] Regular user tenant context:', user.tenantId);
+  } else {
+    // User has no tenantId - this is a problem!
+    console.error('[TenantContext] User has no tenantId:', user?.id);
+    req.tenantId = undefined;
+    req.effectiveTenantId = undefined;
+  }
+
+  next();
+};
+
+export const requireTenantContext = (req: Request, res: Response, next: NextFunction) => {
+  if (!req.tenantId) {
+    console.error('[RequireTenantContext] No tenant context for user:', req.user?.id);
+    return res.status(400).json({
+      ok: false,
+      code: 'NO_TENANT_CONTEXT',
+      message: 'Tenant context is required for this operation',
+      userId: req.user?.id,
+      userRole: req.user?.role,
+    });
+  }
+  next();
+};
+```
+
+### Step 5: Verify User Actually Has TenantId in Database
+
+**Run this SQL query to check:**
+```sql
+-- Check user's tenant association
+SELECT 
+  u.id as user_id,
+  u.email,
+  u.name,
+  u.role,
+  u."tenantId" as user_tenant_id,
+  t.id as tenant_id,
+  t.name as tenant_name,
+  t.slug as tenant_slug,
+  t.status as tenant_status
+FROM users u
+LEFT JOIN tenants t ON u."tenantId" = t.id
+WHERE u.email = 'employee@example.com'  -- Replace with actual employee email
+ORDER BY u."createdAt" DESC;
+```
+
+**Expected Result:**
+```
+user_id  | email              | role     | user_tenant_id | tenant_name    | tenant_status
+---------|-------------------|----------|----------------|----------------|---------------
+abc-123  | emp@example.com   | employee | xyz-789        | Acme Corp      | active
+```
+
+**If `user_tenant_id` is NULL:**
+```sql
+-- Fix: Assign user to tenant
+UPDATE users 
+SET "tenantId" = 'your-tenant-id-here'
+WHERE email = 'employee@example.com';
+```
+
+### Step 6: Fix User-Tenant Association During Registration/Invitation
+
+**Check invitation acceptance flow:**
+
+In `/server/routes.ts` or invitation routes, when a user accepts an invite:
+```typescript
+// POST /api/invitations/:token/accept
+app.post('/api/invitations/:token/accept', async (req, res) => {
+  // ... validate token ...
+  
+  const invitation = await db.query.invitations.findFirst({
+    where: eq(invitations.token, token),
+  });
+  
+  // CREATE OR UPDATE USER
+  const [user] = await db.insert(users).values({
+    email: invitation.email,
+    name: req.body.name,
+    passwordHash: hashedPassword,
+    tenantId: invitation.tenantId,  // ← CRITICAL: Must set tenantId
+    role: invitation.role || 'employee',
+    isActive: true,
+  }).returning();
+  
+  // Update invitation status
+  await db.update(invitations)
+    .set({ status: 'accepted' })
+    .where(eq(invitations.id, invitation.id));
+    
+  res.json({ ok: true, user });
+});
+```
+
+### Step 7: Check Session Deserialization
+
+**Verify `/server/auth.ts` includes tenantId:**
+```typescript
+passport.deserializeUser(async (id: string, done) => {
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, id),
+    });
+    
+    console.log('[Auth] Deserializing user:', {
+      id: user?.id,
+      email: user?.email,
+      role: user?.role,
+      tenantId: user?.tenantId,  // ← Should be included
+    });
+    
+    // IMPORTANT: Make sure tenantId is included in user object
+    done(null, user);
+  } catch (err) {
+    console.error('[Auth] Deserialization error:', err);
+    done(err);
+  }
+});
+```
+
+### Step 8: Fix Frontend Error Handling
+
+**Update frontend to show actual error instead of JSON parse error:**
+```typescript
+// In /client/src/lib/queryClient.ts or wherever queries are configured
+
+export const queryClient = new QueryClient({
+  defaultOptions: {
+    queries: {
+      queryFn: async ({ queryKey }) => {
+        const url = typeof queryKey[0] === 'string' ? queryKey[0] : queryKey.join('/');
+        const res = await fetch(url, { credentials: 'include' });
+        
+        // Get content type
+        const contentType = res.headers.get('content-type');
+        
+        if (!res.ok) {
+          // Try to parse error as JSON first
+          if (contentType?.includes('application/json')) {
+            const error = await res.json();
+            throw new Error(error.message || 'Request failed');
+          } else {
+            // Got HTML instead of JSON
+            const text = await res.text();
+            console.error('[Query] Received HTML instead of JSON:', text.substring(0, 200));
+            throw new Error(`API returned HTML instead of JSON (status: ${res.status})`);
+          }
+        }
+        
+        // Verify we got JSON
+        if (!contentType?.includes('application/json')) {
+          const text = await res.text();
+          console.error('[Query] Expected JSON but got:', contentType);
+          console.error('[Query] Response:', text.substring(0, 200));
+          throw new Error('API returned non-JSON response');
+        }
+        
+        return res.json();
+      },
+      retry: false,
+      refetchOnWindowFocus: false,
+    },
+  },
+});
+```
+
+## Complete Fix Checklist
+
+### Backend Fixes:
+
+- [ ] **Verify API route order** - API routes before frontend fallback
+- [ ] **Create `/api/v1/tenant-settings` endpoint** if missing
+- [ ] **Create `/api/v1/tenant-info` endpoint** if missing
+- [ ] **Add logging to tenant context middleware**
+- [ ] **Verify `requireTenantContext` returns JSON errors**
+- [ ] **Check user deserialization includes tenantId**
+- [ ] **Verify invitation acceptance sets tenantId**
+- [ ] **Add proper error handling to all tenant endpoints**
+
+### Database Fixes:
+
+- [ ] **Verify users have tenantId** in database
+- [ ] **Create script to assign missing tenantIds**
+- [ ] **Verify tenant exists and is active**
+- [ ] **Verify tenantSettings exist for tenant**
+
+### Frontend Fixes:
+
+- [ ] **Add better error handling for API calls**
+- [ ] **Show actual error messages instead of JSON parse errors**
+- [ ] **Add loading states for tenant data**
+- [ ] **Add null checks for tenant context**
+
+### Railway Deployment:
+
+- [ ] **Set `TRUST_PROXY=true`**
+- [ ] **Verify `SESSION_SECRET` is set**
+- [ ] **Check Railway logs for actual errors**
+- [ ] **Verify database connection works**
+
+## Quick Diagnostic Script
+
+**Create `/server/scripts/diagnose-tenant-context.ts`:**
+```typescript
+import { db } from '../db';
+import { users, tenants, tenantSettings } from '../../shared/schema';
+import { eq } from 'drizzle-orm';
+
+async function diagnose() {
+  console.log('=== Tenant Context Diagnostic ===\n');
+
+  // Get all users with their tenant info
+  const allUsers = await db
+    .select({
+      userId: users.id,
+      email: users.email,
+      role: users.role,
+      userTenantId: users.tenantId,
+      tenantName: tenants.name,
+      tenantStatus: tenants.status,
+      hasSettings: tenantSettings.id,
+    })
+    .from(users)
+    .leftJoin(tenants, eq(users.tenantId, tenants.id))
+    .leftJoin(tenantSettings, eq(tenants.id, tenantSettings.tenantId));
+
+  console.log('Users and their tenants:');
+  console.table(allUsers);
+
+  // Find users without tenantId (except super users)
+  const orphanUsers = allUsers.filter(u => 
+    !u.userTenantId && u.role !== 'super_user'
+  );
+
+  if (orphanUsers.length > 0) {
+    console.log('\n❌ FOUND USERS WITHOUT TENANT:');
+    console.table(orphanUsers);
+  }
+
+  // Find tenants without settings
+  const tenantsWithoutSettings = await db
+    .select({
+      tenantId: tenants.id,
+      tenantName: tenants.name,
+    })
+    .from(tenants)
+    .leftJoin(tenantSettings, eq(tenants.id, tenantSettings.tenantId))
+    .where(eq(tenantSettings.id, null));
+
+  if (tenantsWithoutSettings.length > 0) {
+    console.log('\n❌ FOUND TENANTS WITHOUT SETTINGS:');
+    console.table(tenantsWithoutSettings);
+  }
+
+  console.log('\n=== Diagnostic Complete ===');
+  process.exit(0);
+}
+
+diagnose().catch(console.error);
+```
+
+Run with: `tsx server/scripts/diagnose-tenant-context.ts`
+
+## Expected Resolution
+
+After fixes:
+1. ✅ API returns JSON (not HTML)
+2. ✅ Users have tenantId in database
+3. ✅ Session includes tenantId
+4. ✅ Tenant context middleware works
+5. ✅ Employees can access dashboard
+6. ✅ Tenant settings load correctly
+7. ✅ Proper error messages (not JSON parse errors)
+
+## Priority Actions
+
+**DO THIS FIRST:**
+1. Check Railway logs for actual error
+2. Run diagnostic script to verify database
+3. Check browser Network tab to see which endpoint fails
+4. Verify API route order in server/index.ts
+5. Add the missing `/api/v1/tenant-settings` endpoint
+
+This is likely a combination of:
+- Missing API endpoint
+- Wrong route order (frontend catches API requests)
+- User missing tenantId in database

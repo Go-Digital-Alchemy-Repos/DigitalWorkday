@@ -80,7 +80,7 @@ export function useTenantTheme() {
   const { isAuthenticated } = useAuth();
 
   const { data } = useQuery<TenantSettingsResponse>({
-    queryKey: ["/api/v1/tenant/settings"],
+    queryKey: ["/api/v1/tenant/branding"],
     enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5,
   });
