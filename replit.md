@@ -6,6 +6,7 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 ## User Preferences
 - Professional, clean Asana-like design
 - Board view as primary view with list view and calendar view options
+- **Database migrations**: When pushing schema changes, preserve existing data - only update schema structure, never wipe the database. Use Drizzle migrations (`drizzle-kit generate` + `drizzle-kit migrate`) instead of `drizzle-kit push` for production deployments.
 - Calendar view displays tasks with due dates using FullCalendar, with filtering and drag-to-reschedule
 - My Tasks view with two viewing modes: date-based grouping (overdue, today, tomorrow, upcoming) and personal sections organization
 - Projects Dashboard with search, status/client/team filters, table view showing project details via drawer, and budget utilization indicators
