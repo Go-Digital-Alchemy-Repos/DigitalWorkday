@@ -117,6 +117,26 @@ export const tenants = pgTable("tenants", {
   stripeDefaultPaymentMethodId: text("stripe_default_payment_method_id"),
   billingEmail: text("billing_email"),
   billingStatus: text("billing_status").default("none"), // "none" | "active" | "past_due" | "canceled"
+  // CRM Fields
+  legalName: text("legal_name"),
+  industry: text("industry"),
+  companySize: text("company_size"),
+  website: text("website"),
+  taxId: text("tax_id"),
+  foundedDate: text("founded_date"),
+  description: text("description"),
+  // Address fields
+  addressLine1: text("address_line_1"),
+  addressLine2: text("address_line_2"),
+  city: text("city"),
+  state: text("state"),
+  postalCode: text("postal_code"),
+  country: text("country"),
+  // Contact fields
+  phoneNumber: text("phone_number"),
+  primaryContactName: text("primary_contact_name"),
+  primaryContactEmail: text("primary_contact_email"),
+  primaryContactPhone: text("primary_contact_phone"),
 }, (table) => [
   index("tenants_slug_idx").on(table.slug),
   index("tenants_status_idx").on(table.status),

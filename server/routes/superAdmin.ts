@@ -326,6 +326,27 @@ const updateTenantSchema = z.object({
   name: z.string().min(1).optional(),
   slug: z.string().min(1).regex(/^[a-z0-9-]+$/).optional(),
   status: z.enum([TenantStatus.ACTIVE, TenantStatus.INACTIVE, TenantStatus.SUSPENDED]).optional(),
+  // CRM Fields
+  legalName: z.string().optional().nullable(),
+  industry: z.string().optional().nullable(),
+  companySize: z.string().optional().nullable(),
+  website: z.string().url().optional().nullable().or(z.literal("")),
+  taxId: z.string().optional().nullable(),
+  foundedDate: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
+  // Address fields
+  addressLine1: z.string().optional().nullable(),
+  addressLine2: z.string().optional().nullable(),
+  city: z.string().optional().nullable(),
+  state: z.string().optional().nullable(),
+  postalCode: z.string().optional().nullable(),
+  country: z.string().optional().nullable(),
+  // Contact fields
+  phoneNumber: z.string().optional().nullable(),
+  primaryContactName: z.string().optional().nullable(),
+  primaryContactEmail: z.string().email().optional().nullable().or(z.literal("")),
+  primaryContactPhone: z.string().optional().nullable(),
+  billingEmail: z.string().email().optional().nullable().or(z.literal("")),
 });
 
 router.patch("/tenants/:id", requireSuperUser, async (req, res) => {

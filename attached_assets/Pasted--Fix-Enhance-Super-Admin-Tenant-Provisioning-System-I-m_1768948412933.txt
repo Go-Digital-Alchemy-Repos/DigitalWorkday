@@ -1,0 +1,1681 @@
+# Fix & Enhance Super Admin Tenant Provisioning System
+
+I'm working on MyWorkDay, a multi-tenant project management SaaS application.
+
+## Tech Stack Context
+- Frontend: React 18 + TypeScript + Tailwind CSS + shadcn/ui + TanStack Query
+- Backend: Express.js + TypeScript + Drizzle ORM
+- Database: PostgreSQL
+- Current Location: Super Admin Dashboard → Tenants section
+
+## Overview of Changes
+
+We need to improve the tenant provisioning experience for Super Admins with better UX, consolidated controls, and full CRUD capabilities across all tenant resources.
+
+---
+
+## 1. Make Tenant Row Fully Clickable
+
+### Current State:
+- Tenant table has separate clickable areas
+- Pencil icon for editing
+- Gear cog icon for settings
+
+### Required Changes:
+
+**Remove:** Pencil icon  
+**Keep:** Gear cog icon  
+**Add:** Make entire row clickable
+
+**Implementation:**
+
+In `/client/src/pages/super-admin.tsx` or wherever tenant list is rendered:
+```tsx
+// Current (likely):
+<TableRow key={tenant.id}>
+  <TableCell>{tenant.name}</TableCell>
+  <TableCell>{tenant.slug}</TableCell>
+  <TableCell>{tenant.status}</TableCell>
+  <TableCell>
+    <Button size="sm" onClick={() => setEditingTenant(tenant)}>
+      <Edit className="h-4 w-4" /> {/* ❌ Remove this */}
+    </Button>
+    <Button size="sm" onClick={() => openTenantDrawer(tenant)}>
+      <Settings className="h-4 w-4" /> {/* ✅ Keep this */}
+    </Button>
+  </TableCell>
+</TableRow>
+
+// New (required):
+<TableRow 
+  key={tenant.id}
+  className="cursor-pointer hover:bg-muted/50 transition-colors"
+  onClick={() => openTenantDrawer(tenant)}
+>
+  <TableCell>{tenant.name}</TableCell>
+  <TableCell>{tenant.slug}</TableCell>
+  <TableCell>
+    <Badge variant={tenant.status === 'active' ? 'default' : 'secondary'}>
+      {tenant.status}
+    </Badge>
+  </TableCell>
+  <TableCell onClick={(e) => e.stopPropagation()}>
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="sm">
+          <Settings className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={() => openTenantDrawer(tenant)}>
+          <Edit className="h-4 w-4 mr-2" /> Edit Details
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => activateTenant(tenant.id)}>
+          <CheckCircle className="h-4 w-4 mr-2" /> Activate
+        </DropdownMenuItem>
+        <DropdownMenuItem onClick={() => suspendTenant(tenant.id)}>
+          <XCircle className="h-4 w-4 mr-2" /> Suspend
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  </TableCell>
+</TableRow>
+```
+
+**Both clicking the row OR clicking gear cog should:**
+- Open the same tenant drawer
+- Show all tabs (Overview, Workspaces, Users, Clients, Projects, Branding, Notes)
+- Pass tenant data to drawer
+
+---
+
+## 2. Overview Tab - Editable Name/Slug + CRM Fields
+
+### Current State:
+Overview tab likely shows basic tenant info in read-only format
+
+### Required Changes:
+
+**Make Editable:**
+- Organization name
+- URL slug
+
+**Add Full CRM Fields:**
+- Company name (same as org name or separate?)
+- Address fields (street, city, state, zip, country)
+- Phone number
+- Website URL
+- Industry/Business type
+- Company size
+- Tax ID / EIN
+- Billing email (if different from support email)
+- Primary contact name
+- Primary contact email
+- Primary contact phone
+- Founded date
+- Company description/notes
+
+**Implementation:**
+
+In `/client/src/components/super-admin/tenant-drawer.tsx` → Overview tab:
+```tsx
+import { useForm } from 'react-hook-form';
+import { zodResolver } from '@hookform/resolvers/zod';
+import { z } from 'zod';
+
+const tenantOverviewSchema = z.object({
+  // Basic Info
+  name: z.string().min(1, 'Organization name is required'),
+  slug: z.string().min(1, 'URL slug is required')
+    .regex(/^[a-z0-9-]+$/, 'Only lowercase letters, numbers, and hyphens'),
+  
+  // CRM Fields
+  legalName: z.string().optional(),
+  industry: z.string().optional(),
+  companySize: z.enum(['1-10', '11-50', '51-200', '201-500', '501-1000', '1000+']).optional(),
+  website: z.string().url().optional().or(z.literal('')),
+  taxId: z.string().optional(),
+  foundedDate: z.string().optional(),
+  description: z.string().optional(),
+  
+  // Address
+  addressLine1: z.string().optional(),
+  addressLine2: z.string().optional(),
+  city: z.string().optional(),
+  state: z.string().optional(),
+  postalCode: z.string().optional(),
+  country: z.string().optional(),
+  
+  // Contact Info
+  phoneNumber: z.string().optional(),
+  primaryContactName: z.string().optional(),
+  primaryContactEmail: z.string().email().optional().or(z.literal('')),
+  primaryContactPhone: z.string().optional(),
+  
+  // Billing
+  billingEmail: z.string().email().optional().or(z.literal('')),
+});
+
+function TenantOverviewTab({ tenant, onUpdate }) {
+  const form = useForm({
+    resolver: zodResolver(tenantOverviewSchema),
+    defaultValues: {
+      name: tenant.name || '',
+      slug: tenant.slug || '',
+      legalName: tenant.legalName || '',
+      industry: tenant.industry || '',
+      companySize: tenant.companySize || '',
+      website: tenant.website || '',
+      taxId: tenant.taxId || '',
+      foundedDate: tenant.foundedDate || '',
+      description: tenant.description || '',
+      addressLine1: tenant.addressLine1 || '',
+      addressLine2: tenant.addressLine2 || '',
+      city: tenant.city || '',
+      state: tenant.state || '',
+      postalCode: tenant.postalCode || '',
+      country: tenant.country || '',
+      phoneNumber: tenant.phoneNumber || '',
+      primaryContactName: tenant.primaryContactName || '',
+      primaryContactEmail: tenant.primaryContactEmail || '',
+      primaryContactPhone: tenant.primaryContactPhone || '',
+      billingEmail: tenant.billingEmail || '',
+    },
+  });
+
+  const updateTenant = useMutation({
+    mutationFn: async (data) => {
+      const res = await fetch(`/api/v1/super/tenants/${tenant.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      });
+      if (!res.ok) throw new Error('Failed to update tenant');
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'Tenant updated successfully' });
+      onUpdate?.();
+    },
+  });
+
+  return (
+    <Form {...form}>
+      <form onSubmit={form.handleSubmit((data) => updateTenant.mutate(data))} className="space-y-6">
+        
+        {/* Basic Information */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Basic Information</h3>
+          
+          <FormField
+            control={form.control}
+            name="name"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Organization Name *</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Acme Corporation" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="slug"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>URL Slug *</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="acme-corp" />
+                </FormControl>
+                <FormDescription>
+                  Used in URLs: yourapp.com/acme-corp
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="legalName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Legal Name</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Acme Corporation Inc." />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Company Details */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Company Details</h3>
+          
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="industry"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Industry</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="Technology, Healthcare, etc." />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="companySize"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Company Size</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Select size" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="1-10">1-10 employees</SelectItem>
+                      <SelectItem value="11-50">11-50 employees</SelectItem>
+                      <SelectItem value="51-200">51-200 employees</SelectItem>
+                      <SelectItem value="201-500">201-500 employees</SelectItem>
+                      <SelectItem value="501-1000">501-1000 employees</SelectItem>
+                      <SelectItem value="1000+">1000+ employees</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="website"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Website</FormLabel>
+                <FormControl>
+                  <Input {...field} type="url" placeholder="https://example.com" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="taxId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Tax ID / EIN</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="12-3456789" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="foundedDate"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Founded Date</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="date" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="description"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Company Description</FormLabel>
+                <FormControl>
+                  <Textarea {...field} rows={3} placeholder="Brief description of the company..." />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Address */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Business Address</h3>
+          
+          <FormField
+            control={form.control}
+            name="addressLine1"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Address Line 1</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="123 Main Street" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="addressLine2"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Address Line 2</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="Suite 100" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="grid grid-cols-3 gap-4">
+            <FormField
+              control={form.control}
+              name="city"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>City</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="San Francisco" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="state"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>State/Province</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="CA" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="postalCode"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Postal Code</FormLabel>
+                  <FormControl>
+                    <Input {...field} placeholder="94105" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="country"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Country</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="United States" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Contact Information */}
+        <div className="space-y-4">
+          <h3 className="text-lg font-semibold">Contact Information</h3>
+          
+          <FormField
+            control={form.control}
+            name="phoneNumber"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Main Phone Number</FormLabel>
+                <FormControl>
+                  <Input {...field} type="tel" placeholder="+1 (555) 123-4567" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <FormField
+            control={form.control}
+            name="primaryContactName"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Primary Contact Name</FormLabel>
+                <FormControl>
+                  <Input {...field} placeholder="John Doe" />
+                </FormControl>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+
+          <div className="grid grid-cols-2 gap-4">
+            <FormField
+              control={form.control}
+              name="primaryContactEmail"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Primary Contact Email</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="email" placeholder="john@example.com" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="primaryContactPhone"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Primary Contact Phone</FormLabel>
+                  <FormControl>
+                    <Input {...field} type="tel" placeholder="+1 (555) 123-4567" />
+                  </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          </div>
+
+          <FormField
+            control={form.control}
+            name="billingEmail"
+            render={({ field }) => (
+              <FormItem>
+                <FormLabel>Billing Email</FormLabel>
+                <FormControl>
+                  <Input {...field} type="email" placeholder="billing@example.com" />
+                </FormControl>
+                <FormDescription>
+                  If different from primary contact email
+                </FormDescription>
+                <FormMessage />
+              </FormItem>
+            )}
+          />
+        </div>
+
+        {/* Save Button */}
+        <div className="flex justify-end gap-2">
+          <Button type="submit" disabled={updateTenant.isPending}>
+            {updateTenant.isPending ? 'Saving...' : 'Save Changes'}
+          </Button>
+        </div>
+      </form>
+    </Form>
+  );
+}
+```
+
+**Backend: Update tenants table schema to support CRM fields**
+
+In `/shared/schema.ts`, update tenants table:
+```typescript
+export const tenants = pgTable("tenants", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  name: text("name").notNull(),
+  slug: text("slug").notNull().unique(),
+  status: text("status").notNull().default("inactive"),
+  
+  // CRM Fields
+  legalName: text("legal_name"),
+  industry: text("industry"),
+  companySize: text("company_size"),
+  website: text("website"),
+  taxId: text("tax_id"),
+  foundedDate: text("founded_date"),
+  description: text("description"),
+  
+  // Address
+  addressLine1: text("address_line_1"),
+  addressLine2: text("address_line_2"),
+  city: text("city"),
+  state: text("state"),
+  postalCode: text("postal_code"),
+  country: text("country"),
+  
+  // Contact
+  phoneNumber: text("phone_number"),
+  primaryContactName: text("primary_contact_name"),
+  primaryContactEmail: text("primary_contact_email"),
+  primaryContactPhone: text("primary_contact_phone"),
+  
+  // Existing fields...
+  onboardedAt: timestamp("onboarded_at"),
+  ownerUserId: varchar("owner_user_id"),
+  activatedBySuperUserAt: timestamp("activated_by_super_user_at"),
+  stripeCustomerId: text("stripe_customer_id"),
+  stripeDefaultPaymentMethodId: text("stripe_default_payment_method_id"),
+  billingEmail: text("billing_email"),
+  billingStatus: text("billing_status").default("none"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+```
+
+**Backend: Update PATCH endpoint to accept CRM fields**
+
+In `/server/routes/superAdmin.ts`:
+```typescript
+app.patch('/api/v1/super/tenants/:id',
+  requireAuth,
+  requireSuperUser,
+  asyncHandler(async (req, res) => {
+    const { id } = req.params;
+    const updateData = req.body;
+
+    // Validate and update tenant
+    const [updated] = await db
+      .update(tenants)
+      .set({
+        ...updateData,
+        updatedAt: new Date(),
+      })
+      .where(eq(tenants.id, id))
+      .returning();
+
+    res.json(updated);
+  })
+);
+```
+
+---
+
+## 3. Workspaces Tab - Comprehensive Management
+
+### Required Features:
+
+**Current State:** Likely basic workspace listing
+
+**Add:**
+- Create new workspace button
+- Edit existing workspace (inline or drawer)
+- Delete workspace (with confirmation)
+- Workspace members management
+- Workspace settings
+- Archive/unarchive workspace
+
+**Implementation:**
+
+In `/client/src/components/super-admin/tenant-drawer.tsx` → Workspaces tab:
+```tsx
+function TenantWorkspacesTab({ tenant }) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingWorkspace, setEditingWorkspace] = useState(null);
+
+  const { data: workspaces, isLoading } = useQuery({
+    queryKey: ['super', 'tenants', tenant.id, 'workspaces'],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/super/tenants/${tenant.id}/workspaces`, {
+        credentials: 'include',
+        headers: { 'X-Tenant-Id': tenant.id },
+      });
+      return res.json();
+    },
+  });
+
+  const createWorkspace = useMutation({
+    mutationFn: async (data) => {
+      const res = await fetch(`/api/v1/super/tenants/${tenant.id}/workspaces`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Tenant-Id': tenant.id,
+        },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['super', 'tenants', tenant.id, 'workspaces']);
+      setCreateOpen(false);
+      toast({ title: 'Workspace created' });
+    },
+  });
+
+  const deleteWorkspace = useMutation({
+    mutationFn: async (workspaceId) => {
+      const res = await fetch(`/api/v1/super/tenants/${tenant.id}/workspaces/${workspaceId}`, {
+        method: 'DELETE',
+        headers: { 'X-Tenant-Id': tenant.id },
+        credentials: 'include',
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['super', 'tenants', tenant.id, 'workspaces']);
+      toast({ title: 'Workspace deleted' });
+    },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-semibold">Workspaces</h3>
+          <p className="text-sm text-muted-foreground">
+            Manage organizational units within this tenant
+          </p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>
+          <Plus className="h-4 w-4 mr-2" />
+          Create Workspace
+        </Button>
+      </div>
+
+      {isLoading ? (
+        <div>Loading...</div>
+      ) : (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Description</TableHead>
+              <TableHead>Members</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead className="w-[100px]">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {workspaces?.map((workspace) => (
+              <TableRow key={workspace.id}>
+                <TableCell className="font-medium">{workspace.name}</TableCell>
+                <TableCell>{workspace.description}</TableCell>
+                <TableCell>{workspace.memberCount || 0}</TableCell>
+                <TableCell>{new Date(workspace.createdAt).toLocaleDateString()}</TableCell>
+                <TableCell>
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <Button variant="ghost" size="sm">
+                        <MoreVertical className="h-4 w-4" />
+                      </Button>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="end">
+                      <DropdownMenuItem onClick={() => setEditingWorkspace(workspace)}>
+                        <Edit className="h-4 w-4 mr-2" /> Edit
+                      </DropdownMenuItem>
+                      <DropdownMenuItem onClick={() => {/* manage members */}}>
+                        <Users className="h-4 w-4 mr-2" /> Manage Members
+                      </DropdownMenuItem>
+                      <DropdownMenuSeparator />
+                      <DropdownMenuItem 
+                        className="text-destructive"
+                        onClick={() => {
+                          if (confirm('Delete this workspace?')) {
+                            deleteWorkspace.mutate(workspace.id);
+                          }
+                        }}
+                      >
+                        <Trash className="h-4 w-4 mr-2" /> Delete
+                      </DropdownMenuItem>
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+
+      {/* Create Workspace Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Workspace</DialogTitle>
+          </DialogHeader>
+          <WorkspaceForm
+            onSubmit={(data) => createWorkspace.mutate(data)}
+            onCancel={() => setCreateOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Workspace Dialog */}
+      {editingWorkspace && (
+        <Dialog open={!!editingWorkspace} onOpenChange={() => setEditingWorkspace(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Workspace</DialogTitle>
+            </DialogHeader>
+            <WorkspaceForm
+              workspace={editingWorkspace}
+              onSubmit={(data) => {/* update workspace */}}
+              onCancel={() => setEditingWorkspace(null)}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
+function WorkspaceForm({ workspace, onSubmit, onCancel }) {
+  const form = useForm({
+    defaultValues: {
+      name: workspace?.name || '',
+      description: workspace?.description || '',
+    },
+  });
+
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <div>
+        <Label>Workspace Name</Label>
+        <Input {...form.register('name')} placeholder="Marketing" />
+      </div>
+      <div>
+        <Label>Description</Label>
+        <Textarea {...form.register('description')} rows={3} />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit">
+          {workspace ? 'Update' : 'Create'}
+        </Button>
+      </div>
+    </form>
+  );
+}
+```
+
+**Backend: Add workspace CRUD endpoints for super admin**
+```typescript
+// GET workspaces for a tenant
+app.get('/api/v1/super/tenants/:tenantId/workspaces',
+  requireAuth,
+  requireSuperUser,
+  asyncHandler(async (req, res) => {
+    const { tenantId } = req.params;
+    
+    const workspaces = await db.query.workspaces.findMany({
+      where: eq(workspaces.tenantId, tenantId),
+      with: {
+        members: true,
+      },
+    });
+
+    res.json(workspaces);
+  })
+);
+
+// POST create workspace
+app.post('/api/v1/super/tenants/:tenantId/workspaces',
+  requireAuth,
+  requireSuperUser,
+  asyncHandler(async (req, res) => {
+    const { tenantId } = req.params;
+    const { name, description } = req.body;
+
+    const [workspace] = await db.insert(workspaces).values({
+      tenantId,
+      name,
+      description,
+    }).returning();
+
+    res.status(201).json(workspace);
+  })
+);
+
+// PATCH update workspace
+app.patch('/api/v1/super/tenants/:tenantId/workspaces/:workspaceId',
+  requireAuth,
+  requireSuperUser,
+  asyncHandler(async (req, res) => {
+    const { workspaceId } = req.params;
+    
+    const [updated] = await db.update(workspaces)
+      .set(req.body)
+      .where(eq(workspaces.id, workspaceId))
+      .returning();
+
+    res.json(updated);
+  })
+);
+
+// DELETE workspace
+app.delete('/api/v1/super/tenants/:tenantId/workspaces/:workspaceId',
+  requireAuth,
+  requireSuperUser,
+  asyncHandler(async (req, res) => {
+    const { workspaceId } = req.params;
+    
+    await db.delete(workspaces)
+      .where(eq(workspaces.id, workspaceId));
+
+    res.json({ ok: true });
+  })
+);
+```
+
+---
+
+## 4. Users Tab - Consolidate Invite & Provision
+
+### Current State:
+- "Provision User" button
+- Separate "Invite User" section below
+
+### Required Changes:
+- **Remove** separate "Invite User" section
+- **Update** "Provision User" button to include invite/manual toggle
+- **Combine** both workflows into single modal
+
+**Implementation:**
+
+In `/client/src/components/super-admin/tenant-drawer.tsx` → Users tab:
+```tsx
+function TenantUsersTab({ tenant }) {
+  const [provisionOpen, setProvisionOpen] = useState(false);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-semibold">Users</h3>
+          <p className="text-sm text-muted-foreground">
+            Manage user access to this tenant
+          </p>
+        </div>
+        <Button onClick={() => setProvisionOpen(true)}>
+          <UserPlus className="h-4 w-4 mr-2" />
+          Provision User
+        </Button>
+      </div>
+
+      {/* User list table here... */}
+
+      {/* Single Provision User Dialog */}
+      <ProvisionUserDialog
+        open={provisionOpen}
+        onOpenChange={setProvisionOpen}
+        tenant={tenant}
+      />
+      
+      {/* ❌ REMOVE separate invite user section that was below */}
+    </div>
+  );
+}
+```
+
+**Update `/client/src/components/super-admin/provision-user-drawer.tsx`:**
+```tsx
+function ProvisionUserDialog({ open, onOpenChange, tenant }) {
+  const [method, setMethod] = useState<'SET_PASSWORD' | 'SEND_INVITE'>('SEND_INVITE');
+  const [step, setStep] = useState(1);
+
+  const form = useForm({
+    defaultValues: {
+      email: '',
+      name: '',
+      firstName: '',
+      lastName: '',
+      role: 'employee',
+      password: '',
+      confirmPassword: '',
+      sendEmail: true,
+    },
+  });
+
+  const provisionUser = useMutation({
+    mutationFn: async (data) => {
+      const res = await fetch(`/api/v1/super/tenants/${tenant.id}/users/provision`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          ...data,
+          method,
+        }),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: 'User provisioned successfully' });
+      onOpenChange(false);
+      setStep(1);
+      form.reset();
+    },
+  });
+
+  return (
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>Provision User for {tenant.name}</DialogTitle>
+          <DialogDescription>
+            Create a new user account with immediate access or send an invitation
+          </DialogDescription>
+        </DialogHeader>
+
+        <Form {...form}>
+          <form onSubmit={form.handleSubmit((data) => provisionUser.mutate(data))}>
+            
+            {/* Step 1: User Info */}
+            {step === 1 && (
+              <div className="space-y-4">
+                <h4 className="font-medium">User Information</h4>
+                
+                <FormField
+                  control={form.control}
+                  name="email"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Email *</FormLabel>
+                      <FormControl>
+                        <Input {...field} type="email" placeholder="user@example.com" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <div className="grid grid-cols-2 gap-4">
+                  <FormField
+                    control={form.control}
+                    name="firstName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>First Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="John" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+
+                  <FormField
+                    control={form.control}
+                    name="lastName"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormLabel>Last Name</FormLabel>
+                        <FormControl>
+                          <Input {...field} placeholder="Doe" />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                </div>
+
+                <FormField
+                  control={form.control}
+                  name="name"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Full Name *</FormLabel>
+                      <FormControl>
+                        <Input {...field} placeholder="John Doe" />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <FormField
+                  control={form.control}
+                  name="role"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Role *</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="admin">Admin</SelectItem>
+                          <SelectItem value="employee">Employee</SelectItem>
+                          <SelectItem value="client">Client</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+
+                <Button type="button" onClick={() => setStep(2)} className="w-full">
+                  Next: Access Method
+                </Button>
+              </div>
+            )}
+
+            {/* Step 2: Access Method */}
+            {step === 2 && (
+              <div className="space-y-4">
+                <h4 className="font-medium">Access Method</h4>
+                <p className="text-sm text-muted-foreground">
+                  Choose how the user will access their account
+                </p>
+
+                {/* Toggle between Invite and Manual */}
+                <div className="flex items-center gap-4 p-4 border rounded-lg">
+                  <div className="flex-1">
+                    <Label className="text-base">Send Invitation Email</Label>
+                    <p className="text-sm text-muted-foreground">
+                      User receives email with setup link
+                    </p>
+                  </div>
+                  <Switch
+                    checked={method === 'SEND_INVITE'}
+                    onCheckedChange={(checked) => 
+                      setMethod(checked ? 'SEND_INVITE' : 'SET_PASSWORD')
+                    }
+                  />
+                </div>
+
+                {method === 'SET_PASSWORD' ? (
+                  // Manual password setting
+                  <div className="space-y-4">
+                    <Alert>
+                      <AlertDescription>
+                        Set a temporary password. User will be required to change it on first login.
+                      </AlertDescription>
+                    </Alert>
+
+                    <FormField
+                      control={form.control}
+                      name="password"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Temporary Password *</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="password" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="confirmPassword"
+                      render={({ field }) => (
+                        <FormItem>
+                          <FormLabel>Confirm Password *</FormLabel>
+                          <FormControl>
+                            <Input {...field} type="password" />
+                          </FormControl>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+
+                    <FormField
+                      control={form.control}
+                      name="sendEmail"
+                      render={({ field }) => (
+                        <FormItem className="flex items-center gap-2">
+                          <FormControl>
+                            <Checkbox 
+                              checked={field.value}
+                              onCheckedChange={field.onChange}
+                            />
+                          </FormControl>
+                          <FormLabel className="!mt-0">
+                            Send credentials via email
+                          </FormLabel>
+                        </FormItem>
+                      )}
+                    />
+                  </div>
+                ) : (
+                  // Email invitation
+                  <Alert>
+                    <Mail className="h-4 w-4" />
+                    <AlertDescription>
+                      An invitation email will be sent to <strong>{form.watch('email')}</strong> with 
+                      instructions to set up their account.
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => setStep(1)}>
+                    Back
+                  </Button>
+                  <Button type="button" onClick={() => setStep(3)} className="flex-1">
+                    Review
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Review */}
+            {step === 3 && (
+              <div className="space-y-4">
+                <h4 className="font-medium">Review & Confirm</h4>
+
+                <div className="space-y-2 p-4 bg-muted rounded-lg">
+                  <div className="grid grid-cols-2 gap-2 text-sm">
+                    <div className="font-medium">Email:</div>
+                    <div>{form.watch('email')}</div>
+                    
+                    <div className="font-medium">Name:</div>
+                    <div>{form.watch('name')}</div>
+                    
+                    <div className="font-medium">Role:</div>
+                    <div className="capitalize">{form.watch('role')}</div>
+                    
+                    <div className="font-medium">Access Method:</div>
+                    <div>{method === 'SEND_INVITE' ? 'Email Invitation' : 'Manual Password'}</div>
+                  </div>
+                </div>
+
+                <div className="flex gap-2">
+                  <Button type="button" variant="outline" onClick={() => setStep(2)}>
+                    Back
+                  </Button>
+                  <Button type="submit" className="flex-1" disabled={provisionUser.isPending}>
+                    {provisionUser.isPending ? 'Creating...' : 'Create User'}
+                  </Button>
+                </div>
+              </div>
+            )}
+          </form>
+        </Form>
+      </DialogContent>
+    </Dialog>
+  );
+}
+```
+
+---
+
+## 5. Clients Tab - Add New Client Functionality
+
+### Implementation:
+```tsx
+function TenantClientsTab({ tenant }) {
+  const [createOpen, setCreateOpen] = useState(false);
+
+  const { data: clients, isLoading } = useQuery({
+    queryKey: ['super', 'tenants', tenant.id, 'clients'],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/super/tenants/${tenant.id}/clients`, {
+        credentials: 'include',
+        headers: { 'X-Tenant-Id': tenant.id },
+      });
+      return res.json();
+    },
+  });
+
+  const createClient = useMutation({
+    mutationFn: async (data) => {
+      const res = await fetch(`/api/v1/super/tenants/${tenant.id}/clients`, {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Tenant-Id': tenant.id,
+        },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['super', 'tenants', tenant.id, 'clients']);
+      setCreateOpen(false);
+      toast({ title: 'Client created successfully' });
+    },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-semibold">Clients</h3>
+          <p className="text-sm text-muted-foreground">
+            Manage client accounts for this tenant
+          </p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>
+          <Building className="h-4 w-4 mr-2" />
+          Add Client
+        </Button>
+      </div>
+
+      {/* Clients table */}
+      <Table>
+        <TableHeader>
+          <TableRow>
+            <TableHead>Name</TableHead>
+            <TableHead>Email</TableHead>
+            <TableHead>Status</TableHead>
+            <TableHead>Projects</TableHead>
+            <TableHead>Created</TableHead>
+            <TableHead>Actions</TableHead>
+          </TableRow>
+        </TableHeader>
+        <TableBody>
+          {clients?.map((client) => (
+            <TableRow key={client.id}>
+              <TableCell>{client.name}</TableCell>
+              <TableCell>{client.email}</TableCell>
+              <TableCell>
+                <Badge>{client.status}</Badge>
+              </TableCell>
+              <TableCell>{client.projectCount || 0}</TableCell>
+              <TableCell>{new Date(client.createdAt).toLocaleDateString()}</TableCell>
+              <TableCell>
+                <Button variant="ghost" size="sm">
+                  <Edit className="h-4 w-4" />
+                </Button>
+              </TableCell>
+            </TableRow>
+          ))}
+        </TableBody>
+      </Table>
+
+      {/* Create Client Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add New Client</DialogTitle>
+          </DialogHeader>
+          <ClientForm
+            onSubmit={(data) => createClient.mutate(data)}
+            onCancel={() => setCreateOpen(false)}
+          />
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+function ClientForm({ client, onSubmit, onCancel }) {
+  const form = useForm({
+    defaultValues: {
+      name: client?.name || '',
+      email: client?.email || '',
+      phone: client?.phone || '',
+      company: client?.company || '',
+      status: client?.status || 'active',
+      website: client?.website || '',
+      notes: client?.notes || '',
+    },
+  });
+
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <div>
+        <Label>Client Name *</Label>
+        <Input {...form.register('name')} placeholder="Acme Corp" />
+      </div>
+      <div>
+        <Label>Email</Label>
+        <Input {...form.register('email')} type="email" placeholder="contact@acme.com" />
+      </div>
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label>Phone</Label>
+          <Input {...form.register('phone')} type="tel" />
+        </div>
+        <div>
+          <Label>Status</Label>
+          <Select {...form.register('status')}>
+            <SelectTrigger>
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="prospect">Prospect</SelectItem>
+              <SelectItem value="inactive">Inactive</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+      </div>
+      <div>
+        <Label>Website</Label>
+        <Input {...form.register('website')} type="url" placeholder="https://..." />
+      </div>
+      <div>
+        <Label>Notes</Label>
+        <Textarea {...form.register('notes')} rows={3} />
+      </div>
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onCancel}>Cancel</Button>
+        <Button type="submit">{client ? 'Update' : 'Create'}</Button>
+      </div>
+    </form>
+  );
+}
+```
+
+**Backend:**
+```typescript
+// POST create client
+app.post('/api/v1/super/tenants/:tenantId/clients',
+  requireAuth,
+  requireSuperUser,
+  asyncHandler(async (req, res) => {
+    const { tenantId } = req.params;
+
+    const [client] = await db.insert(clients).values({
+      ...req.body,
+      tenantId,
+    }).returning();
+
+    res.status(201).json(client);
+  })
+);
+```
+
+---
+
+## 6. Projects Tab - Add New Project Functionality
+
+Similar implementation to Clients tab:
+```tsx
+function TenantProjectsTab({ tenant }) {
+  const [createOpen, setCreateOpen] = useState(false);
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-semibold">Projects</h3>
+          <p className="text-sm text-muted-foreground">
+            Manage projects for this tenant
+          </p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>
+          <FolderPlus className="h-4 w-4 mr-2" />
+          Add Project
+        </Button>
+      </div>
+
+      {/* Projects table and create dialog */}
+      {/* Similar pattern to clients above */}
+    </div>
+  );
+}
+```
+
+---
+
+## 7. Notes Tab - Fix and Restrict to Super Admin Only
+
+### Current Issue:
+Notes tab doesn't work
+
+### Required:
+- Only Super Admins can see Notes tab
+- Only Super Admins can add notes
+- Notes are chronological log entries
+- Can categorize notes (onboarding, support, billing, technical)
+
+**Implementation:**
+```tsx
+function TenantNotesTab({ tenant }) {
+  const { user } = useAuth();
+  const [noteText, setNoteText] = useState('');
+  const [category, setCategory] = useState('general');
+
+  // Only show to super users
+  if (user?.role !== 'super_user') {
+    return (
+      <Alert>
+        <AlertDescription>
+          Only Super Admins can view and add tenant notes.
+        </AlertDescription>
+      </Alert>
+    );
+  }
+
+  const { data: notes, isLoading } = useQuery({
+    queryKey: ['super', 'tenants', tenant.id, 'notes'],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/super/tenants/${tenant.id}/notes`, {
+        credentials: 'include',
+      });
+      return res.json();
+    },
+  });
+
+  const addNote = useMutation({
+    mutationFn: async (data) => {
+      const res = await fetch(`/api/v1/super/tenants/${tenant.id}/notes`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['super', 'tenants', tenant.id, 'notes']);
+      setNoteText('');
+      setCategory('general');
+      toast({ title: 'Note added' });
+    },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div>
+        <h3 className="text-lg font-semibold">Internal Notes</h3>
+        <p className="text-sm text-muted-foreground">
+          Private notes visible only to Super Admins
+        </p>
+      </div>
+
+      {/* Add Note Form */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-base">Add Note</CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <div>
+            <Label>Category</Label>
+            <Select value={category} onValueChange={setCategory}>
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="general">General</SelectItem>
+                <SelectItem value="onboarding">Onboarding</SelectItem>
+                <SelectItem value="support">Support</SelectItem>
+                <SelectItem value="billing">Billing</SelectItem>
+                <SelectItem value="technical">Technical</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Note</Label>
+            <Textarea
+              value={noteText}
+              onChange={(e) => setNoteText(e.target.value)}
+              rows={3}
+              placeholder="Enter internal note..."
+            />
+          </div>
+          <Button 
+            onClick={() => addNote.mutate({ body: noteText, category })}
+            disabled={!noteText.trim() || addNote.isPending}
+          >
+            {addNote.isPending ? 'Adding...' : 'Add Note'}
+          </Button>
+        </CardContent>
+      </Card>
+
+      {/* Notes Timeline */}
+      <div className="space-y-3">
+        {notes?.map((note) => (
+          <Card key={note.id}>
+            <CardContent className="pt-4">
+              <div className="flex justify-between items-start mb-2">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline">{note.category}</Badge>
+                  <span className="text-sm text-muted-foreground">
+                    {note.authorName} • {new Date(note.createdAt).toLocaleString()}
+                  </span>
+                </div>
+              </div>
+              <p className="text-sm whitespace-pre-wrap">{note.body}</p>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </div>
+  );
+}
+```
+
+**Backend:**
+```typescript
+// GET notes (super admin only)
+app.get('/api/v1/super/tenants/:tenantId/notes',
+  requireAuth,
+  requireSuperUser,
+  asyncHandler(async (req, res) => {
+    const { tenantId } = req.params;
+
+    const notes = await db.query.tenantNotes.findMany({
+      where: eq(tenantNotes.tenantId, tenantId),
+      orderBy: [desc(tenantNotes.createdAt)],
+      with: {
+        author: {
+          columns: { name: true, email: true },
+        },
+      },
+    });
+
+    res.json(notes);
+  })
+);
+
+// POST add note (super admin only)
+app.post('/api/v1/super/tenants/:tenantId/notes',
+  requireAuth,
+  requireSuperUser,
+  asyncHandler(async (req, res) => {
+    const { tenantId } = req.params;
+    const { body, category } = req.body;
+
+    const [note] = await db.insert(tenantNotes).values({
+      tenantId,
+      authorUserId: req.user!.id,
+      body,
+      category: category || 'general',
+    }).returning();
+
+    res.status(201).json(note);
+  })
+);
+```
+
+---
+
+## Summary of All Changes
+
+### Frontend Files to Modify:
+
+1. `/client/src/pages/super-admin.tsx`
+   - Make tenant rows clickable
+   - Remove pencil icon, keep gear cog
+
+2. `/client/src/components/super-admin/tenant-drawer.tsx`
+   - Update Overview tab with CRM fields
+   - Enhanced Workspaces tab
+   - Consolidate Users tab (remove separate invite section)
+   - Add Clients tab with create functionality
+   - Add Projects tab with create functionality
+   - Fix Notes tab (super admin only)
+
+### Backend Files to Modify:
+
+1. `/shared/schema.ts`
+   - Add CRM fields to tenants table
+
+2. `/server/routes/superAdmin.ts`
+   - Add workspace CRUD endpoints
+   - Add client CRUD endpoints  
+   - Add project CRUD endpoints
+   - Add notes endpoints
+   - Update tenant PATCH to accept CRM fields
+
+### Database Migration:
+```sql
+-- Add CRM fields to tenants table
+ALTER TABLE tenants 
+  ADD COLUMN legal_name TEXT,
+  ADD COLUMN industry TEXT,
+  ADD COLUMN company_size TEXT,
+  ADD COLUMN website TEXT,
+  ADD COLUMN tax_id TEXT,
+  ADD COLUMN founded_date TEXT,
+  ADD COLUMN description TEXT,
+  ADD COLUMN address_line_1 TEXT,
+  ADD COLUMN address_line_2 TEXT,
+  ADD COLUMN city TEXT,
+  ADD COLUMN state TEXT,
+  ADD COLUMN postal_code TEXT,
+  ADD COLUMN country TEXT,
+  ADD COLUMN phone_number TEXT,
+  ADD COLUMN primary_contact_name TEXT,
+  ADD COLUMN primary_contact_email TEXT,
+  ADD COLUMN primary_contact_phone TEXT;
+```
+
+## Testing Checklist
+
+- [ ] Clicking tenant row opens drawer
+- [ ] Gear cog icon also opens drawer
+- [ ] Overview tab shows all CRM fields
+- [ ] Can edit name and slug
+- [ ] Can save CRM data
+- [ ] Workspaces tab shows create button
+- [ ] Can create/edit/delete workspaces
+- [ ] Provision User button shows single modal
+- [ ] Can toggle between invite/manual in provision modal
+- [ ] Can set password manually
+- [ ] Can send invite email
+- [ ] Clients tab shows add button
+- [ ] Can create new client
+- [ ] Projects tab shows add button
+- [ ] Can create new project
+- [ ] Notes tab only visible to super admin
+- [ ] Can add notes as super admin
+- [ ] Notes show in chronological order
+- [ ] All changes save to database
