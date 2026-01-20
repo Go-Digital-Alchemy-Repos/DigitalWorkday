@@ -46,7 +46,7 @@ interface AppModeHook {
 const ACTING_TENANT_NAME_KEY = "actingTenantName";
 
 export function useAppMode(): AppModeHook {
-  const { user } = useAuth();
+  const { user, userImpersonation } = useAuth();
   const { toast } = useToast();
   const isSuperUser = user?.role === UserRole.SUPER_USER;
   const [isModeTransitioning, setIsModeTransitioning] = useState(false);
@@ -142,15 +142,49 @@ export function useAppMode(): AppModeHook {
     setTimeout(() => setIsModeTransitioning(false), 100);
   }, []);
 
-  const isImpersonating = isSuperUser && impersonation !== null;
-  const appMode: AppMode = (isSuperUser && !isImpersonating) ? "super" : "tenant";
+  // Determine if user impersonation is active (super admin logged in as tenant user)
+  const isUserImpersonating = userImpersonation?.isImpersonating === true;
+  
+  // Determine if tenant impersonation is active (super admin acting as tenant via X-Tenant-Id)
+  const isTenantImpersonating = isSuperUser && impersonation !== null;
+  
+  // Combined impersonation state (either type counts as impersonating for layout purposes)
+  const isImpersonating = isUserImpersonating || isTenantImpersonating;
+  
+  // Determine effective tenant ID:
+  // 1. User impersonation takes highest priority (super admin logged in as tenant user)
+  // 2. Tenant impersonation (super admin acting as tenant via localStorage)
+  // 3. Regular user's own tenant ID
+  let effectiveTenantId: string | null = null;
+  let effectiveTenantName: string | null = null;
+  
+  if (isUserImpersonating && userImpersonation?.impersonatedTenant?.id) {
+    // User impersonation: use the impersonated user's tenant
+    effectiveTenantId = userImpersonation.impersonatedTenant.id;
+    effectiveTenantName = userImpersonation.impersonatedTenant.name || null;
+  } else if (isTenantImpersonating && impersonation) {
+    // Tenant impersonation: use the selected tenant from localStorage
+    effectiveTenantId = impersonation.tenantId;
+    effectiveTenantName = impersonation.tenantName;
+  } else if (!isSuperUser && user?.tenantId) {
+    // Regular tenant user: use their own tenant ID
+    effectiveTenantId = user.tenantId;
+    effectiveTenantName = null; // We don't store tenant name for regular users, API will provide it
+  }
+  
+  // Determine app mode:
+  // - Super user without any impersonation: "super" mode
+  // - Super user with user impersonation: "tenant" mode (acting as tenant user)
+  // - Super user with tenant impersonation: "tenant" mode
+  // - Regular user: "tenant" mode
+  const appMode: AppMode = (isSuperUser && !isUserImpersonating && !isTenantImpersonating) ? "super" : "tenant";
 
   return {
     appMode,
     isSuper: isSuperUser,
     isImpersonating,
-    effectiveTenantId: impersonation?.tenantId || null,
-    effectiveTenantName: impersonation?.tenantName || null,
+    effectiveTenantId,
+    effectiveTenantName,
     isModeTransitioning,
     startImpersonation,
     stopImpersonation,
