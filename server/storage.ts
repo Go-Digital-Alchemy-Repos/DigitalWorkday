@@ -230,6 +230,7 @@ export interface IStorage {
   deleteTaskWithTenant(id: string, tenantId: string): Promise<boolean>;
 
   getUserByIdAndTenant(id: string, tenantId: string): Promise<User | undefined>;
+  getUserByEmailAndTenant(email: string, tenantId: string): Promise<User | undefined>;
   getUsersByTenant(tenantId: string): Promise<User[]>;
   createUserWithTenant(user: InsertUser & { tenantId: string }): Promise<User>;
   updateUserWithTenant(id: string, tenantId: string, updates: Partial<InsertUser>): Promise<User | undefined>;
@@ -1440,6 +1441,12 @@ export class DatabaseStorage implements IStorage {
   async getUserByIdAndTenant(id: string, tenantId: string): Promise<User | undefined> {
     const [user] = await db.select().from(users)
       .where(and(eq(users.id, id), eq(users.tenantId, tenantId)));
+    return user || undefined;
+  }
+
+  async getUserByEmailAndTenant(email: string, tenantId: string): Promise<User | undefined> {
+    const [user] = await db.select().from(users)
+      .where(and(eq(users.email, email), eq(users.tenantId, tenantId)));
     return user || undefined;
   }
 

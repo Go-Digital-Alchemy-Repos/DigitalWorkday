@@ -38,7 +38,7 @@ import { z } from "zod";
 import { db } from "../db";
 import { eq, sql, desc, and, ilike, count, gte, lt, isNull, isNotNull, ne } from "drizzle-orm";
 import { timingSafeEqual } from "crypto";
-import { tenantIntegrationService, IntegrationProvider } from "../services/tenantIntegrations";
+import { tenantIntegrationService } from "../services/tenantIntegrations";
 import multer from "multer";
 import { validateBrandAsset, generateBrandAssetKey, uploadToS3, isS3Configured } from "../s3";
 import * as schema from "@shared/schema";
@@ -806,6 +806,280 @@ router.post("/tenants/:tenantId/users", requireSuperUser, async (req, res) => {
   }
 });
 
+// =============================================================================
+// PROVISION USER ACCESS - Unified endpoint for Super Admin to fully provision tenant users
+// =============================================================================
+const provisionUserSchema = z.object({
+  email: z.string().email("Valid email is required"),
+  firstName: z.string().min(1, "First name is required").optional(),
+  lastName: z.string().min(1, "Last name is required").optional(),
+  role: z.enum(["admin", "employee", "client"]).default("employee"),
+  activateNow: z.boolean().default(true),
+  method: z.enum(["SET_PASSWORD", "RESET_LINK"]),
+  password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  mustChangeOnNextLogin: z.boolean().default(true),
+  sendEmail: z.boolean().default(false),
+});
+
+router.post("/tenants/:tenantId/users/provision", requireSuperUser, async (req, res) => {
+  const requestId = req.get("X-Request-Id") || `prov-${Date.now()}`;
+  const debug = process.env.SUPER_USER_PROVISION_DEBUG === "true";
+  
+  try {
+    const { tenantId } = req.params;
+    const data = provisionUserSchema.parse(req.body);
+    const superUser = req.user as any;
+    
+    if (debug) {
+      console.log(`[provision-debug] requestId=${requestId} tenantId=${tenantId} email=${data.email} method=${data.method}`);
+    }
+    
+    // Validate tenant exists and is not deleted
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      if (debug) console.log(`[provision-debug] requestId=${requestId} FAIL: tenant not found`);
+      return res.status(404).json({ error: "Tenant not found", requestId });
+    }
+    
+    if (tenant.status === "deleted") {
+      if (debug) console.log(`[provision-debug] requestId=${requestId} FAIL: tenant is deleted`);
+      return res.status(400).json({ error: "Cannot provision users in a deleted tenant", requestId });
+    }
+    
+    // Validate method-specific requirements
+    if (data.method === "SET_PASSWORD" && !data.password) {
+      return res.status(400).json({ error: "Password is required when method is SET_PASSWORD", requestId });
+    }
+    
+    // Check if user exists in this tenant
+    const existingUserByEmail = await storage.getUserByEmailAndTenant(data.email, tenantId);
+    let user: any;
+    let isNewUser = false;
+    
+    if (existingUserByEmail) {
+      if (debug) console.log(`[provision-debug] requestId=${requestId} found existing user id=${existingUserByEmail.id}`);
+      
+      // Update existing user
+      const updates: any = {
+        isActive: data.activateNow,
+      };
+      if (data.firstName) updates.firstName = data.firstName;
+      if (data.lastName) updates.lastName = data.lastName;
+      if (data.firstName || data.lastName) {
+        updates.name = `${data.firstName || existingUserByEmail.firstName || ""} ${data.lastName || existingUserByEmail.lastName || ""}`.trim();
+      }
+      if (data.role) updates.role = data.role;
+      
+      user = await storage.updateUserWithTenant(existingUserByEmail.id, tenantId, updates);
+      
+      await recordTenantAuditEvent(
+        tenantId,
+        "super_provision_user_updated",
+        `User ${data.email} updated via provision`,
+        superUser?.id,
+        { userId: user.id, email: data.email, role: data.role, isActive: data.activateNow }
+      );
+    } else {
+      if (debug) console.log(`[provision-debug] requestId=${requestId} creating new user`);
+      
+      // Check if email exists globally (in another tenant)
+      const globalExisting = await storage.getUserByEmail(data.email);
+      if (globalExisting) {
+        if (debug) console.log(`[provision-debug] requestId=${requestId} FAIL: email exists in another tenant`);
+        return res.status(409).json({ 
+          error: "A user with this email already exists in another tenant", 
+          requestId 
+        });
+      }
+      
+      // Get primary workspace for this tenant
+      const tenantWorkspaces = await db.select().from(workspaces)
+        .where(and(eq(workspaces.tenantId, tenantId), eq(workspaces.isPrimary, true)));
+      const primaryWorkspace = tenantWorkspaces[0];
+      
+      // Create new user (password will be set below if method is SET_PASSWORD)
+      user = await storage.createUserWithTenant({
+        email: data.email,
+        name: `${data.firstName || ""} ${data.lastName || ""}`.trim() || data.email,
+        firstName: data.firstName || "",
+        lastName: data.lastName || "",
+        role: data.role,
+        passwordHash: null, // Will be set below if SET_PASSWORD
+        isActive: data.activateNow,
+        tenantId,
+      });
+      isNewUser = true;
+      
+      // Add to primary workspace if exists
+      if (primaryWorkspace) {
+        await db.insert(workspaceMembers).values({
+          workspaceId: primaryWorkspace.id,
+          userId: user.id,
+          role: data.role === "admin" ? "admin" : "member",
+        }).onConflictDoNothing();
+      }
+      
+      await recordTenantAuditEvent(
+        tenantId,
+        "super_provision_user_created",
+        `User ${data.email} created via provision`,
+        superUser?.id,
+        { userId: user.id, email: data.email, role: data.role, isActive: data.activateNow }
+      );
+    }
+    
+    let resetUrl: string | undefined;
+    let expiresAt: string | undefined;
+    
+    if (data.method === "SET_PASSWORD") {
+      if (debug) console.log(`[provision-debug] requestId=${requestId} setting password`);
+      
+      // Hash and set password
+      const { hashPassword } = await import("../auth");
+      const passwordHash = await hashPassword(data.password!);
+      
+      await storage.setUserPasswordWithMustChange(user.id, tenantId, passwordHash, data.mustChangeOnNextLogin);
+      
+      // Invalidate any outstanding reset tokens for this user
+      const { passwordResetTokens } = await import("@shared/schema");
+      const { eq: eqOp, and: andOp, isNull: isNullOp } = await import("drizzle-orm");
+      await db
+        .update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(andOp(
+          eqOp(passwordResetTokens.userId, user.id),
+          isNullOp(passwordResetTokens.usedAt)
+        ));
+      
+      await recordTenantAuditEvent(
+        tenantId,
+        "super_provision_user_set_password",
+        `Password set for user ${data.email} via provision`,
+        superUser?.id,
+        { userId: user.id, email: data.email, mustChangeOnNextLogin: data.mustChangeOnNextLogin }
+      );
+      
+      if (debug) console.log(`[provision-debug] requestId=${requestId} password set successfully`);
+    } else if (data.method === "RESET_LINK") {
+      if (debug) console.log(`[provision-debug] requestId=${requestId} generating reset link`);
+      
+      // Invalidate existing reset tokens
+      const { passwordResetTokens } = await import("@shared/schema");
+      const { eq: eqOp, and: andOp, isNull: isNullOp } = await import("drizzle-orm");
+      await db
+        .update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(andOp(
+          eqOp(passwordResetTokens.userId, user.id),
+          isNullOp(passwordResetTokens.usedAt)
+        ));
+      
+      // Generate reset token
+      const crypto = await import("crypto");
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      await db.insert(passwordResetTokens).values({
+        userId: user.id,
+        tokenHash,
+        expiresAt: expiry,
+        createdByUserId: superUser.id,
+      });
+      
+      const appPublicUrl = process.env.APP_PUBLIC_URL;
+      if (!appPublicUrl && debug) {
+        console.warn(`[provision-debug] requestId=${requestId} APP_PUBLIC_URL not set`);
+      }
+      const baseUrl = appPublicUrl || `${req.protocol}://${req.get("host")}`;
+      resetUrl = `${baseUrl}/auth/reset-password?token=${token}`;
+      expiresAt = expiry.toISOString();
+      
+      await recordTenantAuditEvent(
+        tenantId,
+        "super_provision_user_generated_reset_link",
+        `Reset link generated for user ${data.email} via provision`,
+        superUser?.id,
+        { userId: user.id, email: data.email }
+      );
+      
+      // Optionally send email if requested and Mailgun is configured
+      if (data.sendEmail) {
+        try {
+          const emailResult = await sendProvisionResetEmail(tenantId, user.email, resetUrl, tenant.name);
+          if (debug) console.log(`[provision-debug] requestId=${requestId} email sent=${emailResult}`);
+        } catch (emailError) {
+          if (debug) console.log(`[provision-debug] requestId=${requestId} email failed:`, emailError);
+          // Don't fail the whole operation if email fails
+        }
+      }
+      
+      if (debug) console.log(`[provision-debug] requestId=${requestId} reset link generated`);
+    }
+    
+    // Refetch user to get latest state
+    const finalUser = await storage.getUserByIdAndTenant(user.id, tenantId);
+    
+    res.json({
+      ok: true,
+      user: {
+        id: finalUser?.id,
+        email: finalUser?.email,
+        firstName: finalUser?.firstName,
+        lastName: finalUser?.lastName,
+        role: finalUser?.role,
+        isActive: finalUser?.isActive,
+        mustChangeOnNextLogin: finalUser?.mustChangePasswordOnNextLogin,
+        lastLoginAt: finalUser?.lastLoginAt,
+      },
+      isNewUser,
+      resetUrl,
+      expiresAt,
+      requestId,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors, requestId });
+    }
+    console.error(`[provision-error] requestId=${requestId}`, error);
+    res.status(500).json({ error: "Failed to provision user", requestId });
+  }
+});
+
+// Helper function to send reset email for provisioned users
+async function sendProvisionResetEmail(tenantId: string, email: string, resetUrl: string, tenantName: string): Promise<boolean> {
+  try {
+    const integration = await tenantIntegrationService.getIntegration(tenantId, "mailgun");
+    if (!integration?.isEnabled || !integration.config) {
+      return false;
+    }
+    
+    const config = integration.config as any;
+    if (!config.apiKey || !config.domain) {
+      return false;
+    }
+    
+    const mailgun = new Mailgun(FormData);
+    const mg = mailgun.client({ username: "api", key: config.apiKey });
+    
+    await mg.messages.create(config.domain, {
+      from: config.fromEmail || `noreply@${config.domain}`,
+      to: email,
+      subject: `Set Your Password for ${tenantName}`,
+      html: `
+        <h2>Welcome to ${tenantName}</h2>
+        <p>Your account has been created. Click the link below to set your password:</p>
+        <p><a href="${resetUrl}">Set Your Password</a></p>
+        <p>This link expires in 24 hours.</p>
+      `,
+    });
+    
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 // Update a user
 const updateUserSchema = z.object({
   email: z.string().email().optional(),
@@ -958,6 +1232,173 @@ router.post("/tenants/:tenantId/users/:userId/set-password", requireSuperUser, a
     console.error("Error setting user password:", error);
     res.status(500).json({ error: "Failed to set password" });
   }
+});
+
+// =============================================================================
+// USER IMPERSONATION - Super Admin can log in as a tenant user for testing
+// =============================================================================
+router.post("/tenants/:tenantId/users/:userId/impersonate-login", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, userId } = req.params;
+    const superUser = req.user as any;
+    
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+    
+    if (tenant.status === "deleted" || tenant.status === "suspended") {
+      return res.status(400).json({ error: `Cannot impersonate users in a ${tenant.status} tenant` });
+    }
+    
+    const targetUser = await storage.getUserByIdAndTenant(userId, tenantId);
+    if (!targetUser) {
+      return res.status(404).json({ error: "User not found in this tenant" });
+    }
+    
+    if (!targetUser.isActive) {
+      return res.status(400).json({ error: "Cannot impersonate an inactive user" });
+    }
+    
+    // Record audit event BEFORE impersonation
+    await recordTenantAuditEvent(
+      tenantId,
+      "super_impersonate_user",
+      `Super admin started impersonation of user ${targetUser.email}`,
+      superUser?.id,
+      { 
+        targetUserId: userId, 
+        targetEmail: targetUser.email,
+        superAdminId: superUser?.id,
+        superAdminEmail: superUser?.email
+      }
+    );
+    
+    // Set impersonation session data
+    // We preserve the original super user and add impersonation context
+    (req.session as any).isImpersonatingUser = true;
+    (req.session as any).impersonatedUserId = targetUser.id;
+    (req.session as any).impersonatedUserEmail = targetUser.email;
+    (req.session as any).impersonatedUserRole = targetUser.role;
+    (req.session as any).impersonatedTenantId = tenantId;
+    (req.session as any).impersonatedTenantName = tenant.name;
+    (req.session as any).originalSuperUserId = superUser.id;
+    (req.session as any).originalSuperUserEmail = superUser.email;
+    (req.session as any).impersonationStartedAt = new Date().toISOString();
+    
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    
+    console.log(`[impersonate] Super admin ${superUser.email} now impersonating ${targetUser.email} in tenant ${tenant.name}`);
+    
+    res.json({
+      ok: true,
+      impersonating: {
+        userId: targetUser.id,
+        email: targetUser.email,
+        name: targetUser.name,
+        role: targetUser.role,
+        tenantId,
+        tenantName: tenant.name,
+      },
+      message: `Now impersonating ${targetUser.email}. You will see the app as this user sees it.`,
+    });
+  } catch (error) {
+    console.error("Error impersonating user:", error);
+    res.status(500).json({ error: "Failed to start impersonation" });
+  }
+});
+
+// Exit user impersonation and return to super admin view
+router.post("/impersonation/exit", requireSuperUser, async (req, res) => {
+  try {
+    const session = req.session as any;
+    
+    if (!session.isImpersonatingUser) {
+      return res.status(400).json({ error: "Not currently impersonating any user" });
+    }
+    
+    const impersonatedEmail = session.impersonatedUserEmail;
+    const tenantId = session.impersonatedTenantId;
+    const superUser = req.user as any;
+    
+    // Record audit event for exiting impersonation
+    if (tenantId) {
+      await recordTenantAuditEvent(
+        tenantId,
+        "super_exit_impersonation",
+        `Super admin exited impersonation of user ${impersonatedEmail}`,
+        superUser?.id,
+        { 
+          impersonatedEmail,
+          duration: session.impersonationStartedAt 
+            ? `${Math.round((Date.now() - new Date(session.impersonationStartedAt).getTime()) / 1000)}s`
+            : "unknown"
+        }
+      );
+    }
+    
+    // Clear impersonation session data
+    delete session.isImpersonatingUser;
+    delete session.impersonatedUserId;
+    delete session.impersonatedUserEmail;
+    delete session.impersonatedUserRole;
+    delete session.impersonatedTenantId;
+    delete session.impersonatedTenantName;
+    delete session.originalSuperUserId;
+    delete session.originalSuperUserEmail;
+    delete session.impersonationStartedAt;
+    
+    await new Promise<void>((resolve, reject) => {
+      req.session.save((err) => {
+        if (err) reject(err);
+        else resolve();
+      });
+    });
+    
+    console.log(`[impersonate] Super admin exited impersonation of ${impersonatedEmail}`);
+    
+    res.json({
+      ok: true,
+      message: "Impersonation ended. You are now viewing as super admin again.",
+    });
+  } catch (error) {
+    console.error("Error exiting impersonation:", error);
+    res.status(500).json({ error: "Failed to exit impersonation" });
+  }
+});
+
+// Get current impersonation status
+router.get("/impersonation/status", requireSuperUser, async (req, res) => {
+  const session = req.session as any;
+  
+  if (!session.isImpersonatingUser) {
+    return res.json({
+      isImpersonating: false,
+    });
+  }
+  
+  res.json({
+    isImpersonating: true,
+    impersonatedUser: {
+      id: session.impersonatedUserId,
+      email: session.impersonatedUserEmail,
+      role: session.impersonatedUserRole,
+    },
+    tenant: {
+      id: session.impersonatedTenantId,
+      name: session.impersonatedTenantName,
+    },
+    startedAt: session.impersonationStartedAt,
+    originalSuperUser: {
+      id: session.originalSuperUserId,
+      email: session.originalSuperUserEmail,
+    },
+  });
 });
 
 // Get user's latest invitation status

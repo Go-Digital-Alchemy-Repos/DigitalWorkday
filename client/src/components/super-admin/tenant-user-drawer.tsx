@@ -36,7 +36,9 @@ import {
   Eye,
   EyeOff,
   X,
-  Lock
+  Lock,
+  LogIn,
+  ExternalLink
 } from "lucide-react";
 
 interface TenantUser {
@@ -191,6 +193,29 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
     },
   });
 
+  const impersonateMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/users/${userId}/impersonate-login`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      toast({ 
+        title: "Impersonation started", 
+        description: `Now viewing as ${data.impersonating.email}. You'll be redirected.` 
+      });
+      setTimeout(() => {
+        window.location.href = "/";
+      }, 500);
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "Impersonation failed", 
+        description: error?.message || "Could not impersonate this user",
+        variant: "destructive" 
+      });
+    },
+  });
+
   useEffect(() => {
     if (!open) {
       setActiveTab("overview");
@@ -334,6 +359,28 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
                         disabled={toggleUserActiveMutation.isPending}
                         data-testid="switch-user-active"
                       />
+                    </div>
+                    
+                    <div className="flex items-center justify-between p-3 rounded-lg border">
+                      <div>
+                        <p className="font-medium">Impersonate User</p>
+                        <p className="text-sm text-muted-foreground">
+                          Log in as this user to see the app from their perspective
+                        </p>
+                      </div>
+                      <Button
+                        variant="outline"
+                        onClick={() => impersonateMutation.mutate()}
+                        disabled={impersonateMutation.isPending || !user.isActive}
+                        data-testid="button-impersonate-user"
+                      >
+                        {impersonateMutation.isPending ? (
+                          <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                        ) : (
+                          <LogIn className="h-4 w-4 mr-2" />
+                        )}
+                        Impersonate
+                      </Button>
                     </div>
                   </CardContent>
                 </Card>

@@ -64,6 +64,7 @@ import {
 import { CsvImportPanel, type ParsedRow, type ImportResult } from "@/components/common/csv-import-panel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TenantUserDrawer } from "./tenant-user-drawer";
+import { ProvisionUserDrawer } from "./provision-user-drawer";
 import { S3Dropzone } from "@/components/common/S3Dropzone";
 import type { Tenant } from "@shared/schema";
 
@@ -511,6 +512,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
   
   // User drawer state
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
+  const [provisionDrawerOpen, setProvisionDrawerOpen] = useState(false);
 
   // Reset form state when tenant changes, restore persisted tab for this tenant
   useEffect(() => {
@@ -2584,6 +2586,30 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
           </TabsContent>
 
           <TabsContent value="users" className="space-y-6 mt-6">
+            {/* Quick Provision Button */}
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="pt-4">
+                <div className="flex items-center justify-between">
+                  <div>
+                    <h4 className="font-medium flex items-center gap-2">
+                      <UserPlus className="h-4 w-4 text-primary" />
+                      Provision User Access
+                    </h4>
+                    <p className="text-sm text-muted-foreground">
+                      Create or update a user with immediate access - no invitation required
+                    </p>
+                  </div>
+                  <Button 
+                    onClick={() => setProvisionDrawerOpen(true)}
+                    data-testid="button-provision-user"
+                  >
+                    <UserPlus className="h-4 w-4 mr-2" />
+                    Provision User
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             {/* Add User Card - Toggle between Invite and Manual Creation */}
             <Card>
               <CardHeader>
@@ -3568,6 +3594,16 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
           onClose={() => setSelectedUserId(null)}
           tenantId={activeTenant.id}
           userId={selectedUserId}
+          tenantName={activeTenant.name}
+        />
+      )}
+
+      {/* Provision User Drawer */}
+      {activeTenant && (
+        <ProvisionUserDrawer
+          open={provisionDrawerOpen}
+          onClose={() => setProvisionDrawerOpen(false)}
+          tenantId={activeTenant.id}
           tenantName={activeTenant.name}
         />
       )}
