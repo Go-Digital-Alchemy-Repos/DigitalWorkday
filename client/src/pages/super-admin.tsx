@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from "@/components/ui/dropdown-menu";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
@@ -13,7 +14,7 @@ import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest, clearTenantScopedCaches } from "@/lib/queryClient";
 import { useAppMode } from "@/hooks/useAppMode";
 import { useLocation } from "wouter";
-import { Building2, Plus, Edit2, Shield, CheckCircle, XCircle, UserPlus, Clock, Copy, AlertTriangle, Loader2, Activity, Database, RefreshCw, Play, Settings, Upload, Users, Download, PlayCircle, PauseCircle, Power, ExternalLink, Mail, FileText, Check, X } from "lucide-react";
+import { Building2, Plus, Edit2, Shield, CheckCircle, XCircle, UserPlus, Clock, Copy, AlertTriangle, Loader2, Activity, Database, RefreshCw, Play, Settings, Upload, Users, Download, PlayCircle, PauseCircle, Power, ExternalLink, Mail, FileText, Check, X, MoreHorizontal } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { TenantDrawer } from "@/components/super-admin/tenant-drawer";
@@ -473,19 +474,16 @@ export default function SuperAdminPage() {
               {tenants.map((tenant) => (
                 <div
                   key={tenant.id}
-                  className="flex items-center justify-between p-4 rounded-lg border bg-card hover-elevate"
+                  className="flex items-center justify-between p-4 rounded-lg border bg-card hover-elevate cursor-pointer"
                   data-testid={`tenant-row-${tenant.id}`}
+                  onClick={() => setSelectedTenant(tenant)}
                 >
-                  <div 
-                    className="flex items-center gap-4 cursor-pointer"
-                    onClick={() => setSelectedTenant(tenant)}
-                    data-testid={`button-select-tenant-${tenant.id}`}
-                  >
+                  <div className="flex items-center gap-4">
                     <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                       <Building2 className="h-5 w-5 text-primary" />
                     </div>
                     <div>
-                      <div className="font-medium hover:underline">{tenant.settings?.displayName || tenant.name}</div>
+                      <div className="font-medium">{tenant.settings?.displayName || tenant.name}</div>
                       <div className="text-sm text-muted-foreground">/{tenant.slug}</div>
                       {tenant.userCount !== undefined && tenant.userCount > 0 && (
                         <div className="text-xs text-muted-foreground mt-1">
@@ -494,120 +492,110 @@ export default function SuperAdminPage() {
                       )}
                     </div>
                   </div>
-                  <div className="flex items-center gap-3 flex-wrap">
+                  <div className="flex items-center gap-3">
                     {getStatusBadge(tenant)}
                     
-                    {/* Act as Tenant button */}
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleActAsTenant(tenant)}
-                      disabled={isActingAsTenant || tenant.status === "suspended"}
-                      data-testid={`button-act-as-tenant-${tenant.id}`}
-                    >
-                      {isActingAsTenant ? (
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                      ) : (
-                        <ExternalLink className="h-4 w-4 mr-2" />
-                      )}
-                      Act as Tenant
-                    </Button>
-                    
-                    {/* Status action buttons */}
-                    {tenant.status === "inactive" && (
-                      <>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
                         <Button
-                          size="sm"
-                          variant="default"
-                          onClick={() => setConfirmAction({ type: "activate", tenant })}
-                          data-testid={`button-activate-tenant-${tenant.id}`}
+                          size="icon"
+                          variant="ghost"
+                          onClick={(e) => e.stopPropagation()}
+                          data-testid={`button-actions-tenant-${tenant.id}`}
                         >
-                          <PlayCircle className="h-4 w-4 mr-2" />
-                          Activate
+                          <MoreHorizontal className="h-4 w-4" />
                         </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
+                        <DropdownMenuItem
+                          onClick={() => handleActAsTenant(tenant)}
+                          disabled={isActingAsTenant || tenant.status === "suspended"}
+                          data-testid={`menu-act-as-tenant-${tenant.id}`}
+                        >
+                          <ExternalLink className="h-4 w-4 mr-2" />
+                          Act as Tenant
+                        </DropdownMenuItem>
+                        
+                        <DropdownMenuSeparator />
+                        
+                        {tenant.status === "inactive" && (
+                          <>
+                            <DropdownMenuItem
+                              onClick={() => setConfirmAction({ type: "activate", tenant })}
+                              data-testid={`menu-activate-tenant-${tenant.id}`}
+                            >
+                              <PlayCircle className="h-4 w-4 mr-2" />
+                              Activate
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => {
+                                setInvitingTenant(tenant);
+                                setLastInviteUrl(null);
+                                setInviteType("link");
+                              }}
+                              data-testid={`menu-invite-admin-${tenant.id}`}
+                            >
+                              <UserPlus className="h-4 w-4 mr-2" />
+                              Invite Admin
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                        
+                        {tenant.status === "active" && (
+                          <>
+                            <DropdownMenuItem
+                              onClick={() => setConfirmAction({ type: "suspend", tenant })}
+                              data-testid={`menu-suspend-tenant-${tenant.id}`}
+                            >
+                              <PauseCircle className="h-4 w-4 mr-2" />
+                              Suspend
+                            </DropdownMenuItem>
+                            <DropdownMenuItem
+                              onClick={() => setConfirmAction({ type: "deactivate", tenant })}
+                              data-testid={`menu-deactivate-tenant-${tenant.id}`}
+                            >
+                              <Power className="h-4 w-4 mr-2" />
+                              Deactivate
+                            </DropdownMenuItem>
+                          </>
+                        )}
+                        
+                        {tenant.status === "suspended" && (
+                          <DropdownMenuItem
+                            onClick={() => setConfirmAction({ type: "activate", tenant })}
+                            data-testid={`menu-reactivate-tenant-${tenant.id}`}
+                          >
+                            <PlayCircle className="h-4 w-4 mr-2" />
+                            Reactivate
+                          </DropdownMenuItem>
+                        )}
+                        
+                        <DropdownMenuSeparator />
+                        
+                        <DropdownMenuItem
                           onClick={() => {
-                            setInvitingTenant(tenant);
-                            setLastInviteUrl(null);
-                            setInviteType("link");
+                            setImportingTenant(tenant);
+                            setCsvUsers([]);
+                            setImportResults(null);
                           }}
-                          data-testid={`button-invite-admin-${tenant.id}`}
+                          data-testid={`menu-import-users-${tenant.id}`}
                         >
-                          <UserPlus className="h-4 w-4 mr-2" />
-                          Invite Admin
-                        </Button>
-                      </>
-                    )}
-                    
-                    {tenant.status === "active" && (
-                      <>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setConfirmAction({ type: "suspend", tenant })}
-                          data-testid={`button-suspend-tenant-${tenant.id}`}
+                          <Upload className="h-4 w-4 mr-2" />
+                          Import CSV
+                        </DropdownMenuItem>
+                        
+                        <DropdownMenuItem
+                          onClick={() => {
+                            localStorage.setItem(`tenantDrawerTab_${tenant.id}`, "branding");
+                            setSelectedTenant(tenant);
+                          }}
+                          data-testid={`menu-settings-tenant-${tenant.id}`}
                         >
-                          <PauseCircle className="h-4 w-4 mr-2" />
-                          Suspend
-                        </Button>
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => setConfirmAction({ type: "deactivate", tenant })}
-                          data-testid={`button-deactivate-tenant-${tenant.id}`}
-                        >
-                          <Power className="h-4 w-4 mr-2" />
-                          Deactivate
-                        </Button>
-                      </>
-                    )}
-                    
-                    {tenant.status === "suspended" && (
-                      <Button
-                        size="sm"
-                        variant="default"
-                        onClick={() => setConfirmAction({ type: "activate", tenant })}
-                        data-testid={`button-reactivate-tenant-${tenant.id}`}
-                      >
-                        <PlayCircle className="h-4 w-4 mr-2" />
-                        Reactivate
-                      </Button>
-                    )}
-                    
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => {
-                        setImportingTenant(tenant);
-                        setCsvUsers([]);
-                        setImportResults(null);
-                      }}
-                      data-testid={`button-import-users-${tenant.id}`}
-                    >
-                      <Upload className="h-4 w-4 mr-2" />
-                      Import CSV
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => {
-                        localStorage.setItem(`tenantDrawerTab_${tenant.id}`, "branding");
-                        setSelectedTenant(tenant);
-                      }}
-                      data-testid={`button-settings-tenant-${tenant.id}`}
-                    >
-                      <Settings className="h-4 w-4" />
-                    </Button>
-                    <Button
-                      size="icon"
-                      variant="ghost"
-                      onClick={() => setEditingTenant(tenant)}
-                      data-testid={`button-edit-tenant-${tenant.id}`}
-                    >
-                      <Edit2 className="h-4 w-4" />
-                    </Button>
+                          <Settings className="h-4 w-4 mr-2" />
+                          Settings
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
                   </div>
                 </div>
               ))}
@@ -1037,7 +1025,7 @@ export default function SuperAdminPage() {
               <Card>
                 <CardHeader className="pb-2">
                   <CardTitle className="text-base flex items-center gap-2">
-                    {healthData.readinessCheck.canEnableStrict ? (
+                    {healthData.readinessCheck?.canEnableStrict ? (
                       <CheckCircle className="h-4 w-4 text-green-500" />
                     ) : (
                       <AlertTriangle className="h-4 w-4 text-yellow-500" />
@@ -1046,13 +1034,13 @@ export default function SuperAdminPage() {
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {healthData.readinessCheck.canEnableStrict ? (
+                  {healthData.readinessCheck?.canEnableStrict ? (
                     <p className="text-sm text-green-600">Ready to enable strict enforcement</p>
                   ) : (
                     <div className="space-y-2">
                       <p className="text-sm text-yellow-600">Not ready - resolve blockers first</p>
                       <ul className="text-xs text-muted-foreground list-disc list-inside">
-                        {healthData.readinessCheck.blockers.map((blocker, i) => (
+                        {healthData.readinessCheck?.blockers?.map((blocker, i) => (
                           <li key={i}>{blocker}</li>
                         ))}
                       </ul>

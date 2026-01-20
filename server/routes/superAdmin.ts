@@ -534,6 +534,118 @@ router.get("/tenants/:tenantId/workspaces", requireSuperUser, async (req, res) =
   }
 });
 
+// POST /api/v1/super/tenants/:tenantId/workspaces - Create a workspace for a tenant
+const createWorkspaceSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional(),
+});
+
+router.post("/tenants/:tenantId/workspaces", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const data = createWorkspaceSchema.parse(req.body);
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    const [workspace] = await db.insert(workspaces).values({
+      name: data.name,
+      tenantId,
+    }).returning();
+
+    const superUser = req.user as any;
+    await recordTenantAuditEvent(
+      tenantId,
+      "workspace_created",
+      `Workspace "${data.name}" created by super admin`,
+      superUser?.id,
+      { workspaceId: workspace.id, workspaceName: data.name }
+    );
+
+    res.status(201).json(workspace);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors });
+    }
+    console.error("Error creating workspace:", error);
+    res.status(500).json({ error: "Failed to create workspace" });
+  }
+});
+
+// PATCH /api/v1/super/tenants/:tenantId/workspaces/:workspaceId - Update a workspace
+const updateWorkspaceSchema = z.object({
+  name: z.string().min(1).optional(),
+});
+
+router.patch("/tenants/:tenantId/workspaces/:workspaceId", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, workspaceId } = req.params;
+    const data = updateWorkspaceSchema.parse(req.body);
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    const [existingWorkspace] = await db.select().from(workspaces)
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.tenantId, tenantId)));
+    
+    if (!existingWorkspace) {
+      return res.status(404).json({ error: "Workspace not found" });
+    }
+
+    const [updated] = await db.update(workspaces)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(workspaces.id, workspaceId))
+      .returning();
+
+    res.json(updated);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors });
+    }
+    console.error("Error updating workspace:", error);
+    res.status(500).json({ error: "Failed to update workspace" });
+  }
+});
+
+// DELETE /api/v1/super/tenants/:tenantId/workspaces/:workspaceId - Delete a workspace
+router.delete("/tenants/:tenantId/workspaces/:workspaceId", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, workspaceId } = req.params;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    const [existingWorkspace] = await db.select().from(workspaces)
+      .where(and(eq(workspaces.id, workspaceId), eq(workspaces.tenantId, tenantId)));
+    
+    if (!existingWorkspace) {
+      return res.status(404).json({ error: "Workspace not found" });
+    }
+
+    await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+
+    const superUser = req.user as any;
+    await recordTenantAuditEvent(
+      tenantId,
+      "workspace_deleted",
+      `Workspace "${existingWorkspace.name}" deleted by super admin`,
+      superUser?.id,
+      { workspaceId, workspaceName: existingWorkspace.name }
+    );
+
+    res.json({ success: true, message: "Workspace deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting workspace:", error);
+    res.status(500).json({ error: "Failed to delete workspace" });
+  }
+});
+
 // =============================================================================
 // PHASE 3A: TENANT ADMIN INVITATION
 // =============================================================================
@@ -2542,6 +2654,70 @@ router.post("/tenants/:tenantId/notes", requireSuperUser, async (req, res) => {
   }
 });
 
+// PATCH /api/v1/super/tenants/:tenantId/notes/:noteId - Update a note
+const updateNoteSchema = z.object({
+  body: z.string().min(1).max(10000).optional(),
+  category: z.enum(["onboarding", "support", "billing", "technical", "general"]).optional(),
+});
+
+router.patch("/tenants/:tenantId/notes/:noteId", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, noteId } = req.params;
+    const data = updateNoteSchema.parse(req.body);
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    const [existingNote] = await db.select().from(tenantNotes)
+      .where(and(eq(tenantNotes.id, noteId), eq(tenantNotes.tenantId, tenantId)));
+    
+    if (!existingNote) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    const [updated] = await db.update(tenantNotes)
+      .set({ ...data })
+      .where(eq(tenantNotes.id, noteId))
+      .returning();
+
+    res.json(updated);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors });
+    }
+    console.error("Error updating note:", error);
+    res.status(500).json({ error: "Failed to update note" });
+  }
+});
+
+// DELETE /api/v1/super/tenants/:tenantId/notes/:noteId - Delete a note
+router.delete("/tenants/:tenantId/notes/:noteId", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, noteId } = req.params;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    const [existingNote] = await db.select().from(tenantNotes)
+      .where(and(eq(tenantNotes.id, noteId), eq(tenantNotes.tenantId, tenantId)));
+    
+    if (!existingNote) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    await db.delete(tenantNotes).where(eq(tenantNotes.id, noteId));
+
+    res.json({ success: true, message: "Note deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting note:", error);
+    res.status(500).json({ error: "Failed to delete note" });
+  }
+});
+
 // =============================================================================
 // TENANT AUDIT EVENTS
 // =============================================================================
@@ -3085,6 +3261,139 @@ router.get("/tenants/:tenantId/clients", requireSuperUser, async (req, res) => {
   }
 });
 
+// POST /api/v1/super/tenants/:tenantId/clients - Create a client
+const createClientSchema = z.object({
+  companyName: z.string().min(1, "Company name is required"),
+  contactName: z.string().optional(),
+  email: z.string().email().optional().nullable().or(z.literal("")),
+  phone: z.string().optional(),
+  workspaceId: z.string().uuid().optional(),
+});
+
+router.post("/tenants/:tenantId/clients", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const data = createClientSchema.parse(req.body);
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    // Get a workspace for the client - use provided or find first tenant workspace
+    let workspaceId = data.workspaceId;
+    if (!workspaceId) {
+      const tenantWorkspaces = await db.select().from(workspaces)
+        .where(eq(workspaces.tenantId, tenantId)).limit(1);
+      if (tenantWorkspaces.length === 0) {
+        return res.status(400).json({ error: "No workspace found for tenant. Create a workspace first." });
+      }
+      workspaceId = tenantWorkspaces[0].id;
+    }
+
+    const [client] = await db.insert(clients).values({
+      companyName: data.companyName,
+      contactName: data.contactName || null,
+      email: data.email || null,
+      phone: data.phone || null,
+      tenantId,
+      workspaceId,
+    }).returning();
+
+    const superUser = req.user as any;
+    await recordTenantAuditEvent(
+      tenantId,
+      "client_created",
+      `Client "${data.companyName}" created by super admin`,
+      superUser?.id,
+      { clientId: client.id, clientName: data.companyName }
+    );
+
+    res.status(201).json(client);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors });
+    }
+    console.error("Error creating client:", error);
+    res.status(500).json({ error: "Failed to create client" });
+  }
+});
+
+// PATCH /api/v1/super/tenants/:tenantId/clients/:clientId - Update a client
+const updateClientSchema = z.object({
+  companyName: z.string().min(1).optional(),
+  contactName: z.string().optional().nullable(),
+  email: z.string().email().optional().nullable().or(z.literal("")),
+  phone: z.string().optional().nullable(),
+});
+
+router.patch("/tenants/:tenantId/clients/:clientId", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, clientId } = req.params;
+    const data = updateClientSchema.parse(req.body);
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    const [existingClient] = await db.select().from(clients)
+      .where(and(eq(clients.id, clientId), eq(clients.tenantId, tenantId)));
+    
+    if (!existingClient) {
+      return res.status(404).json({ error: "Client not found" });
+    }
+
+    const [updated] = await db.update(clients)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(clients.id, clientId))
+      .returning();
+
+    res.json(updated);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors });
+    }
+    console.error("Error updating client:", error);
+    res.status(500).json({ error: "Failed to update client" });
+  }
+});
+
+// DELETE /api/v1/super/tenants/:tenantId/clients/:clientId - Delete a client
+router.delete("/tenants/:tenantId/clients/:clientId", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, clientId } = req.params;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    const [existingClient] = await db.select().from(clients)
+      .where(and(eq(clients.id, clientId), eq(clients.tenantId, tenantId)));
+    
+    if (!existingClient) {
+      return res.status(404).json({ error: "Client not found" });
+    }
+
+    await db.delete(clients).where(eq(clients.id, clientId));
+
+    const superUser = req.user as any;
+    await recordTenantAuditEvent(
+      tenantId,
+      "client_deleted",
+      `Client "${existingClient.companyName}" deleted by super admin`,
+      superUser?.id,
+      { clientId, clientName: existingClient.companyName }
+    );
+
+    res.json({ success: true, message: "Client deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting client:", error);
+    res.status(500).json({ error: "Failed to delete client" });
+  }
+});
+
 // GET /api/v1/super/tenants/:tenantId/projects - List projects for a tenant
 router.get("/tenants/:tenantId/projects", requireSuperUser, async (req, res) => {
   try {
@@ -3127,6 +3436,142 @@ router.get("/tenants/:tenantId/projects", requireSuperUser, async (req, res) => 
   } catch (error) {
     console.error("Error fetching tenant projects:", error);
     res.status(500).json({ error: "Failed to fetch projects" });
+  }
+});
+
+// POST /api/v1/super/tenants/:tenantId/projects - Create a project
+const createProjectSchema = z.object({
+  name: z.string().min(1, "Name is required"),
+  description: z.string().optional(),
+  clientId: z.string().uuid().optional(),
+  workspaceId: z.string().uuid().optional(),
+  status: z.string().optional(),
+  budgetMinutes: z.number().optional(),
+});
+
+router.post("/tenants/:tenantId/projects", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const data = createProjectSchema.parse(req.body);
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    // Get a workspace for the project - use provided or find first tenant workspace
+    let workspaceId = data.workspaceId;
+    if (!workspaceId) {
+      const tenantWorkspaces = await db.select().from(workspaces)
+        .where(eq(workspaces.tenantId, tenantId)).limit(1);
+      if (tenantWorkspaces.length === 0) {
+        return res.status(400).json({ error: "No workspace found for tenant. Create a workspace first." });
+      }
+      workspaceId = tenantWorkspaces[0].id;
+    }
+
+    const [project] = await db.insert(projects).values({
+      name: data.name,
+      description: data.description || null,
+      clientId: data.clientId || null,
+      tenantId,
+      workspaceId,
+      status: data.status || "active",
+      budgetMinutes: data.budgetMinutes || null,
+    }).returning();
+
+    const superUser = req.user as any;
+    await recordTenantAuditEvent(
+      tenantId,
+      "project_created",
+      `Project "${data.name}" created by super admin`,
+      superUser?.id,
+      { projectId: project.id, projectName: data.name }
+    );
+
+    res.status(201).json(project);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors });
+    }
+    console.error("Error creating project:", error);
+    res.status(500).json({ error: "Failed to create project" });
+  }
+});
+
+// PATCH /api/v1/super/tenants/:tenantId/projects/:projectId - Update a project
+const updateProjectSchema = z.object({
+  name: z.string().min(1).optional(),
+  description: z.string().optional().nullable(),
+  clientId: z.string().uuid().optional().nullable(),
+  status: z.string().optional(),
+  budgetMinutes: z.number().optional().nullable(),
+});
+
+router.patch("/tenants/:tenantId/projects/:projectId", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, projectId } = req.params;
+    const data = updateProjectSchema.parse(req.body);
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    const [existingProject] = await db.select().from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.tenantId, tenantId)));
+    
+    if (!existingProject) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    const [updated] = await db.update(projects)
+      .set({ ...data, updatedAt: new Date() })
+      .where(eq(projects.id, projectId))
+      .returning();
+
+    res.json(updated);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors });
+    }
+    console.error("Error updating project:", error);
+    res.status(500).json({ error: "Failed to update project" });
+  }
+});
+
+// DELETE /api/v1/super/tenants/:tenantId/projects/:projectId - Delete a project
+router.delete("/tenants/:tenantId/projects/:projectId", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, projectId } = req.params;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    const [existingProject] = await db.select().from(projects)
+      .where(and(eq(projects.id, projectId), eq(projects.tenantId, tenantId)));
+    
+    if (!existingProject) {
+      return res.status(404).json({ error: "Project not found" });
+    }
+
+    await db.delete(projects).where(eq(projects.id, projectId));
+
+    const superUser = req.user as any;
+    await recordTenantAuditEvent(
+      tenantId,
+      "project_deleted",
+      `Project "${existingProject.name}" deleted by super admin`,
+      superUser?.id,
+      { projectId, projectName: existingProject.name }
+    );
+
+    res.json({ success: true, message: "Project deleted successfully" });
+  } catch (error) {
+    console.error("Error deleting project:", error);
+    res.status(500).json({ error: "Failed to delete project" });
   }
 });
 

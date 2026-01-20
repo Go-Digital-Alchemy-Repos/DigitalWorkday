@@ -59,7 +59,9 @@ import {
   Eye,
   EyeOff,
   Lock,
-  RefreshCw
+  RefreshCw,
+  Trash2,
+  Edit2
 } from "lucide-react";
 import { CsvImportPanel, type ParsedRow, type ImportResult } from "@/components/common/csv-import-panel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -513,6 +515,20 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
   // User drawer state
   const [selectedUserId, setSelectedUserId] = useState<string | null>(null);
   const [provisionDrawerOpen, setProvisionDrawerOpen] = useState(false);
+  
+  // Workspace CRUD state
+  const [newWorkspaceName, setNewWorkspaceName] = useState("");
+  const [editingWorkspaceId, setEditingWorkspaceId] = useState<string | null>(null);
+  const [editingWorkspaceName, setEditingWorkspaceName] = useState("");
+  
+  // Client CRUD state
+  const [showCreateClient, setShowCreateClient] = useState(false);
+  const [newClientName, setNewClientName] = useState("");
+  
+  // Project CRUD state
+  const [showCreateProject, setShowCreateProject] = useState(false);
+  const [newProjectName, setNewProjectName] = useState("");
+  const [newProjectClientId, setNewProjectClientId] = useState<string>("");
 
   // Reset form state when tenant changes, restore persisted tab for this tenant
   useEffect(() => {
@@ -917,6 +933,19 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
     },
   });
 
+  const deleteNoteMutation = useMutation({
+    mutationFn: async (noteId: string) => {
+      return apiRequest("DELETE", `/api/v1/super/tenants/${activeTenant?.id}/notes/${noteId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "notes"] });
+      toast({ title: "Note deleted" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to delete note", description: error.message, variant: "destructive" });
+    },
+  });
+
   const bulkImportMutation = useMutation({
     mutationFn: async (data: { users: typeof csvData; sendInvite: boolean }) => {
       const res = await apiRequest("POST", `/api/v1/super/tenants/${activeTenant?.id}/import-users`, data);
@@ -937,7 +966,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
   });
 
   const updateTenantMutation = useMutation({
-    mutationFn: async (data: { name?: string; status?: string }) => {
+    mutationFn: async (data: Record<string, unknown>) => {
       return apiRequest("PATCH", `/api/v1/super/tenants/${activeTenant?.id}`, data);
     },
     onSuccess: () => {
@@ -948,6 +977,117 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
     },
     onError: (error: any) => {
       toast({ title: "Failed to update tenant", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Workspace CRUD mutations
+  const createWorkspaceMutation = useMutation({
+    mutationFn: async (name: string) => {
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${activeTenant?.id}/workspaces`, { name });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "workspaces"] });
+      setNewWorkspaceName("");
+      toast({ title: "Workspace created" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to create workspace", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const updateWorkspaceMutation = useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const res = await apiRequest("PATCH", `/api/v1/super/tenants/${activeTenant?.id}/workspaces/${id}`, { name });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "workspaces"] });
+      setEditingWorkspaceId(null);
+      toast({ title: "Workspace updated" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to update workspace", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteWorkspaceMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/v1/super/tenants/${activeTenant?.id}/workspaces/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "workspaces"] });
+      toast({ title: "Workspace deleted" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to delete workspace", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Client CRUD mutations
+  const createClientMutation = useMutation({
+    mutationFn: async (companyName: string) => {
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${activeTenant?.id}/clients`, { companyName });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "clients", clientSearch] });
+      setNewClientName("");
+      setShowCreateClient(false);
+      toast({ title: "Client created" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to create client", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteClientMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/v1/super/tenants/${activeTenant?.id}/clients/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "clients", clientSearch] });
+      toast({ title: "Client deleted" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to delete client", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Project CRUD mutations
+  const createProjectMutation = useMutation({
+    mutationFn: async ({ name, clientId }: { name: string; clientId?: string }) => {
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${activeTenant?.id}/projects`, { 
+        name, 
+        clientId: clientId || undefined 
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "projects", projectSearch] });
+      setNewProjectName("");
+      setNewProjectClientId("");
+      setShowCreateProject(false);
+      toast({ title: "Project created" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to create project", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const deleteProjectMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/v1/super/tenants/${activeTenant?.id}/projects/${id}`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "projects", projectSearch] });
+      toast({ title: "Project deleted" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to delete project", description: error.message, variant: "destructive" });
     },
   });
 
@@ -1854,6 +1994,260 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
               </CardContent>
             </Card>
 
+            {/* Company Details Section */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base">Company Details</CardTitle>
+                <CardDescription>Additional organization information</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <form 
+                  className="space-y-6"
+                  onSubmit={(e) => {
+                    e.preventDefault();
+                    const formData = new FormData(e.currentTarget);
+                    const updates: Record<string, string | null> = {};
+                    
+                    const fields = [
+                      'legalName', 'industry', 'companySize', 'website', 'taxId', 
+                      'foundedDate', 'description', 'addressLine1', 'addressLine2',
+                      'city', 'state', 'postalCode', 'country', 'phoneNumber',
+                      'primaryContactName', 'primaryContactEmail', 'primaryContactPhone', 'billingEmail'
+                    ];
+                    
+                    fields.forEach(field => {
+                      const value = formData.get(field) as string;
+                      updates[field] = value || null;
+                    });
+                    
+                    updateTenantMutation.mutate(updates);
+                  }}
+                >
+                  {/* Company Information */}
+                  <div className="space-y-4">
+                    <h4 className="text-sm font-medium">Company Information</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="legalName">Legal Name</Label>
+                        <Input
+                          id="legalName"
+                          name="legalName"
+                          defaultValue={(activeTenant as any).legalName || ""}
+                          placeholder="Legal company name"
+                          data-testid="input-legal-name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="industry">Industry</Label>
+                        <Input
+                          id="industry"
+                          name="industry"
+                          defaultValue={(activeTenant as any).industry || ""}
+                          placeholder="e.g. Technology, Healthcare"
+                          data-testid="input-industry"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="companySize">Company Size</Label>
+                        <Select name="companySize" defaultValue={(activeTenant as any).companySize || ""}>
+                          <SelectTrigger data-testid="select-company-size">
+                            <SelectValue placeholder="Select size" />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="1-10">1-10 employees</SelectItem>
+                            <SelectItem value="11-50">11-50 employees</SelectItem>
+                            <SelectItem value="51-200">51-200 employees</SelectItem>
+                            <SelectItem value="201-500">201-500 employees</SelectItem>
+                            <SelectItem value="501+">501+ employees</SelectItem>
+                          </SelectContent>
+                        </Select>
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="website">Website</Label>
+                        <Input
+                          id="website"
+                          name="website"
+                          type="url"
+                          defaultValue={(activeTenant as any).website || ""}
+                          placeholder="https://example.com"
+                          data-testid="input-website"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="taxId">Tax ID</Label>
+                        <Input
+                          id="taxId"
+                          name="taxId"
+                          defaultValue={(activeTenant as any).taxId || ""}
+                          placeholder="Tax identification number"
+                          data-testid="input-tax-id"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="foundedDate">Founded Date</Label>
+                        <Input
+                          id="foundedDate"
+                          name="foundedDate"
+                          defaultValue={(activeTenant as any).foundedDate || ""}
+                          placeholder="e.g. 2020"
+                          data-testid="input-founded-date"
+                        />
+                      </div>
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="description">Description</Label>
+                      <Textarea
+                        id="description"
+                        name="description"
+                        defaultValue={(activeTenant as any).description || ""}
+                        placeholder="Brief description of the company"
+                        rows={3}
+                        data-testid="input-description"
+                      />
+                    </div>
+                  </div>
+
+                  {/* Address */}
+                  <div className="space-y-4 pt-4 border-t">
+                    <h4 className="text-sm font-medium">Address</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2 col-span-2">
+                        <Label htmlFor="addressLine1">Address Line 1</Label>
+                        <Input
+                          id="addressLine1"
+                          name="addressLine1"
+                          defaultValue={(activeTenant as any).addressLine1 || ""}
+                          placeholder="Street address"
+                          data-testid="input-address-1"
+                        />
+                      </div>
+                      <div className="space-y-2 col-span-2">
+                        <Label htmlFor="addressLine2">Address Line 2</Label>
+                        <Input
+                          id="addressLine2"
+                          name="addressLine2"
+                          defaultValue={(activeTenant as any).addressLine2 || ""}
+                          placeholder="Suite, unit, building"
+                          data-testid="input-address-2"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="city">City</Label>
+                        <Input
+                          id="city"
+                          name="city"
+                          defaultValue={(activeTenant as any).city || ""}
+                          placeholder="City"
+                          data-testid="input-city"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="state">State / Province</Label>
+                        <Input
+                          id="state"
+                          name="state"
+                          defaultValue={(activeTenant as any).state || ""}
+                          placeholder="State or province"
+                          data-testid="input-state"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="postalCode">Postal Code</Label>
+                        <Input
+                          id="postalCode"
+                          name="postalCode"
+                          defaultValue={(activeTenant as any).postalCode || ""}
+                          placeholder="Zip / postal code"
+                          data-testid="input-postal-code"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="country">Country</Label>
+                        <Input
+                          id="country"
+                          name="country"
+                          defaultValue={(activeTenant as any).country || ""}
+                          placeholder="Country"
+                          data-testid="input-country"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Contact Information */}
+                  <div className="space-y-4 pt-4 border-t">
+                    <h4 className="text-sm font-medium">Contact Information</h4>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="phoneNumber">Phone Number</Label>
+                        <Input
+                          id="phoneNumber"
+                          name="phoneNumber"
+                          defaultValue={(activeTenant as any).phoneNumber || ""}
+                          placeholder="+1 (555) 000-0000"
+                          data-testid="input-phone"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="billingEmail">Billing Email</Label>
+                        <Input
+                          id="billingEmail"
+                          name="billingEmail"
+                          type="email"
+                          defaultValue={(activeTenant as any).billingEmail || ""}
+                          placeholder="billing@example.com"
+                          data-testid="input-billing-email"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="primaryContactName">Primary Contact Name</Label>
+                        <Input
+                          id="primaryContactName"
+                          name="primaryContactName"
+                          defaultValue={(activeTenant as any).primaryContactName || ""}
+                          placeholder="Full name"
+                          data-testid="input-contact-name"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="primaryContactEmail">Primary Contact Email</Label>
+                        <Input
+                          id="primaryContactEmail"
+                          name="primaryContactEmail"
+                          type="email"
+                          defaultValue={(activeTenant as any).primaryContactEmail || ""}
+                          placeholder="contact@example.com"
+                          data-testid="input-contact-email"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="primaryContactPhone">Primary Contact Phone</Label>
+                        <Input
+                          id="primaryContactPhone"
+                          name="primaryContactPhone"
+                          defaultValue={(activeTenant as any).primaryContactPhone || ""}
+                          placeholder="+1 (555) 000-0000"
+                          data-testid="input-contact-phone"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <div className="flex justify-end pt-4">
+                    <Button 
+                      type="submit" 
+                      disabled={updateTenantMutation.isPending}
+                      data-testid="button-save-company-details"
+                    >
+                      {updateTenantMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                      <Save className="h-4 w-4 mr-2" />
+                      Save Company Details
+                    </Button>
+                  </div>
+                </form>
+              </CardContent>
+            </Card>
+
             {activeTenant.status === "inactive" && (
               <Card className="border-amber-500/20 bg-amber-500/5">
                 <CardHeader>
@@ -2013,7 +2407,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                 ) : notesResponse?.notes && notesResponse.notes.length > 0 ? (
                   <div className="space-y-3">
                     {notesResponse.notes.map((note) => (
-                      <div key={note.id} className="border rounded-md p-3 space-y-2">
+                      <div key={note.id} className="border rounded-md p-3 space-y-2" data-testid={`note-${note.id}`}>
                         <div className="flex items-center justify-between gap-2">
                           <div className="flex items-center gap-2">
                             <Badge variant="secondary" className="text-xs">
@@ -2021,9 +2415,20 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                             </Badge>
                             <span className="text-sm font-medium">{note.author?.name || "Unknown"}</span>
                           </div>
-                          <span className="text-xs text-muted-foreground">
-                            {new Date(note.createdAt).toLocaleDateString()}
-                          </span>
+                          <div className="flex items-center gap-2">
+                            <span className="text-xs text-muted-foreground">
+                              {new Date(note.createdAt).toLocaleDateString()}
+                            </span>
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              onClick={() => deleteNoteMutation.mutate(note.id)}
+                              disabled={deleteNoteMutation.isPending}
+                              data-testid={`button-delete-note-${note.id}`}
+                            >
+                              <Trash2 className="h-3 w-3 text-destructive" />
+                            </Button>
+                          </div>
                         </div>
                         <p className="text-sm">{note.body}</p>
                       </div>
@@ -2083,6 +2488,34 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
           </TabsContent>
 
           <TabsContent value="clients" className="space-y-6 mt-6">
+            {/* Create Client */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create Client
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Company name"
+                    value={newClientName}
+                    onChange={(e) => setNewClientName(e.target.value)}
+                    data-testid="input-new-client-name"
+                  />
+                  <Button
+                    onClick={() => createClientMutation.mutate(newClientName)}
+                    disabled={!newClientName.trim() || createClientMutation.isPending}
+                    data-testid="button-create-client"
+                  >
+                    {createClientMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Create
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -2119,11 +2552,12 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                           <th className="text-left p-2">Industry</th>
                           <th className="text-left p-2">Status</th>
                           <th className="text-left p-2">Created</th>
+                          <th className="text-left p-2"></th>
                         </tr>
                       </thead>
                       <tbody>
                         {clientsResponse.clients.map((client) => (
-                          <tr key={client.id} className="border-b last:border-0 hover:bg-muted/50">
+                          <tr key={client.id} className="border-b last:border-0 hover:bg-muted/50" data-testid={`client-row-${client.id}`}>
                             <td className="p-2 font-medium">{client.companyName}</td>
                             <td className="p-2 text-muted-foreground">{client.industry || "-"}</td>
                             <td className="p-2">
@@ -2134,6 +2568,17 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                             <td className="p-2 text-muted-foreground text-xs">
                               {new Date(client.createdAt).toLocaleDateString()}
                             </td>
+                            <td className="p-2">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => deleteClientMutation.mutate(client.id)}
+                                disabled={deleteClientMutation.isPending}
+                                data-testid={`button-delete-client-${client.id}`}
+                              >
+                                <Trash2 className="h-4 w-4 text-destructive" />
+                              </Button>
+                            </td>
                           </tr>
                         ))}
                       </tbody>
@@ -2141,7 +2586,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
-                    No clients found. Import clients below to get started.
+                    No clients found. Create one above or import clients below.
                   </div>
                 )}
               </CardContent>
@@ -2187,6 +2632,34 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
           </TabsContent>
 
           <TabsContent value="projects" className="space-y-6 mt-6">
+            {/* Create Project */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create Project
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Project name"
+                    value={newProjectName}
+                    onChange={(e) => setNewProjectName(e.target.value)}
+                    data-testid="input-new-project-name"
+                  />
+                  <Button
+                    onClick={() => createProjectMutation.mutate(newProjectName)}
+                    disabled={!newProjectName.trim() || createProjectMutation.isPending}
+                    data-testid="button-create-project"
+                  >
+                    {createProjectMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Create
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
             <Card>
               <CardHeader>
                 <div className="flex items-center justify-between">
@@ -2228,7 +2701,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                       </thead>
                       <tbody>
                         {projectsResponse.projects.map((project) => (
-                          <tr key={project.id} className="border-b last:border-0 hover:bg-muted/50">
+                          <tr key={project.id} className="border-b last:border-0 hover:bg-muted/50" data-testid={`project-row-${project.id}`}>
                             <td className="p-2">
                               <div className="flex items-center gap-2">
                                 <div 
@@ -2273,6 +2746,15 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                                   <Upload className="h-3 w-3 mr-1" />
                                   Import
                                 </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => deleteProjectMutation.mutate(project.id)}
+                                  disabled={deleteProjectMutation.isPending}
+                                  data-testid={`button-delete-project-${project.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
                               </div>
                             </td>
                           </tr>
@@ -2282,7 +2764,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                   </div>
                 ) : (
                   <div className="text-center py-8 text-muted-foreground">
-                    No projects found. Import projects below to get started.
+                    No projects found. Create one above or import projects below.
                   </div>
                 )}
               </CardContent>
@@ -2542,6 +3024,35 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
           </TabsContent>
 
           <TabsContent value="workspaces" className="space-y-6 mt-6">
+            {/* Create Workspace */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-base flex items-center gap-2">
+                  <Plus className="h-4 w-4" />
+                  Create Workspace
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Workspace name"
+                    value={newWorkspaceName}
+                    onChange={(e) => setNewWorkspaceName(e.target.value)}
+                    data-testid="input-new-workspace-name"
+                  />
+                  <Button
+                    onClick={() => createWorkspaceMutation.mutate(newWorkspaceName)}
+                    disabled={!newWorkspaceName.trim() || createWorkspaceMutation.isPending}
+                    data-testid="button-create-workspace"
+                  >
+                    {createWorkspaceMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+                    Create
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Workspaces List */}
             <Card>
               <CardHeader>
                 <CardTitle className="text-base flex items-center gap-2">
@@ -2557,7 +3068,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                   </div>
                 ) : workspaces.length === 0 ? (
                   <div className="text-center py-8 text-muted-foreground">
-                    No workspaces found
+                    No workspaces found. Create one above.
                   </div>
                 ) : (
                   <div className="space-y-3">
@@ -2567,15 +3078,68 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                         className="flex items-center justify-between p-3 rounded-lg border"
                         data-testid={`workspace-row-${workspace.id}`}
                       >
-                        <div className="flex items-center gap-3">
-                          <Briefcase className="h-4 w-4 text-muted-foreground" />
-                          <div>
-                            <div className="font-medium">{workspace.name}</div>
-                            <div className="text-xs text-muted-foreground">{workspace.id}</div>
+                        {editingWorkspaceId === workspace.id ? (
+                          <div className="flex items-center gap-2 flex-1">
+                            <Input
+                              value={editingWorkspaceName}
+                              onChange={(e) => setEditingWorkspaceName(e.target.value)}
+                              className="flex-1"
+                              data-testid={`input-edit-workspace-${workspace.id}`}
+                            />
+                            <Button
+                              size="sm"
+                              onClick={() => updateWorkspaceMutation.mutate({ id: workspace.id, name: editingWorkspaceName })}
+                              disabled={updateWorkspaceMutation.isPending}
+                              data-testid={`button-save-workspace-${workspace.id}`}
+                            >
+                              <Check className="h-4 w-4" />
+                            </Button>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              onClick={() => setEditingWorkspaceId(null)}
+                              data-testid={`button-cancel-edit-workspace-${workspace.id}`}
+                            >
+                              <X className="h-4 w-4" />
+                            </Button>
                           </div>
-                        </div>
-                        {workspace.isPrimary && (
-                          <Badge variant="secondary">Primary</Badge>
+                        ) : (
+                          <>
+                            <div className="flex items-center gap-3">
+                              <Briefcase className="h-4 w-4 text-muted-foreground" />
+                              <div>
+                                <div className="font-medium">{workspace.name}</div>
+                                <div className="text-xs text-muted-foreground">{workspace.id}</div>
+                              </div>
+                            </div>
+                            <div className="flex items-center gap-2">
+                              {workspace.isPrimary && (
+                                <Badge variant="secondary">Primary</Badge>
+                              )}
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  setEditingWorkspaceId(workspace.id);
+                                  setEditingWorkspaceName(workspace.name);
+                                }}
+                                data-testid={`button-edit-workspace-${workspace.id}`}
+                              >
+                                <Edit2 className="h-4 w-4" />
+                              </Button>
+                              {!workspace.isPrimary && (
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => deleteWorkspaceMutation.mutate(workspace.id)}
+                                  disabled={deleteWorkspaceMutation.isPending}
+                                  data-testid={`button-delete-workspace-${workspace.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              )}
+                            </div>
+                          </>
                         )}
                       </div>
                     ))}
