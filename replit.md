@@ -55,6 +55,16 @@ MyWorkDay is an Asana-inspired project management application designed to stream
   - Overview tab: User details, role, account status, activity timestamps
   - Invitation tab: View invitation status, regenerate invite links, resend invitation emails
   - Security tab: Reset user password with `mustChangePasswordOnNextLogin` flag enforcement
+- **User Provisioning (Super Admin)**: Unified workflow for creating/updating tenant users with immediate access:
+  - POST `/api/v1/super/tenants/:tenantId/users/provision` with two methods: SET_PASSWORD (immediate access) and RESET_LINK (send password reset URL)
+  - ProvisionUserDrawer: 4-step wizard (User Info → Access Method → Review → Success)
+  - Handles user creation, update, activation, password setting, and optional email notifications
+  - Diagnostic logging via `SUPER_USER_PROVISION_DEBUG` environment flag
+- **User Impersonation (Super Admin)**: Allows super admins to view the app as a tenant user:
+  - POST `/api/v1/super/tenants/:tenantId/users/:userId/impersonate-login` to start
+  - POST `/api/v1/super/impersonation/exit` to return to super admin view
+  - GET `/api/v1/super/impersonation/status` to check current state
+  - Stores impersonation context in session with audit logging
 - **Password Security**: Users table includes `mustChangePasswordOnNextLogin` boolean field for forced password changes on next login
 - **SaaS Agreement System**: Manages tenant SaaS agreements with an active/archived lifecycle, versioning, and user acceptance tracking, enforced by middleware. Supports global default agreements (tenantId = null) that apply to all tenants without specific overrides. Tenant-specific agreements take precedence over global defaults.
 - **Frontend Structure**: Organized into `pages/` and `components/`, utilizing FullScreenDrawer for entity editing with unsaved changes guards.
