@@ -36,11 +36,22 @@ interface TenantSettings {
 }
 
 export function TenantContextGate({ children }: TenantContextGateProps) {
-  const { effectiveTenantId, isImpersonating, stopImpersonation } = useAppMode();
+  const { effectiveTenantId, isImpersonating, stopImpersonation, appMode, isSuper } = useAppMode();
   const [location, setLocation] = useLocation();
   const { toast } = useToast();
   const hasRestoredUrl = useRef(false);
   const [isExiting, setIsExiting] = useState(false);
+  
+  // Debug logging for tenant context issues
+  if (import.meta.env.DEV || import.meta.env.VITE_DEBUG_AUTH === "true") {
+    console.log("[TenantContextGate] State:", {
+      effectiveTenantId,
+      isImpersonating,
+      appMode,
+      isSuper,
+      location,
+    });
+  }
   
   // Fetch tenant context to validate tenant access
   const { 

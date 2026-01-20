@@ -217,6 +217,17 @@ export function setupAuth(app: Express): void {
     const user = req.user as any;
     const session = req.session as any;
     
+    // Debug logging for tenant context issues
+    const debugTenantContext = process.env.DEBUG_TENANT_CONTEXT === "true";
+    if (debugTenantContext) {
+      console.log("[auth/me] Session ID:", req.sessionID);
+      console.log("[auth/me] User ID:", user?.id);
+      console.log("[auth/me] User email:", user?.email);
+      console.log("[auth/me] User role:", user?.role);
+      console.log("[auth/me] User tenantId:", user?.tenantId);
+      console.log("[auth/me] Session keys:", Object.keys(session || {}));
+    }
+    
     // Include impersonation context if active
     const impersonation = session.isImpersonatingUser ? {
       isImpersonating: true,

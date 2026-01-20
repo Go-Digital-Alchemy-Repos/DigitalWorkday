@@ -1,0 +1,279 @@
+# CRITICAL BUG FIX: Tenant Context Not Loading for Tenant Admins
+
+I'm working on MyWorkDay, a multi-tenant project management SaaS application deployed on Railway.
+
+## Tech Stack Context
+- Frontend: React 18 + TypeScript + Tailwind CSS + shadcn/ui + TanStack Query
+- Backend: Express.js + TypeScript + Drizzle ORM + Passport.js (session-based auth)
+- Database: PostgreSQL
+- Deployment: Railway
+- Session Store: PostgreSQL (connect-pg-simple)
+
+## Current Bug
+
+**Severity:** CRITICAL - Tenant admins cannot use the application
+
+**Symptoms:**
+- Tenant admin users can log in successfully
+- After login, they see: "No Tenant Selected - Please select a tenant to access this page"
+- Cannot access any tenant-scoped features (clients, workspaces, tasks, projects)
+- The tenant context is not being established despite the user having a tenantId
+
+**Environment:** Railway production deployment (works in local dev)
+
+**User Role Affected:** Tenant admins (role: 'admin', has tenantId assigned)
+
+## Investigation Areas
+
+Please systematically debug and fix this issue by checking:
+
+### 1. SESSION CONFIGURATION (Railway-Specific)
+
+**Check `/server/index.ts` session configuration:**
+```typescript
+// Verify these settings for Railway deployment:
+app.use(session({
+  store: sessionStore,
+  secret: process.env.SESSION_SECRET,
+  resave: false,
+  saveUninitialized: false,
+  cookie: {
+    secure: process.env.NODE_ENV === 'production',  // Must be true in production
+    httpOnly: true,
+    sameSite: 'lax',  // Important for Railway
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+    domain: undefined  // Don't set domain for Railway
+  }
+}));
+```
+
+**Railway-specific fixes needed:**
+- Add `app.set('trust proxy', 1);` BEFORE session middleware if not present
+- Ensure `TRUST_PROXY=true` in Railway environment variables
+- Verify `SESSION_SECRET` is set in Railway
+- Check that cookies are being set correctly (inspect browser devtools)
+
+### 2. TENANT CONTEXT MIDDLEWARE
+
+**Check `/server/middleware/tenantContext.ts`:**
+
+The middleware should:
+1. Extract user from session (req.user)
+2. Set req.tenantId from user.tenantId
+3. Handle super_user role (they don't have tenantId)
+4. Log tenant context for debugging
+
+**Add debug logging:**
+```typescript
+export const tenantContextMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  // ADD THIS LOGGING
+  console.log('[TenantContext] Session ID:', req.sessionID);
+  console.log('[TenantContext] User:', req.user);
+  console.log('[TenantContext] User tenantId:', req.user?.tenantId);
+  console.log('[TenantContext] X-Tenant-Id header:', req.headers['x-tenant-id']);
+  
+  // Rest of middleware logic...
+  
+  console.log('[TenantContext] Final req.tenantId:', req.tenantId);
+  next();
+};
+```
+
+### 3. AUTHENTICATION FLOW
+
+**Check `/server/auth.ts` Passport serialization:**
+```typescript
+passport.serializeUser((user, done) => {
+  console.log('[Auth] Serializing user:', user.id, 'tenantId:', user.tenantId);
+  done(null, user.id);
+});
+
+passport.deserializeUser(async (id: string, done) => {
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, id),
+    });
+    console.log('[Auth] Deserialized user:', user?.id, 'tenantId:', user?.tenantId);
+    done(null, user);
+  } catch (err) {
+    done(err);
+  }
+});
+```
+
+**Verify:**
+- User object includes `tenantId` field
+- Session is persisting user data correctly
+- PostgreSQL session store is connected
+
+### 4. FRONTEND TENANT LOADING
+
+**Check `/client/src/lib/auth.tsx` or similar:**
+
+The `useAuth()` hook should:
+1. Fetch `/api/auth/me` on mount
+2. Extract user.tenantId from response
+3. Set tenant context in frontend state
+
+**Add debug logging:**
+```typescript
+export function useAuth() {
+  const { data: user, isLoading } = useQuery({
+    queryKey: ['auth', 'me'],
+    queryFn: async () => {
+      const res = await fetch('/api/auth/me', { credentials: 'include' });
+      const data = await res.json();
+      console.log('[Auth Hook] User data:', data);
+      console.log('[Auth Hook] User tenantId:', data?.tenantId);
+      return data;
+    },
+    retry: false,
+  });
+  
+  // Log current state
+  console.log('[Auth Hook] Current user:', user);
+  
+  return { user, isLoading };
+}
+```
+
+### 5. TENANT CONTEXT GATE COMPONENT
+
+**Check `/client/src/components/tenant-context-gate.tsx`:**
+
+This component likely shows the "No Tenant Selected" error. Debug:
+```typescript
+export function TenantContextGate({ children }: { children: React.ReactNode }) {
+  const { user } = useAuth();
+  
+  // ADD DEBUG LOGGING
+  console.log('[TenantGate] User:', user);
+  console.log('[TenantGate] User role:', user?.role);
+  console.log('[TenantGate] User tenantId:', user?.tenantId);
+  
+  // Super users don't need tenant context
+  if (user?.role === 'super_user') {
+    return <>{children}</>;
+  }
+  
+  // Regular users need tenantId
+  if (!user?.tenantId) {
+    console.error('[TenantGate] No tenantId found for user:', user?.id);
+    return <NoTenantSelectedMessage />;
+  }
+  
+  return <>{children}</>;
+}
+```
+
+### 6. DATABASE QUERY - USER TENANT ASSOCIATION
+
+**Verify user record in database:**
+```sql
+-- Check if user has tenantId
+SELECT id, username, email, role, "tenantId", "createdAt" 
+FROM users 
+WHERE email = 'tenant-admin@example.com';
+
+-- Verify tenant exists
+SELECT id, name, slug, status 
+FROM tenants 
+WHERE id = 'user-tenant-id-from-above';
+
+-- Check tenant settings exist
+SELECT "tenantId", "displayName" 
+FROM tenant_settings 
+WHERE "tenantId" = 'user-tenant-id-from-above';
+```
+
+### 7. RAILWAY ENVIRONMENT VARIABLES
+
+**Verify these are set in Railway:**
+```env
+DATABASE_URL=postgresql://...  # Railway Postgres connection
+SESSION_SECRET=your-secret-here
+APP_ENCRYPTION_KEY=your-32-byte-base64-key
+NODE_ENV=production
+TRUST_PROXY=true  # CRITICAL for Railway
+PORT=5000  # Railway sets this automatically
+```
+
+### 8. API ENDPOINT CHECK
+
+**Test `/api/auth/me` endpoint:**
+```bash
+# From Railway logs or local curl
+curl -v https://your-app.railway.app/api/auth/me \
+  -H "Cookie: connect.sid=<session-cookie-from-browser>"
+```
+
+**Expected response for tenant admin:**
+```json
+{
+  "id": "user-123",
+  "email": "admin@tenant.com",
+  "role": "admin",
+  "tenantId": "tenant-xyz",  // MUST BE PRESENT
+  "username": "Admin User"
+}
+```
+
+## Likely Root Causes
+
+Based on the symptoms, the issue is most likely:
+
+1. **Missing `trust proxy` setting** - Railway uses a reverse proxy, cookies won't work without this
+2. **Session not persisting** - Database connection issue or session store misconfiguration
+3. **User.tenantId not being loaded** - Deserialization not fetching tenantId field
+4. **Frontend not reading tenantId** - Auth hook or context gate logic issue
+5. **Cookie domain mismatch** - Railway-specific cookie configuration
+
+## Required Fixes
+
+Please provide:
+
+1. **Diagnostic script** to run in Railway console:
+```typescript
+   // server/scripts/diagnose-session.ts
+   // Check session store connection, query sample user, verify tenantId
+```
+
+2. **Updated session configuration** for Railway with proper trust proxy settings
+
+3. **Enhanced logging** in tenant context middleware to track the issue
+
+4. **Frontend debugging** in auth hook and tenant gate component
+
+5. **Database verification query** to ensure user has tenantId
+
+6. **Step-by-step fix** with explanations for each change
+
+7. **Verification steps** to confirm the fix works
+
+## Success Criteria
+
+After the fix:
+- Tenant admin can log in ✓
+- Tenant admin sees their workspace (not "No Tenant Selected") ✓
+- Tenant admin can access all features (tasks, projects, clients) ✓
+- Session persists across page refreshes ✓
+- Cookies are set correctly in browser ✓
+- Backend logs show tenant context established ✓
+
+## Additional Context
+
+**Files to check/modify:**
+- `/server/index.ts` - Session & trust proxy configuration
+- `/server/middleware/tenantContext.ts` - Tenant context logic
+- `/server/auth.ts` - Passport serialize/deserialize
+- `/client/src/lib/auth.tsx` - Frontend auth hook
+- `/client/src/components/tenant-context-gate.tsx` - Gate component
+- `/client/src/App.tsx` - Route guards
+
+**Railway-specific considerations:**
+- Uses reverse proxy (needs trust proxy)
+- Cookies must use secure: true in production
+- Session store must connect to Railway Postgres
+- Environment variables must be set correctly
+
+Please provide a comprehensive fix with detailed explanations and Railway-specific configuration.

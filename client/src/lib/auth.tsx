@@ -46,18 +46,32 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       if (response.ok) {
         const data = await response.json();
+        
+        // Debug logging for tenant context issues
+        if (import.meta.env.DEV || import.meta.env.VITE_DEBUG_AUTH === "true") {
+          console.log("[Auth] /api/auth/me response:", {
+            userId: data.user?.id,
+            email: data.user?.email,
+            role: data.user?.role,
+            tenantId: data.user?.tenantId,
+            hasImpersonation: !!data.impersonation,
+          });
+        }
+        
         setUser(data.user);
         // Set user impersonation state from session
         setUserImpersonation(data.impersonation || null);
         // Set super user flag when session is restored
         setSuperUserFlag(data.user?.role === UserRole.SUPER_USER);
       } else {
+        console.log("[Auth] /api/auth/me failed:", response.status);
         setUser(null);
         setUserImpersonation(null);
         // Clear super user state when not authenticated
         clearActingAsState();
       }
-    } catch {
+    } catch (err) {
+      console.error("[Auth] /api/auth/me error:", err);
       setUser(null);
       setUserImpersonation(null);
       // Clear super user state on error
