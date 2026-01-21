@@ -5145,6 +5145,220 @@ router.get("/admins/:id/audit-events", requireSuperUser, async (req, res) => {
   }
 });
 
+// POST /api/v1/super/admins/:id/provision - Set password or generate reset link for platform admin
+const provisionPlatformAdminSchema = z.object({
+  method: z.enum(["SET_PASSWORD", "RESET_LINK"]),
+  password: z.string().min(8, "Password must be at least 8 characters").optional(),
+  mustChangeOnNextLogin: z.boolean().default(true),
+  activateNow: z.boolean().default(true),
+  sendEmail: z.boolean().default(false),
+});
+
+router.post("/admins/:id/provision", requireSuperUser, async (req, res) => {
+  const requestId = req.get("X-Request-Id") || `padmin-prov-${Date.now()}`;
+  const debug = process.env.SUPER_USER_PROVISION_DEBUG === "true";
+  
+  try {
+    const { id } = req.params;
+    const data = provisionPlatformAdminSchema.parse(req.body);
+    const actor = req.user as any;
+    
+    if (debug) {
+      console.log(`[platform-admin-provision] requestId=${requestId} adminId=${id} method=${data.method}`);
+    }
+    
+    // Validate method-specific requirements
+    if (data.method === "SET_PASSWORD" && !data.password) {
+      return res.status(400).json({ error: "Password is required when method is SET_PASSWORD", requestId });
+    }
+    
+    // Get the platform admin
+    const [admin] = await db.select()
+      .from(users)
+      .where(and(eq(users.id, id), eq(users.role, UserRole.SUPER_USER)));
+    
+    if (!admin) {
+      if (debug) console.log(`[platform-admin-provision] requestId=${requestId} FAIL: admin not found`);
+      return res.status(404).json({ error: "Platform admin not found", requestId });
+    }
+    
+    // Update activation status if needed
+    if (data.activateNow && !admin.isActive) {
+      await db.update(users)
+        .set({ isActive: true, updatedAt: new Date() })
+        .where(eq(users.id, id));
+      
+      await db.insert(platformAuditEvents).values({
+        actorUserId: actor.id,
+        targetUserId: id,
+        eventType: "platform_admin_reactivated",
+        message: `Platform admin ${admin.email} activated via provision`,
+        metadata: { requestId },
+      });
+    }
+    
+    let resetUrl: string | undefined;
+    let expiresAt: string | undefined;
+    
+    if (data.method === "SET_PASSWORD") {
+      if (debug) console.log(`[platform-admin-provision] requestId=${requestId} setting password`);
+      
+      // Hash and set password
+      const { hashPassword } = await import("../auth");
+      const passwordHash = await hashPassword(data.password!);
+      
+      // Update user with password and mustChangePasswordOnNextLogin flag
+      await db.update(users)
+        .set({ 
+          passwordHash, 
+          mustChangePasswordOnNextLogin: data.mustChangeOnNextLogin,
+          updatedAt: new Date() 
+        })
+        .where(eq(users.id, id));
+      
+      // Invalidate any outstanding reset tokens for this user
+      const { passwordResetTokens } = await import("@shared/schema");
+      const { eq: eqOp, and: andOp, isNull: isNullOp } = await import("drizzle-orm");
+      await db
+        .update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(andOp(
+          eqOp(passwordResetTokens.userId, id),
+          isNullOp(passwordResetTokens.usedAt)
+        ));
+      
+      // Revoke any pending platform invitations
+      await db.update(platformInvitations)
+        .set({ status: "revoked", revokedAt: new Date() })
+        .where(and(
+          eq(platformInvitations.targetUserId, id),
+          eq(platformInvitations.status, "pending")
+        ));
+      
+      await db.insert(platformAuditEvents).values({
+        actorUserId: actor.id,
+        targetUserId: id,
+        eventType: "platform_admin_password_set",
+        message: `Password set for platform admin ${admin.email} via provision`,
+        metadata: { requestId, mustChangeOnNextLogin: data.mustChangeOnNextLogin },
+      });
+      
+      if (debug) console.log(`[platform-admin-provision] requestId=${requestId} password set successfully`);
+      
+      res.json({
+        success: true,
+        method: "SET_PASSWORD",
+        adminId: id,
+        email: admin.email,
+        isActive: data.activateNow || admin.isActive,
+        mustChangeOnNextLogin: data.mustChangeOnNextLogin,
+        requestId,
+      });
+    } else if (data.method === "RESET_LINK") {
+      if (debug) console.log(`[platform-admin-provision] requestId=${requestId} generating reset link`);
+      
+      // Invalidate existing reset tokens
+      const { passwordResetTokens } = await import("@shared/schema");
+      const { eq: eqOp, and: andOp, isNull: isNullOp } = await import("drizzle-orm");
+      await db
+        .update(passwordResetTokens)
+        .set({ usedAt: new Date() })
+        .where(andOp(
+          eqOp(passwordResetTokens.userId, id),
+          isNullOp(passwordResetTokens.usedAt)
+        ));
+      
+      // Generate reset token
+      const crypto = await import("crypto");
+      const token = crypto.randomBytes(32).toString("hex");
+      const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+      const expiry = new Date(Date.now() + 24 * 60 * 60 * 1000); // 24 hours
+      
+      await db.insert(passwordResetTokens).values({
+        userId: id,
+        tokenHash,
+        expiresAt: expiry,
+        createdByUserId: actor.id,
+      });
+      
+      const appPublicUrl = process.env.APP_PUBLIC_URL;
+      if (!appPublicUrl && debug) {
+        console.warn(`[platform-admin-provision] requestId=${requestId} APP_PUBLIC_URL not set`);
+      }
+      const baseUrl = appPublicUrl || `${req.protocol}://${req.get("host")}`;
+      resetUrl = `${baseUrl}/auth/reset-password?token=${token}`;
+      expiresAt = expiry.toISOString();
+      
+      await db.insert(platformAuditEvents).values({
+        actorUserId: actor.id,
+        targetUserId: id,
+        eventType: "platform_admin_reset_link_generated",
+        message: `Reset link generated for platform admin ${admin.email} via provision`,
+        metadata: { requestId },
+      });
+      
+      // Optionally send email if requested
+      if (data.sendEmail) {
+        try {
+          // Get global mailgun settings
+          const [settings] = await db.select().from(systemSettings).limit(1);
+          
+          if (settings?.mailgunDomain && settings?.mailgunFromEmail && settings?.mailgunApiKeyEncrypted && isEncryptionAvailable()) {
+            const apiKey = decryptValue(settings.mailgunApiKeyEncrypted);
+            const mailgun = new Mailgun(FormData);
+            const mgUrl = settings.mailgunRegion === "EU" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
+            const mg = mailgun.client({ username: "api", key: apiKey, url: mgUrl });
+            
+            await mg.messages.create(settings.mailgunDomain, {
+              from: settings.mailgunFromEmail,
+              to: [admin.email],
+              subject: "Reset Your Platform Admin Password",
+              html: `
+                <h2>Password Reset</h2>
+                <p>A password reset has been requested for your Platform Admin account.</p>
+                <p><a href="${resetUrl}">Click here to set your password</a></p>
+                <p>This link expires in 24 hours.</p>
+                <p>If you did not request this, please contact your administrator.</p>
+              `,
+            });
+            
+            await db.insert(platformAuditEvents).values({
+              actorUserId: actor.id,
+              targetUserId: id,
+              eventType: "platform_admin_reset_email_sent",
+              message: `Reset email sent to platform admin ${admin.email}`,
+              metadata: { requestId },
+            });
+          } else {
+            console.warn(`[platform-admin-provision] requestId=${requestId} Mailgun not configured, email not sent`);
+          }
+        } catch (emailError) {
+          console.error(`[platform-admin-provision] requestId=${requestId} Failed to send email:`, emailError);
+        }
+      }
+      
+      if (debug) console.log(`[platform-admin-provision] requestId=${requestId} reset link generated successfully`);
+      
+      res.json({
+        success: true,
+        method: "RESET_LINK",
+        adminId: id,
+        email: admin.email,
+        isActive: data.activateNow || admin.isActive,
+        resetUrl,
+        expiresAt,
+        requestId,
+      });
+    }
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Invalid request body", details: error.errors, requestId });
+    }
+    console.error("[admins] Failed to provision platform admin:", error);
+    res.status(500).json({ error: "Failed to provision platform admin", requestId });
+  }
+});
+
 // =============================================================================
 // TENANT AGREEMENTS OVERSIGHT ENDPOINTS
 // =============================================================================
