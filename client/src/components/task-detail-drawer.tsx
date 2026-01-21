@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye } from "lucide-react";
+import { useAuth } from "@/lib/auth";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -81,6 +82,7 @@ export function TaskDetailDrawer({
   availableUsers = [],
   workspaceId = "",
 }: TaskDetailDrawerProps) {
+  const { user: currentUser } = useAuth();
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
   const [description, setDescription] = useState(task?.description || "");
@@ -90,6 +92,40 @@ export function TaskDetailDrawer({
   const [selectedChildTask, setSelectedChildTask] = useState<TaskWithRelations | null>(null);
   const [childDrawerOpen, setChildDrawerOpen] = useState(false);
   const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
+
+  const invalidateCommentQueries = () => {
+    if (task) {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.id, "comments"] });
+    }
+  };
+
+  const updateCommentMutation = useMutation({
+    mutationFn: async ({ id, body }: { id: string; body: string }) => {
+      await apiRequest("PATCH", `/api/comments/${id}`, { body });
+    },
+    onSuccess: invalidateCommentQueries,
+  });
+
+  const deleteCommentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("DELETE", `/api/comments/${id}`);
+    },
+    onSuccess: invalidateCommentQueries,
+  });
+
+  const resolveCommentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("POST", `/api/comments/${id}/resolve`);
+    },
+    onSuccess: invalidateCommentQueries,
+  });
+
+  const unresolveCommentMutation = useMutation({
+    mutationFn: async (id: string) => {
+      await apiRequest("POST", `/api/comments/${id}/unresolve`);
+    },
+    onSuccess: invalidateCommentQueries,
+  });
 
   const invalidateTaskQueries = () => {
     // Broad invalidation to ensure all task-related caches refresh
@@ -442,7 +478,13 @@ export function TaskDetailDrawer({
 
           <CommentThread
             comments={comments}
+            taskId={task.id}
+            currentUserId={currentUser?.id}
             onAdd={(body) => onAddComment?.(task.id, body)}
+            onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
+            onDelete={(id) => deleteCommentMutation.mutate(id)}
+            onResolve={(id) => resolveCommentMutation.mutate(id)}
+            onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
           />
 
           <Separator />
