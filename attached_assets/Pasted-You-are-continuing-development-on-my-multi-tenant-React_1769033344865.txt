@@ -1,0 +1,77 @@
+You are continuing development on my multi-tenant React + Express + Postgres app.
+TASK: Add formal documentation defining Tenant Data Visibility rules so future development does not accidentally reintroduce incorrect user-scoped filters.
+
+This prompt is DOCUMENTATION ONLY.
+Do NOT change any application logic, routes, schemas, or permissions enforcement.
+
+===============================================================================
+GOAL
+===============================================================================
+Create a clear “Tenant Data Visibility Policy” document and integrate it into the app’s existing documentation structure so it is easy for developers (and future prompts) to find and reference.
+
+===============================================================================
+STEP 1 — CREATE DOCUMENT
+===============================================================================
+Create a new documentation file in the docs area (or equivalent location used by the app):
+
+Suggested path:
+- /docs/TENANT_DATA_VISIBILITY.md
+OR
+- /docs/PERMISSIONS.md (if that already exists, add a new section instead)
+
+Content must include:
+
+Title:
+Tenant Data Visibility Policy
+
+Sections:
+1) Purpose
+2) Core Rule (tenant scope first, role second)
+3) Shared Tenant Data (Clients, Projects, Workspaces, Tasks)
+4) Restricted Data (Time Entries, Reports, Tenant Settings)
+5) Backend Enforcement Rules (tenantId vs userId)
+6) UI Gating Rules (explicitly not security)
+7) Implementation Guidance
+8) Common Pitfalls to Avoid
+
+Use explicit “DO” / “DO NOT” examples in SQL-style pseudo code where helpful.
+
+===============================================================================
+STEP 2 — INTEGRATE INTO EXISTING DOCS
+===============================================================================
+1) Locate existing README or docs index file (examples):
+- README.md
+- /docs/README.md
+- /docs/index.md
+
+2) Add a link to the new Tenant Data Visibility Policy under:
+- Architecture
+- Tenancy
+- Permissions
+OR a new “Authorization & Tenancy” section.
+
+3) Ensure naming and tone match existing docs.
+
+===============================================================================
+STEP 3 — OPTIONAL (IF PERMISSIONS DOC ALREADY EXISTS)
+===============================================================================
+If a permissions-related doc already exists:
+- Do NOT duplicate content
+- Add a clearly labeled subsection:
+  “Tenant Data Visibility (Source of Truth)”
+- Cross-link between permissions doc and tenant visibility doc.
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+- A clearly named documentation file exists describing tenant data visibility rules.
+- The document explicitly states that Clients/Projects/Workspaces are tenant-wide shared.
+- The document explicitly states that Time Entries and Reports are role/ownership scoped.
+- The document is linked from a primary README or docs index.
+- No code behavior is modified.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Path(s) of documentation files created or modified
+- Brief summary of what was added

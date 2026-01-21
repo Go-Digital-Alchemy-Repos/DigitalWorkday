@@ -43,6 +43,7 @@ Welcome to the MyWorkDay documentation hub. MyWorkDay is a multi-tenant SaaS pro
 1. **[Project Structure](./02-ARCHITECTURE/PROJECT_STRUCTURE.md)** - File organization
 2. **[Adding Features](./11-DEVELOPMENT/ADDING_FEATURES.md)** - How to add new features
 3. **[API Conventions](./04-API/README.md)** - API design patterns
+4. **[Tenant Data Visibility](./07-SECURITY/TENANT_DATA_VISIBILITY.md)** - Data scoping rules (required reading)
 
 ### For Deployment
 
@@ -74,6 +75,7 @@ Welcome to the MyWorkDay documentation hub. MyWorkDay is a multi-tenant SaaS pro
 
 ### Multi-Tenancy
 - **Tenant Isolation** - Complete data separation between tenants
+- **[Data Visibility Policy](./07-SECURITY/TENANT_DATA_VISIBILITY.md)** - What data is shared vs user-scoped
 - **White Label Branding** - Custom logos, colors, app names per tenant
 - **Super Admin Dashboard** - Global tenant management, reports, system health
 

@@ -11,6 +11,7 @@ This section covers security architecture, multi-tenant isolation, and best prac
 
 | Document | Description |
 |----------|-------------|
+| [TENANT_DATA_VISIBILITY.md](./TENANT_DATA_VISIBILITY.md) | **Data visibility policy (source of truth)** |
 | [TENANT_ISOLATION.md](./TENANT_ISOLATION.md) | Multi-tenant security |
 | [AUTHENTICATION.md](./AUTHENTICATION.md) | Auth security |
 | [AUTHORIZATION.md](./AUTHORIZATION.md) | RBAC and permissions |
@@ -112,6 +113,15 @@ All resources validate:
 1. User is authenticated
 2. User has appropriate role
 3. Resource belongs to user's tenant (or user is super)
+
+### Data Visibility Policy
+
+**See [TENANT_DATA_VISIBILITY.md](./TENANT_DATA_VISIBILITY.md) for the complete policy.**
+
+Key rules:
+- **Shared data** (Clients, Projects, Workspaces, Tasks): Filter by `tenantId` only
+- **User-scoped data** (Time Entries, Personal Sections): Filter by `tenantId` AND `userId`
+- **Admin data** (Tenant Settings, Integrations): Require admin role check
 
 ---
 
