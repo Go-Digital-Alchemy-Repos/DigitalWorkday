@@ -22,6 +22,7 @@ import {
   ChevronLeft,
   Users,
   Settings,
+  Play,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +33,7 @@ import { TaskDetailDrawer } from "@/components/task-detail-drawer";
 import { TaskCreateDrawer } from "@/components/task-create-drawer";
 import { ProjectCalendar } from "@/components/project-calendar";
 import { ProjectSettingsSheet } from "@/components/project-settings-sheet";
+import { StartTimerDrawer } from "@/components/start-timer-drawer";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useProjectSocket } from "@/lib/realtime";
@@ -52,6 +54,7 @@ export default function ProjectPage() {
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
   const [createTaskOpen, setCreateTaskOpen] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState<string | undefined>();
   const [localSections, setLocalSections] = useState<SectionWithTasks[] | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -405,6 +408,15 @@ export default function ProjectPage() {
             </div>
           </div>
           <div className="flex items-center gap-2">
+            <Button 
+              variant="default" 
+              size="sm"
+              onClick={() => setTimerDrawerOpen(true)}
+              data-testid="button-start-timer-project"
+            >
+              <Play className="h-4 w-4 mr-1" />
+              Start Timer
+            </Button>
             <Button variant="ghost" size="icon" data-testid="button-project-members">
               <Users className="h-4 w-4" />
             </Button>
@@ -578,6 +590,13 @@ export default function ProjectPage() {
           onOpenChange={setSettingsOpen}
         />
       )}
+
+      <StartTimerDrawer
+        open={timerDrawerOpen}
+        onOpenChange={setTimerDrawerOpen}
+        initialProjectId={projectId}
+        initialClientId={project?.clientId}
+      />
     </div>
   );
 }

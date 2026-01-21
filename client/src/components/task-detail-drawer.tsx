@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer } from "lucide-react";
+import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -27,6 +27,7 @@ import { TagBadge } from "@/components/tag-badge";
 import { MultiSelectAssignees } from "@/components/multi-select-assignees";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
+import { StartTimerDrawer } from "@/components/start-timer-drawer";
 import type { TaskWithRelations, User, Tag as TagType, Comment } from "@shared/schema";
 
 type TimeEntry = {
@@ -87,6 +88,7 @@ export function TaskDetailDrawer({
   );
   const [selectedChildTask, setSelectedChildTask] = useState<TaskWithRelations | null>(null);
   const [childDrawerOpen, setChildDrawerOpen] = useState(false);
+  const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
 
   const invalidateTaskQueries = () => {
     // Broad invalidation to ensure all task-related caches refresh
@@ -434,11 +436,22 @@ export function TaskDetailDrawer({
                 <Timer className="h-3.5 w-3.5" />
                 Time Entries
               </label>
-              {timeEntries.length > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  Total: {formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}
-                </span>
-              )}
+              <div className="flex items-center gap-2">
+                {timeEntries.length > 0 && (
+                  <span className="text-xs text-muted-foreground">
+                    Total: {formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}
+                  </span>
+                )}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setTimerDrawerOpen(true)}
+                  data-testid="button-start-timer-task"
+                >
+                  <Play className="h-3 w-3 mr-1" />
+                  Start Timer
+                </Button>
+              </div>
             </div>
             {timeEntriesLoading ? (
               <p className="text-sm text-muted-foreground">Loading time entries...</p>
@@ -490,6 +503,13 @@ export function TaskDetailDrawer({
         onUpdate={handleChildTaskUpdate}
         onBack={() => setChildDrawerOpen(false)}
         availableUsers={availableUsers}
+      />
+
+      <StartTimerDrawer
+        open={timerDrawerOpen}
+        onOpenChange={setTimerDrawerOpen}
+        initialTaskId={task.id}
+        initialProjectId={task.projectId || null}
       />
     </Sheet>
   );
