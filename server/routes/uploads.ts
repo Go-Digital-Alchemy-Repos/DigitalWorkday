@@ -20,8 +20,6 @@ import { db } from "../db";
 import { users, tasks, projects, UserRole } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
 import {
-  isS3Configured,
-  isS3ConfiguredForTenant,
   validateCategory,
   validateFile,
   createPresignedUpload,
@@ -29,7 +27,12 @@ import {
   type UploadCategory,
   type AssetType,
 } from "../services/uploads/s3UploadService";
-import { StorageNotConfiguredError, getStorageStatus } from "../storage/getStorageProvider";
+import { 
+  StorageNotConfiguredError, 
+  StorageDecryptionError, 
+  StorageEncryptionNotAvailableError,
+  getStorageStatus 
+} from "../storage/getStorageProvider";
 
 const router = Router();
 
@@ -93,14 +96,6 @@ async function validateTaskAccess(
  */
 router.post("/presign", requireAuth, async (req: Request, res: Response) => {
   try {
-    if (!isS3Configured()) {
-      return res.status(503).json({
-        error: { code: "S3_NOT_CONFIGURED", message: "S3 storage is not configured" },
-        code: "S3_NOT_CONFIGURED",
-        message: "S3 storage is not configured",
-      });
-    }
-
     const parsed = presignRequestSchema.safeParse(req.body);
     if (!parsed.success) {
       return res.status(400).json({
@@ -220,10 +215,26 @@ router.post("/presign", requireAuth, async (req: Request, res: Response) => {
     console.error("[uploads] Presign error:", error);
     
     if (error instanceof StorageNotConfiguredError) {
-      return res.status(400).json({
+      return res.status(503).json({
         error: { code: "STORAGE_NOT_CONFIGURED", message: error.message },
         code: "STORAGE_NOT_CONFIGURED",
         message: error.message,
+      });
+    }
+    
+    if (error instanceof StorageDecryptionError) {
+      return res.status(500).json({
+        error: { code: "STORAGE_DECRYPTION_FAILED", message: "Storage credentials could not be accessed. Contact your administrator." },
+        code: "STORAGE_DECRYPTION_FAILED",
+        message: "Storage credentials could not be accessed. Contact your administrator.",
+      });
+    }
+    
+    if (error instanceof StorageEncryptionNotAvailableError) {
+      return res.status(500).json({
+        error: { code: "STORAGE_ENCRYPTION_NOT_AVAILABLE", message: "Storage encryption is not configured. Contact your administrator." },
+        code: "STORAGE_ENCRYPTION_NOT_AVAILABLE",
+        message: "Storage encryption is not configured. Contact your administrator.",
       });
     }
     

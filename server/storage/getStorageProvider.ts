@@ -61,6 +61,24 @@ function debugLog(message: string, data?: Record<string, any>) {
   }
 }
 
+export class StorageDecryptionError extends Error {
+  code = "STORAGE_DECRYPTION_FAILED";
+  
+  constructor(integrationId: string) {
+    super(`Failed to decrypt storage credentials for integration ${integrationId}. Check APP_ENCRYPTION_KEY configuration.`);
+    this.name = "StorageDecryptionError";
+  }
+}
+
+export class StorageEncryptionNotAvailableError extends Error {
+  code = "STORAGE_ENCRYPTION_NOT_AVAILABLE";
+  
+  constructor() {
+    super("Encryption key not configured. Cannot access storage credentials.");
+    this.name = "StorageEncryptionNotAvailableError";
+  }
+}
+
 async function getIntegrationConfig(tenantId: string | null, provider: string = "s3"): Promise<{
   publicConfig: S3PublicConfig | null;
   secretConfig: S3SecretConfig | null;
@@ -81,12 +99,16 @@ async function getIntegrationConfig(tenantId: string | null, provider: string = 
   }
 
   let secretConfig: S3SecretConfig | null = null;
-  if (integration.configEncrypted && isEncryptionAvailable()) {
+  if (integration.configEncrypted) {
+    if (!isEncryptionAvailable()) {
+      console.error(`[StorageProvider] Encryption not available for integration ${integration.id}`);
+      throw new StorageEncryptionNotAvailableError();
+    }
     try {
       secretConfig = JSON.parse(decryptValue(integration.configEncrypted)) as S3SecretConfig;
     } catch (err) {
-      console.error(`[StorageProvider] Failed to decrypt secrets for integration ${integration.id}`);
-      return null;
+      console.error(`[StorageProvider] Failed to decrypt secrets for integration ${integration.id}:`, err);
+      throw new StorageDecryptionError(integration.id);
     }
   }
 
@@ -198,23 +220,44 @@ export function createS3ClientFromConfig(config: S3Config): S3Client {
 /**
  * Check the storage status for a tenant (for UI display).
  * Returns information about which storage source is being used.
+ * 
+ * Note: This is a safe check that won't throw errors - it catches
+ * decryption/encryption errors and reports them in the status.
  */
 export async function getStorageStatus(tenantId: string | null): Promise<{
   configured: boolean;
   source: "tenant" | "system" | "env" | "none";
   tenantHasOverride: boolean;
   systemHasDefault: boolean;
+  error?: string;
 }> {
   let tenantHasOverride = false;
   let systemHasDefault = false;
+  let error: string | undefined;
 
   if (tenantId) {
-    const tenantConfig = await getIntegrationConfig(tenantId, "s3");
-    tenantHasOverride = tenantConfig !== null && isValidS3Config(tenantConfig.publicConfig, tenantConfig.secretConfig);
+    try {
+      const tenantConfig = await getIntegrationConfig(tenantId, "s3");
+      tenantHasOverride = tenantConfig !== null && isValidS3Config(tenantConfig.publicConfig, tenantConfig.secretConfig);
+    } catch (err) {
+      if (err instanceof StorageDecryptionError || err instanceof StorageEncryptionNotAvailableError) {
+        error = err.message;
+      } else {
+        throw err;
+      }
+    }
   }
 
-  const systemConfig = await getIntegrationConfig(null, "s3");
-  systemHasDefault = systemConfig !== null && isValidS3Config(systemConfig.publicConfig, systemConfig.secretConfig);
+  try {
+    const systemConfig = await getIntegrationConfig(null, "s3");
+    systemHasDefault = systemConfig !== null && isValidS3Config(systemConfig.publicConfig, systemConfig.secretConfig);
+  } catch (err) {
+    if (err instanceof StorageDecryptionError || err instanceof StorageEncryptionNotAvailableError) {
+      if (!error) error = err.message;
+    } else {
+      throw err;
+    }
+  }
 
   const envConfigured = !!(
     process.env.AWS_REGION &&
@@ -240,6 +283,7 @@ export async function getStorageStatus(tenantId: string | null): Promise<{
   return {
     configured,
     source,
+    error,
     tenantHasOverride,
     systemHasDefault,
   };
