@@ -75,16 +75,16 @@ function requireTenantContext(req: any, res: any, next: any) {
   const effectiveTenantId = getEffectiveTenantId(req);
   
   if (!effectiveTenantId) {
-    // Debug logging for tenant context issues
-    if (process.env.DEBUG_TENANT_CONTEXT === "true") {
-      console.log("[requireTenantContext] No tenant context:", {
-        userId: user?.id,
-        email: user?.email,
-        role: user?.role,
-        userTenantId: user?.tenantId,
-        headerTenantId: req.headers["x-tenant-id"],
-      });
-    }
+    // Always log tenant context issues to help diagnose Railway deployment problems
+    console.error("[requireTenantContext] No tenant context:", {
+      userId: user?.id,
+      email: user?.email,
+      role: user?.role,
+      userTenantId: user?.tenantId,
+      headerTenantId: req.headers["x-tenant-id"],
+      reqTenant: req.tenant,
+      path: req.path,
+    });
     return res.status(403).json({ error: "No tenant context" });
   }
   

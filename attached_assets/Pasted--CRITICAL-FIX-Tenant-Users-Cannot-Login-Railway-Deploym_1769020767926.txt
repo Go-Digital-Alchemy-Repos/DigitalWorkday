@@ -1,0 +1,672 @@
+# CRITICAL FIX: Tenant Users Cannot Login - Railway Deployment
+
+## The Error
+
+**Symptom:** Tenant admins and employees login successfully but immediately see:
+```
+Unable to Load Tenant
+Unexpected token '<', "<!DOCTYPE "... is not valid JSON"
+```
+
+**What This Means:** 
+The frontend is requesting JSON from an API endpoint but receiving HTML (your React app's index.html) instead. This happens when API routes don't exist or aren't properly registered.
+
+---
+
+## STEP-BY-STEP FIX (Railway Production)
+
+### Step 1: Check Railway Logs RIGHT NOW
+
+1. Go to Railway Dashboard → Your Project → Deployments → Latest
+2. Click "View Logs"
+3. Have a tenant user attempt to login
+4. Watch logs in real-time
+
+**Look for:**
+- `404 GET /api/v1/tenant-settings` ← Most likely culprit
+- `404 GET /api/auth/me`
+- `404 GET /api/v1/tenant-info`
+- Any JavaScript errors during startup
+
+**Copy the exact 404 error and tell me which endpoint is failing!**
+
+---
+
+### Step 2: Fix Route Order (MOST COMMON CAUSE)
+
+This is the #1 cause on Railway deployments.
+
+**Check `/server/index.ts`** - The order MUST be:
+```typescript
+import express from 'express';
+import path from 'path';
+import session from 'express-session';
+import passport from './auth';
+import { registerRoutes } from './routes';
+
+const app = express();
+
+// 1. TRUST PROXY - CRITICAL FOR RAILWAY
+app.set('trust proxy', 1);
+
+// 2. Body parsing
+app.use(express.json());
+app.use(express.urlencoded({ extended: true }));
+
+// 3. Session (must come after trust proxy)
+app.use(session({
+  // ... your session config
+  cookie: {
+    secure: process.env.NODE_ENV === 'production', // true on Railway
+    httpOnly: true,
+    sameSite: 'lax',
+    maxAge: 1000 * 60 * 60 * 24 * 7,
+  }
+}));
+
+// 4. Passport
+app.use(passport.initialize());
+app.use(passport.session());
+
+// 5. ⚠️ REGISTER ALL API ROUTES FIRST - BEFORE STATIC FILES
+registerRoutes(app);
+
+// 6. ⚠️ STATIC FILES AND SPA FALLBACK MUST BE LAST
+if (process.env.NODE_ENV === 'production') {
+  const publicPath = path.join(__dirname, '../dist/public');
+  
+  // Serve static files
+  app.use(express.static(publicPath));
+  
+  // SPA fallback - MUST BE ABSOLUTE LAST
+  app.get('*', (req, res) => {
+    // Don't send HTML for failed API requests
+    if (req.path.startsWith('/api/')) {
+      return res.status(404).json({
+        ok: false,
+        code: 'NOT_FOUND',
+        message: `API endpoint not found: ${req.path}`,
+      });
+    }
+    res.sendFile(path.join(publicPath, 'index.html'));
+  });
+}
+
+const PORT = process.env.PORT || 5000;
+app.listen(PORT, () => {
+  console.log(`Server running on port ${PORT}`);
+  console.log(`Environment: ${process.env.NODE_ENV}`);
+  console.log(`Trust proxy: ${app.get('trust proxy')}`);
+});
+```
+
+**If your routes are AFTER the `app.get('*')` line, THAT'S THE PROBLEM!**
+
+---
+
+### Step 3: Add Missing Tenant Context Endpoint
+
+Create `/server/routes/tenantContext.ts`:
+```typescript
+import { Router } from 'express';
+import { eq } from 'drizzle-orm';
+import { db } from '../db';
+import { tenants, tenantSettings } from '../../shared/schema';
+import { requireAuth, requireTenantContext } from '../middleware/authContext';
+import { asyncHandler } from '../middleware/asyncHandler';
+
+export function registerTenantContextRoutes(app: Router) {
+  
+  /**
+   * GET /api/v1/tenant-settings
+   * Returns current user's tenant branding and settings
+   */
+  app.get('/api/v1/tenant-settings',
+    requireAuth,
+    requireTenantContext,
+    asyncHandler(async (req, res) => {
+      const tenantId = req.tenantId;
+
+      console.log('[TenantSettings] Loading for tenant:', tenantId);
+
+      if (!tenantId) {
+        return res.status(400).json({
+          ok: false,
+          code: 'NO_TENANT_CONTEXT',
+          message: 'No tenant context available',
+        });
+      }
+
+      // Find or create tenant settings
+      let settings = await db.query.tenantSettings.findFirst({
+        where: eq(tenantSettings.tenantId, tenantId),
+      });
+
+      // Auto-create if missing
+      if (!settings) {
+        console.log('[TenantSettings] No settings found, creating defaults');
+        
+        const tenant = await db.query.tenants.findFirst({
+          where: eq(tenants.id, tenantId),
+        });
+
+        if (!tenant) {
+          return res.status(404).json({
+            ok: false,
+            code: 'TENANT_NOT_FOUND',
+            message: 'Tenant not found',
+          });
+        }
+
+        [settings] = await db.insert(tenantSettings).values({
+          tenantId: tenantId,
+          displayName: tenant.name,
+          whiteLabelEnabled: false,
+          hideVendorBranding: false,
+        }).returning();
+      }
+
+      console.log('[TenantSettings] Returning settings for:', settings.displayName);
+      res.json(settings);
+    })
+  );
+
+  /**
+   * GET /api/v1/tenant-info
+   * Returns current user's tenant basic info
+   */
+  app.get('/api/v1/tenant-info',
+    requireAuth,
+    requireTenantContext,
+    asyncHandler(async (req, res) => {
+      const tenantId = req.tenantId;
+
+      console.log('[TenantInfo] Loading for tenant:', tenantId);
+
+      if (!tenantId) {
+        return res.status(400).json({
+          ok: false,
+          code: 'NO_TENANT_CONTEXT',
+          message: 'No tenant context available',
+        });
+      }
+
+      const tenant = await db.query.tenants.findFirst({
+        where: eq(tenants.id, tenantId),
+        with: {
+          settings: true,
+        },
+      });
+
+      if (!tenant) {
+        return res.status(404).json({
+          ok: false,
+          code: 'TENANT_NOT_FOUND',
+          message: 'Tenant not found',
+        });
+      }
+
+      console.log('[TenantInfo] Returning info for:', tenant.name);
+      res.json(tenant);
+    })
+  );
+}
+```
+
+**Then in `/server/routes.ts` or `/server/routes/index.ts`, add:**
+```typescript
+import { registerTenantContextRoutes } from './routes/tenantContext';
+
+export function registerRoutes(app: Express) {
+  // ... existing route registrations
+  
+  // Add tenant context routes
+  registerTenantContextRoutes(app);
+  
+  // ... rest of routes
+}
+```
+
+**OR if you're adding directly to `/server/routes.ts`, add these routes:**
+```typescript
+// Add these routes to your existing routes.ts file
+
+app.get('/api/v1/tenant-settings',
+  requireAuth,
+  requireTenantContext,
+  asyncHandler(async (req, res) => {
+    const tenantId = req.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        code: 'NO_TENANT_CONTEXT',
+        message: 'No tenant context available',
+      });
+    }
+
+    let settings = await db.query.tenantSettings.findFirst({
+      where: eq(tenantSettings.tenantId, tenantId),
+    });
+
+    if (!settings) {
+      const tenant = await db.query.tenants.findFirst({
+        where: eq(tenants.id, tenantId),
+      });
+
+      if (!tenant) {
+        return res.status(404).json({
+          ok: false,
+          code: 'TENANT_NOT_FOUND',
+          message: 'Tenant not found',
+        });
+      }
+
+      [settings] = await db.insert(tenantSettings).values({
+        tenantId: tenantId,
+        displayName: tenant.name,
+        whiteLabelEnabled: false,
+        hideVendorBranding: false,
+      }).returning();
+    }
+
+    res.json(settings);
+  })
+);
+
+app.get('/api/v1/tenant-info',
+  requireAuth,
+  requireTenantContext,
+  asyncHandler(async (req, res) => {
+    const tenantId = req.tenantId;
+
+    if (!tenantId) {
+      return res.status(400).json({
+        ok: false,
+        code: 'NO_TENANT_CONTEXT',
+        message: 'No tenant context available',
+      });
+    }
+
+    const tenant = await db.query.tenants.findFirst({
+      where: eq(tenants.id, tenantId),
+    });
+
+    if (!tenant) {
+      return res.status(404).json({
+        ok: false,
+        code: 'TENANT_NOT_FOUND',
+        message: 'Tenant not found',
+      });
+    }
+
+    res.json(tenant);
+  })
+);
+```
+
+---
+
+### Step 4: Verify Railway Environment Variables
+
+In Railway Dashboard → Variables, ensure these are set:
+```env
+DATABASE_URL=postgresql://...  # Auto-set by Railway Postgres
+SESSION_SECRET=your-long-random-secret-here
+APP_ENCRYPTION_KEY=your-32-byte-base64-key
+NODE_ENV=production
+TRUST_PROXY=true
+```
+
+**Generate secrets if missing:**
+```bash
+# SESSION_SECRET
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+
+# APP_ENCRYPTION_KEY
+node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
+```
+
+---
+
+### Step 5: Check Database - Do Users Have TenantId?
+
+Connect to your Railway Postgres database:
+
+1. Railway Dashboard → Postgres → Connect
+2. Use the provided connection string
+3. Run this query:
+```sql
+-- Check if users have tenantId
+SELECT 
+  u.id,
+  u.email,
+  u.role,
+  u."tenantId",
+  t.name as tenant_name,
+  t.status as tenant_status
+FROM users u
+LEFT JOIN tenants t ON u."tenantId" = t.id
+WHERE u.role IN ('admin', 'employee')
+ORDER BY u.email;
+```
+
+**Expected result:**
+```
+id       | email              | role     | tenantId  | tenant_name | tenant_status
+---------|--------------------|---------|-----------|--------------|--------------
+abc-123  | admin@acme.com     | admin    | xyz-789   | Acme Corp    | active
+def-456  | emp@acme.com       | employee | xyz-789   | Acme Corp    | active
+```
+
+**If tenantId is NULL for any user, FIX IT:**
+```sql
+-- Find the correct tenant ID first
+SELECT id, name, slug FROM tenants WHERE status = 'active';
+
+-- Update user with correct tenant ID
+UPDATE users 
+SET "tenantId" = 'your-tenant-id-here'  -- Replace with actual tenant ID
+WHERE email = 'admin@acme.com';  -- Replace with actual user email
+```
+
+---
+
+### Step 6: Verify Tenant Settings Exist
+```sql
+-- Check if tenant has settings
+SELECT 
+  t.id,
+  t.name,
+  ts.id as settings_id,
+  ts."displayName"
+FROM tenants t
+LEFT JOIN tenant_settings ts ON t.id = ts."tenantId"
+WHERE t.status = 'active';
+```
+
+**If settings are missing:**
+```sql
+-- Create missing tenant settings
+INSERT INTO tenant_settings (
+  "tenantId",
+  "displayName",
+  "whiteLabelEnabled",
+  "hideVendorBranding"
+)
+SELECT 
+  id,
+  name,
+  false,
+  false
+FROM tenants
+WHERE id NOT IN (SELECT "tenantId" FROM tenant_settings);
+```
+
+---
+
+### Step 7: Add Comprehensive Logging
+
+Update `/server/middleware/tenantContext.ts`:
+```typescript
+export const tenantContextMiddleware = (req: Request, res: Response, next: NextFunction) => {
+  const user = req.user as any;
+
+  console.log('[TenantContext] ===== MIDDLEWARE =====');
+  console.log('[TenantContext] Path:', req.path);
+  console.log('[TenantContext] Method:', req.method);
+  console.log('[TenantContext] Session ID:', req.sessionID);
+  console.log('[TenantContext] User ID:', user?.id);
+  console.log('[TenantContext] User Email:', user?.email);
+  console.log('[TenantContext] User Role:', user?.role);
+  console.log('[TenantContext] User TenantId:', user?.tenantId);
+  console.log('[TenantContext] X-Tenant-Id Header:', req.headers['x-tenant-id']);
+
+  // Super users can act as any tenant
+  if (user?.role === 'super_user') {
+    const headerTenantId = req.headers['x-tenant-id'] as string;
+    if (headerTenantId) {
+      req.tenantId = headerTenantId;
+      req.effectiveTenantId = headerTenantId;
+      console.log('[TenantContext] ✓ Super user acting as tenant:', headerTenantId);
+    } else {
+      req.tenantId = undefined;
+      req.effectiveTenantId = undefined;
+      console.log('[TenantContext] ⚠ Super user with no tenant context');
+    }
+  } 
+  // Regular users use their assigned tenant
+  else if (user?.tenantId) {
+    req.tenantId = user.tenantId;
+    req.effectiveTenantId = user.tenantId;
+    console.log('[TenantContext] ✓ User tenant context:', user.tenantId);
+  } 
+  // User exists but has no tenant - ERROR
+  else if (user) {
+    req.tenantId = undefined;
+    req.effectiveTenantId = undefined;
+    console.error('[TenantContext] ✗ ERROR - User has no tenantId!');
+    console.error('[TenantContext] User needs tenantId assignment in database');
+  }
+
+  console.log('[TenantContext] Final tenantId:', req.tenantId);
+  console.log('[TenantContext] ===== END =====');
+  next();
+};
+
+export const requireTenantContext = (req: Request, res: Response, next: NextFunction) => {
+  console.log('[RequireTenantContext] Checking tenant context for:', req.path);
+  
+  if (!req.tenantId) {
+    console.error('[RequireTenantContext] ✗ FAILED - No tenant context');
+    console.error('[RequireTenantContext] User:', req.user?.id);
+    console.error('[RequireTenantContext] User Role:', req.user?.role);
+    console.error('[RequireTenantContext] User TenantId:', req.user?.tenantId);
+    
+    return res.status(400).json({
+      ok: false,
+      code: 'NO_TENANT_CONTEXT',
+      message: 'Tenant context required but not available',
+      debug: {
+        userId: req.user?.id,
+        userRole: req.user?.role,
+        userTenantId: req.user?.tenantId,
+        path: req.path,
+      }
+    });
+  }
+
+  console.log('[RequireTenantContext] ✓ SUCCESS - Tenant:', req.tenantId);
+  next();
+};
+```
+
+---
+
+### Step 8: Verify Passport Includes TenantId
+
+Update `/server/auth.ts`:
+```typescript
+passport.deserializeUser(async (id: string, done) => {
+  console.log('[Auth] ===== DESERIALIZE USER =====');
+  console.log('[Auth] User ID:', id);
+  
+  try {
+    const user = await db.query.users.findFirst({
+      where: eq(users.id, id),
+    });
+
+    if (!user) {
+      console.error('[Auth] ✗ User not found:', id);
+      return done(null, false);
+    }
+
+    console.log('[Auth] ✓ User found:', user.email);
+    console.log('[Auth] User ID:', user.id);
+    console.log('[Auth] User Role:', user.role);
+    console.log('[Auth] User TenantId:', user.tenantId);  // ← MUST BE HERE
+    console.log('[Auth] ===== END DESERIALIZE =====');
+
+    done(null, user);  // ← Full user object with tenantId
+  } catch (err) {
+    console.error('[Auth] ✗ Deserialization error:', err);
+    done(err);
+  }
+});
+```
+
+---
+
+### Step 9: Deploy and Test
+
+1. **Commit all changes:**
+```bash
+git add .
+git commit -m "Fix tenant context for Railway deployment"
+git push
+```
+
+2. **Railway will auto-deploy**
+
+3. **Watch Railway logs during deployment:**
+   - Click "View Logs" 
+   - Look for startup messages
+   - Verify no errors
+
+4. **Test login:**
+   - Login as tenant admin
+   - Watch Railway logs in real-time
+   - Look for the tenant context log messages
+
+---
+
+### Step 10: Debug Output to Look For
+
+**SUCCESSFUL LOGIN (what you want to see):**
+```
+[Auth] ===== DESERIALIZE USER =====
+[Auth] User ID: abc-123
+[Auth] ✓ User found: admin@acme.com
+[Auth] User ID: abc-123
+[Auth] User Role: admin
+[Auth] User TenantId: xyz-789
+[Auth] ===== END DESERIALIZE =====
+
+[TenantContext] ===== MIDDLEWARE =====
+[TenantContext] Path: /api/v1/tenant-settings
+[TenantContext] User ID: abc-123
+[TenantContext] User Email: admin@acme.com
+[TenantContext] User Role: admin
+[TenantContext] User TenantId: xyz-789
+[TenantContext] ✓ User tenant context: xyz-789
+[TenantContext] Final tenantId: xyz-789
+[TenantContext] ===== END =====
+
+[RequireTenantContext] Checking tenant context for: /api/v1/tenant-settings
+[RequireTenantContext] ✓ SUCCESS - Tenant: xyz-789
+
+[TenantSettings] Loading for tenant: xyz-789
+[TenantSettings] Returning settings for: Acme Corp
+```
+
+**FAILED LOGIN (what you're seeing now):**
+```
+[Auth] ===== DESERIALIZE USER =====
+[Auth] User ID: abc-123
+[Auth] ✓ User found: admin@acme.com
+[Auth] User ID: abc-123
+[Auth] User Role: admin
+[Auth] User TenantId: null  ← PROBLEM!
+[Auth] ===== END DESERIALIZE =====
+
+[TenantContext] ===== MIDDLEWARE =====
+[TenantContext] User TenantId: null  ← PROBLEM!
+[TenantContext] ✗ ERROR - User has no tenantId!
+[TenantContext] Final tenantId: undefined
+[TenantContext] ===== END =====
+
+[RequireTenantContext] ✗ FAILED - No tenant context
+```
+
+---
+
+## QUICK CHECKLIST
+
+**Backend Code:**
+- [ ] `app.set('trust proxy', 1)` BEFORE session in `/server/index.ts`
+- [ ] API routes registered BEFORE `app.get('*')` in `/server/index.ts`
+- [ ] `/api/v1/tenant-settings` endpoint exists
+- [ ] `/api/v1/tenant-info` endpoint exists
+- [ ] `requireTenantContext` returns JSON errors (not HTML)
+- [ ] Passport deserialization includes `tenantId`
+- [ ] Logging added to track the issue
+
+**Railway Environment:**
+- [ ] `TRUST_PROXY=true` in Railway variables
+- [ ] `SESSION_SECRET` is set
+- [ ] `NODE_ENV=production` is set
+- [ ] `DATABASE_URL` connects to Railway Postgres
+
+**Database:**
+- [ ] Users have `tenantId` values (not NULL)
+- [ ] Tenants exist and are `active`
+- [ ] Tenant settings exist for each tenant
+
+**Deployment:**
+- [ ] Code committed and pushed
+- [ ] Railway redeployed
+- [ ] No build errors
+- [ ] No startup errors in logs
+
+---
+
+## MOST LIKELY FIXES
+
+Based on this error on Railway, the issue is **99% likely** one of these:
+
+### #1: Route Order (50% probability)
+```typescript
+// Routes must come BEFORE the SPA fallback
+registerRoutes(app);  // ← API routes first
+app.get('*', ...)     // ← Catch-all last
+```
+
+### #2: Missing Endpoint (30% probability)
+The `/api/v1/tenant-settings` endpoint doesn't exist
+
+### #3: User Missing TenantId (15% probability)
+```sql
+UPDATE users SET "tenantId" = 'tenant-id' WHERE email = 'user@example.com';
+```
+
+### #4: Trust Proxy Not Set (5% probability)
+```typescript
+app.set('trust proxy', 1);
+```
+
+---
+
+## EMERGENCY QUICK FIX
+
+If you need to get users working IMMEDIATELY while debugging:
+
+**Create a temporary endpoint that returns mock data:**
+```typescript
+// Temporary endpoint to bypass tenant loading
+app.get('/api/v1/tenant-settings', requireAuth, (req, res) => {
+  console.log('[TEMP] Returning mock tenant settings');
+  res.json({
+    id: 'temp',
+    tenantId: req.user?.tenantId || 'unknown',
+    displayName: 'Temporary Settings',
+    whiteLabelEnabled: false,
+    hideVendorBranding: false,
+  });
+});
+```
+
+This will at least let users login while you fix the real issue.
+
+---
+
+**Tell me what you see in the Railway logs after deploying the debug version!**
