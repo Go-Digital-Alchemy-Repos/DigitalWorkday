@@ -772,6 +772,13 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
     enabled: !!activeTenant && open && activeTab === "clients",
   });
 
+  // Also load clients for the projects tab (for client dropdown in create project form)
+  const { data: allClientsResponse } = useQuery<{ clients: TenantClient[] }>({
+    queryKey: ["/api/v1/super/tenants", activeTenant?.id, "clients-all"],
+    queryFn: () => fetch(`/api/v1/super/tenants/${activeTenant?.id}/clients`, { credentials: "include" }).then(r => r.json()),
+    enabled: !!activeTenant && open && activeTab === "projects",
+  });
+
   const { data: projectsResponse, isLoading: projectsLoading } = useQuery<{ projects: TenantProject[] }>({
     queryKey: ["/api/v1/super/tenants", activeTenant?.id, "projects", projectSearch],
     queryFn: () => fetch(`/api/v1/super/tenants/${activeTenant?.id}/projects?search=${encodeURIComponent(projectSearch)}`, { credentials: "include" }).then(r => r.json()),
@@ -2807,22 +2814,58 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                   <Plus className="h-4 w-4" />
                   Create Project
                 </CardTitle>
+                <CardDescription>
+                  Create a new project for this tenant. Projects must be associated with a client.
+                </CardDescription>
               </CardHeader>
-              <CardContent>
-                <div className="flex gap-2">
-                  <Input
-                    placeholder="Project name"
-                    value={newProjectName}
-                    onChange={(e) => setNewProjectName(e.target.value)}
-                    data-testid="input-new-project-name"
-                  />
+              <CardContent className="space-y-4">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Project Name</label>
+                    <Input
+                      placeholder="Enter project name"
+                      value={newProjectName}
+                      onChange={(e) => setNewProjectName(e.target.value)}
+                      data-testid="input-new-project-name"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium">Client <span className="text-destructive">*</span></label>
+                    <Select 
+                      value={newProjectClientId} 
+                      onValueChange={setNewProjectClientId}
+                    >
+                      <SelectTrigger data-testid="select-project-client">
+                        <SelectValue placeholder="Select a client" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {allClientsResponse?.clients?.map((client) => (
+                          <SelectItem key={client.id} value={client.id}>
+                            {client.companyName}
+                          </SelectItem>
+                        ))}
+                        {(!allClientsResponse?.clients || allClientsResponse.clients.length === 0) && (
+                          <SelectItem value="_no_clients" disabled>
+                            No clients available - create a client first
+                          </SelectItem>
+                        )}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+                <div className="flex justify-end">
                   <Button
-                    onClick={() => createProjectMutation.mutate(newProjectName)}
-                    disabled={!newProjectName.trim() || createProjectMutation.isPending}
+                    onClick={() => {
+                      createProjectMutation.mutate({ 
+                        name: newProjectName, 
+                        clientId: newProjectClientId || undefined 
+                      });
+                    }}
+                    disabled={!newProjectName.trim() || !newProjectClientId || createProjectMutation.isPending}
                     data-testid="button-create-project"
                   >
                     {createProjectMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-                    Create
+                    Create Project
                   </Button>
                 </div>
               </CardContent>
