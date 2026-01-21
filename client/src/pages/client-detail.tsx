@@ -59,8 +59,10 @@ import {
   FileText,
   Link as LinkIcon,
   Search,
+  Play,
 } from "lucide-react";
 import { useLocation } from "wouter";
+import { StartTimerDrawer } from "@/components/start-timer-drawer";
 import type { ClientWithContacts, Project, ClientContact } from "@shared/schema";
 
 const createContactSchema = z.object({
@@ -209,6 +211,7 @@ export default function ClientDetailPage() {
   const [editContactOpen, setEditContactOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
   const [editClientOpen, setEditClientOpen] = useState(false);
+  const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [projectView, setProjectView] = useState<"options" | "create" | "assign">("options");
   const [projectSearchQuery, setProjectSearchQuery] = useState("");
@@ -435,6 +438,14 @@ export default function ClientDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          <Button 
+            variant="default" 
+            onClick={() => setTimerDrawerOpen(true)}
+            data-testid="button-start-timer-client"
+          >
+            <Play className="h-4 w-4 mr-2" />
+            Start Timer
+          </Button>
           <Dialog open={editClientOpen} onOpenChange={setEditClientOpen}>
             <DialogTrigger asChild>
               <Button variant="outline" data-testid="button-edit-client">
@@ -1083,6 +1094,12 @@ export default function ClientDetailPage() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <StartTimerDrawer
+        open={timerDrawerOpen}
+        onOpenChange={setTimerDrawerOpen}
+        initialClientId={clientId}
+      />
     </div>
   );
 }

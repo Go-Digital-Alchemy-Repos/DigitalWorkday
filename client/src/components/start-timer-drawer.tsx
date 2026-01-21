@@ -19,9 +19,21 @@ const BROADCAST_CHANNEL_NAME = "active-timer-sync";
 interface StartTimerDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  /** Pre-populate the client field */
+  initialClientId?: string | null;
+  /** Pre-populate the project field */
+  initialProjectId?: string | null;
+  /** Pre-populate the task field */
+  initialTaskId?: string | null;
 }
 
-export function StartTimerDrawer({ open, onOpenChange }: StartTimerDrawerProps) {
+export function StartTimerDrawer({ 
+  open, 
+  onOpenChange,
+  initialClientId = null,
+  initialProjectId = null,
+  initialTaskId = null,
+}: StartTimerDrawerProps) {
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [hasChanges, setHasChanges] = useState(false);
@@ -108,19 +120,19 @@ export function StartTimerDrawer({ open, onOpenChange }: StartTimerDrawerProps) 
     },
   });
 
-  const resetForm = () => {
+  const resetForm = useCallback(() => {
     setDescription("");
-    setClientId(null);
-    setProjectId(null);
-    setTaskId(null);
+    setClientId(initialClientId);
+    setProjectId(initialProjectId);
+    setTaskId(initialTaskId);
     setHasChanges(false);
-  };
+  }, [initialClientId, initialProjectId, initialTaskId]);
 
   useEffect(() => {
     if (open) {
       resetForm();
     }
-  }, [open]);
+  }, [open, resetForm]);
 
   const handleFieldChange = () => {
     setHasChanges(true);
