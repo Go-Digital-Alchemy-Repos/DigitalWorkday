@@ -7,6 +7,7 @@ import { Label } from "@/components/ui/label";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -638,6 +639,18 @@ export default function SuperAdminSettingsPage() {
   const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
   const [adminToDeactivate, setAdminToDeactivate] = useState<PlatformAdmin | null>(null);
   
+  const [passwordDrawerOpen, setPasswordDrawerOpen] = useState(false);
+  const [adminToProvision, setAdminToProvision] = useState<PlatformAdmin | null>(null);
+  const [passwordMethod, setPasswordMethod] = useState<"SET_PASSWORD" | "RESET_LINK">("SET_PASSWORD");
+  const [passwordForm, setPasswordForm] = useState({
+    password: "",
+    confirmPassword: "",
+    mustChangeOnNextLogin: true,
+    sendEmail: false,
+  });
+  const [showPassword, setShowPassword] = useState(false);
+  const [generatedResetUrl, setGeneratedResetUrl] = useState<string | null>(null);
+  
   const [newAdminForm, setNewAdminForm] = useState({
     email: "",
     firstName: "",
@@ -968,6 +981,86 @@ export default function SuperAdminSettingsPage() {
     },
   });
 
+  const provisionAdminMutation = useMutation({
+    mutationFn: async ({ id, method, password, mustChangeOnNextLogin, sendEmail }: { 
+      id: string; 
+      method: "SET_PASSWORD" | "RESET_LINK";
+      password?: string;
+      mustChangeOnNextLogin: boolean;
+      sendEmail: boolean;
+    }) => {
+      const response = await apiRequest("POST", `/api/v1/super/admins/${id}/provision`, { 
+        method,
+        password,
+        mustChangeOnNextLogin,
+        activateNow: true,
+        sendEmail,
+      });
+      return response.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/admins"] });
+      if (data.method === "SET_PASSWORD") {
+        toast({ title: "Password set successfully" });
+        setPasswordDrawerOpen(false);
+        resetPasswordForm();
+      } else if (data.method === "RESET_LINK") {
+        setGeneratedResetUrl(data.resetUrl);
+        toast({ title: "Password reset link generated" });
+      }
+    },
+    onError: (error: any) => {
+      const parsed = parseApiError(error);
+      toast({ title: "Failed to provision admin", description: parsed.message, variant: "destructive" });
+    },
+  });
+
+  const resetPasswordForm = () => {
+    setPasswordForm({
+      password: "",
+      confirmPassword: "",
+      mustChangeOnNextLogin: true,
+      sendEmail: false,
+    });
+    setShowPassword(false);
+    setGeneratedResetUrl(null);
+    setAdminToProvision(null);
+  };
+
+  const handleOpenPasswordDrawer = (admin: PlatformAdmin, method: "SET_PASSWORD" | "RESET_LINK") => {
+    setAdminToProvision(admin);
+    setPasswordMethod(method);
+    resetPasswordForm();
+    setPasswordDrawerOpen(true);
+  };
+
+  const handleProvisionAdmin = () => {
+    if (!adminToProvision) return;
+    
+    if (passwordMethod === "SET_PASSWORD") {
+      if (!passwordForm.password) {
+        toast({ title: "Please enter a password", variant: "destructive" });
+        return;
+      }
+      if (passwordForm.password.length < 8) {
+        toast({ title: "Password must be at least 8 characters", variant: "destructive" });
+        return;
+      }
+      if (passwordForm.password !== passwordForm.confirmPassword) {
+        toast({ title: "Passwords do not match", variant: "destructive" });
+        return;
+      }
+    }
+    
+    provisionAdminMutation.mutate({
+      id: adminToProvision.id,
+      method: passwordMethod,
+      password: passwordMethod === "SET_PASSWORD" ? passwordForm.password : undefined,
+      mustChangeOnNextLogin: passwordForm.mustChangeOnNextLogin,
+      sendEmail: passwordForm.sendEmail,
+    });
+  };
+
   const handleSaveBranding = () => {
     updateSettingsMutation.mutate(brandingForm);
   };
@@ -1130,17 +1223,31 @@ export default function SuperAdminSettingsPage() {
                               </DropdownMenuItem>
                               {admin.isActive && !admin.passwordSet && (
                                 <>
+                                  <DropdownMenuItem onClick={() => handleOpenPasswordDrawer(admin, "SET_PASSWORD")} data-testid={`button-set-password-${admin.id}`}>
+                                    <KeyRound className="h-4 w-4 mr-2" />
+                                    Set Password
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem onClick={() => handleOpenPasswordDrawer(admin, "RESET_LINK")} data-testid={`button-send-reset-link-${admin.id}`}>
+                                    <Link className="h-4 w-4 mr-2" />
+                                    Generate Reset Link
+                                  </DropdownMenuItem>
                                   <DropdownMenuItem onClick={() => handleGenerateInvite(admin)} data-testid={`button-generate-link-${admin.id}`}>
                                     <Link className="h-4 w-4 mr-2" />
                                     Generate Invite Link
                                   </DropdownMenuItem>
                                   {integrationStatus?.mailgun && (
                                     <DropdownMenuItem onClick={() => handleGenerateInvite(admin, true)} data-testid={`button-send-email-${admin.id}`}>
-                                      <Mail className="h-4 w-4 mr-2" />
+                                      <Send className="h-4 w-4 mr-2" />
                                       Send Invite Email
                                     </DropdownMenuItem>
                                   )}
                                 </>
+                              )}
+                              {admin.isActive && admin.passwordSet && (
+                                <DropdownMenuItem onClick={() => handleOpenPasswordDrawer(admin, "RESET_LINK")} data-testid={`button-reset-password-${admin.id}`}>
+                                  <KeyRound className="h-4 w-4 mr-2" />
+                                  Reset Password
+                                </DropdownMenuItem>
                               )}
                               {admin.isActive ? (
                                 <DropdownMenuItem 
@@ -2247,6 +2354,156 @@ export default function SuperAdminSettingsPage() {
               </Button>
               <Button variant="outline" onClick={() => setEditAdminDrawerOpen(false)}>
                 Cancel
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Password Management Drawer */}
+      <Sheet open={passwordDrawerOpen} onOpenChange={(open) => {
+        if (!open) {
+          resetPasswordForm();
+          setPasswordDrawerOpen(false);
+        }
+      }}>
+        <SheetContent className="w-full sm:max-w-xl" data-testid="drawer-password-management">
+          <SheetHeader>
+            <SheetTitle>
+              {passwordMethod === "SET_PASSWORD" ? "Set Password" : "Reset Password"}
+            </SheetTitle>
+            <SheetDescription>
+              {passwordMethod === "SET_PASSWORD" 
+                ? `Set an initial password for ${adminToProvision?.email}`
+                : `Generate a password reset link for ${adminToProvision?.email}`
+              }
+            </SheetDescription>
+          </SheetHeader>
+          <div className="space-y-6 py-6">
+            {passwordMethod === "SET_PASSWORD" ? (
+              <>
+                <div className="space-y-2">
+                  <Label htmlFor="password">New Password</Label>
+                  <div className="relative">
+                    <Input
+                      id="password"
+                      type={showPassword ? "text" : "password"}
+                      value={passwordForm.password}
+                      onChange={(e) => setPasswordForm({ ...passwordForm, password: e.target.value })}
+                      placeholder="Minimum 8 characters"
+                      data-testid="input-password"
+                    />
+                    <Button
+                      type="button"
+                      variant="ghost"
+                      size="icon"
+                      className="absolute right-0 top-0 h-full"
+                      onClick={() => setShowPassword(!showPassword)}
+                      data-testid="button-toggle-password"
+                    >
+                      {showPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    </Button>
+                  </div>
+                </div>
+                <div className="space-y-2">
+                  <Label htmlFor="confirmPassword">Confirm Password</Label>
+                  <Input
+                    id="confirmPassword"
+                    type={showPassword ? "text" : "password"}
+                    value={passwordForm.confirmPassword}
+                    onChange={(e) => setPasswordForm({ ...passwordForm, confirmPassword: e.target.value })}
+                    placeholder="Re-enter password"
+                    data-testid="input-confirm-password"
+                  />
+                </div>
+                <div className="flex items-center space-x-2">
+                  <Checkbox
+                    id="mustChange"
+                    checked={passwordForm.mustChangeOnNextLogin}
+                    onCheckedChange={(checked) => setPasswordForm({ ...passwordForm, mustChangeOnNextLogin: checked === true })}
+                    data-testid="checkbox-must-change"
+                  />
+                  <Label htmlFor="mustChange" className="text-sm font-normal cursor-pointer">
+                    Require password change on next login
+                  </Label>
+                </div>
+              </>
+            ) : (
+              <>
+                <div className="rounded-lg border p-4 bg-muted/50">
+                  <p className="text-sm text-muted-foreground">
+                    A password reset link will be generated. You can either share the link directly or have an email sent to the admin.
+                  </p>
+                </div>
+                {integrationStatus?.mailgun && (
+                  <div className="flex items-center space-x-2">
+                    <Checkbox
+                      id="sendEmail"
+                      checked={passwordForm.sendEmail}
+                      onCheckedChange={(checked) => setPasswordForm({ ...passwordForm, sendEmail: checked === true })}
+                      data-testid="checkbox-send-email"
+                    />
+                    <Label htmlFor="sendEmail" className="text-sm font-normal cursor-pointer">
+                      Send password reset email
+                    </Label>
+                  </div>
+                )}
+                {generatedResetUrl && (
+                  <div className="space-y-2">
+                    <Label>Password Reset Link</Label>
+                    <div className="flex items-center gap-2">
+                      <Input 
+                        value={generatedResetUrl} 
+                        readOnly 
+                        className="font-mono text-sm"
+                        data-testid="input-reset-url"
+                      />
+                      <Button 
+                        size="icon" 
+                        variant="outline" 
+                        onClick={() => {
+                          navigator.clipboard.writeText(generatedResetUrl);
+                          toast({ title: "Link copied to clipboard" });
+                        }}
+                        data-testid="button-copy-reset-link"
+                      >
+                        <Copy className="h-4 w-4" />
+                      </Button>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      This link expires in 24 hours.
+                    </p>
+                  </div>
+                )}
+              </>
+            )}
+            <div className="flex gap-3 pt-4">
+              {!generatedResetUrl && (
+                <Button 
+                  onClick={handleProvisionAdmin} 
+                  disabled={provisionAdminMutation.isPending}
+                  className="flex-1"
+                  data-testid="button-provision-admin"
+                >
+                  {provisionAdminMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  ) : passwordMethod === "SET_PASSWORD" ? (
+                    <KeyRound className="h-4 w-4 mr-2" />
+                  ) : (
+                    <Mail className="h-4 w-4 mr-2" />
+                  )}
+                  {passwordMethod === "SET_PASSWORD" ? "Set Password" : "Generate Reset Link"}
+                </Button>
+              )}
+              <Button 
+                variant="outline" 
+                onClick={() => {
+                  resetPasswordForm();
+                  setPasswordDrawerOpen(false);
+                }}
+                className={generatedResetUrl ? "flex-1" : ""}
+              >
+                {generatedResetUrl ? "Done" : "Cancel"}
               </Button>
             </div>
           </div>
