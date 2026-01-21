@@ -1,0 +1,827 @@
+# FIX: Clients Not Showing in Tenant Account After Super Admin Creation
+
+## The Problem
+
+Clients created by Super Admin during tenant onboarding are not visible to tenant users (admins/employees) when they login. This is a **tenant association bug**.
+
+---
+
+## ROOT CAUSE DIAGNOSIS
+
+### Step 1: Check Database - Are Clients Missing TenantId?
+
+Connect to Railway Postgres and run:
+```sql
+-- Check all clients and their tenant associations
+SELECT 
+  c.id,
+  c.name as client_name,
+  c."tenantId" as client_tenant_id,
+  c.email,
+  c.status,
+  c."createdAt",
+  t.name as tenant_name,
+  t.id as tenant_id
+FROM clients c
+LEFT JOIN tenants t ON c."tenantId" = t.id
+ORDER BY c."createdAt" DESC
+LIMIT 20;
+```
+
+**Look for:**
+- Clients where `client_tenant_id` is **NULL** ← This is the problem
+- Clients where `client_tenant_id` doesn't match the expected tenant
+- Clients without a matching tenant name
+
+**If you see NULL tenantIds, that's your problem!**
+
+---
+
+### Step 2: Check How Super Admin Creates Clients
+
+The issue is likely in one of these places:
+
+#### A. Super Admin Client Creation Route
+
+Find in `/server/routes/superAdmin.ts` or similar:
+```typescript
+// WRONG - Missing tenantId
+app.post('/api/v1/super/tenants/:tenantId/clients',
+  requireAuth,
+  requireSuperUser,
+  asyncHandler(async (req, res) => {
+    const { tenantId } = req.params;
+    const { name, email, phone, company } = req.body;
+
+    // ❌ BUG: Not setting tenantId!
+    const [client] = await db.insert(clients).values({
+      name,
+      email,
+      phone,
+      company,
+      // tenantId is missing! ← THE BUG
+    }).returning();
+
+    res.json(client);
+  })
+);
+
+// ✅ CORRECT - Includes tenantId
+app.post('/api/v1/super/tenants/:tenantId/clients',
+  requireAuth,
+  requireSuperUser,
+  asyncHandler(async (req, res) => {
+    const { tenantId } = req.params;
+    const { name, email, phone, company, status } = req.body;
+
+    console.log('[CreateClient] Creating client for tenant:', tenantId);
+    console.log('[CreateClient] Client data:', { name, email });
+
+    // ✅ MUST include tenantId
+    const [client] = await db.insert(clients).values({
+      tenantId: tenantId,  // ← CRITICAL
+      name,
+      email,
+      phone,
+      company,
+      status: status || 'active',
+    }).returning();
+
+    console.log('[CreateClient] Client created:', client.id);
+    res.status(201).json(client);
+  })
+);
+```
+
+#### B. Frontend Super Admin Client Creation
+
+Check `/client/src/components/super-admin/tenant-drawer.tsx` or similar:
+```typescript
+// In the Clients tab or tenant onboarding flow
+
+const createClient = useMutation({
+  mutationFn: async (data) => {
+    console.log('[Frontend] Creating client for tenant:', tenant.id);
+    
+    // ✅ CORRECT - Uses tenant ID in URL
+    const res = await fetch(`/api/v1/super/tenants/${tenant.id}/clients`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        // Super admins should NOT use X-Tenant-Id header for creation
+        // The tenantId should come from the URL parameter
+      },
+      credentials: 'include',
+      body: JSON.stringify({
+        name: data.name,
+        email: data.email,
+        phone: data.phone,
+        company: data.company,
+        status: data.status || 'active',
+      }),
+    });
+
+    if (!res.ok) {
+      throw new Error('Failed to create client');
+    }
+
+    return res.json();
+  },
+});
+```
+
+---
+
+### Step 3: Verify Tenant Users Can Query Clients
+
+Check the client list endpoint for tenant users:
+```typescript
+// In /server/routes.ts or similar
+
+/**
+ * GET /api/v1/clients
+ * List all clients for the current tenant
+ */
+app.get('/api/v1/clients',
+  requireAuth,
+  requireTenantContext,
+  asyncHandler(async (req, res) => {
+    const tenantId = req.tenantId;
+
+    console.log('[ListClients] Fetching clients for tenant:', tenantId);
+
+    // ✅ MUST filter by tenantId
+    const clientList = await db.query.clients.findMany({
+      where: eq(clients.tenantId, tenantId),
+      orderBy: [desc(clients.createdAt)],
+    });
+
+    console.log('[ListClients] Found', clientList.length, 'clients');
+    res.json(clientList);
+  })
+);
+```
+
+---
+
+## COMPLETE FIX
+
+### Fix 1: Update Super Admin Client Creation Endpoint
+
+**Location:** `/server/routes/superAdmin.ts`
+```typescript
+/**
+ * POST /api/v1/super/tenants/:tenantId/clients
+ * Create a client for a specific tenant (Super Admin only)
+ */
+app.post('/api/v1/super/tenants/:tenantId/clients',
+  requireAuth,
+  requireSuperUser,
+  asyncHandler(async (req, res) => {
+    const { tenantId } = req.params;
+    const { name, email, phone, company, website, status, notes } = req.body;
+
+    console.log('[SuperAdmin:CreateClient] ===== START =====');
+    console.log('[SuperAdmin:CreateClient] Tenant ID:', tenantId);
+    console.log('[SuperAdmin:CreateClient] Client data:', { name, email, company });
+
+    // Validate tenant exists
+    const tenant = await db.query.tenants.findFirst({
+      where: eq(tenants.id, tenantId),
+    });
+
+    if (!tenant) {
+      console.error('[SuperAdmin:CreateClient] Tenant not found:', tenantId);
+      return res.status(404).json({
+        ok: false,
+        code: 'TENANT_NOT_FOUND',
+        message: 'Tenant not found',
+      });
+    }
+
+    console.log('[SuperAdmin:CreateClient] Tenant verified:', tenant.name);
+
+    // Validate required fields
+    if (!name || !email) {
+      console.error('[SuperAdmin:CreateClient] Missing required fields');
+      return res.status(400).json({
+        ok: false,
+        code: 'VALIDATION_ERROR',
+        message: 'Client name and email are required',
+      });
+    }
+
+    // Create client with explicit tenantId
+    const [client] = await db.insert(clients).values({
+      tenantId: tenantId,  // ✅ CRITICAL - Must be set
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone || null,
+      company: company || null,
+      website: website || null,
+      status: status || 'active',
+      notes: notes || null,
+    }).returning();
+
+    console.log('[SuperAdmin:CreateClient] ✓ Client created:', client.id);
+    console.log('[SuperAdmin:CreateClient] Client tenantId:', client.tenantId);
+    console.log('[SuperAdmin:CreateClient] ===== SUCCESS =====');
+
+    // Log audit event
+    await db.insert(tenantAuditEvents).values({
+      tenantId: tenantId,
+      actorUserId: req.user!.id,
+      eventType: 'client_created',
+      message: `Client "${name}" created by super admin ${req.user!.email}`,
+      metadata: { clientId: client.id },
+    }).catch(err => {
+      console.error('[SuperAdmin:CreateClient] Audit log failed:', err.message);
+    });
+
+    res.status(201).json(client);
+  })
+);
+
+/**
+ * GET /api/v1/super/tenants/:tenantId/clients
+ * List clients for a specific tenant (Super Admin only)
+ */
+app.get('/api/v1/super/tenants/:tenantId/clients',
+  requireAuth,
+  requireSuperUser,
+  asyncHandler(async (req, res) => {
+    const { tenantId } = req.params;
+
+    console.log('[SuperAdmin:ListClients] Fetching clients for tenant:', tenantId);
+
+    const clientList = await db.query.clients.findMany({
+      where: eq(clients.tenantId, tenantId),
+      orderBy: [desc(clients.createdAt)],
+    });
+
+    console.log('[SuperAdmin:ListClients] Found', clientList.length, 'clients');
+    res.json(clientList);
+  })
+);
+```
+
+---
+
+### Fix 2: Update Tenant User Client List Endpoint
+
+**Location:** `/server/routes.ts`
+```typescript
+/**
+ * GET /api/v1/clients
+ * List all clients for the authenticated user's tenant
+ */
+app.get('/api/v1/clients',
+  requireAuth,
+  requireTenantContext,
+  asyncHandler(async (req, res) => {
+    const tenantId = req.tenantId;
+
+    console.log('[Clients:List] ===== START =====');
+    console.log('[Clients:List] User:', req.user?.email);
+    console.log('[Clients:List] User Role:', req.user?.role);
+    console.log('[Clients:List] Tenant ID:', tenantId);
+
+    if (!tenantId) {
+      console.error('[Clients:List] No tenant context');
+      return res.status(400).json({
+        ok: false,
+        code: 'NO_TENANT_CONTEXT',
+        message: 'Tenant context required',
+      });
+    }
+
+    // Fetch clients for this tenant
+    const clientList = await db.query.clients.findMany({
+      where: eq(clients.tenantId, tenantId),
+      orderBy: [desc(clients.createdAt)],
+    });
+
+    console.log('[Clients:List] ✓ Found', clientList.length, 'clients');
+    console.log('[Clients:List] ===== SUCCESS =====');
+
+    res.json(clientList);
+  })
+);
+
+/**
+ * POST /api/v1/clients
+ * Create a client for the authenticated user's tenant
+ */
+app.post('/api/v1/clients',
+  requireAuth,
+  requireTenantContext,
+  requireTenantAdmin,
+  asyncHandler(async (req, res) => {
+    const tenantId = req.tenantId;
+    const { name, email, phone, company, website, status, notes } = req.body;
+
+    console.log('[Clients:Create] Creating client for tenant:', tenantId);
+
+    if (!name || !email) {
+      return res.status(400).json({
+        ok: false,
+        code: 'VALIDATION_ERROR',
+        message: 'Client name and email are required',
+      });
+    }
+
+    const [client] = await db.insert(clients).values({
+      tenantId: tenantId,  // ✅ From user's tenant context
+      name: name.trim(),
+      email: email.trim(),
+      phone: phone || null,
+      company: company || null,
+      website: website || null,
+      status: status || 'active',
+      notes: notes || null,
+    }).returning();
+
+    console.log('[Clients:Create] ✓ Client created:', client.id);
+
+    res.status(201).json(client);
+  })
+);
+```
+
+---
+
+### Fix 3: Backfill Existing Clients Without TenantId
+
+Create `/server/scripts/backfill-client-tenants.ts`:
+```typescript
+import { db } from '../db';
+import { clients, tenants } from '../../shared/schema';
+import { eq, isNull } from 'drizzle-orm';
+
+async function backfillClientTenants() {
+  console.log('='.repeat(80));
+  console.log('BACKFILL CLIENT TENANT ASSOCIATIONS');
+  console.log('='.repeat(80));
+
+  // Find clients without tenantId
+  const orphanClients = await db.query.clients.findMany({
+    where: isNull(clients.tenantId),
+  });
+
+  console.log(`\nFound ${orphanClients.length} clients without tenantId\n`);
+
+  if (orphanClients.length === 0) {
+    console.log('✓ All clients have tenant associations');
+    console.log('='.repeat(80));
+    process.exit(0);
+  }
+
+  // Get all active tenants
+  const activeTenants = await db.query.tenants.findMany({
+    where: eq(tenants.status, 'active'),
+  });
+
+  console.log(`Found ${activeTenants.length} active tenants:\n`);
+  activeTenants.forEach((t, i) => {
+    console.log(`  ${i + 1}. ${t.name} (${t.slug}) - ID: ${t.id}`);
+  });
+
+  console.log('\nOrphan clients:');
+  orphanClients.forEach((c, i) => {
+    console.log(`  ${i + 1}. ${c.name} (${c.email}) - Created: ${c.createdAt}`);
+  });
+
+  console.log('\n' + '='.repeat(80));
+  console.log('MANUAL ASSIGNMENT NEEDED');
+  console.log('='.repeat(80));
+  console.log('\nRun these SQL commands to assign clients to tenants:\n');
+
+  orphanClients.forEach(client => {
+    console.log(`-- Assign "${client.name}" to a tenant:`);
+    console.log(`UPDATE clients SET "tenantId" = 'TENANT_ID_HERE' WHERE id = '${client.id}';`);
+    console.log();
+  });
+
+  console.log('Replace TENANT_ID_HERE with the actual tenant ID from the list above.\n');
+  console.log('='.repeat(80));
+
+  process.exit(0);
+}
+
+backfillClientTenants().catch(err => {
+  console.error('Error:', err);
+  process.exit(1);
+});
+```
+
+**Run it:**
+```bash
+tsx server/scripts/backfill-client-tenants.ts
+```
+
+**Then manually assign clients to tenants in Railway Postgres:**
+```sql
+-- Example: Assign all orphan clients to a specific tenant
+UPDATE clients 
+SET "tenantId" = 'your-tenant-id-here'
+WHERE "tenantId" IS NULL;
+```
+
+---
+
+### Fix 4: Verify Clients Schema Has TenantId
+
+Check `/shared/schema.ts`:
+```typescript
+export const clients = pgTable("clients", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),  // ✅ Must be here
+  name: text("name").notNull(),
+  email: text("email"),
+  phone: text("phone"),
+  company: text("company"),
+  website: text("website"),
+  status: text("status").notNull().default("active"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("clients_tenant_idx").on(table.tenantId),  // ✅ Index for performance
+  index("clients_status_idx").on(table.status),
+]);
+```
+
+**If tenantId is missing from schema:**
+```sql
+-- Add tenantId column if missing
+ALTER TABLE clients 
+ADD COLUMN "tenantId" VARCHAR REFERENCES tenants(id);
+
+-- Create index
+CREATE INDEX clients_tenant_idx ON clients("tenantId");
+```
+
+---
+
+### Fix 5: Update Frontend Tenant Drawer (Clients Tab)
+
+**Location:** `/client/src/components/super-admin/tenant-drawer.tsx`
+```typescript
+function TenantClientsTab({ tenant }: { tenant: any }) {
+  const [createOpen, setCreateOpen] = useState(false);
+  const [editingClient, setEditingClient] = useState<any>(null);
+
+  // Fetch clients for this specific tenant
+  const { data: clients, isLoading, error } = useQuery({
+    queryKey: ['super', 'tenants', tenant.id, 'clients'],
+    queryFn: async () => {
+      console.log('[Frontend] Fetching clients for tenant:', tenant.id);
+      
+      const res = await fetch(`/api/v1/super/tenants/${tenant.id}/clients`, {
+        credentials: 'include',
+      });
+
+      if (!res.ok) {
+        throw new Error('Failed to fetch clients');
+      }
+
+      const data = await res.json();
+      console.log('[Frontend] Loaded', data.length, 'clients');
+      return data;
+    },
+  });
+
+  const createClient = useMutation({
+    mutationFn: async (data: any) => {
+      console.log('[Frontend] Creating client for tenant:', tenant.id);
+      console.log('[Frontend] Client data:', data);
+
+      // ✅ Use tenant-specific endpoint
+      const res = await fetch(`/api/v1/super/tenants/${tenant.id}/clients`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        credentials: 'include',
+        body: JSON.stringify(data),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.message || 'Failed to create client');
+      }
+
+      const result = await res.json();
+      console.log('[Frontend] Client created:', result.id);
+      return result;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries(['super', 'tenants', tenant.id, 'clients']);
+      setCreateOpen(false);
+      toast({ title: 'Client created successfully' });
+    },
+    onError: (error: Error) => {
+      toast({
+        title: 'Failed to create client',
+        description: error.message,
+        variant: 'destructive',
+      });
+    },
+  });
+
+  return (
+    <div className="space-y-4">
+      <div className="flex justify-between items-center">
+        <div>
+          <h3 className="text-lg font-semibold">Clients</h3>
+          <p className="text-sm text-muted-foreground">
+            Manage client accounts for {tenant.name}
+          </p>
+        </div>
+        <Button onClick={() => setCreateOpen(true)}>
+          <Building className="h-4 w-4 mr-2" />
+          Add Client
+        </Button>
+      </div>
+
+      {isLoading && <div>Loading clients...</div>}
+      
+      {error && (
+        <Alert variant="destructive">
+          <AlertDescription>
+            Failed to load clients: {error.message}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {clients && clients.length === 0 && (
+        <Alert>
+          <AlertDescription>
+            No clients yet. Click "Add Client" to create one.
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {clients && clients.length > 0 && (
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Name</TableHead>
+              <TableHead>Email</TableHead>
+              <TableHead>Company</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Created</TableHead>
+              <TableHead className="w-[100px]">Actions</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {clients.map((client: any) => (
+              <TableRow key={client.id}>
+                <TableCell className="font-medium">{client.name}</TableCell>
+                <TableCell>{client.email}</TableCell>
+                <TableCell>{client.company}</TableCell>
+                <TableCell>
+                  <Badge variant={client.status === 'active' ? 'default' : 'secondary'}>
+                    {client.status}
+                  </Badge>
+                </TableCell>
+                <TableCell>
+                  {new Date(client.createdAt).toLocaleDateString()}
+                </TableCell>
+                <TableCell>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => setEditingClient(client)}
+                  >
+                    <Edit className="h-4 w-4" />
+                  </Button>
+                </TableCell>
+              </TableRow>
+            ))}
+          </TableBody>
+        </Table>
+      )}
+
+      {/* Create Client Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Add Client to {tenant.name}</DialogTitle>
+          </DialogHeader>
+          <ClientForm
+            onSubmit={(data) => createClient.mutate(data)}
+            onCancel={() => setCreateOpen(false)}
+            isSubmitting={createClient.isPending}
+          />
+        </DialogContent>
+      </Dialog>
+
+      {/* Edit Client Dialog */}
+      {editingClient && (
+        <Dialog open={!!editingClient} onOpenChange={() => setEditingClient(null)}>
+          <DialogContent>
+            <DialogHeader>
+              <DialogTitle>Edit Client</DialogTitle>
+            </DialogHeader>
+            <ClientForm
+              client={editingClient}
+              onSubmit={(data) => {/* update client */}}
+              onCancel={() => setEditingClient(null)}
+            />
+          </DialogContent>
+        </Dialog>
+      )}
+    </div>
+  );
+}
+
+function ClientForm({ 
+  client, 
+  onSubmit, 
+  onCancel, 
+  isSubmitting 
+}: { 
+  client?: any; 
+  onSubmit: (data: any) => void; 
+  onCancel: () => void;
+  isSubmitting?: boolean;
+}) {
+  const form = useForm({
+    defaultValues: {
+      name: client?.name || '',
+      email: client?.email || '',
+      phone: client?.phone || '',
+      company: client?.company || '',
+      website: client?.website || '',
+      status: client?.status || 'active',
+      notes: client?.notes || '',
+    },
+  });
+
+  return (
+    <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+      <div>
+        <Label>Client Name *</Label>
+        <Input {...form.register('name')} required placeholder="Acme Corp" />
+      </div>
+
+      <div>
+        <Label>Email *</Label>
+        <Input {...form.register('email')} type="email" required placeholder="contact@acme.com" />
+      </div>
+
+      <div className="grid grid-cols-2 gap-4">
+        <div>
+          <Label>Phone</Label>
+          <Input {...form.register('phone')} type="tel" placeholder="+1 (555) 123-4567" />
+        </div>
+        <div>
+          <Label>Company</Label>
+          <Input {...form.register('company')} placeholder="Acme Corporation" />
+        </div>
+      </div>
+
+      <div>
+        <Label>Website</Label>
+        <Input {...form.register('website')} type="url" placeholder="https://acme.com" />
+      </div>
+
+      <div>
+        <Label>Status</Label>
+        <Select value={form.watch('status')} onValueChange={(v) => form.setValue('status', v)}>
+          <SelectTrigger>
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="active">Active</SelectItem>
+            <SelectItem value="prospect">Prospect</SelectItem>
+            <SelectItem value="inactive">Inactive</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
+
+      <div>
+        <Label>Notes</Label>
+        <Textarea {...form.register('notes')} rows={3} placeholder="Additional information..." />
+      </div>
+
+      <div className="flex justify-end gap-2">
+        <Button type="button" variant="outline" onClick={onCancel}>
+          Cancel
+        </Button>
+        <Button type="submit" disabled={isSubmitting}>
+          {isSubmitting ? 'Saving...' : (client ? 'Update Client' : 'Create Client')}
+        </Button>
+      </div>
+    </form>
+  );
+}
+```
+
+---
+
+## TESTING CHECKLIST
+
+### Test 1: Verify Database Associations
+```sql
+-- Should show all clients with their tenant info
+SELECT 
+  c.id,
+  c.name as client_name,
+  c.email,
+  c."tenantId",
+  t.name as tenant_name
+FROM clients c
+LEFT JOIN tenants t ON c."tenantId" = t.id
+ORDER BY c."createdAt" DESC;
+```
+
+**Expected:** Every client should have a matching tenant name
+
+### Test 2: Super Admin Creates Client
+
+1. Login as Super Admin
+2. Go to Super Admin → Tenants
+3. Click on a tenant row
+4. Go to "Clients" tab
+5. Click "Add Client"
+6. Fill in client details
+7. Submit
+
+**Check Railway logs for:**
+```
+[SuperAdmin:CreateClient] Tenant ID: xyz-789
+[SuperAdmin:CreateClient] ✓ Client created: abc-123
+[SuperAdmin:CreateClient] Client tenantId: xyz-789
+```
+
+**Then verify in database:**
+```sql
+SELECT id, name, "tenantId" FROM clients WHERE id = 'abc-123';
+```
+
+### Test 3: Tenant User Views Clients
+
+1. Login as Tenant Admin
+2. Navigate to Clients page
+3. Should see the client created above
+
+**Check Railway logs for:**
+```
+[Clients:List] Tenant ID: xyz-789
+[Clients:List] ✓ Found 1 clients
+```
+
+### Test 4: Tenant User Creates Client
+
+1. As Tenant Admin
+2. Click "Add Client"
+3. Fill details and submit
+
+**Verify client has correct tenantId:**
+```sql
+SELECT id, name, "tenantId" FROM clients ORDER BY "createdAt" DESC LIMIT 1;
+```
+
+---
+
+## COMPLETE FIX CHECKLIST
+
+- [ ] **Backend:** Super admin client creation endpoint includes `tenantId: tenantId`
+- [ ] **Backend:** Tenant user client list filters by `req.tenantId`
+- [ ] **Backend:** Added comprehensive logging
+- [ ] **Frontend:** Uses `/api/v1/super/tenants/:tenantId/clients` endpoint
+- [ ] **Database:** All existing clients have `tenantId` values (run backfill script)
+- [ ] **Schema:** `clients` table has `tenantId` column with foreign key
+- [ ] **Deployed:** Changes pushed to Railway
+- [ ] **Tested:** Super admin can create client
+- [ ] **Tested:** Tenant user can see client
+- [ ] **Verified:** Database shows correct associations
+
+---
+
+## EMERGENCY FIX - Assign Orphan Clients Now
+
+If you have orphan clients that need immediate fixing:
+```sql
+-- 1. Find the tenant ID
+SELECT id, name FROM tenants WHERE status = 'active';
+
+-- 2. Assign all orphan clients to that tenant
+UPDATE clients 
+SET "tenantId" = 'paste-tenant-id-here'
+WHERE "tenantId" IS NULL;
+
+-- 3. Verify
+SELECT 
+  c.name,
+  c."tenantId",
+  t.name as tenant_name
+FROM clients c
+JOIN tenants t ON c."tenantId" = t.id;
+```
+
+---
+
+**The root cause is almost certainly the `tenantId` not being set when Super Admin creates clients. Deploy the fixes above and test!**
