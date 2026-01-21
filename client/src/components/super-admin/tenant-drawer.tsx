@@ -3253,7 +3253,9 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
             </Card>
             
             {/* Fix Tenant IDs - Data Remediation Tool */}
-            <FixTenantIdsCard tenantId={tenantId} tenantName={tenant?.name || "this tenant"} />
+            {activeTenant?.id && (
+              <FixTenantIdsCard tenantId={activeTenant.id} tenantName={activeTenant?.name || "this tenant"} />
+            )}
 
             {/* Add User Card - Toggle between Invite and Manual Creation */}
             <Card>
