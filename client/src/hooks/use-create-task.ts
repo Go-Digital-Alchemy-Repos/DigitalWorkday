@@ -31,7 +31,8 @@ export interface CreateSubtaskData {
 
 function invalidateAllTaskCaches(
   queryClient: ReturnType<typeof useQueryClient>,
-  projectId?: string | null
+  projectId?: string | null,
+  parentTaskId?: string | null
 ) {
   queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
   queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
@@ -39,6 +40,12 @@ function invalidateAllTaskCaches(
   if (projectId) {
     queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
     queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
+  }
+  
+  if (parentTaskId) {
+    queryClient.invalidateQueries({ queryKey: ["/api/tasks", parentTaskId] });
+    queryClient.invalidateQueries({ queryKey: ["/api/tasks", parentTaskId, "childtasks"] });
+    queryClient.invalidateQueries({ queryKey: ["/api/tasks", parentTaskId, "subtasks"] });
   }
   
   queryClient.invalidateQueries({ 
@@ -140,6 +147,7 @@ export function useCreateChildTask(options?: {
 }
 
 export function useCreateSubtask(options?: { 
+  projectId?: string;
   onSuccess?: (subtask: any) => void;
   onError?: (error: Error) => void;
 }) {
@@ -152,9 +160,7 @@ export function useCreateSubtask(options?: {
       return response.json();
     },
     onSuccess: (subtask, variables) => {
-      invalidateAllTaskCaches(queryClient, null);
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", variables.taskId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", variables.taskId, "subtasks"] });
+      invalidateAllTaskCaches(queryClient, options?.projectId || subtask.projectId, variables.taskId);
       options?.onSuccess?.(subtask);
     },
     onError: (error: Error) => {

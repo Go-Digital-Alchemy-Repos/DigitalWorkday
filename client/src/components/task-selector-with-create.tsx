@@ -42,13 +42,11 @@ export function TaskSelectorWithCreate({
 
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
     queryKey: ["/api/projects", projectId, "tasks"],
-    queryFn: () => fetch(`/api/projects/${projectId}/tasks`).then((r) => r.json()),
     enabled: !!projectId,
   });
 
   const { data: sections = [] } = useQuery<Section[]>({
     queryKey: ["/api/projects", projectId, "sections"],
-    queryFn: () => fetch(`/api/projects/${projectId}/sections`).then((r) => r.json()),
     enabled: !!projectId && createOpen,
   });
 
