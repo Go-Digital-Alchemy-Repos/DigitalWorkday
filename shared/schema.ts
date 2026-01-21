@@ -179,12 +179,16 @@ export const IntegrationStatus = {
 } as const;
 
 /**
- * Tenant Integrations table - stores per-tenant integration configurations
+ * Tenant Integrations table - stores per-tenant AND system-level integration configurations
  * Supports multiple providers (mailgun, s3, stripe, etc.) with encrypted secrets
+ * 
+ * HIERARCHY:
+ * - tenantId = NULL → System-level (default for all tenants)
+ * - tenantId = X → Tenant-specific override (takes priority over system-level)
  */
 export const tenantIntegrations = pgTable("tenant_integrations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  tenantId: varchar("tenant_id").references(() => tenants.id), // NULL = system-level integration
   provider: text("provider").notNull(), // "mailgun", "s3", "stripe", etc.
   configEncrypted: text("config_encrypted"), // Encrypted JSON blob for secrets
   configPublic: jsonb("config_public"), // Non-secret fields (domain, region, etc.)
