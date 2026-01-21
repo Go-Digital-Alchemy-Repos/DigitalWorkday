@@ -246,9 +246,16 @@ export async function registerRoutes(
     res.json({ status: "ok", timestamp: new Date().toISOString() });
   });
 
-  // Global search endpoint for command palette
+  // Global search endpoint for command palette (requires tenant context)
   app.get("/api/search", async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
+      
+      // Strict tenant enforcement - no fallback for security
+      if (!tenantId) {
+        return res.status(403).json({ error: "Tenant context required for search" });
+      }
+
       const { q, limit = "10" } = req.query;
       const searchQuery = String(q || "").trim().toLowerCase();
       const maxResults = Math.min(parseInt(String(limit), 10) || 10, 50);
@@ -258,23 +265,30 @@ export async function registerRoutes(
       }
 
       const workspaceId = await getCurrentWorkspaceIdAsync(req);
-      const tenantId = getEffectiveTenantId(req);
 
-      // Parallel search across entities
+      // Parallel tenant-scoped search across entities
       const [clientsList, projectsList] = await Promise.all([
-        tenantId 
-          ? storage.getClientsByTenant(tenantId, workspaceId)
-          : storage.getClientsByWorkspace(workspaceId),
-        tenantId
-          ? storage.getProjectsByTenant(tenantId, workspaceId)
-          : storage.getProjectsByWorkspace(workspaceId),
+        storage.getClientsByTenant(tenantId, workspaceId),
+        storage.getProjectsByTenant(tenantId, workspaceId),
       ]);
 
-      // Get tasks for workspace projects
+      // Get tasks efficiently using project IDs with tenant validation at DB level
       const projectIds = projectsList.map(p => p.id);
-      const taskPromises = projectIds.slice(0, 20).map(pid => storage.getTasksByProject(pid));
-      const taskArrays = await Promise.all(taskPromises);
-      const tasksList = taskArrays.flat();
+      let tasksList: Array<{ id: string; title: string; projectId: string | null; status: string | null; tenantId: string | null }> = [];
+      
+      if (projectIds.length > 0) {
+        // Query tasks for tenant's projects (inherently tenant-scoped via project ownership)
+        const taskMap = await storage.getTasksByProjectIds(projectIds);
+        for (const tasks of taskMap.values()) {
+          tasksList.push(...tasks.map(t => ({
+            id: t.id,
+            title: t.title || "",
+            projectId: t.projectId,
+            status: t.status,
+            tenantId: tenantId,
+          })));
+        }
+      }
 
       // Filter and score results
       const filterAndScore = <T extends { id: string }>(
@@ -296,12 +310,7 @@ export async function registerRoutes(
 
       const clients = filterAndScore(clientsList, c => c.companyName);
       const projects = filterAndScore(projectsList, p => p.name);
-      
-      // Filter tasks by tenant if needed
-      const tenantFilteredTasks = tenantId 
-        ? tasksList.filter(t => t.tenantId === tenantId)
-        : tasksList;
-      const filteredTasks = filterAndScore(tenantFilteredTasks, t => t.title);
+      const filteredTasks = filterAndScore(tasksList, t => t.title);
 
       res.json({ 
         clients: clients.map(c => ({ id: c.id, name: c.companyName, type: "client" })),

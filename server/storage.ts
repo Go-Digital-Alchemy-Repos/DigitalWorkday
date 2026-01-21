@@ -2209,6 +2209,7 @@ export class DatabaseStorage implements IStorage {
    */
   async getTasksByProjectIds(projectIds: string[]): Promise<Map<string, Array<{
     id: string;
+    title: string;
     projectId: string | null;
     status: string | null;
     priority: string | null;
@@ -2222,6 +2223,7 @@ export class DatabaseStorage implements IStorage {
     
     const tasksRows = await db.select({
       id: tasks.id,
+      title: tasks.title,
       projectId: tasks.projectId,
       status: tasks.status,
       priority: tasks.priority,
@@ -2253,6 +2255,7 @@ export class DatabaseStorage implements IStorage {
 
     const tasksByProject = new Map<string, Array<{
       id: string;
+      title: string;
       projectId: string | null;
       status: string | null;
       priority: string | null;
