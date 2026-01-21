@@ -1,6 +1,6 @@
 import { db } from "../db";
 import { tenantIntegrations, IntegrationStatus } from "@shared/schema";
-import { eq, and } from "drizzle-orm";
+import { eq, and, isNull } from "drizzle-orm";
 import { encryptValue, decryptValue, isEncryptionAvailable } from "../lib/encryption";
 import Mailgun from "mailgun.js";
 import FormData from "form-data";
@@ -67,16 +67,17 @@ export interface IntegrationUpdateInput {
 }
 
 export class TenantIntegrationService {
-  async getIntegration(tenantId: string, provider: IntegrationProvider): Promise<IntegrationResponse | null> {
+  async getIntegration(tenantId: string | null, provider: IntegrationProvider): Promise<IntegrationResponse | null> {
     debugLog("getIntegration called", { tenantId, provider });
+    
+    const condition = tenantId
+      ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
+      : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
     
     const [integration] = await db
       .select()
       .from(tenantIntegrations)
-      .where(and(
-        eq(tenantIntegrations.tenantId, tenantId),
-        eq(tenantIntegrations.provider, provider)
-      ))
+      .where(condition)
       .limit(1);
 
     if (!integration) {
@@ -122,13 +123,17 @@ export class TenantIntegrationService {
     };
   }
 
-  async listIntegrations(tenantId: string): Promise<IntegrationResponse[]> {
+  async listIntegrations(tenantId: string | null): Promise<IntegrationResponse[]> {
     debugLog("listIntegrations called", { tenantId });
+    
+    const condition = tenantId
+      ? eq(tenantIntegrations.tenantId, tenantId)
+      : isNull(tenantIntegrations.tenantId);
     
     const integrations = await db
       .select()
       .from(tenantIntegrations)
-      .where(eq(tenantIntegrations.tenantId, tenantId));
+      .where(condition);
 
     const providers: IntegrationProvider[] = ["mailgun", "s3"];
     const result: IntegrationResponse[] = [];
@@ -178,7 +183,7 @@ export class TenantIntegrationService {
   }
 
   async upsertIntegration(
-    tenantId: string,
+    tenantId: string | null,
     provider: IntegrationProvider,
     input: IntegrationUpdateInput
   ): Promise<IntegrationResponse> {
@@ -194,13 +199,14 @@ export class TenantIntegrationService {
       throw new Error("Encryption key not configured. Cannot save integration secrets.");
     }
 
+    const condition = tenantId
+      ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
+      : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
+
     const [existing] = await db
       .select()
       .from(tenantIntegrations)
-      .where(and(
-        eq(tenantIntegrations.tenantId, tenantId),
-        eq(tenantIntegrations.provider, provider)
-      ))
+      .where(condition)
       .limit(1);
 
     let publicConfig: PublicConfig | null = null;
@@ -286,14 +292,15 @@ export class TenantIntegrationService {
     };
   }
 
-  async getDecryptedSecrets(tenantId: string, provider: IntegrationProvider): Promise<SecretConfig | null> {
+  async getDecryptedSecrets(tenantId: string | null, provider: IntegrationProvider): Promise<SecretConfig | null> {
+    const condition = tenantId
+      ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
+      : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
+    
     const [integration] = await db
       .select()
       .from(tenantIntegrations)
-      .where(and(
-        eq(tenantIntegrations.tenantId, tenantId),
-        eq(tenantIntegrations.provider, provider)
-      ))
+      .where(condition)
       .limit(1);
 
     if (!integration?.configEncrypted) {
@@ -308,14 +315,15 @@ export class TenantIntegrationService {
     }
   }
 
-  async getIntegrationWithSecrets(tenantId: string, provider: IntegrationProvider): Promise<{ publicConfig: PublicConfig | null; secretConfig: SecretConfig | null } | null> {
+  async getIntegrationWithSecrets(tenantId: string | null, provider: IntegrationProvider): Promise<{ publicConfig: PublicConfig | null; secretConfig: SecretConfig | null } | null> {
+    const condition = tenantId
+      ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
+      : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
+    
     const [integration] = await db
       .select()
       .from(tenantIntegrations)
-      .where(and(
-        eq(tenantIntegrations.tenantId, tenantId),
-        eq(tenantIntegrations.provider, provider)
-      ))
+      .where(condition)
       .limit(1);
 
     if (!integration) {
@@ -337,7 +345,7 @@ export class TenantIntegrationService {
     };
   }
 
-  async testIntegration(tenantId: string, provider: IntegrationProvider): Promise<{ success: boolean; message: string }> {
+  async testIntegration(tenantId: string | null, provider: IntegrationProvider): Promise<{ success: boolean; message: string }> {
     const integration = await this.getIntegration(tenantId, provider);
     
     if (!integration || integration.status === IntegrationStatus.NOT_CONFIGURED) {
@@ -358,6 +366,10 @@ export class TenantIntegrationService {
           testResult = { success: false, message: `Unknown provider: ${provider}` };
       }
 
+      const updateCondition = tenantId
+        ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
+        : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
+      
       await db
         .update(tenantIntegrations)
         .set({
@@ -365,14 +377,15 @@ export class TenantIntegrationService {
           status: testResult.success ? IntegrationStatus.CONFIGURED : IntegrationStatus.ERROR,
           updatedAt: new Date(),
         })
-        .where(and(
-          eq(tenantIntegrations.tenantId, tenantId),
-          eq(tenantIntegrations.provider, provider)
-        ));
+        .where(updateCondition);
 
       return testResult;
     } catch (error) {
       console.error(`[TenantIntegrations] Test failed for ${provider}:`, error);
+      
+      const updateCondition = tenantId
+        ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
+        : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
       
       await db
         .update(tenantIntegrations)
@@ -381,16 +394,13 @@ export class TenantIntegrationService {
           status: IntegrationStatus.ERROR,
           updatedAt: new Date(),
         })
-        .where(and(
-          eq(tenantIntegrations.tenantId, tenantId),
-          eq(tenantIntegrations.provider, provider)
-        ));
+        .where(updateCondition);
 
       return { success: false, message: error instanceof Error ? error.message : "Test failed" };
     }
   }
 
-  private async testMailgun(tenantId: string): Promise<{ success: boolean; message: string }> {
+  private async testMailgun(tenantId: string | null): Promise<{ success: boolean; message: string }> {
     const secrets = await this.getDecryptedSecrets(tenantId, "mailgun") as MailgunSecretConfig | null;
     const integration = await this.getIntegration(tenantId, "mailgun");
     
@@ -476,7 +486,7 @@ export class TenantIntegrationService {
     }
   }
 
-  private async testS3(tenantId: string): Promise<{ success: boolean; message: string }> {
+  private async testS3(tenantId: string | null): Promise<{ success: boolean; message: string }> {
     const integration = await this.getIntegration(tenantId, "s3");
     
     if (!integration?.publicConfig) {
@@ -488,7 +498,8 @@ export class TenantIntegrationService {
       return { success: false, message: "S3 bucket or region not configured" };
     }
 
-    console.log(`[S3] Testing integration for tenant ${tenantId} - bucket: ${config.bucketName}`);
+    const label = tenantId ? `tenant ${tenantId}` : "system-level";
+    console.log(`[S3] Testing integration for ${label} - bucket: ${config.bucketName}`);
     return { success: true, message: "S3 configuration is valid" };
   }
 
