@@ -1,0 +1,131 @@
+You are continuing development on my multi-tenant React + Express + Postgres app (cookie auth) deployed on Railway.
+FOCUS: Implement hierarchical Amazon S3 integration logic (System-level default + Tenant-level override).
+
+This prompt is STORAGE LOGIC ONLY.
+Do NOT refactor unrelated features.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT break existing uploads.
+- Do NOT expose S3 credentials to the client.
+- Do NOT change existing upload endpoint paths or response shapes.
+- Additive-only changes to schema/config allowed.
+- All logic must be tenant-safe and server-enforced.
+
+===============================================================================
+SYSTEM RULES (SOURCE OF TRUTH)
+===============================================================================
+1) Super Admin System Settings may define a PRIMARY S3 integration.
+2) Tenant Admins may optionally define a TENANT-SPECIFIC S3 integration.
+3) Tenant S3 integration ALWAYS takes priority over system S3.
+4) If tenant S3 is missing, system S3 is used as fallback.
+5) If neither exists, uploads fail gracefully with a clear error.
+
+===============================================================================
+STEP 1 — STANDARDIZE STORAGE CONFIG MODEL
+===============================================================================
+Confirm or implement storage config storage as follows (additive only):
+
+Option A (preferred):
+- integrations table
+  - id
+  - tenantId NULLABLE (NULL = system-level integration)
+  - type = 's3'
+  - config_encrypted JSONB
+  - isActive boolean
+  - createdAt
+
+Rules:
+- tenantId = NULL → system-wide S3
+- tenantId = X → tenant-specific S3 override
+
+Do NOT remove existing records; adapt logic to support this hierarchy.
+
+===============================================================================
+STEP 2 — CENTRALIZE STORAGE RESOLUTION LOGIC (SERVER)
+===============================================================================
+Create a single helper:
+- server/storage/getStorageProvider.ts
+
+Behavior:
+- Input: { tenantId }
+- Logic:
+  1) Look for active S3 integration where tenantId = input tenantId
+  2) If found → return tenant S3 config
+  3) Else look for active S3 integration where tenantId IS NULL
+  4) If found → return system S3 config
+  5) Else → throw STORAGE_NOT_CONFIGURED
+
+All upload paths must use this helper.
+No upload logic may bypass it.
+
+===============================================================================
+STEP 3 — APPLY TO ALL UPLOAD FLOWS
+===============================================================================
+Ensure the following use the centralized storage resolver:
+- User avatar uploads
+- Tenant branding/logo uploads
+- System branding assets
+- Task attachments (current or future)
+
+Do NOT duplicate S3 logic per feature.
+
+===============================================================================
+STEP 4 — TENANT INTEGRATIONS UI BEHAVIOR (NO REDESIGN)
+===============================================================================
+Tenant Integrations → S3:
+- Show status:
+  - “Using Tenant S3” OR
+  - “Using System S3 (fallback)”
+- If tenant S3 is configured:
+  - Show override active badge
+- If not:
+  - Read-only indicator that system S3 is being used
+
+System Integrations → S3:
+- Mark as “Default for all tenants without overrides”
+
+===============================================================================
+STEP 5 — SECURITY & VALIDATION
+===============================================================================
+- Encrypt S3 credentials at rest (reuse existing encryption utilities).
+- Validate credentials on save (optional ping to S3).
+- Never return secrets in API responses.
+- Log which storage provider is selected (tenant vs system) for debugging.
+
+===============================================================================
+STEP 6 — ERROR HANDLING
+===============================================================================
+If upload attempted with no storage configured:
+- Return JSON 400:
+  { error: "STORAGE_NOT_CONFIGURED" }
+- UI should display:
+  “File storage has not been configured. Contact your administrator.”
+
+===============================================================================
+STEP 7 — TESTS (MANDATORY)
+===============================================================================
+Backend:
+1) tenant_uses_own_s3_when_configured.test.ts
+2) tenant_falls_back_to_system_s3_when_missing.test.ts
+3) upload_fails_when_no_s3_anywhere.test.ts
+4) tenant_cannot_access_other_tenant_s3_config.test.ts
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+- Tenant uploads use tenant S3 when configured.
+- Otherwise, system S3 is used.
+- No tenant can affect another tenant’s storage.
+- No credentials leak to client.
+- Existing uploads continue working.
+- Works on Railway.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Storage resolution logic summary
+- Files touched
+- Tests added
+- Manual verificat
