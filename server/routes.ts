@@ -947,6 +947,31 @@ export async function registerRoutes(
     }
   });
 
+  // Get project activity feed
+  app.get("/api/projects/:projectId/activity", async (req, res) => {
+    try {
+      const { projectId } = req.params;
+      const limit = parseInt(req.query.limit as string) || 50;
+      const tenantId = getCurrentTenantId(req);
+
+      // Verify project exists and belongs to tenant
+      const project = await storage.getProject(projectId);
+      if (!project) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+      if (tenantId && project.tenantId !== tenantId) {
+        return res.status(404).json({ error: "Project not found" });
+      }
+
+      // Get project activity from storage
+      const activity = await storage.getProjectActivity(projectId, limit);
+      res.json(activity);
+    } catch (error) {
+      console.error("Error fetching project activity:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.get("/api/tasks/my", async (req, res) => {
     try {
       const tasks = await storage.getTasksByUser(getCurrentUserId(req));

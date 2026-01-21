@@ -58,6 +58,19 @@ import {
 } from "@shared/schema";
 import crypto from "crypto";
 import { db } from "./db";
+
+// Project Activity Feed Types
+export type ProjectActivityItem = {
+  id: string;
+  type: "task_created" | "task_updated" | "comment_added" | "time_logged";
+  timestamp: Date;
+  actorId: string;
+  actorName: string;
+  actorEmail: string;
+  entityId: string;
+  entityTitle: string;
+  metadata?: Record<string, unknown>;
+};
 import { eq, and, desc, asc, inArray, gte, lte, sql } from "drizzle-orm";
 import { encryptValue, decryptValue } from "./lib/encryption";
 
@@ -141,6 +154,7 @@ export interface IStorage {
   
   createActivityLog(log: InsertActivityLog): Promise<ActivityLog>;
   getActivityLogByEntity(entityType: string, entityId: string): Promise<ActivityLog[]>;
+  getProjectActivity(projectId: string, limit?: number): Promise<ProjectActivityItem[]>;
   
   getTaskAttachment(id: string): Promise<TaskAttachment | undefined>;
   getTaskAttachmentsByTask(taskId: string): Promise<TaskAttachmentWithUser[]>;
@@ -853,6 +867,96 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(activityLog)
       .where(and(eq(activityLog.entityType, entityType), eq(activityLog.entityId, entityId)))
       .orderBy(desc(activityLog.createdAt));
+  }
+
+  async getProjectActivity(projectId: string, limit: number = 50): Promise<ProjectActivityItem[]> {
+    const activityItems: ProjectActivityItem[] = [];
+
+    // 1. Get recently created tasks in this project
+    const recentTasks = await db.select().from(tasks)
+      .where(eq(tasks.projectId, projectId))
+      .orderBy(desc(tasks.createdAt))
+      .limit(limit);
+
+    for (const task of recentTasks) {
+      const actor = task.createdBy ? await this.getUser(task.createdBy) : null;
+      activityItems.push({
+        id: `task-created-${task.id}`,
+        type: "task_created",
+        timestamp: task.createdAt,
+        actorId: actor?.id || "system",
+        actorName: actor?.name || "System",
+        actorEmail: actor?.email || "",
+        entityId: task.id,
+        entityTitle: task.title,
+      });
+
+      // Add task_updated if updatedAt differs from createdAt by more than 1 minute
+      const timeDiff = task.updatedAt.getTime() - task.createdAt.getTime();
+      if (timeDiff > 60000) {
+        activityItems.push({
+          id: `task-updated-${task.id}-${task.updatedAt.getTime()}`,
+          type: "task_updated",
+          timestamp: task.updatedAt,
+          actorId: actor?.id || "system",
+          actorName: actor?.name || "System",
+          actorEmail: actor?.email || "",
+          entityId: task.id,
+          entityTitle: task.title,
+        });
+      }
+    }
+
+    // 2. Get comments on tasks in this project
+    const projectTaskIds = recentTasks.map(t => t.id);
+    if (projectTaskIds.length > 0) {
+      const recentComments = await db.select().from(comments)
+        .where(inArray(comments.taskId, projectTaskIds))
+        .orderBy(desc(comments.createdAt))
+        .limit(limit);
+
+      for (const comment of recentComments) {
+        const actor = await this.getUser(comment.userId);
+        const task = recentTasks.find(t => t.id === comment.taskId);
+        activityItems.push({
+          id: `comment-${comment.id}`,
+          type: "comment_added",
+          timestamp: comment.createdAt,
+          actorId: actor?.id || "unknown",
+          actorName: actor?.name || "Unknown",
+          actorEmail: actor?.email || "",
+          entityId: comment.taskId,
+          entityTitle: task?.title || "Task",
+          metadata: { commentBody: comment.body.substring(0, 100) },
+        });
+      }
+    }
+
+    // 3. Get time entries for this project
+    const recentTimeEntries = await db.select().from(timeEntries)
+      .where(eq(timeEntries.projectId, projectId))
+      .orderBy(desc(timeEntries.startTime))
+      .limit(limit);
+
+    for (const entry of recentTimeEntries) {
+      const actor = await this.getUser(entry.userId);
+      const task = entry.taskId ? recentTasks.find(t => t.id === entry.taskId) : null;
+      activityItems.push({
+        id: `time-entry-${entry.id}`,
+        type: "time_logged",
+        timestamp: entry.createdAt,
+        actorId: actor?.id || "unknown",
+        actorName: actor?.name || "Unknown",
+        actorEmail: actor?.email || "",
+        entityId: entry.taskId || projectId,
+        entityTitle: task?.title || entry.description || "Time logged",
+        metadata: { durationSeconds: entry.durationSeconds },
+      });
+    }
+
+    // Sort all items by timestamp descending and limit
+    activityItems.sort((a, b) => b.timestamp.getTime() - a.timestamp.getTime());
+    return activityItems.slice(0, limit);
   }
 
   async getTaskAttachment(id: string): Promise<TaskAttachment | undefined> {
