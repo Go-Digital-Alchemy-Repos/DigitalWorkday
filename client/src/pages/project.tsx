@@ -1,6 +1,7 @@
 import { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute } from "wouter";
+import { useCreateTask, useCreateChildTask } from "@/hooks/use-create-task";
 import {
   DndContext,
   closestCenter,
@@ -86,15 +87,7 @@ export default function ProjectPage() {
 
   const displaySections = localSections || sections;
 
-  const createTaskMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return apiRequest("POST", "/api/tasks", { ...data, projectId });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
-    },
-  });
+  const createTaskMutation = useCreateTask();
 
   const updateTaskMutation = useMutation({
     mutationFn: async ({ taskId, data }: { taskId: string; data: Partial<TaskWithRelations> }) => {
@@ -110,17 +103,7 @@ export default function ProjectPage() {
     },
   });
 
-  const addChildTaskMutation = useMutation({
-    mutationFn: async ({ parentTaskId, title }: { parentTaskId: string; title: string }) => {
-      return apiRequest("POST", `/api/tasks/${parentTaskId}/childtasks`, { title });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
-      if (selectedTask) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", selectedTask.id, "childtasks"] });
-      }
-    },
-  });
+  const addChildTaskMutation = useCreateChildTask({ projectId: projectId || undefined });
 
   const deleteChildTaskMutation = useMutation({
     mutationFn: async (taskId: string) => {
@@ -318,7 +301,7 @@ export default function ProjectPage() {
 
   const handleCreateTask = async (data: any) => {
     return new Promise<void>((resolve, reject) => {
-      createTaskMutation.mutate(data, {
+      createTaskMutation.mutate({ ...data, projectId: projectId! }, {
         onSuccess: () => {
           toast({ title: "Task created successfully" });
           resolve();

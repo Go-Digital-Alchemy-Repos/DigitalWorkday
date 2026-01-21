@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
+import { useCreateTask } from "@/hooks/use-create-task";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -52,33 +52,14 @@ export function TaskSelectorWithCreate({
     enabled: !!projectId && createOpen,
   });
 
-  const createTaskMutation = useMutation({
-    mutationFn: async (data: { 
-      title: string; 
-      description?: string; 
-      priority: string;
-      projectId: string;
-      sectionId?: string;
-    }) => {
-      const response = await apiRequest("POST", "/api/tasks", data);
-      return response.json();
-    },
+  const createTaskMutation = useCreateTask({
     onSuccess: (newTask) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       onTaskChange(newTask.id);
       setCreateOpen(false);
       setNewTaskTitle("");
       setNewTaskDescription("");
       setNewTaskPriority("medium");
       toast({ title: "Task created and selected" });
-    },
-    onError: (error: Error) => {
-      toast({
-        title: "Failed to create task",
-        description: error.message,
-        variant: "destructive",
-      });
     },
   });
 

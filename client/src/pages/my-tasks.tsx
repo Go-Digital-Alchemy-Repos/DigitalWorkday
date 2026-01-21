@@ -1,5 +1,6 @@
 import { useState, useRef, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useCreatePersonalTask, useCreateSubtask } from "@/hooks/use-create-task";
 import {
   DndContext,
   closestCenter,
@@ -204,12 +205,8 @@ export default function MyTasks() {
     queryKey: ["/api/workspaces/current"],
   });
 
-  const createPersonalTaskMutation = useMutation({
-    mutationFn: async (title: string) => {
-      return apiRequest("POST", "/api/tasks/personal", { title });
-    },
+  const createPersonalTaskMutation = useCreatePersonalTask({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
       setNewTaskTitle("");
       setShowNewTaskInput(false);
     },
@@ -227,12 +224,8 @@ export default function MyTasks() {
     },
   });
 
-  const addSubtaskMutation = useMutation({
-    mutationFn: async ({ taskId, title }: { taskId: string; title: string }) => {
-      return apiRequest("POST", `/api/tasks/${taskId}/subtasks`, { title });
-    },
+  const addSubtaskMutation = useCreateSubtask({
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
       if (selectedTask) {
         refetchSelectedTask();
       }
@@ -272,7 +265,7 @@ export default function MyTasks() {
 
   const handleCreatePersonalTask = () => {
     if (newTaskTitle.trim()) {
-      createPersonalTaskMutation.mutate(newTaskTitle.trim());
+      createPersonalTaskMutation.mutate({ title: newTaskTitle.trim() });
     }
   };
 
