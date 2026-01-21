@@ -352,6 +352,91 @@ function FixTenantIdsCard({ tenantId, tenantName }: { tenantId: string; tenantNa
   );
 }
 
+interface FixClientTenantIdsResult {
+  success: boolean;
+  fixed: number;
+  errors: number;
+  fixedClients: { id: string; companyName: string; action: string }[];
+  errorDetails: { id: string; companyName: string; error: string }[];
+  message: string;
+}
+
+function FixClientTenantIdsCard({ tenantId, tenantName }: { tenantId: string; tenantName: string }) {
+  const { toast } = useToast();
+  const [lastResult, setLastResult] = useState<FixClientTenantIdsResult | null>(null);
+  
+  const fixMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/clients/fix-tenant-ids`, {});
+      return res.json() as Promise<FixClientTenantIdsResult>;
+    },
+    onSuccess: (data) => {
+      setLastResult(data);
+      if (data.fixed > 0) {
+        toast({
+          title: "Clients Fixed",
+          description: `Fixed ${data.fixed} client(s) with missing tenant assignment.`,
+        });
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenantId, "clients"] });
+      } else {
+        toast({
+          title: "No Issues Found",
+          description: "All clients already have correct tenant assignments.",
+        });
+      }
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Fix Failed",
+        description: error.message || "Failed to fix client tenant IDs",
+        variant: "destructive",
+      });
+    },
+  });
+  
+  return (
+    <Card className="border-amber-500/20 bg-amber-500/5">
+      <CardContent className="pt-4">
+        <div className="flex items-center justify-between">
+          <div className="flex-1">
+            <h4 className="font-medium flex items-center gap-2">
+              <RefreshCw className="h-4 w-4 text-amber-600" />
+              Fix Client Tenant Assignments
+            </h4>
+            <p className="text-sm text-muted-foreground">
+              Scan for clients that are missing their tenant assignment and fix them automatically. 
+              Use this if clients created by super admin are not visible to tenant users.
+            </p>
+            {lastResult && (
+              <p className="text-xs text-muted-foreground mt-2">
+                Last run: Fixed {lastResult.fixed} client(s)
+                {lastResult.fixedClients.length > 0 && (
+                  <span className="block">
+                    {lastResult.fixedClients.map(c => c.companyName).join(", ")}
+                  </span>
+                )}
+              </p>
+            )}
+          </div>
+          <Button 
+            variant="outline"
+            onClick={() => fixMutation.mutate()}
+            disabled={fixMutation.isPending}
+            data-testid="button-fix-client-tenant-ids"
+          >
+            {fixMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <RefreshCw className="h-4 w-4 mr-2" />
+            )}
+            {fixMutation.isPending ? "Scanning..." : "Fix Client IDs"}
+          </Button>
+        </div>
+      </CardContent>
+    </Card>
+  );
+}
+
 function getStatusBadge(status: string) {
   if (status === "active") {
     return (
@@ -2566,6 +2651,11 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
           </TabsContent>
 
           <TabsContent value="clients" className="space-y-6 mt-6">
+            {/* Fix Client Tenant IDs - Data Remediation Tool */}
+            {activeTenant?.id && (
+              <FixClientTenantIdsCard tenantId={activeTenant.id} tenantName={activeTenant?.name || "this tenant"} />
+            )}
+            
             {/* Create Client */}
             <Card>
               <CardHeader>

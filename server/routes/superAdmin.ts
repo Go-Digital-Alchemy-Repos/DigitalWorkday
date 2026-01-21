@@ -3468,6 +3468,133 @@ router.post("/tenants/:tenantId/clients", requireSuperUser, async (req, res) => 
   }
 });
 
+// POST /api/v1/super/tenants/:tenantId/clients/fix-tenant-ids - Fix orphan clients
+router.post("/tenants/:tenantId/clients/fix-tenant-ids", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    // Get primary workspace for this tenant
+    const [primaryWorkspace] = await db.select()
+      .from(workspaces)
+      .where(and(eq(workspaces.tenantId, tenantId), eq(workspaces.isPrimary, true)))
+      .limit(1);
+
+    if (!primaryWorkspace) {
+      return res.status(400).json({ error: "No primary workspace found for tenant" });
+    }
+
+    // Find clients that:
+    // 1. Have NULL tenantId but belong to a workspace owned by this tenant
+    // 2. Have a workspaceId that matches any workspace in this tenant
+    const tenantWorkspaceIds = await db.select({ id: workspaces.id })
+      .from(workspaces)
+      .where(eq(workspaces.tenantId, tenantId));
+    
+    const workspaceIdList = tenantWorkspaceIds.map(w => w.id);
+
+    // Find orphan clients (null tenantId) in tenant workspaces
+    let orphanClientsInTenantWorkspaces: any[] = [];
+    if (workspaceIdList.length > 0) {
+      orphanClientsInTenantWorkspaces = await db.select()
+        .from(clients)
+        .where(and(
+          isNull(clients.tenantId),
+          inArray(clients.workspaceId, workspaceIdList)
+        ));
+    }
+
+    // Also find clients with null tenantId AND null/orphan workspaceId
+    // These might need to be assigned to the primary workspace
+    const fullyOrphanClients = await db.select()
+      .from(clients)
+      .where(and(
+        isNull(clients.tenantId),
+        isNull(clients.workspaceId)
+      ));
+
+    const fixedClients: { id: string; companyName: string; action: string }[] = [];
+    const errors: { id: string; companyName: string; error: string }[] = [];
+
+    // Fix clients in tenant workspaces (just set tenantId)
+    for (const client of orphanClientsInTenantWorkspaces) {
+      try {
+        await db.update(clients)
+          .set({ tenantId })
+          .where(eq(clients.id, client.id));
+        
+        fixedClients.push({
+          id: client.id,
+          companyName: client.companyName,
+          action: "Set tenantId"
+        });
+      } catch (err: any) {
+        errors.push({
+          id: client.id,
+          companyName: client.companyName,
+          error: err.message
+        });
+      }
+    }
+
+    // Fix fully orphan clients (set both tenantId and workspaceId)
+    for (const client of fullyOrphanClients) {
+      try {
+        await db.update(clients)
+          .set({ 
+            tenantId,
+            workspaceId: primaryWorkspace.id
+          })
+          .where(eq(clients.id, client.id));
+        
+        fixedClients.push({
+          id: client.id,
+          companyName: client.companyName,
+          action: "Set tenantId and workspaceId"
+        });
+      } catch (err: any) {
+        errors.push({
+          id: client.id,
+          companyName: client.companyName,
+          error: err.message
+        });
+      }
+    }
+
+    // Log audit event
+    const superUser = req.user as any;
+    if (fixedClients.length > 0) {
+      await recordTenantAuditEvent(
+        tenantId,
+        "clients_tenant_ids_fixed",
+        `Fixed ${fixedClients.length} orphan client(s) by super admin`,
+        superUser?.id,
+        { fixedClients, errors }
+      );
+    }
+
+    console.log(`[FixClientTenantIds] Tenant ${tenantId}: Fixed ${fixedClients.length} clients, ${errors.length} errors`);
+
+    res.json({
+      success: true,
+      fixed: fixedClients.length,
+      errors: errors.length,
+      fixedClients,
+      errorDetails: errors,
+      message: fixedClients.length > 0 
+        ? `Fixed ${fixedClients.length} client(s) with missing tenant association`
+        : "No orphan clients found for this tenant"
+    });
+  } catch (error) {
+    console.error("Error fixing client tenant IDs:", error);
+    res.status(500).json({ error: "Failed to fix client tenant IDs" });
+  }
+});
+
 // PATCH /api/v1/super/tenants/:tenantId/clients/:clientId - Update a client
 const updateClientSchema = z.object({
   companyName: z.string().min(1).optional(),
