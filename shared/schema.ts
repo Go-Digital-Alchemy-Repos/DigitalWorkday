@@ -744,6 +744,9 @@ export const comments = pgTable("comments", {
   taskId: varchar("task_id").references(() => tasks.id).notNull(),
   userId: varchar("user_id").references(() => users.id).notNull(),
   body: text("body").notNull(),
+  isResolved: boolean("is_resolved").default(false).notNull(),
+  resolvedAt: timestamp("resolved_at"),
+  resolvedByUserId: varchar("resolved_by_user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

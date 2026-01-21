@@ -51,11 +51,12 @@ import {
   type PersonalTaskSection, type InsertPersonalTaskSection,
   users, workspaces, workspaceMembers, teams, teamMembers,
   projects, projectMembers, sections, tasks, taskAssignees, taskWatchers,
-  subtasks, tags, taskTags, comments, activityLog, taskAttachments,
+  subtasks, tags, taskTags, comments, commentMentions, activityLog, taskAttachments,
   clients, clientContacts, clientInvites, clientUserAccess,
   timeEntries, activeTimers,
   invitations, appSettings, tenants, tenantSettings, personalTaskSections,
   UserRole,
+  type CommentMention, type InsertCommentMention,
 } from "@shared/schema";
 import crypto from "crypto";
 import { db } from "./db";
@@ -885,7 +886,47 @@ export class DatabaseStorage implements IStorage {
   }
 
   async deleteComment(id: string): Promise<void> {
+    await db.delete(commentMentions).where(eq(commentMentions.commentId, id));
     await db.delete(comments).where(eq(comments.id, id));
+  }
+
+  async resolveComment(id: string, resolvedByUserId: string): Promise<Comment | undefined> {
+    const [updated] = await db.update(comments).set({
+      isResolved: true,
+      resolvedAt: new Date(),
+      resolvedByUserId,
+      updatedAt: new Date(),
+    }).where(eq(comments.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async unresolveComment(id: string): Promise<Comment | undefined> {
+    const [updated] = await db.update(comments).set({
+      isResolved: false,
+      resolvedAt: null,
+      resolvedByUserId: null,
+      updatedAt: new Date(),
+    }).where(eq(comments.id, id)).returning();
+    return updated || undefined;
+  }
+
+  async createCommentMention(mention: InsertCommentMention): Promise<CommentMention> {
+    const [result] = await db.insert(commentMentions).values(mention).returning();
+    return result;
+  }
+
+  async getCommentMentions(commentId: string): Promise<(CommentMention & { mentionedUser?: User })[]> {
+    const mentions = await db.select().from(commentMentions).where(eq(commentMentions.commentId, commentId));
+    const result = [];
+    for (const mention of mentions) {
+      const user = await this.getUser(mention.mentionedUserId);
+      result.push({ ...mention, mentionedUser: user });
+    }
+    return result;
+  }
+
+  async deleteCommentMentions(commentId: string): Promise<void> {
+    await db.delete(commentMentions).where(eq(commentMentions.commentId, commentId));
   }
 
   async createActivityLog(log: InsertActivityLog): Promise<ActivityLog> {

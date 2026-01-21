@@ -1626,12 +1626,64 @@ export async function registerRoutes(
 
   app.post("/api/tasks/:taskId/comments", async (req, res) => {
     try {
+      const currentUserId = getCurrentUserId(req);
       const data = insertCommentSchema.parse({
         ...req.body,
         taskId: req.params.taskId,
-        userId: getCurrentUserId(req),
+        userId: currentUserId,
       });
       const comment = await storage.createComment(data);
+
+      // Parse @mentions and create notifications
+      const mentionRegex = /@\[([^\]]+)\]\(([a-f0-9-]+)\)/g;
+      const mentions: { name: string; userId: string }[] = [];
+      let match;
+      while ((match = mentionRegex.exec(data.body)) !== null) {
+        mentions.push({ name: match[1], userId: match[2] });
+      }
+
+      // Get task and project info for the notification
+      const task = await storage.getTask(req.params.taskId);
+      const commenter = await storage.getUser(currentUserId);
+      const tenantId = task?.tenantId || null;
+
+      for (const mention of mentions) {
+        // Validate mentioned user exists and is in the same tenant
+        const mentionedUser = await storage.getUser(mention.userId);
+        if (!mentionedUser || (tenantId && mentionedUser.tenantId !== tenantId)) {
+          continue; // Skip if user doesn't exist or is in different tenant
+        }
+
+        // Create mention record
+        await storage.createCommentMention({
+          commentId: comment.id,
+          mentionedUserId: mention.userId,
+        });
+
+        // Send notification email if user has email
+        if (mentionedUser.email && tenantId) {
+          try {
+            const { emailOutboxService } = await import("./services/emailOutbox");
+            await emailOutboxService.sendEmail({
+              tenantId,
+              messageType: "mention_notification",
+              toEmail: mentionedUser.email,
+              subject: `${commenter?.name || 'Someone'} mentioned you in a comment`,
+              textBody: `${commenter?.name || 'Someone'} mentioned you in a comment on task "${task?.title || 'a task'}":\n\n"${data.body.replace(mentionRegex, '@$1')}"`,
+              metadata: {
+                taskId: task?.id,
+                taskTitle: task?.title,
+                commentId: comment.id,
+                mentionedByUserId: currentUserId,
+                mentionedByName: commenter?.name,
+              },
+            });
+          } catch (emailError) {
+            console.error("Error sending mention notification:", emailError);
+          }
+        }
+      }
+
       res.status(201).json(comment);
     } catch (error) {
       if (error instanceof z.ZodError) {
@@ -1644,10 +1696,19 @@ export async function registerRoutes(
 
   app.patch("/api/comments/:id", async (req, res) => {
     try {
-      const comment = await storage.updateComment(req.params.id, req.body);
-      if (!comment) {
+      const currentUserId = getCurrentUserId(req);
+      const existingComment = await storage.getComment(req.params.id);
+      if (!existingComment) {
         return res.status(404).json({ error: "Comment not found" });
       }
+      
+      // Permission check: only the comment owner can edit
+      if (existingComment.userId !== currentUserId) {
+        return res.status(403).json({ error: "You can only edit your own comments" });
+      }
+
+      // Only allow updating the body
+      const comment = await storage.updateComment(req.params.id, { body: req.body.body });
       res.json(comment);
     } catch (error) {
       console.error("Error updating comment:", error);
@@ -1657,10 +1718,53 @@ export async function registerRoutes(
 
   app.delete("/api/comments/:id", async (req, res) => {
     try {
+      const currentUserId = getCurrentUserId(req);
+      const existingComment = await storage.getComment(req.params.id);
+      if (!existingComment) {
+        return res.status(404).json({ error: "Comment not found" });
+      }
+      
+      // Permission check: only the comment owner can delete
+      if (existingComment.userId !== currentUserId) {
+        return res.status(403).json({ error: "You can only delete your own comments" });
+      }
+
       await storage.deleteComment(req.params.id);
       res.status(204).send();
     } catch (error) {
       console.error("Error deleting comment:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Resolve/unresolve comment endpoints
+  app.post("/api/comments/:id/resolve", async (req, res) => {
+    try {
+      const currentUserId = getCurrentUserId(req);
+      const existingComment = await storage.getComment(req.params.id);
+      if (!existingComment) {
+        return res.status(404).json({ error: "Comment not found" });
+      }
+
+      const comment = await storage.resolveComment(req.params.id, currentUserId);
+      res.json(comment);
+    } catch (error) {
+      console.error("Error resolving comment:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  app.post("/api/comments/:id/unresolve", async (req, res) => {
+    try {
+      const existingComment = await storage.getComment(req.params.id);
+      if (!existingComment) {
+        return res.status(404).json({ error: "Comment not found" });
+      }
+
+      const comment = await storage.unresolveComment(req.params.id);
+      res.json(comment);
+    } catch (error) {
+      console.error("Error unresolving comment:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
