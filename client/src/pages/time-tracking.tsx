@@ -59,6 +59,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { TaskSelectorWithCreate } from "@/components/task-selector-with-create";
+import { StartTimerDrawer } from "@/components/start-timer-drawer";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from "date-fns";
 
 type ActiveTimer = {
@@ -1604,6 +1605,17 @@ function ReportsSummary() {
 }
 
 export default function TimeTrackingPage() {
+  const [startTimerDrawerOpen, setStartTimerDrawerOpen] = useState(false);
+  const [manualEntryDrawerOpen, setManualEntryDrawerOpen] = useState(false);
+
+  const { data: timer } = useQuery<ActiveTimer | null>({
+    queryKey: ["/api/timer/current"],
+  });
+
+  const hasActiveTimer = !!timer;
+
+  // Note: Timer queries are user-scoped on the server side via userId filter
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
@@ -1615,12 +1627,28 @@ export default function TimeTrackingPage() {
             Track time spent on tasks and projects
           </p>
         </div>
+        <div className="flex items-center gap-2">
+          <Button
+            onClick={() => setStartTimerDrawerOpen(true)}
+            disabled={hasActiveTimer}
+            data-testid="button-start-timer"
+          >
+            <Play className="h-4 w-4 mr-2" />
+            Start Timer
+          </Button>
+          <Button
+            variant="outline"
+            onClick={() => setManualEntryDrawerOpen(true)}
+            data-testid="button-add-entry"
+          >
+            <Plus className="h-4 w-4 mr-2" />
+            Add Entry
+          </Button>
+        </div>
       </div>
 
       <div className="flex-1 overflow-auto p-6">
-        <ActiveTimerPanel />
-
-        <Tabs defaultValue="entries" className="mt-6">
+        <Tabs defaultValue="entries">
           <TabsList>
             <TabsTrigger value="entries" data-testid="tab-entries">
               <Clock className="h-4 w-4 mr-2" />
@@ -1639,6 +1667,16 @@ export default function TimeTrackingPage() {
           </TabsContent>
         </Tabs>
       </div>
+
+      <StartTimerDrawer
+        open={startTimerDrawerOpen}
+        onOpenChange={setStartTimerDrawerOpen}
+      />
+
+      <ManualEntryDialog
+        open={manualEntryDrawerOpen}
+        onOpenChange={setManualEntryDrawerOpen}
+      />
     </div>
   );
 }

@@ -42,6 +42,7 @@ import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
+import { GlobalActiveTimer } from "@/components/global-active-timer";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -272,6 +273,7 @@ function TenantLayout() {
                 )}
               </div>
               <div className="flex items-center gap-2">
+                <GlobalActiveTimer />
                 <ThemeToggle />
                 <UserMenu />
               </div>
