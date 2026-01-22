@@ -136,8 +136,13 @@ router.get("/context", requireAuth, async (req, res) => {
       displayName: tenantSettings?.displayName || tenant.name,
       status: tenant.status,
     });
-  } catch (error) {
-    console.error("Error fetching tenant context:", error);
+  } catch (error: any) {
+    console.error("Error fetching tenant context:", {
+      message: error?.message,
+      stack: error?.stack,
+      userId: (req.user as any)?.id,
+      tenantId: req.tenant?.effectiveTenantId,
+    });
     res.status(500).json({ error: "Failed to fetch tenant context" });
   }
 });
