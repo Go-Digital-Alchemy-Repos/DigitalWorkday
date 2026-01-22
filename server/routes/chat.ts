@@ -73,7 +73,18 @@ router.get(
     const visibleChannels = allChannels.filter(
       ch => !ch.isPrivate || myChannelIds.has(ch.id)
     );
-    res.json(visibleChannels);
+
+    // Add unread counts for channels user is a member of
+    const channelsWithUnread = await Promise.all(
+      visibleChannels.map(async (ch) => {
+        const unreadCount = myChannelIds.has(ch.id)
+          ? await storage.getUnreadCountForChannel(userId, ch.id)
+          : 0;
+        return { ...ch, unreadCount };
+      })
+    );
+
+    res.json(channelsWithUnread);
   })
 );
 
@@ -336,7 +347,16 @@ router.get(
     if (!tenantId) throw AppError.forbidden("Tenant context required");
 
     const threads = await storage.getUserChatDmThreads(tenantId, userId);
-    res.json(threads);
+    
+    // Add unread counts for each DM thread
+    const threadsWithUnread = await Promise.all(
+      threads.map(async (thread) => {
+        const unreadCount = await storage.getUnreadCountForDm(userId, thread.id);
+        return { ...thread, unreadCount };
+      })
+    );
+
+    res.json(threadsWithUnread);
   })
 );
 
@@ -643,6 +663,66 @@ router.post(
       url: attachment.url,
       storageSource: source,
     });
+  })
+);
+
+// Read Tracking
+const markReadSchema = z.object({
+  targetType: z.enum(["channel", "dm"]),
+  targetId: z.string().min(1),
+  lastReadMessageId: z.string().min(1),
+});
+
+router.post(
+  "/reads",
+  validateBody(markReadSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const { targetType, targetId, lastReadMessageId } = req.body;
+
+    // Verify the target exists and user has access
+    if (targetType === "channel") {
+      const channel = await storage.getChatChannel(targetId);
+      if (!channel || channel.tenantId !== tenantId) {
+        throw AppError.notFound("Channel not found");
+      }
+      // Check if user is a member
+      const memberships = await storage.getUserChatChannels(tenantId, userId);
+      const isMember = memberships.some(m => m.channelId === targetId);
+      if (!isMember) {
+        throw AppError.forbidden("Not a member of this channel");
+      }
+    } else {
+      const thread = await storage.getChatDmThread(targetId);
+      if (!thread || thread.tenantId !== tenantId) {
+        throw AppError.notFound("DM thread not found");
+      }
+      // Check if user is a member
+      const threads = await storage.getUserChatDmThreads(tenantId, userId);
+      const isMember = threads.some(t => t.id === targetId);
+      if (!isMember) {
+        throw AppError.forbidden("Not a member of this DM thread");
+      }
+    }
+
+    // Verify the message exists and belongs to the target
+    const message = await storage.getChatMessage(lastReadMessageId);
+    if (!message || message.tenantId !== tenantId) {
+      throw AppError.notFound("Message not found");
+    }
+    if (targetType === "channel" && message.channelId !== targetId) {
+      throw AppError.badRequest("Message does not belong to this channel");
+    }
+    if (targetType === "dm" && message.dmThreadId !== targetId) {
+      throw AppError.badRequest("Message does not belong to this DM thread");
+    }
+
+    await storage.upsertChatRead(tenantId, userId, targetType, targetId, lastReadMessageId);
+
+    res.json({ success: true });
   })
 );
 

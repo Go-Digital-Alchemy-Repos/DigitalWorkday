@@ -1092,6 +1092,26 @@ export const chatAttachments = pgTable("chat_attachments", {
   index("chat_attachments_message_idx").on(table.messageId),
 ]);
 
+/**
+ * Tracks last read message per user per channel/DM thread for unread badge counts
+ */
+export const chatReads = pgTable("chat_reads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  channelId: varchar("channel_id").references(() => chatChannels.id),
+  dmThreadId: varchar("dm_thread_id").references(() => chatDmThreads.id),
+  lastReadMessageId: varchar("last_read_message_id").references(() => chatMessages.id),
+  lastReadAt: timestamp("last_read_at").defaultNow().notNull(),
+}, (table) => [
+  index("chat_reads_tenant_idx").on(table.tenantId),
+  index("chat_reads_user_idx").on(table.userId),
+  index("chat_reads_channel_idx").on(table.channelId),
+  index("chat_reads_dm_thread_idx").on(table.dmThreadId),
+  uniqueIndex("chat_reads_user_channel_unique").on(table.userId, table.channelId),
+  uniqueIndex("chat_reads_user_dm_unique").on(table.userId, table.dmThreadId),
+]);
+
 // =============================================================================
 // RELATIONS
 // =============================================================================

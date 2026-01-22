@@ -61,7 +61,7 @@ import {
   clients, clientContacts, clientInvites, clientUserAccess,
   timeEntries, activeTimers,
   invitations, appSettings, tenants, tenantSettings, personalTaskSections,
-  chatChannels, chatChannelMembers, chatDmThreads, chatDmMembers, chatMessages, chatAttachments,
+  chatChannels, chatChannelMembers, chatDmThreads, chatDmMembers, chatMessages, chatAttachments, chatReads,
   UserRole,
   type CommentMention, type InsertCommentMention,
 } from "@shared/schema";
@@ -80,7 +80,7 @@ export type ProjectActivityItem = {
   entityTitle: string;
   metadata?: Record<string, unknown>;
 };
-import { eq, and, desc, asc, inArray, gte, lte, sql } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, gte, lte, gt, isNull, sql } from "drizzle-orm";
 import { encryptValue, decryptValue } from "./lib/encryption";
 
 export interface IStorage {
@@ -363,6 +363,13 @@ export interface IStorage {
   getChatAttachment(id: string): Promise<ChatAttachment | undefined>;
   getChatAttachmentsByTenantAndIds(tenantId: string, ids: string[]): Promise<ChatAttachment[]>;
   linkChatAttachmentsToMessage(messageId: string, attachmentIds: string[]): Promise<void>;
+
+  // Chat - Read Tracking
+  upsertChatRead(tenantId: string, userId: string, targetType: "channel" | "dm", targetId: string, lastReadMessageId: string): Promise<void>;
+  getChatReadForChannel(userId: string, channelId: string): Promise<{ lastReadMessageId: string | null } | undefined>;
+  getChatReadForDm(userId: string, dmThreadId: string): Promise<{ lastReadMessageId: string | null } | undefined>;
+  getUnreadCountForChannel(userId: string, channelId: string): Promise<number>;
+  getUnreadCountForDm(userId: string, dmThreadId: string): Promise<number>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2631,6 +2638,115 @@ export class DatabaseStorage implements IStorage {
     await db.update(chatAttachments)
       .set({ messageId })
       .where(inArray(chatAttachments.id, attachmentIds));
+  }
+
+  // Chat - Read Tracking
+  async upsertChatRead(tenantId: string, userId: string, targetType: "channel" | "dm", targetId: string, lastReadMessageId: string): Promise<void> {
+    if (targetType === "channel") {
+      await db.insert(chatReads)
+        .values({
+          tenantId,
+          userId,
+          channelId: targetId,
+          lastReadMessageId,
+          lastReadAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [chatReads.userId, chatReads.channelId],
+          set: {
+            lastReadMessageId,
+            lastReadAt: new Date(),
+          },
+        });
+    } else {
+      await db.insert(chatReads)
+        .values({
+          tenantId,
+          userId,
+          dmThreadId: targetId,
+          lastReadMessageId,
+          lastReadAt: new Date(),
+        })
+        .onConflictDoUpdate({
+          target: [chatReads.userId, chatReads.dmThreadId],
+          set: {
+            lastReadMessageId,
+            lastReadAt: new Date(),
+          },
+        });
+    }
+  }
+
+  async getChatReadForChannel(userId: string, channelId: string): Promise<{ lastReadMessageId: string | null } | undefined> {
+    const [read] = await db.select({ lastReadMessageId: chatReads.lastReadMessageId })
+      .from(chatReads)
+      .where(and(eq(chatReads.userId, userId), eq(chatReads.channelId, channelId)));
+    return read;
+  }
+
+  async getChatReadForDm(userId: string, dmThreadId: string): Promise<{ lastReadMessageId: string | null } | undefined> {
+    const [read] = await db.select({ lastReadMessageId: chatReads.lastReadMessageId })
+      .from(chatReads)
+      .where(and(eq(chatReads.userId, userId), eq(chatReads.dmThreadId, dmThreadId)));
+    return read;
+  }
+
+  async getUnreadCountForChannel(userId: string, channelId: string): Promise<number> {
+    const readRecord = await this.getChatReadForChannel(userId, channelId);
+    
+    if (!readRecord?.lastReadMessageId) {
+      // No read record - count all messages in channel
+      const [result] = await db.select({ count: sql<number>`count(*)::int` })
+        .from(chatMessages)
+        .where(and(eq(chatMessages.channelId, channelId), isNull(chatMessages.deletedAt)));
+      return result?.count ?? 0;
+    }
+
+    // Get the timestamp of the last read message
+    const [lastReadMsg] = await db.select({ createdAt: chatMessages.createdAt })
+      .from(chatMessages)
+      .where(eq(chatMessages.id, readRecord.lastReadMessageId));
+
+    if (!lastReadMsg) return 0;
+
+    // Count messages after the last read message
+    const [result] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(chatMessages)
+      .where(and(
+        eq(chatMessages.channelId, channelId),
+        isNull(chatMessages.deletedAt),
+        gt(chatMessages.createdAt, lastReadMsg.createdAt)
+      ));
+    return result?.count ?? 0;
+  }
+
+  async getUnreadCountForDm(userId: string, dmThreadId: string): Promise<number> {
+    const readRecord = await this.getChatReadForDm(userId, dmThreadId);
+    
+    if (!readRecord?.lastReadMessageId) {
+      // No read record - count all messages in thread
+      const [result] = await db.select({ count: sql<number>`count(*)::int` })
+        .from(chatMessages)
+        .where(and(eq(chatMessages.dmThreadId, dmThreadId), isNull(chatMessages.deletedAt)));
+      return result?.count ?? 0;
+    }
+
+    // Get the timestamp of the last read message
+    const [lastReadMsg] = await db.select({ createdAt: chatMessages.createdAt })
+      .from(chatMessages)
+      .where(eq(chatMessages.id, readRecord.lastReadMessageId));
+
+    if (!lastReadMsg) return 0;
+
+    // Count messages after the last read message
+    const [result] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(chatMessages)
+      .where(and(
+        eq(chatMessages.dmThreadId, dmThreadId),
+        isNull(chatMessages.deletedAt),
+        gt(chatMessages.createdAt, lastReadMsg.createdAt)
+      ));
+    return result?.count ?? 0;
   }
 }
 
