@@ -262,9 +262,11 @@ Manual regression checklist for verifying core functionality. Run through this c
 - [ ] No "login twice" issue (was: first login sometimes failed)
 
 ### Data Integrity
-- [ ] Tasks have tenantId after creation
+- [ ] Tasks have tenantId after creation (POST /api/tasks, /api/tasks/personal, /api/tasks/:id/childtasks)
+- [ ] Child tasks inherit parent's tenantId
 - [ ] Projects have tenantId after creation
 - [ ] Users have tenantId after invitation acceptance
+- [ ] Error responses include requestId for debugging
 
 ---
 
