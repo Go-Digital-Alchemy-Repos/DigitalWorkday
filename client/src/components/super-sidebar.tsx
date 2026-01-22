@@ -6,6 +6,7 @@ import {
   Activity,
   LayoutDashboard,
   FileText,
+  MessageSquareText,
 } from "lucide-react";
 import dasanaLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -25,6 +26,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 const superAdminNavItems = [
   { title: "Dashboard", url: "/super-admin/dashboard", icon: LayoutDashboard, exact: false },
   { title: "Tenants", url: "/super-admin/tenants", icon: Building2, exact: false },
+  { title: "Chat Monitoring", url: "/super-admin/chat-monitoring", icon: MessageSquareText, exact: false },
   { title: "System Settings", url: "/super-admin/settings", icon: Wrench, exact: false },
   { title: "System Status", url: "/super-admin/status", icon: Activity, exact: false },
   { title: "App Docs", url: "/super-admin/docs", icon: FileText, exact: false },
