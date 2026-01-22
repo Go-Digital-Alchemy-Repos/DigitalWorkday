@@ -41,6 +41,7 @@ import PlatformInvitePage from "@/pages/platform-invite";
 import AcceptInvitePage from "@/pages/accept-invite";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
+import ChatPage from "@/pages/chat";
 import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
 import { GlobalActiveTimer } from "@/components/global-active-timer";
@@ -197,6 +198,9 @@ function TenantRouter() {
       </Route>
       <Route path="/time-tracking">
         {() => <TenantRouteGuard component={TimeTrackingPage} />}
+      </Route>
+      <Route path="/chat">
+        {() => <TenantRouteGuard component={ChatPage} />}
       </Route>
       <Route path="/settings">
         {() => <TenantRouteGuard component={SettingsPage} />}

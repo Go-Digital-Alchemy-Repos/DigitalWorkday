@@ -15,6 +15,7 @@ import {
   Clock,
   Cog,
   UserCog,
+  MessageCircle,
 } from "lucide-react";
 import dasanaLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -47,6 +48,7 @@ const mainNavItems = [
   { title: "Projects", url: "/projects", icon: FolderKanban },
   { title: "Clients", url: "/clients", icon: Briefcase },
   { title: "Time Tracking", url: "/time-tracking", icon: Clock },
+  { title: "Chat", url: "/chat", icon: MessageCircle },
 ];
 
 export function TenantSidebar() {
