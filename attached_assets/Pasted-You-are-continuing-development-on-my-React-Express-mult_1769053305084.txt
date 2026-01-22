@@ -1,0 +1,154 @@
+You are continuing development on my React + Express multi-tenant app (single codebase) deployed on Railway.
+PHASE CHAT-0: Chat Audit + Instrumentation (Diagnostics-first, no feature changes)
+
+Goal:
+Add safe observability so we can diagnose chat issues (disconnects, duplicates, membership problems, delivery failures)
+before/while we harden stability in Phase Chat-1.
+
+This phase should NOT change chat behavior or UI flows beyond adding debug surfaces and logging.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change existing endpoint paths or response shapes.
+- Do NOT change chat business logic (delivery, membership, permissions).
+- Do NOT add or require DB schema changes (prefer in-memory logs or existing logs tables).
+- Do NOT log secrets, message contents, or PII beyond minimal IDs.
+- All diagnostics must be behind an env flag:
+  CHAT_DEBUG=true
+- Diagnostics are viewable ONLY by Super Admin (and optionally Tenant Admin) and must be tenant-safe.
+
+===============================================================================
+PART A — SERVER-SIDE INSTRUMENTATION (SOCKET + API)
+===============================================================================
+A1) Standardize requestId correlation
+- Ensure every HTTP response includes X-Request-Id header (if not already).
+- For chat-related endpoints, include requestId in server logs.
+
+A2) Socket event logging (minimal, ID-only)
+When CHAT_DEBUG=true, log these events with:
+- timestamp
+- requestId (if available) or socketId
+- tenantId (effective)
+- userId
+- conversationId (if applicable)
+- event type
+- payload sizes (NOT payload contents)
+
+Track:
+- socket_connected
+- socket_disconnected (include reason)
+- room_joined / room_left
+- message_send_attempt
+- message_persisted
+- message_broadcast
+- membership_add_attempt / membership_remove_attempt
+- membership_changed_broadcast
+- auth_session_missing (if socket connects without valid session cookie)
+
+A3) Add safe per-process “chat metrics” in memory (no DB)
+Maintain rolling counters + last-N events (e.g. last 200):
+- activeSockets count
+- roomsJoined count
+- messagesSentLast5Min
+- disconnectsLast5Min
+- top error codes
+
+Important:
+- Store only IDs + counts
+- Never store message bodies
+
+===============================================================================
+PART B — DIAGNOSTICS ENDPOINTS (SUPER ADMIN ONLY)
+===============================================================================
+Add read-only endpoints (add-only) behind auth+role checks and CHAT_DEBUG=true:
+1) GET /api/v1/super/debug/chat/metrics
+Returns:
+- activeSockets
+- roomsJoined
+- messagesLast5Min
+- disconnectsLast5Min
+- lastErrors (code + count)
+
+2) GET /api/v1/super/debug/chat/events?limit=200
+Returns last-N event summaries (IDs only).
+
+3) GET /api/v1/super/debug/chat/sockets
+Returns list:
+- socketId
+- userId
+- tenantId
+- connectedAt
+- roomsCount
+
+If CHAT_DEBUG is false:
+- endpoints return 404 or 403 with a safe message (do not reveal internals).
+
+===============================================================================
+PART C — CLIENT-SIDE DEBUG SURFACE (SUPER ADMIN ONLY)
+===============================================================================
+C1) Add a “Chat Debug” panel in Super Admin System Status (or System Settings → Status)
+Visible only when:
+- user is super admin AND CHAT_DEBUG=true
+
+The panel shows:
+- metrics cards
+- last 50 events table (auto-refresh every 5–10 seconds)
+- “Copy diagnostics snapshot” button (JSON summary without secrets)
+
+C2) RequestId surfacing in UI on chat failures
+Without changing response shapes:
+- When chat actions fail (create conversation, send message, add member):
+  - read X-Request-Id header and show it in toast:
+    “Chat action failed. Request ID: <id>”
+  - add copy button for requestId
+
+===============================================================================
+PART D — AUDIT CHECKLIST (AUTOMATED WHERE POSSIBLE)
+===============================================================================
+Add a lightweight audit script or test that checks:
+- all chat endpoints require auth
+- all chat endpoints enforce tenant scoping
+- all socket connections validate session cookie
+- all membership mutations validate same tenant
+
+If automation is too heavy, add a documented manual checklist:
+- /docs/CHAT_DEBUGGING.md
+
+===============================================================================
+TESTS (MANDATORY MINIMUM)
+===============================================================================
+1) chat_debug_endpoints_super_only.test.ts
+- tenant admin/employee cannot access
+
+2) chat_debug_disabled_returns_404_or_403.test.ts
+- when CHAT_DEBUG=false, endpoints not accessible
+
+3) request_id_header_present_on_chat_errors.test.ts
+- chat endpoint error includes X-Request-Id header
+
+===============================================================================
+DOCUMENTATION (REQUIRED)
+===============================================================================
+Create /docs/CHAT_DEBUGGING.md including:
+- enabling CHAT_DEBUG on Railway
+- what metrics mean
+- how to capture requestId and correlate logs
+- common failure patterns (disconnect loops, duplicate joins, membership mismatch)
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+- No changes to chat behavior; only diagnostics added.
+- When CHAT_DEBUG=true, Super Admin can see real-time metrics + recent event summaries.
+- Chat failures show requestId in the UI for correlation.
+- No secrets or message contents logged or exposed.
+- Tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Where logging is implemented (socket + routes)
+- Env vars required
+- How to enable on Railway (exact vars)
+- Manual diagnostic workflow steps

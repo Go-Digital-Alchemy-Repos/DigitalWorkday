@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
-import { getSocket } from "@/lib/realtime/socket";
+import { getSocket, joinChatRoom, leaveChatRoom, onConnectionChange, isSocketConnected } from "@/lib/realtime/socket";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -47,6 +47,10 @@ import {
   UserPlus,
   UserMinus,
   Settings,
+  RefreshCw,
+  AlertCircle,
+  Wifi,
+  WifiOff,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -98,6 +102,9 @@ interface PendingAttachment extends ChatAttachment {
   uploading?: boolean;
 }
 
+// Message status for optimistic updates
+type MessageStatus = 'pending' | 'sent' | 'failed';
+
 interface ChatMessage {
   id: string;
   tenantId: string;
@@ -115,6 +122,9 @@ interface ChatMessage {
     email: string;
     avatarUrl: string | null;
   };
+  // Optimistic update status (client-side only)
+  _status?: MessageStatus;
+  _tempId?: string; // Temporary ID for pending messages
 }
 
 interface ChatDmThread {
@@ -176,6 +186,15 @@ export default function ChatPage() {
   const [startChatSearchQuery, setStartChatSearchQuery] = useState("");
   const [startChatSelectedUsers, setStartChatSelectedUsers] = useState<Set<string>>(new Set());
   const [startChatGroupName, setStartChatGroupName] = useState("");
+
+  // Connection status tracking
+  const [isConnected, setIsConnected] = useState(isSocketConnected());
+  
+  // Track seen message IDs to prevent duplicates
+  const seenMessageIds = useRef<Set<string>>(new Set());
+  
+  // Track pending messages by tempId for reliable reconciliation
+  const pendingMessagesRef = useRef<Map<string, { body: string; timestamp: number }>>(new Map());
 
   interface TeamUser {
     id: string;
@@ -575,13 +594,31 @@ export default function ChatPage() {
     return parts.length > 0 ? parts : body;
   };
 
+  // Sort messages by createdAt with ID fallback for consistent ordering
+  const sortMessages = (msgs: ChatMessage[]): ChatMessage[] => {
+    return [...msgs].sort((a, b) => {
+      const timeA = new Date(a.createdAt).getTime();
+      const timeB = new Date(b.createdAt).getTime();
+      if (timeA !== timeB) return timeA - timeB;
+      // Fallback to ID comparison for messages with same timestamp
+      return a.id.localeCompare(b.id);
+    });
+  };
+
   useEffect(() => {
     if (selectedChannel && channelMessagesQuery.data) {
-      setMessages(channelMessagesQuery.data);
+      setMessages(sortMessages(channelMessagesQuery.data));
+      // Clear seen IDs when switching conversations
+      seenMessageIds.current.clear();
+      channelMessagesQuery.data.forEach(m => seenMessageIds.current.add(m.id));
     } else if (selectedDm && dmMessagesQuery.data) {
-      setMessages(dmMessagesQuery.data);
+      setMessages(sortMessages(dmMessagesQuery.data));
+      // Clear seen IDs when switching conversations
+      seenMessageIds.current.clear();
+      dmMessagesQuery.data.forEach(m => seenMessageIds.current.add(m.id));
     } else {
       setMessages([]);
+      seenMessageIds.current.clear();
     }
   }, [selectedChannel, selectedDm, channelMessagesQuery.data, dmMessagesQuery.data]);
 
@@ -623,40 +660,71 @@ export default function ChatPage() {
     }
   }, [messages]);
 
-  // Join/leave socket rooms when selection changes
-  // Note: userId/tenantId are derived server-side from authenticated session for security
+  // Track connection status for UI feedback
   useEffect(() => {
-    const socket = getSocket();
-    if (!socket || !user) return;
+    const unsubscribe = onConnectionChange((connected) => {
+      setIsConnected(connected);
+      if (connected) {
+        // Refetch data on reconnect to ensure fresh state
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+        if (selectedChannel) {
+          queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel.id, "messages"] });
+        }
+        if (selectedDm) {
+          queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm", selectedDm.id, "messages"] });
+        }
+      }
+    });
+    return unsubscribe;
+  }, [selectedChannel, selectedDm]);
+
+  // Join/leave socket rooms when selection changes
+  // Uses centralized room management with reconnect support
+  useEffect(() => {
+    if (!user) return;
 
     // Join the appropriate room (server validates access using session data)
     if (selectedChannel) {
-      socket.emit(CHAT_ROOM_EVENTS.JOIN as any, {
-        targetType: 'channel',
-        targetId: selectedChannel.id,
-      });
+      joinChatRoom('channel', selectedChannel.id);
     } else if (selectedDm) {
-      socket.emit(CHAT_ROOM_EVENTS.JOIN as any, {
-        targetType: 'dm',
-        targetId: selectedDm.id,
-      });
+      joinChatRoom('dm', selectedDm.id);
     }
 
     // Leave the room on cleanup or selection change
     return () => {
       if (selectedChannel) {
-        socket.emit(CHAT_ROOM_EVENTS.LEAVE as any, {
-          targetType: 'channel',
-          targetId: selectedChannel.id,
-        });
+        leaveChatRoom('channel', selectedChannel.id);
       } else if (selectedDm) {
-        socket.emit(CHAT_ROOM_EVENTS.LEAVE as any, {
-          targetType: 'dm',
-          targetId: selectedDm.id,
-        });
+        leaveChatRoom('dm', selectedDm.id);
       }
     };
   }, [selectedChannel, selectedDm, user]);
+
+  // Periodically clean up stale pending messages (older than 2 minutes)
+  useEffect(() => {
+    const cleanup = () => {
+      const now = Date.now();
+      const staleThreshold = 2 * 60 * 1000; // 2 minutes
+      
+      for (const [tempId, pending] of pendingMessagesRef.current.entries()) {
+        if (now - pending.timestamp > staleThreshold) {
+          pendingMessagesRef.current.delete(tempId);
+          // Also mark the message as failed if still pending
+          setMessages(prev => 
+            prev.map(m => 
+              m._tempId === tempId && m._status === 'pending'
+                ? { ...m, _status: 'failed' as const }
+                : m
+            )
+          );
+        }
+      }
+    };
+    
+    const interval = setInterval(cleanup, 30000); // Run every 30 seconds
+    return () => clearInterval(interval);
+  }, []);
 
   useEffect(() => {
     const socket = getSocket();
@@ -667,8 +735,64 @@ export default function ChatPage() {
       const isCurrentDm = selectedDm && payload.targetType === "dm" && payload.targetId === selectedDm.id;
       
       if (isCurrentChannel || isCurrentDm) {
-        setMessages(prev => [...prev, payload.message as ChatMessage]);
+        const message = payload.message as ChatMessage;
+        
+        // Guard against duplicate messages
+        if (seenMessageIds.current.has(message.id)) {
+          console.debug("[Chat] Ignoring duplicate message:", message.id);
+          return;
+        }
+        seenMessageIds.current.add(message.id);
+        
+        // Try to find a matching pending message using the ref
+        // This provides reliable reconciliation by finding the oldest pending message
+        // with matching body from the same author
+        let matchedTempId: string | null = null;
+        const messageTime = new Date(message.createdAt).getTime();
+        
+        for (const [tempId, pending] of pendingMessagesRef.current.entries()) {
+          // Match by body and recency (within 30 seconds)
+          if (pending.body === message.body && 
+              Math.abs(messageTime - pending.timestamp) < 30000) {
+            matchedTempId = tempId;
+            break; // Take the first (oldest) matching pending message
+          }
+        }
+        
+        // Replace pending message with confirmed one or add new message
+        setMessages(prev => {
+          let updated: ChatMessage[];
+          
+          if (matchedTempId) {
+            // Find and replace the pending message by tempId
+            const pendingIndex = prev.findIndex(m => m._tempId === matchedTempId);
+            
+            if (pendingIndex >= 0) {
+              updated = [...prev];
+              updated[pendingIndex] = { ...message, _status: 'sent' };
+              // Clean up the pending reference
+              pendingMessagesRef.current.delete(matchedTempId);
+            } else {
+              // Pending message not found in array (race condition), just add
+              updated = [...prev, { ...message, _status: 'sent' }];
+              pendingMessagesRef.current.delete(matchedTempId);
+            }
+          } else if (prev.some(m => m.id === message.id)) {
+            // Message already exists, skip
+            return prev;
+          } else {
+            // Add new message (from another user or reconnect)
+            updated = [...prev, { ...message, _status: 'sent' }];
+          }
+          
+          // Re-sort to maintain consistent ordering
+          return sortMessages(updated);
+        });
       }
+      
+      // Invalidate conversation list to update last message preview
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
     };
 
     const handleMessageUpdated = (payload: ChatMessageUpdatedPayload) => {
@@ -712,11 +836,16 @@ export default function ChatPage() {
       // Refresh channel members if currently viewing this channel's members
       if (payload.targetType === 'channel' && selectedChannel && payload.targetId === selectedChannel.id) {
         queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel.id, "members"] });
-        // If current user was removed, deselect and refresh channels
+        // If current user was removed, deselect and show notification
         if (payload.userId === user?.id) {
           setSelectedChannel(null);
           setMembersDrawerOpen(false);
           queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+          toast({
+            title: "Removed from channel",
+            description: "You've been removed from this chat.",
+            variant: "default",
+          });
         }
       }
       // Refresh channel list
@@ -753,7 +882,7 @@ export default function ChatPage() {
   });
 
   const sendMessageMutation = useMutation({
-    mutationFn: async ({ body, attachmentIds }: { body: string; attachmentIds?: string[] }) => {
+    mutationFn: async ({ body, attachmentIds, tempId }: { body: string; attachmentIds?: string[]; tempId: string }) => {
       const payload = { body, attachmentIds };
       if (selectedChannel) {
         return apiRequest("POST", `/api/v1/chat/channels/${selectedChannel.id}/messages`, payload);
@@ -762,11 +891,82 @@ export default function ChatPage() {
       }
       throw new Error("No channel or DM selected");
     },
-    onSuccess: () => {
+    onMutate: async ({ body, tempId }) => {
+      // Track pending message for reliable reconciliation
+      pendingMessagesRef.current.set(tempId, { 
+        body, 
+        timestamp: Date.now() 
+      });
+      
+      // Optimistic update: add pending message immediately
+      const pendingMessage: ChatMessage = {
+        id: tempId,
+        tenantId: user?.tenantId || '',
+        channelId: selectedChannel?.id || null,
+        dmThreadId: selectedDm?.id || null,
+        authorUserId: user?.id || '',
+        body,
+        createdAt: new Date(),
+        editedAt: null,
+        author: user ? {
+          id: user.id,
+          name: `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email,
+          email: user.email,
+          avatarUrl: user.avatarUrl || null,
+        } : undefined,
+        _status: 'pending',
+        _tempId: tempId,
+      };
+      
+      setMessages(prev => [...prev, pendingMessage]);
       setMessageInput("");
       setPendingAttachments([]);
+      
+      return { tempId, body };
+    },
+    onError: (_error, _variables, context) => {
+      // Mark the pending message as failed
+      if (context?.tempId) {
+        // Remove from pending ref since it failed
+        pendingMessagesRef.current.delete(context.tempId);
+        
+        setMessages(prev => 
+          prev.map(msg => 
+            msg._tempId === context.tempId 
+              ? { ...msg, _status: 'failed' as const }
+              : msg
+          )
+        );
+      }
+      toast({
+        title: "Failed to send message",
+        description: "Click the retry button to try again.",
+        variant: "destructive",
+      });
+    },
+    onSuccess: () => {
+      // Message will be replaced by socket event with confirmed ID
     },
   });
+
+  // Retry failed message
+  const retryFailedMessage = (failedMsg: ChatMessage) => {
+    // Remove the failed message
+    setMessages(prev => prev.filter(m => m._tempId !== failedMsg._tempId));
+    
+    // Re-send the message
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    sendMessageMutation.mutate({ 
+      body: failedMsg.body, 
+      attachmentIds: failedMsg.attachments?.map(a => a.id),
+      tempId 
+    });
+  };
+
+  // Remove failed message
+  const removeFailedMessage = (tempId: string) => {
+    setMessages(prev => prev.filter(m => m._tempId !== tempId));
+  };
 
   const joinChannelMutation = useMutation({
     mutationFn: async (channelId: string) => {
@@ -903,13 +1103,26 @@ export default function ChatPage() {
     setPendingAttachments(prev => prev.filter(a => a.id !== id));
   };
 
-  const handleSendMessage = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSendMessage = (e?: React.FormEvent) => {
+    if (e) e.preventDefault();
     if (!messageInput.trim() && pendingAttachments.length === 0) return;
+    
+    // Generate temporary ID for optimistic update
+    const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
+    
     sendMessageMutation.mutate({
       body: messageInput.trim() || " ", // Ensure body is not empty
       attachmentIds: pendingAttachments.map(a => a.id),
+      tempId,
     });
+  };
+
+  // Handle keyboard shortcuts for message input (Enter to send, Shift+Enter for newline)
+  const handleMessageKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter' && !e.shiftKey) {
+      e.preventDefault();
+      handleSendMessage();
+    }
   };
 
   const getInitials = (name: string) => {
@@ -1156,6 +1369,16 @@ export default function ChatPage() {
                 )}
               </div>
               <div className="flex items-center gap-1">
+                {/* Connection status indicator */}
+                {!isConnected && (
+                  <div 
+                    className="flex items-center gap-1 text-xs text-muted-foreground px-2"
+                    data-testid="connection-status-offline"
+                  >
+                    <WifiOff className="h-3 w-3 text-destructive" />
+                    <span>Reconnecting...</span>
+                  </div>
+                )}
                 {selectedChannel && (
                   <Button
                     variant="ghost"
@@ -1179,16 +1402,42 @@ export default function ChatPage() {
 
             <ScrollArea className="flex-1 p-4" ref={scrollRef}>
               <div className="space-y-4">
+                {messages.length === 0 && !channelMessagesQuery.isLoading && !dmMessagesQuery.isLoading && (
+                  <div className="flex flex-col items-center justify-center h-40 text-muted-foreground" data-testid="empty-messages">
+                    <MessageCircle className="h-12 w-12 mb-2 opacity-50" />
+                    <p className="text-sm">No messages yet</p>
+                    <p className="text-xs">Be the first to send a message!</p>
+                  </div>
+                )}
+                {(channelMessagesQuery.isLoading || dmMessagesQuery.isLoading) && messages.length === 0 && (
+                  <div className="space-y-4" data-testid="messages-loading">
+                    {[1, 2, 3].map(i => (
+                      <div key={i} className="flex gap-3 animate-pulse">
+                        <div className="h-8 w-8 rounded-full bg-muted" />
+                        <div className="flex-1 space-y-2">
+                          <div className="h-4 bg-muted rounded w-24" />
+                          <div className="h-4 bg-muted rounded w-3/4" />
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
                 {messages.map((message) => {
                   const isDeleted = !!message.deletedAt;
                   const isOwnMessage = message.authorUserId === user?.id;
                   const isTenantAdmin = user?.role === "admin";
                   const isEditing = editingMessageId === message.id;
-                  const canEdit = isOwnMessage && !isDeleted;
-                  const canDelete = (isOwnMessage || isTenantAdmin) && !isDeleted;
+                  const canEdit = isOwnMessage && !isDeleted && !message._status;
+                  const canDelete = (isOwnMessage || isTenantAdmin) && !isDeleted && !message._status;
+                  const isPending = message._status === 'pending';
+                  const isFailed = message._status === 'failed';
                   
                   return (
-                  <div key={message.id} className="flex gap-3 group" data-testid={`message-${message.id}`}>
+                  <div 
+                    key={message._tempId || message.id} 
+                    className={`flex gap-3 group ${isPending ? 'opacity-60' : ''} ${isFailed ? 'bg-destructive/10 p-2 rounded-md' : ''}`} 
+                    data-testid={`message-${message._tempId || message.id}`}
+                  >
                     <Avatar className="h-8 w-8 flex-shrink-0">
                       <AvatarFallback>
                         {getInitials(message.author?.name || message.author?.email || "?")}
@@ -1202,6 +1451,18 @@ export default function ChatPage() {
                         <span className="text-xs text-muted-foreground">
                           {formatTime(message.createdAt)}
                         </span>
+                        {isPending && (
+                          <span className="text-xs text-muted-foreground flex items-center gap-1">
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                            Sending...
+                          </span>
+                        )}
+                        {isFailed && (
+                          <span className="text-xs text-destructive flex items-center gap-1">
+                            <AlertCircle className="h-3 w-3" />
+                            Failed
+                          </span>
+                        )}
                         {message.editedAt && !isDeleted && (
                           <span className="text-xs text-muted-foreground">(edited)</span>
                         )}
@@ -1291,9 +1552,33 @@ export default function ChatPage() {
                           </Button>
                         </div>
                       ) : (
-                        <p className={`text-sm break-words ${isDeleted ? "text-muted-foreground italic" : ""}`}>
-                          {isDeleted ? message.body : renderMessageBody(message.body)}
-                        </p>
+                        <>
+                          <p className={`text-sm break-words ${isDeleted ? "text-muted-foreground italic" : ""}`}>
+                            {isDeleted ? message.body : renderMessageBody(message.body)}
+                          </p>
+                          {isFailed && message._tempId && (
+                            <div className="flex items-center gap-2 mt-2">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                onClick={() => retryFailedMessage(message)}
+                                data-testid={`message-retry-${message._tempId}`}
+                              >
+                                <RefreshCw className="h-3 w-3 mr-1" />
+                                Retry
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => removeFailedMessage(message._tempId!)}
+                                data-testid={`message-remove-${message._tempId}`}
+                              >
+                                <X className="h-3 w-3 mr-1" />
+                                Remove
+                              </Button>
+                            </div>
+                          )}
+                        </>
                       )}
                       {message.attachments && message.attachments.length > 0 && !isDeleted && (
                         <div className="mt-2 flex flex-wrap gap-2">
@@ -1398,6 +1683,7 @@ export default function ChatPage() {
                     ref={messageInputRef}
                     value={messageInput}
                     onChange={handleMessageInputChange}
+                    onKeyDown={handleMessageKeyDown}
                     placeholder={`Message ${selectedChannel ? "#" + selectedChannel.name : getDmDisplayName(selectedDm!)}`}
                     disabled={sendMessageMutation.isPending}
                     data-testid="input-message"
