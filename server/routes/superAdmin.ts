@@ -1304,9 +1304,13 @@ router.post("/tenants/:tenantId/users/fix-tenant-ids", requireSuperUser, async (
       tenantId,
       tenantName: tenant.name,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[fix-tenant-ids] Error:", error);
-    res.status(500).json({ error: "Failed to fix tenant IDs" });
+    res.status(500).json({ 
+      error: "Failed to fix tenant IDs",
+      details: error?.message || "Unknown error",
+      stack: process.env.NODE_ENV === "development" ? error?.stack : undefined
+    });
   }
 });
 
@@ -3605,9 +3609,13 @@ router.post("/tenants/:tenantId/clients/fix-tenant-ids", requireSuperUser, async
         ? `Fixed ${fixedClients.length} client(s) with missing tenant association`
         : "No orphan clients found for this tenant"
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("Error fixing client tenant IDs:", error);
-    res.status(500).json({ error: "Failed to fix client tenant IDs" });
+    res.status(500).json({ 
+      error: "Failed to fix client tenant IDs",
+      details: error?.message || "Unknown error",
+      stack: process.env.NODE_ENV === "development" ? error?.stack : undefined
+    });
   }
 });
 

@@ -305,10 +305,17 @@ function FixTenantIdsCard({ tenantId, tenantName }: { tenantId: string; tenantNa
         });
       }
     },
-    onError: (error: Error) => {
+    onError: async (error: any) => {
+      let details = error.message || "Failed to fix tenant IDs";
+      try {
+        const errorData = error?.response ? await error.response.json() : null;
+        if (errorData?.details) {
+          details = `${errorData.error}: ${errorData.details}`;
+        }
+      } catch { /* ignore */ }
       toast({
         title: "Fix Failed",
-        description: error.message || "Failed to fix tenant IDs",
+        description: details,
         variant: "destructive",
       });
     },
@@ -385,10 +392,17 @@ function FixClientTenantIdsCard({ tenantId, tenantName }: { tenantId: string; te
         });
       }
     },
-    onError: (error: Error) => {
+    onError: async (error: any) => {
+      let details = error.message || "Failed to fix client tenant IDs";
+      try {
+        const errorData = error?.response ? await error.response.json() : null;
+        if (errorData?.details) {
+          details = `${errorData.error}: ${errorData.details}`;
+        }
+      } catch { /* ignore */ }
       toast({
         title: "Fix Failed",
-        description: error.message || "Failed to fix client tenant IDs",
+        description: details,
         variant: "destructive",
       });
     },
