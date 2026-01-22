@@ -2384,9 +2384,25 @@ router.get("/tenants-detail", requireSuperUser, async (req, res) => {
   try {
     const tenantsWithDetails = await storage.getTenantsWithDetails();
     res.json(tenantsWithDetails);
-  } catch (error) {
-    console.error("Error fetching tenants with details:", error);
-    res.status(500).json({ error: "Failed to fetch tenants" });
+  } catch (error: any) {
+    console.error("Error fetching tenants with details:", {
+      message: error?.message,
+      stack: error?.stack,
+    });
+    // Fall back to basic tenants list if detailed query fails
+    try {
+      const basicTenants = await storage.getAllTenants();
+      const tenantsWithDefaults = basicTenants.map(t => ({
+        ...t,
+        settings: null,
+        userCount: 0,
+      }));
+      console.warn("[tenants-detail] Falling back to basic tenant list");
+      res.json(tenantsWithDefaults);
+    } catch (fallbackError: any) {
+      console.error("Fallback also failed:", fallbackError?.message);
+      res.status(500).json({ error: "Failed to fetch tenants", details: error?.message });
+    }
   }
 });
 
