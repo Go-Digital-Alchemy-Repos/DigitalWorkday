@@ -247,7 +247,7 @@ export function GlobalChatDrawer() {
   };
 
   const getDmDisplayName = (dm: ChatDmThread) => {
-    const otherMembers = dm.members.filter((m) => m.userId !== user?.userId);
+    const otherMembers = dm.members.filter((m) => m.userId !== user?.id);
     if (otherMembers.length === 0) return "Just you";
     return otherMembers.map((m) => m.user.name || m.user.email).join(", ");
   };

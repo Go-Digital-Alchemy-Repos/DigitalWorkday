@@ -45,6 +45,10 @@ import ChatPage from "@/pages/chat";
 import { Loader2 } from "lucide-react";
 import { useEffect } from "react";
 import { GlobalActiveTimer } from "@/components/global-active-timer";
+import { ChatDrawerProvider, useChatDrawer } from "@/contexts/chat-drawer-context";
+import { GlobalChatDrawer } from "@/components/global-chat-drawer";
+import { MessageCircle } from "lucide-react";
+import { Button } from "@/components/ui/button";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -252,6 +256,21 @@ function SuperLayout() {
   );
 }
 
+function ChatToggleButton() {
+  const { toggleDrawer } = useChatDrawer();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={toggleDrawer}
+      data-testid="button-open-chat"
+      title="Open Chat"
+    >
+      <MessageCircle className="h-4 w-4" />
+    </Button>
+  );
+}
+
 function TenantLayout() {
   const { isImpersonating } = useAppMode();
   const [, setLocation] = useLocation();
@@ -262,42 +281,46 @@ function TenantLayout() {
   };
 
   return (
-    <SidebarProvider style={style as React.CSSProperties}>
-      <CommandPalette
-        onNewTask={() => setLocation("/my-tasks")}
-        onNewProject={() => setLocation("/projects")}
-        onStartTimer={() => setLocation("/time-tracking")}
-      />
-      <div className={`flex flex-col h-screen w-full ${isImpersonating ? "ring-2 ring-amber-500 ring-inset" : ""}`}>
-        {/* Tenant impersonation banner (Act as Tenant mode) */}
-        <ImpersonationBanner />
-        <div className="flex flex-1 overflow-hidden">
-          <TenantSidebar />
-          <div className="flex flex-col flex-1 overflow-hidden">
-            <header className={`flex items-center justify-between h-12 px-4 border-b shrink-0 ${isImpersonating ? "border-amber-400 bg-amber-50/30 dark:bg-amber-900/10" : "border-border bg-background"}`}>
-              <div className="flex items-center gap-2">
-                <SidebarTrigger data-testid="button-sidebar-toggle" />
-                {isImpersonating && (
-                  <span className="text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded" data-testid="badge-impersonating">
-                    TENANT IMPERSONATION
-                  </span>
-                )}
-              </div>
-              <div className="flex items-center gap-2">
-                <GlobalActiveTimer />
-                <ThemeToggle />
-                <UserMenu />
-              </div>
-            </header>
-            <main className="flex-1 overflow-hidden">
-              <TenantContextGate>
-                <TenantRouter />
-              </TenantContextGate>
-            </main>
+    <ChatDrawerProvider>
+      <SidebarProvider style={style as React.CSSProperties}>
+        <CommandPalette
+          onNewTask={() => setLocation("/my-tasks")}
+          onNewProject={() => setLocation("/projects")}
+          onStartTimer={() => setLocation("/time-tracking")}
+        />
+        <div className={`flex flex-col h-screen w-full ${isImpersonating ? "ring-2 ring-amber-500 ring-inset" : ""}`}>
+          {/* Tenant impersonation banner (Act as Tenant mode) */}
+          <ImpersonationBanner />
+          <div className="flex flex-1 overflow-hidden">
+            <TenantSidebar />
+            <div className="flex flex-col flex-1 overflow-hidden">
+              <header className={`flex items-center justify-between h-12 px-4 border-b shrink-0 ${isImpersonating ? "border-amber-400 bg-amber-50/30 dark:bg-amber-900/10" : "border-border bg-background"}`}>
+                <div className="flex items-center gap-2">
+                  <SidebarTrigger data-testid="button-sidebar-toggle" />
+                  {isImpersonating && (
+                    <span className="text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded" data-testid="badge-impersonating">
+                      TENANT IMPERSONATION
+                    </span>
+                  )}
+                </div>
+                <div className="flex items-center gap-2">
+                  <GlobalActiveTimer />
+                  <ChatToggleButton />
+                  <ThemeToggle />
+                  <UserMenu />
+                </div>
+              </header>
+              <main className="flex-1 overflow-hidden">
+                <TenantContextGate>
+                  <TenantRouter />
+                </TenantContextGate>
+              </main>
+            </div>
           </div>
         </div>
-      </div>
-    </SidebarProvider>
+        <GlobalChatDrawer />
+      </SidebarProvider>
+    </ChatDrawerProvider>
   );
 }
 
