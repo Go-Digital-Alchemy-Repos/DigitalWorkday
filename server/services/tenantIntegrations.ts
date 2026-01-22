@@ -5,7 +5,7 @@ import { encryptValue, decryptValue, isEncryptionAvailable } from "../lib/encryp
 import Mailgun from "mailgun.js";
 import FormData from "form-data";
 
-export type IntegrationProvider = "mailgun" | "s3" | "sso_google" | "sso_github";
+export type IntegrationProvider = "mailgun" | "s3" | "r2" | "sso_google" | "sso_github";
 
 interface MailgunPublicConfig {
   domain: string;
@@ -24,6 +24,18 @@ interface S3PublicConfig {
 }
 
 interface S3SecretConfig {
+  accessKeyId?: string;
+  secretAccessKey?: string;
+}
+
+interface R2PublicConfig {
+  bucketName: string;
+  accountId: string;
+  endpoint: string;
+  keyPrefixTemplate?: string;
+}
+
+interface R2SecretConfig {
   accessKeyId?: string;
   secretAccessKey?: string;
 }
@@ -60,8 +72,8 @@ export interface SsoGithubSecretConfig {
   clientSecret: string;
 }
 
-type PublicConfig = MailgunPublicConfig | S3PublicConfig | SsoGooglePublicConfig | SsoGithubPublicConfig;
-type SecretConfig = MailgunSecretConfig | S3SecretConfig | SsoGoogleSecretConfig | SsoGithubSecretConfig;
+type PublicConfig = MailgunPublicConfig | S3PublicConfig | R2PublicConfig | SsoGooglePublicConfig | SsoGithubPublicConfig;
+type SecretConfig = MailgunSecretConfig | S3SecretConfig | R2SecretConfig | SsoGoogleSecretConfig | SsoGithubSecretConfig;
 
 interface SecretMaskedInfo {
   apiKeyMasked?: string | null;
@@ -173,7 +185,7 @@ export class TenantIntegrationService {
       .from(tenantIntegrations)
       .where(condition);
 
-    const providers: IntegrationProvider[] = ["mailgun", "s3", "sso_google", "sso_github"];
+    const providers: IntegrationProvider[] = ["mailgun", "s3", "r2", "sso_google", "sso_github"];
     const result: IntegrationResponse[] = [];
 
     for (const provider of providers) {
@@ -403,6 +415,9 @@ export class TenantIntegrationService {
         case "s3":
           testResult = await this.testS3(tenantId);
           break;
+        case "r2":
+          testResult = await this.testR2(tenantId);
+          break;
         case "sso_google":
           testResult = await this.testSsoGoogle();
           break;
@@ -550,6 +565,23 @@ export class TenantIntegrationService {
     return { success: true, message: "S3 configuration is valid" };
   }
 
+  private async testR2(tenantId: string | null): Promise<{ success: boolean; message: string }> {
+    const integration = await this.getIntegration(tenantId, "r2");
+    
+    if (!integration?.publicConfig) {
+      return { success: false, message: "Cloudflare R2 not configured" };
+    }
+
+    const config = integration.publicConfig as R2PublicConfig;
+    if (!config.bucketName || !config.accountId) {
+      return { success: false, message: "R2 bucket or account ID not configured" };
+    }
+
+    const label = tenantId ? `tenant ${tenantId}` : "system-level";
+    console.log(`[R2] Testing integration for ${label} - bucket: ${config.bucketName}, accountId: ${config.accountId}`);
+    return { success: true, message: "Cloudflare R2 configuration is valid" };
+  }
+
   private determineStatus(
     provider: IntegrationProvider,
     publicConfig: PublicConfig | null,
@@ -570,6 +602,13 @@ export class TenantIntegrationService {
       case "s3": {
         const config = publicConfig as S3PublicConfig;
         if (config.bucketName && config.region) {
+          return IntegrationStatus.CONFIGURED;
+        }
+        break;
+      }
+      case "r2": {
+        const config = publicConfig as R2PublicConfig;
+        if (config.bucketName && config.accountId) {
           return IntegrationStatus.CONFIGURED;
         }
         break;

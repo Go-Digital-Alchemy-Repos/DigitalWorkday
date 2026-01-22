@@ -140,6 +140,24 @@ interface S3Settings {
   lastTestedAt: string | null;
 }
 
+interface R2Settings {
+  provider: string;
+  status: "configured" | "not_configured" | "error";
+  publicConfig: {
+    bucketName: string | null;
+    accountId: string | null;
+    endpoint: string | null;
+    keyPrefixTemplate: string | null;
+  } | null;
+  secretConfigured: boolean;
+  secretMasked: {
+    accessKeyIdMasked: string | null;
+    secretAccessKeyMasked: string | null;
+  } | null;
+  lastTestedAt: string | null;
+  isSystemDefault: boolean;
+}
+
 interface StripeSettings {
   status: "configured" | "not_configured";
   config: {
@@ -728,6 +746,11 @@ export default function SuperAdminSettingsPage() {
     enabled: activeTab === "integrations",
   });
 
+  const { data: r2Settings, isLoading: r2Loading } = useQuery<R2Settings>({
+    queryKey: ["/api/v1/system/integrations/r2"],
+    enabled: activeTab === "integrations",
+  });
+
   const { data: stripeSettings, isLoading: stripeLoading } = useQuery<StripeSettings>({
     queryKey: ["/api/v1/super/integrations/stripe"],
     enabled: activeTab === "integrations",
@@ -760,6 +783,14 @@ export default function SuperAdminSettingsPage() {
     secretAccessKey: "",
   });
 
+  const [r2Form, setR2Form] = useState({
+    bucketName: "",
+    accountId: "",
+    keyPrefixTemplate: "",
+    accessKeyId: "",
+    secretAccessKey: "",
+  });
+
   const [stripeForm, setStripeForm] = useState({
     publishableKey: "",
     secretKey: "",
@@ -780,6 +811,8 @@ export default function SuperAdminSettingsPage() {
   const [showMailgunSigningKey, setShowMailgunSigningKey] = useState(false);
   const [showS3AccessKey, setShowS3AccessKey] = useState(false);
   const [showS3SecretKey, setShowS3SecretKey] = useState(false);
+  const [showR2AccessKey, setShowR2AccessKey] = useState(false);
+  const [showR2SecretKey, setShowR2SecretKey] = useState(false);
   const [showStripeSecretKey, setShowStripeSecretKey] = useState(false);
   const [showStripeWebhookSecret, setShowStripeWebhookSecret] = useState(false);
   const [testEmailAddress, setTestEmailAddress] = useState("");
@@ -802,6 +835,19 @@ export default function SuperAdminSettingsPage() {
   const [showGithubClientSecret, setShowGithubClientSecret] = useState(false);
   const [ssoGoogleDirty, setSsoGoogleDirty] = useState(false);
   const [ssoGithubDirty, setSsoGithubDirty] = useState(false);
+  const [r2Dirty, setR2Dirty] = useState(false);
+
+  useEffect(() => {
+    if (r2Settings && !r2Dirty) {
+      setR2Form({
+        bucketName: r2Settings.publicConfig?.bucketName || "",
+        accountId: r2Settings.publicConfig?.accountId || "",
+        keyPrefixTemplate: r2Settings.publicConfig?.keyPrefixTemplate || "",
+        accessKeyId: "",
+        secretAccessKey: "",
+      });
+    }
+  }, [r2Settings, r2Dirty]);
 
   useEffect(() => {
     if (ssoGoogleSettings && !ssoGoogleDirty) {
@@ -854,6 +900,41 @@ export default function SuperAdminSettingsPage() {
     onError: (error: any) => {
       const parsed = parseApiError(error);
       toast({ title: "Failed to save S3 settings", description: parsed.message, variant: "destructive" });
+    },
+  });
+
+  const saveR2Mutation = useMutation({
+    mutationFn: async (data: any) => {
+      return apiRequest("PUT", "/api/v1/system/integrations/r2", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/system/integrations/r2"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/status"] });
+      toast({ title: "Cloudflare R2 settings saved successfully" });
+      setR2Form(prev => ({ ...prev, accessKeyId: "", secretAccessKey: "" }));
+    },
+    onError: (error: any) => {
+      const parsed = parseApiError(error);
+      toast({ title: "Failed to save R2 settings", description: parsed.message, variant: "destructive" });
+    },
+  });
+
+  const testR2Mutation = useMutation({
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/v1/system/integrations/r2/test", {});
+      return response.json();
+    },
+    onSuccess: (data: { success: boolean; message: string }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/system/integrations/r2"] });
+      if (data.success) {
+        toast({ title: "R2 test successful", description: data.message });
+      } else {
+        toast({ title: "R2 test failed", description: data.message, variant: "destructive" });
+      }
+    },
+    onError: (error: any) => {
+      const parsed = parseApiError(error);
+      toast({ title: "R2 test failed", description: parsed.message, variant: "destructive" });
     },
   });
 
@@ -1876,7 +1957,202 @@ export default function SuperAdminSettingsPage() {
                 </CardContent>
               </Card>
 
-              {/* S3 Configuration */}
+              {/* Cloudflare R2 Configuration (Preferred Default) */}
+              <Card>
+                <CardHeader>
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <CardTitle className="flex items-center gap-2">
+                        <Cloud className="h-5 w-5" />
+                        Cloudflare R2 Storage
+                        <Badge variant="default" className="ml-2">Preferred</Badge>
+                      </CardTitle>
+                      <CardDescription>
+                        Configure Cloudflare R2 as the default system-wide file storage (S3-compatible)
+                      </CardDescription>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      {r2Settings?.status === "configured" ? (
+                        <Badge variant="default">Configured</Badge>
+                      ) : (
+                        <Badge variant="outline">Not Configured</Badge>
+                      )}
+                      {r2Settings?.lastTestedAt && (
+                        <span className="text-xs text-muted-foreground">
+                          Tested: {new Date(r2Settings.lastTestedAt).toLocaleString()}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  {r2Loading ? (
+                    <div className="flex items-center justify-center py-8">
+                      <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : (
+                    <div className="space-y-4">
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="r2-account-id">Cloudflare Account ID</Label>
+                          <Input
+                            id="r2-account-id"
+                            value={r2Form.accountId}
+                            onChange={(e) => {
+                              setR2Dirty(true);
+                              setR2Form({ ...r2Form, accountId: e.target.value });
+                            }}
+                            placeholder="your-cloudflare-account-id"
+                            data-testid="input-r2-account-id"
+                          />
+                          <p className="text-xs text-muted-foreground">
+                            Find this in your Cloudflare Dashboard under R2 &gt; Overview
+                          </p>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="r2-bucket">Bucket Name</Label>
+                          <Input
+                            id="r2-bucket"
+                            value={r2Form.bucketName}
+                            onChange={(e) => {
+                              setR2Dirty(true);
+                              setR2Form({ ...r2Form, bucketName: e.target.value });
+                            }}
+                            placeholder="my-r2-bucket"
+                            data-testid="input-r2-bucket"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="space-y-2">
+                        <Label htmlFor="r2-key-prefix">Key Prefix Template (Optional)</Label>
+                        <Input
+                          id="r2-key-prefix"
+                          value={r2Form.keyPrefixTemplate}
+                          onChange={(e) => {
+                            setR2Dirty(true);
+                            setR2Form({ ...r2Form, keyPrefixTemplate: e.target.value });
+                          }}
+                          placeholder="uploads/{tenantId}/"
+                          data-testid="input-r2-key-prefix"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Use {"{tenantId}"} as a placeholder for tenant isolation
+                        </p>
+                      </div>
+
+                      <Separator />
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                        <div className="space-y-2">
+                          <Label htmlFor="r2-access-key">
+                            Access Key ID
+                            {r2Settings?.secretMasked?.accessKeyIdMasked && (
+                              <span className="ml-2 text-muted-foreground font-normal text-xs">
+                                ({r2Settings.secretMasked.accessKeyIdMasked})
+                              </span>
+                            )}
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="r2-access-key"
+                              type={showR2AccessKey ? "text" : "password"}
+                              value={r2Form.accessKeyId}
+                              onChange={(e) => {
+                                setR2Dirty(true);
+                                setR2Form({ ...r2Form, accessKeyId: e.target.value });
+                              }}
+                              placeholder={r2Settings?.secretConfigured ? "Enter new key to replace" : "Enter access key"}
+                              data-testid="input-r2-access-key"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => setShowR2AccessKey(!showR2AccessKey)}
+                            >
+                              {showR2AccessKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                        </div>
+                        <div className="space-y-2">
+                          <Label htmlFor="r2-secret-key">
+                            Secret Access Key
+                            {r2Settings?.secretMasked?.secretAccessKeyMasked && (
+                              <span className="ml-2 text-muted-foreground font-normal text-xs">
+                                ({r2Settings.secretMasked.secretAccessKeyMasked})
+                              </span>
+                            )}
+                          </Label>
+                          <div className="flex gap-2">
+                            <Input
+                              id="r2-secret-key"
+                              type={showR2SecretKey ? "text" : "password"}
+                              value={r2Form.secretAccessKey}
+                              onChange={(e) => {
+                                setR2Dirty(true);
+                                setR2Form({ ...r2Form, secretAccessKey: e.target.value });
+                              }}
+                              placeholder={r2Settings?.secretConfigured ? "Enter new key to replace" : "Enter secret key"}
+                              data-testid="input-r2-secret-key"
+                            />
+                            <Button
+                              type="button"
+                              variant="outline"
+                              size="icon"
+                              onClick={() => setShowR2SecretKey(!showR2SecretKey)}
+                            >
+                              {showR2SecretKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                            </Button>
+                          </div>
+                          <p className="text-xs text-muted-foreground">
+                            Generate API tokens in Cloudflare Dashboard &gt; R2 &gt; Manage R2 API Tokens
+                          </p>
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end gap-2 flex-wrap pt-2">
+                        <Button
+                          variant="outline"
+                          onClick={() => testR2Mutation.mutate()}
+                          disabled={testR2Mutation.isPending || r2Settings?.status !== "configured"}
+                          data-testid="button-test-r2"
+                        >
+                          {testR2Mutation.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <TestTube className="h-4 w-4 mr-2" />
+                          )}
+                          Test Connection
+                        </Button>
+                        <Button
+                          onClick={() => {
+                            const data: any = {};
+                            if (r2Form.bucketName) data.bucketName = r2Form.bucketName;
+                            if (r2Form.accountId) data.accountId = r2Form.accountId;
+                            if (r2Form.keyPrefixTemplate) data.keyPrefixTemplate = r2Form.keyPrefixTemplate;
+                            if (r2Form.accessKeyId) data.accessKeyId = r2Form.accessKeyId;
+                            if (r2Form.secretAccessKey) data.secretAccessKey = r2Form.secretAccessKey;
+                            saveR2Mutation.mutate(data);
+                            setR2Dirty(false);
+                          }}
+                          disabled={saveR2Mutation.isPending}
+                          data-testid="button-save-r2"
+                        >
+                          {saveR2Mutation.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <Save className="h-4 w-4 mr-2" />
+                          )}
+                          Save R2 Settings
+                        </Button>
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {/* S3 Configuration (Fallback) */}
               <Card>
                 <CardHeader>
                   <div className="flex items-center justify-between">
@@ -1884,8 +2160,9 @@ export default function SuperAdminSettingsPage() {
                       <CardTitle className="flex items-center gap-2">
                         <HardDrive className="h-5 w-5" />
                         S3 Storage Configuration
+                        <Badge variant="outline" className="ml-2">Fallback</Badge>
                       </CardTitle>
-                      <CardDescription>Configure global file storage service</CardDescription>
+                      <CardDescription>Configure AWS S3 as fallback storage (used if R2 is not configured)</CardDescription>
                     </div>
                     {s3Settings?.lastTestedAt && (
                       <div className="text-xs text-muted-foreground">

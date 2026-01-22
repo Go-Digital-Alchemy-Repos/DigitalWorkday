@@ -24,6 +24,8 @@ export interface S3Config {
   accessKeyId: string;
   secretAccessKey: string;
   keyPrefixTemplate?: string;
+  endpoint?: string;
+  provider?: "s3" | "r2";
 }
 
 export interface StorageProviderResult {
@@ -45,6 +47,7 @@ interface S3PublicConfig {
   bucketName: string;
   region: string;
   keyPrefixTemplate?: string;
+  endpoint?: string;
 }
 
 interface S3SecretConfig {
@@ -130,13 +133,34 @@ function isValidS3Config(publicConfig: S3PublicConfig | null, secretConfig: S3Se
 }
 
 /**
- * Get the S3 storage provider configuration for a tenant.
+ * Build S3Config from integration config
+ */
+function buildConfigFromIntegration(
+  publicConfig: S3PublicConfig,
+  secretConfig: S3SecretConfig,
+  provider: "s3" | "r2"
+): S3Config {
+  return {
+    bucketName: publicConfig.bucketName,
+    region: publicConfig.region || "auto",
+    accessKeyId: secretConfig.accessKeyId!,
+    secretAccessKey: secretConfig.secretAccessKey!,
+    keyPrefixTemplate: publicConfig.keyPrefixTemplate,
+    endpoint: publicConfig.endpoint,
+    provider,
+  };
+}
+
+/**
+ * Get the storage provider configuration for a tenant.
  * 
- * Resolution order:
- * 1. Tenant-specific S3 integration (if tenantId provided)
- * 2. System-level S3 integration (tenantId = NULL)
- * 3. Environment variables (legacy fallback)
- * 4. Throws StorageNotConfiguredError if none available
+ * Resolution order (R2 is prioritized over S3):
+ * 1. Tenant-specific R2 integration (if tenantId provided)
+ * 2. Tenant-specific S3 integration (if tenantId provided)
+ * 3. System-level R2 integration (tenantId = NULL) - preferred default
+ * 4. System-level S3 integration (tenantId = NULL)
+ * 5. Environment variables (legacy fallback)
+ * 6. Throws StorageNotConfiguredError if none available
  * 
  * @param tenantId - The tenant ID to resolve storage for, or null for system-level only
  * @returns StorageProviderResult with config and source information
@@ -146,35 +170,43 @@ export async function getStorageProvider(tenantId: string | null): Promise<Stora
   debugLog("Resolving storage provider", { tenantId });
 
   if (tenantId) {
-    const tenantConfig = await getIntegrationConfig(tenantId, "s3");
-    if (tenantConfig && isValidS3Config(tenantConfig.publicConfig, tenantConfig.secretConfig)) {
-      debugLog("Using tenant S3 configuration", { tenantId, integrationId: tenantConfig.integrationId });
+    const tenantR2Config = await getIntegrationConfig(tenantId, "r2");
+    if (tenantR2Config && isValidS3Config(tenantR2Config.publicConfig, tenantR2Config.secretConfig)) {
+      debugLog("Using tenant R2 configuration", { tenantId, integrationId: tenantR2Config.integrationId });
       return {
-        config: {
-          bucketName: tenantConfig.publicConfig!.bucketName,
-          region: tenantConfig.publicConfig!.region,
-          accessKeyId: tenantConfig.secretConfig!.accessKeyId!,
-          secretAccessKey: tenantConfig.secretConfig!.secretAccessKey!,
-          keyPrefixTemplate: tenantConfig.publicConfig!.keyPrefixTemplate,
-        },
+        config: buildConfigFromIntegration(tenantR2Config.publicConfig!, tenantR2Config.secretConfig!, "r2"),
         source: "tenant",
         sourceId: tenantId,
       };
     }
-    debugLog("No valid tenant S3 config, checking system fallback", { tenantId });
+
+    const tenantS3Config = await getIntegrationConfig(tenantId, "s3");
+    if (tenantS3Config && isValidS3Config(tenantS3Config.publicConfig, tenantS3Config.secretConfig)) {
+      debugLog("Using tenant S3 configuration", { tenantId, integrationId: tenantS3Config.integrationId });
+      return {
+        config: buildConfigFromIntegration(tenantS3Config.publicConfig!, tenantS3Config.secretConfig!, "s3"),
+        source: "tenant",
+        sourceId: tenantId,
+      };
+    }
+    debugLog("No valid tenant storage config, checking system fallback", { tenantId });
   }
 
-  const systemConfig = await getIntegrationConfig(null, "s3");
-  if (systemConfig && isValidS3Config(systemConfig.publicConfig, systemConfig.secretConfig)) {
+  const systemR2Config = await getIntegrationConfig(null, "r2");
+  if (systemR2Config && isValidS3Config(systemR2Config.publicConfig, systemR2Config.secretConfig)) {
+    debugLog("Using system R2 configuration (preferred default)", { tenantId });
+    return {
+      config: buildConfigFromIntegration(systemR2Config.publicConfig!, systemR2Config.secretConfig!, "r2"),
+      source: "system",
+      sourceId: null,
+    };
+  }
+
+  const systemS3Config = await getIntegrationConfig(null, "s3");
+  if (systemS3Config && isValidS3Config(systemS3Config.publicConfig, systemS3Config.secretConfig)) {
     debugLog("Using system S3 configuration (fallback)", { tenantId });
     return {
-      config: {
-        bucketName: systemConfig.publicConfig!.bucketName,
-        region: systemConfig.publicConfig!.region,
-        accessKeyId: systemConfig.secretConfig!.accessKeyId!,
-        secretAccessKey: systemConfig.secretConfig!.secretAccessKey!,
-        keyPrefixTemplate: systemConfig.publicConfig!.keyPrefixTemplate,
-      },
+      config: buildConfigFromIntegration(systemS3Config.publicConfig!, systemS3Config.secretConfig!, "s3"),
       source: "system",
       sourceId: null,
     };
@@ -194,6 +226,7 @@ export async function getStorageProvider(tenantId: string | null): Promise<Stora
         accessKeyId: envAccessKeyId,
         secretAccessKey: envSecretAccessKey,
         keyPrefixTemplate: process.env.AWS_S3_KEY_PREFIX,
+        provider: "s3",
       },
       source: "system",
       sourceId: null,
@@ -206,15 +239,23 @@ export async function getStorageProvider(tenantId: string | null): Promise<Stora
 
 /**
  * Create an S3Client from the resolved storage provider configuration.
+ * Supports both AWS S3 and Cloudflare R2 (via custom endpoint).
  */
 export function createS3ClientFromConfig(config: S3Config): S3Client {
-  return new S3Client({
-    region: config.region,
+  const clientConfig: any = {
+    region: config.region || "auto",
     credentials: {
       accessKeyId: config.accessKeyId,
       secretAccessKey: config.secretAccessKey,
     },
-  });
+  };
+
+  if (config.endpoint) {
+    clientConfig.endpoint = config.endpoint;
+    clientConfig.forcePathStyle = true;
+  }
+
+  return new S3Client(clientConfig);
 }
 
 /**
@@ -227,18 +268,33 @@ export function createS3ClientFromConfig(config: S3Config): S3Client {
 export async function getStorageStatus(tenantId: string | null): Promise<{
   configured: boolean;
   source: "tenant" | "system" | "env" | "none";
+  provider?: "r2" | "s3";
   tenantHasOverride: boolean;
   systemHasDefault: boolean;
+  systemR2Configured: boolean;
+  systemS3Configured: boolean;
   error?: string;
 }> {
   let tenantHasOverride = false;
+  let tenantProvider: "r2" | "s3" | undefined;
   let systemHasDefault = false;
+  let systemR2Configured = false;
+  let systemS3Configured = false;
   let error: string | undefined;
 
   if (tenantId) {
     try {
-      const tenantConfig = await getIntegrationConfig(tenantId, "s3");
-      tenantHasOverride = tenantConfig !== null && isValidS3Config(tenantConfig.publicConfig, tenantConfig.secretConfig);
+      const tenantR2Config = await getIntegrationConfig(tenantId, "r2");
+      if (tenantR2Config && isValidS3Config(tenantR2Config.publicConfig, tenantR2Config.secretConfig)) {
+        tenantHasOverride = true;
+        tenantProvider = "r2";
+      } else {
+        const tenantS3Config = await getIntegrationConfig(tenantId, "s3");
+        if (tenantS3Config && isValidS3Config(tenantS3Config.publicConfig, tenantS3Config.secretConfig)) {
+          tenantHasOverride = true;
+          tenantProvider = "s3";
+        }
+      }
     } catch (err) {
       if (err instanceof StorageDecryptionError || err instanceof StorageEncryptionNotAvailableError) {
         error = err.message;
@@ -249,8 +305,13 @@ export async function getStorageStatus(tenantId: string | null): Promise<{
   }
 
   try {
-    const systemConfig = await getIntegrationConfig(null, "s3");
-    systemHasDefault = systemConfig !== null && isValidS3Config(systemConfig.publicConfig, systemConfig.secretConfig);
+    const systemR2Config = await getIntegrationConfig(null, "r2");
+    systemR2Configured = systemR2Config !== null && isValidS3Config(systemR2Config.publicConfig, systemR2Config.secretConfig);
+    
+    const systemS3Config = await getIntegrationConfig(null, "s3");
+    systemS3Configured = systemS3Config !== null && isValidS3Config(systemS3Config.publicConfig, systemS3Config.secretConfig);
+    
+    systemHasDefault = systemR2Configured || systemS3Configured;
   } catch (err) {
     if (err instanceof StorageDecryptionError || err instanceof StorageEncryptionNotAvailableError) {
       if (!error) error = err.message;
@@ -267,13 +328,20 @@ export async function getStorageStatus(tenantId: string | null): Promise<{
   );
 
   let source: "tenant" | "system" | "env" | "none" = "none";
+  let provider: "r2" | "s3" | undefined;
   let configured = false;
 
   if (tenantHasOverride) {
     source = "tenant";
+    provider = tenantProvider;
     configured = true;
-  } else if (systemHasDefault) {
+  } else if (systemR2Configured) {
     source = "system";
+    provider = "r2";
+    configured = true;
+  } else if (systemS3Configured) {
+    source = "system";
+    provider = "s3";
     configured = true;
   } else if (envConfigured) {
     source = "env";
@@ -283,8 +351,11 @@ export async function getStorageStatus(tenantId: string | null): Promise<{
   return {
     configured,
     source,
+    provider,
     error,
     tenantHasOverride,
     systemHasDefault,
+    systemR2Configured,
+    systemS3Configured,
   };
 }

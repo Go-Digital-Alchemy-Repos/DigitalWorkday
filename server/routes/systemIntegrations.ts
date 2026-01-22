@@ -35,6 +35,14 @@ const s3UpdateSchema = z.object({
   secretAccessKey: z.string().optional(),
 });
 
+const r2UpdateSchema = z.object({
+  bucketName: z.string().optional(),
+  accountId: z.string().optional(),
+  keyPrefixTemplate: z.string().optional(),
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
+});
+
 /**
  * SSO Google configuration schema
  */
@@ -148,6 +156,98 @@ router.post("/integrations/s3/test", requireSuperUser, async (req: Request, res:
   } catch (error) {
     console.error("[system-integrations] Error testing S3 integration:", error);
     res.status(500).json({ success: false, message: "Failed to test S3 integration" });
+  }
+});
+
+// =============================================================================
+// CLOUDFLARE R2 STORAGE - SYSTEM-LEVEL CONFIGURATION (PREFERRED DEFAULT)
+// =============================================================================
+
+/**
+ * GET /api/v1/system/integrations/r2
+ * Get system-level Cloudflare R2 configuration
+ */
+router.get("/integrations/r2", requireSuperUser, async (req: Request, res: Response) => {
+  try {
+    const integration = await tenantIntegrationService.getIntegration(null, "r2");
+    
+    if (!integration) {
+      return res.json({
+        provider: "r2",
+        status: "not_configured",
+        publicConfig: null,
+        secretConfigured: false,
+        lastTestedAt: null,
+        isSystemDefault: true,
+      });
+    }
+    
+    res.json({
+      ...integration,
+      isSystemDefault: true,
+    });
+  } catch (error) {
+    console.error("[system-integrations] Error getting R2 integration:", error);
+    res.status(500).json({ error: { code: "SERVER_ERROR", message: "Failed to get R2 integration" } });
+  }
+});
+
+/**
+ * PUT /api/v1/system/integrations/r2
+ * Update system-level Cloudflare R2 configuration
+ */
+router.put("/integrations/r2", requireSuperUser, async (req: Request, res: Response) => {
+  try {
+    if (process.env.NODE_ENV === "production" && !isEncryptionAvailable()) {
+      return res.status(400).json({
+        error: { code: "ENCRYPTION_REQUIRED", message: "Encryption key not configured. Cannot save secrets." },
+      });
+    }
+
+    const data = r2UpdateSchema.parse(req.body);
+    
+    const endpoint = data.accountId 
+      ? `https://${data.accountId}.r2.cloudflarestorage.com`
+      : undefined;
+    
+    const result = await tenantIntegrationService.upsertIntegration(null, "r2", {
+      publicConfig: {
+        bucketName: data.bucketName,
+        region: "auto",
+        accountId: data.accountId,
+        endpoint,
+        keyPrefixTemplate: data.keyPrefixTemplate,
+      },
+      secretConfig: {
+        accessKeyId: data.accessKeyId,
+        secretAccessKey: data.secretAccessKey,
+      },
+    });
+    
+    res.json({
+      ...result,
+      isSystemDefault: true,
+    });
+  } catch (error) {
+    console.error("[system-integrations] Error updating R2 integration:", error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Invalid request data" } });
+    }
+    res.status(500).json({ error: { code: "SERVER_ERROR", message: "Failed to update R2 integration" } });
+  }
+});
+
+/**
+ * POST /api/v1/system/integrations/r2/test
+ * Test system-level Cloudflare R2 connection
+ */
+router.post("/integrations/r2/test", requireSuperUser, async (req: Request, res: Response) => {
+  try {
+    const result = await tenantIntegrationService.testIntegration(null, "r2");
+    res.json(result);
+  } catch (error) {
+    console.error("[system-integrations] Error testing R2 integration:", error);
+    res.status(500).json({ success: false, message: "Failed to test R2 integration" });
   }
 });
 
