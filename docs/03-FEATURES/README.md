@@ -11,17 +11,23 @@ This section documents all major features and modules in MyWorkDay.
 
 | Document | Description |
 |----------|-------------|
-| [AUTHENTICATION.md](./AUTHENTICATION.md) | Auth flows and implementation |
-| [PROJECT_MANAGEMENT.md](./PROJECT_MANAGEMENT.md) | Projects, tasks, workspaces |
+| [DIVISIONS.md](./DIVISIONS.md) | Client divisions for access control |
+| [CHAT.md](./CHAT.md) | Real-time messaging system |
+| [ERROR_HANDLING.md](./ERROR_HANDLING.md) | Error handling and logging |
+| [MODULAR_ARCHITECTURE.md](./MODULAR_ARCHITECTURE.md) | Feature-based code organization |
 | [TIME_TRACKING.md](./TIME_TRACKING.md) | Time tracking and reports |
-| [CLIENT_MANAGEMENT.md](./CLIENT_MANAGEMENT.md) | CRM functionality |
-| [SUPER_ADMIN.md](./SUPER_ADMIN.md) | Super admin capabilities |
-| [TENANT_ADMIN.md](./TENANT_ADMIN.md) | Tenant admin features |
-| [WHITE_LABEL.md](./WHITE_LABEL.md) | Branding and customization |
-| [INTEGRATIONS.md](./INTEGRATIONS.md) | Third-party integrations |
-| [FILE_UPLOADS.md](./FILE_UPLOADS.md) | S3 upload system |
-| [EMAIL_SYSTEM.md](./EMAIL_SYSTEM.md) | Email delivery and templates |
-| [WORKLOAD_REPORTS.md](./WORKLOAD_REPORTS.md) | Analytics and reporting |
+| [TENANT_ADMIN_GUIDE.md](./TENANT_ADMIN_GUIDE.md) | Tenant admin features |
+
+### Also See (Root /docs)
+
+| Document | Description |
+|----------|-------------|
+| [AUTHENTICATION.md](../AUTHENTICATION.md) | Auth flows and implementation |
+| [CHAT.md](../CHAT.md) | Full chat technical docs |
+| [DIVISIONS.md](../DIVISIONS.md) | Full divisions technical docs |
+| [ERROR_LOGGING.md](../ERROR_LOGGING.md) | Error logging details |
+| [UPLOADS_S3.md](../UPLOADS_S3.md) | S3 upload system |
+| [EMAIL_OBSERVABILITY.md](../EMAIL_OBSERVABILITY.md) | Email delivery and tracking |
 
 ---
 

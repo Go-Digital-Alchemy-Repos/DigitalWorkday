@@ -71,19 +71,27 @@ Welcome to the MyWorkDay documentation hub. MyWorkDay is a multi-tenant SaaS pro
 - **Project Management** - Workspaces, projects, kanban boards, tasks, subtasks
 - **Time Tracking** - Stopwatch timer, manual entries, reports
 - **Client CRM** - Client management with 17+ fields, contacts, portal invitations
+- **[Client Divisions](./DIVISIONS.md)** - Optional organizational divisions for access control
 - **Team Collaboration** - Teams, multi-assignee tasks, comments
+- **[Chat System](./CHAT.md)** - Slack-like channels and direct messages
 
 ### Multi-Tenancy
 - **Tenant Isolation** - Complete data separation between tenants
+- **[Multi-Tenancy Security](./07-SECURITY/MULTI_TENANCY.md)** - Enforcement modes and implementation
 - **[Data Visibility Policy](./07-SECURITY/TENANT_DATA_VISIBILITY.md)** - What data is shared vs user-scoped
 - **White Label Branding** - Custom logos, colors, app names per tenant
 - **Super Admin Dashboard** - Global tenant management, reports, system health
 
+### Developer Experience
+- **[Modular Architecture](./03-FEATURES/MODULAR_ARCHITECTURE.md)** - Feature-based code organization
+- **[Error Handling](./03-FEATURES/ERROR_HANDLING.md)** - Centralized error logging and request correlation
+- **[Chat Debugging](./CHAT_DEBUGGING.md)** - Debug mode for real-time troubleshooting
+
 ### Integrations
 - **Email** - Mailgun integration for transactional emails
-- **Storage** - S3-compatible file uploads
+- **Storage** - [S3-compatible file uploads](./UPLOADS_S3.md)
 - **Payments** - Stripe billing (optional)
-- **Authentication** - Google OAuth (optional)
+- **Authentication** - [Google OAuth](./GOOGLE_OAUTH_SETUP.md) (optional)
 
 ---
 
