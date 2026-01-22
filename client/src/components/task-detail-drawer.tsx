@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye } from "lucide-react";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, MessageSquare, Building2, FolderKanban, Loader2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -30,7 +30,22 @@ import { MultiSelectWatchers } from "@/components/multi-select-watchers";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { StartTimerDrawer } from "@/components/start-timer-drawer";
-import type { TaskWithRelations, User, Tag as TagType, Comment } from "@shared/schema";
+import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
+import type { TaskWithRelations, User, Tag as TagType, Comment, Project, Client } from "@shared/schema";
+
+type ActiveTimer = {
+  id: string;
+  taskId: string | null;
+  status: "running" | "paused";
+  elapsedSeconds: number;
+  lastStartedAt: string | null;
+};
+
+type ProjectContext = Project & {
+  client?: Client;
+  division?: { id: string; name: string; color?: string | null };
+};
 
 type TimeEntry = {
   id: string;
@@ -168,6 +183,139 @@ export function TaskDetailDrawer({
     queryKey: [`/api/time-entries?taskId=${task?.id}`],
     enabled: !!task?.id && open,
   });
+
+  const { data: projectContext, isLoading: projectContextLoading, isError: projectContextError } = useQuery<ProjectContext>({
+    queryKey: ["/api/projects", task?.projectId, "context"],
+    queryFn: async () => {
+      if (!task?.projectId) return null;
+      const projectRes = await fetch(`/api/projects/${task.projectId}`, { credentials: "include" });
+      if (!projectRes.ok) throw new Error("Failed to load project");
+      const project = await projectRes.json();
+      let client = null;
+      let division = null;
+      if (project?.clientId) {
+        const clientRes = await fetch(`/api/clients/${project.clientId}`, { credentials: "include" });
+        if (clientRes.ok) client = await clientRes.json();
+      }
+      if (project?.divisionId && project?.clientId) {
+        const divisionsRes = await fetch(`/api/v1/clients/${project.clientId}/divisions`, { credentials: "include" });
+        if (divisionsRes.ok) {
+          const divisions = await divisionsRes.json();
+          division = divisions.find((d: any) => d.id === project.divisionId) || null;
+        }
+      }
+      return { ...project, client, division };
+    },
+    enabled: !!task?.projectId && open,
+    retry: 1,
+  });
+
+  const canQuickStartTimer = !task?.projectId || (projectContext && projectContext.clientId);
+
+  const { data: activeTimer, isLoading: timerLoading } = useQuery<ActiveTimer | null>({
+    queryKey: ["/api/timer/current"],
+    enabled: open,
+    refetchInterval: 30000,
+  });
+
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+  const qc = useQueryClient();
+
+  const isTimerOnThisTask = activeTimer?.taskId === task?.id;
+  const isTimerRunning = activeTimer?.status === "running";
+
+  const startTimerMutation = useMutation({
+    mutationFn: async () => {
+      if (task?.projectId && !projectContext?.clientId) {
+        throw new Error("Client context required for project tasks");
+      }
+      return apiRequest("POST", "/api/timer/start", {
+        clientId: projectContext?.clientId || null,
+        projectId: task?.projectId || null,
+        taskId: task?.id || null,
+        description: task?.title || "",
+      });
+    },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      toast({ title: "Timer started", description: `Tracking time for "${task?.title}"` });
+    },
+    onError: (error: Error) => {
+      if (error.message === "Client context required for project tasks") {
+        toast({ 
+          title: "Use timer drawer", 
+          description: "Please use the full timer form for this task",
+          variant: "default" 
+        });
+        setTimerDrawerOpen(true);
+      } else {
+        toast({ title: "Failed to start timer", variant: "destructive" });
+      }
+    },
+  });
+
+  const pauseTimerMutation = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/timer/pause"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      toast({ title: "Timer paused" });
+    },
+  });
+
+  const resumeTimerMutation = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/timer/resume"),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      toast({ title: "Timer resumed" });
+    },
+  });
+
+  const stopTimerMutation = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/timer/stop", { scope: "in_scope" }),
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      qc.invalidateQueries({ queryKey: [`/api/time-entries?taskId=${task?.id}`] });
+      toast({ title: "Timer stopped", description: "Time entry saved" });
+    },
+  });
+
+  const { data: userChannels = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/v1/chat/channels"],
+    enabled: open,
+  });
+
+  const getTaskChannelName = () => {
+    const sanitized = task?.title?.slice(0, 40).replace(/[^a-zA-Z0-9\s-]/g, "").trim() || "";
+    return `task-${sanitized || task?.id?.slice(0, 8)}`;
+  };
+
+  const existingTaskChannel = userChannels.find(c => 
+    c.name.toLowerCase() === getTaskChannelName().toLowerCase()
+  );
+
+  const openOrCreateTaskChat = useMutation({
+    mutationFn: async () => {
+      if (existingTaskChannel) {
+        return existingTaskChannel;
+      }
+      return apiRequest("POST", "/api/v1/chat/channels", {
+        name: getTaskChannelName(),
+        isPrivate: true,
+      });
+    },
+    onSuccess: (channel: any) => {
+      qc.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      navigate(`/chat?channel=${channel.id}`);
+      toast({ 
+        title: existingTaskChannel ? "Opening discussion" : "Discussion created",
+        description: `Chat for "${task?.title?.slice(0, 30) || "this task"}"` 
+      });
+    },
+    onError: () => {
+      toast({ title: "Failed to open discussion", variant: "destructive" });
+    },
+  });
   
   useEffect(() => {
     if (task) {
@@ -232,6 +380,144 @@ export function TaskDetailDrawer({
         </SheetHeader>
 
         <div className="px-6 py-6 space-y-6">
+          {task.projectId && (
+            <div className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap" data-testid="task-breadcrumbs">
+              {projectContextLoading ? (
+                <div className="flex items-center gap-2">
+                  <Loader2 className="h-3 w-3 animate-spin" />
+                  <span>Loading context...</span>
+                </div>
+              ) : (
+                <>
+                  {projectContext?.client && (
+                    <>
+                      <Building2 className="h-3.5 w-3.5 shrink-0" />
+                      <span className="font-medium" data-testid="breadcrumb-client">
+                        {projectContext.client.displayName || projectContext.client.companyName}
+                      </span>
+                      <ChevronRight className="h-3 w-3 shrink-0" />
+                    </>
+                  )}
+                  {projectContext?.division && (
+                    <>
+                      <div className="flex items-center gap-1">
+                        {projectContext.division.color && (
+                          <div
+                            className="h-2.5 w-2.5 rounded-full shrink-0"
+                            style={{ backgroundColor: projectContext.division.color }}
+                          />
+                        )}
+                        <span data-testid="breadcrumb-division">{projectContext.division.name}</span>
+                      </div>
+                      <ChevronRight className="h-3 w-3 shrink-0" />
+                    </>
+                  )}
+                  <FolderKanban className="h-3.5 w-3.5 shrink-0" />
+                  <span data-testid="breadcrumb-project">{projectContext?.name || "Project"}</span>
+                </>
+              )}
+            </div>
+          )}
+
+          <div className="flex items-center gap-2 flex-wrap" data-testid="task-action-bar">
+            {!activeTimer && !timerLoading && (
+              <>
+                {projectContextLoading && task.projectId ? (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    disabled
+                    data-testid="button-quick-start-timer"
+                  >
+                    <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+                    Loading...
+                  </Button>
+                ) : canQuickStartTimer && !projectContextError ? (
+                  <Button
+                    variant="default"
+                    size="sm"
+                    onClick={() => startTimerMutation.mutate()}
+                    disabled={startTimerMutation.isPending}
+                    data-testid="button-quick-start-timer"
+                  >
+                    <Play className="h-3.5 w-3.5 mr-1" />
+                    Start Timer
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setTimerDrawerOpen(true)}
+                    data-testid="button-start-timer-task"
+                  >
+                    <Play className="h-3.5 w-3.5 mr-1" />
+                    Start Timer
+                  </Button>
+                )}
+              </>
+            )}
+
+            {activeTimer && isTimerOnThisTask && (
+              <div className="flex items-center gap-2">
+                {isTimerRunning ? (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => pauseTimerMutation.mutate()}
+                    disabled={pauseTimerMutation.isPending}
+                    data-testid="button-pause-timer"
+                  >
+                    <Pause className="h-3.5 w-3.5 mr-1" />
+                    Pause
+                  </Button>
+                ) : (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => resumeTimerMutation.mutate()}
+                    disabled={resumeTimerMutation.isPending}
+                    data-testid="button-resume-timer"
+                  >
+                    <Play className="h-3.5 w-3.5 mr-1" />
+                    Resume
+                  </Button>
+                )}
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={() => stopTimerMutation.mutate()}
+                  disabled={stopTimerMutation.isPending}
+                  data-testid="button-stop-timer"
+                >
+                  <Square className="h-3.5 w-3.5 mr-1" />
+                  Stop
+                </Button>
+              </div>
+            )}
+
+            {activeTimer && !isTimerOnThisTask && (
+              <Badge variant="secondary" className="text-xs">
+                Timer running on another task
+              </Badge>
+            )}
+
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => openOrCreateTaskChat.mutate()}
+              disabled={openOrCreateTaskChat.isPending}
+              data-testid="button-open-task-chat"
+            >
+              {openOrCreateTaskChat.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+              ) : (
+                <MessageSquare className="h-3.5 w-3.5 mr-1" />
+              )}
+              {existingTaskChannel ? "Open Discussion" : "Discuss"}
+            </Button>
+          </div>
+
+          <Separator />
           <div className="space-y-4">
             {editingTitle ? (
               <Input
