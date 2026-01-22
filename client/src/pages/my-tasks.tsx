@@ -90,7 +90,10 @@ import { SortableTaskCard } from "@/components/sortable-task-card";
 import { TaskDetailDrawer } from "@/components/task-detail-drawer";
 import { isToday, isPast, isFuture } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
+import { AccessInfoBanner } from "@/components/access-info-banner";
 import type { TaskWithRelations, Workspace } from "@shared/schema";
+import { UserRole } from "@shared/schema";
 
 type TaskSection = {
   id: string;
@@ -231,6 +234,8 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, localOrder, on
 }
 
 export default function MyTasks() {
+  const { user } = useAuth();
+  const isEmployee = user?.role === UserRole.EMPLOYEE;
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [showNewTaskInput, setShowNewTaskInput] = useState(false);
@@ -375,6 +380,9 @@ export default function MyTasks() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {isEmployee && (
+        <AccessInfoBanner variant="tasks" className="mx-6 mt-4" />
+      )}
       <div className="border-b border-border bg-background sticky top-0 z-10">
         <div className="flex items-center justify-between px-6 py-4">
           <div className="flex items-center gap-3">

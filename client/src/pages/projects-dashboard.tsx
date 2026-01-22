@@ -27,7 +27,10 @@ import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriang
 import { ProjectDetailDrawer } from "@/components/project-detail-drawer";
 import { ProjectDrawer } from "@/components/project-drawer";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
+import { AccessInfoBanner } from "@/components/access-info-banner";
 import type { Project, Client, Team, ClientDivision } from "@shared/schema";
+import { UserRole } from "@shared/schema";
 import { format } from "date-fns";
 
 interface ProjectWithCounts extends Project {
@@ -77,6 +80,8 @@ export default function ProjectsDashboard() {
   const [editProjectOpen, setEditProjectOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectWithCounts | null>(null);
   const { toast } = useToast();
+  const { user } = useAuth();
+  const isEmployee = user?.role === UserRole.EMPLOYEE;
 
   const { data: projects, isLoading: projectsLoading } = useQuery<ProjectWithCounts[]>({
     queryKey: ["/api/v1/projects", { includeCounts: true }],
@@ -232,6 +237,10 @@ export default function ProjectsDashboard() {
             New Project
           </Button>
         </div>
+
+        {isEmployee && (
+          <AccessInfoBanner variant="projects" className="mb-4" />
+        )}
 
         {analytics?.totals && (
           <div className="grid gap-3 grid-cols-2 md:grid-cols-4 mb-6">
