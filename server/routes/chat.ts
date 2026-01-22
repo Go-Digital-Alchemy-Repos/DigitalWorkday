@@ -855,4 +855,92 @@ router.delete(
   })
 );
 
+// GET /api/v1/chat/search - Search messages in tenant's chat
+router.get(
+  "/search",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const { q, channelId, dmThreadId, fromUserId, limit = "50", offset = "0" } = req.query;
+    
+    if (!q || typeof q !== "string" || q.trim().length < 2) {
+      throw AppError.badRequest("Search query must be at least 2 characters");
+    }
+
+    const limitNum = Math.min(parseInt(limit as string) || 50, 100);
+    const offsetNum = parseInt(offset as string) || 0;
+
+    const results = await storage.searchChatMessages(tenantId, userId, {
+      query: q.trim(),
+      channelId: channelId as string | undefined,
+      dmThreadId: dmThreadId as string | undefined,
+      fromUserId: fromUserId as string | undefined,
+      limit: limitNum,
+      offset: offsetNum,
+    });
+
+    res.json(results);
+  })
+);
+
+// GET /api/v1/chat/users/mentionable - Get users that can be mentioned
+router.get(
+  "/users/mentionable",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const { channelId, dmThreadId, q } = req.query;
+    
+    let users = [];
+
+    if (channelId && typeof channelId === "string") {
+      const channel = await storage.getChatChannel(channelId);
+      if (!channel || channel.tenantId !== tenantId) {
+        throw AppError.notFound("Channel not found");
+      }
+      
+      if (channel.isPrivate) {
+        const members = await storage.getChatChannelMembers(channelId);
+        users = await Promise.all(members.map(m => storage.getUser(m.userId)));
+        users = users.filter(Boolean);
+      } else {
+        users = await storage.getUsersByTenant(tenantId);
+      }
+    } else if (dmThreadId && typeof dmThreadId === "string") {
+      const dm = await storage.getChatDmThread(dmThreadId);
+      if (!dm || dm.tenantId !== tenantId) {
+        throw AppError.notFound("DM thread not found");
+      }
+      
+      const participants = await storage.getChatDmParticipants(dmThreadId);
+      users = await Promise.all(participants.map(p => storage.getUser(p.userId)));
+      users = users.filter(Boolean);
+    } else {
+      users = await storage.getUsersByTenant(tenantId);
+    }
+
+    const query = typeof q === "string" ? q.toLowerCase().trim() : "";
+    
+    let filtered = users.map((u: any) => ({
+      id: u.id,
+      email: u.email,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      displayName: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email,
+    }));
+
+    if (query) {
+      filtered = filtered.filter(u => 
+        u.displayName.toLowerCase().includes(query) ||
+        u.email.toLowerCase().includes(query)
+      );
+    }
+
+    res.json(filtered.slice(0, 20));
+  })
+);
+
 export default router;

@@ -80,7 +80,7 @@ export type ProjectActivityItem = {
   entityTitle: string;
   metadata?: Record<string, unknown>;
 };
-import { eq, and, desc, asc, inArray, gte, lte, gt, isNull, sql } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, gte, lte, gt, isNull, sql, ilike, or } from "drizzle-orm";
 import { encryptValue, decryptValue } from "./lib/encryption";
 
 export interface IStorage {
@@ -356,6 +356,14 @@ export interface IStorage {
   createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
   updateChatMessage(id: string, updates: Partial<InsertChatMessage>): Promise<ChatMessage | undefined>;
   deleteChatMessage(id: string): Promise<void>;
+  searchChatMessages(tenantId: string, userId: string, options: {
+    query: string;
+    channelId?: string;
+    dmThreadId?: string;
+    fromUserId?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ messages: any[]; total: number }>;
 
   // Chat - Attachments
   createChatAttachment(attachment: InsertChatAttachment): Promise<ChatAttachment>;
@@ -2609,6 +2617,99 @@ export class DatabaseStorage implements IStorage {
 
   async deleteChatMessage(id: string): Promise<void> {
     await db.update(chatMessages).set({ deletedAt: new Date() }).where(eq(chatMessages.id, id));
+  }
+
+  async searchChatMessages(tenantId: string, userId: string, options: {
+    query: string;
+    channelId?: string;
+    dmThreadId?: string;
+    fromUserId?: string;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ messages: any[]; total: number }> {
+    const { query, channelId, dmThreadId, fromUserId, limit = 50, offset = 0 } = options;
+    
+    const accessibleChannelIds = (await this.getUserChatChannels(tenantId, userId)).map(m => m.channelId);
+    const accessibleDmIds = (await this.getUserChatDmThreads(tenantId, userId)).map(dm => dm.id);
+
+    const conditions = [
+      eq(chatMessages.tenantId, tenantId),
+      isNull(chatMessages.deletedAt),
+      isNull(chatMessages.archivedAt),
+      ilike(chatMessages.body, `%${query}%`),
+    ];
+
+    if (channelId) {
+      if (!accessibleChannelIds.includes(channelId)) {
+        return { messages: [], total: 0 };
+      }
+      conditions.push(eq(chatMessages.channelId, channelId));
+    } else if (dmThreadId) {
+      if (!accessibleDmIds.includes(dmThreadId)) {
+        return { messages: [], total: 0 };
+      }
+      conditions.push(eq(chatMessages.dmThreadId, dmThreadId));
+    } else {
+      const accessConditions = [];
+      if (accessibleChannelIds.length > 0) {
+        accessConditions.push(inArray(chatMessages.channelId, accessibleChannelIds));
+      }
+      if (accessibleDmIds.length > 0) {
+        accessConditions.push(inArray(chatMessages.dmThreadId, accessibleDmIds));
+      }
+      if (accessConditions.length > 0) {
+        conditions.push(or(...accessConditions)!);
+      } else {
+        return { messages: [], total: 0 };
+      }
+    }
+
+    if (fromUserId) {
+      conditions.push(eq(chatMessages.authorUserId, fromUserId));
+    }
+
+    const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(chatMessages)
+      .where(and(...conditions));
+
+    const messages = await db.select({
+      id: chatMessages.id,
+      body: chatMessages.body,
+      createdAt: chatMessages.createdAt,
+      editedAt: chatMessages.editedAt,
+      channelId: chatMessages.channelId,
+      dmThreadId: chatMessages.dmThreadId,
+      authorId: chatMessages.authorUserId,
+      authorEmail: users.email,
+      authorFirstName: users.firstName,
+      authorLastName: users.lastName,
+      channelName: chatChannels.name,
+    })
+    .from(chatMessages)
+    .leftJoin(users, eq(chatMessages.authorUserId, users.id))
+    .leftJoin(chatChannels, eq(chatMessages.channelId, chatChannels.id))
+    .where(and(...conditions))
+    .orderBy(desc(chatMessages.createdAt))
+    .limit(limit)
+    .offset(offset);
+
+    return {
+      messages: messages.map(m => ({
+        id: m.id,
+        body: m.body,
+        createdAt: m.createdAt,
+        editedAt: m.editedAt,
+        channelId: m.channelId,
+        dmThreadId: m.dmThreadId,
+        channelName: m.channelName,
+        author: {
+          id: m.authorId,
+          email: m.authorEmail,
+          displayName: `${m.authorFirstName || ""} ${m.authorLastName || ""}`.trim() || m.authorEmail,
+        },
+      })),
+      total: countResult?.count || 0,
+    };
   }
 
   // Chat - Attachments
