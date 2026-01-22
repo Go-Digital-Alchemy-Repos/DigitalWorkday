@@ -326,3 +326,95 @@ interface ChatConversationReadPayload {
 
 - `unread_counts_drop_after_read_event.test.ts`: Verifies unread counts reset on read events
 - `read_event_emits_socket_update.test.ts`: Verifies socket event emission and payload structure
+
+## Message Search
+
+### Overview
+
+The chat system includes a message search feature that allows users to find messages across all their accessible conversations. Search is tenant-scoped and respects channel/DM membership.
+
+### API
+
+#### Search Messages
+
+```
+GET /api/v1/chat/search?q=<query>&limit=50&offset=0
+```
+
+Query parameters:
+- `q` (required): Search query (minimum 2 characters)
+- `channelId` (optional): Filter to specific channel
+- `dmThreadId` (optional): Filter to specific DM thread
+- `fromUserId` (optional): Filter by message author
+- `limit` (optional): Max results, default 50, max 100
+- `offset` (optional): Pagination offset, default 0
+
+Response:
+```json
+{
+  "messages": [
+    {
+      "id": "msg-123",
+      "body": "message content with search term...",
+      "createdAt": "2026-01-22T10:00:00Z",
+      "editedAt": null,
+      "channelId": "ch-456",
+      "dmThreadId": null,
+      "channelName": "general",
+      "author": {
+        "id": "user-789",
+        "email": "user@example.com",
+        "displayName": "John Doe"
+      }
+    }
+  ],
+  "total": 42
+}
+```
+
+### Security
+
+- **Tenant Isolation**: Searches only within the user's tenant
+- **Membership Scoping**: Only returns messages from:
+  - Channels the user is a member of
+  - DM threads the user participates in
+- **Soft-deleted Messages**: Excluded from search results
+- **Archived Messages**: Excluded from search results
+
+### UI
+
+- **Sidebar Search Input**: Search field in the chat sidebar header
+- **Search Dialog**: Opens automatically when typing 2+ characters
+- **Result Display**: Shows message snippet, author, conversation badge, and timestamp
+- **Navigation**: Clicking a result opens the conversation and closes the dialog
+
+### Performance
+
+The search uses ILIKE pattern matching with the following optimizations:
+- **Compound indexes** for scoped searches (defined in schema):
+  - `chat_messages_tenant_channel_created_idx` on (tenant_id, channel_id, created_at)
+  - `chat_messages_tenant_dm_created_idx` on (tenant_id, dm_thread_id, created_at)
+- Tenant ID index for fast tenant filtering
+- Channel/DM thread indexes for membership filtering
+- Result limit (default 50, max 100)
+- Proper query scoping before text matching (filters by accessible conversations first)
+
+#### Optional: GIN Trigram Index
+
+For improved text search performance on large datasets, you can add a GIN trigram index:
+
+```sql
+-- Enable the pg_trgm extension (run once per database)
+CREATE EXTENSION IF NOT EXISTS pg_trgm;
+
+-- Create GIN index for fast ILIKE pattern matching
+CREATE INDEX CONCURRENTLY chat_messages_body_trgm_idx 
+  ON chat_messages USING gin (body gin_trgm_ops);
+```
+
+This index significantly speeds up ILIKE queries for message body searches.
+
+### Tests
+
+- `search_scoped_to_membership.test.ts`: Verifies search respects channel/DM membership
+- `search_opens_conversation.test.tsx`: Verifies clicking results opens correct conversation

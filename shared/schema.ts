@@ -1077,6 +1077,8 @@ export const chatMessages = pgTable("chat_messages", {
   index("chat_messages_author_idx").on(table.authorUserId),
   index("chat_messages_created_idx").on(table.createdAt),
   index("chat_messages_archived_idx").on(table.archivedAt),
+  index("chat_messages_tenant_channel_created_idx").on(table.tenantId, table.channelId, table.createdAt),
+  index("chat_messages_tenant_dm_created_idx").on(table.tenantId, table.dmThreadId, table.createdAt),
 ]);
 
 /**
