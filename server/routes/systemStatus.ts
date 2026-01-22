@@ -8,6 +8,7 @@ import {
   timeEntries, activeTimers, appSettings
 } from "@shared/schema";
 import { isS3Configured, testS3Presign } from "../s3";
+import { storage } from "../storage";
 
 const router = Router();
 
@@ -311,5 +312,149 @@ function getEnforcementDescription(mode: string): string {
       return "Tenancy enforcement disabled. Legacy fallback mode.";
   }
 }
+
+// =============================================================================
+// ERROR LOGS - Super Admin Only
+// =============================================================================
+
+/**
+ * GET /status/error-logs - List error logs with filters
+ * Super Admin only
+ */
+router.get("/error-logs", requireAuth, requireSuperUser, async (req: Request, res: Response) => {
+  const requestId = req.requestId || generateRequestId();
+  try {
+    const { 
+      tenantId, 
+      status, 
+      startDate, 
+      endDate, 
+      pathContains,
+      requestId: filterRequestId,
+      resolved,
+      limit = "50",
+      offset = "0"
+    } = req.query;
+
+    const filters: any = {
+      limit: parseInt(limit as string, 10),
+      offset: parseInt(offset as string, 10),
+    };
+
+    if (tenantId) filters.tenantId = tenantId as string;
+    if (status) filters.status = parseInt(status as string, 10);
+    if (startDate) filters.startDate = new Date(startDate as string);
+    if (endDate) filters.endDate = new Date(endDate as string);
+    if (pathContains) filters.pathContains = pathContains as string;
+    if (filterRequestId) filters.requestId = filterRequestId as string;
+    if (resolved !== undefined) filters.resolved = resolved === "true";
+
+    const result = await storage.getErrorLogs(filters);
+
+    res.json({
+      ok: true,
+      requestId,
+      logs: result.logs,
+      total: result.total,
+      limit: filters.limit,
+      offset: filters.offset,
+    });
+  } catch (error: any) {
+    console.error("[status/error-logs] Failed to fetch error logs:", error);
+    res.status(500).json({
+      ok: false,
+      requestId,
+      error: {
+        code: "ERROR_LOGS_FETCH_FAILED",
+        message: "Failed to fetch error logs",
+        requestId,
+      },
+    });
+  }
+});
+
+/**
+ * GET /status/error-logs/:id - Get single error log details
+ * Super Admin only
+ */
+router.get("/error-logs/:id", requireAuth, requireSuperUser, async (req: Request, res: Response) => {
+  const requestId = req.requestId || generateRequestId();
+  try {
+    const { id } = req.params;
+    const log = await storage.getErrorLog(id);
+
+    if (!log) {
+      return res.status(404).json({
+        ok: false,
+        requestId,
+        error: {
+          code: "ERROR_LOG_NOT_FOUND",
+          message: "Error log not found",
+          requestId,
+        },
+      });
+    }
+
+    res.json({
+      ok: true,
+      requestId,
+      log,
+    });
+  } catch (error: any) {
+    console.error("[status/error-logs/:id] Failed to fetch error log:", error);
+    res.status(500).json({
+      ok: false,
+      requestId,
+      error: {
+        code: "ERROR_LOG_FETCH_FAILED",
+        message: "Failed to fetch error log",
+        requestId,
+      },
+    });
+  }
+});
+
+/**
+ * PATCH /status/error-logs/:id/resolve - Mark error log as resolved/unresolved
+ * Super Admin only
+ */
+router.patch("/error-logs/:id/resolve", requireAuth, requireSuperUser, async (req: Request, res: Response) => {
+  const requestId = req.requestId || generateRequestId();
+  try {
+    const { id } = req.params;
+    const { resolved = true } = req.body;
+
+    const log = await storage.markErrorLogResolved(id, resolved);
+
+    if (!log) {
+      return res.status(404).json({
+        ok: false,
+        requestId,
+        error: {
+          code: "ERROR_LOG_NOT_FOUND",
+          message: "Error log not found",
+          requestId,
+        },
+      });
+    }
+
+    res.json({
+      ok: true,
+      requestId,
+      log,
+    });
+  } catch (error: any) {
+    console.error("[status/error-logs/:id/resolve] Failed to update error log:", error);
+    res.status(500).json({
+      ok: false,
+      requestId,
+      error: {
+        code: "ERROR_LOG_UPDATE_FAILED",
+        message: "Failed to update error log",
+        requestId,
+      },
+    });
+  }
+});
 
 export default router;

@@ -325,6 +325,34 @@ export const tenancyWarnings = pgTable("tenancy_warnings", {
   index("tenancy_warnings_tenant_idx").on(table.effectiveTenantId),
 ]);
 
+/**
+ * Error Logs table - centralized error logging for Super Admin monitoring
+ * Records 500 errors and explicit error captures with requestId correlation
+ */
+export const errorLogs = pgTable("error_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestId: varchar("request_id").notNull(),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  userId: varchar("user_id").references(() => users.id),
+  method: text("method").notNull(),
+  path: text("path").notNull(),
+  status: integer("status").notNull(),
+  errorName: text("error_name"),
+  message: text("message").notNull(),
+  stack: text("stack"),
+  dbCode: text("db_code"),
+  dbConstraint: text("db_constraint"),
+  meta: jsonb("meta"),
+  environment: text("environment").default("development"),
+  resolved: boolean("resolved").default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("error_logs_created_at_idx").on(table.createdAt),
+  index("error_logs_request_id_idx").on(table.requestId),
+  index("error_logs_tenant_idx").on(table.tenantId),
+  index("error_logs_status_idx").on(table.status),
+]);
+
 // Note category enum for tenant notes
 export const NoteCategory = {
   ONBOARDING: "onboarding",
@@ -1562,6 +1590,11 @@ export const insertEmailOutboxSchema = createInsertSchema(emailOutbox).omit({
   updatedAt: true,
 });
 
+export const insertErrorLogSchema = createInsertSchema(errorLogs).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertTenancyWarningSchema = createInsertSchema(tenancyWarnings).omit({
   id: true,
   occurredAt: true,
@@ -1828,6 +1861,9 @@ export type InsertEmailOutbox = z.infer<typeof insertEmailOutboxSchema>;
 
 export type TenancyWarning = typeof tenancyWarnings.$inferSelect;
 export type InsertTenancyWarning = z.infer<typeof insertTenancyWarningSchema>;
+
+export type ErrorLog = typeof errorLogs.$inferSelect;
+export type InsertErrorLog = z.infer<typeof insertErrorLogSchema>;
 
 export type TenantAgreement = typeof tenantAgreements.$inferSelect;
 export type InsertTenantAgreement = z.infer<typeof insertTenantAgreementSchema>;

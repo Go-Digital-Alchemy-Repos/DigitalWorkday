@@ -55,13 +55,14 @@ import {
   type ChatDmMember, type InsertChatDmMember,
   type ChatMessage, type InsertChatMessage,
   type ChatAttachment, type InsertChatAttachment,
+  type ErrorLog, type InsertErrorLog,
   users, workspaces, workspaceMembers, teams, teamMembers,
   projects, projectMembers, sections, tasks, taskAssignees, taskWatchers,
   subtasks, tags, taskTags, comments, commentMentions, activityLog, taskAttachments,
   clients, clientContacts, clientInvites, clientUserAccess,
   timeEntries, activeTimers,
   invitations, appSettings, tenants, tenantSettings, personalTaskSections,
-  chatChannels, chatChannelMembers, chatDmThreads, chatDmMembers, chatMessages, chatAttachments, chatReads,
+  chatChannels, chatChannelMembers, chatDmThreads, chatDmMembers, chatMessages, chatAttachments, chatReads, errorLogs,
   UserRole,
   type CommentMention, type InsertCommentMention,
 } from "@shared/schema";
@@ -379,6 +380,22 @@ export interface IStorage {
   getChatReadForDm(userId: string, dmThreadId: string): Promise<{ lastReadMessageId: string | null } | undefined>;
   getUnreadCountForChannel(userId: string, channelId: string): Promise<number>;
   getUnreadCountForDm(userId: string, dmThreadId: string): Promise<number>;
+
+  // Error Logs - Super Admin Monitoring
+  createErrorLog(log: InsertErrorLog): Promise<ErrorLog>;
+  getErrorLogs(filters?: {
+    tenantId?: string;
+    status?: number;
+    startDate?: Date;
+    endDate?: Date;
+    pathContains?: string;
+    requestId?: string;
+    resolved?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ logs: ErrorLog[]; total: number }>;
+  getErrorLog(id: string): Promise<ErrorLog | undefined>;
+  markErrorLogResolved(id: string, resolved: boolean): Promise<ErrorLog | undefined>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2855,6 +2872,82 @@ export class DatabaseStorage implements IStorage {
         gt(chatMessages.createdAt, lastReadMsg.createdAt)
       ));
     return result?.count ?? 0;
+  }
+
+  // =============================================================================
+  // Error Logs - Super Admin Monitoring
+  // =============================================================================
+
+  async createErrorLog(log: InsertErrorLog): Promise<ErrorLog> {
+    const [errorLog] = await db.insert(errorLogs).values(log).returning();
+    return errorLog;
+  }
+
+  async getErrorLogs(filters?: {
+    tenantId?: string;
+    status?: number;
+    startDate?: Date;
+    endDate?: Date;
+    pathContains?: string;
+    requestId?: string;
+    resolved?: boolean;
+    limit?: number;
+    offset?: number;
+  }): Promise<{ logs: ErrorLog[]; total: number }> {
+    const conditions: any[] = [];
+    
+    if (filters?.tenantId) {
+      conditions.push(eq(errorLogs.tenantId, filters.tenantId));
+    }
+    if (filters?.status !== undefined) {
+      conditions.push(eq(errorLogs.status, filters.status));
+    }
+    if (filters?.startDate) {
+      conditions.push(gte(errorLogs.createdAt, filters.startDate));
+    }
+    if (filters?.endDate) {
+      conditions.push(lte(errorLogs.createdAt, filters.endDate));
+    }
+    if (filters?.pathContains) {
+      conditions.push(ilike(errorLogs.path, `%${filters.pathContains}%`));
+    }
+    if (filters?.requestId) {
+      conditions.push(eq(errorLogs.requestId, filters.requestId));
+    }
+    if (filters?.resolved !== undefined) {
+      conditions.push(eq(errorLogs.resolved, filters.resolved));
+    }
+
+    const whereClause = conditions.length > 0 ? and(...conditions) : undefined;
+    const limit = filters?.limit ?? 50;
+    const offset = filters?.offset ?? 0;
+
+    const [logs, countResult] = await Promise.all([
+      db.select()
+        .from(errorLogs)
+        .where(whereClause)
+        .orderBy(desc(errorLogs.createdAt))
+        .limit(limit)
+        .offset(offset),
+      db.select({ count: sql<number>`count(*)::int` })
+        .from(errorLogs)
+        .where(whereClause)
+    ]);
+
+    return { logs, total: countResult[0]?.count ?? 0 };
+  }
+
+  async getErrorLog(id: string): Promise<ErrorLog | undefined> {
+    const [log] = await db.select().from(errorLogs).where(eq(errorLogs.id, id));
+    return log || undefined;
+  }
+
+  async markErrorLogResolved(id: string, resolved: boolean): Promise<ErrorLog | undefined> {
+    const [log] = await db.update(errorLogs)
+      .set({ resolved })
+      .where(eq(errorLogs.id, id))
+      .returning();
+    return log || undefined;
   }
 }
 

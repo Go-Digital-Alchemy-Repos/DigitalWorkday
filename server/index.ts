@@ -10,6 +10,7 @@ import { tenantContextMiddleware } from "./middleware/tenantContext";
 import { agreementEnforcementGuard } from "./middleware/agreementEnforcement";
 import { requestIdMiddleware } from "./middleware/requestId";
 import { errorHandler } from "./middleware/errorHandler";
+import { errorLoggingMiddleware } from "./middleware/errorLogging";
 
 export const app = express();
 const httpServer = createServer(app);
@@ -105,6 +106,9 @@ app.use((req, res, next) => {
   await bootstrapAdminUser();
   
   await registerRoutes(httpServer, app);
+
+  // Error logging middleware (captures 500+ errors to database)
+  app.use(errorLoggingMiddleware);
 
   // Global error handler (uses standard error envelope)
   app.use(errorHandler);
