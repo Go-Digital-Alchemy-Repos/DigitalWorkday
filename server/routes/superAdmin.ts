@@ -7374,6 +7374,153 @@ router.post("/status/checks/:type", requireSuperUser, async (req, res) => {
   }
 });
 
+// POST /api/v1/super/tenancy/backfill - Backfill missing tenant_id values
+router.post("/tenancy/backfill", requireSuperUser, async (req, res) => {
+  try {
+    const dryRun = req.query.dryRun === "true" || req.body.dryRun === true;
+    
+    const TENANT_SCOPED_TABLES = [
+      "workspaces", "teams", "clients", "projects", "tasks", "time_entries",
+      "active_timers", "invitations", "personal_task_sections", "task_assignees",
+      "task_watchers", "client_divisions", "division_members", "chat_channels",
+      "chat_channel_members", "chat_dm_threads", "chat_dm_members", "chat_messages",
+      "chat_mentions", "chat_reads", "chat_attachments"
+    ];
+
+    interface BackfillResult {
+      table: string;
+      nullBefore: number;
+      updated: number;
+      remaining: number;
+      details?: string;
+    }
+
+    const results: BackfillResult[] = [];
+
+    // Check and backfill each table
+    for (const table of TENANT_SCOPED_TABLES) {
+      try {
+        // Count NULL before
+        const countResult = await db.execute<{ count: string }>(
+          sql.raw(`SELECT COUNT(*) as count FROM ${table} WHERE tenant_id IS NULL`)
+        );
+        const nullBefore = parseInt(countResult.rows[0]?.count || "0", 10);
+
+        if (nullBefore === 0) {
+          results.push({ table, nullBefore: 0, updated: 0, remaining: 0 });
+          continue;
+        }
+
+        let updated = 0;
+        let details = "";
+
+        // Apply backfill logic based on table relationships
+        if (!dryRun) {
+          switch (table) {
+            case "teams":
+              const teamsResult = await db.execute(sql.raw(`
+                UPDATE teams t SET tenant_id = w.tenant_id
+                FROM workspaces w WHERE t.workspace_id = w.id
+                AND t.tenant_id IS NULL AND w.tenant_id IS NOT NULL
+              `));
+              updated = (teamsResult as any).rowCount || 0;
+              break;
+            case "projects":
+              const projectsResult = await db.execute(sql.raw(`
+                UPDATE projects p SET tenant_id = COALESCE(
+                  (SELECT c.tenant_id FROM clients c WHERE c.id = p.client_id AND c.tenant_id IS NOT NULL),
+                  (SELECT w.tenant_id FROM workspaces w WHERE w.id = p.workspace_id AND w.tenant_id IS NOT NULL)
+                ) WHERE p.tenant_id IS NULL AND (
+                  EXISTS (SELECT 1 FROM clients c WHERE c.id = p.client_id AND c.tenant_id IS NOT NULL)
+                  OR EXISTS (SELECT 1 FROM workspaces w WHERE w.id = p.workspace_id AND w.tenant_id IS NOT NULL)
+                )
+              `));
+              updated = (projectsResult as any).rowCount || 0;
+              break;
+            case "tasks":
+              const tasksResult = await db.execute(sql.raw(`
+                UPDATE tasks t SET tenant_id = p.tenant_id
+                FROM projects p WHERE t.project_id = p.id
+                AND t.tenant_id IS NULL AND p.tenant_id IS NOT NULL
+              `));
+              updated = (tasksResult as any).rowCount || 0;
+              break;
+            case "time_entries":
+              const timeResult = await db.execute(sql.raw(`
+                UPDATE time_entries te SET tenant_id = t.tenant_id
+                FROM tasks t WHERE te.task_id = t.id
+                AND te.tenant_id IS NULL AND t.tenant_id IS NOT NULL
+              `));
+              updated = (timeResult as any).rowCount || 0;
+              break;
+            case "chat_messages":
+              const chatMsgResult = await db.execute(sql.raw(`
+                UPDATE chat_messages cm SET tenant_id = COALESCE(
+                  (SELECT cc.tenant_id FROM chat_channels cc WHERE cc.id = cm.channel_id AND cc.tenant_id IS NOT NULL),
+                  (SELECT dt.tenant_id FROM chat_dm_threads dt WHERE dt.id = cm.dm_thread_id AND dt.tenant_id IS NOT NULL)
+                ) WHERE cm.tenant_id IS NULL AND (
+                  EXISTS (SELECT 1 FROM chat_channels cc WHERE cc.id = cm.channel_id AND cc.tenant_id IS NOT NULL)
+                  OR EXISTS (SELECT 1 FROM chat_dm_threads dt WHERE dt.id = cm.dm_thread_id AND dt.tenant_id IS NOT NULL)
+                )
+              `));
+              updated = (chatMsgResult as any).rowCount || 0;
+              break;
+            case "workspaces":
+              details = "Workspaces require manual tenant assignment";
+              break;
+            default:
+              details = "No auto-backfill strategy for this table";
+          }
+        } else {
+          details = "Dry run - no changes applied";
+        }
+
+        // Count remaining NULL
+        const remainingResult = await db.execute<{ count: string }>(
+          sql.raw(`SELECT COUNT(*) as count FROM ${table} WHERE tenant_id IS NULL`)
+        );
+        const remaining = parseInt(remainingResult.rows[0]?.count || "0", 10);
+
+        results.push({
+          table,
+          nullBefore,
+          updated,
+          remaining: dryRun ? nullBefore : remaining,
+          details: details || undefined,
+        });
+      } catch (tableError) {
+        results.push({
+          table,
+          nullBefore: -1,
+          updated: 0,
+          remaining: -1,
+          details: `Error: ${(tableError as Error).message}`,
+        });
+      }
+    }
+
+    // Summary
+    const totalUpdated = results.reduce((sum, r) => sum + r.updated, 0);
+    const totalRemaining = results.reduce((sum, r) => sum + Math.max(0, r.remaining), 0);
+    const tablesWithDrift = results.filter(r => r.nullBefore > 0).length;
+
+    res.json({
+      success: true,
+      mode: dryRun ? "dry-run" : "live",
+      summary: {
+        tablesChecked: results.length,
+        tablesWithDrift,
+        totalUpdated,
+        totalRemaining,
+      },
+      results: results.filter(r => r.nullBefore > 0 || r.remaining > 0),
+    });
+  } catch (error) {
+    console.error("[tenancy/backfill] Backfill failed:", error);
+    res.status(500).json({ error: "Backfill operation failed", details: (error as Error).message });
+  }
+});
+
 // =============================================================================
 // TENANT PICKER & IMPERSONATION ENDPOINTS
 // =============================================================================

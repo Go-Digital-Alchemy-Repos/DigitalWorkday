@@ -277,3 +277,49 @@ export function requireValidId(id: string, paramName = "id"): void {
     throw AppError.badRequest(`Invalid ${paramName}: must be a valid identifier`);
   }
 }
+
+/**
+ * Asserts that a tenant ID is present and valid.
+ * Use this in create/update operations to ensure tenant context is set.
+ * 
+ * @param tenantId - The tenant ID to validate
+ * @param context - Optional context for error message (e.g., "creating task")
+ * @throws AppError with TENANT_REQUIRED code if tenantId is null/undefined
+ * 
+ * @example
+ * const tenantId = assertTenantId(req.effectiveTenantId, "creating task");
+ * await storage.createTask({ ...data, tenantId });
+ */
+export function assertTenantId(
+  tenantId: string | null | undefined,
+  context?: string
+): string {
+  if (!tenantId) {
+    const message = context
+      ? `Tenant context required for ${context}`
+      : "Tenant context required";
+    throw AppError.tenantRequired(message);
+  }
+  return tenantId;
+}
+
+/**
+ * Asserts that a user ID is present and valid.
+ * Use this in operations that require an authenticated user.
+ * 
+ * @param userId - The user ID to validate
+ * @param context - Optional context for error message
+ * @throws AppError with UNAUTHORIZED code if userId is null/undefined
+ */
+export function assertUserId(
+  userId: string | null | undefined,
+  context?: string
+): string {
+  if (!userId) {
+    const message = context
+      ? `Authentication required for ${context}`
+      : "Authentication required";
+    throw AppError.unauthorized(message);
+  }
+  return userId;
+}
