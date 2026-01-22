@@ -3520,7 +3520,6 @@ router.get("/tenants/:tenantId/clients", requireSuperUser, async (req, res) => {
 // POST /api/v1/super/tenants/:tenantId/clients - Create a client
 const createClientSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
-  contactName: z.string().optional(),
   email: z.string().email().optional().nullable().or(z.literal("")),
   phone: z.string().optional(),
   workspaceId: z.string().uuid().optional(),
@@ -3549,7 +3548,6 @@ router.post("/tenants/:tenantId/clients", requireSuperUser, async (req, res) => 
 
     const [client] = await db.insert(clients).values({
       companyName: data.companyName,
-      contactName: data.contactName || null,
       email: data.email || null,
       phone: data.phone || null,
       tenantId,
@@ -3709,7 +3707,6 @@ router.post("/tenants/:tenantId/clients/fix-tenant-ids", requireSuperUser, async
 // PATCH /api/v1/super/tenants/:tenantId/clients/:clientId - Update a client
 const updateClientSchema = z.object({
   companyName: z.string().min(1).optional(),
-  contactName: z.string().optional().nullable(),
   email: z.string().email().optional().nullable().or(z.literal("")),
   phone: z.string().optional().nullable(),
 });

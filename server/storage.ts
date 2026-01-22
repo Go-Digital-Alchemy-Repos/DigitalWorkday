@@ -94,6 +94,8 @@ export interface IStorage {
   
   getWorkspace(id: string): Promise<Workspace | undefined>;
   getWorkspacesByUser(userId: string): Promise<Workspace[]>;
+  getWorkspacesByTenant(tenantId: string): Promise<Workspace[]>;
+  getPrimaryWorkspaceId(tenantId: string): Promise<string | null>;
   createWorkspace(workspace: InsertWorkspace): Promise<Workspace>;
   
   getWorkspaceMembers(workspaceId: string): Promise<(WorkspaceMember & { user?: User })[]>;
@@ -121,7 +123,7 @@ export interface IStorage {
   removeProjectMember(projectId: string, userId: string): Promise<void>;
   setProjectMembers(projectId: string, userIds: string[]): Promise<void>;
   isProjectMember(projectId: string, userId: string): Promise<boolean>;
-  getProjectsForUser(userId: string, tenantId: string, workspaceId: string, isAdmin: boolean): Promise<Project[]>;
+  getProjectsForUser(userId: string, tenantId: string, workspaceId?: string, isAdmin?: boolean): Promise<Project[]>;
   
   getSection(id: string): Promise<Section | undefined>;
   getSectionsByProject(projectId: string): Promise<Section[]>;
@@ -243,13 +245,13 @@ export interface IStorage {
 
   // Tenant-scoped methods (Phase 2A)
   getClientByIdAndTenant(id: string, tenantId: string): Promise<Client | undefined>;
-  getClientsByTenant(tenantId: string, workspaceId: string): Promise<ClientWithContacts[]>;
+  getClientsByTenant(tenantId: string, workspaceId?: string): Promise<ClientWithContacts[]>;
   createClientWithTenant(client: InsertClient, tenantId: string): Promise<Client>;
   updateClientWithTenant(id: string, tenantId: string, client: Partial<InsertClient>): Promise<Client | undefined>;
   deleteClientWithTenant(id: string, tenantId: string): Promise<boolean>;
 
   getProjectByIdAndTenant(id: string, tenantId: string): Promise<Project | undefined>;
-  getProjectsByTenant(tenantId: string, workspaceId: string): Promise<Project[]>;
+  getProjectsByTenant(tenantId: string, workspaceId?: string): Promise<Project[]>;
   createProjectWithTenant(project: InsertProject, tenantId: string): Promise<Project>;
   updateProjectWithTenant(id: string, tenantId: string, project: Partial<InsertProject>): Promise<Project | undefined>;
 
@@ -454,6 +456,15 @@ export class DatabaseStorage implements IStorage {
     return db.select().from(workspaces).where(inArray(workspaces.id, workspaceIds));
   }
 
+  async getWorkspacesByTenant(tenantId: string): Promise<Workspace[]> {
+    return db.select().from(workspaces).where(eq(workspaces.tenantId, tenantId)).orderBy(asc(workspaces.createdAt));
+  }
+
+  async getPrimaryWorkspaceId(tenantId: string): Promise<string | null> {
+    const tenantWorkspaces = await this.getWorkspacesByTenant(tenantId);
+    return tenantWorkspaces.length > 0 ? tenantWorkspaces[0].id : null;
+  }
+
   async createWorkspace(insertWorkspace: InsertWorkspace): Promise<Workspace> {
     const [workspace] = await db.insert(workspaces).values(insertWorkspace).returning();
     return workspace;
@@ -607,9 +618,9 @@ export class DatabaseStorage implements IStorage {
     return !!member;
   }
 
-  async getProjectsForUser(userId: string, tenantId: string, workspaceId: string, isAdmin: boolean): Promise<Project[]> {
+  async getProjectsForUser(userId: string, tenantId: string, _workspaceId?: string, isAdmin?: boolean): Promise<Project[]> {
     if (isAdmin) {
-      return this.getProjectsByTenant(tenantId, workspaceId);
+      return this.getProjectsByTenant(tenantId);
     }
     
     const memberProjects = await db.select({ project: projects })
@@ -617,8 +628,7 @@ export class DatabaseStorage implements IStorage {
       .innerJoin(projects, eq(projectMembers.projectId, projects.id))
       .where(and(
         eq(projectMembers.userId, userId),
-        eq(projects.tenantId, tenantId),
-        eq(projects.workspaceId, workspaceId)
+        eq(projects.tenantId, tenantId)
       ))
       .orderBy(desc(projects.createdAt));
     
@@ -1673,10 +1683,10 @@ export class DatabaseStorage implements IStorage {
     return client || undefined;
   }
 
-  async getClientsByTenant(tenantId: string, workspaceId: string): Promise<ClientWithContacts[]> {
+  async getClientsByTenant(tenantId: string, _workspaceId?: string): Promise<ClientWithContacts[]> {
     const clientsList = await db.select()
       .from(clients)
-      .where(and(eq(clients.tenantId, tenantId), eq(clients.workspaceId, workspaceId)))
+      .where(eq(clients.tenantId, tenantId))
       .orderBy(asc(clients.companyName));
     
     const result: ClientWithContacts[] = [];
@@ -1719,10 +1729,10 @@ export class DatabaseStorage implements IStorage {
     return project || undefined;
   }
 
-  async getProjectsByTenant(tenantId: string, workspaceId: string): Promise<Project[]> {
+  async getProjectsByTenant(tenantId: string, _workspaceId?: string): Promise<Project[]> {
     return db.select()
       .from(projects)
-      .where(and(eq(projects.tenantId, tenantId), eq(projects.workspaceId, workspaceId)))
+      .where(eq(projects.tenantId, tenantId))
       .orderBy(desc(projects.createdAt));
   }
 
