@@ -411,6 +411,20 @@ export interface IStorage {
   getUnreadCountForChannel(userId: string, channelId: string): Promise<number>;
   getUnreadCountForDm(userId: string, dmThreadId: string): Promise<number>;
 
+  // Chat - Diagnostics (Super Admin)
+  getChatDiagnostics(): Promise<{
+    nullTenantCounts: {
+      channels: number;
+      channelMembers: number;
+      dmThreads: number;
+      dmMembers: number;
+      messages: number;
+      attachments: number;
+    };
+    orphanedChannels: number;
+    underMemberedDmThreads: number;
+  }>;
+
   // Error Logs - Super Admin Monitoring
   createErrorLog(log: InsertErrorLog): Promise<ErrorLog>;
   getErrorLogs(filters?: {
@@ -3153,6 +3167,83 @@ export class DatabaseStorage implements IStorage {
         gt(chatMessages.createdAt, lastReadMsg.createdAt)
       ));
     return result?.count ?? 0;
+  }
+
+  // =============================================================================
+  // Chat - Diagnostics (Super Admin)
+  // =============================================================================
+
+  async getChatDiagnostics(): Promise<{
+    nullTenantCounts: {
+      channels: number;
+      channelMembers: number;
+      dmThreads: number;
+      dmMembers: number;
+      messages: number;
+      attachments: number;
+    };
+    orphanedChannels: number;
+    underMemberedDmThreads: number;
+  }> {
+    // Count rows with null tenantId in chat tables
+    // Note: Schema requires tenantId NOT NULL, so these counts should be 0
+    // This is for detecting data corruption or migration issues
+    
+    const [channelsNull] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(chatChannels)
+      .where(isNull(chatChannels.tenantId));
+    
+    const [channelMembersNull] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(chatChannelMembers)
+      .where(isNull(chatChannelMembers.tenantId));
+    
+    const [dmThreadsNull] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(chatDmThreads)
+      .where(isNull(chatDmThreads.tenantId));
+    
+    const [dmMembersNull] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(chatDmMembers)
+      .where(isNull(chatDmMembers.tenantId));
+    
+    const [messagesNull] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(chatMessages)
+      .where(isNull(chatMessages.tenantId));
+    
+    const [attachmentsNull] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(chatAttachments)
+      .where(isNull(chatAttachments.tenantId));
+
+    // Count channels without any members
+    const orphanedChannelsResult = await db.execute(sql`
+      SELECT COUNT(*)::int as count FROM chat_channels c
+      WHERE NOT EXISTS (SELECT 1 FROM chat_channel_members m WHERE m.channel_id = c.id)
+    `);
+    const orphanedChannels = (orphanedChannelsResult.rows[0] as any)?.count ?? 0;
+
+    // Count DM threads with fewer than 2 members
+    const underMemberedResult = await db.execute(sql`
+      SELECT COUNT(*)::int as count FROM (
+        SELECT dm.id, COUNT(m.id) as member_count
+        FROM chat_dm_threads dm
+        LEFT JOIN chat_dm_members m ON m.dm_thread_id = dm.id
+        GROUP BY dm.id
+        HAVING COUNT(m.id) < 2
+      ) sub
+    `);
+    const underMemberedDmThreads = (underMemberedResult.rows[0] as any)?.count ?? 0;
+
+    return {
+      nullTenantCounts: {
+        channels: channelsNull?.count ?? 0,
+        channelMembers: channelMembersNull?.count ?? 0,
+        dmThreads: dmThreadsNull?.count ?? 0,
+        dmMembers: dmMembersNull?.count ?? 0,
+        messages: messagesNull?.count ?? 0,
+        attachments: attachmentsNull?.count ?? 0,
+      },
+      orphanedChannels,
+      underMemberedDmThreads,
+    };
   }
 
   // =============================================================================

@@ -7,10 +7,11 @@
  * - GET /api/v1/super/debug/chat/metrics - Active sockets, messages, errors
  * - GET /api/v1/super/debug/chat/events - Last N event summaries (IDs only)
  * - GET /api/v1/super/debug/chat/sockets - Active socket connections
+ * - GET /api/v1/super/debug/chat/diagnostics - Chat data integrity diagnostics (always available)
  * 
  * Security Invariants:
  * - ALL routes require Super Admin role
- * - Only enabled when CHAT_DEBUG=true
+ * - Most routes only enabled when CHAT_DEBUG=true
  * - Returns 404 when disabled (no internal information leaked)
  * - No secrets or message contents exposed
  */
@@ -18,6 +19,7 @@
 import { Router, Request, Response } from 'express';
 import { requireSuperUser } from '../middleware/tenantContext';
 import { chatDebugStore, isChatDebugEnabled } from '../realtime/chatDebug';
+import { storage } from '../storage';
 import { z } from 'zod';
 
 const router = Router();
@@ -73,6 +75,56 @@ router.get('/status', requireSuperUser, (_req: Request, res: Response) => {
       envVar: 'CHAT_DEBUG',
     },
   });
+});
+
+/**
+ * Chat Diagnostics Endpoint (always available, does not require CHAT_DEBUG)
+ * Reports:
+ * - Counts of chat rows with tenantId null
+ * - Counts of channels without members
+ * - Counts of DM threads with <2 members
+ * - Top 10 recent errors with requestId (chat-related)
+ */
+router.get('/diagnostics', requireSuperUser, async (_req: Request, res: Response) => {
+  try {
+    // Get chat data integrity diagnostics
+    const diagnostics = await storage.getChatDiagnostics();
+    
+    // Get recent errors (last 10 chat-related or all recent)
+    const { logs: recentErrors } = await storage.getErrorLogs({
+      pathContains: '/chat',
+      limit: 10,
+    });
+    
+    // Map to safe output (no secrets)
+    const safeErrors = recentErrors.map(e => ({
+      requestId: e.requestId,
+      status: e.status,
+      path: e.path,
+      method: e.method,
+      errorName: e.errorName,
+      message: e.message,
+      createdAt: e.createdAt,
+      tenantId: e.tenantId,
+    }));
+
+    res.json({
+      success: true,
+      data: {
+        nullTenantCounts: diagnostics.nullTenantCounts,
+        orphanedChannels: diagnostics.orphanedChannels,
+        underMemberedDmThreads: diagnostics.underMemberedDmThreads,
+        recentErrors: safeErrors,
+      },
+      timestamp: new Date().toISOString(),
+    });
+  } catch (error) {
+    console.error('[chatDebug] Error fetching diagnostics:', error);
+    res.status(500).json({
+      success: false,
+      error: 'Failed to fetch chat diagnostics',
+    });
+  }
 });
 
 export default router;

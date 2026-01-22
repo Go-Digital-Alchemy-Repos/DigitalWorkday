@@ -172,6 +172,20 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
         return;
       }
       
+      // Require tenantId for chat room access (super_users without tenant context cannot access chat)
+      if (!serverTenantId) {
+        log(`Client ${socket.id} denied chat room join: no tenant context (user: ${serverUserId})`, 'socket.io');
+        chatDebugStore.logEvent({
+          eventType: 'room_access_denied',
+          socketId: socket.id,
+          userId: serverUserId,
+          roomName,
+          conversationId,
+          errorCode: 'NO_TENANT_CONTEXT',
+        });
+        return;
+      }
+      
       // Validate chat room access using server-derived identity
       try {
         const { storage } = await import('../storage');
@@ -179,7 +193,7 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
           targetType, 
           targetId, 
           serverUserId, 
-          serverTenantId || ''
+          serverTenantId
         );
         
         if (!hasAccess) {
