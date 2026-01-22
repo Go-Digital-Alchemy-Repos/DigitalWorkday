@@ -560,6 +560,55 @@ export const clientInvites = pgTable("client_invites", {
 ]);
 
 // =============================================================================
+// CLIENT DIVISIONS TABLES
+// =============================================================================
+
+/**
+ * Division Member Role enum
+ */
+export const DivisionMemberRole = {
+  ADMIN: "admin",
+  MEMBER: "member",
+} as const;
+
+/**
+ * Client Divisions table - represents organizational divisions/departments within a client
+ * Divisions are OPTIONAL - clients without divisions continue working as-is
+ */
+export const clientDivisions = pgTable("client_divisions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  color: text("color"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("client_divisions_tenant_idx").on(table.tenantId),
+  index("client_divisions_client_idx").on(table.clientId),
+  index("client_divisions_active_idx").on(table.isActive),
+]);
+
+/**
+ * Division Members table - tracks which users belong to which divisions
+ * Used for scoping visibility: employees see only projects in their divisions
+ */
+export const divisionMembers = pgTable("division_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  divisionId: varchar("division_id").references(() => clientDivisions.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  role: text("role").default("member"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("division_members_unique").on(table.divisionId, table.userId),
+  index("division_members_tenant_idx").on(table.tenantId),
+  index("division_members_user_idx").on(table.userId),
+]);
+
+// =============================================================================
 // TIME TRACKING TABLES
 // =============================================================================
 
@@ -625,6 +674,7 @@ export const projects = pgTable("projects", {
   workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
   teamId: varchar("team_id").references(() => teams.id),
   clientId: varchar("client_id").references(() => clients.id),
+  divisionId: varchar("division_id").references(() => clientDivisions.id), // Optional: project belongs to a client division
   name: text("name").notNull(),
   description: text("description"),
   visibility: text("visibility").notNull().default("workspace"),
@@ -637,6 +687,7 @@ export const projects = pgTable("projects", {
 }, (table) => [
   index("projects_client_idx").on(table.clientId),
   index("projects_tenant_idx").on(table.tenantId),
+  index("projects_division_idx").on(table.divisionId),
 ]);
 
 // Project Members table
@@ -1271,6 +1322,10 @@ export const projectsRelations = relations(projects, ({ one, many }) => ({
     fields: [projects.clientId],
     references: [clients.id],
   }),
+  division: one(clientDivisions, {
+    fields: [projects.divisionId],
+    references: [clientDivisions.id],
+  }),
   createdByUser: one(users, {
     fields: [projects.createdBy],
     references: [users.id],
@@ -1437,6 +1492,7 @@ export const clientsRelations = relations(clients, ({ one, many }) => ({
   contacts: many(clientContacts),
   invites: many(clientInvites),
   projects: many(projects),
+  divisions: many(clientDivisions),
 }));
 
 export const clientContactsRelations = relations(clientContacts, ({ one, many }) => ({
@@ -1459,6 +1515,38 @@ export const clientInvitesRelations = relations(clientInvites, ({ one }) => ({
   contact: one(clientContacts, {
     fields: [clientInvites.contactId],
     references: [clientContacts.id],
+  }),
+}));
+
+// =============================================================================
+// CLIENT DIVISIONS RELATIONS
+// =============================================================================
+
+export const clientDivisionsRelations = relations(clientDivisions, ({ one, many }) => ({
+  tenant: one(tenants, {
+    fields: [clientDivisions.tenantId],
+    references: [tenants.id],
+  }),
+  client: one(clients, {
+    fields: [clientDivisions.clientId],
+    references: [clients.id],
+  }),
+  members: many(divisionMembers),
+  projects: many(projects),
+}));
+
+export const divisionMembersRelations = relations(divisionMembers, ({ one }) => ({
+  tenant: one(tenants, {
+    fields: [divisionMembers.tenantId],
+    references: [tenants.id],
+  }),
+  division: one(clientDivisions, {
+    fields: [divisionMembers.divisionId],
+    references: [clientDivisions.id],
+  }),
+  user: one(users, {
+    fields: [divisionMembers.userId],
+    references: [users.id],
   }),
 }));
 
@@ -1732,6 +1820,18 @@ export const insertClientInviteSchema = createInsertSchema(clientInvites).omit({
   updatedAt: true,
 });
 
+// Client Divisions Insert Schemas
+export const insertClientDivisionSchema = createInsertSchema(clientDivisions).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertDivisionMemberSchema = createInsertSchema(divisionMembers).omit({
+  id: true,
+  createdAt: true,
+});
+
 // Time Tracking Insert Schemas
 export const insertTimeEntrySchema = createInsertSchema(timeEntries).omit({
   id: true,
@@ -1937,6 +2037,13 @@ export type InsertClientContact = z.infer<typeof insertClientContactSchema>;
 
 export type ClientInvite = typeof clientInvites.$inferSelect;
 export type InsertClientInvite = z.infer<typeof insertClientInviteSchema>;
+
+// Client Division Types
+export type ClientDivision = typeof clientDivisions.$inferSelect;
+export type InsertClientDivision = z.infer<typeof insertClientDivisionSchema>;
+
+export type DivisionMember = typeof divisionMembers.$inferSelect;
+export type InsertDivisionMember = z.infer<typeof insertDivisionMemberSchema>;
 
 // Time Tracking Types
 export type TimeEntry = typeof timeEntries.$inferSelect;

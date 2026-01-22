@@ -56,10 +56,13 @@ import {
   type ChatMessage, type InsertChatMessage,
   type ChatAttachment, type InsertChatAttachment,
   type ErrorLog, type InsertErrorLog,
+  type ClientDivision, type InsertClientDivision,
+  type DivisionMember, type InsertDivisionMember,
   users, workspaces, workspaceMembers, teams, teamMembers,
   projects, projectMembers, sections, tasks, taskAssignees, taskWatchers,
   subtasks, tags, taskTags, comments, commentMentions, activityLog, taskAttachments,
   clients, clientContacts, clientInvites, clientUserAccess,
+  clientDivisions, divisionMembers,
   timeEntries, activeTimers,
   invitations, appSettings, tenants, tenantSettings, personalTaskSections,
   chatChannels, chatChannelMembers, chatDmThreads, chatDmMembers, chatMessages, chatAttachments, chatReads, errorLogs,
@@ -331,6 +334,27 @@ export interface IStorage {
   updatePersonalTaskSection(id: string, section: Partial<InsertPersonalTaskSection>): Promise<PersonalTaskSection | undefined>;
   deletePersonalTaskSection(id: string): Promise<void>;
   clearPersonalSectionFromTasks(sectionId: string): Promise<void>;
+
+  // Client Divisions - CRUD operations
+  getClientDivision(id: string): Promise<ClientDivision | undefined>;
+  getClientDivisionsByClient(clientId: string, tenantId: string): Promise<ClientDivision[]>;
+  getClientDivisionsByTenant(tenantId: string): Promise<ClientDivision[]>;
+  createClientDivision(division: InsertClientDivision): Promise<ClientDivision>;
+  updateClientDivision(id: string, tenantId: string, division: Partial<InsertClientDivision>): Promise<ClientDivision | undefined>;
+  deleteClientDivision(id: string, tenantId: string): Promise<boolean>;
+  
+  // Division Members - CRUD operations
+  getDivisionMembers(divisionId: string): Promise<(DivisionMember & { user?: User })[]>;
+  addDivisionMember(member: InsertDivisionMember): Promise<DivisionMember>;
+  removeDivisionMember(divisionId: string, userId: string): Promise<void>;
+  setDivisionMembers(divisionId: string, tenantId: string, userIds: string[]): Promise<void>;
+  isDivisionMember(divisionId: string, userId: string): Promise<boolean>;
+  getUserDivisions(userId: string, tenantId: string): Promise<ClientDivision[]>;
+  
+  // Division Scoping Helpers (no route changes)
+  getEffectiveDivisionScope(userId: string, tenantId: string): Promise<string[] | "ALL">;
+  validateDivisionBelongsToClientTenant(divisionId: string, clientId: string, tenantId: string): Promise<boolean>;
+  validateUserBelongsToTenant(userId: string, tenantId: string): Promise<boolean>;
 
   // Chat - Channels
   getChatChannel(id: string): Promise<ChatChannel | undefined>;
@@ -2301,6 +2325,197 @@ export class DatabaseStorage implements IStorage {
     await db.update(tasks)
       .set({ personalSectionId: null })
       .where(eq(tasks.personalSectionId, sectionId));
+  }
+
+  // =============================================================================
+  // CLIENT DIVISIONS - CRUD OPERATIONS
+  // =============================================================================
+
+  async getClientDivision(id: string): Promise<ClientDivision | undefined> {
+    const results = await db.select().from(clientDivisions).where(eq(clientDivisions.id, id));
+    return results[0];
+  }
+
+  async getClientDivisionsByClient(clientId: string, tenantId: string): Promise<ClientDivision[]> {
+    return db.select().from(clientDivisions)
+      .where(and(
+        eq(clientDivisions.clientId, clientId),
+        eq(clientDivisions.tenantId, tenantId)
+      ))
+      .orderBy(asc(clientDivisions.name));
+  }
+
+  async getClientDivisionsByTenant(tenantId: string): Promise<ClientDivision[]> {
+    return db.select().from(clientDivisions)
+      .where(eq(clientDivisions.tenantId, tenantId))
+      .orderBy(asc(clientDivisions.name));
+  }
+
+  async createClientDivision(division: InsertClientDivision): Promise<ClientDivision> {
+    const [created] = await db.insert(clientDivisions).values(division).returning();
+    return created;
+  }
+
+  async updateClientDivision(id: string, tenantId: string, division: Partial<InsertClientDivision>): Promise<ClientDivision | undefined> {
+    const [updated] = await db.update(clientDivisions)
+      .set({ ...division, updatedAt: new Date() })
+      .where(and(
+        eq(clientDivisions.id, id),
+        eq(clientDivisions.tenantId, tenantId)
+      ))
+      .returning();
+    return updated;
+  }
+
+  async deleteClientDivision(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(clientDivisions)
+      .where(and(
+        eq(clientDivisions.id, id),
+        eq(clientDivisions.tenantId, tenantId)
+      ))
+      .returning();
+    return result.length > 0;
+  }
+
+  // =============================================================================
+  // DIVISION MEMBERS - CRUD OPERATIONS
+  // =============================================================================
+
+  async getDivisionMembers(divisionId: string): Promise<(DivisionMember & { user?: User })[]> {
+    const results = await db.select({
+      divisionMember: divisionMembers,
+      user: users,
+    })
+    .from(divisionMembers)
+    .leftJoin(users, eq(divisionMembers.userId, users.id))
+    .where(eq(divisionMembers.divisionId, divisionId));
+
+    return results.map(r => ({
+      ...r.divisionMember,
+      user: r.user || undefined,
+    }));
+  }
+
+  async addDivisionMember(member: InsertDivisionMember): Promise<DivisionMember> {
+    const [created] = await db.insert(divisionMembers).values(member).returning();
+    return created;
+  }
+
+  async removeDivisionMember(divisionId: string, userId: string): Promise<void> {
+    await db.delete(divisionMembers)
+      .where(and(
+        eq(divisionMembers.divisionId, divisionId),
+        eq(divisionMembers.userId, userId)
+      ));
+  }
+
+  async setDivisionMembers(divisionId: string, tenantId: string, userIds: string[]): Promise<void> {
+    // Delete all existing members
+    await db.delete(divisionMembers).where(eq(divisionMembers.divisionId, divisionId));
+    
+    // Add new members
+    if (userIds.length > 0) {
+      await db.insert(divisionMembers).values(
+        userIds.map(userId => ({
+          divisionId,
+          tenantId,
+          userId,
+          role: "member",
+        }))
+      );
+    }
+  }
+
+  async isDivisionMember(divisionId: string, userId: string): Promise<boolean> {
+    const results = await db.select({ id: divisionMembers.id })
+      .from(divisionMembers)
+      .where(and(
+        eq(divisionMembers.divisionId, divisionId),
+        eq(divisionMembers.userId, userId)
+      ))
+      .limit(1);
+    return results.length > 0;
+  }
+
+  async getUserDivisions(userId: string, tenantId: string): Promise<ClientDivision[]> {
+    const results = await db.select({ division: clientDivisions })
+      .from(divisionMembers)
+      .innerJoin(clientDivisions, eq(divisionMembers.divisionId, clientDivisions.id))
+      .where(and(
+        eq(divisionMembers.userId, userId),
+        eq(divisionMembers.tenantId, tenantId)
+      ));
+    return results.map(r => r.division);
+  }
+
+  // =============================================================================
+  // DIVISION SCOPING HELPERS
+  // =============================================================================
+
+  /**
+   * Get the effective division scope for a user.
+   * For tenant admins, returns "ALL" - they can see all projects.
+   * For employees, returns an array of division IDs they belong to.
+   * If user belongs to no divisions, returns empty array.
+   */
+  async getEffectiveDivisionScope(userId: string, tenantId: string): Promise<string[] | "ALL"> {
+    // Check if user is an admin (tenant admin or super user)
+    const userResults = await db.select({ role: users.role })
+      .from(users)
+      .where(and(
+        eq(users.id, userId),
+        eq(users.tenantId, tenantId)
+      ));
+    
+    if (userResults.length === 0) {
+      return []; // User not found in tenant
+    }
+    
+    const userRole = userResults[0].role;
+    if (userRole === "admin" || userRole === "super_user") {
+      return "ALL";
+    }
+    
+    // For employees, get their division memberships
+    const membershipResults = await db.select({ divisionId: divisionMembers.divisionId })
+      .from(divisionMembers)
+      .where(and(
+        eq(divisionMembers.userId, userId),
+        eq(divisionMembers.tenantId, tenantId)
+      ));
+    
+    return membershipResults.map(r => r.divisionId);
+  }
+
+  /**
+   * Validate that a division belongs to the specified client and tenant.
+   * Used to prevent cross-tenant or cross-client division assignments.
+   */
+  async validateDivisionBelongsToClientTenant(divisionId: string, clientId: string, tenantId: string): Promise<boolean> {
+    const results = await db.select({ id: clientDivisions.id })
+      .from(clientDivisions)
+      .where(and(
+        eq(clientDivisions.id, divisionId),
+        eq(clientDivisions.clientId, clientId),
+        eq(clientDivisions.tenantId, tenantId)
+      ))
+      .limit(1);
+    return results.length > 0;
+  }
+
+  /**
+   * Validate that a user belongs to the specified tenant.
+   * Used for tenant isolation checks.
+   */
+  async validateUserBelongsToTenant(userId: string, tenantId: string): Promise<boolean> {
+    const results = await db.select({ id: users.id })
+      .from(users)
+      .where(and(
+        eq(users.id, userId),
+        eq(users.tenantId, tenantId)
+      ))
+      .limit(1);
+    return results.length > 0;
   }
 
   // =============================================================================
