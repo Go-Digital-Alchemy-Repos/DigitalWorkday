@@ -235,19 +235,19 @@ async function cleanupByTenant(tenantId: string) {
     )
   );
   
-  // Level 3: Tasks
+  // Level 3: Time tracking (must be before tasks due to FK on taskId)
+  await db.delete(timeEntries).where(eq(timeEntries.tenantId, tenantId));
+  await db.delete(activeTimers).where(eq(activeTimers.tenantId, tenantId));
+  
+  // Level 4: Tasks
   await db.delete(tasks).where(eq(tasks.tenantId, tenantId));
 
-  // Level 4: Sections
+  // Level 5: Sections
   await db.delete(sections).where(
     inArray(sections.projectId,
       db.select({ id: projects.id }).from(projects).where(eq(projects.tenantId, tenantId))
     )
   );
-
-  // Level 5: Time tracking
-  await db.delete(timeEntries).where(eq(timeEntries.tenantId, tenantId));
-  await db.delete(activeTimers).where(eq(activeTimers.tenantId, tenantId));
 
   // Level 6: Project members, projects
   await db.delete(projectMembers).where(
