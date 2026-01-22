@@ -54,13 +54,14 @@ import {
   type ChatDmThread, type InsertChatDmThread,
   type ChatDmMember, type InsertChatDmMember,
   type ChatMessage, type InsertChatMessage,
+  type ChatAttachment, type InsertChatAttachment,
   users, workspaces, workspaceMembers, teams, teamMembers,
   projects, projectMembers, sections, tasks, taskAssignees, taskWatchers,
   subtasks, tags, taskTags, comments, commentMentions, activityLog, taskAttachments,
   clients, clientContacts, clientInvites, clientUserAccess,
   timeEntries, activeTimers,
   invitations, appSettings, tenants, tenantSettings, personalTaskSections,
-  chatChannels, chatChannelMembers, chatDmThreads, chatDmMembers, chatMessages,
+  chatChannels, chatChannelMembers, chatDmThreads, chatDmMembers, chatMessages, chatAttachments,
   UserRole,
   type CommentMention, type InsertCommentMention,
 } from "@shared/schema";
@@ -351,10 +352,16 @@ export interface IStorage {
 
   // Chat - Messages
   getChatMessage(id: string): Promise<ChatMessage | undefined>;
-  getChatMessages(targetType: 'channel' | 'dm', targetId: string, limit?: number, before?: Date): Promise<(ChatMessage & { author: User })[]>;
+  getChatMessages(targetType: 'channel' | 'dm', targetId: string, limit?: number, before?: Date): Promise<(ChatMessage & { author: User; attachments?: ChatAttachment[] })[]>;
   createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
   updateChatMessage(id: string, updates: Partial<InsertChatMessage>): Promise<ChatMessage | undefined>;
   deleteChatMessage(id: string): Promise<void>;
+
+  // Chat - Attachments
+  createChatAttachment(attachment: InsertChatAttachment): Promise<ChatAttachment>;
+  getChatAttachmentsByMessageId(messageId: string): Promise<ChatAttachment[]>;
+  getChatAttachment(id: string): Promise<ChatAttachment | undefined>;
+  getChatAttachmentsByTenantAndIds(tenantId: string, ids: string[]): Promise<ChatAttachment[]>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -2594,6 +2601,28 @@ export class DatabaseStorage implements IStorage {
 
   async deleteChatMessage(id: string): Promise<void> {
     await db.update(chatMessages).set({ deletedAt: new Date() }).where(eq(chatMessages.id, id));
+  }
+
+  // Chat - Attachments
+  async createChatAttachment(attachment: InsertChatAttachment): Promise<ChatAttachment> {
+    const [newAttachment] = await db.insert(chatAttachments).values(attachment).returning();
+    return newAttachment;
+  }
+
+  async getChatAttachmentsByMessageId(messageId: string): Promise<ChatAttachment[]> {
+    return db.select().from(chatAttachments).where(eq(chatAttachments.messageId, messageId));
+  }
+
+  async getChatAttachment(id: string): Promise<ChatAttachment | undefined> {
+    const [attachment] = await db.select().from(chatAttachments).where(eq(chatAttachments.id, id));
+    return attachment || undefined;
+  }
+
+  async getChatAttachmentsByTenantAndIds(tenantId: string, ids: string[]): Promise<ChatAttachment[]> {
+    if (ids.length === 0) return [];
+    return db.select().from(chatAttachments).where(
+      and(eq(chatAttachments.tenantId, tenantId), inArray(chatAttachments.id, ids))
+    );
   }
 }
 
