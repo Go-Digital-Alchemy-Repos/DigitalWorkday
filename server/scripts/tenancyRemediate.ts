@@ -2,9 +2,10 @@
  * Tenancy Remediation Script
  * 
  * Safely backfills missing tenant_id values using relationship chains.
- * NEVER deletes data - only updates or quarantines.
+ * NEVER deletes data - only updates resolvable rows.
+ * Unresolved rows remain NULL and are reported for manual intervention.
  * 
- * Run: npx tsx server/scripts/tenancyRemediate.ts [--dry-run] [--quarantine-table]
+ * Run: npx tsx server/scripts/tenancyRemediate.ts [--dry-run]
  */
 
 import { db } from "../db";
@@ -282,23 +283,20 @@ async function backfillTable(
       `;
       break;
 
-    // Chat DM threads -> participant users
+    // Chat DM threads -> participant users (only if BOTH users share same tenant)
     case "chat_dm_threads":
       updateQuery = `
         UPDATE chat_dm_threads dt
-        SET tenant_id = (
-          SELECT u.tenant_id FROM users u
-          WHERE (u.id = dt.user1_id OR u.id = dt.user2_id)
-            AND u.tenant_id IS NOT NULL
-          LIMIT 1
-        )
-        WHERE dt.tenant_id IS NULL
-          AND EXISTS (
-            SELECT 1 FROM users u
-            WHERE (u.id = dt.user1_id OR u.id = dt.user2_id)
-              AND u.tenant_id IS NOT NULL
-          )
+        SET tenant_id = u1.tenant_id
+        FROM users u1, users u2
+        WHERE dt.user1_id = u1.id
+          AND dt.user2_id = u2.id
+          AND dt.tenant_id IS NULL
+          AND u1.tenant_id IS NOT NULL
+          AND u2.tenant_id IS NOT NULL
+          AND u1.tenant_id = u2.tenant_id
       `;
+      details.push("Only updates DM threads where both users share the same tenant");
       break;
 
     // Chat DM members -> DM thread -> tenant

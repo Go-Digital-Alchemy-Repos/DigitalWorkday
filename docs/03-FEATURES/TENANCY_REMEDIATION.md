@@ -2,6 +2,13 @@
 
 This document describes how to identify and fix tenant_id drift in the database.
 
+## Design Principles
+
+- **NEVER delete data** - Only update resolvable rows
+- **Unresolved rows remain NULL** - Reported for manual intervention
+- **Relationship-based inference** - Use parent records to determine tenant_id
+- **Cross-tenant safety** - DM threads only backfilled when both users share same tenant
+
 ## Current State Summary
 
 After running the tenancy scan, the following tables have rows with NULL tenant_id:
