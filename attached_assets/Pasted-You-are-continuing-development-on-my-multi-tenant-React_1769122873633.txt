@@ -1,0 +1,44 @@
+You are continuing development on my multi-tenant React + Express + Postgres (Drizzle) app.
+
+SPRINT 1 / PROMPT 1
+GOAL: Fix tenant integrity drift by backfilling missing tenant_id on existing rows and preventing new rows from being created without tenant_id.
+
+ABSOLUTE SAFETY RULES:
+- Do NOT delete any data.
+- Do NOT change existing endpoint paths or response shapes.
+- Prefer additive migrations and safe scripts.
+- If any table has unresolved tenant_id rows, do NOT force NOT NULL yet; instead report unresolved counts.
+
+STEP A — Identify drift tables
+1) Identify all tables that should ALWAYS have tenant_id:
+   - clients, projects, tasks, teams, users, workspace_members, team_members,
+     time_entries, active_timers, task_attachments, chat_* tables, comments, etc.
+2) For each, compute COUNT(*) where tenant_id IS NULL.
+
+STEP B — Backfill tenant_id safely (best-effort, deterministic)
+Create a server script or migration-safe script (server/scripts/tenancyRemediate.ts) that:
+- For each table, updates tenant_id for NULL rows using strong relationships:
+  - If workspace_id exists: join workspaces -> tenant_id
+  - If project_id exists: join projects -> tenant_id
+  - If client_id exists: join clients -> tenant_id
+  - If created_by/user_id exists: join users -> tenant_id (only if user has tenant_id)
+  - For chat messages: follow channel/dm thread -> tenant_id
+- Log a report: updatedCount per table + unresolvedCount per table.
+
+STEP C — Prevent future drift (server-side enforcement)
+- In ALL create paths (routes and storage methods), require tenant_id to be set from effectiveTenantId.
+- Add a defensive assertion utility:
+  assertTenantId(tenantId) throws a typed AppError("Tenant context required")
+- Ensure Super Admin “acting as tenant” creates records with tenant_id.
+
+STEP D — Constraints (only if safe)
+If and only if unresolvedCount == 0 for a table:
+- add NOT NULL constraint for tenant_id
+- add index on tenant_id if missing
+If unresolvedCount > 0:
+- DO NOT set NOT NULL; output manual remediation instructions and keep app functional.
+
+ACCEPTANCE CRITERIA:
+- Tenancy health no longer reports missing tenantId for core tables OR clearly reports only the unresolved edge cases.
+- No new rows can be created without tenant_id in normal tenant-scoped flows.
+- No destructive changes.
