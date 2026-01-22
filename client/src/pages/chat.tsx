@@ -169,6 +169,7 @@ export default function ChatPage() {
   const [newChannelPrivate, setNewChannelPrivate] = useState(false);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [isDragOver, setIsDragOver] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const [dmSeenBy, setDmSeenBy] = useState<{ userId: string; messageId: string } | null>(null);
@@ -1151,6 +1152,18 @@ export default function ChatPage() {
     const files = e.target.files;
     if (!files || files.length === 0) return;
     
+    await uploadFiles(files);
+    
+    if (fileInputRef.current) {
+      fileInputRef.current.value = "";
+    }
+  };
+
+  const removePendingAttachment = (id: string) => {
+    setPendingAttachments(prev => prev.filter(a => a.id !== id));
+  };
+
+  const uploadFiles = async (files: FileList | File[]) => {
     setIsUploading(true);
     
     for (const file of Array.from(files)) {
@@ -1186,13 +1199,29 @@ export default function ChatPage() {
     }
     
     setIsUploading(false);
-    if (fileInputRef.current) {
-      fileInputRef.current.value = "";
-    }
   };
 
-  const removePendingAttachment = (id: string) => {
-    setPendingAttachments(prev => prev.filter(a => a.id !== id));
+  const handleDragOver = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    if (!isDragOver) setIsDragOver(true);
+  };
+
+  const handleDragLeave = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+  };
+
+  const handleDrop = async (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    
+    const files = e.dataTransfer.files;
+    if (files && files.length > 0) {
+      await uploadFiles(files);
+    }
   };
 
   const handleSendMessage = (e?: React.FormEvent) => {
@@ -1877,7 +1906,21 @@ export default function ChatPage() {
               </div>
             </ScrollArea>
 
-            <form onSubmit={handleSendMessage} className="p-4 border-t">
+            <form 
+              onSubmit={handleSendMessage} 
+              className={`p-4 border-t transition-colors ${isDragOver ? "bg-accent/20 border-primary border-2 border-dashed" : ""}`}
+              onDragOver={handleDragOver}
+              onDragLeave={handleDragLeave}
+              onDrop={handleDrop}
+              data-testid="message-composer-form"
+            >
+              {/* Drag and drop indicator */}
+              {isDragOver && (
+                <div className="mb-2 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
+                  <Paperclip className="h-4 w-4" />
+                  Drop files here to upload
+                </div>
+              )}
               {/* Pending attachments preview */}
               {pendingAttachments.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-2">
@@ -1895,11 +1938,10 @@ export default function ChatPage() {
                           type="button"
                           size="icon"
                           variant="ghost"
-                          className="h-5 w-5"
                           onClick={() => removePendingAttachment(attachment.id)}
                           data-testid={`remove-attachment-${attachment.id}`}
                         >
-                          <X className="h-3 w-3" />
+                          <X className="h-4 w-4" />
                         </Button>
                       </div>
                     );

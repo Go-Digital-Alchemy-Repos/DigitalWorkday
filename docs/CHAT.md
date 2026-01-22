@@ -418,3 +418,84 @@ This index significantly speeds up ILIKE queries for message body searches.
 
 - `search_scoped_to_membership.test.ts`: Verifies search respects channel/DM membership
 - `search_opens_conversation.test.tsx`: Verifies clicking results opens correct conversation
+
+---
+
+## Chat Attachments
+
+Chat supports file attachments via S3 storage with tenant isolation.
+
+### Upload UI
+
+The message composer includes:
+- **Paperclip Button**: Click to select files from file picker
+- **Drag and Drop**: Drag files directly onto the composer area
+
+### Supported File Types
+
+- Documents: PDF, DOC, DOCX, XLS, XLSX, CSV, TXT
+- Images: PNG, JPG, JPEG, WebP
+- Archives: ZIP
+
+Maximum file size: 25MB per file
+
+### Upload Flow
+
+1. User selects or drops files
+2. Files are uploaded to S3 via `POST /api/v1/chat/uploads`
+3. Attachments appear as pending in the composer
+4. User can remove pending attachments before sending
+5. On send, attachment IDs are included in the message payload
+6. Attachments are linked to the message in the database
+
+### Message Display
+
+Messages with attachments show:
+- **Images**: Thumbnail preview (clickable to open full size)
+- **Other Files**: Icon, filename, and size with download link
+
+### API
+
+#### Upload Attachment
+
+```
+POST /api/v1/chat/uploads
+Content-Type: multipart/form-data
+```
+
+Form data field: `file`
+
+Response:
+```json
+{
+  "id": "attachment-uuid",
+  "fileName": "document.pdf",
+  "mimeType": "application/pdf",
+  "sizeBytes": 102400,
+  "url": "https://bucket.s3.region.amazonaws.com/...",
+  "storageSource": "tenant"
+}
+```
+
+#### Send Message with Attachments
+
+```
+POST /api/v1/chat/channels/:channelId/messages
+{
+  "body": "Check these files",
+  "attachmentIds": ["att-1", "att-2"]
+}
+```
+
+### Security
+
+- **Tenant Isolation**: S3 keys include tenant ID, attachments validated on upload
+- **Single-use**: Each attachment can only be linked to one message
+- **Cross-tenant Rejection**: Attempting to use attachments from another tenant fails
+
+### Tests
+
+- `attachment_upload_scoped_to_tenant.test.ts`: Verifies tenant isolation
+- `message_with_attachment_renders.test.tsx`: Verifies attachment display in messages
+
+See also: `/docs/UPLOADS_S3.md` for S3 configuration and storage provider details.

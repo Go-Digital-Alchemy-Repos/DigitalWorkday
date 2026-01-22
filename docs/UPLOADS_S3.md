@@ -168,6 +168,77 @@ This flow differs from the unified service because it creates an attachment reco
 
 The unified S3 service supports the `task-attachment` category for validation purposes, but the specialized attachment endpoints should be used for task attachments to ensure proper record management.
 
+## Chat Attachments
+
+Chat attachments use a direct upload flow with multipart form data:
+
+### Upload Endpoint
+
+```
+POST /api/v1/chat/uploads
+Content-Type: multipart/form-data
+```
+
+**Request**: Form data with `file` field containing the file to upload
+
+**Response**:
+```json
+{
+  "id": "attachment-uuid",
+  "fileName": "document.pdf",
+  "mimeType": "application/pdf",
+  "sizeBytes": 102400,
+  "url": "https://bucket.s3.region.amazonaws.com/chat-attachments/tenant-id/file.pdf",
+  "storageSource": "tenant" | "system" | "legacy"
+}
+```
+
+### S3 Key Structure
+
+Chat attachments use tenant-isolated keys:
+```
+{keyPrefixTemplate}/{tenantId}/{uuid}.{extension}
+```
+
+Default key prefix: `chat-attachments`
+
+### Allowed File Types
+
+- Documents: PDF, DOC, DOCX, XLS, XLSX, CSV, TXT
+- Images: PNG, JPG, JPEG, WebP
+- Archives: ZIP
+
+### Size Limit
+
+Maximum file size: 25MB per file
+
+### Storage Provider Resolution
+
+Chat attachments use the hierarchical S3 storage resolver:
+1. Tenant-specific S3 configuration (if configured)
+2. System-level S3 configuration
+3. Environment variable S3 configuration
+
+### Sending Messages with Attachments
+
+1. Upload files via `/api/v1/chat/uploads`
+2. Collect returned attachment IDs
+3. Include `attachmentIds` array in message payload:
+
+```json
+POST /api/v1/chat/channels/:channelId/messages
+{
+  "body": "Check out these files",
+  "attachmentIds": ["att-1", "att-2"]
+}
+```
+
+### Security
+
+- Attachments are scoped to tenant (tenantId validated on upload and link)
+- Attachments can only be linked to one message (prevents reuse across conversations)
+- Cross-tenant attachment access is rejected
+
 ## Configuration
 
 S3 uploads require the following environment variables:
