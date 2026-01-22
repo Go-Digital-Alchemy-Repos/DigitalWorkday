@@ -12,6 +12,7 @@ import { Card } from "@/components/ui/card";
 import {
   Dialog,
   DialogContent,
+  DialogDescription,
   DialogHeader,
   DialogTitle,
   DialogFooter,
@@ -43,14 +44,37 @@ import {
   Check,
   Search,
   AtSign,
+  UserPlus,
+  UserMinus,
+  Settings,
 } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
+import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetHeader,
+  SheetTitle,
+  SheetTrigger,
+} from "@/components/ui/sheet";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Popover,
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { CHAT_EVENTS, CHAT_ROOM_EVENTS, ChatNewMessagePayload, ChatMessageUpdatedPayload, ChatMessageDeletedPayload } from "@shared/events";
+import { CHAT_EVENTS, CHAT_ROOM_EVENTS, ChatNewMessagePayload, ChatMessageUpdatedPayload, ChatMessageDeletedPayload, ChatMemberJoinedPayload, ChatMemberLeftPayload } from "@shared/events";
 
 interface ChatChannel {
   id: string;
@@ -135,6 +159,40 @@ export default function ChatPage() {
   const [mentionCursorPos, setMentionCursorPos] = useState(0);
   const messageInputRef = useRef<HTMLInputElement>(null);
 
+  // Team panel state
+  const [sidebarTab, setSidebarTab] = useState<"chats" | "team">("chats");
+  const [teamSearchQuery, setTeamSearchQuery] = useState("");
+  const [selectedTeamUsers, setSelectedTeamUsers] = useState<Set<string>>(new Set());
+  const [createGroupDialogOpen, setCreateGroupDialogOpen] = useState(false);
+  const [newGroupName, setNewGroupName] = useState("");
+
+  // Members drawer state
+  const [membersDrawerOpen, setMembersDrawerOpen] = useState(false);
+  const [addMemberSearchQuery, setAddMemberSearchQuery] = useState("");
+  const [removeMemberConfirmUserId, setRemoveMemberConfirmUserId] = useState<string | null>(null);
+
+  interface TeamUser {
+    id: string;
+    firstName: string | null;
+    lastName: string | null;
+    email: string;
+    role: string;
+    avatarUrl: string | null;
+    displayName: string;
+  }
+
+  interface ChannelMember {
+    id: string;
+    userId: string;
+    role: string;
+    user: {
+      id: string;
+      name: string;
+      email: string;
+      avatarUrl: string | null;
+    };
+  }
+
   interface MentionableUser {
     id: string;
     email: string;
@@ -184,6 +242,167 @@ export default function ChatPage() {
     }],
     enabled: mentionOpen && (!!selectedChannel || !!selectedDm),
   });
+
+  // Team panel: fetch all tenant users - also needed when members drawer is open
+  const { data: teamUsers = [], isLoading: isLoadingTeamUsers } = useQuery<TeamUser[]>({
+    queryKey: ["/api/v1/chat/users", { search: teamSearchQuery }],
+    enabled: sidebarTab === "team" || membersDrawerOpen,
+  });
+
+  // Channel members query for the members drawer
+  const { data: channelMembers = [], refetch: refetchChannelMembers } = useQuery<ChannelMember[]>({
+    queryKey: ["/api/v1/chat/channels", selectedChannel?.id, "members"],
+    enabled: !!selectedChannel && membersDrawerOpen,
+  });
+
+  // Mutation: Add members to channel
+  const addMembersMutation = useMutation({
+    mutationFn: async ({ channelId, userIds }: { channelId: string; userIds: string[] }) => {
+      return apiRequest("POST", `/api/v1/chat/channels/${channelId}/members`, { userIds });
+    },
+    onSuccess: () => {
+      refetchChannelMembers();
+      setAddMemberSearchQuery("");
+      toast({ title: "Members added successfully" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to add members",
+        description: error.message || "An error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation: Remove member from channel
+  const removeMemberMutation = useMutation({
+    mutationFn: async ({ channelId, userId }: { channelId: string; userId: string }) => {
+      return apiRequest("DELETE", `/api/v1/chat/channels/${channelId}/members/${userId}`);
+    },
+    onSuccess: (_, { userId }) => {
+      refetchChannelMembers();
+      setRemoveMemberConfirmUserId(null);
+      // If user removed themselves, close drawer and deselect channel
+      if (userId === user?.id) {
+        setMembersDrawerOpen(false);
+        setSelectedChannel(null);
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      }
+      toast({ title: "Member removed" });
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to remove member",
+        description: error.message || "An error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation: Start DM with selected users
+  const startDmMutation = useMutation({
+    mutationFn: async (userIds: string[]) => {
+      return apiRequest("POST", "/api/v1/chat/dm", { userIds });
+    },
+    onSuccess: (result: any) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+      setSelectedTeamUsers(new Set());
+      setSidebarTab("chats");
+      // Select the newly created/returned DM
+      if (result && result.id) {
+        setSelectedDm(result);
+        setSelectedChannel(null);
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to start conversation",
+        description: error.message || "An error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Mutation: Create group channel with selected users
+  const createGroupWithMembersMutation = useMutation({
+    mutationFn: async ({ name, userIds }: { name: string; userIds: string[] }) => {
+      const channel: any = await apiRequest("POST", "/api/v1/chat/channels", { name, isPrivate: true });
+      let addMembersFailed = false;
+      if (userIds.length > 0 && channel?.id) {
+        try {
+          await apiRequest("POST", `/api/v1/chat/channels/${channel.id}/members`, { userIds });
+        } catch (err) {
+          addMembersFailed = true;
+        }
+      }
+      return { channel, addMembersFailed };
+    },
+    onSuccess: (result: { channel: any; addMembersFailed: boolean }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+      setSelectedTeamUsers(new Set());
+      setCreateGroupDialogOpen(false);
+      setNewGroupName("");
+      setSidebarTab("chats");
+      if (result.channel?.id) {
+        setSelectedChannel(result.channel);
+        setSelectedDm(null);
+      }
+      if (result.addMembersFailed) {
+        toast({
+          title: "Group created with warning",
+          description: "The group was created but some members could not be added. You can add them later.",
+          variant: "default",
+        });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to create group",
+        description: error.message || "An error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+
+  // Handle start chat from team panel
+  const handleStartChat = () => {
+    if (selectedTeamUsers.size === 0) return;
+    const userIds = Array.from(selectedTeamUsers);
+    
+    if (userIds.length === 1) {
+      // Start DM
+      startDmMutation.mutate(userIds);
+    } else {
+      // Multiple users - open group creation dialog
+      setCreateGroupDialogOpen(true);
+    }
+  };
+
+  // Toggle user selection in team panel
+  const toggleUserSelection = (userId: string) => {
+    setSelectedTeamUsers(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(userId)) {
+        newSet.delete(userId);
+      } else {
+        newSet.add(userId);
+      }
+      return newSet;
+    });
+  };
+
+  // Filter team users excluding self
+  const filteredTeamUsers = teamUsers.filter(u => u.id !== user?.id);
+
+  // Get users not in current channel for add member dropdown
+  const channelMemberIds = new Set(channelMembers.map(m => m.userId));
+  const usersNotInChannel = teamUsers.filter(u => !channelMemberIds.has(u.id) && u.id !== user?.id);
+  const filteredUsersNotInChannel = addMemberSearchQuery
+    ? usersNotInChannel.filter(u =>
+        u.displayName.toLowerCase().includes(addMemberSearchQuery.toLowerCase()) ||
+        u.email.toLowerCase().includes(addMemberSearchQuery.toLowerCase())
+      )
+    : usersNotInChannel;
 
   const handleMessageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const value = e.target.value;
@@ -367,16 +586,44 @@ export default function ChatPage() {
       }
     };
 
+    const handleMemberJoined = (payload: ChatMemberJoinedPayload) => {
+      // Refresh channel members if currently viewing this channel's members
+      if (selectedChannel && payload.channelId === selectedChannel.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel.id, "members"] });
+      }
+      // Refresh channel list in case user was added to a new channel
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+    };
+
+    const handleMemberLeft = (payload: ChatMemberLeftPayload) => {
+      // Refresh channel members if currently viewing this channel's members
+      if (selectedChannel && payload.channelId === selectedChannel.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel.id, "members"] });
+        // If current user was removed, deselect and refresh channels
+        if (payload.userId === user?.id) {
+          setSelectedChannel(null);
+          setMembersDrawerOpen(false);
+          queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+        }
+      }
+      // Refresh channel list
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
+    };
+
     socket.on(CHAT_EVENTS.NEW_MESSAGE as any, handleNewMessage as any);
     socket.on(CHAT_EVENTS.MESSAGE_UPDATED as any, handleMessageUpdated as any);
     socket.on(CHAT_EVENTS.MESSAGE_DELETED as any, handleMessageDeleted as any);
+    socket.on(CHAT_EVENTS.MEMBER_JOINED as any, handleMemberJoined as any);
+    socket.on(CHAT_EVENTS.MEMBER_LEFT as any, handleMemberLeft as any);
 
     return () => {
       socket.off(CHAT_EVENTS.NEW_MESSAGE as any, handleNewMessage as any);
       socket.off(CHAT_EVENTS.MESSAGE_UPDATED as any, handleMessageUpdated as any);
       socket.off(CHAT_EVENTS.MESSAGE_DELETED as any, handleMessageDeleted as any);
+      socket.off(CHAT_EVENTS.MEMBER_JOINED as any, handleMemberJoined as any);
+      socket.off(CHAT_EVENTS.MEMBER_LEFT as any, handleMemberLeft as any);
     };
-  }, [selectedChannel, selectedDm]);
+  }, [selectedChannel, selectedDm, user?.id]);
 
   const createChannelMutation = useMutation({
     mutationFn: async (data: { name: string; isPrivate: boolean }) => {
@@ -584,34 +831,48 @@ export default function ChatPage() {
   return (
     <div className="flex h-full" data-testid="chat-page">
       <div className="w-64 border-r bg-sidebar flex flex-col">
-        <div className="p-4 border-b">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-sidebar-foreground">Channels</h2>
-            <Button
-              size="icon"
-              variant="ghost"
-              onClick={() => setCreateChannelOpen(true)}
-              data-testid="button-create-channel"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-          </div>
-          <ScrollArea className="h-40">
-            {channels.map((channel) => (
-              <button
-                key={channel.id}
-                onClick={() => handleSelectChannel(channel)}
-                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-sm hover-elevate ${
-                  selectedChannel?.id === channel.id
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground"
-                }`}
-                data-testid={`channel-item-${channel.id}`}
-              >
-                {channel.isPrivate ? (
-                  <Lock className="h-4 w-4 flex-shrink-0" />
-                ) : (
-                  <Hash className="h-4 w-4 flex-shrink-0" />
+        <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as "chats" | "team")} className="flex-1 flex flex-col">
+          <TabsList className="grid w-full grid-cols-2 mx-2 mt-2" style={{ width: "calc(100% - 16px)" }}>
+            <TabsTrigger value="chats" data-testid="tab-chats">
+              <MessageCircle className="h-4 w-4 mr-1" />
+              Chats
+            </TabsTrigger>
+            <TabsTrigger value="team" data-testid="tab-team">
+              <Users className="h-4 w-4 mr-1" />
+              Team
+            </TabsTrigger>
+          </TabsList>
+
+          {/* Chats Tab */}
+          <TabsContent value="chats" className="flex-1 flex flex-col overflow-hidden mt-0 p-0">
+            <div className="p-4 border-b">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-sidebar-foreground">Channels</h2>
+                <Button
+                  size="icon"
+                  variant="ghost"
+                  onClick={() => setCreateChannelOpen(true)}
+                  data-testid="button-create-channel"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <ScrollArea className="h-40">
+                {channels.map((channel) => (
+                  <button
+                    key={channel.id}
+                    onClick={() => handleSelectChannel(channel)}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-sm hover-elevate ${
+                      selectedChannel?.id === channel.id
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-sidebar-foreground"
+                    }`}
+                    data-testid={`channel-item-${channel.id}`}
+                  >
+                    {channel.isPrivate ? (
+                      <Lock className="h-4 w-4 flex-shrink-0" />
+                    ) : (
+                      <Hash className="h-4 w-4 flex-shrink-0" />
                 )}
                 <span className="truncate flex-1">{channel.name}</span>
                 {channel.unreadCount && channel.unreadCount > 0 && (
@@ -628,46 +889,120 @@ export default function ChatPage() {
               <p className="text-sm text-muted-foreground px-2">No channels yet</p>
             )}
           </ScrollArea>
-        </div>
+            </div>
 
-        <div className="p-4 flex-1">
-          <div className="flex items-center justify-between mb-4">
-            <h2 className="font-semibold text-sidebar-foreground">Direct Messages</h2>
-            <Users className="h-4 w-4 text-muted-foreground" />
-          </div>
-          <ScrollArea className="h-40">
-            {dmThreads.map((dm) => (
-              <button
-                key={dm.id}
-                onClick={() => handleSelectDm(dm)}
-                className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-sm hover-elevate ${
-                  selectedDm?.id === dm.id
-                    ? "bg-sidebar-accent text-sidebar-accent-foreground"
-                    : "text-sidebar-foreground"
-                }`}
-                data-testid={`dm-item-${dm.id}`}
-              >
-                <Avatar className="h-6 w-6">
-                  <AvatarFallback className="text-xs">
-                    {getInitials(getDmDisplayName(dm))}
-                  </AvatarFallback>
-                </Avatar>
-                <span className="truncate flex-1">{getDmDisplayName(dm)}</span>
-                {dm.unreadCount && dm.unreadCount > 0 && (
-                  <span 
-                    className="ml-auto px-1.5 py-0.5 text-xs font-medium bg-primary text-primary-foreground rounded-full"
-                    data-testid={`dm-unread-${dm.id}`}
+            <div className="p-4 flex-1">
+              <div className="flex items-center justify-between mb-4">
+                <h2 className="font-semibold text-sidebar-foreground">Direct Messages</h2>
+              </div>
+              <ScrollArea className="h-40">
+                {dmThreads.map((dm) => (
+                  <button
+                    key={dm.id}
+                    onClick={() => handleSelectDm(dm)}
+                    className={`w-full flex items-center gap-2 px-2 py-1.5 rounded text-left text-sm hover-elevate ${
+                      selectedDm?.id === dm.id
+                        ? "bg-sidebar-accent text-sidebar-accent-foreground"
+                        : "text-sidebar-foreground"
+                    }`}
+                    data-testid={`dm-item-${dm.id}`}
                   >
-                    {dm.unreadCount > 99 ? "99+" : dm.unreadCount}
-                  </span>
+                    <Avatar className="h-6 w-6">
+                      <AvatarFallback className="text-xs">
+                        {getInitials(getDmDisplayName(dm))}
+                      </AvatarFallback>
+                    </Avatar>
+                    <span className="truncate flex-1">{getDmDisplayName(dm)}</span>
+                    {dm.unreadCount && dm.unreadCount > 0 && (
+                      <span 
+                        className="ml-auto px-1.5 py-0.5 text-xs font-medium bg-primary text-primary-foreground rounded-full"
+                        data-testid={`dm-unread-${dm.id}`}
+                      >
+                        {dm.unreadCount > 99 ? "99+" : dm.unreadCount}
+                      </span>
+                    )}
+                  </button>
+                ))}
+                {dmThreads.length === 0 && (
+                  <p className="text-sm text-muted-foreground px-2">No conversations yet</p>
                 )}
-              </button>
-            ))}
-            {dmThreads.length === 0 && (
-              <p className="text-sm text-muted-foreground px-2">No conversations yet</p>
-            )}
-          </ScrollArea>
-        </div>
+              </ScrollArea>
+            </div>
+          </TabsContent>
+
+          {/* Team Tab */}
+          <TabsContent value="team" className="flex-1 flex flex-col overflow-hidden mt-0 p-0">
+            <div className="p-4 border-b">
+              <Input
+                placeholder="Search team members..."
+                value={teamSearchQuery}
+                onChange={(e) => setTeamSearchQuery(e.target.value)}
+                className="mb-2"
+                data-testid="input-team-search"
+              />
+              {selectedTeamUsers.size > 0 && (
+                <div className="flex items-center gap-2 mb-2">
+                  <Badge variant="secondary">
+                    {selectedTeamUsers.size} selected
+                  </Badge>
+                  <Button
+                    size="sm"
+                    onClick={handleStartChat}
+                    disabled={startDmMutation.isPending || createGroupWithMembersMutation.isPending}
+                    data-testid="button-start-chat"
+                  >
+                    {startDmMutation.isPending || createGroupWithMembersMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                    ) : (
+                      <MessageCircle className="h-4 w-4 mr-1" />
+                    )}
+                    Start Chat
+                  </Button>
+                </div>
+              )}
+            </div>
+            <ScrollArea className="flex-1 p-2">
+              {isLoadingTeamUsers ? (
+                <div className="flex justify-center p-4">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : filteredTeamUsers.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center p-4">
+                  {teamSearchQuery ? "No users found" : "No team members"}
+                </p>
+              ) : (
+                <div className="space-y-1">
+                  {filteredTeamUsers.map((teamUser) => (
+                    <div
+                      key={teamUser.id}
+                      className="flex items-center gap-2 px-2 py-2 rounded hover-elevate cursor-pointer"
+                      onClick={() => toggleUserSelection(teamUser.id)}
+                      data-testid={`team-user-${teamUser.id}`}
+                    >
+                      <Checkbox
+                        checked={selectedTeamUsers.has(teamUser.id)}
+                        onCheckedChange={() => toggleUserSelection(teamUser.id)}
+                        data-testid={`checkbox-user-${teamUser.id}`}
+                      />
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-xs">
+                          {getInitials(teamUser.displayName)}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">{teamUser.displayName}</p>
+                        <p className="text-xs text-muted-foreground truncate">{teamUser.email}</p>
+                      </div>
+                      <Badge variant="outline" className="text-xs">
+                        {teamUser.role}
+                      </Badge>
+                    </div>
+                  ))}
+                </div>
+              )}
+            </ScrollArea>
+          </TabsContent>
+        </Tabs>
       </div>
 
       <div className="flex-1 flex flex-col">
@@ -692,14 +1027,26 @@ export default function ChatPage() {
                   </>
                 )}
               </div>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setSearchOpen(true)}
-                data-testid="button-chat-search"
-              >
-                <Search className="h-4 w-4" />
-              </Button>
+              <div className="flex items-center gap-1">
+                {selectedChannel && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setMembersDrawerOpen(true)}
+                    data-testid="button-channel-members"
+                  >
+                    <Users className="h-4 w-4" />
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setSearchOpen(true)}
+                  data-testid="button-chat-search"
+                >
+                  <Search className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
 
             <ScrollArea className="flex-1 p-4" ref={scrollRef}>
@@ -1123,6 +1470,203 @@ export default function ChatPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Members Drawer */}
+      <Sheet open={membersDrawerOpen} onOpenChange={setMembersDrawerOpen}>
+        <SheetContent className="w-80">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Users className="h-5 w-5" />
+              Channel Members
+            </SheetTitle>
+            <SheetDescription>
+              {selectedChannel?.name} has {channelMembers.length} member{channelMembers.length !== 1 ? "s" : ""}
+            </SheetDescription>
+          </SheetHeader>
+          <div className="mt-4 space-y-4">
+            {/* Add members section - only for channel creator */}
+            {selectedChannel?.createdBy === user?.id && usersNotInChannel.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Add Members</p>
+                <div className="flex gap-2">
+                  <Input
+                    placeholder="Search users..."
+                    value={addMemberSearchQuery}
+                    onChange={(e) => setAddMemberSearchQuery(e.target.value)}
+                    className="flex-1"
+                    data-testid="input-add-member-search"
+                  />
+                </div>
+                {addMemberSearchQuery && filteredUsersNotInChannel.length > 0 && (
+                  <ScrollArea className="h-32 border rounded-md p-2">
+                    {filteredUsersNotInChannel.map((u) => (
+                      <button
+                        key={u.id}
+                        className="w-full flex items-center gap-2 p-2 rounded hover-elevate text-left"
+                        onClick={() => {
+                          if (selectedChannel) {
+                            addMembersMutation.mutate({ 
+                              channelId: selectedChannel.id, 
+                              userIds: [u.id] 
+                            });
+                          }
+                        }}
+                        data-testid={`add-member-${u.id}`}
+                      >
+                        <Avatar className="h-6 w-6">
+                          <AvatarFallback className="text-xs">
+                            {getInitials(u.displayName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium truncate">{u.displayName}</p>
+                          <p className="text-xs text-muted-foreground truncate">{u.email}</p>
+                        </div>
+                        <Plus className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    ))}
+                  </ScrollArea>
+                )}
+              </div>
+            )}
+
+            {/* Current members list */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">Members</p>
+              <ScrollArea className="h-64">
+                {channelMembers.map((member) => {
+                  const isCreator = selectedChannel?.createdBy === member.userId;
+                  const isCurrentUser = member.userId === user?.id;
+                  const canRemove = selectedChannel?.createdBy === user?.id || isCurrentUser;
+                  
+                  return (
+                    <div 
+                      key={member.id} 
+                      className="flex items-center gap-2 p-2 rounded"
+                      data-testid={`member-${member.userId}`}
+                    >
+                      <Avatar className="h-8 w-8">
+                        <AvatarFallback className="text-xs">
+                          {getInitials(member.user?.name || member.user?.email || "?")}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium truncate">
+                          {member.user?.name || member.user?.email || "Unknown"}
+                          {isCurrentUser && " (you)"}
+                        </p>
+                        {isCreator && (
+                          <Badge variant="outline" className="text-xs">Owner</Badge>
+                        )}
+                      </div>
+                      {canRemove && !isCreator && (
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-6 w-6"
+                          onClick={() => setRemoveMemberConfirmUserId(member.userId)}
+                          data-testid={`remove-member-${member.userId}`}
+                        >
+                          <X className="h-4 w-4" />
+                        </Button>
+                      )}
+                    </div>
+                  );
+                })}
+              </ScrollArea>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Create Group Dialog */}
+      <Dialog open={createGroupDialogOpen} onOpenChange={setCreateGroupDialogOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Create Group Chat</DialogTitle>
+            <DialogDescription>
+              Create a group chat with {selectedTeamUsers.size} selected member{selectedTeamUsers.size !== 1 ? "s" : ""}.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            <Label htmlFor="group-name">Group Name</Label>
+            <Input
+              id="group-name"
+              placeholder="Enter group name..."
+              value={newGroupName}
+              onChange={(e) => setNewGroupName(e.target.value)}
+              className="mt-2"
+              data-testid="input-group-name"
+            />
+          </div>
+          <DialogFooter>
+            <Button 
+              variant="outline" 
+              onClick={() => {
+                setCreateGroupDialogOpen(false);
+                setNewGroupName("");
+              }}
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (newGroupName.trim()) {
+                  createGroupWithMembersMutation.mutate({
+                    name: newGroupName.trim(),
+                    userIds: Array.from(selectedTeamUsers),
+                  });
+                }
+              }}
+              disabled={!newGroupName.trim() || createGroupWithMembersMutation.isPending}
+              data-testid="button-confirm-create-group"
+            >
+              {createGroupWithMembersMutation.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              )}
+              Create Group
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Remove Member Confirmation Dialog */}
+      <AlertDialog 
+        open={!!removeMemberConfirmUserId} 
+        onOpenChange={(open) => !open && setRemoveMemberConfirmUserId(null)}
+      >
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {removeMemberConfirmUserId === user?.id ? "Leave Channel?" : "Remove Member?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {removeMemberConfirmUserId === user?.id 
+                ? "Are you sure you want to leave this channel? You will need to be re-added by the channel owner to rejoin."
+                : "Are you sure you want to remove this member from the channel?"}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (selectedChannel && removeMemberConfirmUserId) {
+                  removeMemberMutation.mutate({
+                    channelId: selectedChannel.id,
+                    userId: removeMemberConfirmUserId,
+                  });
+                }
+              }}
+              data-testid="button-confirm-remove-member"
+            >
+              {removeMemberMutation.isPending && (
+                <Loader2 className="h-4 w-4 animate-spin mr-2" />
+              )}
+              {removeMemberConfirmUserId === user?.id ? "Leave" : "Remove"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
