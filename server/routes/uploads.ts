@@ -50,9 +50,15 @@ const presignRequestSchema = z.object({
 
 function requireAuth(req: Request, res: Response, next: () => void) {
   if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
+    const requestId = (req as any).requestId || "unknown";
     return res.status(401).json({
-      error: { code: "AUTH_REQUIRED", message: "Authentication required" },
-      code: "AUTH_REQUIRED",
+      error: { 
+        code: "UNAUTHORIZED", 
+        message: "Authentication required",
+        status: 401,
+        requestId,
+      },
+      code: "UNAUTHORIZED",
       message: "Authentication required",
     });
   }

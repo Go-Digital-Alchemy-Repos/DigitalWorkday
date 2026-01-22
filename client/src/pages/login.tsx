@@ -33,7 +33,7 @@ export default function LoginPage() {
   const [, setLocation] = useLocation();
   const searchString = useSearch();
 
-  // Handle error messages from OAuth callback redirects
+  // Handle error messages from OAuth callback redirects and session expiry
   useEffect(() => {
     const params = new URLSearchParams(searchString);
     const errorMessage = params.get("error");
@@ -45,6 +45,17 @@ export default function LoginPage() {
       });
       // Clear the error from URL without page reload
       window.history.replaceState({}, "", "/login");
+    }
+    
+    // Check for session expired message from redirect
+    const authMessage = sessionStorage.getItem("authMessage");
+    if (authMessage) {
+      toast({
+        title: "Session expired",
+        description: authMessage,
+        variant: "destructive",
+      });
+      sessionStorage.removeItem("authMessage");
     }
   }, [searchString, toast]);
 

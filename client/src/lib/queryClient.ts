@@ -52,11 +52,56 @@ export class ApiError extends Error {
   }
 }
 
+/**
+ * Check if response is JSON based on content-type header.
+ * Guards against parsing HTML as JSON which causes "Unexpected token <" errors.
+ */
+function isJsonResponse(res: Response): boolean {
+  const contentType = res.headers.get("content-type") || "";
+  return contentType.includes("application/json");
+}
+
+/**
+ * Handle 401 Unauthorized - redirect to login with session expired message.
+ * Only handles cases where we're NOT already on the login page.
+ */
+function handle401Redirect(): void {
+  if (window.location.pathname !== "/login") {
+    // Store message in sessionStorage for login page to display
+    sessionStorage.setItem("authMessage", "Session expired. Please log in again.");
+    window.location.href = "/login";
+  }
+}
+
 async function throwIfResNotOk(res: Response) {
   if (!res.ok) {
     if (await handleAgreementRequired(res)) {
       throw new Error("Agreement acceptance required");
     }
+    
+    // Handle 401 with clean redirect
+    if (res.status === 401) {
+      handle401Redirect();
+      throw new ApiError(401, "Session expired", res.headers.get("X-Request-Id"));
+    }
+    
+    // Guard against non-JSON responses (HTML error pages, etc.)
+    if (!isJsonResponse(res)) {
+      const rawText = await res.text();
+      const requestId = res.headers.get("X-Request-Id");
+      
+      // Detect HTML responses
+      if (rawText.includes("<!DOCTYPE") || rawText.includes("<html")) {
+        throw new ApiError(
+          res.status, 
+          `Server returned HTML instead of JSON (status ${res.status}). This usually indicates a routing issue.`,
+          requestId
+        );
+      }
+      
+      throw new ApiError(res.status, rawText || res.statusText, requestId);
+    }
+    
     const text = (await res.text()) || res.statusText;
     const requestId = res.headers.get("X-Request-Id");
     throw new ApiError(res.status, text, requestId);
@@ -157,7 +202,25 @@ export const getQueryFn: <T>(options: {
       throw new Error("Agreement acceptance required");
     }
 
+    // throwIfResNotOk handles 401 redirect internally
     await throwIfResNotOk(res);
+    
+    // Guard against non-JSON responses before parsing
+    if (!isJsonResponse(res)) {
+      const rawText = await res.text();
+      const requestId = res.headers.get("X-Request-Id");
+      
+      if (rawText.includes("<!DOCTYPE") || rawText.includes("<html")) {
+        throw new ApiError(
+          res.status,
+          `Server returned HTML instead of JSON (status ${res.status}). This usually indicates a routing issue.`,
+          requestId
+        );
+      }
+      
+      throw new ApiError(res.status, `Unexpected response format: ${rawText.slice(0, 100)}`, requestId);
+    }
+    
     return await res.json();
   };
 

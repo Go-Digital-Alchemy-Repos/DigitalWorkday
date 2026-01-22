@@ -38,7 +38,17 @@ const router = Router();
 // Middleware to ensure user is authenticated
 function requireAuth(req: any, res: any, next: any) {
   if (!req.isAuthenticated() || !req.user) {
-    return res.status(401).json({ error: "Authentication required" });
+    const requestId = req.requestId || "unknown";
+    return res.status(401).json({ 
+      error: {
+        code: "UNAUTHORIZED",
+        message: "Authentication required",
+        status: 401,
+        requestId,
+      },
+      message: "Authentication required",
+      code: "UNAUTHORIZED",
+    });
   }
   next();
 }
@@ -55,12 +65,31 @@ function getEffectiveTenantId(req: any): string | null {
 function requireTenantAdmin(req: any, res: any, next: any) {
   const user = req.user as any;
   const effectiveTenantId = getEffectiveTenantId(req);
+  const requestId = req.requestId || "unknown";
   
   if (!effectiveTenantId) {
-    return res.status(403).json({ error: "No tenant context" });
+    return res.status(403).json({ 
+      error: {
+        code: "FORBIDDEN",
+        message: "No tenant context",
+        status: 403,
+        requestId,
+      },
+      message: "No tenant context",
+      code: "FORBIDDEN",
+    });
   }
   if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
-    return res.status(403).json({ error: "Admin access required" });
+    return res.status(403).json({ 
+      error: {
+        code: "FORBIDDEN",
+        message: "Admin access required",
+        status: 403,
+        requestId,
+      },
+      message: "Admin access required",
+      code: "FORBIDDEN",
+    });
   }
   
   // Attach effective tenant ID to request for use in route handlers
@@ -74,10 +103,11 @@ function requireTenantAdmin(req: any, res: any, next: any) {
 function requireTenantContext(req: any, res: any, next: any) {
   const user = req.user as any;
   const effectiveTenantId = getEffectiveTenantId(req);
+  const requestId = req.requestId || "unknown";
   
   if (!effectiveTenantId) {
     // Always log tenant context issues to help diagnose Railway deployment problems
-    console.error("[requireTenantContext] No tenant context:", {
+    console.error(`[requireTenantContext] No tenant context, requestId=${requestId}:`, {
       userId: user?.id,
       email: user?.email,
       role: user?.role,
@@ -86,7 +116,16 @@ function requireTenantContext(req: any, res: any, next: any) {
       reqTenant: req.tenant,
       path: req.path,
     });
-    return res.status(403).json({ error: "No tenant context" });
+    return res.status(403).json({ 
+      error: {
+        code: "FORBIDDEN",
+        message: "No tenant context",
+        status: 403,
+        requestId,
+      },
+      message: "No tenant context",
+      code: "FORBIDDEN",
+    });
   }
   
   // Attach effective tenant ID to request for use in route handlers
@@ -121,12 +160,34 @@ router.get("/context", requireAuth, async (req, res) => {
     }
     
     if (!effectiveTenantId) {
-      return res.status(403).json({ error: "No tenant context" });
+      const requestId = req.requestId || "unknown";
+      console.log(`[tenant/context] No tenant context for user ${user?.id}, requestId=${requestId}`);
+      return res.status(403).json({ 
+        error: {
+          code: "FORBIDDEN",
+          message: "No tenant context",
+          status: 403,
+          requestId,
+        },
+        message: "No tenant context",
+        code: "FORBIDDEN",
+      });
     }
 
     const tenant = await storage.getTenant(effectiveTenantId);
     if (!tenant) {
-      return res.status(404).json({ error: "Tenant not found" });
+      const requestId = req.requestId || "unknown";
+      console.log(`[tenant/context] Tenant not found: ${effectiveTenantId}, requestId=${requestId}`);
+      return res.status(404).json({ 
+        error: {
+          code: "NOT_FOUND",
+          message: "Tenant not found",
+          status: 404,
+          requestId,
+        },
+        message: "Tenant not found",
+        code: "NOT_FOUND",
+      });
     }
 
     // Gracefully handle tenant settings - if table doesn't exist or query fails, use tenant name
@@ -146,13 +207,25 @@ router.get("/context", requireAuth, async (req, res) => {
       status: tenant.status,
     });
   } catch (error: any) {
-    console.error("Error fetching tenant context:", {
+    const requestId = req.requestId || "unknown";
+    console.error(`[tenant/context] Error requestId=${requestId}:`, {
       message: error?.message,
       stack: error?.stack,
       userId: (req.user as any)?.id,
       tenantId: req.tenant?.effectiveTenantId,
     });
-    res.status(500).json({ error: "Failed to fetch tenant context", details: error?.message });
+    res.status(500).json({ 
+      error: {
+        code: "INTERNAL_ERROR",
+        message: "Failed to fetch tenant context",
+        status: 500,
+        requestId,
+        details: error?.message,
+      },
+      message: "Failed to fetch tenant context",
+      code: "INTERNAL_ERROR",
+      details: error?.message,
+    });
   }
 });
 

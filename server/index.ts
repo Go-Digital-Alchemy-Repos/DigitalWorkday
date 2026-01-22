@@ -11,6 +11,7 @@ import { agreementEnforcementGuard } from "./middleware/agreementEnforcement";
 import { requestIdMiddleware } from "./middleware/requestId";
 import { errorHandler } from "./middleware/errorHandler";
 import { errorLoggingMiddleware } from "./middleware/errorLogging";
+import { apiJsonResponseGuard, apiNotFoundHandler } from "./middleware/apiJsonGuard";
 
 export const app = express();
 const httpServer = createServer(app);
@@ -64,6 +65,9 @@ app.use(tenantContextMiddleware);
 // Setup agreement enforcement (must be after tenant context)
 app.use(agreementEnforcementGuard);
 
+// API JSON response guard - ensures all /api routes return JSON, never HTML
+app.use(apiJsonResponseGuard);
+
 export function log(message: string, source = "express") {
   const formattedTime = new Date().toLocaleTimeString("en-US", {
     hour: "numeric",
@@ -106,6 +110,10 @@ app.use((req, res, next) => {
   await bootstrapAdminUser();
   
   await registerRoutes(httpServer, app);
+
+  // API 404 handler - BEFORE error handlers to catch unmatched /api routes first
+  // This ensures /api routes that don't exist return JSON 404 instead of HTML
+  app.use(apiNotFoundHandler);
 
   // Error logging middleware (captures 500+ errors to database)
   app.use(errorLoggingMiddleware);
