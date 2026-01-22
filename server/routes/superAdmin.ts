@@ -32,7 +32,7 @@
 import { Router } from "express";
 import { storage } from "../storage";
 import { requireSuperUser } from "../middleware/tenantContext";
-import { insertTenantSchema, TenantStatus, UserRole, tenants, workspaces, invitations, tenantSettings, tenantNotes, tenantAuditEvents, NoteCategory, clients, clientContacts, projects, tasks, users, teams, systemSettings, tenantAgreements, tenantAgreementAcceptances, timeEntries, updateSystemSettingsSchema, platformInvitations, platformAuditEvents, workspaceMembers } from "@shared/schema";
+import { insertTenantSchema, TenantStatus, UserRole, tenants, workspaces, invitations, tenantSettings, tenantNotes, tenantAuditEvents, NoteCategory, clients, clientContacts, projects, tasks, users, teams, systemSettings, tenantAgreements, tenantAgreementAcceptances, timeEntries, updateSystemSettingsSchema, platformInvitations, platformAuditEvents, workspaceMembers, teamMembers, projectMembers, divisionMembers, activityLog, comments, passwordResetTokens } from "@shared/schema";
 import { hashPassword } from "../auth";
 import { z } from "zod";
 import { db } from "../db";
@@ -1469,6 +1469,93 @@ router.post("/tenants/:tenantId/users/:userId/activate", requireSuperUser, async
     }
     console.error("Error updating user activation:", error);
     res.status(500).json({ error: "Failed to update user activation" });
+  }
+});
+
+// DELETE /api/v1/super/tenants/:tenantId/users/:userId - Permanently delete a tenant user
+// Only allowed for users who are suspended (isActive=false)
+router.delete("/tenants/:tenantId/users/:userId", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, userId } = req.params;
+    const superUser = req.user as any;
+    
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+    
+    const existingUser = await storage.getUserByIdAndTenant(userId, tenantId);
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found in this tenant" });
+    }
+    
+    // Safety check: Only allow deletion of suspended/inactive users
+    if (existingUser.isActive) {
+      return res.status(400).json({ 
+        error: "Cannot delete active user",
+        details: "User must be suspended (deactivated) before deletion. Deactivate the user first, then try again."
+      });
+    }
+    
+    // Delete all related records first (cascade manually for safety)
+    // 1. Delete workspace memberships
+    await db.delete(workspaceMembers).where(eq(workspaceMembers.userId, userId));
+    
+    // 2. Delete team memberships
+    await db.delete(teamMembers).where(eq(teamMembers.userId, userId));
+    
+    // 3. Delete project memberships
+    await db.delete(projectMembers).where(eq(projectMembers.userId, userId));
+    
+    // 4. Delete division memberships
+    await db.delete(divisionMembers).where(eq(divisionMembers.userId, userId));
+    
+    // 5. Nullify references in tasks (assignee)
+    await db.update(tasks).set({ assigneeId: null }).where(eq(tasks.assigneeId, userId));
+    
+    // 6. Nullify references in projects (createdBy)
+    await db.update(projects).set({ createdBy: null }).where(eq(projects.createdBy, userId));
+    
+    // 7. Delete time entries
+    await db.delete(timeEntries).where(eq(timeEntries.userId, userId));
+    
+    // 8. Delete activity logs referencing this user
+    await db.delete(activityLog).where(eq(activityLog.userId, userId));
+    
+    // 9. Delete comments by this user
+    await db.delete(comments).where(eq(comments.authorId, userId));
+    
+    // 10. Delete password reset tokens
+    await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
+    
+    // 11. Delete invitations for this user's email
+    await db.delete(invitations).where(eq(invitations.email, existingUser.email));
+    
+    // 12. Finally, delete the user
+    await db.delete(users).where(and(eq(users.id, userId), eq(users.tenantId, tenantId)));
+    
+    // Record audit event
+    await recordTenantAuditEvent(
+      tenantId,
+      "user_deleted",
+      `User ${existingUser.email} permanently deleted`,
+      superUser?.id,
+      { userId, email: existingUser.email, deletedAt: new Date().toISOString() }
+    );
+    
+    console.log(`[SuperAdmin] User ${existingUser.email} deleted from tenant ${tenantId} by ${superUser?.email}`);
+    
+    res.json({
+      message: `User ${existingUser.email} has been permanently deleted`,
+      deletedUser: {
+        id: userId,
+        email: existingUser.email,
+        name: existingUser.name,
+      },
+    });
+  } catch (error) {
+    console.error("Error deleting user:", error);
+    res.status(500).json({ error: "Failed to delete user" });
   }
 });
 
@@ -5026,6 +5113,77 @@ router.patch("/admins/:id", requireSuperUser, async (req, res) => {
     }
     console.error("[admins] Failed to update platform admin:", error);
     res.status(500).json({ error: "Failed to update platform admin" });
+  }
+});
+
+// DELETE /api/v1/super/admins/:id - Permanently delete a platform admin
+// Only allowed for admins who are inactive (suspended)
+router.delete("/admins/:id", requireSuperUser, async (req, res) => {
+  try {
+    const actor = req.user as any;
+    const { id } = req.params;
+    
+    // Get the admin to delete
+    const [adminToDelete] = await db.select()
+      .from(users)
+      .where(and(eq(users.id, id), eq(users.role, UserRole.SUPER_USER)));
+    
+    if (!adminToDelete) {
+      return res.status(404).json({ error: "Platform admin not found" });
+    }
+    
+    // Prevent self-deletion
+    if (actor?.id === id) {
+      return res.status(400).json({ 
+        error: "Cannot delete yourself",
+        details: "You cannot delete your own account. Another platform admin must perform this action."
+      });
+    }
+    
+    // Safety check: Only allow deletion of inactive (suspended) admins
+    if (adminToDelete.isActive) {
+      return res.status(400).json({ 
+        error: "Cannot delete active platform admin",
+        details: "Platform admin must be deactivated before deletion. Deactivate the admin first, then try again."
+      });
+    }
+    
+    // Delete related records
+    // 1. Delete password reset tokens
+    await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, id));
+    
+    // 2. Delete platform invitations for this admin
+    await db.delete(platformInvitations).where(eq(platformInvitations.userId, id));
+    
+    // 3. Finally, delete the admin user
+    await db.delete(users).where(and(eq(users.id, id), eq(users.role, UserRole.SUPER_USER)));
+    
+    // Record audit event (platform-level)
+    await db.insert(platformAuditEvents).values({
+      id: crypto.randomUUID(),
+      eventType: "platform_admin_deleted",
+      message: `Platform admin ${adminToDelete.email} permanently deleted by ${actor?.email}`,
+      actorUserId: actor?.id,
+      metadata: { 
+        deletedAdminId: id, 
+        deletedAdminEmail: adminToDelete.email,
+        deletedAt: new Date().toISOString()
+      },
+    });
+    
+    console.log(`[SuperAdmin] Platform admin ${adminToDelete.email} deleted by ${actor?.email}`);
+    
+    res.json({
+      message: `Platform admin ${adminToDelete.email} has been permanently deleted`,
+      deletedAdmin: {
+        id: id,
+        email: adminToDelete.email,
+        name: adminToDelete.name,
+      },
+    });
+  } catch (error) {
+    console.error("[admins] Failed to delete platform admin:", error);
+    res.status(500).json({ error: "Failed to delete platform admin" });
   }
 });
 

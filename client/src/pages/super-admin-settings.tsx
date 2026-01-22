@@ -668,6 +668,7 @@ export default function SuperAdminSettingsPage() {
   const [generatedInviteUrl, setGeneratedInviteUrl] = useState<string | null>(null);
   const [deactivateDialogOpen, setDeactivateDialogOpen] = useState(false);
   const [adminToDeactivate, setAdminToDeactivate] = useState<PlatformAdmin | null>(null);
+  const [adminToDelete, setAdminToDelete] = useState<PlatformAdmin | null>(null);
   
   const [passwordDrawerOpen, setPasswordDrawerOpen] = useState(false);
   const [adminToProvision, setAdminToProvision] = useState<PlatformAdmin | null>(null);
@@ -1111,6 +1112,23 @@ export default function SuperAdminSettingsPage() {
     },
   });
 
+  const deleteAdminMutation = useMutation({
+    mutationFn: async (id: string) => {
+      const res = await apiRequest("DELETE", `/api/v1/super/admins/${id}`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/admins"] });
+      toast({ title: "Platform admin deleted", description: data.message || "The admin has been permanently deleted." });
+      setAdminToDelete(null);
+    },
+    onError: (error: any) => {
+      const parsed = parseApiError(error);
+      toast({ title: "Failed to delete admin", description: parsed.message, variant: "destructive" });
+      setAdminToDelete(null);
+    },
+  });
+
   const generateInviteMutation = useMutation({
     mutationFn: async ({ id, sendEmail }: { id: string; sendEmail: boolean }) => {
       const response = await apiRequest("POST", `/api/v1/super/admins/${id}/invite`, { 
@@ -1411,10 +1429,20 @@ export default function SuperAdminSettingsPage() {
                                   Deactivate
                                 </DropdownMenuItem>
                               ) : (
-                                <DropdownMenuItem onClick={() => handleReactivateAdmin(admin)} data-testid={`button-reactivate-${admin.id}`}>
-                                  <UserCheck className="h-4 w-4 mr-2" />
-                                  Reactivate
-                                </DropdownMenuItem>
+                                <>
+                                  <DropdownMenuItem onClick={() => handleReactivateAdmin(admin)} data-testid={`button-reactivate-${admin.id}`}>
+                                    <UserCheck className="h-4 w-4 mr-2" />
+                                    Reactivate
+                                  </DropdownMenuItem>
+                                  <DropdownMenuItem 
+                                    onClick={() => setAdminToDelete(admin)}
+                                    className="text-destructive"
+                                    data-testid={`button-delete-admin-${admin.id}`}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Permanently Delete
+                                  </DropdownMenuItem>
+                                </>
                               )}
                             </DropdownMenuContent>
                           </DropdownMenu>
@@ -3033,6 +3061,42 @@ export default function SuperAdminSettingsPage() {
               data-testid="button-confirm-deactivate"
             >
               Deactivate
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Admin Confirmation Dialog */}
+      <AlertDialog open={!!adminToDelete} onOpenChange={(open) => !open && setAdminToDelete(null)}>
+        <AlertDialogContent data-testid="dialog-delete-admin">
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently Delete Platform Admin</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete <strong>{adminToDelete?.email}</strong>? 
+              This action cannot be undone and will remove all data associated with this admin account.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              disabled={deleteAdminMutation.isPending}
+              data-testid="button-cancel-delete-admin"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => adminToDelete && deleteAdminMutation.mutate(adminToDelete.id)}
+              disabled={deleteAdminMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-admin"
+            >
+              {deleteAdminMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete Admin"
+              )}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>

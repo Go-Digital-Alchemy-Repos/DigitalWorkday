@@ -1434,6 +1434,33 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
     },
   });
 
+  // Delete user mutation (only for suspended/inactive users)
+  const [userToDelete, setUserToDelete] = useState<{ id: string; email: string; name: string } | null>(null);
+  const deleteUserMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      const res = await apiRequest("DELETE", `/api/v1/super/tenants/${activeTenant?.id}/users/${userId}`);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "users"] });
+      toast({ 
+        title: "User deleted", 
+        description: data.message || "The user has been permanently deleted." 
+      });
+      setUserToDelete(null);
+    },
+    onError: (error: any) => {
+      const message = error?.message || "An unexpected error occurred. Please try again.";
+      const details = error?.details || "";
+      toast({ 
+        title: "Failed to delete user", 
+        description: details || message, 
+        variant: "destructive" 
+      });
+      setUserToDelete(null);
+    },
+  });
+
   // Revoke invitation mutation
   const revokeInvitationMutation = useMutation({
     mutationFn: async (invitationId: string) => {
@@ -3674,6 +3701,19 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                           >
                             {user.isActive ? <PauseCircle className="h-4 w-4" /> : <PlayCircle className="h-4 w-4" />}
                           </Button>
+                          {!user.isActive && (
+                            <Button
+                              size="icon"
+                              variant="ghost"
+                              className="text-destructive hover:text-destructive"
+                              onClick={() => setUserToDelete({ id: user.id, email: user.email, name: user.name || user.email })}
+                              disabled={deleteUserMutation.isPending}
+                              title="Permanently delete user"
+                              data-testid={`button-delete-user-${user.id}`}
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -4375,6 +4415,43 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                 confirmDialog.action === "suspend" ? "Suspend Tenant" :
                 confirmDialog.action === "activate" ? "Activate Tenant" :
                 "Reactivate Tenant"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete User Confirmation Dialog */}
+      <AlertDialog open={!!userToDelete} onOpenChange={(open) => !open && setUserToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Permanently Delete User</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to permanently delete <strong>{userToDelete?.email}</strong>? 
+              This action cannot be undone and will remove all data associated with this user, 
+              including their task assignments, time entries, comments, and activity logs.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              disabled={deleteUserMutation.isPending}
+              data-testid="button-cancel-delete-user"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => userToDelete && deleteUserMutation.mutate(userToDelete.id)}
+              disabled={deleteUserMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-user"
+            >
+              {deleteUserMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                "Delete User"
               )}
             </AlertDialogAction>
           </AlertDialogFooter>
