@@ -15,7 +15,8 @@ import { Server, Socket } from 'socket.io';
 import { 
   ServerToClientEvents, 
   ClientToServerEvents,
-  ROOM_EVENTS 
+  ROOM_EVENTS,
+  CHAT_ROOM_EVENTS
 } from '@shared/events';
 import { log } from '../index';
 
@@ -86,6 +87,19 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
       const roomName = `workspace:${workspaceId}`;
       socket.leave(roomName);
       log(`Client ${socket.id} left room: ${roomName}`, 'socket.io');
+    });
+
+    // Handle joining/leaving chat rooms (channels and DMs)
+    socket.on(CHAT_ROOM_EVENTS.JOIN, ({ targetType, targetId }) => {
+      const roomName = `chat:${targetType}:${targetId}`;
+      socket.join(roomName);
+      log(`Client ${socket.id} joined chat room: ${roomName}`, 'socket.io');
+    });
+
+    socket.on(CHAT_ROOM_EVENTS.LEAVE, ({ targetType, targetId }) => {
+      const roomName = `chat:${targetType}:${targetId}`;
+      socket.leave(roomName);
+      log(`Client ${socket.id} left chat room: ${roomName}`, 'socket.io');
     });
 
     // Handle client disconnection
