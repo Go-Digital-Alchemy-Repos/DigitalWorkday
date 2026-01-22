@@ -16,6 +16,12 @@ import {
   SheetTitle,
 } from "@/components/ui/sheet";
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
   Hash,
   Send,
   MessageCircle,
@@ -27,8 +33,12 @@ import {
   FileText,
   Image,
   Loader2,
+  MoreHorizontal,
+  Pencil,
+  Trash2,
+  Check,
 } from "lucide-react";
-import { CHAT_EVENTS, CHAT_ROOM_EVENTS, ChatNewMessagePayload } from "@shared/events";
+import { CHAT_EVENTS, CHAT_ROOM_EVENTS, ChatNewMessagePayload, ChatMessageUpdatedPayload, ChatMessageDeletedPayload } from "@shared/events";
 
 interface ChatChannel {
   id: string;
@@ -61,6 +71,7 @@ interface ChatMessage {
   body: string;
   createdAt: Date;
   editedAt: Date | null;
+  deletedAt?: Date | null;
   attachments?: ChatAttachment[];
   author?: {
     id: string;
@@ -98,6 +109,8 @@ export function GlobalChatDrawer() {
   const [showThreadList, setShowThreadList] = useState(true);
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
+  const [editingBody, setEditingBody] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastMarkedReadRef = useRef<string | null>(null);
@@ -202,10 +215,40 @@ export function GlobalChatDrawer() {
       }
     };
 
+    const handleMessageUpdated = (payload: ChatMessageUpdatedPayload) => {
+      const isCurrentChannel = selectedChannel && payload.targetType === "channel" && payload.targetId === selectedChannel.id;
+      const isCurrentDm = selectedDm && payload.targetType === "dm" && payload.targetId === selectedDm.id;
+      
+      if (isCurrentChannel || isCurrentDm) {
+        setMessages(prev => prev.map(msg => 
+          msg.id === payload.messageId 
+            ? { ...msg, ...payload.updates }
+            : msg
+        ));
+      }
+    };
+
+    const handleMessageDeleted = (payload: ChatMessageDeletedPayload) => {
+      const isCurrentChannel = selectedChannel && payload.targetType === "channel" && payload.targetId === selectedChannel.id;
+      const isCurrentDm = selectedDm && payload.targetType === "dm" && payload.targetId === selectedDm.id;
+      
+      if (isCurrentChannel || isCurrentDm) {
+        setMessages(prev => prev.map(msg => 
+          msg.id === payload.messageId 
+            ? { ...msg, body: "Message deleted", deletedAt: new Date() }
+            : msg
+        ));
+      }
+    };
+
     socket.on(CHAT_EVENTS.NEW_MESSAGE as any, handleNewMessage as any);
+    socket.on(CHAT_EVENTS.MESSAGE_UPDATED as any, handleMessageUpdated as any);
+    socket.on(CHAT_EVENTS.MESSAGE_DELETED as any, handleMessageDeleted as any);
 
     return () => {
       socket.off(CHAT_EVENTS.NEW_MESSAGE as any, handleNewMessage as any);
+      socket.off(CHAT_EVENTS.MESSAGE_UPDATED as any, handleMessageUpdated as any);
+      socket.off(CHAT_EVENTS.MESSAGE_DELETED as any, handleMessageDeleted as any);
     };
   }, [selectedChannel, selectedDm, isOpen]);
 
@@ -241,6 +284,45 @@ export function GlobalChatDrawer() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+    },
+  });
+
+  const editMessageMutation = useMutation({
+    mutationFn: async ({ messageId, body }: { messageId: string; body: string }): Promise<ChatMessage> => {
+      const res = await apiRequest("PATCH", `/api/v1/chat/messages/${messageId}`, { body });
+      return res.json();
+    },
+    onSuccess: (data: ChatMessage) => {
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === data.id ? { ...msg, body: data.body, editedAt: data.editedAt } : msg))
+      );
+      setEditingMessageId(null);
+      setEditingBody("");
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to edit message",
+        description: error.message,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteMessageMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      return apiRequest("DELETE", `/api/v1/chat/messages/${messageId}`);
+    },
+    onSuccess: (_data, messageId) => {
+      setMessages((prev) =>
+        prev.map((msg) => (msg.id === messageId ? { ...msg, body: "Message deleted", deletedAt: new Date() } : msg))
+      );
+    },
+    onError: (error: Error) => {
+      toast({
+        title: "Failed to delete message",
+        description: error.message,
+        variant: "destructive",
+      });
     },
   });
 
@@ -505,8 +587,16 @@ export function GlobalChatDrawer() {
           <div className="flex-1 flex flex-col overflow-hidden">
             <ScrollArea className="flex-1 p-4" ref={scrollRef}>
               <div className="space-y-4">
-                {messages.map((message) => (
-                  <div key={message.id} className="flex gap-3" data-testid={`drawer-message-${message.id}`}>
+                {messages.map((message) => {
+                  const isDeleted = !!message.deletedAt;
+                  const isOwnMessage = message.authorUserId === user?.id;
+                  const isTenantAdmin = user?.role === "admin";
+                  const isEditing = editingMessageId === message.id;
+                  const canEdit = isOwnMessage && !isDeleted;
+                  const canDelete = (isOwnMessage || isTenantAdmin) && !isDeleted;
+                  
+                  return (
+                  <div key={message.id} className="flex gap-3 group" data-testid={`drawer-message-${message.id}`}>
                     <Avatar className="h-8 w-8 flex-shrink-0">
                       <AvatarFallback>
                         {getInitials(message.author?.name || message.author?.email || "?")}
@@ -520,12 +610,100 @@ export function GlobalChatDrawer() {
                         <span className="text-xs text-muted-foreground">
                           {formatTime(message.createdAt)}
                         </span>
-                        {message.editedAt && (
+                        {message.editedAt && !isDeleted && (
                           <span className="text-xs text-muted-foreground">(edited)</span>
                         )}
+                        {(canEdit || canDelete) && !isEditing && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button 
+                                variant="ghost" 
+                                size="sm" 
+                                className="h-auto p-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                                data-testid={`drawer-message-menu-${message.id}`}
+                              >
+                                <MoreHorizontal className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="start">
+                              {canEdit && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setEditingMessageId(message.id);
+                                    setEditingBody(message.body);
+                                  }}
+                                  data-testid={`drawer-message-edit-${message.id}`}
+                                >
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                              )}
+                              {canDelete && (
+                                <DropdownMenuItem
+                                  onClick={() => deleteMessageMutation.mutate(message.id)}
+                                  className="text-destructive focus:text-destructive"
+                                  data-testid={`drawer-message-delete-${message.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </div>
-                      <p className="text-sm break-words">{message.body}</p>
-                      {message.attachments && message.attachments.length > 0 && (
+                      {isEditing ? (
+                        <div className="flex items-center gap-2 mt-1">
+                          <Input
+                            value={editingBody}
+                            onChange={(e) => setEditingBody(e.target.value)}
+                            className="flex-1 text-sm"
+                            autoFocus
+                            onKeyDown={(e) => {
+                              if (e.key === "Enter" && !e.shiftKey) {
+                                e.preventDefault();
+                                if (editingBody.trim()) {
+                                  editMessageMutation.mutate({ messageId: message.id, body: editingBody.trim() });
+                                }
+                              }
+                              if (e.key === "Escape") {
+                                setEditingMessageId(null);
+                                setEditingBody("");
+                              }
+                            }}
+                            data-testid={`drawer-message-edit-input-${message.id}`}
+                          />
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              if (editingBody.trim()) {
+                                editMessageMutation.mutate({ messageId: message.id, body: editingBody.trim() });
+                              }
+                            }}
+                            disabled={editMessageMutation.isPending || !editingBody.trim()}
+                            data-testid={`drawer-message-edit-save-${message.id}`}
+                          >
+                            <Check className="h-4 w-4" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => {
+                              setEditingMessageId(null);
+                              setEditingBody("");
+                            }}
+                            data-testid={`drawer-message-edit-cancel-${message.id}`}
+                          >
+                            <X className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <p className={`text-sm break-words ${isDeleted ? "text-muted-foreground italic" : ""}`}>
+                          {message.body}
+                        </p>
+                      )}
+                      {message.attachments && message.attachments.length > 0 && !isDeleted && (
                         <div className="mt-2 flex flex-wrap gap-2">
                           {message.attachments.map(attachment => {
                             const FileIcon = getFileIcon(attachment.mimeType);
@@ -558,7 +736,8 @@ export function GlobalChatDrawer() {
                       )}
                     </div>
                   </div>
-                ))}
+                  );
+                })}
                 {messages.length === 0 && (
                   <div className="text-center py-8 text-muted-foreground">
                     <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
