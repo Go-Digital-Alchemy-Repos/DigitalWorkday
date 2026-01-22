@@ -145,3 +145,30 @@ export function emitToWorkspace(
   const roomName = `workspace:${workspaceId}`;
   getIO().to(roomName).emit(event as any, payload);
 }
+
+export function emitToTenant(
+  tenantId: string,
+  event: string,
+  payload: unknown
+): void {
+  const roomName = `tenant:${tenantId}`;
+  getIO().to(roomName).emit(event as any, payload);
+}
+
+export function emitToChatChannel(
+  channelId: string,
+  event: string,
+  payload: unknown
+): void {
+  const roomName = `chat:channel:${channelId}`;
+  getIO().to(roomName).emit(event as any, payload);
+}
+
+export function emitToChatDm(
+  dmThreadId: string,
+  event: string,
+  payload: unknown
+): void {
+  const roomName = `chat:dm:${dmThreadId}`;
+  getIO().to(roomName).emit(event as any, payload);
+}
