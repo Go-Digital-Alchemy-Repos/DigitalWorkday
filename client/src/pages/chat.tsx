@@ -1288,6 +1288,30 @@ export default function ChatPage() {
 
           {/* Chats Tab */}
           <TabsContent value="chats" className="flex-1 flex flex-col overflow-hidden mt-0 p-0">
+            {/* Search Input */}
+            <div className="p-2 border-b">
+              <div className="relative">
+                <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground pointer-events-none" />
+                <Input
+                  placeholder="Search messages..."
+                  className="pl-8 h-9"
+                  value={searchQuery}
+                  onChange={(e) => {
+                    setSearchQuery(e.target.value);
+                    if (e.target.value.length >= 2) {
+                      setSearchOpen(true);
+                    }
+                  }}
+                  onFocus={() => {
+                    if (searchQuery.length >= 2) {
+                      setSearchOpen(true);
+                    }
+                  }}
+                  data-testid="input-sidebar-search"
+                />
+              </div>
+            </div>
+
             {/* Start New Chat Button */}
             <div className="p-2 border-b">
               <Button
