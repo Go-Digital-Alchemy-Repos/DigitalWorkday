@@ -27,7 +27,7 @@ import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriang
 import { ProjectDetailDrawer } from "@/components/project-detail-drawer";
 import { ProjectDrawer } from "@/components/project-drawer";
 import { useToast } from "@/hooks/use-toast";
-import type { Project, Client, Team } from "@shared/schema";
+import type { Project, Client, Team, ClientDivision } from "@shared/schema";
 import { format } from "date-fns";
 
 interface ProjectWithCounts extends Project {
@@ -69,6 +69,7 @@ export default function ProjectsDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("all");
   const [clientFilter, setClientFilter] = useState<string>("all");
+  const [divisionFilter, setDivisionFilter] = useState<string>("all");
   const [teamFilter, setTeamFilter] = useState<string>("all");
   const [selectedProject, setSelectedProject] = useState<ProjectWithCounts | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
@@ -88,6 +89,14 @@ export default function ProjectsDashboard() {
   const { data: teams } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
   });
+
+  const { data: clientDivisions = [] } = useQuery<ClientDivision[]>({
+    queryKey: ["/api/v1/clients", clientFilter, "divisions"],
+    queryFn: () => fetch(`/api/v1/clients/${clientFilter}/divisions`, { credentials: "include" }).then(r => r.json()),
+    enabled: clientFilter !== "all",
+  });
+
+  const selectedClientHasDivisions = clientDivisions.length > 0;
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery<ProjectAnalyticsSummary>({
     queryKey: ["/api/v1/projects/analytics/summary"],
@@ -160,6 +169,11 @@ export default function ProjectsDashboard() {
     return forecastSummary.perProject.find(p => p.projectId === projectId);
   };
 
+  const handleClientFilterChange = (newClientId: string) => {
+    setClientFilter(newClientId);
+    setDivisionFilter("all");
+  };
+
   const filteredProjects = useMemo(() => {
     if (!projects) return [];
     
@@ -175,11 +189,13 @@ export default function ProjectsDashboard() {
       
       const matchesClient = clientFilter === "all" || project.clientId === clientFilter;
       
+      const matchesDivision = divisionFilter === "all" || project.divisionId === divisionFilter;
+      
       const matchesTeam = teamFilter === "all" || project.teamId === teamFilter;
       
-      return matchesSearch && matchesStatus && matchesClient && matchesTeam;
+      return matchesSearch && matchesStatus && matchesClient && matchesDivision && matchesTeam;
     });
-  }, [projects, searchQuery, statusFilter, clientFilter, teamFilter]);
+  }, [projects, searchQuery, statusFilter, clientFilter, divisionFilter, teamFilter]);
 
   const handleRowClick = (project: ProjectWithCounts) => {
     setSelectedProject(project);
@@ -287,7 +303,7 @@ export default function ProjectsDashboard() {
                 </SelectContent>
               </Select>
 
-              <Select value={clientFilter} onValueChange={setClientFilter}>
+              <Select value={clientFilter} onValueChange={handleClientFilterChange}>
                 <SelectTrigger className="w-[150px]" data-testid="select-client-filter">
                   <SelectValue placeholder="Client" />
                 </SelectTrigger>
@@ -295,11 +311,27 @@ export default function ProjectsDashboard() {
                   <SelectItem value="all">All Clients</SelectItem>
                   {clients?.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
-                      {client.companyName}
+                      {client.displayName || client.companyName}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
+
+              {selectedClientHasDivisions && (
+                <Select value={divisionFilter} onValueChange={setDivisionFilter}>
+                  <SelectTrigger className="w-[150px]" data-testid="select-division-filter">
+                    <SelectValue placeholder="Division" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="all">All Divisions</SelectItem>
+                    {clientDivisions.map((division) => (
+                      <SelectItem key={division.id} value={division.id}>
+                        {division.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              )}
 
               <Select value={teamFilter} onValueChange={setTeamFilter}>
                 <SelectTrigger className="w-[150px]" data-testid="select-team-filter">
@@ -329,7 +361,7 @@ export default function ProjectsDashboard() {
             <FolderKanban className="h-12 w-12 text-muted-foreground mb-4" />
             <h3 className="text-lg font-medium mb-1">No projects found</h3>
             <p className="text-muted-foreground text-sm">
-              {searchQuery || statusFilter !== "all" || clientFilter !== "all" || teamFilter !== "all"
+              {searchQuery || statusFilter !== "all" || clientFilter !== "all" || divisionFilter !== "all" || teamFilter !== "all"
                 ? "Try adjusting your filters"
                 : "Create your first project to get started"}
             </p>

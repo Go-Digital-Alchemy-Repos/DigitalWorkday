@@ -40,7 +40,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { CreateProjectDialog } from "@/components/create-project-dialog";
-import type { Project, Team, Workspace, Client } from "@shared/schema";
+import { Badge } from "@/components/ui/badge";
+import type { Project, Team, Workspace, Client, ClientDivision } from "@shared/schema";
 
 const mainNavItems = [
   { title: "Home", url: "/", icon: Home },
@@ -73,6 +74,38 @@ export function TenantSidebar() {
   const { data: clients } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
   });
+
+  const { data: allDivisions = [] } = useQuery<ClientDivision[]>({
+    queryKey: ["/api/v1/divisions"],
+    queryFn: async () => {
+      if (!clients || clients.length === 0) return [];
+      const allDivs: ClientDivision[] = [];
+      for (const client of clients) {
+        try {
+          const res = await fetch(`/api/v1/clients/${client.id}/divisions`, { credentials: "include" });
+          if (res.ok) {
+            const divs = await res.json();
+            allDivs.push(...divs);
+          }
+        } catch {
+        }
+      }
+      return allDivs;
+    },
+    enabled: !!clients && clients.length > 0,
+  });
+
+  const getClientName = (clientId: string | null) => {
+    if (!clientId || !clients) return null;
+    const client = clients.find(c => c.id === clientId);
+    return client ? (client.displayName || client.companyName) : null;
+  };
+
+  const getDivisionName = (divisionId: string | null) => {
+    if (!divisionId) return null;
+    const division = allDivisions.find(d => d.id === divisionId);
+    return division?.name || null;
+  };
 
   const createProjectMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -143,25 +176,45 @@ export function TenantSidebar() {
             <CollapsibleContent>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {projects?.map((project) => (
-                    <SidebarMenuItem key={project.id}>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={location === `/projects/${project.id}`}
-                      >
-                        <Link
-                          href={`/projects/${project.id}`}
-                          data-testid={`link-project-${project.id}`}
+                  {projects?.map((project) => {
+                    const clientName = getClientName(project.clientId);
+                    const divisionName = getDivisionName(project.divisionId);
+                    return (
+                      <SidebarMenuItem key={project.id}>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={location === `/projects/${project.id}`}
                         >
-                          <div
-                            className="h-3 w-3 rounded-sm"
-                            style={{ backgroundColor: project.color || "#3B82F6" }}
-                          />
-                          <span className="truncate">{project.name}</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
-                  ))}
+                          <Link
+                            href={`/projects/${project.id}`}
+                            data-testid={`link-project-${project.id}`}
+                          >
+                            <div className="flex items-center gap-2 min-w-0 flex-1">
+                              <div
+                                className="h-3 w-3 rounded-sm shrink-0"
+                                style={{ backgroundColor: project.color || "#3B82F6" }}
+                              />
+                              <span className="truncate flex-1">{project.name}</span>
+                              {(clientName || divisionName) && (
+                                <div className="flex items-center gap-1 shrink-0">
+                                  {clientName && (
+                                    <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-client-${project.id}`}>
+                                      {clientName.length > 10 ? clientName.slice(0, 10) + "…" : clientName}
+                                    </Badge>
+                                  )}
+                                  {divisionName && (
+                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-division-${project.id}`}>
+                                      {divisionName.length > 8 ? divisionName.slice(0, 8) + "…" : divisionName}
+                                    </Badge>
+                                  )}
+                                </div>
+                              )}
+                            </div>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    );
+                  })}
                   {(!projects || projects.length === 0) && (
                     <div className="px-3 py-2 text-xs text-muted-foreground">
                       No projects yet

@@ -160,14 +160,26 @@ Uses `sessionStorage` to show once per timer per session.
 Time entries use cascading dropdowns:
 
 ```
-Client → Project → Task → Subtask
+Client → Division (if client has divisions) → Project → Task → Subtask
 ```
 
 **Behavior:**
-- Selecting Client filters Projects to that client
+- Selecting Client:
+  - Filters Projects to that client
+  - Shows Division dropdown if client has divisions
+- Selecting Division (when available):
+  - Filters Projects to only those in the selected division
+  - Selecting "All divisions" shows all client projects
 - Selecting Project enables Task dropdown
 - If Task has subtasks, Subtask dropdown appears
-- Changing parent clears children
+- Changing parent clears children (cascade reset)
+
+**Division-aware filtering:**
+```typescript
+const filteredProjects = clientHasDivisions && divisionId
+  ? clientProjects.filter(p => p.divisionId === divisionId)
+  : clientProjects;
+```
 
 **Final assignment:**
 ```typescript

@@ -198,9 +198,39 @@ The storage layer provides scoping helpers:
 
 ## UI Integration
 
+### Division Management
+
 Divisions are managed through the Client profile:
 1. Navigate to a Client
 2. Click the "Divisions" tab
 3. Create, edit, or manage division membership
+
+### Projects Dashboard
+
+The Projects Dashboard includes cascading filters:
+1. **Client filter**: Select a client to filter projects
+2. **Division filter**: Automatically appears when selected client has divisions
+3. **Team filter**: Filter by team assignment
+
+When a client with divisions is selected, the division filter dropdown appears automatically, allowing you to filter projects by specific divisions.
+
+### Left Navigation
+
+Projects in the sidebar display badges showing:
+- **Client badge** (secondary style): Shows the client name (truncated to 10 chars)
+- **Division badge** (outline style): Shows the division name when project has one (truncated to 8 chars)
+
+This provides quick context without needing to expand project details.
+
+### Time Tracking
+
+When creating manual time entries:
+1. Select a **Client** (required)
+2. If the client has divisions, a **Division** dropdown appears
+3. Select a **Division** to filter the available projects
+4. Select a **Project** (filtered by division if selected)
+5. Select a **Task** and **Subtask** as needed
+
+The cascade ensures you can quickly find the right project by narrowing down through division first.
 
 See TENANT_ADMIN_GUIDE.md for detailed UI workflows.

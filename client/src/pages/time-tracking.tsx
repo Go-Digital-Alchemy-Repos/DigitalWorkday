@@ -556,6 +556,7 @@ function ManualEntryDialog({
   const [minutes, setMinutes] = useState("30");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [clientId, setClientId] = useState<string | null>(null);
+  const [divisionId, setDivisionId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [subtaskId, setSubtaskId] = useState<string | null>(null);
@@ -566,11 +567,23 @@ function ManualEntryDialog({
     enabled: open,
   });
 
-  const { data: clientProjects = [] } = useQuery<Array<{ id: string; name: string }>>({
+  const { data: clientDivisions = [] } = useQuery<Array<{ id: string; name: string }>>({
+    queryKey: ["/api/v1/clients", clientId, "divisions"],
+    queryFn: () => fetch(`/api/v1/clients/${clientId}/divisions`, { credentials: "include" }).then((r) => r.json()),
+    enabled: !!clientId && open,
+  });
+
+  const clientHasDivisions = clientDivisions.length > 0;
+
+  const { data: clientProjects = [] } = useQuery<Array<{ id: string; name: string; divisionId?: string | null }>>({
     queryKey: ["/api/clients", clientId, "projects"],
     queryFn: () => fetch(`/api/clients/${clientId}/projects`, { credentials: "include" }).then((r) => r.json()),
     enabled: !!clientId && open,
   });
+
+  const filteredProjects = clientHasDivisions && divisionId
+    ? clientProjects.filter(p => p.divisionId === divisionId)
+    : clientProjects;
 
   const { data: projectTasks = [] } = useQuery<Array<{ id: string; title: string; parentTaskId: string | null; status: string }>>({
     queryKey: ["/api/projects", projectId, "tasks"],
@@ -584,6 +597,14 @@ function ManualEntryDialog({
 
   const handleClientChange = (newClientId: string | null) => {
     setClientId(newClientId);
+    setDivisionId(null);
+    setProjectId(null);
+    setTaskId(null);
+    setSubtaskId(null);
+  };
+
+  const handleDivisionChange = (newDivisionId: string | null) => {
+    setDivisionId(newDivisionId);
     setProjectId(null);
     setTaskId(null);
     setSubtaskId(null);
@@ -618,6 +639,7 @@ function ManualEntryDialog({
       setHours("0");
       setMinutes("30");
       setClientId(null);
+      setDivisionId(null);
       setProjectId(null);
       setTaskId(null);
       setSubtaskId(null);
@@ -658,6 +680,7 @@ function ManualEntryDialog({
     hours !== "0" || 
     minutes !== "30" || 
     clientId !== null || 
+    divisionId !== null ||
     projectId !== null || 
     taskId !== null ||
     subtaskId !== null ||
@@ -740,6 +763,29 @@ function ManualEntryDialog({
               </SelectContent>
             </Select>
           </div>
+          {clientHasDivisions && (
+            <div className="space-y-2">
+              <Label>Division</Label>
+              <Select 
+                value={divisionId || "none"} 
+                onValueChange={(v) => handleDivisionChange(v === "none" ? null : v)}
+              >
+                <SelectTrigger data-testid="select-manual-division">
+                  <SelectValue placeholder="Select division" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">All divisions</SelectItem>
+                  {clientDivisions.map((division) => (
+                    <SelectItem key={division.id} value={division.id}>
+                      {division.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+        </div>
+        <div className={`grid grid-cols-1 ${clientHasDivisions ? "" : "md:grid-cols-2"} gap-6`}>
           <div className="space-y-2">
             <Label>Project</Label>
             <Select 
@@ -752,7 +798,7 @@ function ManualEntryDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No project</SelectItem>
-                {clientProjects.map((project) => (
+                {filteredProjects.map((project) => (
                   <SelectItem key={project.id} value={project.id}>
                     {project.name}
                   </SelectItem>
