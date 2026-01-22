@@ -163,6 +163,8 @@ export const tenantSettings = pgTable("tenant_settings", {
   // White label toggles
   whiteLabelEnabled: boolean("white_label_enabled").notNull().default(false),
   hideVendorBranding: boolean("hide_vendor_branding").notNull().default(false),
+  // Chat retention settings (tenant-specific override, null = use system default)
+  chatRetentionDays: integer("chat_retention_days"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -960,6 +962,8 @@ export const systemSettings = pgTable("system_settings", {
   stripeWebhookSecretEncrypted: text("stripe_webhook_secret_encrypted"),
   stripeDefaultCurrency: text("stripe_default_currency").default("usd"),
   stripeLastTestedAt: timestamp("stripe_last_tested_at"),
+  // Chat retention settings (platform default)
+  chatRetentionDays: integer("chat_retention_days").default(365), // Default 365 days
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 });
@@ -1065,12 +1069,14 @@ export const chatMessages = pgTable("chat_messages", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
   editedAt: timestamp("edited_at"),
   deletedAt: timestamp("deleted_at"),
+  archivedAt: timestamp("archived_at"), // Soft archive for retention policy
 }, (table) => [
   index("chat_messages_tenant_idx").on(table.tenantId),
   index("chat_messages_channel_idx").on(table.channelId),
   index("chat_messages_dm_thread_idx").on(table.dmThreadId),
   index("chat_messages_author_idx").on(table.authorUserId),
   index("chat_messages_created_idx").on(table.createdAt),
+  index("chat_messages_archived_idx").on(table.archivedAt),
 ]);
 
 /**
@@ -1110,6 +1116,22 @@ export const chatReads = pgTable("chat_reads", {
   index("chat_reads_dm_thread_idx").on(table.dmThreadId),
   uniqueIndex("chat_reads_user_channel_unique").on(table.userId, table.channelId),
   uniqueIndex("chat_reads_user_dm_unique").on(table.userId, table.dmThreadId),
+]);
+
+/**
+ * Chat Mentions table - tracks @mentions in chat messages
+ * Used for highlighting mentions and optional notification
+ */
+export const chatMentions = pgTable("chat_mentions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  messageId: varchar("message_id").references(() => chatMessages.id).notNull(),
+  mentionedUserId: varchar("mentioned_user_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("chat_mentions_tenant_idx").on(table.tenantId),
+  index("chat_mentions_message_idx").on(table.messageId),
+  index("chat_mentions_user_idx").on(table.mentionedUserId),
 ]);
 
 // =============================================================================
@@ -1771,9 +1793,15 @@ export const insertChatMessageSchema = createInsertSchema(chatMessages).omit({
   createdAt: true,
   editedAt: true,
   deletedAt: true,
+  archivedAt: true,
 });
 
 export const insertChatAttachmentSchema = createInsertSchema(chatAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertChatMentionSchema = createInsertSchema(chatMentions).omit({
   id: true,
   createdAt: true,
 });
@@ -2010,3 +2038,6 @@ export type ChatDmThreadWithMembers = ChatDmThread & {
 export type ChatMessageWithAuthor = ChatMessage & {
   author?: User;
 };
+
+export type ChatMention = typeof chatMentions.$inferSelect;
+export type InsertChatMention = z.infer<typeof insertChatMentionSchema>;
