@@ -25,6 +25,7 @@ MyWorkDay includes a tenant-scoped Slack-like chat system with channels and dire
 | `chat:memberLeft` | User left or was removed from channel (tenant-level) |
 | `chat:memberAdded` | User added to channel (channel room level, richer info) |
 | `chat:memberRemoved` | User removed from channel (channel room level, richer info) |
+| `chat:conversationRead` | User marked conversation as read |
 | `connection:connected` | Server ack with serverTime and requestId |
 
 ## Message Lifecycle
@@ -251,3 +252,77 @@ Client time is never used for ordering.
 - Buttons have appropriate aria labels
 - Loading states announce via skeleton animations
 - Error messages are visible and actionable
+
+## Read Tracking
+
+### Overview
+
+The chat system tracks per-user read status for each conversation using the `chat_reads` table. This enables:
+- Unread badge counts in the conversation list
+- "Seen" indicators for DMs (shows when other users have read messages)
+- Real-time updates via socket events
+
+### Database Schema
+
+```sql
+chat_reads (
+  id: varchar (primary key)
+  tenant_id: varchar (references tenants.id)
+  user_id: varchar (references users.id)
+  channel_id: varchar (references chat_channels.id, nullable)
+  dm_thread_id: varchar (references chat_dm_threads.id, nullable)
+  last_read_message_id: varchar (references chat_messages.id)
+  last_read_at: timestamp
+)
+```
+
+Unique constraints:
+- `(user_id, channel_id)` - One read record per user per channel
+- `(user_id, dm_thread_id)` - One read record per user per DM thread
+
+### API
+
+#### Mark Conversation as Read
+
+```
+POST /api/v1/chat/reads
+{
+  targetType: "channel" | "dm",
+  targetId: string,
+  lastReadMessageId: string
+}
+```
+
+Response: `{ success: true }`
+
+After marking as read, the server emits `chat:conversationRead` event to the conversation room.
+
+### Socket Events
+
+#### `chat:conversationRead` Payload
+
+```typescript
+interface ChatConversationReadPayload {
+  targetType: 'channel' | 'dm';
+  targetId: string;
+  userId: string;
+  lastReadAt: Date;
+  lastReadMessageId: string;
+}
+```
+
+### Client Behavior
+
+1. **Auto-mark Read**: When messages are loaded in a conversation, the client automatically calls `/api/v1/chat/reads` with the last message ID
+2. **Optimistic Updates**: On receiving `chat:conversationRead` for the current user, unread counts are set to 0 via `setQueryData`
+3. **Seen Indicator**: In DMs, when receiving `chat:conversationRead` from another user, a "Seen" indicator appears after the last message
+
+### UI Elements
+
+- **Unread Badge**: Red badge with count (caps at "99+") shown in conversation list
+- **Seen Indicator**: Double-check icon with "Seen" text after last DM message (only shown when other user has read it)
+
+### Tests
+
+- `unread_counts_drop_after_read_event.test.ts`: Verifies unread counts reset on read events
+- `read_event_emits_socket_update.test.ts`: Verifies socket event emission and payload structure

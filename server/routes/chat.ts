@@ -763,7 +763,21 @@ router.post(
       throw AppError.badRequest("Message does not belong to this DM thread");
     }
 
-    await storage.upsertChatRead(tenantId, userId, targetType, targetId, lastReadMessageId);
+    const readResult = await storage.upsertChatRead(tenantId, userId, targetType, targetId, lastReadMessageId);
+
+    // Emit conversation_read event to all members of the conversation
+    const readPayload = {
+      targetType,
+      targetId,
+      userId,
+      lastReadAt: readResult.lastReadAt,
+      lastReadMessageId,
+    };
+    if (targetType === "channel") {
+      emitToChatChannel(targetId, CHAT_EVENTS.CONVERSATION_READ, readPayload);
+    } else {
+      emitToChatDm(targetId, CHAT_EVENTS.CONVERSATION_READ, readPayload);
+    }
 
     res.json({ success: true });
   })

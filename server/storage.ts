@@ -374,7 +374,7 @@ export interface IStorage {
   linkChatAttachmentsToMessage(messageId: string, attachmentIds: string[]): Promise<void>;
 
   // Chat - Read Tracking
-  upsertChatRead(tenantId: string, userId: string, targetType: "channel" | "dm", targetId: string, lastReadMessageId: string): Promise<void>;
+  upsertChatRead(tenantId: string, userId: string, targetType: "channel" | "dm", targetId: string, lastReadMessageId: string): Promise<{ lastReadAt: Date }>;
   getChatReadForChannel(userId: string, channelId: string): Promise<{ lastReadMessageId: string | null } | undefined>;
   getChatReadForDm(userId: string, dmThreadId: string): Promise<{ lastReadMessageId: string | null } | undefined>;
   getUnreadCountForChannel(userId: string, channelId: string): Promise<number>;
@@ -2747,7 +2747,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   // Chat - Read Tracking
-  async upsertChatRead(tenantId: string, userId: string, targetType: "channel" | "dm", targetId: string, lastReadMessageId: string): Promise<void> {
+  async upsertChatRead(tenantId: string, userId: string, targetType: "channel" | "dm", targetId: string, lastReadMessageId: string): Promise<{ lastReadAt: Date }> {
+    const lastReadAt = new Date();
     if (targetType === "channel") {
       await db.insert(chatReads)
         .values({
@@ -2755,13 +2756,13 @@ export class DatabaseStorage implements IStorage {
           userId,
           channelId: targetId,
           lastReadMessageId,
-          lastReadAt: new Date(),
+          lastReadAt,
         })
         .onConflictDoUpdate({
           target: [chatReads.userId, chatReads.channelId],
           set: {
             lastReadMessageId,
-            lastReadAt: new Date(),
+            lastReadAt,
           },
         });
     } else {
@@ -2771,16 +2772,17 @@ export class DatabaseStorage implements IStorage {
           userId,
           dmThreadId: targetId,
           lastReadMessageId,
-          lastReadAt: new Date(),
+          lastReadAt,
         })
         .onConflictDoUpdate({
           target: [chatReads.userId, chatReads.dmThreadId],
           set: {
             lastReadMessageId,
-            lastReadAt: new Date(),
+            lastReadAt,
           },
         });
     }
+    return { lastReadAt };
   }
 
   async getChatReadForChannel(userId: string, channelId: string): Promise<{ lastReadMessageId: string | null } | undefined> {

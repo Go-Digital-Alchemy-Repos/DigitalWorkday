@@ -530,6 +530,7 @@ export const CHAT_EVENTS = {
   MEMBER_LEFT: 'chat:memberLeft',
   MEMBER_ADDED: 'chat:memberAdded',
   MEMBER_REMOVED: 'chat:memberRemoved',
+  CONVERSATION_READ: 'chat:conversationRead',
 } as const;
 
 export const CHAT_ROOM_EVENTS = {
@@ -618,6 +619,14 @@ export interface ChatMemberRemovedPayload {
   removedBy: string | null;
 }
 
+export interface ChatConversationReadPayload {
+  targetType: 'channel' | 'dm';
+  targetId: string;
+  userId: string;
+  lastReadAt: Date;
+  lastReadMessageId: string;
+}
+
 export interface ChatJoinPayload {
   targetType: 'channel' | 'dm';
   targetId: string;
@@ -690,6 +699,7 @@ export type ServerToClientEvents = {
   [CHAT_EVENTS.MEMBER_LEFT]: (payload: ChatMemberLeftPayload) => void;
   [CHAT_EVENTS.MEMBER_ADDED]: (payload: ChatMemberAddedPayload) => void;
   [CHAT_EVENTS.MEMBER_REMOVED]: (payload: ChatMemberRemovedPayload) => void;
+  [CHAT_EVENTS.CONVERSATION_READ]: (payload: ChatConversationReadPayload) => void;
   // Connection events
   [CONNECTION_EVENTS.CONNECTED]: (payload: ConnectionConnectedPayload) => void;
 };

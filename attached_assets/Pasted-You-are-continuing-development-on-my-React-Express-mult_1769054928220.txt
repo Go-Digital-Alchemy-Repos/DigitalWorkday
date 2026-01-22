@@ -1,0 +1,158 @@
+You are continuing development on my React + Express multi-tenant app (single codebase).
+TENANT PROJECTS REFINEMENT: Project provisioning, required client assignment, project member access & visibility.
+
+Goal:
+Improve the tenant “Projects” section so Tenant Admins and Employees can create/edit projects with required client assignment,
+project-level team member assignment, and color selection. Ensure project visibility in the left menu is scoped to assigned users.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change existing endpoint paths or response shapes (add-only endpoints OK if missing).
+- Do NOT change auth/tenancy/agreement enforcement behavior.
+- Do NOT break existing projects/tasks/clients functionality.
+- No destructive DB changes. Additive schema changes only if necessary.
+- If a schema change is needed, it must be additive and migration-backed.
+- Enforce tenant isolation on every query.
+
+===============================================================================
+REQUIREMENTS
+===============================================================================
+
+PART A — PROJECT DATA MODEL (REUSE IF PRESENT)
+1) Identify current project schema and relationships:
+- projects table fields (name/title, description, clientId, color, tenantId/workspaceId, createdBy, etc.)
+- current relationship between projects and users (assignment/membership)
+- current relationship between projects and clients
+
+2) Client assignment is REQUIRED for all projects
+- If DB currently allows null clientId, do not break existing rows:
+  - enforce at API validation layer for new/updated projects
+  - add a safe remediation UX for legacy projects missing client assignment (prompt user to assign client on edit)
+- If DB currently requires clientId, ensure UI always supplies it.
+
+3) Project member assignment
+- Use existing join table if present (project_members, project_users, etc.)
+- If none exists and you currently store a single assignee, add additive join table:
+  project_members(id, projectId, userId, role?, createdAt)
+- Ensure unique(projectId, userId)
+
+===============================================================================
+PART B — PERMISSIONS
+===============================================================================
+1) Tenant Admin: can create/edit any project in tenant.
+2) Employee: can create/edit projects (per request) OR if you already have stricter rules, implement:
+- Employee can create/edit projects they are a member of, plus can create new projects.
+(Keep it simple and consistent: both Tenant Admin and Employee can create/edit.)
+
+3) Client users:
+- Do not change client permissions in this prompt unless already established.
+
+===============================================================================
+PART C — BACKEND: VALIDATION + ENDPOINT SUPPORT (ADD-ONLY IF MISSING)
+===============================================================================
+1) Create/Update project must validate:
+- title required, trimmed
+- description optional
+- clientId required AND client belongs to same tenant
+- color optional but if present validate format (hex)
+- memberIds array optional; validate each user belongs to same tenant
+
+2) Ensure project membership is written server-side:
+- On create:
+  - include creator as a member automatically (unless your rules already do this)
+  - add selected members
+- On update:
+  - update project core fields
+  - update members using safe diff (add missing, remove unchecked) OR explicit endpoints:
+    - POST /api/v1/projects/:id/members
+    - DELETE /api/v1/projects/:id/members/:userId
+(Prefer minimal change: if you already have member update support, reuse it.)
+
+3) Visibility scoping:
+- Project lists for tenant users must return:
+  - Tenant Admin: all projects (or optionally filterable)
+  - Employees: only projects where user is a member
+- The left nav “Projects” list must be based on the same scoped list.
+
+4) Ensure sockets update:
+- When project created/updated or membership changes:
+  - emit event: project_created / project_updated / project_membership_changed
+  - clients update left nav without refresh
+
+===============================================================================
+PART D — FRONTEND: PROJECT CREATION + EDIT UX
+===============================================================================
+1) Add “New Project” entry point:
+- Tenant Projects page: “New Project” button
+- Use full-width slide-out drawer (not small modal)
+Drawer Tabs (simple, two sections):
+- Overview: title, description, client assignment (required), color picker
+- Team: multi-select user picker to assign members
+
+2) Edit project:
+- From project list and/or project settings:
+  - open the same drawer populated
+  - allow edit of title/description/client/color/team
+
+3) Required client assignment UX:
+- Client field required (no submit until chosen)
+- If legacy projects exist with missing clientId:
+  - show “Client required — assign now” banner and block saving other edits until assigned.
+
+4) Left menu visibility:
+- Left sidebar “Projects” shows only projects user has access to:
+  - employees see assigned projects only
+  - tenant admins can see all (or optionally a toggle “All / Assigned to me”)
+- When a user is added to a project:
+  - project appears in their sidebar immediately (socket + cache update)
+- When removed:
+  - project disappears and any open project route redirects safely.
+
+===============================================================================
+PART E — TESTS (MANDATORY MINIMUM)
+===============================================================================
+Backend integration tests:
+1) tenant_admin_can_create_project_requires_client.test.ts
+- creating without clientId fails validation
+- creating with clientId succeeds
+
+2) employee_can_create_project_and_is_member.test.ts
+- employee creates project -> membership includes employee
+
+3) project_list_scoped_for_employee.test.ts
+- employee only sees projects they’re a member of
+
+4) cannot_assign_project_to_client_from_other_tenant.test.ts
+
+Frontend tests (if infra exists):
+5) new_project_drawer_requires_client_before_save.test.tsx
+6) sidebar_updates_when_membership_added.test.tsx
+
+If UI tests limited, add manual checklist to /docs/REGRESSION_CHECKLIST.md.
+
+===============================================================================
+DOCUMENTATION
+===============================================================================
+Update:
+- /docs/TENANT_ADMIN_GUIDE.md: managing projects, required client assignment
+- /docs/TENANCY_MODEL.md: project membership scoping rules
+- /docs/REALTIME_EVENTS.md (if exists): project events emitted
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+- Tenant Admins + Employees can create and edit projects.
+- Project creation requires client assignment.
+- Project membership selection works (multi-member).
+- Employees only see projects they are assigned to (including in left nav).
+- When a project is created and members assigned, those users see it in the left nav immediately.
+- No endpoint/response shape changes; no destructive schema changes; tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- Endpoints used/added for project create/update/membership
+- Any validation rules added
+- How sidebar data is sourced and updated in real time
+- Manual verification checklist (local + Railway)

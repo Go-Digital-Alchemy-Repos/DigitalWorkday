@@ -43,6 +43,7 @@ import {
   Pencil,
   Trash2,
   Check,
+  CheckCheck,
   Search,
   AtSign,
   UserPlus,
@@ -79,7 +80,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
-import { CHAT_EVENTS, CHAT_ROOM_EVENTS, ChatNewMessagePayload, ChatMessageUpdatedPayload, ChatMessageDeletedPayload, ChatMemberJoinedPayload, ChatMemberLeftPayload, ChatMemberAddedPayload, ChatMemberRemovedPayload } from "@shared/events";
+import { CHAT_EVENTS, CHAT_ROOM_EVENTS, ChatNewMessagePayload, ChatMessageUpdatedPayload, ChatMessageDeletedPayload, ChatMemberJoinedPayload, ChatMemberLeftPayload, ChatMemberAddedPayload, ChatMemberRemovedPayload, ChatConversationReadPayload } from "@shared/events";
 
 interface ChatChannel {
   id: string;
@@ -170,6 +171,7 @@ export default function ChatPage() {
   const [isUploading, setIsUploading] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
+  const [dmSeenBy, setDmSeenBy] = useState<{ userId: string; messageId: string } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastMarkedReadRef = useRef<string | null>(null);
@@ -683,6 +685,11 @@ export default function ChatPage() {
     }
   }, [selectedChannel?.id, selectedDm?.id]);
 
+  // Reset DM seen indicator when switching conversations
+  useEffect(() => {
+    setDmSeenBy(null);
+  }, [selectedDm?.id]);
+
   // Track connection status for UI feedback
   useEffect(() => {
     const unsubscribe = onConnectionChange((connected) => {
@@ -905,6 +912,34 @@ export default function ChatPage() {
       }
     };
 
+    // Handle conversation read - update unread counts when current user reads a conversation
+    // Also track when other users read DMs for "Seen" indicator
+    const handleConversationRead = (payload: ChatConversationReadPayload) => {
+      if (payload.userId === user?.id) {
+        // Current user read - update unread counts
+        if (payload.targetType === 'channel') {
+          queryClient.setQueryData(["/api/v1/chat/channels"], (old: ChatChannel[] | undefined) => {
+            if (!old) return old;
+            return old.map(ch => 
+              ch.id === payload.targetId ? { ...ch, unreadCount: 0 } : ch
+            );
+          });
+        } else {
+          queryClient.setQueryData(["/api/v1/chat/dm-threads"], (old: ChatDmThread[] | undefined) => {
+            if (!old) return old;
+            return old.map(dm => 
+              dm.id === payload.targetId ? { ...dm, unreadCount: 0 } : dm
+            );
+          });
+        }
+      } else {
+        // Other user read - update "Seen" indicator for DMs only
+        if (payload.targetType === 'dm' && selectedDm && payload.targetId === selectedDm.id) {
+          setDmSeenBy({ userId: payload.userId, messageId: payload.lastReadMessageId });
+        }
+      }
+    };
+
     socket.on(CHAT_EVENTS.NEW_MESSAGE as any, handleNewMessage as any);
     socket.on(CHAT_EVENTS.MESSAGE_UPDATED as any, handleMessageUpdated as any);
     socket.on(CHAT_EVENTS.MESSAGE_DELETED as any, handleMessageDeleted as any);
@@ -912,6 +947,7 @@ export default function ChatPage() {
     socket.on(CHAT_EVENTS.MEMBER_LEFT as any, handleMemberLeft as any);
     socket.on(CHAT_EVENTS.MEMBER_ADDED as any, handleMemberAdded as any);
     socket.on(CHAT_EVENTS.MEMBER_REMOVED as any, handleMemberRemoved as any);
+    socket.on(CHAT_EVENTS.CONVERSATION_READ as any, handleConversationRead as any);
 
     return () => {
       socket.off(CHAT_EVENTS.NEW_MESSAGE as any, handleNewMessage as any);
@@ -921,6 +957,7 @@ export default function ChatPage() {
       socket.off(CHAT_EVENTS.MEMBER_LEFT as any, handleMemberLeft as any);
       socket.off(CHAT_EVENTS.MEMBER_ADDED as any, handleMemberAdded as any);
       socket.off(CHAT_EVENTS.MEMBER_REMOVED as any, handleMemberRemoved as any);
+      socket.off(CHAT_EVENTS.CONVERSATION_READ as any, handleConversationRead as any);
     };
   }, [selectedChannel, selectedDm, user?.id]);
 
@@ -1802,6 +1839,15 @@ export default function ChatPage() {
                   <div className="text-center py-8 text-muted-foreground">
                     <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
                     <p>No messages yet. Start the conversation!</p>
+                  </div>
+                )}
+                {/* DM "Seen" indicator - shows when other user has read the last message */}
+                {selectedDm && dmSeenBy && messages.length > 0 && dmSeenBy.messageId === messages[messages.length - 1]?.id && (
+                  <div className="flex justify-end pr-4 pb-2" data-testid="dm-seen-indicator">
+                    <span className="text-xs text-muted-foreground flex items-center gap-1">
+                      <CheckCheck className="h-3 w-3" />
+                      Seen
+                    </span>
                   </div>
                 )}
               </div>
