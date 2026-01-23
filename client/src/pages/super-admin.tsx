@@ -17,6 +17,7 @@ import { useLocation } from "wouter";
 import { Building2, Plus, Edit2, Shield, CheckCircle, XCircle, UserPlus, Clock, Copy, AlertTriangle, Loader2, Activity, Database, RefreshCw, Play, Settings, Upload, Users, Download, PlayCircle, PauseCircle, Power, ExternalLink, Mail, FileText, Check, X, MoreHorizontal, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { TenantDrawer } from "@/components/super-admin/tenant-drawer";
 import type { Tenant } from "@shared/schema";
 
@@ -447,6 +448,7 @@ export default function SuperAdminPage() {
   }
 
   return (
+    <ScrollArea className="h-full">
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       <div className="flex items-center gap-3">
         <Shield className="h-8 w-8 text-primary" />
@@ -1307,5 +1309,7 @@ export default function SuperAdminPage() {
         mode="create"
       />
     </div>
+    </ScrollArea>
   );
 }
+
