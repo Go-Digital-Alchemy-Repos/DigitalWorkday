@@ -223,7 +223,7 @@ function SuperAdminRouter() {
       <Route path="/super-admin/docs">
         {() => <SuperRouteGuard component={SuperAdminDocsPage} />}
       </Route>
-      <Route path="/super-admin/chat-monitoring">
+      <Route path="/super-admin/chat">
         {() => <SuperRouteGuard component={SuperChatMonitoringPage} />}
       </Route>
       <Route path="/super-admin/users">

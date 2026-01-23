@@ -6,6 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Alert, AlertDescription } from "@/components/ui/alert";
@@ -192,23 +193,32 @@ export default function SuperChatMonitoringPage() {
     <div className="container mx-auto py-6 space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold">Chat Monitoring</h1>
-          <p className="text-muted-foreground">View any tenant's chat history (read-only)</p>
+          <h1 className="text-2xl font-bold">Chat System</h1>
+          <p className="text-muted-foreground">Manage and monitor platform chat functionality</p>
         </div>
-        <Badge variant="secondary" className="flex items-center gap-1">
-          <Eye className="h-3 w-3" />
-          Read-only mode
-        </Badge>
       </div>
 
-      <Alert variant="default" className="border-yellow-500/50 bg-yellow-500/10">
-        <AlertTriangle className="h-4 w-4 text-yellow-600" />
-        <AlertDescription className="text-yellow-700 dark:text-yellow-400">
-          This is a monitoring interface. You can view messages but cannot send, edit, or delete anything.
-        </AlertDescription>
-      </Alert>
+      <Tabs defaultValue="monitoring" className="space-y-4">
+        <TabsList data-testid="chat-system-tabs">
+          <TabsTrigger value="monitoring" data-testid="tab-chat-monitoring">Chat Monitoring</TabsTrigger>
+        </TabsList>
 
-      <div className="grid grid-cols-12 gap-6">
+        <TabsContent value="monitoring" className="space-y-4">
+          <div className="flex items-center justify-end">
+            <Badge variant="secondary" className="flex items-center gap-1">
+              <Eye className="h-3 w-3" />
+              Read-only mode
+            </Badge>
+          </div>
+
+          <Alert variant="default" className="border-yellow-500/50 bg-yellow-500/10">
+            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+            <AlertDescription className="text-yellow-700 dark:text-yellow-400">
+              This is a monitoring interface. You can view messages but cannot send, edit, or delete anything.
+            </AlertDescription>
+          </Alert>
+
+          <div className="grid grid-cols-12 gap-6">
         <div className="col-span-3 space-y-4">
           <Card>
             <CardHeader className="pb-3">
@@ -438,7 +448,9 @@ export default function SuperChatMonitoringPage() {
             </CardContent>
           </Card>
         </div>
-      </div>
+          </div>
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }

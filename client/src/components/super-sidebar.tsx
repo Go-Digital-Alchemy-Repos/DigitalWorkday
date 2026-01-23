@@ -27,7 +27,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 const superAdminNavItems = [
   { title: "Dashboard", url: "/super-admin/dashboard", icon: LayoutDashboard, exact: false },
   { title: "Tenants", url: "/super-admin/tenants", icon: Building2, exact: false },
-  { title: "Chat Monitoring", url: "/super-admin/chat-monitoring", icon: MessageSquareText, exact: false },
+  { title: "Chat System", url: "/super-admin/chat", icon: MessageSquareText, exact: false },
   { title: "User Manager", url: "/super-admin/users", icon: Users, exact: false },
   { title: "System Settings", url: "/super-admin/settings", icon: Wrench, exact: false },
   { title: "System Status", url: "/super-admin/status", icon: Activity, exact: false },
