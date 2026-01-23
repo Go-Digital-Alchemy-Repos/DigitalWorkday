@@ -225,10 +225,6 @@ export default function SuperAdminPage() {
   const deleteTenantMutation = useMutation({
     mutationFn: async (tenantId: string) => {
       const res = await apiRequest("DELETE", `/api/v1/super/tenants/${tenantId}`);
-      if (!res.ok) {
-        const data = await res.json();
-        throw new Error(data.error || data.details || "Failed to delete tenant");
-      }
       return res.json();
     },
     onSuccess: () => {
@@ -237,7 +233,16 @@ export default function SuperAdminPage() {
       toast({ title: "Tenant deleted", description: "The tenant and all its data have been permanently deleted" });
     },
     onError: (error: any) => {
-      toast({ title: "Failed to delete tenant", description: error.message, variant: "destructive" });
+      let errorMessage = "An unexpected error occurred";
+      if (error.message) {
+        try {
+          const parsed = JSON.parse(error.message);
+          errorMessage = parsed.error || parsed.details || parsed.message || error.message;
+        } catch {
+          errorMessage = error.message;
+        }
+      }
+      toast({ title: "Failed to delete tenant", description: errorMessage, variant: "destructive" });
     },
   });
 
