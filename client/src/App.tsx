@@ -8,7 +8,6 @@ import { ThemeToggle } from "@/components/theme-toggle";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { SuperSidebar } from "@/components/super-sidebar";
 import { TenantSidebar } from "@/components/tenant-sidebar";
-import { TenantSwitcher } from "@/components/tenant-switcher";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
 import { TenantContextGate } from "@/components/tenant-context-gate";
 import { AuthProvider, useAuth } from "@/lib/auth";
@@ -302,10 +301,7 @@ function SuperLayout() {
         <SuperSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
           <header className="flex items-center justify-between h-14 px-4 border-b border-border bg-background shrink-0">
-            <div className="flex items-center gap-4">
-              <SidebarTrigger data-testid="button-sidebar-toggle" />
-              <TenantSwitcher />
-            </div>
+            <SidebarTrigger data-testid="button-sidebar-toggle" />
             <div className="flex items-center gap-2">
               <NotificationCenter />
               <ThemeToggle />

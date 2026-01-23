@@ -11,10 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
-import { queryClient, apiRequest, clearTenantScopedCaches } from "@/lib/queryClient";
-import { useAppMode } from "@/hooks/useAppMode";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useLocation } from "wouter";
-import { Building2, Plus, Edit2, Shield, CheckCircle, XCircle, UserPlus, Clock, Copy, AlertTriangle, Loader2, Activity, Database, RefreshCw, Play, Settings, Upload, Users, Download, PlayCircle, PauseCircle, Power, ExternalLink, Mail, FileText, Check, X, MoreHorizontal, Trash2 } from "lucide-react";
+import { Building2, Plus, Edit2, Shield, CheckCircle, XCircle, UserPlus, Clock, Copy, AlertTriangle, Loader2, Activity, Database, RefreshCw, Play, Settings, Upload, Users, Download, PlayCircle, PauseCircle, Power, Mail, FileText, Check, X, MoreHorizontal, Trash2 } from "lucide-react";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { ScrollArea } from "@/components/ui/scroll-area";
@@ -94,7 +93,6 @@ interface ImportResponse {
 
 export default function SuperAdminPage() {
   const { toast } = useToast();
-  const { startImpersonation } = useAppMode();
   const [isCreateDrawerOpen, setIsCreateDrawerOpen] = useState(false);
   const [editingTenant, setEditingTenant] = useState<Tenant | null>(null);
   const [invitingTenant, setInvitingTenant] = useState<Tenant | null>(null);
@@ -106,7 +104,6 @@ export default function SuperAdminPage() {
   const [importResults, setImportResults] = useState<ImportResponse | null>(null);
   const [confirmAction, setConfirmAction] = useState<{ type: "activate" | "suspend" | "delete"; tenant: Tenant } | null>(null);
   const [selectedTenant, setSelectedTenant] = useState<TenantWithDetails | null>(null);
-  const [isActingAsTenant, setIsActingAsTenant] = useState(false);
   const [, setLocation] = useLocation();
 
   const { data: tenants = [], isLoading } = useQuery<TenantWithDetails[]>({
@@ -246,38 +243,6 @@ export default function SuperAdminPage() {
       toast({ title: "Failed to delete tenant", description: errorMessage, variant: "destructive" });
     },
   });
-
-  const handleActAsTenant = async (tenant: Tenant) => {
-    if (tenant.status === "suspended") {
-      toast({ 
-        title: "Cannot act as suspended tenant", 
-        description: "This tenant is currently suspended.",
-        variant: "destructive"
-      });
-      return;
-    }
-    
-    setIsActingAsTenant(true);
-    try {
-      await apiRequest("POST", "/api/v1/super/impersonate/start", {
-        tenantId: tenant.id,
-      });
-      
-      clearTenantScopedCaches();
-      startImpersonation(tenant.id, tenant.name);
-      
-      // Force full page reload to ensure all components pick up the new app mode
-      // Client-side navigation doesn't remount AppLayout, so useAppMode state doesn't sync
-      window.location.href = "/";
-    } catch (error) {
-      toast({ 
-        title: "Failed to act as tenant", 
-        description: error instanceof Error ? error.message : "Unknown error",
-        variant: "destructive"
-      });
-      setIsActingAsTenant(false);
-    }
-  };
 
   const parseCSV = (csvText: string): CSVUser[] => {
     const lines = csvText.trim().split("\n");
@@ -529,17 +494,6 @@ export default function SuperAdminPage() {
                         </Button>
                       </DropdownMenuTrigger>
                       <DropdownMenuContent align="end" onClick={(e) => e.stopPropagation()}>
-                        <DropdownMenuItem
-                          onClick={() => handleActAsTenant(tenant)}
-                          disabled={isActingAsTenant || tenant.status === "suspended"}
-                          data-testid={`menu-act-as-tenant-${tenant.id}`}
-                        >
-                          <ExternalLink className="h-4 w-4 mr-2" />
-                          Act as Tenant
-                        </DropdownMenuItem>
-                        
-                        <DropdownMenuSeparator />
-                        
                         {tenant.status === "inactive" && (
                           <>
                             <DropdownMenuItem
