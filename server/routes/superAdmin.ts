@@ -3807,7 +3807,7 @@ router.get("/tenants/:tenantId/projects", requireSuperUser, async (req, res) => 
     if (clientIds.length > 0) {
       const clientsData = await db.select({ id: clients.id, companyName: clients.companyName })
         .from(clients)
-        .where(sql`${clients.id} = ANY(${clientIds})`);
+        .where(inArray(clients.id, clientIds));
       clientNameMap = new Map(clientsData.map(c => [c.id, c.companyName]));
     }
 
