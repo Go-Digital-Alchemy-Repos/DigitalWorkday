@@ -58,6 +58,8 @@ import {
   type ErrorLog, type InsertErrorLog,
   type ClientDivision, type InsertClientDivision,
   type DivisionMember, type InsertDivisionMember,
+  type Notification, type InsertNotification,
+  type NotificationPreferences, type InsertNotificationPreferences,
   users, workspaces, workspaceMembers, teams, teamMembers,
   projects, projectMembers, sections, tasks, taskAssignees, taskWatchers,
   subtasks, tags, taskTags, comments, commentMentions, activityLog, taskAttachments,
@@ -66,6 +68,7 @@ import {
   timeEntries, activeTimers,
   invitations, appSettings, tenants, tenantSettings, personalTaskSections,
   chatChannels, chatChannelMembers, chatDmThreads, chatDmMembers, chatMessages, chatAttachments, chatReads, errorLogs,
+  notifications, notificationPreferences,
   UserRole,
   type CommentMention, type InsertCommentMention,
 } from "@shared/schema";
@@ -440,6 +443,18 @@ export interface IStorage {
   }): Promise<{ logs: ErrorLog[]; total: number }>;
   getErrorLog(id: string): Promise<ErrorLog | undefined>;
   markErrorLogResolved(id: string, resolved: boolean): Promise<ErrorLog | undefined>;
+
+  // Notifications
+  createNotification(notification: InsertNotification): Promise<Notification>;
+  getNotificationsByUser(userId: string, options?: { unreadOnly?: boolean; limit?: number; offset?: number }): Promise<Notification[]>;
+  getUnreadNotificationCount(userId: string): Promise<number>;
+  markNotificationRead(id: string, userId: string): Promise<Notification | undefined>;
+  markAllNotificationsRead(userId: string): Promise<void>;
+  deleteNotification(id: string, userId: string): Promise<void>;
+
+  // Notification Preferences
+  getNotificationPreferences(userId: string): Promise<NotificationPreferences | undefined>;
+  upsertNotificationPreferences(userId: string, prefs: Partial<InsertNotificationPreferences>): Promise<NotificationPreferences>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -3320,6 +3335,97 @@ export class DatabaseStorage implements IStorage {
       .where(eq(errorLogs.id, id))
       .returning();
     return log || undefined;
+  }
+
+  // =============================================================================
+  // NOTIFICATIONS
+  // =============================================================================
+
+  async createNotification(notification: InsertNotification): Promise<Notification> {
+    const [created] = await db.insert(notifications).values(notification).returning();
+    return created;
+  }
+
+  async getNotificationsByUser(userId: string, options?: { unreadOnly?: boolean; limit?: number; offset?: number }): Promise<Notification[]> {
+    const { unreadOnly = false, limit = 50, offset = 0 } = options || {};
+    
+    const conditions = [eq(notifications.userId, userId)];
+    if (unreadOnly) {
+      conditions.push(isNull(notifications.readAt));
+    }
+    
+    return db.select()
+      .from(notifications)
+      .where(and(...conditions))
+      .orderBy(desc(notifications.createdAt))
+      .limit(limit)
+      .offset(offset);
+  }
+
+  async getUnreadNotificationCount(userId: string): Promise<number> {
+    const [result] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(notifications)
+      .where(and(
+        eq(notifications.userId, userId),
+        isNull(notifications.readAt)
+      ));
+    return result?.count ?? 0;
+  }
+
+  async markNotificationRead(id: string, userId: string): Promise<Notification | undefined> {
+    const [updated] = await db.update(notifications)
+      .set({ readAt: new Date() })
+      .where(and(
+        eq(notifications.id, id),
+        eq(notifications.userId, userId)
+      ))
+      .returning();
+    return updated || undefined;
+  }
+
+  async markAllNotificationsRead(userId: string): Promise<void> {
+    await db.update(notifications)
+      .set({ readAt: new Date() })
+      .where(and(
+        eq(notifications.userId, userId),
+        isNull(notifications.readAt)
+      ));
+  }
+
+  async deleteNotification(id: string, userId: string): Promise<void> {
+    await db.delete(notifications)
+      .where(and(
+        eq(notifications.id, id),
+        eq(notifications.userId, userId)
+      ));
+  }
+
+  // =============================================================================
+  // NOTIFICATION PREFERENCES
+  // =============================================================================
+
+  async getNotificationPreferences(userId: string): Promise<NotificationPreferences | undefined> {
+    const [prefs] = await db.select()
+      .from(notificationPreferences)
+      .where(eq(notificationPreferences.userId, userId));
+    return prefs || undefined;
+  }
+
+  async upsertNotificationPreferences(userId: string, prefs: Partial<InsertNotificationPreferences>): Promise<NotificationPreferences> {
+    const existing = await this.getNotificationPreferences(userId);
+    
+    if (existing) {
+      const [updated] = await db.update(notificationPreferences)
+        .set({ ...prefs, updatedAt: new Date() })
+        .where(eq(notificationPreferences.userId, userId))
+        .returning();
+      return updated;
+    }
+    
+    const [created] = await db.insert(notificationPreferences)
+      .values({ userId, ...prefs })
+      .returning();
+    return created;
   }
 }
 
