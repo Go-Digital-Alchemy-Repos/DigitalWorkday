@@ -2830,10 +2830,11 @@ export async function registerRoutes(
       
       const userId = getCurrentUserId(req);
       const user = await storage.getUser(userId);
-      const isAdmin = user?.role === 'admin' || user?.role === 'super_user';
+      // Allow super users, tenant admins, and tenant employees to create divisions
+      const canCreate = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
       
-      if (!isAdmin) {
-        return res.status(403).json({ error: "Only tenant admins can create divisions" });
+      if (!canCreate) {
+        return res.status(403).json({ error: "You do not have permission to create divisions" });
       }
       
       const data = insertClientDivisionSchema.parse({
@@ -2864,10 +2865,11 @@ export async function registerRoutes(
       
       const userId = getCurrentUserId(req);
       const user = await storage.getUser(userId);
-      const isAdmin = user?.role === 'admin' || user?.role === 'super_user';
+      // Allow super users, tenant admins, and tenant employees to update divisions
+      const canUpdate = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
       
-      if (!isAdmin) {
-        return res.status(403).json({ error: "Only tenant admins can update divisions" });
+      if (!canUpdate) {
+        return res.status(403).json({ error: "You do not have permission to update divisions" });
       }
       
       const updateSchema = insertClientDivisionSchema.partial().omit({ 
@@ -2940,10 +2942,11 @@ export async function registerRoutes(
       
       const userId = getCurrentUserId(req);
       const user = await storage.getUser(userId);
-      const isAdmin = user?.role === 'admin' || user?.role === 'super_user';
+      // Allow super users, tenant admins, and tenant employees to manage division members
+      const canManage = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
       
-      if (!isAdmin) {
-        return res.status(403).json({ error: "Only tenant admins can manage division members" });
+      if (!canManage) {
+        return res.status(403).json({ error: "You do not have permission to manage division members" });
       }
       
       const division = await storage.getClientDivision(divisionId);
@@ -2979,10 +2982,11 @@ export async function registerRoutes(
       
       const currentUserId = getCurrentUserId(req);
       const user = await storage.getUser(currentUserId);
-      const isAdmin = user?.role === 'admin' || user?.role === 'super_user';
+      // Allow super users, tenant admins, and tenant employees to remove division members
+      const canManage = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
       
-      if (!isAdmin) {
-        return res.status(403).json({ error: "Only tenant admins can remove division members" });
+      if (!canManage) {
+        return res.status(403).json({ error: "You do not have permission to remove division members" });
       }
       
       const division = await storage.getClientDivision(divisionId);
