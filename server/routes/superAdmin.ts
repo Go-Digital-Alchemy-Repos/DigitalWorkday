@@ -7466,12 +7466,22 @@ router.get("/tenancy/health", requireSuperUser, async (req, res) => {
       quarantinedCounts.tasks + 
       quarantinedCounts.teams;
     
+    // Build missingTenantIds array for frontend compatibility
+    const missingTenantIds = [
+      { table: "users", missingTenantIdCount: missingCounts.users },
+      { table: "projects", missingTenantIdCount: missingCounts.projects },
+      { table: "tasks", missingTenantIdCount: missingCounts.tasks },
+      { table: "teams", missingTenantIdCount: missingCounts.teams },
+      { table: "clients", missingTenantIdCount: missingCounts.clients },
+    ];
+    
     res.json({
       currentMode: tenancyMode,
       totalMissing,
       totalQuarantined,
       activeTenantCount,
       missingByTable: missingCounts,
+      missingTenantIds,
       quarantinedByTable: quarantinedCounts,
       hasQuarantineTenant: !!quarantineTenantId,
       warningStats: {

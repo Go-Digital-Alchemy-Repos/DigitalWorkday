@@ -1075,7 +1075,7 @@ export default function SuperAdminPage() {
                   ) : (
                     <div className="space-y-4">
                       <div className="space-y-2">
-                        {healthData.missingTenantIds.filter(m => m.missingTenantIdCount > 0).map((item) => (
+                        {(healthData.missingTenantIds || []).filter(m => m.missingTenantIdCount > 0).map((item) => (
                           <div key={item.table} className="flex items-center justify-between">
                             <span className="text-sm font-medium">{item.table}</span>
                             <div className="flex items-center gap-4">
