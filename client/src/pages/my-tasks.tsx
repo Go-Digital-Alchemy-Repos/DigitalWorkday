@@ -91,6 +91,7 @@ import { isToday, isPast, isFuture } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { AccessInfoBanner } from "@/components/access-info-banner";
+import { TaskProgressBar } from "@/components/task-progress-bar";
 import type { TaskWithRelations, Workspace } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 
@@ -377,6 +378,17 @@ export default function MyTasks() {
 
   const totalTasks = filteredTasks.length;
 
+  const taskStats = useMemo(() => {
+    const allTasks = tasks || [];
+    return {
+      total: allTasks.length,
+      done: allTasks.filter(t => t.status === "done").length,
+      inProgress: allTasks.filter(t => t.status === "in_progress").length,
+      todo: allTasks.filter(t => t.status === "todo").length,
+      blocked: allTasks.filter(t => t.status === "blocked").length,
+    };
+  }, [tasks]);
+
   return (
     <div className="flex flex-col h-full overflow-hidden">
       {isEmployee && (
@@ -449,6 +461,12 @@ export default function MyTasks() {
             </Button>
           </div>
         </div>
+
+        {taskStats.total > 0 && (
+          <div className="px-6 pb-4">
+            <TaskProgressBar stats={taskStats} />
+          </div>
+        )}
 
         {showNewTaskInput && (
           <div className="px-6 pb-4 border-b border-border">
