@@ -1216,7 +1216,9 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "clients", clientSearch] });
+      // Invalidate all client queries for this tenant (any search filter)
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "clients-all"] });
       setNewClientName("");
       setShowCreateClient(false);
       toast({ title: "Client created" });
@@ -1232,7 +1234,9 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
       return res.json();
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "clients", clientSearch] });
+      // Invalidate all client queries for this tenant (any search filter)
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "clients-all"] });
       toast({ title: "Client deleted" });
     },
     onError: (error: any) => {
