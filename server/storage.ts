@@ -215,6 +215,11 @@ export interface IStorage {
   
   // Client User Access
   addClientUserAccess(access: InsertClientUserAccess): Promise<ClientUserAccess>;
+  getClientUsers(clientId: string): Promise<Array<{ user: User; access: ClientUserAccess }>>;
+  getClientUserAccessByUserAndClient(userId: string, clientId: string): Promise<ClientUserAccess | undefined>;
+  updateClientUserAccess(clientId: string, userId: string, updates: Partial<InsertClientUserAccess>): Promise<ClientUserAccess | undefined>;
+  deleteClientUserAccess(clientId: string, userId: string): Promise<void>;
+  getClientsForUser(userId: string): Promise<Array<{ client: Client; access: ClientUserAccess }>>;
   
   // Time Tracking - Time Entries
   getTimeEntry(id: string): Promise<TimeEntry | undefined>;
@@ -1450,6 +1455,65 @@ export class DatabaseStorage implements IStorage {
 
   async addClientUserAccess(access: InsertClientUserAccess): Promise<ClientUserAccess> {
     const [result] = await db.insert(clientUserAccess).values(access).returning();
+    return result;
+  }
+
+  async getClientUsers(clientId: string): Promise<Array<{ user: User; access: ClientUserAccess }>> {
+    const accessRecords = await db.select()
+      .from(clientUserAccess)
+      .where(eq(clientUserAccess.clientId, clientId));
+    
+    const result: Array<{ user: User; access: ClientUserAccess }> = [];
+    for (const access of accessRecords) {
+      const [user] = await db.select().from(users).where(eq(users.id, access.userId));
+      if (user) {
+        result.push({ user, access });
+      }
+    }
+    return result;
+  }
+
+  async getClientUserAccessByUserAndClient(userId: string, clientId: string): Promise<ClientUserAccess | undefined> {
+    const [access] = await db.select()
+      .from(clientUserAccess)
+      .where(and(
+        eq(clientUserAccess.userId, userId),
+        eq(clientUserAccess.clientId, clientId)
+      ));
+    return access || undefined;
+  }
+
+  async updateClientUserAccess(clientId: string, userId: string, updates: Partial<InsertClientUserAccess>): Promise<ClientUserAccess | undefined> {
+    const [result] = await db.update(clientUserAccess)
+      .set({ ...updates })
+      .where(and(
+        eq(clientUserAccess.clientId, clientId),
+        eq(clientUserAccess.userId, userId)
+      ))
+      .returning();
+    return result || undefined;
+  }
+
+  async deleteClientUserAccess(clientId: string, userId: string): Promise<void> {
+    await db.delete(clientUserAccess)
+      .where(and(
+        eq(clientUserAccess.clientId, clientId),
+        eq(clientUserAccess.userId, userId)
+      ));
+  }
+
+  async getClientsForUser(userId: string): Promise<Array<{ client: Client; access: ClientUserAccess }>> {
+    const accessRecords = await db.select()
+      .from(clientUserAccess)
+      .where(eq(clientUserAccess.userId, userId));
+    
+    const result: Array<{ client: Client; access: ClientUserAccess }> = [];
+    for (const access of accessRecords) {
+      const [client] = await db.select().from(clients).where(eq(clients.id, access.clientId));
+      if (client) {
+        result.push({ client, access });
+      }
+    }
     return result;
   }
 
