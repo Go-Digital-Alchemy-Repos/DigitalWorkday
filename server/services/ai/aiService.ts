@@ -4,10 +4,18 @@ import { systemSettings } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import crypto from "crypto";
 
-const ENCRYPTION_KEY = process.env.SESSION_SECRET || "dev-secret-key-32-chars-long!!";
+function getEncryptionSecret(): string {
+  const secret = process.env.SESSION_SECRET;
+  if (!secret || secret.length < 16) {
+    throw new Error("SESSION_SECRET environment variable is required for AI encryption (minimum 16 characters)");
+  }
+  return secret;
+}
 
 function getEncryptionKey(): Buffer {
-  return crypto.scryptSync(ENCRYPTION_KEY, "salt", 32);
+  const secret = getEncryptionSecret();
+  const salt = crypto.createHash("sha256").update(secret).digest().slice(0, 16);
+  return crypto.scryptSync(secret, salt, 32);
 }
 
 export function encryptApiKey(apiKey: string): string {
@@ -42,6 +50,11 @@ interface AIConfig {
   temperature: number;
 }
 
+export interface AIConfigStatus {
+  config: AIConfig | null;
+  error?: string;
+}
+
 async function getAIConfig(): Promise<AIConfig | null> {
   const [settings] = await db.select().from(systemSettings).where(eq(systemSettings.id, 1));
   
@@ -62,6 +75,44 @@ async function getAIConfig(): Promise<AIConfig | null> {
   } catch (error) {
     console.error("[AI] Failed to decrypt API key:", error);
     return null;
+  }
+}
+
+export async function getAIConfigStatus(): Promise<AIConfigStatus> {
+  const [settings] = await db.select().from(systemSettings).where(eq(systemSettings.id, 1));
+  
+  if (!settings) {
+    return { config: null, error: "System settings not found" };
+  }
+  
+  if (!settings.aiEnabled) {
+    return { config: null, error: "AI is not enabled" };
+  }
+  
+  if (!settings.aiApiKeyEncrypted) {
+    return { config: null, error: "API key not configured" };
+  }
+
+  try {
+    getEncryptionSecret();
+  } catch (error) {
+    return { config: null, error: "Encryption configuration error - check SESSION_SECRET" };
+  }
+
+  try {
+    const apiKey = decryptApiKey(settings.aiApiKeyEncrypted);
+    return {
+      config: {
+        enabled: settings.aiEnabled,
+        provider: settings.aiProvider || "openai",
+        model: settings.aiModel || "gpt-4o-mini",
+        apiKey,
+        maxTokens: settings.aiMaxTokens || 2000,
+        temperature: parseFloat(settings.aiTemperature || "0.7"),
+      }
+    };
+  } catch (error) {
+    return { config: null, error: "Failed to decrypt API key - key may be corrupted or encryption secret changed" };
   }
 }
 

@@ -8,6 +8,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Badge } from "@/components/ui/badge";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -15,7 +16,8 @@ import { Redirect } from "wouter";
 import { 
   Loader2, Users, FileText, Palette, Settings, Shield, Save, Mail, HardDrive, Check, X, 
   Plus, Link, Copy, MoreHorizontal, UserCheck, UserX, Clock, AlertCircle, KeyRound, Image,
-  TestTube, Eye, EyeOff, Trash2, RefreshCw, Send, CreditCard, Archive, Globe, Cloud
+  TestTube, Eye, EyeOff, Trash2, RefreshCw, Send, CreditCard, Archive, Globe, Cloud, Sparkles, Bot,
+  AlertTriangle, CheckCircle
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { S3Dropzone } from "@/components/common/S3Dropzone";
@@ -665,6 +667,377 @@ function AgreementsManagementTab({
             <AlertDialogCancel>Cancel</AlertDialogCancel>
             <AlertDialogAction onClick={() => actionAgreement && archiveMutation.mutate(actionAgreement.id)}>
               Archive
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
+  );
+}
+
+interface AIConfig {
+  enabled: boolean;
+  provider: string;
+  model: string;
+  maxTokens: number;
+  temperature: string;
+  hasApiKey: boolean;
+  apiKeyMasked: string | null;
+  lastTestedAt: string | null;
+  configError: string | null;
+  isOperational: boolean;
+}
+
+function AIIntegrationTab() {
+  const { toast } = useToast();
+  const [showApiKey, setShowApiKey] = useState(false);
+  const [apiKeyInput, setApiKeyInput] = useState("");
+  const [confirmRemoveOpen, setConfirmRemoveOpen] = useState(false);
+  const [form, setForm] = useState({
+    enabled: false,
+    provider: "openai",
+    model: "gpt-4o-mini",
+    maxTokens: 2000,
+    temperature: "0.7",
+  });
+
+  const { data: aiConfig, isLoading: loadingConfig, refetch } = useQuery<AIConfig>({
+    queryKey: ["/api/v1/super/ai/config"],
+    queryFn: async () => {
+      const res = await fetch("/api/v1/super/ai/config", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch AI configuration");
+      return res.json();
+    },
+  });
+
+  useEffect(() => {
+    if (aiConfig) {
+      setForm({
+        enabled: aiConfig.enabled,
+        provider: aiConfig.provider,
+        model: aiConfig.model,
+        maxTokens: aiConfig.maxTokens,
+        temperature: aiConfig.temperature,
+      });
+    }
+  }, [aiConfig]);
+
+  const updateConfigMutation = useMutation({
+    mutationFn: async (data: Partial<AIConfig & { apiKey?: string }>) => {
+      return apiRequest("PUT", "/api/v1/super/ai/config", data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/ai/config"] });
+      toast({ title: "AI configuration updated" });
+      setApiKeyInput("");
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to update AI configuration", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const testConnectionMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/v1/super/ai/test", { 
+        method: "POST", 
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+      });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.success) {
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/super/ai/config"] });
+        toast({ title: "Connection successful", description: `Model: ${data.model}` });
+      } else {
+        toast({ title: "Connection failed", description: data.message, variant: "destructive" });
+      }
+    },
+    onError: (error: any) => {
+      toast({ title: "Connection test failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const removeApiKeyMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("DELETE", "/api/v1/super/ai/api-key");
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/ai/config"] });
+      toast({ title: "API key removed" });
+      setConfirmRemoveOpen(false);
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to remove API key", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleSave = () => {
+    const data: any = { ...form };
+    if (apiKeyInput.trim()) {
+      data.apiKey = apiKeyInput.trim();
+    }
+    updateConfigMutation.mutate(data);
+  };
+
+  if (loadingConfig) {
+    return (
+      <div className="flex items-center justify-center py-8">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  const availableModels = [
+    { value: "gpt-4o-mini", label: "GPT-4o Mini (Cost-effective)" },
+    { value: "gpt-4o", label: "GPT-4o (Best quality)" },
+    { value: "gpt-4-turbo", label: "GPT-4 Turbo" },
+    { value: "gpt-3.5-turbo", label: "GPT-3.5 Turbo (Fastest)" },
+  ];
+
+  return (
+    <div className="space-y-6">
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2">
+            <Sparkles className="h-5 w-5" />
+            AI Integration Settings
+          </CardTitle>
+          <CardDescription>
+            Configure ChatGPT/OpenAI integration for AI-powered features across all tenants. These features include task breakdown suggestions and project planning assistance.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-6">
+          {aiConfig?.configError && (
+            <div className="flex items-start gap-3 p-4 border border-destructive/50 rounded-lg bg-destructive/5">
+              <AlertTriangle className="h-5 w-5 text-destructive mt-0.5" />
+              <div>
+                <div className="font-medium text-destructive">Configuration Error</div>
+                <div className="text-sm text-destructive/80">
+                  {aiConfig.configError}
+                </div>
+              </div>
+            </div>
+          )}
+
+          {aiConfig?.hasApiKey && aiConfig?.isOperational && (
+            <div className="flex items-center gap-2 p-4 border border-green-500/50 rounded-lg bg-green-500/5">
+              <CheckCircle className="h-5 w-5 text-green-500" />
+              <div className="text-sm text-green-700 dark:text-green-400">
+                AI integration is configured and operational
+              </div>
+            </div>
+          )}
+
+          <div className="flex items-center justify-between p-4 border rounded-lg">
+            <div className="flex items-center gap-3">
+              <Bot className="h-5 w-5 text-muted-foreground" />
+              <div>
+                <div className="font-medium">Enable AI Features</div>
+                <div className="text-sm text-muted-foreground">
+                  Turn on AI-powered suggestions for task breakdowns and project planning
+                </div>
+              </div>
+            </div>
+            <Checkbox
+              checked={form.enabled}
+              onCheckedChange={(checked) => setForm({ ...form, enabled: !!checked })}
+              data-testid="checkbox-ai-enabled"
+            />
+          </div>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="ai-api-key">OpenAI API Key</Label>
+              <div className="flex gap-2">
+                <div className="relative flex-1">
+                  <Input
+                    id="ai-api-key"
+                    type={showApiKey ? "text" : "password"}
+                    value={apiKeyInput}
+                    onChange={(e) => setApiKeyInput(e.target.value)}
+                    placeholder={aiConfig?.hasApiKey ? "••••••••••••••••" : "sk-..."}
+                    data-testid="input-ai-api-key"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7"
+                    onClick={() => setShowApiKey(!showApiKey)}
+                  >
+                    {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {aiConfig?.hasApiKey && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setConfirmRemoveOpen(true)}
+                    data-testid="button-remove-api-key"
+                  >
+                    <Trash2 className="h-4 w-4 mr-2" />
+                    Remove
+                  </Button>
+                )}
+              </div>
+              {aiConfig?.hasApiKey && (
+                <p className="text-xs text-muted-foreground">
+                  Current key: {aiConfig.apiKeyMasked}
+                </p>
+              )}
+              <p className="text-xs text-muted-foreground">
+                Get your API key from{" "}
+                <a 
+                  href="https://platform.openai.com/api-keys" 
+                  target="_blank" 
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline"
+                >
+                  OpenAI Platform
+                </a>
+              </p>
+            </div>
+
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label htmlFor="ai-model">Model</Label>
+                <Select
+                  value={form.model}
+                  onValueChange={(value) => setForm({ ...form, model: value })}
+                >
+                  <SelectTrigger id="ai-model" data-testid="select-ai-model">
+                    <SelectValue placeholder="Select model" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {availableModels.map((model) => (
+                      <SelectItem key={model.value} value={model.value}>
+                        {model.label}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                <p className="text-xs text-muted-foreground">
+                  GPT-4o Mini is recommended for a balance of quality and cost
+                </p>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="ai-max-tokens">Max Tokens</Label>
+                <Input
+                  id="ai-max-tokens"
+                  type="number"
+                  min={100}
+                  max={8000}
+                  value={form.maxTokens}
+                  onChange={(e) => setForm({ ...form, maxTokens: parseInt(e.target.value) || 2000 })}
+                  data-testid="input-ai-max-tokens"
+                />
+                <p className="text-xs text-muted-foreground">
+                  Maximum response length (100-8000)
+                </p>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="ai-temperature">Temperature</Label>
+              <Select
+                value={form.temperature}
+                onValueChange={(value) => setForm({ ...form, temperature: value })}
+              >
+                <SelectTrigger id="ai-temperature" data-testid="select-ai-temperature">
+                  <SelectValue placeholder="Select temperature" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="0.3">0.3 - More focused and deterministic</SelectItem>
+                  <SelectItem value="0.5">0.5 - Balanced</SelectItem>
+                  <SelectItem value="0.7">0.7 - More creative (recommended)</SelectItem>
+                  <SelectItem value="1.0">1.0 - Most creative</SelectItem>
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                Higher values produce more varied responses
+              </p>
+            </div>
+          </div>
+
+          <div className="flex items-center gap-4 pt-4 border-t">
+            <Button
+              onClick={handleSave}
+              disabled={updateConfigMutation.isPending}
+              data-testid="button-save-ai-config"
+            >
+              {updateConfigMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <Save className="h-4 w-4 mr-2" />
+              Save Configuration
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => testConnectionMutation.mutate()}
+              disabled={!aiConfig?.hasApiKey || testConnectionMutation.isPending}
+              data-testid="button-test-ai-connection"
+            >
+              {testConnectionMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              <TestTube className="h-4 w-4 mr-2" />
+              Test Connection
+            </Button>
+          </div>
+
+          {aiConfig?.lastTestedAt && (
+            <div className="text-sm text-muted-foreground flex items-center gap-2">
+              <Check className="h-4 w-4 text-green-600" />
+              Last tested: {new Date(aiConfig.lastTestedAt).toLocaleString()}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle>Available AI Features</CardTitle>
+          <CardDescription>
+            These features will be available to all tenants when AI is enabled
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="p-4 border rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="font-medium">Task Breakdown Suggestions</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                AI can suggest subtasks for complex tasks, helping users break down their work into manageable pieces.
+              </p>
+            </div>
+            <div className="p-4 border rounded-lg">
+              <div className="flex items-center gap-2 mb-2">
+                <Sparkles className="h-4 w-4 text-primary" />
+                <span className="font-medium">Project Planning Assistance</span>
+              </div>
+              <p className="text-sm text-muted-foreground">
+                AI can generate project plans with phases and tasks based on project descriptions.
+              </p>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={confirmRemoveOpen} onOpenChange={setConfirmRemoveOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remove API Key?</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will remove the OpenAI API key and disable AI features. You can add a new key at any time.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => removeApiKeyMutation.mutate()}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {removeApiKeyMutation.isPending && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Remove Key
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
@@ -1426,6 +1799,10 @@ export default function SuperAdminSettingsPage() {
             <TabsTrigger value="invoice-settings" data-testid="tab-invoice-settings">
               <CreditCard className="h-4 w-4 mr-2" />
               Invoice Settings
+            </TabsTrigger>
+            <TabsTrigger value="ai-integration" data-testid="tab-ai-integration">
+              <Sparkles className="h-4 w-4 mr-2" />
+              AI Integration
             </TabsTrigger>
           </TabsList>
 
@@ -3009,6 +3386,10 @@ export default function SuperAdminSettingsPage() {
               </AlertDialogFooter>
             </AlertDialogContent>
           </AlertDialog>
+
+          <TabsContent value="ai-integration">
+            <AIIntegrationTab />
+          </TabsContent>
         </Tabs>
       </div>
 

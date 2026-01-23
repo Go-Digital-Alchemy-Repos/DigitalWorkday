@@ -25,12 +25,13 @@ import {
   Settings,
   Play,
   Activity,
+  Sparkles,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SectionColumn, TaskCard, TaskDetailDrawer, TaskCreateDrawer, ListSectionDroppable } from "@/features/tasks";
-import { ProjectCalendar, ProjectSettingsSheet, ProjectActivityFeed } from "@/features/projects";
+import { ProjectCalendar, ProjectSettingsSheet, ProjectActivityFeed, AIProjectPlanner } from "@/features/projects";
 import { StartTimerDrawer } from "@/features/timer";
 import {
   Sheet,
@@ -60,6 +61,7 @@ export default function ProjectPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
+  const [aiPlannerOpen, setAiPlannerOpen] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState<string | undefined>();
   const [localSections, setLocalSections] = useState<SectionWithTasks[] | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
@@ -438,6 +440,15 @@ export default function ProjectPage() {
               <Play className="h-4 w-4 mr-1" />
               Start Timer
             </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => setAiPlannerOpen(true)}
+              data-testid="button-ai-planner"
+            >
+              <Sparkles className="h-4 w-4 mr-1" />
+              AI Plan
+            </Button>
             <Button variant="ghost" size="icon" data-testid="button-project-members">
               <Users className="h-4 w-4" />
             </Button>
@@ -619,6 +630,43 @@ export default function ProjectPage() {
           onOpenChange={setSettingsOpen}
         />
       )}
+
+      <Sheet open={aiPlannerOpen} onOpenChange={setAiPlannerOpen}>
+        <SheetContent className="w-[440px] sm:w-[540px]">
+          <SheetHeader>
+            <SheetTitle className="flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              AI Project Planner
+            </SheetTitle>
+          </SheetHeader>
+          {project && (
+            <div className="mt-4">
+              <AIProjectPlanner
+                projectName={project.name}
+                projectDescription={project.description || undefined}
+                onCreateTask={(title) => {
+                  const defaultSectionId = sections?.[0]?.id;
+                  if (!defaultSectionId) {
+                    toast({
+                      title: "Cannot create task",
+                      description: "Please create a section in the project first",
+                      variant: "destructive",
+                    });
+                    return;
+                  }
+                  if (projectId) {
+                    createTaskMutation.mutate({
+                      title,
+                      sectionId: defaultSectionId,
+                      projectId,
+                    });
+                  }
+                }}
+              />
+            </div>
+          )}
+        </SheetContent>
+      </Sheet>
 
       <StartTimerDrawer
         open={timerDrawerOpen}

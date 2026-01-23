@@ -15,6 +15,7 @@ import systemStatusRoutes from "./systemStatus";
 import systemIntegrationsRoutes from "./systemIntegrations";
 import chatRoutes from "./chat";
 import chatRetentionRoutes from "./chatRetention";
+import aiRoutes from "./ai";
 import featuresRoutes from "../features";
 
 const router = Router();
@@ -35,6 +36,7 @@ router.use("/v1/uploads", uploadRoutes);
 router.use("/v1", emailOutboxRoutes);
 router.use("/v1/chat", chatRoutes);
 router.use("/v1", chatRetentionRoutes);
+router.use("/v1/ai", aiRoutes);
 router.use(tenancyHealthRoutes);
 
 export default router;

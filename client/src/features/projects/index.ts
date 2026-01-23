@@ -4,3 +4,4 @@ export { ProjectSettingsSheet } from "./project-settings-sheet";
 export { ProjectCalendar } from "./project-calendar";
 export { ProjectActivityFeed } from "./project-activity-feed";
 export { CreateProjectDialog } from "./create-project-dialog";
+export { AIProjectPlanner } from "./ai-project-planner";

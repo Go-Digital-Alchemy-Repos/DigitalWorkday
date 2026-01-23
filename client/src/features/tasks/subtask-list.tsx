@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, GripVertical, X, CalendarIcon, UserCircle } from "lucide-react";
+import { Plus, GripVertical, X, CalendarIcon, UserCircle, Sparkles, Loader2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -11,12 +11,15 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { Subtask, User, WorkspaceMember } from "@shared/schema";
 
 interface SubtaskListProps {
   subtasks: Subtask[];
   taskId: string;
   workspaceId?: string;
+  taskTitle?: string;
+  taskDescription?: string;
   onAdd?: (title: string) => void;
   onToggle?: (subtaskId: string, completed: boolean) => void;
   onDelete?: (subtaskId: string) => void;
@@ -37,21 +40,78 @@ export function SubtaskList({
   subtasks,
   taskId,
   workspaceId,
+  taskTitle,
+  taskDescription,
   onAdd,
   onToggle,
   onDelete,
   onUpdate,
   onSubtaskUpdate,
 }: SubtaskListProps) {
+  const { toast } = useToast();
   const [isAdding, setIsAdding] = useState(false);
   const [newTitle, setNewTitle] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
+  const [aiSuggestions, setAiSuggestions] = useState<Array<{ title: string; description?: string }>>([]);
 
   const { data: workspaceMembers = [] } = useQuery<(WorkspaceMember & { user?: User })[]>({
     queryKey: ["/api/workspaces", workspaceId, "members"],
     enabled: !!workspaceId,
   });
+
+  const { data: aiStatus } = useQuery<{ enabled: boolean }>({
+    queryKey: ["/api/v1/ai/status"],
+    queryFn: async () => {
+      const res = await fetch("/api/v1/ai/status", { credentials: "include" });
+      if (!res.ok) return { enabled: false };
+      return res.json();
+    },
+    staleTime: 60000,
+  });
+
+  const aiSuggestMutation = useMutation({
+    mutationFn: async () => {
+      const res = await fetch("/api/v1/ai/suggest/task-breakdown", {
+        method: "POST",
+        credentials: "include",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          taskTitle: taskTitle || "Task",
+          taskDescription: taskDescription || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const data = await res.json();
+        throw new Error(data.error || "Failed to get AI suggestions");
+      }
+      return res.json();
+    },
+    onSuccess: (data) => {
+      if (data.subtasks && data.subtasks.length > 0) {
+        setAiSuggestions(data.subtasks);
+        toast({ title: `AI suggested ${data.subtasks.length} subtasks` });
+      } else {
+        toast({ title: "No suggestions generated", variant: "destructive" });
+      }
+    },
+    onError: (error: any) => {
+      toast({ 
+        title: "AI suggestion failed", 
+        description: error.message,
+        variant: "destructive" 
+      });
+    },
+  });
+
+  const handleAcceptSuggestion = (suggestion: { title: string }) => {
+    onAdd?.(suggestion.title);
+    setAiSuggestions((prev) => prev.filter((s) => s.title !== suggestion.title));
+  };
+
+  const handleDismissSuggestions = () => {
+    setAiSuggestions([]);
+  };
 
   const updateSubtaskMutation = useMutation({
     mutationFn: async ({ subtaskId, data }: { subtaskId: string; data: Partial<Subtask> }) => {
@@ -119,18 +179,78 @@ export function SubtaskList({
             </span>
           )}
         </h4>
-        {!isAdding && (
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setIsAdding(true)}
-            data-testid="button-add-subtask"
-          >
-            <Plus className="h-3.5 w-3.5 mr-1" />
-            Add
-          </Button>
-        )}
+        <div className="flex items-center gap-1">
+          {aiStatus?.enabled && taskTitle && !isAdding && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => aiSuggestMutation.mutate()}
+              disabled={aiSuggestMutation.isPending}
+              data-testid="button-ai-suggest-subtasks"
+            >
+              {aiSuggestMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
+              ) : (
+                <Sparkles className="h-3.5 w-3.5 mr-1" />
+              )}
+              AI Suggest
+            </Button>
+          )}
+          {!isAdding && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setIsAdding(true)}
+              data-testid="button-add-subtask"
+            >
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Add
+            </Button>
+          )}
+        </div>
       </div>
+
+      {aiSuggestions.length > 0 && (
+        <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg space-y-2">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2 text-sm font-medium text-primary">
+              <Sparkles className="h-4 w-4" />
+              AI Suggestions
+            </div>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleDismissSuggestions}
+              className="h-6 text-xs"
+              data-testid="button-dismiss-ai-suggestions"
+            >
+              <X className="h-3 w-3 mr-1" />
+              Dismiss
+            </Button>
+          </div>
+          <div className="space-y-1">
+            {aiSuggestions.map((suggestion, index) => (
+              <div
+                key={index}
+                className="flex items-center justify-between gap-2 py-1.5 px-2 bg-background rounded-md border"
+                data-testid={`ai-suggestion-${index}`}
+              >
+                <span className="text-sm flex-1 min-w-0 truncate">{suggestion.title}</span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => handleAcceptSuggestion(suggestion)}
+                  className="h-6 text-xs"
+                  data-testid={`button-accept-suggestion-${index}`}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  Add
+                </Button>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
 
       {subtasks.length > 0 && (
         <div className="space-y-1">
