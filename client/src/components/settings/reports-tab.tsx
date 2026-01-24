@@ -376,14 +376,14 @@ export function ReportsTab() {
     queryKey: ["/api/time-entries/summary", { groupBy }],
   });
 
-  const totalHours = timeEntries?.reduce((acc, entry) => acc + (entry.duration || 0), 0) || 0;
-  const totalMinutes = Math.round(totalHours / 60);
+  const totalSeconds = timeEntries?.reduce((acc, entry) => acc + (entry.durationSeconds || 0), 0) || 0;
+  const totalMinutes = Math.round(totalSeconds / 60);
   const displayHours = Math.floor(totalMinutes / 60);
   const displayMinutes = totalMinutes % 60;
 
   const projectHours = projects?.map((project) => {
     const projectEntries = timeEntries?.filter((e) => e.projectId === project.id) || [];
-    const hours = projectEntries.reduce((acc, e) => acc + (e.duration || 0), 0) / 3600;
+    const hours = projectEntries.reduce((acc, e) => acc + (e.durationSeconds || 0), 0) / 3600;
     return {
       name: project.name.slice(0, 15),
       hours: Math.round(hours * 10) / 10,
@@ -395,7 +395,7 @@ export function ReportsTab() {
     const user = member.user;
     if (!user) return null;
     const userEntries = timeEntries?.filter((e) => e.userId === user.id) || [];
-    const hours = userEntries.reduce((acc, e) => acc + (e.duration || 0), 0) / 3600;
+    const hours = userEntries.reduce((acc, e) => acc + (e.durationSeconds || 0), 0) / 3600;
     return {
       id: user.id,
       name: user.firstName && user.lastName
@@ -413,7 +413,7 @@ export function ReportsTab() {
       const project = projects?.find((p) => p.id === e.projectId);
       return project?.teamId === team.id;
     }) || [];
-    const hours = teamEntries.reduce((acc, e) => acc + (e.duration || 0), 0) / 3600;
+    const hours = teamEntries.reduce((acc, e) => acc + (e.durationSeconds || 0), 0) / 3600;
     return {
       id: team.id,
       name: team.name,
@@ -440,13 +440,13 @@ export function ReportsTab() {
     if (type === "time") {
       const headers = ["Date", "Employee", "Project", "Description", "Duration (hours)"];
       const rows = timeEntries?.map((entry) => [
-        entry.date ? new Date(entry.date).toLocaleDateString() : "",
+        entry.startTime ? new Date(entry.startTime).toLocaleDateString() : "",
         entry.user ? (entry.user.firstName && entry.user.lastName 
           ? `${entry.user.firstName} ${entry.user.lastName}` 
           : entry.user.name || entry.user.email) : "",
         projects?.find((p) => p.id === entry.projectId)?.name || "",
         entry.description || "",
-        ((entry.duration || 0) / 3600).toFixed(2),
+        ((entry.durationSeconds || 0) / 3600).toFixed(2),
       ]) || [];
       csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
       filename = `time-entries-${new Date().toISOString().split("T")[0]}.csv`;

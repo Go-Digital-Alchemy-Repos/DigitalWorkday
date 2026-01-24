@@ -1,0 +1,179 @@
+SPRINT 2F — Documentation, Architecture Lock-In, Guardrails & Docs Organization
+
+CONTEXT:
+Sprint 2 stabilized critical foundations:
+- Tenant-wide visibility with strict tenant_id enforcement
+- Deterministic tenant provisioning
+- Cloudflare R2 as primary storage
+- Chat hardening and performance improvements
+
+However, documentation has grown organically and is now difficult to navigate.
+This prompt focuses on documentation clarity, organization, and guardrails —
+NOT on changing runtime behavior.
+
+GOAL:
+1) Clearly document how the system works (tenancy, storage, chat, auth, provisioning).
+2) Reorganize existing docs into a discoverable, categorized structure.
+3) Add lightweight guardrails and annotations so future changes don’t break core invariants.
+
+ABSOLUTE SAFETY RULES:
+- DO NOT change runtime behavior.
+- DO NOT modify API endpoints or response shapes.
+- DO NOT delete documentation content — reorganize and consolidate only.
+- Documentation + comments + assertions only.
+
+===============================================================================
+STEP 1 — Create a Docs Index & Category Structure
+===============================================================================
+Audit existing documentation files and create (or update) a clear index:
+
+Create or update:
+- /docs/README.md
+
+In this file, introduce **top-level categories** and list documents under each:
+
+### Recommended Categories
+1) Architecture & Tenancy
+2) Authentication & Authorization
+3) Security & Data Isolation
+4) Storage & File Handling
+5) Chat & Communication
+6) Provisioning & Onboarding
+7) Integrations
+8) Performance & Scaling
+9) Super Admin / Tenant Admin Operations
+10) Development & Contribution Guide
+
+Each category should list:
+- document name
+- short 1–2 line description
+- link to file
+
+===============================================================================
+STEP 2 — Reorganize Existing Docs (Non-Destructive)
+===============================================================================
+For existing docs:
+- Move them into appropriate subfolders (if not already):
+  - /docs/architecture/
+  - /docs/auth/
+  - /docs/security/
+  - /docs/storage/
+  - /docs/chat/
+  - /docs/provisioning/
+  - /docs/integrations/
+  - /docs/performance/
+  - /docs/admin/
+  - /docs/dev/
+
+Rules:
+- DO NOT delete content.
+- If two docs overlap heavily, consolidate and add redirect notes at top of old file.
+- Preserve git history when possible.
+
+===============================================================================
+STEP 3 — Ensure Key Sprint 2 Docs Exist & Are Linked
+===============================================================================
+Ensure the following docs exist and are placed correctly:
+
+ARCHITECTURE & TENANCY
+- Tenancy Model (tenant_id invariants, tenant-wide visibility)
+- Effective Tenant Context & “Tenant Context Loaded” gate
+- Workspace role (organizational only)
+
+AUTH & SECURITY
+- Cookie-based auth model
+- Super Admin “Act As Tenant” behavior
+- Invite + password flows
+- Role permissions summary
+
+STORAGE
+- Cloudflare R2 as primary storage
+- Tenant override vs system fallback
+- Signed URLs vs public assets
+- What NOT to do (never bypass resolver)
+
+CHAT
+- Tenant-scoped chat architecture
+- Channels vs DMs
+- Membership rules
+- Super Admin monitoring (read-only)
+
+PROVISIONING
+- Tenant creation lifecycle
+- Primary workspace creation
+- Client/project provisioning rules
+
+===============================================================================
+STEP 4 — Inline Code Annotations (Critical Paths)
+===============================================================================
+Add clear comments (no logic changes) at:
+
+1) Storage resolver:
+   - Explain provider priority and override behavior.
+
+2) Tenant-scoped CREATE handlers:
+   - Explain why tenant_id is mandatory.
+   - Warn against workspace-based visibility filters.
+
+3) Chat socket handlers:
+   - Explain tenant + membership enforcement.
+
+4) Super Admin provisioning routes:
+   - Explain primary workspace logic and audit logging.
+
+===============================================================================
+STEP 5 — Developer Guardrails (Assertions & Warnings)
+===============================================================================
+Add lightweight guardrails that reflect existing assumptions:
+
+1) Runtime assertions:
+   - requireTenantContext() for tenant routes
+   - assertTenantIdOnInsert() for tenant-owned tables
+
+2) Dev-mode warnings (NODE_ENV !== 'production'):
+   - Warn if tenant_id missing in insert/update payloads.
+   - Warn if workspaceId is used as a visibility filter.
+
+===============================================================================
+STEP 6 — In-App Docs / Help Area Update (If Present)
+===============================================================================
+If the app includes an in-app “Docs” or “Help” section:
+- Add or update entries for:
+  - How Tenancy Works
+  - Authentication & Roles
+  - Storage & File Uploads
+  - Chat Rules
+  - Super Admin vs Tenant Admin Responsibilities
+
+Use concise, user-friendly language.
+
+===============================================================================
+STEP 7 — Verification Checklist (Docs Only)
+===============================================================================
+Add a checklist for future development:
+
+- New table:
+  ☐ Should it have tenant_id?
+  ☐ Is tenant_id enforced on insert?
+
+- New list endpoint:
+  ☐ Tenant-scoped, not workspace-scoped?
+
+- New upload feature:
+  ☐ Uses storage resolver?
+
+- Chat changes:
+  ☐ Tenant + membership enforced?
+
+===============================================================================
+ACCEPTANCE CRITERIA:
+- Documentation is grouped under clear categories.
+- A docs index makes it easy to find auth, security, storage, chat, and admin info.
+- Core architectural rules are explicitly documented.
+- No runtime behavior is changed.
+
+OUTPUT REQUIRED:
+- Updated docs folder structure
+- Docs index with categories and links
+- List of new or consolidated documents
+- Summary of guardrails and annotations added
