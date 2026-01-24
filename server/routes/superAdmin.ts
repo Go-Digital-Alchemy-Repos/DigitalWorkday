@@ -1761,6 +1761,285 @@ router.get("/users/:userId/activity", requireSuperUser, async (req, res) => {
   }
 });
 
+// =============================================================================
+// APP USER MANAGEMENT - Direct management of app users (without tenant context)
+// =============================================================================
+
+// Update an app user directly
+router.patch("/users/:userId", requireSuperUser, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const data = z.object({
+      firstName: z.string().min(1).optional(),
+      lastName: z.string().min(1).optional(),
+      role: z.enum(["admin", "employee"]).optional(),
+      isActive: z.boolean().optional(),
+    }).parse(req.body);
+    const superUser = req.user as any;
+    
+    const existingUser = await storage.getUser(userId);
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    if (existingUser.role === UserRole.SUPER_USER) {
+      return res.status(403).json({ error: "Cannot modify super users through this endpoint" });
+    }
+    
+    const updates: any = { updatedAt: new Date() };
+    if (data.firstName !== undefined) {
+      updates.firstName = data.firstName;
+      updates.name = `${data.firstName} ${data.lastName || existingUser.lastName || ""}`.trim();
+    }
+    if (data.lastName !== undefined) {
+      updates.lastName = data.lastName;
+      updates.name = `${data.firstName || existingUser.firstName || ""} ${data.lastName}`.trim();
+    }
+    if (data.role) updates.role = data.role;
+    if (data.isActive !== undefined) updates.isActive = data.isActive;
+    
+    const [updatedUser] = await db.update(users)
+      .set(updates)
+      .where(eq(users.id, userId))
+      .returning();
+    
+    res.json({
+      user: updatedUser,
+      message: "User updated successfully",
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors });
+    }
+    console.error("[super/users/:userId] Error:", error);
+    res.status(500).json({ error: "Failed to update user" });
+  }
+});
+
+// Set password for an app user
+router.post("/users/:userId/set-password", requireSuperUser, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const data = z.object({
+      password: z.string().min(8, "Password must be at least 8 characters"),
+      mustChangeOnNextLogin: z.boolean().default(true),
+    }).parse(req.body);
+    
+    const existingUser = await storage.getUser(userId);
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    if (existingUser.role === UserRole.SUPER_USER) {
+      return res.status(403).json({ error: "Cannot modify super users through this endpoint" });
+    }
+    
+    const { hashPassword } = await import("../auth");
+    const passwordHash = await hashPassword(data.password);
+    
+    await db.update(users)
+      .set({ 
+        passwordHash,
+        mustChangePasswordOnNextLogin: data.mustChangeOnNextLogin,
+        isActive: true,
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, userId));
+    
+    res.json({ message: "Password set successfully" });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors });
+    }
+    console.error("[super/users/:userId/set-password] Error:", error);
+    res.status(500).json({ error: "Failed to set password" });
+  }
+});
+
+// Delete an app user (uses transaction for data integrity)
+router.delete("/users/:userId", requireSuperUser, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const superUser = req.user as any;
+    
+    const existingUser = await storage.getUser(userId);
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+    
+    if (existingUser.role === UserRole.SUPER_USER) {
+      return res.status(403).json({ error: "Cannot delete super users through this endpoint" });
+    }
+    
+    // Use transaction for atomicity
+    await db.transaction(async (tx) => {
+      // Delete related data first (foreign key constraints)
+      await tx.delete(taskAssignees).where(eq(taskAssignees.userId, userId));
+      await tx.delete(taskWatchers).where(eq(taskWatchers.userId, userId));
+      await tx.delete(workspaceMembers).where(eq(workspaceMembers.userId, userId));
+      await tx.delete(teamMembers).where(eq(teamMembers.userId, userId));
+      await tx.delete(projectMembers).where(eq(projectMembers.userId, userId));
+      await tx.delete(notifications).where(eq(notifications.userId, userId));
+      await tx.delete(notificationPreferences).where(eq(notificationPreferences.userId, userId));
+      
+      // Delete the user
+      await tx.delete(users).where(eq(users.id, userId));
+    });
+    
+    console.log(`[super/users/:userId DELETE] User ${existingUser.email} (tenant: ${existingUser.tenantId}) deleted by super admin ${superUser?.email}`);
+    
+    res.json({ message: "User deleted successfully" });
+  } catch (error) {
+    console.error("[super/users/:userId DELETE] Error:", error);
+    res.status(500).json({ error: "Failed to delete user" });
+  }
+});
+
+// =============================================================================
+// PENDING INVITATION MANAGEMENT
+// =============================================================================
+
+// Resend/regenerate an invitation
+router.post("/invitations/:invitationId/resend", requireSuperUser, async (req, res) => {
+  try {
+    const { invitationId } = req.params;
+    const superUser = req.user as any;
+    
+    const [invitation] = await db.select()
+      .from(invitations)
+      .where(eq(invitations.id, invitationId))
+      .limit(1);
+    
+    if (!invitation) {
+      return res.status(404).json({ error: "Invitation not found" });
+    }
+    
+    if (invitation.status !== "pending") {
+      return res.status(400).json({ error: "Can only resend pending invitations" });
+    }
+    
+    // Generate new token
+    const crypto = await import("crypto");
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const expiresAt = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000); // 7 days
+    
+    await db.update(invitations)
+      .set({ tokenHash, expiresAt })
+      .where(eq(invitations.id, invitationId));
+    
+    const baseUrl = process.env.BASE_URL || `${req.protocol}://${req.get("host")}`;
+    const inviteUrl = `${baseUrl}/invite/${token}`;
+    
+    console.log(`[super/invitations/:id/resend] Invitation for ${invitation.email} (tenant: ${invitation.tenantId}) regenerated by super admin ${superUser?.email}`);
+    
+    res.json({ inviteUrl, message: "Invitation regenerated" });
+  } catch (error) {
+    console.error("[super/invitations/:id/resend] Error:", error);
+    res.status(500).json({ error: "Failed to resend invitation" });
+  }
+});
+
+// Delete/revoke a pending invitation
+router.delete("/invitations/:invitationId", requireSuperUser, async (req, res) => {
+  try {
+    const { invitationId } = req.params;
+    const superUser = req.user as any;
+    
+    const [invitation] = await db.select()
+      .from(invitations)
+      .where(eq(invitations.id, invitationId))
+      .limit(1);
+    
+    if (!invitation) {
+      return res.status(404).json({ error: "Invitation not found" });
+    }
+    
+    await db.delete(invitations).where(eq(invitations.id, invitationId));
+    
+    console.log(`[super/invitations/:id DELETE] Invitation for ${invitation.email} (tenant: ${invitation.tenantId}) deleted by super admin ${superUser?.email}`);
+    
+    res.json({ message: "Invitation deleted successfully" });
+  } catch (error) {
+    console.error("[super/invitations/:id DELETE] Error:", error);
+    res.status(500).json({ error: "Failed to delete invitation" });
+  }
+});
+
+// Convert a pending invitation to a user directly (activate without accepting)
+router.post("/invitations/:invitationId/activate", requireSuperUser, async (req, res) => {
+  try {
+    const { invitationId } = req.params;
+    const data = z.object({
+      password: z.string().min(8, "Password must be at least 8 characters"),
+      mustChangeOnNextLogin: z.boolean().default(true),
+    }).parse(req.body);
+    
+    const [invitation] = await db.select()
+      .from(invitations)
+      .where(eq(invitations.id, invitationId))
+      .limit(1);
+    
+    if (!invitation) {
+      return res.status(404).json({ error: "Invitation not found" });
+    }
+    
+    if (invitation.status !== "pending") {
+      return res.status(400).json({ error: "Invitation is not pending" });
+    }
+    
+    // Check if user already exists
+    const existingUser = await storage.getUserByEmail(invitation.email);
+    if (existingUser) {
+      return res.status(409).json({ error: "A user with this email already exists" });
+    }
+    
+    const { hashPassword } = await import("../auth");
+    const passwordHash = await hashPassword(data.password);
+    
+    // Create the user
+    const [newUser] = await db.insert(users).values({
+      email: invitation.email,
+      firstName: invitation.firstName,
+      lastName: invitation.lastName,
+      name: `${invitation.firstName || ""} ${invitation.lastName || ""}`.trim() || invitation.email,
+      passwordHash,
+      role: invitation.role as any,
+      tenantId: invitation.tenantId,
+      isActive: true,
+      mustChangePasswordOnNextLogin: data.mustChangeOnNextLogin,
+    }).returning();
+    
+    // Add to workspace if specified
+    if (invitation.workspaceId) {
+      await db.insert(workspaceMembers).values({
+        workspaceId: invitation.workspaceId,
+        userId: newUser.id,
+        role: invitation.role === "admin" ? "admin" : "member",
+      }).onConflictDoNothing();
+    }
+    
+    // Mark invitation as used
+    await db.update(invitations)
+      .set({ status: "used", usedAt: new Date() })
+      .where(eq(invitations.id, invitationId));
+    
+    const superUser = req.user as any;
+    console.log(`[super/invitations/:id/activate] User ${newUser.email} (tenant: ${invitation.tenantId}) activated from invitation by super admin ${superUser?.email}`);
+    
+    res.json({ 
+      user: newUser,
+      message: "User activated successfully" 
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors });
+    }
+    console.error("[super/invitations/:id/activate] Error:", error);
+    res.status(500).json({ error: "Failed to activate user" });
+  }
+});
+
 // Update a user
 const updateUserSchema = z.object({
   email: z.string().email().optional(),

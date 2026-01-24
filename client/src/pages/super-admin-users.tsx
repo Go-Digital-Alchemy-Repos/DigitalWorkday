@@ -74,6 +74,9 @@ interface AppUser {
   lastName: string | null;
   role: string;
   isActive: boolean;
+  isPendingInvite?: boolean;
+  needsPassword?: boolean;
+  expiresAt?: string;
   avatarUrl: string | null;
   tenantId: string | null;
   tenantName: string | null;
@@ -162,6 +165,13 @@ export default function SuperAdminUsers() {
   const [appUserPage, setAppUserPage] = useState(1);
   const [selectedAppUser, setSelectedAppUser] = useState<AppUser | null>(null);
   const [appUserDrawerOpen, setAppUserDrawerOpen] = useState(false);
+  const [appUserPasswordDrawerOpen, setAppUserPasswordDrawerOpen] = useState(false);
+  const [appUserPassword, setAppUserPassword] = useState("");
+  const [appUserConfirmPassword, setAppUserConfirmPassword] = useState("");
+  const [appUserMustChange, setAppUserMustChange] = useState(true);
+  const [showAppUserPassword, setShowAppUserPassword] = useState(false);
+  const [appUserToDelete, setAppUserToDelete] = useState<AppUser | null>(null);
+  const [generatedAppUserInviteUrl, setGeneratedAppUserInviteUrl] = useState<string | null>(null);
 
   if (user?.role !== "super_user") {
     return <Redirect to="/" />;
@@ -401,6 +411,119 @@ export default function SuperAdminUsers() {
     }
   };
 
+  // App User Management mutations
+  const updateAppUserMutation = useMutation({
+    mutationFn: async ({ id, data }: { id: string; data: any }) => {
+      return apiRequest("PATCH", `/api/v1/super/users/${id}`, data);
+    },
+    onSuccess: () => {
+      toast({ title: "User updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/users"] });
+      setAppUserDrawerOpen(false);
+      setSelectedAppUser(null);
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "Failed to update user", variant: "destructive" });
+    },
+  });
+
+  const setAppUserPasswordMutation = useMutation({
+    mutationFn: async ({ id, password, mustChangeOnNextLogin }: { id: string; password: string; mustChangeOnNextLogin: boolean }) => {
+      return apiRequest("POST", `/api/v1/super/users/${id}/set-password`, { password, mustChangeOnNextLogin });
+    },
+    onSuccess: () => {
+      toast({ title: "Password set successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/users"] });
+      setAppUserPasswordDrawerOpen(false);
+      setAppUserPassword("");
+      setAppUserConfirmPassword("");
+      setAppUserMustChange(true);
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "Failed to set password", variant: "destructive" });
+    },
+  });
+
+  const deleteAppUserMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/v1/super/users/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "User deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/users"] });
+      setAppUserToDelete(null);
+      setAppUserDrawerOpen(false);
+      setSelectedAppUser(null);
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "Failed to delete user", variant: "destructive" });
+    },
+  });
+
+  const resendInvitationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("POST", `/api/v1/super/invitations/${id}/resend`);
+    },
+    onSuccess: (data: any) => {
+      setGeneratedAppUserInviteUrl(data.inviteUrl);
+      toast({ title: "Invitation link regenerated" });
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "Failed to regenerate invitation", variant: "destructive" });
+    },
+  });
+
+  const deleteInvitationMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/v1/super/invitations/${id}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Invitation deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/users"] });
+      setAppUserDrawerOpen(false);
+      setSelectedAppUser(null);
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "Failed to delete invitation", variant: "destructive" });
+    },
+  });
+
+  const activateInvitationMutation = useMutation({
+    mutationFn: async ({ id, password, mustChangeOnNextLogin }: { id: string; password: string; mustChangeOnNextLogin: boolean }) => {
+      return apiRequest("POST", `/api/v1/super/invitations/${id}/activate`, { password, mustChangeOnNextLogin });
+    },
+    onSuccess: () => {
+      toast({ title: "User activated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/users"] });
+      setAppUserPasswordDrawerOpen(false);
+      setAppUserPassword("");
+      setAppUserConfirmPassword("");
+      setAppUserMustChange(true);
+      setAppUserDrawerOpen(false);
+      setSelectedAppUser(null);
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "Failed to activate user", variant: "destructive" });
+    },
+  });
+
+  const handleSetAppUserPassword = () => {
+    if (!selectedAppUser) return;
+    if (appUserPassword.length < 8) {
+      toast({ title: "Password must be at least 8 characters", variant: "destructive" });
+      return;
+    }
+    if (appUserPassword !== appUserConfirmPassword) {
+      toast({ title: "Passwords do not match", variant: "destructive" });
+      return;
+    }
+    if (selectedAppUser.isPendingInvite) {
+      activateInvitationMutation.mutate({ id: selectedAppUser.id, password: appUserPassword, mustChangeOnNextLogin: appUserMustChange });
+    } else {
+      setAppUserPasswordMutation.mutate({ id: selectedAppUser.id, password: appUserPassword, mustChangeOnNextLogin: appUserMustChange });
+    }
+  };
+
   const handleDeactivateAdmin = (admin: PlatformAdmin) => {
     setAdminToDeactivate(admin);
     setDeactivateDialogOpen(true);
@@ -628,13 +751,14 @@ export default function SuperAdminUsers() {
                       </SelectContent>
                     </Select>
                     <Select value={appUserStatusFilter} onValueChange={(v) => { setAppUserStatusFilter(v); setAppUserPage(1); }}>
-                      <SelectTrigger className="w-[140px]" data-testid="select-status-filter">
+                      <SelectTrigger className="w-[160px]" data-testid="select-status-filter">
                         <SelectValue placeholder="All Status" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="all">All Status</SelectItem>
                         <SelectItem value="active">Active</SelectItem>
                         <SelectItem value="inactive">Inactive</SelectItem>
+                        <SelectItem value="pending">Pending Invite</SelectItem>
                       </SelectContent>
                     </Select>
                     <Select value={appUserRoleFilter} onValueChange={(v) => { setAppUserRoleFilter(v); setAppUserPage(1); }}>
@@ -686,10 +810,22 @@ export default function SuperAdminUsers() {
                           <Badge variant={appUser.role === "admin" ? "default" : "secondary"} className="text-xs">
                             {appUser.role}
                           </Badge>
-                          <Badge variant={appUser.isActive ? "default" : "secondary"} className="text-xs">
-                            {appUser.isActive ? <UserCheck className="h-3 w-3 mr-1" /> : <UserX className="h-3 w-3 mr-1" />}
-                            {appUser.isActive ? "Active" : "Inactive"}
-                          </Badge>
+                          {appUser.isPendingInvite ? (
+                            <Badge variant="outline" className="text-xs">
+                              <Clock className="h-3 w-3 mr-1" />
+                              Pending Invite
+                            </Badge>
+                          ) : appUser.needsPassword ? (
+                            <Badge variant="outline" className="text-xs">
+                              <AlertCircle className="h-3 w-3 mr-1" />
+                              Needs Password
+                            </Badge>
+                          ) : (
+                            <Badge variant={appUser.isActive ? "default" : "secondary"} className="text-xs">
+                              {appUser.isActive ? <UserCheck className="h-3 w-3 mr-1" /> : <UserX className="h-3 w-3 mr-1" />}
+                              {appUser.isActive ? "Active" : "Inactive"}
+                            </Badge>
+                          )}
                         </div>
                       </div>
                     ))}
@@ -756,9 +892,21 @@ export default function SuperAdminUsers() {
                   </div>
                   <div className="text-sm text-muted-foreground">{selectedAppUser.email}</div>
                   <div className="flex gap-2 mt-2">
-                    <Badge variant={selectedAppUser.isActive ? "default" : "secondary"}>
-                      {selectedAppUser.isActive ? "Active" : "Inactive"}
-                    </Badge>
+                    {selectedAppUser.isPendingInvite ? (
+                      <Badge variant="outline">
+                        <Clock className="h-3 w-3 mr-1" />
+                        Pending Invite
+                      </Badge>
+                    ) : selectedAppUser.needsPassword ? (
+                      <Badge variant="outline">
+                        <AlertCircle className="h-3 w-3 mr-1" />
+                        Needs Password
+                      </Badge>
+                    ) : (
+                      <Badge variant={selectedAppUser.isActive ? "default" : "secondary"}>
+                        {selectedAppUser.isActive ? "Active" : "Inactive"}
+                      </Badge>
+                    )}
                     <Badge variant="outline">{selectedAppUser.role}</Badge>
                   </div>
                 </div>
@@ -792,12 +940,127 @@ export default function SuperAdminUsers() {
                 </div>
               </div>
 
+              {/* Management Actions */}
+              <div className="border-t pt-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <Settings className="h-4 w-4" />
+                  <h4 className="font-medium">Actions</h4>
+                </div>
+                <div className="space-y-2">
+                  {selectedAppUser.isPendingInvite ? (
+                    <>
+                      <Button 
+                        className="w-full justify-start" 
+                        variant="outline"
+                        onClick={() => {
+                          setAppUserPasswordDrawerOpen(true);
+                          setGeneratedAppUserInviteUrl(null);
+                        }}
+                        data-testid="button-activate-user"
+                      >
+                        <UserCheck className="h-4 w-4 mr-2" />
+                        Activate User & Set Password
+                      </Button>
+                      <Button 
+                        className="w-full justify-start" 
+                        variant="outline"
+                        onClick={() => resendInvitationMutation.mutate(selectedAppUser.id)}
+                        disabled={resendInvitationMutation.isPending}
+                        data-testid="button-resend-invitation"
+                      >
+                        {resendInvitationMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                        Regenerate Invite Link
+                      </Button>
+                      {generatedAppUserInviteUrl && (
+                        <div className="flex items-center gap-2 p-2 bg-muted rounded-md">
+                          <Input 
+                            value={generatedAppUserInviteUrl} 
+                            readOnly 
+                            className="font-mono text-xs"
+                            data-testid="input-invite-url"
+                          />
+                          <Button 
+                            size="icon" 
+                            variant="ghost"
+                            onClick={() => {
+                              navigator.clipboard.writeText(generatedAppUserInviteUrl);
+                              toast({ title: "Link copied to clipboard" });
+                            }}
+                            data-testid="button-copy-invite-url"
+                          >
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </div>
+                      )}
+                      <Button 
+                        className="w-full justify-start text-destructive" 
+                        variant="outline"
+                        onClick={() => setAppUserToDelete(selectedAppUser)}
+                        data-testid="button-delete-invitation"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete Invitation
+                      </Button>
+                    </>
+                  ) : (
+                    <>
+                      {(selectedAppUser.needsPassword || !selectedAppUser.isActive) && (
+                        <Button 
+                          className="w-full justify-start" 
+                          variant="outline"
+                          onClick={() => setAppUserPasswordDrawerOpen(true)}
+                          data-testid="button-set-password"
+                        >
+                          <KeyRound className="h-4 w-4 mr-2" />
+                          Set Password
+                        </Button>
+                      )}
+                      {selectedAppUser.isActive ? (
+                        <Button 
+                          className="w-full justify-start" 
+                          variant="outline"
+                          onClick={() => updateAppUserMutation.mutate({ id: selectedAppUser.id, data: { isActive: false } })}
+                          disabled={updateAppUserMutation.isPending}
+                          data-testid="button-deactivate-user"
+                        >
+                          {updateAppUserMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserX className="h-4 w-4 mr-2" />}
+                          Deactivate User
+                        </Button>
+                      ) : (
+                        <Button 
+                          className="w-full justify-start" 
+                          variant="outline"
+                          onClick={() => updateAppUserMutation.mutate({ id: selectedAppUser.id, data: { isActive: true } })}
+                          disabled={updateAppUserMutation.isPending}
+                          data-testid="button-activate-user"
+                        >
+                          {updateAppUserMutation.isPending ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <UserCheck className="h-4 w-4 mr-2" />}
+                          Activate User
+                        </Button>
+                      )}
+                      <Button 
+                        className="w-full justify-start text-destructive" 
+                        variant="outline"
+                        onClick={() => setAppUserToDelete(selectedAppUser)}
+                        data-testid="button-delete-user"
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete User
+                      </Button>
+                    </>
+                  )}
+                </div>
+              </div>
+
+              {/* Activity Summary */}
               <div className="border-t pt-4">
                 <div className="flex items-center gap-2 mb-3">
                   <Activity className="h-4 w-4" />
                   <h4 className="font-medium">Activity Summary</h4>
                 </div>
-                {activityLoading ? (
+                {selectedAppUser.isPendingInvite ? (
+                  <div className="text-sm text-muted-foreground">User has not yet accepted their invitation</div>
+                ) : activityLoading ? (
                   <div className="flex items-center justify-center py-4">
                     <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                   </div>
@@ -841,6 +1104,145 @@ export default function SuperAdminUsers() {
           )}
         </SheetContent>
       </Sheet>
+
+      {/* App User Password Drawer */}
+      <Sheet open={appUserPasswordDrawerOpen} onOpenChange={(open) => {
+        setAppUserPasswordDrawerOpen(open);
+        if (!open) {
+          setAppUserPassword("");
+          setAppUserConfirmPassword("");
+          setAppUserMustChange(true);
+          setGeneratedAppUserInviteUrl(null);
+        }
+      }}>
+        <SheetContent className="w-full sm:max-w-md" data-testid="drawer-app-user-password">
+          <SheetHeader>
+            <SheetTitle>{selectedAppUser?.isPendingInvite ? "Activate User" : "Set Password"}</SheetTitle>
+            <SheetDescription>
+              {selectedAppUser?.isPendingInvite 
+                ? "Set a password to activate this user without requiring them to accept the invitation"
+                : "Set a new password for this user"
+              }
+            </SheetDescription>
+          </SheetHeader>
+          <div className="space-y-4 py-6">
+            <div className="space-y-2">
+              <Label htmlFor="appUserPassword">Password</Label>
+              <div className="relative">
+                <Input
+                  id="appUserPassword"
+                  type={showAppUserPassword ? "text" : "password"}
+                  value={appUserPassword}
+                  onChange={(e) => setAppUserPassword(e.target.value)}
+                  placeholder="Minimum 8 characters"
+                  data-testid="input-app-user-password"
+                />
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="icon"
+                  className="absolute right-0 top-0 h-full"
+                  onClick={() => setShowAppUserPassword(!showAppUserPassword)}
+                  data-testid="button-toggle-app-user-password"
+                >
+                  {showAppUserPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="appUserConfirmPassword">Confirm Password</Label>
+              <Input
+                id="appUserConfirmPassword"
+                type={showAppUserPassword ? "text" : "password"}
+                value={appUserConfirmPassword}
+                onChange={(e) => setAppUserConfirmPassword(e.target.value)}
+                placeholder="Re-enter password"
+                data-testid="input-app-user-confirm-password"
+              />
+            </div>
+            <div className="flex items-center space-x-2">
+              <Checkbox
+                id="appUserMustChange"
+                checked={appUserMustChange}
+                onCheckedChange={(checked) => setAppUserMustChange(checked === true)}
+                data-testid="checkbox-app-user-must-change"
+              />
+              <Label htmlFor="appUserMustChange" className="text-sm font-normal cursor-pointer">
+                Require password change on next login
+              </Label>
+            </div>
+            <div className="flex gap-3 pt-4">
+              <Button 
+                onClick={handleSetAppUserPassword}
+                disabled={setAppUserPasswordMutation.isPending || activateInvitationMutation.isPending}
+                className="flex-1"
+                data-testid="button-confirm-set-password"
+              >
+                {(setAppUserPasswordMutation.isPending || activateInvitationMutation.isPending) ? (
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                ) : (
+                  <KeyRound className="h-4 w-4 mr-2" />
+                )}
+                {selectedAppUser?.isPendingInvite ? "Activate User" : "Set Password"}
+              </Button>
+              <Button 
+                variant="outline" 
+                onClick={() => setAppUserPasswordDrawerOpen(false)}
+              >
+                Cancel
+              </Button>
+            </div>
+          </div>
+        </SheetContent>
+      </Sheet>
+
+      {/* Delete App User Confirmation Dialog */}
+      <AlertDialog open={!!appUserToDelete} onOpenChange={(open) => !open && setAppUserToDelete(null)}>
+        <AlertDialogContent data-testid="dialog-delete-app-user">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {appUserToDelete?.isPendingInvite ? "Delete Invitation" : "Permanently Delete User"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {appUserToDelete?.isPendingInvite ? (
+                <>Are you sure you want to delete the pending invitation for <strong>{appUserToDelete?.email}</strong>? This action cannot be undone.</>
+              ) : (
+                <>Are you sure you want to permanently delete <strong>{appUserToDelete?.email}</strong>? This will remove all data associated with this user and cannot be undone.</>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel 
+              disabled={deleteAppUserMutation.isPending || deleteInvitationMutation.isPending}
+              data-testid="button-cancel-delete-app-user"
+            >
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction 
+              onClick={() => {
+                if (!appUserToDelete) return;
+                if (appUserToDelete.isPendingInvite) {
+                  deleteInvitationMutation.mutate(appUserToDelete.id);
+                } else {
+                  deleteAppUserMutation.mutate(appUserToDelete.id);
+                }
+              }}
+              disabled={deleteAppUserMutation.isPending || deleteInvitationMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-app-user"
+            >
+              {(deleteAppUserMutation.isPending || deleteInvitationMutation.isPending) ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                appUserToDelete?.isPendingInvite ? "Delete Invitation" : "Delete User"
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {/* New Platform Admin Drawer */}
       <Sheet open={newAdminDrawerOpen} onOpenChange={setNewAdminDrawerOpen}>
