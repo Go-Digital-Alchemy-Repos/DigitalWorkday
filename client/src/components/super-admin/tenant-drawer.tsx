@@ -22,6 +22,14 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { 
@@ -62,7 +70,8 @@ import {
   RefreshCw,
   Trash2,
   Edit2,
-  Download
+  Download,
+  History
 } from "lucide-react";
 import { CsvImportPanel, type ParsedRow, type ImportResult, type CsvColumn } from "@/components/common/csv-import-panel";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -667,6 +676,14 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
   const [newNoteCategory, setNewNoteCategory] = useState("general");
   const [noteSearchQuery, setNoteSearchQuery] = useState("");
   const [noteFilterCategory, setNoteFilterCategory] = useState<string>("all");
+  
+  // Note edit and version history state
+  const [editNoteDialogOpen, setEditNoteDialogOpen] = useState(false);
+  const [editingNote, setEditingNote] = useState<{ id: string; body: string; category: string } | null>(null);
+  const [editNoteBody, setEditNoteBody] = useState("");
+  const [editNoteCategory, setEditNoteCategory] = useState("general");
+  const [versionHistoryDialogOpen, setVersionHistoryDialogOpen] = useState(false);
+  const [versionHistoryNoteId, setVersionHistoryNoteId] = useState<string | null>(null);
   const [csvData, setCsvData] = useState<Array<{ email: string; firstName?: string; lastName?: string; role?: string }>>([]);
   const [sendInviteEmails, setSendInviteEmails] = useState(false);
   const [bulkImportResults, setBulkImportResults] = useState<Array<{ email: string; success: boolean; inviteUrl?: string; emailSent?: boolean; error?: string }>>([]);
@@ -1145,6 +1162,42 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
     onError: (error: any) => {
       toast({ title: "Failed to delete note", description: error.message, variant: "destructive" });
     },
+  });
+
+  const updateNoteMutation = useMutation({
+    mutationFn: async (data: { noteId: string; body: string; category: string }) => {
+      return apiRequest("PATCH", `/api/v1/super/tenants/${activeTenant?.id}/notes/${data.noteId}`, {
+        body: data.body,
+        category: data.category,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "notes"] });
+      setEditNoteDialogOpen(false);
+      setEditingNote(null);
+      toast({ title: "Note updated successfully" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to update note", description: error.message, variant: "destructive" });
+    },
+  });
+
+  // Query for note version history
+  const { data: versionHistoryData, isLoading: versionHistoryLoading } = useQuery<{
+    currentNote: any;
+    versions: Array<{
+      id: string;
+      noteId: string;
+      body: string;
+      category: string;
+      versionNumber: number;
+      createdAt: string;
+      editor: { id: string; firstName: string | null; lastName: string | null; email: string };
+    }>;
+    totalVersions: number;
+  }>({
+    queryKey: ["/api/v1/super/tenants", activeTenant?.id, "notes", versionHistoryNoteId, "versions"],
+    enabled: !!activeTenant?.id && !!versionHistoryNoteId && versionHistoryDialogOpen,
   });
 
   const bulkImportMutation = useMutation({
@@ -2779,16 +2832,44 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                                 </span>
                               </div>
                             </div>
-                            <Button
-                              size="icon"
-                              variant="ghost"
-                              onClick={() => deleteNoteMutation.mutate(note.id)}
-                              disabled={deleteNoteMutation.isPending}
-                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
-                              data-testid={`button-delete-note-${note.id}`}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
+                            <div className="flex items-center gap-1">
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  setEditingNote({ id: note.id, body: note.body, category: note.category || "general" });
+                                  setEditNoteBody(note.body);
+                                  setEditNoteCategory(note.category || "general");
+                                  setEditNoteDialogOpen(true);
+                                }}
+                                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                data-testid={`button-edit-note-${note.id}`}
+                              >
+                                <Edit2 className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => {
+                                  setVersionHistoryNoteId(note.id);
+                                  setVersionHistoryDialogOpen(true);
+                                }}
+                                className="h-7 w-7 text-muted-foreground hover:text-primary"
+                                data-testid={`button-history-note-${note.id}`}
+                              >
+                                <History className="h-3.5 w-3.5" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => deleteNoteMutation.mutate(note.id)}
+                                disabled={deleteNoteMutation.isPending}
+                                className="h-7 w-7 text-muted-foreground hover:text-destructive"
+                                data-testid={`button-delete-note-${note.id}`}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </div>
                           </div>
                           {/* Note Content */}
                           <div className="border-t pt-3">
@@ -4636,6 +4717,171 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
           tenantName={activeTenant.name}
         />
       )}
+
+      {/* Edit Note Dialog */}
+      <Dialog open={editNoteDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setEditNoteDialogOpen(false);
+          setEditingNote(null);
+        }
+      }}>
+        <DialogContent className="max-w-2xl" data-testid="dialog-edit-note">
+          <DialogHeader>
+            <DialogTitle>Edit Note</DialogTitle>
+            <DialogDescription>
+              Make changes to this note. Previous versions will be saved in the history.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label>Category</Label>
+              <Select value={editNoteCategory} onValueChange={setEditNoteCategory}>
+                <SelectTrigger data-testid="select-edit-note-category">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="general">General</SelectItem>
+                  <SelectItem value="onboarding">Onboarding</SelectItem>
+                  <SelectItem value="support">Support</SelectItem>
+                  <SelectItem value="billing">Billing</SelectItem>
+                  <SelectItem value="technical">Technical</SelectItem>
+                  <SelectItem value="accounts">Accounts</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Content</Label>
+              <RichTextEditor
+                value={editNoteBody}
+                onChange={setEditNoteBody}
+                placeholder="Edit note content..."
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setEditNoteDialogOpen(false);
+                setEditingNote(null);
+              }}
+              data-testid="button-cancel-edit-note"
+            >
+              Cancel
+            </Button>
+            <Button
+              onClick={() => {
+                if (editingNote) {
+                  updateNoteMutation.mutate({
+                    noteId: editingNote.id,
+                    body: editNoteBody,
+                    category: editNoteCategory,
+                  });
+                }
+              }}
+              disabled={!editNoteBody.trim() || editNoteBody === "<p></p>" || updateNoteMutation.isPending}
+              data-testid="button-save-note"
+            >
+              {updateNoteMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                <>
+                  <Save className="h-4 w-4 mr-2" />
+                  Save Changes
+                </>
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Version History Dialog */}
+      <Dialog open={versionHistoryDialogOpen} onOpenChange={(open) => {
+        if (!open) {
+          setVersionHistoryDialogOpen(false);
+          setVersionHistoryNoteId(null);
+        }
+      }}>
+        <DialogContent className="max-w-3xl max-h-[80vh]" data-testid="dialog-version-history">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <History className="h-5 w-5" />
+              Note Version History
+            </DialogTitle>
+            <DialogDescription>
+              View all previous versions of this note. Each edit creates a new version.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="py-4">
+            {versionHistoryLoading ? (
+              <div className="flex items-center justify-center py-8">
+                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+              </div>
+            ) : versionHistoryData?.versions && versionHistoryData.versions.length > 0 ? (
+              <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
+                {/* Current Version */}
+                <div className="border rounded-md p-4 bg-primary/5 border-primary/20">
+                  <div className="flex items-center justify-between mb-3">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="default">Current</Badge>
+                      <Badge variant="outline" className="text-xs capitalize">
+                        {versionHistoryData.currentNote?.category}
+                      </Badge>
+                    </div>
+                    <span className="text-xs text-muted-foreground">
+                      {new Date(versionHistoryData.currentNote?.updatedAt || versionHistoryData.currentNote?.createdAt).toLocaleString()}
+                    </span>
+                  </div>
+                  <RichTextViewer content={versionHistoryData.currentNote?.body} className="text-sm" />
+                </div>
+
+                {/* Previous Versions */}
+                {versionHistoryData.versions.map((version) => (
+                  <div key={version.id} className="border rounded-md p-4 bg-muted/30">
+                    <div className="flex items-center justify-between mb-3">
+                      <div className="flex items-center gap-2">
+                        <Badge variant="secondary">Version {version.versionNumber}</Badge>
+                        <Badge variant="outline" className="text-xs capitalize">
+                          {version.category}
+                        </Badge>
+                        <span className="text-xs text-muted-foreground">
+                          by {version.editor.firstName && version.editor.lastName 
+                            ? `${version.editor.firstName} ${version.editor.lastName}` 
+                            : version.editor.email}
+                        </span>
+                      </div>
+                      <span className="text-xs text-muted-foreground">
+                        {new Date(version.createdAt).toLocaleString()}
+                      </span>
+                    </div>
+                    <RichTextViewer content={version.body} className="text-sm" />
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div className="text-center py-8 text-sm text-muted-foreground">
+                <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                No previous versions. This note has never been edited.
+              </div>
+            )}
+          </div>
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setVersionHistoryDialogOpen(false);
+                setVersionHistoryNoteId(null);
+              }}
+              data-testid="button-close-version-history"
+            >
+              Close
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </FullScreenDrawer>
   );
 }
