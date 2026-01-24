@@ -32,7 +32,7 @@
 import { Router } from "express";
 import { storage } from "../storage";
 import { requireSuperUser } from "../middleware/tenantContext";
-import { insertTenantSchema, TenantStatus, UserRole, tenants, workspaces, invitations, tenantSettings, tenantNotes, tenantAuditEvents, NoteCategory, clients, clientContacts, clientDivisions, projects, tasks, users, teams, systemSettings, tenantAgreements, tenantAgreementAcceptances, timeEntries, updateSystemSettingsSchema, platformInvitations, platformAuditEvents, workspaceMembers, teamMembers, projectMembers, divisionMembers, activityLog, comments, passwordResetTokens, chatReads, chatMessages, chatChannelMembers, chatChannels, notifications, notificationPreferences, activeTimers, clientUserAccess, clientInvites, tenantIntegrations, appSettings, errorLogs, emailOutbox, sections, taskAssignees, taskWatchers, personalTaskSections, subtasks, tags, taskTags, taskAttachments, commentMentions, chatDmThreads, chatDmMembers, chatAttachments, chatMentions, tenancyWarnings } from "@shared/schema";
+import { insertTenantSchema, TenantStatus, UserRole, tenants, workspaces, invitations, tenantSettings, tenantNotes, tenantNoteVersions, tenantAuditEvents, NoteCategory, clients, clientContacts, clientDivisions, projects, tasks, users, teams, systemSettings, tenantAgreements, tenantAgreementAcceptances, timeEntries, updateSystemSettingsSchema, platformInvitations, platformAuditEvents, workspaceMembers, teamMembers, projectMembers, divisionMembers, activityLog, comments, passwordResetTokens, chatReads, chatMessages, chatChannelMembers, chatChannels, notifications, notificationPreferences, activeTimers, clientUserAccess, clientInvites, tenantIntegrations, appSettings, errorLogs, emailOutbox, sections, taskAssignees, taskWatchers, personalTaskSections, subtasks, tags, taskTags, taskAttachments, commentMentions, chatDmThreads, chatDmMembers, chatAttachments, chatMentions, tenancyWarnings } from "@shared/schema";
 import { hashPassword } from "../auth";
 import { z } from "zod";
 import { db } from "../db";
@@ -3611,6 +3611,11 @@ router.patch("/tenants/:tenantId/notes/:noteId", requireSuperUser, async (req, r
   try {
     const { tenantId, noteId } = req.params;
     const data = updateNoteSchema.parse(req.body);
+    const editorUserId = req.user?.id;
+
+    if (!editorUserId) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
 
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -3624,8 +3629,31 @@ router.patch("/tenants/:tenantId/notes/:noteId", requireSuperUser, async (req, r
       return res.status(404).json({ error: "Note not found" });
     }
 
+    // Get the current highest version number for this note
+    const [latestVersion] = await db.select({ maxVersion: sql<number>`COALESCE(MAX(${tenantNoteVersions.versionNumber}), 0)` })
+      .from(tenantNoteVersions)
+      .where(eq(tenantNoteVersions.noteId, noteId));
+    
+    const nextVersionNumber = (latestVersion?.maxVersion || 0) + 1;
+
+    // Save the current version before updating
+    await db.insert(tenantNoteVersions).values({
+      noteId: noteId,
+      tenantId: tenantId,
+      editorUserId: existingNote.lastEditedByUserId || existingNote.authorUserId,
+      body: existingNote.body,
+      category: existingNote.category,
+      versionNumber: nextVersionNumber,
+      createdAt: existingNote.updatedAt || existingNote.createdAt,
+    });
+
+    // Update the note with new content
     const [updated] = await db.update(tenantNotes)
-      .set({ ...data })
+      .set({
+        ...data,
+        lastEditedByUserId: editorUserId,
+        updatedAt: new Date(),
+      })
       .where(eq(tenantNotes.id, noteId))
       .returning();
 
@@ -3636,6 +3664,71 @@ router.patch("/tenants/:tenantId/notes/:noteId", requireSuperUser, async (req, r
     }
     console.error("Error updating note:", error);
     res.status(500).json({ error: "Failed to update note" });
+  }
+});
+
+// GET /api/v1/super/tenants/:tenantId/notes/:noteId/versions - Get version history for a note
+router.get("/tenants/:tenantId/notes/:noteId/versions", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, noteId } = req.params;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    const [existingNote] = await db.select().from(tenantNotes)
+      .where(and(eq(tenantNotes.id, noteId), eq(tenantNotes.tenantId, tenantId)));
+    
+    if (!existingNote) {
+      return res.status(404).json({ error: "Note not found" });
+    }
+
+    // Get all versions for this note, ordered by version number descending
+    const versions = await db.select({
+      id: tenantNoteVersions.id,
+      noteId: tenantNoteVersions.noteId,
+      editorUserId: tenantNoteVersions.editorUserId,
+      body: tenantNoteVersions.body,
+      category: tenantNoteVersions.category,
+      versionNumber: tenantNoteVersions.versionNumber,
+      createdAt: tenantNoteVersions.createdAt,
+    })
+      .from(tenantNoteVersions)
+      .where(eq(tenantNoteVersions.noteId, noteId))
+      .orderBy(desc(tenantNoteVersions.versionNumber));
+
+    // Get user info for the editors
+    const editorIds = [...new Set(versions.map(v => v.editorUserId))];
+    let editorMap: Record<string, { id: string; firstName: string | null; lastName: string | null; email: string }> = {};
+    
+    if (editorIds.length > 0) {
+      const editors = await db.select({
+        id: users.id,
+        firstName: users.firstName,
+        lastName: users.lastName,
+        email: users.email,
+      }).from(users).where(inArray(users.id, editorIds));
+      
+      editors.forEach(editor => {
+        editorMap[editor.id] = editor;
+      });
+    }
+
+    // Add editor info to each version
+    const versionsWithEditors = versions.map(version => ({
+      ...version,
+      editor: editorMap[version.editorUserId] || { id: version.editorUserId, firstName: null, lastName: null, email: "Unknown" },
+    }));
+
+    res.json({
+      currentNote: existingNote,
+      versions: versionsWithEditors,
+      totalVersions: versions.length,
+    });
+  } catch (error) {
+    console.error("Error fetching note versions:", error);
+    res.status(500).json({ error: "Failed to fetch note versions" });
   }
 });
 
