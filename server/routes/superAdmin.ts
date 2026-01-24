@@ -3519,7 +3519,7 @@ router.post("/tenants/:tenantId/settings/brand-assets", requireSuperUser, upload
 
 const createNoteSchema = z.object({
   body: z.string().min(1, "Note body is required").max(10000, "Note too long"),
-  category: z.enum(["onboarding", "support", "billing", "technical", "general"]).optional().default("general"),
+  category: z.enum(["onboarding", "support", "billing", "technical", "general", "accounts"]).optional().default("general"),
 });
 
 // GET /api/v1/super/tenants/:tenantId/notes - Get all notes for a tenant
@@ -3604,7 +3604,7 @@ router.post("/tenants/:tenantId/notes", requireSuperUser, async (req, res) => {
 // PATCH /api/v1/super/tenants/:tenantId/notes/:noteId - Update a note
 const updateNoteSchema = z.object({
   body: z.string().min(1).max(10000).optional(),
-  category: z.enum(["onboarding", "support", "billing", "technical", "general"]).optional(),
+  category: z.enum(["onboarding", "support", "billing", "technical", "general", "accounts"]).optional(),
 });
 
 router.patch("/tenants/:tenantId/notes/:noteId", requireSuperUser, async (req, res) => {

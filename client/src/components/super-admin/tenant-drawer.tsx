@@ -2653,6 +2653,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem value="general">General</SelectItem>
+                        <SelectItem value="onboarding">Onboarding</SelectItem>
                         <SelectItem value="support">Support</SelectItem>
                         <SelectItem value="billing">Billing</SelectItem>
                         <SelectItem value="technical">Technical</SelectItem>
