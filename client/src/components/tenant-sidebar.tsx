@@ -49,10 +49,12 @@ import type { Project, Team, Workspace, Client, ClientDivision } from "@shared/s
 const mainNavItems = [
   { title: "Home", url: "/", icon: Home },
   { title: "My Tasks", url: "/my-tasks", icon: CheckSquare },
+  { title: "My Time", url: "/my-time", icon: Clock },
+  { title: "My Calendar", url: "/my-calendar", icon: CalendarDays },
   { title: "Projects", url: "/projects", icon: FolderKanban },
   { title: "Clients", url: "/clients", icon: Briefcase },
   { title: "Time Tracking", url: "/time-tracking", icon: Clock },
-  { title: "Calendar", url: "/calendar", icon: CalendarDays },
+  { title: "Team Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Chat", url: "/chat", icon: MessageCircle },
   { title: "User Manager", url: "/user-manager", icon: UsersRound, adminOnly: true },
 ];

@@ -3721,6 +3721,136 @@ export async function registerRoutes(
     }
   });
 
+  // Get personal time statistics for "My Time" dashboard
+  app.get("/api/time-entries/my/stats", async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      const userId = getCurrentUserId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      
+      // Fetch all user's time entries (we'll filter by date ranges in memory)
+      let entries;
+      if (tenantId && isStrictMode()) {
+        entries = await storage.getTimeEntriesByTenant(tenantId, workspaceId, { userId });
+      } else {
+        entries = await storage.getTimeEntriesByUser(userId, workspaceId);
+      }
+      
+      // Calculate date ranges
+      const now = new Date();
+      const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      const todayEnd = new Date(todayStart.getTime() + 24 * 60 * 60 * 1000);
+      
+      // This week (Sunday start)
+      const dayOfWeek = now.getDay();
+      const weekStart = new Date(todayStart.getTime() - dayOfWeek * 24 * 60 * 60 * 1000);
+      const weekEnd = new Date(weekStart.getTime() + 7 * 24 * 60 * 60 * 1000);
+      
+      // This month
+      const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
+      const monthEnd = new Date(now.getFullYear(), now.getMonth() + 1, 1);
+      
+      // Aggregate stats
+      let todaySeconds = 0, todayBillable = 0, todayUnbillable = 0;
+      let weekSeconds = 0, weekBillable = 0, weekUnbillable = 0;
+      let monthSeconds = 0, monthBillable = 0, monthUnbillable = 0;
+      let totalSeconds = 0, totalBillable = 0, totalUnbillable = 0;
+      
+      // Daily breakdown for the week (for charts)
+      const dailyBreakdown: Record<string, { date: string; total: number; billable: number; unbillable: number }> = {};
+      
+      // Recent entries with missing descriptions
+      const entriesWithMissingDescriptions: Array<{ id: string; date: string; duration: number; clientName?: string; projectName?: string }> = [];
+      
+      // Days with >8h (long-running days warning)
+      const dayTotals: Record<string, number> = {};
+      
+      for (const entry of entries) {
+        const entryDate = new Date(entry.startTime);
+        const isBillable = entry.scope === "out_of_scope"; // out_of_scope = billable
+        const seconds = entry.durationSeconds;
+        
+        // Total
+        totalSeconds += seconds;
+        if (isBillable) totalBillable += seconds;
+        else totalUnbillable += seconds;
+        
+        // Today
+        if (entryDate >= todayStart && entryDate < todayEnd) {
+          todaySeconds += seconds;
+          if (isBillable) todayBillable += seconds;
+          else todayUnbillable += seconds;
+        }
+        
+        // This week
+        if (entryDate >= weekStart && entryDate < weekEnd) {
+          weekSeconds += seconds;
+          if (isBillable) weekBillable += seconds;
+          else weekUnbillable += seconds;
+          
+          // Daily breakdown
+          const dateKey = entryDate.toISOString().split('T')[0];
+          if (!dailyBreakdown[dateKey]) {
+            dailyBreakdown[dateKey] = { date: dateKey, total: 0, billable: 0, unbillable: 0 };
+          }
+          dailyBreakdown[dateKey].total += seconds;
+          if (isBillable) dailyBreakdown[dateKey].billable += seconds;
+          else dailyBreakdown[dateKey].unbillable += seconds;
+        }
+        
+        // This month
+        if (entryDate >= monthStart && entryDate < monthEnd) {
+          monthSeconds += seconds;
+          if (isBillable) monthBillable += seconds;
+          else monthUnbillable += seconds;
+          
+          // Track daily totals for long-running days
+          const dateKey = entryDate.toISOString().split('T')[0];
+          dayTotals[dateKey] = (dayTotals[dateKey] || 0) + seconds;
+        }
+        
+        // Check for missing descriptions (recent entries only - last 30 days)
+        const thirtyDaysAgo = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
+        if (entryDate >= thirtyDaysAgo && (!entry.description || entry.description.trim() === '')) {
+          entriesWithMissingDescriptions.push({
+            id: entry.id,
+            date: entryDate.toISOString(),
+            duration: seconds,
+            clientName: entry.client?.name,
+            projectName: entry.project?.name,
+          });
+        }
+      }
+      
+      // Find long-running days (>8h = 28800 seconds)
+      const longRunningDays = Object.entries(dayTotals)
+        .filter(([_, seconds]) => seconds > 28800)
+        .map(([date, seconds]) => ({ date, hours: Math.round(seconds / 3600 * 10) / 10 }));
+      
+      // Get the most recent entry for "Edit last time entry" quick action
+      const sortedEntries = [...entries].sort((a, b) => 
+        new Date(b.startTime).getTime() - new Date(a.startTime).getTime()
+      );
+      const lastEntry = sortedEntries[0];
+      
+      res.json({
+        today: { total: todaySeconds, billable: todayBillable, unbillable: todayUnbillable },
+        thisWeek: { total: weekSeconds, billable: weekBillable, unbillable: weekUnbillable },
+        thisMonth: { total: monthSeconds, billable: monthBillable, unbillable: monthUnbillable },
+        allTime: { total: totalSeconds, billable: totalBillable, unbillable: totalUnbillable },
+        dailyBreakdown: Object.values(dailyBreakdown).sort((a, b) => a.date.localeCompare(b.date)),
+        warnings: {
+          missingDescriptions: entriesWithMissingDescriptions.slice(0, 10), // Limit to 10
+          longRunningDays: longRunningDays.slice(0, 5), // Limit to 5
+        },
+        lastEntryId: lastEntry?.id || null,
+      });
+    } catch (error) {
+      console.error("Error fetching personal time stats:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   // Get single time entry
   app.get("/api/time-entries/:id", async (req, res) => {
     try {
@@ -4033,6 +4163,77 @@ export async function registerRoutes(
       });
     } catch (error) {
       console.error("Error fetching calendar events:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // Get personal calendar events (user's own tasks and time entries only)
+  // This endpoint enforces strict user scoping - no cross-user visibility
+  app.get("/api/my-calendar/events", async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      const userId = getCurrentUserId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      const { start, end } = req.query;
+
+      const startDate = start ? new Date(start as string) : new Date(new Date().setDate(new Date().getDate() - 7));
+      const endDate = end ? new Date(end as string) : new Date(new Date().setDate(new Date().getDate() + 30));
+
+      // Fetch user's assigned tasks with due dates in range
+      let tasks;
+      if (tenantId && isStrictMode()) {
+        tasks = await storage.getCalendarTasksByTenant(tenantId, workspaceId, startDate, endDate);
+      } else {
+        tasks = await storage.getCalendarTasksByWorkspace(workspaceId, startDate, endDate);
+      }
+      
+      // Filter to only tasks assigned to current user
+      const userTasks = tasks.filter(task => 
+        task.assignees?.some(a => a.userId === userId)
+      );
+
+      // Fetch user's personal tasks (isPersonal = true)
+      const allUserTasks = await storage.getTasksByUser(userId);
+      const personalTasks = allUserTasks
+        .filter(t => t.isPersonal && t.dueDate)
+        .filter(t => {
+          const dueDate = new Date(t.dueDate!);
+          return dueDate >= startDate && dueDate <= endDate;
+        })
+        .map(t => ({
+          id: t.id,
+          title: t.title,
+          status: t.status,
+          priority: t.priority,
+          dueDate: t.dueDate,
+          projectId: t.projectId,
+          isPersonal: true,
+          assignees: [],
+        }));
+
+      // Fetch user's time entries in range (strictly user-scoped)
+      let timeEntries;
+      if (tenantId && isStrictMode()) {
+        timeEntries = await storage.getTimeEntriesByTenant(tenantId, workspaceId, { 
+          userId, 
+          startDate, 
+          endDate 
+        });
+      } else {
+        const allUserEntries = await storage.getTimeEntriesByUser(userId, workspaceId);
+        timeEntries = allUserEntries.filter(entry => {
+          const entryDate = new Date(entry.startTime);
+          return entryDate >= startDate && entryDate <= endDate;
+        });
+      }
+
+      res.json({
+        tasks: userTasks,
+        personalTasks,
+        timeEntries,
+      });
+    } catch (error) {
+      console.error("Error fetching personal calendar events:", error);
       res.status(500).json({ error: "Internal server error" });
     }
   });
