@@ -645,4 +645,211 @@ router.post("/v1/super/health/orphans/fix", requireAuth, requireSuperUser, async
   }
 });
 
+/**
+ * Remediate endpoint - uses relationship-based backfill (more accurate than default tenant assignment)
+ * POST /api/v1/super/tenancy/remediate?mode=dry-run|apply
+ */
+router.post("/v1/super/tenancy/remediate", requireAuth, requireSuperUser, async (req: Request, res: Response) => {
+  const mode = (req.query.mode as string) || "dry-run";
+  const user = req.user as any;
+
+  if (mode !== "dry-run" && mode !== "apply") {
+    return res.status(400).json({
+      error: { code: "invalid_mode", message: "Mode must be 'dry-run' or 'apply'" },
+    });
+  }
+
+  const applyMode = mode === "apply";
+
+  if (applyMode) {
+    const confirmHeader = req.headers["x-confirm-remediate"];
+    if (confirmHeader !== "YES") {
+      return res.status(400).json({
+        error: {
+          code: "confirmation_required",
+          message: "To apply remediation, include header 'X-Confirm-Remediate: YES'",
+        },
+      });
+    }
+  }
+
+  console.log(`[TenancyRemediate] ${applyMode ? "APPLY" : "DRY-RUN"} mode started by ${user.email}`);
+
+  try {
+    const REMEDIATION_TABLES = [
+      { name: "workspaces", resolveVia: null },
+      { name: "teams", resolveVia: "workspaces" },
+      { name: "clients", resolveVia: "workspaces" },
+      { name: "projects", resolveVia: "workspaces" },
+      { name: "tasks", resolveVia: "projects" },
+      { name: "time_entries", resolveVia: "workspaces" },
+      { name: "active_timers", resolveVia: "workspaces" },
+      { name: "invitations", resolveVia: "workspaces" },
+      { name: "personal_task_sections", resolveVia: "users" },
+      { name: "task_assignees", resolveVia: "tasks" },
+      { name: "task_watchers", resolveVia: "tasks" },
+      { name: "notifications", resolveVia: "users" },
+      { name: "notification_preferences", resolveVia: "users" },
+    ];
+
+    interface TableResult {
+      table: string;
+      nullBefore: number;
+      resolvable: number;
+      updated: number;
+      unresolvedAfter: number;
+      unresolvedSampleIds: string[];
+    }
+
+    const results: TableResult[] = [];
+
+    for (const { name, resolveVia } of REMEDIATION_TABLES) {
+      const countBefore = await db.execute(
+        sql.raw(`SELECT COUNT(*) as count FROM ${name} WHERE tenant_id IS NULL`)
+      );
+      const nullBefore = parseInt(String((countBefore.rows[0] as any).count || 0), 10);
+
+      if (nullBefore === 0) {
+        results.push({
+          table: name,
+          nullBefore: 0,
+          resolvable: 0,
+          updated: 0,
+          unresolvedAfter: 0,
+          unresolvedSampleIds: [],
+        });
+        continue;
+      }
+
+      let resolvable = 0;
+      let updated = 0;
+
+      if (resolveVia) {
+        let countQuery: string;
+        let updateQuery: string;
+
+        switch (resolveVia) {
+          case "workspaces":
+            countQuery = `
+              SELECT COUNT(*) as count FROM ${name} t
+              INNER JOIN workspaces w ON t.workspace_id = w.id
+              WHERE t.tenant_id IS NULL AND w.tenant_id IS NOT NULL
+            `;
+            updateQuery = `
+              UPDATE ${name} t SET tenant_id = w.tenant_id
+              FROM workspaces w
+              WHERE t.workspace_id = w.id AND t.tenant_id IS NULL AND w.tenant_id IS NOT NULL
+            `;
+            break;
+          case "projects":
+            countQuery = `
+              SELECT COUNT(*) as count FROM ${name} t
+              INNER JOIN projects p ON t.project_id = p.id
+              WHERE t.tenant_id IS NULL AND p.tenant_id IS NOT NULL
+            `;
+            updateQuery = `
+              UPDATE ${name} t SET tenant_id = p.tenant_id
+              FROM projects p
+              WHERE t.project_id = p.id AND t.tenant_id IS NULL AND p.tenant_id IS NOT NULL
+            `;
+            break;
+          case "tasks":
+            countQuery = `
+              SELECT COUNT(*) as count FROM ${name} t
+              INNER JOIN tasks tk ON t.task_id = tk.id
+              WHERE t.tenant_id IS NULL AND tk.tenant_id IS NOT NULL
+            `;
+            updateQuery = `
+              UPDATE ${name} t SET tenant_id = tk.tenant_id
+              FROM tasks tk
+              WHERE t.task_id = tk.id AND t.tenant_id IS NULL AND tk.tenant_id IS NOT NULL
+            `;
+            break;
+          case "users":
+            countQuery = `
+              SELECT COUNT(*) as count FROM ${name} t
+              INNER JOIN users u ON t.user_id = u.id
+              WHERE t.tenant_id IS NULL AND u.tenant_id IS NOT NULL
+            `;
+            updateQuery = `
+              UPDATE ${name} t SET tenant_id = u.tenant_id
+              FROM users u
+              WHERE t.user_id = u.id AND t.tenant_id IS NULL AND u.tenant_id IS NOT NULL
+            `;
+            break;
+          default:
+            countQuery = "";
+            updateQuery = "";
+        }
+
+        if (countQuery) {
+          const resolvableResult = await db.execute(sql.raw(countQuery));
+          resolvable = parseInt(String((resolvableResult.rows[0] as any).count || 0), 10);
+
+          if (applyMode && resolvable > 0 && updateQuery) {
+            const updateResult = await db.execute(sql.raw(updateQuery));
+            updated = updateResult.rowCount || 0;
+          }
+        }
+      }
+
+      const countAfter = await db.execute(
+        sql.raw(`SELECT COUNT(*) as count FROM ${name} WHERE tenant_id IS NULL`)
+      );
+      const unresolvedAfter = parseInt(String((countAfter.rows[0] as any).count || 0), 10);
+
+      let unresolvedSampleIds: string[] = [];
+      if (unresolvedAfter > 0) {
+        const sampleResult = await db.execute(
+          sql.raw(`SELECT id FROM ${name} WHERE tenant_id IS NULL LIMIT 50`)
+        );
+        unresolvedSampleIds = (sampleResult.rows as any[]).map(r => r.id);
+      }
+
+      results.push({
+        table: name,
+        nullBefore,
+        resolvable,
+        updated,
+        unresolvedAfter,
+        unresolvedSampleIds,
+      });
+    }
+
+    const usersResult = await db.execute(sql`
+      SELECT id, email, role FROM users WHERE tenant_id IS NULL
+    `);
+    const usersRows = usersResult.rows as any[];
+    const superUsers = usersRows.filter(u => u.role === "super_user");
+    const nonSuperUsers = usersRows.filter(u => u.role !== "super_user");
+
+    const totalNull = results.reduce((sum, r) => sum + r.nullBefore, 0);
+    const totalResolvable = results.reduce((sum, r) => sum + r.resolvable, 0);
+    const totalUpdated = results.reduce((sum, r) => sum + r.updated, 0);
+    const totalUnresolved = results.reduce((sum, r) => sum + r.unresolvedAfter, 0) + nonSuperUsers.length;
+
+    res.json({
+      mode,
+      timestamp: new Date().toISOString(),
+      executedBy: user.email,
+      tables: results,
+      users: {
+        superUsersWithNullTenantId: superUsers.length,
+        nonSuperUsersWithNullTenantId: nonSuperUsers.length,
+        nonSuperUserSampleIds: nonSuperUsers.slice(0, 50).map((u: any) => u.id),
+      },
+      summary: {
+        totalNull,
+        totalResolvable,
+        totalUpdated,
+        totalUnresolved,
+        canApplyNotNullConstraints: totalUnresolved === 0,
+      },
+    });
+  } catch (error) {
+    console.error("[TenancyRemediate] Error:", error);
+    res.status(500).json({ error: { code: "internal_error", message: "Remediation failed" } });
+  }
+});
+
 export default router;

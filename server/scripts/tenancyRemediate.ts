@@ -47,6 +47,8 @@ const TENANT_SCOPED_TABLES = [
   "task_watchers",
   "client_divisions",
   "division_members",
+  "notifications",
+  "notification_preferences",
   // Chat tables
   "chat_channels",
   "chat_channel_members",
@@ -115,15 +117,15 @@ async function backfillTable(
       `;
       break;
 
-    // Clients -> has tenant_id directly, use created_by -> users -> tenant_id
+    // Clients -> workspace -> tenant (primary path)
     case "clients":
       updateQuery = `
         UPDATE clients c
-        SET tenant_id = u.tenant_id
-        FROM users u
-        WHERE c.created_by = u.id
+        SET tenant_id = w.tenant_id
+        FROM workspaces w
+        WHERE c.workspace_id = w.id
           AND c.tenant_id IS NULL
-          AND u.tenant_id IS NOT NULL
+          AND w.tenant_id IS NOT NULL
       `;
       break;
 
@@ -155,43 +157,39 @@ async function backfillTable(
       `;
       break;
 
-    // Time entries -> task -> project -> tenant
+    // Time entries -> workspace -> tenant (primary path since task may be null)
     case "time_entries":
       updateQuery = `
         UPDATE time_entries te
-        SET tenant_id = t.tenant_id
-        FROM tasks t
-        WHERE te.task_id = t.id
+        SET tenant_id = w.tenant_id
+        FROM workspaces w
+        WHERE te.workspace_id = w.id
           AND te.tenant_id IS NULL
-          AND t.tenant_id IS NOT NULL
+          AND w.tenant_id IS NOT NULL
       `;
       break;
 
-    // Active timers -> task -> tenant OR user -> tenant
+    // Active timers -> workspace -> tenant (primary path)
     case "active_timers":
       updateQuery = `
         UPDATE active_timers at
-        SET tenant_id = COALESCE(
-          (SELECT t.tenant_id FROM tasks t WHERE t.id = at.task_id AND t.tenant_id IS NOT NULL),
-          (SELECT u.tenant_id FROM users u WHERE u.id = at.user_id AND u.tenant_id IS NOT NULL)
-        )
-        WHERE at.tenant_id IS NULL
-          AND (
-            EXISTS (SELECT 1 FROM tasks t WHERE t.id = at.task_id AND t.tenant_id IS NOT NULL)
-            OR EXISTS (SELECT 1 FROM users u WHERE u.id = at.user_id AND u.tenant_id IS NOT NULL)
-          )
+        SET tenant_id = w.tenant_id
+        FROM workspaces w
+        WHERE at.workspace_id = w.id
+          AND at.tenant_id IS NULL
+          AND w.tenant_id IS NOT NULL
       `;
       break;
 
-    // Invitations -> use tenant_id from inviter (user)
+    // Invitations -> workspace -> tenant (primary path)
     case "invitations":
       updateQuery = `
         UPDATE invitations i
-        SET tenant_id = u.tenant_id
-        FROM users u
-        WHERE i.invited_by = u.id
+        SET tenant_id = w.tenant_id
+        FROM workspaces w
+        WHERE i.workspace_id = w.id
           AND i.tenant_id IS NULL
-          AND u.tenant_id IS NOT NULL
+          AND w.tenant_id IS NOT NULL
       `;
       break;
 
@@ -231,6 +229,30 @@ async function backfillTable(
       `;
       break;
 
+    // Notifications -> user -> tenant
+    case "notifications":
+      updateQuery = `
+        UPDATE notifications n
+        SET tenant_id = u.tenant_id
+        FROM users u
+        WHERE n.user_id = u.id
+          AND n.tenant_id IS NULL
+          AND u.tenant_id IS NOT NULL
+      `;
+      break;
+
+    // Notification preferences -> user -> tenant
+    case "notification_preferences":
+      updateQuery = `
+        UPDATE notification_preferences np
+        SET tenant_id = u.tenant_id
+        FROM users u
+        WHERE np.user_id = u.id
+          AND np.tenant_id IS NULL
+          AND u.tenant_id IS NOT NULL
+      `;
+      break;
+
     // Client divisions -> client -> tenant
     case "client_divisions":
       updateQuery = `
@@ -255,19 +277,15 @@ async function backfillTable(
       `;
       break;
 
-    // Chat channels -> created_by user -> tenant OR workspace -> tenant
+    // Chat channels -> created_by user -> tenant
     case "chat_channels":
       updateQuery = `
         UPDATE chat_channels cc
-        SET tenant_id = COALESCE(
-          (SELECT u.tenant_id FROM users u WHERE u.id = cc.created_by AND u.tenant_id IS NOT NULL),
-          (SELECT w.tenant_id FROM workspaces w WHERE w.id = cc.workspace_id AND w.tenant_id IS NOT NULL)
-        )
-        WHERE cc.tenant_id IS NULL
-          AND (
-            EXISTS (SELECT 1 FROM users u WHERE u.id = cc.created_by AND u.tenant_id IS NOT NULL)
-            OR EXISTS (SELECT 1 FROM workspaces w WHERE w.id = cc.workspace_id AND w.tenant_id IS NOT NULL)
-          )
+        SET tenant_id = u.tenant_id
+        FROM users u
+        WHERE cc.created_by = u.id
+          AND cc.tenant_id IS NULL
+          AND u.tenant_id IS NOT NULL
       `;
       break;
 
