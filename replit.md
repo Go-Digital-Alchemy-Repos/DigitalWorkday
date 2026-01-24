@@ -63,7 +63,15 @@ MyWorkDay is an Asana-inspired project management application designed to stream
   - All provisioning endpoints have audit logging via recordTenantAuditEvent
 - **Performance Optimizations**: N+1 query fixes and query debugging utilities.
 - **Navigation Mode Hardening**: Enhanced super/tenant mode switching with `useAppMode` hook, cache isolation, and route guards.
-- **Time Tracking Reliability**: Timer hardening for cross-session/tab reliability using `BroadcastChannel`, `localStorage` fallback, and optimistic mutations.
+- **Time Tracking Reliability (Sprint 3A)**: Stopwatch-based time tracking with "no silent failures" guarantee:
+  - Timer never disappears without explicit user action (save or discard)
+  - Explicit UI states: idle, running, paused, stopping (spinner), error (alert icon)
+  - All mutations check response.ok with requestId correlation in error messages (Ref: xxx)
+  - Stop failures keep timer recoverable with retry UI
+  - Zero-duration timers require explicit discard confirmation
+  - 10 second error toast duration for visibility
+  - Server validates clientId before creating time entry, timer persists on validation failure
+  - Cross-session/tab reliability using `BroadcastChannel` and `localStorage` fallback
 - **Hierarchical S3 Storage**: 3-tier storage configuration with automatic fallback (tenant-specific → system-level → env vars).
 - **Global Command Palette**: Keyboard-driven search (⌘K / Ctrl+K) and quick actions across clients, projects, and tasks.
 - **Enhanced Task Comments**: Full comment management with edit/delete permissions, resolve/unresolve, and @mention support with email notifications.
