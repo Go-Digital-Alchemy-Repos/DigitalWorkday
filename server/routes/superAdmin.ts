@@ -1565,7 +1565,6 @@ router.get("/users", requireSuperUser, async (req, res) => {
       tenantStatus: tenants.status,
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
-      lastLoginAt: users.lastLoginAt,
     })
       .from(users)
       .leftJoin(tenants, eq(users.tenantId, tenants.id))
@@ -1630,7 +1629,7 @@ router.get("/users/:userId/activity", requireSuperUser, async (req, res) => {
     const activityCountResult = await db.select({ count: count() })
       .from(activityLog)
       .where(and(
-        eq(activityLog.userId, userId),
+        eq(activityLog.actorUserId, userId),
         gte(activityLog.createdAt, thirtyDaysAgo)
       ));
 
@@ -1640,11 +1639,11 @@ router.get("/users/:userId/activity", requireSuperUser, async (req, res) => {
       action: activityLog.action,
       entityType: activityLog.entityType,
       entityId: activityLog.entityId,
-      metadata: activityLog.metadata,
+      metadata: activityLog.diffJson,
       createdAt: activityLog.createdAt,
     })
       .from(activityLog)
-      .where(eq(activityLog.userId, userId))
+      .where(eq(activityLog.actorUserId, userId))
       .orderBy(desc(activityLog.createdAt))
       .limit(10);
 
@@ -1664,7 +1663,6 @@ router.get("/users/:userId/activity", requireSuperUser, async (req, res) => {
       taskCount: taskCountResult[0]?.count || 0,
       commentCount: commentCountResult[0]?.count || 0,
       recentActivity,
-      lastLoginAt: user.lastLoginAt,
     });
   } catch (error) {
     console.error("[super/users/activity] Error:", error);

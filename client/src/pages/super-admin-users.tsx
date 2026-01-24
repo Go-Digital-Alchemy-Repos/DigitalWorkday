@@ -80,7 +80,6 @@ interface AppUser {
   tenantStatus: string | null;
   createdAt: string;
   updatedAt: string | null;
-  lastLoginAt: string | null;
   hasPendingInvite: boolean;
 }
 
@@ -103,7 +102,6 @@ interface UserActivity {
   activityCount30Days: number;
   taskCount: number;
   commentCount: number;
-  lastLoginAt: string | null;
   recentActivity: Array<{
     id: string;
     action: string;
@@ -187,9 +185,9 @@ export default function SuperAdminUsers() {
   appUserParams.set("pageSize", "25");
   const appUserQueryString = appUserParams.toString();
 
-  // App Users query - uses default fetcher
+  // App Users query - uses default fetcher with array-segment keys for proper cache invalidation
   const { data: appUsersData, isLoading: appUsersLoading } = useQuery<AppUsersResponse>({
-    queryKey: [`/api/v1/super/users?${appUserQueryString}`],
+    queryKey: ["/api/v1/super/users", `?${appUserQueryString}`],
     enabled: activeTab === "app-users",
   });
 
@@ -200,8 +198,9 @@ export default function SuperAdminUsers() {
   });
 
   // User activity query - only enabled when drawer is open and user selected
+  // Uses array segments for proper cache management
   const { data: userActivity, isLoading: activityLoading } = useQuery<UserActivity>({
-    queryKey: [`/api/v1/super/users/${selectedAppUser?.id}/activity`],
+    queryKey: ["/api/v1/super/users", selectedAppUser?.id, "activity"],
     enabled: appUserDrawerOpen && !!selectedAppUser,
   });
 
@@ -774,12 +773,12 @@ export default function SuperAdminUsers() {
                   </div>
                 </div>
                 <div className="space-y-1">
-                  <Label className="text-xs text-muted-foreground">Last Login</Label>
-                  <div className="text-sm">{formatDate(selectedAppUser.lastLoginAt)}</div>
-                </div>
-                <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Created</Label>
                   <div className="text-sm">{formatDate(selectedAppUser.createdAt)}</div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Updated</Label>
+                  <div className="text-sm">{formatDate(selectedAppUser.updatedAt)}</div>
                 </div>
                 <div className="space-y-1">
                   <Label className="text-xs text-muted-foreground">Invite Status</Label>
