@@ -1,0 +1,48 @@
+SPRINT 2B — Provisioning Hardening (Super Admin) + Primary Workspace Rules
+
+CONTEXT:
+Super Admin provisions tenants, users, clients, projects, teams. Tenant-wide visibility is expected.
+Provisioned entities must always have tenant_id set and should default to the tenant’s primary workspace_id when workspace_id is not specified.
+
+GOAL:
+1) Ensure tenant provisioning always sets tenant_id for all created records.
+2) Ensure default workspace_id is always the tenant’s PRIMARY workspace.
+3) Eliminate schema drift bugs (routes inserting fields not present in Drizzle schema).
+
+ABSOLUTE SAFETY RULES:
+- Do NOT change endpoint paths or success response shapes.
+- Do NOT remove any existing provisioning features.
+- Only additive schema changes allowed (if a field truly needed, add migration + schema update; otherwise remove from insert).
+- Do NOT change tenant-wide list behavior.
+
+TASKS:
+1) Implement or confirm helper:
+- getPrimaryWorkspaceId(tenantId): returns the primary workspace for tenant.
+If no primary workspace exists, fail with explicit error and log requestId.
+
+2) In super admin provisioning flows:
+- When creating a client/project/team/task without workspace_id:
+  set workspace_id = getPrimaryWorkspaceId(tenantId)
+- Always set tenant_id = tenantId for all created records.
+
+3) Add provisioning audit logging:
+- For each created entity (tenant, workspace, client, project, team, user):
+  log: requestId, tenantId, entityType, entityId, workspaceId used.
+
+4) Fix schema drift:
+- Search for inserts/updates referencing columns not defined in shared/schema.ts.
+- If the UI requires the field and it’s legitimate, add it:
+  - Create migration
+  - Update Drizzle schema
+  - Update create/update validation (zod)
+- If the field is legacy/unnecessary, remove it from the insert payload.
+
+5) Add tests:
+- Create tenant -> auto-create primary workspace named after tenant
+- Provision client + project during onboarding
+- Login as tenant admin and confirm client + project visible via existing endpoints
+
+ACCEPTANCE:
+- Super Admin can provision tenant and tenant users can see all provisioned clients/projects.
+- No tenant-owned entity created with tenant_id NULL.
+- No provisioning inserts referencing non-existent columns.

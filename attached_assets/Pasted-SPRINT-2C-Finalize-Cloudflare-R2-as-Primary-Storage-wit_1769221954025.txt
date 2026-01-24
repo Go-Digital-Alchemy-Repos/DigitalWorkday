@@ -1,0 +1,59 @@
+SPRINT 2C — Finalize Cloudflare R2 as Primary Storage (with compatibility)
+
+CONTEXT:
+The app currently has partial support for R2 (schemas/config) and possibly S3 legacy code.
+We want Cloudflare R2 to become the primary storage provider for new uploads.
+We must keep old S3-backed records usable until a migration is run (separate prompt).
+
+GOAL:
+1) Make Cloudflare R2 the default provider when configured at system level.
+2) Preserve tenant override behavior: tenant R2 overrides system R2.
+3) Route ALL uploads through ONE unified storage resolver (avatars, branding, task attachments, chat attachments, exports).
+4) Keep legacy S3 objects/URLs readable if they exist in DB (compatibility mode).
+
+ABSOLUTE SAFETY RULES:
+- Do NOT attempt to migrate existing objects from S3 to R2 in this prompt.
+- Do NOT delete S3 code yet if it is needed for legacy reads.
+- Do NOT expose secrets; never return them to client.
+- Do NOT change API success shapes for existing upload endpoints (add fields only if safe).
+
+TASKS:
+1) Unify naming:
+- Update UI labels and docs from “Amazon S3” to “Cloudflare R2”
+- Ensure integration type is “storage_r2” (system + tenant) as the primary config.
+
+2) Storage resolver:
+- Implement getStorageConfig(tenantId) with priority:
+  tenant R2 (enabled) -> system R2 (enabled) -> error STORAGE_NOT_CONFIGURED
+- Provide a compatibility handler:
+  If a DB record has an existing URL that points to S3, keep using it for reads (no rewrite).
+
+3) R2 client:
+- Use S3-compatible SDK configured with:
+  endpoint: https://<accountId>.r2.cloudflarestorage.com
+  region: auto
+  forcePathStyle: true (if needed)
+- Implement:
+  uploadObject, deleteObject, getSignedDownloadUrl (or public URL using publicBaseUrl)
+- Default: signed URLs ON unless publicBaseUrl is set and object is non-sensitive.
+
+4) Update all upload paths to use resolver + R2 client:
+- user avatar uploads
+- tenant/system branding uploads
+- task attachments
+- chat attachments
+
+5) Add “Test R2 Config” button for system and tenant integrations:
+- performs a safe HEAD/LIST or small temp put+delete
+- returns success/failure without secrets.
+
+6) Tests:
+- tenant override config used
+- fallback system config used
+- storage not configured returns clean error
+
+ACCEPTANCE:
+- New uploads go to R2 (when configured).
+- Tenant override works and does not affect other tenants.
+- Legacy S3 URLs (if present in DB) still render/download.
+- No secrets leak to UI.

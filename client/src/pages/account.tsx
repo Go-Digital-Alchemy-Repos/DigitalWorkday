@@ -3,10 +3,12 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/lib/auth";
 import { Redirect } from "wouter";
-import { Building2, Palette, Plug } from "lucide-react";
+import { Building2, Palette, CreditCard, ClipboardList, UserCog, Layers } from "lucide-react";
 import { ProfileTab } from "@/components/settings/profile-tab";
 import { BrandingTab } from "@/components/settings/branding-tab";
-import { IntegrationsTab } from "@/components/settings/integrations-tab";
+import { WorkspacesTab } from "@/components/settings/workspaces-tab";
+import { BillingTab } from "@/components/settings/billing-tab";
+import { WorkloadTab } from "@/components/settings/workload-tab";
 
 export default function AccountPage() {
   const [location, setLocation] = useLocation();
@@ -38,26 +40,37 @@ export default function AccountPage() {
   return (
     <ScrollArea className="h-full">
       <div className="container max-w-5xl py-8 px-6">
-        <div className="mb-8">
-          <h1 className="text-2xl font-semibold mb-2">Account Settings</h1>
-          <p className="text-muted-foreground">
-            Manage your organization profile, branding, integrations, and team members
-          </p>
+        <div className="flex items-center gap-3 mb-8">
+          <UserCog className="h-8 w-8 text-primary" />
+          <div>
+            <h1 className="text-2xl font-semibold">Account</h1>
+            <p className="text-muted-foreground text-sm">
+              Manage your organization profile, workspaces, branding, and billing
+            </p>
+          </div>
         </div>
 
         <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
             <TabsTrigger value="profile" className="gap-2" data-testid="tab-profile">
               <Building2 className="h-4 w-4" />
               <span className="hidden sm:inline">Profile</span>
             </TabsTrigger>
+            <TabsTrigger value="workspaces" className="gap-2" data-testid="tab-workspaces">
+              <Layers className="h-4 w-4" />
+              <span className="hidden sm:inline">Workspaces</span>
+            </TabsTrigger>
             <TabsTrigger value="branding" className="gap-2" data-testid="tab-branding">
               <Palette className="h-4 w-4" />
-              <span className="hidden sm:inline">White Label</span>
+              <span className="hidden sm:inline">Branding</span>
             </TabsTrigger>
-            <TabsTrigger value="integrations" className="gap-2" data-testid="tab-integrations">
-              <Plug className="h-4 w-4" />
-              <span className="hidden sm:inline">Integrations</span>
+            <TabsTrigger value="billing" className="gap-2" data-testid="tab-billing">
+              <CreditCard className="h-4 w-4" />
+              <span className="hidden sm:inline">Billing</span>
+            </TabsTrigger>
+            <TabsTrigger value="workload" className="gap-2" data-testid="tab-workload">
+              <ClipboardList className="h-4 w-4" />
+              <span className="hidden sm:inline">Workload</span>
             </TabsTrigger>
           </TabsList>
 
@@ -65,12 +78,20 @@ export default function AccountPage() {
             <ProfileTab />
           </TabsContent>
 
+          <TabsContent value="workspaces" className="mt-6">
+            <WorkspacesTab />
+          </TabsContent>
+
           <TabsContent value="branding" className="mt-6">
             <BrandingTab />
           </TabsContent>
 
-          <TabsContent value="integrations" className="mt-6">
-            <IntegrationsTab />
+          <TabsContent value="billing" className="mt-6">
+            <BillingTab />
+          </TabsContent>
+
+          <TabsContent value="workload" className="mt-6">
+            <WorkloadTab />
           </TabsContent>
         </Tabs>
       </div>

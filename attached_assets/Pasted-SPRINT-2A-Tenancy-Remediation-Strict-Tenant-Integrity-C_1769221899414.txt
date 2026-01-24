@@ -1,0 +1,74 @@
+SPRINT 2A — Tenancy Remediation + Strict Tenant Integrity
+
+CONTEXT:
+This is a multi-tenant React + Express + Postgres app using Drizzle.
+Tenant-wide visibility is desired (clients/projects/tasks are tenant-scoped, not workspace-scoped).
+Currently, some core tables still allow tenant_id to be NULL, and there are existing rows missing tenant_id.
+This causes “provisioned but invisible” data for tenant users.
+
+GOAL:
+1) Backfill tenant_id for any tenant-owned rows where tenant_id is NULL.
+2) Add a safe “Strict Tenant Integrity” mode that prevents new NULL tenant_id rows.
+3) After remediation (when unresolved==0), enforce NOT NULL + indexes for tenant_id in core tables.
+
+ABSOLUTE SAFETY RULES:
+- DO NOT delete any data.
+- DO NOT change existing API endpoint paths or success response shapes.
+- Additive migrations/scripts only; constraint tightening must be gated by “unresolved==0”.
+- If unresolved > 0, DO NOT apply NOT NULL constraints; instead produce a remediation report and exit safely.
+
+STEP 1 — Identify tenant-owned tables
+Audit and list tables that should always have tenant_id (at minimum):
+- clients, projects, tasks, teams, users (tenant users), time_entries, active_timers,
+  comments/task_comments, attachments/task_attachments, chat tables (chat_channels, chat_members, chat_dm_threads, chat_messages, chat_attachments),
+  workspace membership tables that should be tenant consistent.
+Do not include truly system/global tables.
+
+STEP 2 — Implement remediation script (dry run + apply)
+Create: server/scripts/tenancyRemediate.ts with two modes:
+- --dry-run (default): computes counts and prints a table: tableName, nullCount, resolvableCount, unresolvedCount
+- --apply: performs updates inside a transaction per table where possible, logs updated counts per table, and outputs unresolved rows for manual review.
+
+Backfill rules (use strongest relationship available):
+- If row has workspace_id: tenant_id = workspaces.tenant_id
+- If row has project_id: tenant_id = projects.tenant_id
+- If row has client_id: tenant_id = clients.tenant_id
+- If row has channel_id: tenant_id = chat_channels.tenant_id
+- If row has dm_thread_id: tenant_id = chat_dm_threads.tenant_id
+- If row has user_id/created_by: tenant_id = users.tenant_id (only if user already has tenant_id)
+For each table, implement the best join path.
+
+STEP 3 — Add a Super Admin “Tenancy Health” action to run remediation
+If you already have tenancy health routes, extend them safely:
+- POST /api/v1/super/tenancy/remediate?mode=dry-run|apply
+Return JSON with:
+- per table counts
+- unresolved sample IDs (limit 50)
+Do NOT expose sensitive data.
+
+STEP 4 — Strict Tenant Integrity (runtime guard)
+Add a server-side guard helper (shared utility):
+- requireTenantContext(req): ensures effectiveTenantId exists for tenant routes
+- assertTenantIdOnInsert(record): logs + throws AppError if tenantId missing
+
+Ensure all CREATE handlers for tenant-owned tables set:
+- tenant_id = effectiveTenantId (or explicitly chosen tenantId in super admin tools)
+No insert may omit tenant_id.
+
+STEP 5 — Constraints + indexes (only when safe)
+Add a migration that:
+- checks (via script output) unresolved==0
+- then for each core table:
+  - ALTER COLUMN tenant_id SET NOT NULL
+  - add index on tenant_id
+If unresolved > 0, DO NOT apply constraints and include instructions in the migration output/logs.
+
+ACCEPTANCE CRITERIA:
+- Tenancy health shows zero rows missing tenant_id for core tenant tables OR produces a clear unresolved list.
+- No new rows can be created with tenant_id NULL in normal tenant mode.
+- No changes to endpoint paths or response shapes.
+- App continues to run on Railway.
+OUTPUT REQUIRED:
+- List of tables remediated and counts
+- Any unresolved rows and why they could not be resolved
+- Which NOT NULL constraints were applied (if any)

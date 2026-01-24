@@ -17,6 +17,7 @@ import {
   UserCog,
   MessageCircle,
   UsersRound,
+  BarChart3,
 } from "lucide-react";
 import dasanaLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -332,11 +333,22 @@ export function TenantSidebar() {
                 <SidebarMenuItem>
                   <SidebarMenuButton
                     asChild
+                    isActive={location === "/reports" || location.startsWith("/reports/")}
+                  >
+                    <Link href="/reports" data-testid="link-reports">
+                      <BarChart3 className="h-4 w-4" />
+                      <span>Reports</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
                     isActive={location.startsWith("/settings")}
                   >
                     <Link href="/settings" data-testid="link-global-settings">
                       <Cog className="h-4 w-4" />
-                      <span>Settings</span>
+                      <span>System Settings</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

@@ -1,0 +1,57 @@
+SPRINT 2D — Chat Hardening Pass (Tenant correctness + reliability)
+
+CONTEXT:
+Chat exists and is tenant-scoped, but “has issues”.
+We must ensure strict tenant isolation, reliable room joins, attachment correctness, and smooth tenant switching.
+
+GOAL:
+1) Ensure every chat entity has tenant_id and is enforced in every query.
+2) Ensure Socket.IO joins/sends validate membership and tenant match.
+3) Ensure chat attachments use the unified storage resolver (R2 primary after Sprint 2C).
+4) Improve client-side cache invalidation during thread switches and tenant switching.
+
+ABSOLUTE SAFETY RULES:
+- Do NOT add advanced new chat features (threads/reactions/search overhaul).
+- Do NOT change existing chat endpoint paths or success response shapes.
+- Fix correctness, not redesign.
+
+TASKS:
+SERVER:
+1) Audit endpoints + storage for:
+- channels list/create
+- dm create/find
+- messages list/send
+- attachment upload link
+Ensure every insert sets tenant_id and every select filters by effectiveTenantId.
+
+2) Socket validation:
+- On connect, determine effectiveTenantId.
+- For join and send events:
+  - validate target belongs to effectiveTenantId
+  - validate user is member (channel member or dm member)
+  - join tenant-scoped room names
+
+3) Add diagnostics (super admin only):
+- GET /api/v1/super/chat/diagnostics
+returns:
+  - counts of chat rows with tenant_id NULL by table
+  - dm threads missing 2 members
+  - channels with 0 members
+  - last 20 chat-related errors (requestId + route + code)
+
+FRONTEND:
+4) Improve thread switching:
+- cancel in-flight queries when switching threads
+- clear “active thread” state on tenant switch
+- ensure “Tenant Context Loaded” gate prevents stale chat UI
+
+TESTS:
+- cannot access other-tenant channel/dm
+- cannot join without membership
+- attachments cannot be linked cross-tenant
+- message persistence after reload
+
+ACCEPTANCE:
+- Chat works reliably per tenant and across refresh.
+- No cross-tenant visibility possible.
+- Attachments persist and are accessible after refresh.

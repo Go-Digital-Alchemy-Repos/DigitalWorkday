@@ -44,6 +44,7 @@ import AcceptInvitePage from "@/pages/accept-invite";
 import ForgotPasswordPage from "@/pages/forgot-password";
 import ResetPasswordPage from "@/pages/reset-password";
 import ChatPage from "@/pages/chat";
+import ReportsPage from "@/pages/reports";
 import ClientPortalDashboard from "@/pages/client-portal-dashboard";
 import ClientPortalProjects from "@/pages/client-portal-projects";
 import ClientPortalTasks from "@/pages/client-portal-tasks";
@@ -282,6 +283,9 @@ function TenantRouter() {
       </Route>
       <Route path="/user-manager">
         {() => <TenantRouteGuard component={UserManagerPage} />}
+      </Route>
+      <Route path="/reports">
+        {() => <TenantRouteGuard component={ReportsPage} />}
       </Route>
       <Route path="/profile">
         {() => <TenantRouteGuard component={UserProfilePage} />}

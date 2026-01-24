@@ -2,29 +2,17 @@ import { useLocation, useRoute, Redirect } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Building2, BarChart3, Puzzle, Settings as SettingsIcon, Palette, HardDrive, FileText, ClipboardList, CreditCard, Mail, UserCircle } from "lucide-react";
+import { Settings as SettingsIcon, Puzzle, FileText, Mail, UserCircle } from "lucide-react";
 import { ProfileTab } from "@/components/settings/profile-tab";
-import { WorkspacesTab } from "@/components/settings/workspaces-tab";
-import { ReportsTab } from "@/components/settings/reports-tab";
 import { IntegrationsTab } from "@/components/settings/integrations-tab";
-import { BrandingTab } from "@/components/settings/branding-tab";
-import { TenantIntegrationsTab } from "@/components/settings/tenant-integrations-tab";
 import { AgreementTab } from "@/components/settings/agreement-tab";
-import { WorkloadTab } from "@/components/settings/workload-tab";
-import { BillingTab } from "@/components/settings/billing-tab";
 import { EmailLogsTab } from "@/components/settings/email-logs-tab";
 
 const SETTINGS_TABS = [
   { id: "profile", label: "Profile", icon: UserCircle },
-  { id: "workspaces", label: "Workspaces", icon: Building2 },
-  { id: "branding", label: "Branding", icon: Palette },
-  { id: "tenant-integrations", label: "Services", icon: HardDrive },
-  { id: "billing", label: "Billing", icon: CreditCard },
+  { id: "integrations", label: "Integrations", icon: Puzzle },
   { id: "email-logs", label: "Email Logs", icon: Mail },
   { id: "agreement", label: "Agreement", icon: FileText },
-  { id: "workload", label: "Workload", icon: ClipboardList },
-  { id: "reports", label: "Reports", icon: BarChart3 },
-  { id: "integrations", label: "Integrations", icon: Puzzle },
 ];
 
 export default function SettingsPage() {
@@ -49,15 +37,15 @@ export default function SettingsPage() {
         <div className="flex items-center gap-3 mb-6">
           <SettingsIcon className="h-8 w-8 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold">Settings</h1>
+            <h1 className="text-2xl font-bold">System Settings</h1>
             <p className="text-muted-foreground text-sm">
-              Manage your workspace, team, and integrations
+              Manage integrations and system configuration
             </p>
           </div>
         </div>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-10 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-4 h-auto p-1">
             {SETTINGS_TABS.map((tab) => (
               <TabsTrigger
                 key={tab.id}
@@ -75,20 +63,8 @@ export default function SettingsPage() {
             <ProfileTab />
           </TabsContent>
 
-          <TabsContent value="workspaces" className="mt-6">
-            <WorkspacesTab />
-          </TabsContent>
-
-          <TabsContent value="branding" className="mt-6">
-            <BrandingTab />
-          </TabsContent>
-
-          <TabsContent value="tenant-integrations" className="mt-6">
-            <TenantIntegrationsTab />
-          </TabsContent>
-
-          <TabsContent value="billing" className="mt-6">
-            <BillingTab />
+          <TabsContent value="integrations" className="mt-6">
+            <IntegrationsTab />
           </TabsContent>
 
           <TabsContent value="email-logs" className="mt-6">
@@ -97,18 +73,6 @@ export default function SettingsPage() {
 
           <TabsContent value="agreement" className="mt-6">
             <AgreementTab />
-          </TabsContent>
-
-          <TabsContent value="workload" className="mt-6">
-            <WorkloadTab />
-          </TabsContent>
-
-          <TabsContent value="reports" className="mt-6">
-            <ReportsTab />
-          </TabsContent>
-
-          <TabsContent value="integrations" className="mt-6">
-            <IntegrationsTab />
           </TabsContent>
         </Tabs>
       </div>
