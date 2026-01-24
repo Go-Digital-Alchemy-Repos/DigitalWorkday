@@ -22,19 +22,13 @@
  * 
  * @see POST /api/tasks/:taskId/comments in server/routes.ts for mention parsing
  */
-import { useState, useRef, useEffect, useMemo } from "react";
-import { Send, Pencil, Trash2, Check, X, CheckCircle2, CircleDot } from "lucide-react";
+import { useState, useRef } from "react";
+import { Pencil, Trash2, Check, X, CheckCircle2, CircleDot } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { Textarea } from "@/components/ui/textarea";
-import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
 import { formatDistanceToNow } from "date-fns";
-import { useQuery, useMutation } from "@tanstack/react-query";
-import { apiRequest, queryClient } from "@/lib/queryClient";
+import { useQuery } from "@tanstack/react-query";
+import { CommentEditor, RichTextRenderer, type CommentEditorRef } from "@/components/richtext";
 import type { Comment, User } from "@shared/schema";
 
 /** Comment with optional user relation for display */
@@ -217,15 +211,18 @@ export function CommentThread({
   const [body, setBody] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
+  const commentEditorRef = useRef<CommentEditorRef>(null);
 
   const { data: workspaceUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/users"],
   });
 
-  const handleSubmit = () => {
-    if (body.trim()) {
-      onAdd?.(body.trim());
+  const handleSubmit = (content?: string) => {
+    const commentBody = content || body;
+    if (commentBody.trim()) {
+      onAdd?.(commentBody.trim());
       setBody("");
+      commentEditorRef.current?.clear();
     }
   };
 
@@ -289,11 +286,10 @@ export function CommentThread({
 
                   {isEditing ? (
                     <div className="space-y-2">
-                      <MentionInput
+                      <CommentEditor
                         value={editBody}
                         onChange={setEditBody}
                         users={workspaceUsers}
-                        className="min-h-[60px] resize-none text-sm"
                         data-testid="textarea-edit-comment"
                       />
                       <div className="flex gap-1">
@@ -316,9 +312,9 @@ export function CommentThread({
                       </div>
                     </div>
                   ) : (
-                    <p className="text-sm text-foreground whitespace-pre-wrap">
-                      {renderMentions(comment.body)}
-                    </p>
+                    <div className="text-sm text-foreground">
+                      <RichTextRenderer value={comment.body} className="text-sm" />
+                    </div>
                   )}
 
                   {!isEditing && (
@@ -389,26 +385,16 @@ export function CommentThread({
         <Avatar className="h-8 w-8 shrink-0">
           <AvatarFallback className="bg-primary/10 text-primary text-xs">U</AvatarFallback>
         </Avatar>
-        <div className="flex-1 space-y-2">
-          <MentionInput
+        <div className="flex-1">
+          <CommentEditor
+            ref={commentEditorRef}
             value={body}
             onChange={setBody}
+            onSubmit={handleSubmit}
             placeholder="Write a comment... Type @ to mention someone"
             users={workspaceUsers}
-            className="min-h-[80px] resize-none text-sm"
             data-testid="textarea-comment"
           />
-          <div className="flex justify-end">
-            <Button
-              size="sm"
-              onClick={handleSubmit}
-              disabled={!body.trim()}
-              data-testid="button-submit-comment"
-            >
-              <Send className="h-3.5 w-3.5 mr-1" />
-              Comment
-            </Button>
-          </div>
         </div>
       </div>
     </div>

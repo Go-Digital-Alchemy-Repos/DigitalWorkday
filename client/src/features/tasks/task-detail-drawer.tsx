@@ -6,6 +6,8 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor, RichTextRenderer } from "@/components/richtext";
+import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
@@ -107,6 +109,8 @@ export function TaskDetailDrawer({
   const [selectedChildTask, setSelectedChildTask] = useState<TaskWithRelations | null>(null);
   const [childDrawerOpen, setChildDrawerOpen] = useState(false);
   const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
+  
+  const { isDirty, setDirty, markClean, confirmIfDirty, UnsavedChangesDialog } = useUnsavedChanges();
 
   const invalidateCommentQueries = () => {
     if (task) {
@@ -351,15 +355,37 @@ export function TaskDetailDrawer({
     setEditingTitle(false);
   };
 
+  const handleDescriptionChange = (value: string) => {
+    setDescription(value);
+    if (value !== (task?.description || "")) {
+      setDirty(true);
+    }
+  };
+
   const handleDescriptionBlur = () => {
     if (description !== task.description) {
       onUpdate?.(task.id, { description: description || null });
+      markClean();
+    }
+  };
+
+  const handleDrawerClose = (shouldClose: boolean) => {
+    if (!shouldClose) return;
+    if (isDirty) {
+      confirmIfDirty(() => {
+        markClean();
+        onOpenChange(false);
+      });
+    } else {
+      onOpenChange(false);
     }
   };
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent
+    <>
+      <UnsavedChangesDialog />
+      <Sheet open={open} onOpenChange={handleDrawerClose}>
+        <SheetContent
         className="w-full sm:max-w-xl overflow-y-auto p-0"
         data-testid="task-detail-drawer"
       >
@@ -701,12 +727,12 @@ export function TaskDetailDrawer({
 
           <div className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground">Description</label>
-            <Textarea
+            <RichTextEditor
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
+              onChange={handleDescriptionChange}
               onBlur={handleDescriptionBlur}
               placeholder="Add a description..."
-              className="min-h-[100px] resize-none text-sm"
+              minHeight="100px"
               data-testid="textarea-description"
             />
           </div>
@@ -863,6 +889,7 @@ export function TaskDetailDrawer({
         initialTaskId={task.id}
         initialProjectId={task.projectId || null}
       />
-    </Sheet>
+      </Sheet>
+    </>
   );
 }

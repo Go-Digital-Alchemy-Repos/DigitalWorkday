@@ -4,6 +4,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/richtext";
 import { Separator } from "@/components/ui/separator";
 import {
   Select,
@@ -211,12 +212,16 @@ export function SubtaskDetailDrawer({
 
           <div className="space-y-2">
             <label className="text-xs font-medium text-muted-foreground">Description</label>
-            <Textarea
+            <RichTextEditor
               value={description}
-              onChange={(e) => setDescription(e.target.value)}
-              onBlur={handleDescriptionBlur}
+              onChange={(value) => {
+                setDescription(value);
+                if (value !== subtask.description) {
+                  onUpdate?.(subtask.id, { description: value || null });
+                }
+              }}
               placeholder="Add a description..."
-              className="min-h-[100px] resize-none text-sm"
+              minHeight="100px"
               data-testid="textarea-subtask-description"
             />
           </div>

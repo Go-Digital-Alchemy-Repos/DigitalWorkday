@@ -1,7 +1,7 @@
 # MyWorkDay - Project Management Application
 
 ## Overview
-MyWorkDay is an Asana-inspired project management application designed to streamline project workflows and enhance team collaboration. It provides comprehensive tools for organizing projects, teams, and clients, featuring workspaces, tasks with subtasks, tags, comments, and activity tracking. The application aims to be a robust solution for managing diverse project needs and improving productivity.
+MyWorkDay is an Asana-inspired project management application designed to streamline project workflows and enhance team collaboration. It provides comprehensive tools for organizing projects, teams, and clients, featuring workspaces, tasks with subtasks, tags, comments, and activity tracking. The application aims to be a robust solution for managing diverse project needs and improving productivity by offering a centralized platform for project and client management, robust reporting, and real-time communication capabilities.
 
 ## User Preferences
 - Professional, clean Asana-like design
@@ -24,71 +24,20 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **Real-time**: Socket.IO for live updates across connected clients
 
 ### Core Features and Design Patterns
-- **Multi-Tenancy**: Supports multi-tenancy with configurable enforcement levels.
-- **Admin Dashboard**: Expanded Super Admin Dashboard for tenant management, global reports, and system settings.
-- **White Label Branding**: Tenants can customize app appearance (names, logos, favicons, colors, login messages).
-- **Per-Tenant Integrations**: Tenants can configure Mailgun (email) and S3 (storage) with encrypted secrets.
-- **Authentication**: Session-based authentication using Passport.js with email/password and Google OAuth. Includes account linking and first-user bootstrap.
-- **Rate Limiting**: IP and email-based brute-force protection for auth endpoints.
-- **Email Observability**: Outbox logging for all emails with status tracking and resend capability.
-- **Real-time Communication**: Socket.IO for live updates.
-- **Database Schema**: Includes entities for users, workspaces, teams, clients, projects, tasks, activity logs, time tracking, tenant settings, and integrations.
-- **Workload Forecast**: Project-level analytics with budget tracking and assignee workload distribution.
-- **Production Bootstrap**: Secure one-time super admin creation or first-user registration.
-- **Data Purge**: Controlled script and API endpoint for deleting all application data with safety guards.
-- **Tenant Onboarding**: Structured 4-step wizard for new tenants.
-- **Tenant Invitations**: Super admins can invite tenant admins via link or email.
-- **Bulk CSV User Import**: Super admins can import users in bulk via CSV.
-- **Tenant Pre-Provisioning**: Super users can fully configure tenants before activation, including "Act as Tenant" mode.
-- **Tenant Management UI**: Comprehensive drawer-based UI for tenant management including overview, onboarding, workspaces, users, and branding.
-- **User Provisioning**: Unified workflow for creating/updating tenant users with immediate access or password reset links.
-- **Platform Admin Provisioning**: Password management for other platform administrators with audit logging.
-- **User Impersonation**: Allows super admins to view the app as a tenant user.
-- **Password Security**: `mustChangePasswordOnNextLogin` flag for forced password changes.
-- **SaaS Agreement System**: Manages tenant SaaS agreements with lifecycle, versioning, and user acceptance tracking, enforced by middleware.
-- **Frontend Structure**: Feature-based organization in `client/src/features/` (clients, projects, tasks, timer, teams) with barrel exports. Pages in `pages/`, shared UI in `components/ui/`.
-- **Backend Structure**: Feature-based modules in `server/features/` (clients extracted, others planned). Routes mounted before legacy for incremental migration. `DatabaseStorage` class, middleware for error handling, validation, and authentication.
-- **Design Guidelines**: Professional design with Inter font, 3-column layout, and dark mode support.
-- **API Error Handling**: Standardized error envelope with stable error codes and request ID correlation.
-- **Tenant Data Health Remediation**: Tools for backfilling missing `tenantId` values, quarantine management, and data integrity checks. Sprint 2A added:
-  - Relationship-based backfill via workspace→tenant, project→tenant chains (server/scripts/tenancyRemediate.ts)
-  - Super Admin endpoints: POST /api/v1/super/tenancy/remediate (dry-run/apply), GET/POST /api/v1/super/tenancy/constraints
-  - Atomic NOT NULL constraint migration (CLI + API) with pre-flight blocking for NULL values
-  - Shared table allowlist (server/scripts/tenantOwnedTables.ts) for SQL injection prevention
-  - Runtime guard helpers ready for integration (validateInsertTenantId, validateUpdateTenantId, etc.) - route wiring deferred to future sprint
-- **Provisioning Hardening (Sprint 2B)**: All super admin provisioning flows now use `storage.getPrimaryWorkspaceIdOrFail(tenantId, requestId?)` helper:
-  - Helper queries for primary workspace and throws explicit error with requestId correlation if not found
-  - Updated flows: user creation, invitation activation, bulk import, client/project imports, orphan fixing, welcome project seeding, time entry imports
-  - Schema drift fixes: correct column references (comments.userId, activityLog.actorUserId), subqueries for tables without tenantId
-  - All provisioning endpoints have audit logging via recordTenantAuditEvent
-- **Performance Optimizations**: N+1 query fixes and query debugging utilities.
-- **Navigation Mode Hardening**: Enhanced super/tenant mode switching with `useAppMode` hook, cache isolation, and route guards.
-- **Time Tracking Reliability (Sprint 3A)**: Stopwatch-based time tracking with "no silent failures" guarantee:
-  - Timer never disappears without explicit user action (save or discard)
-  - Explicit UI states: idle, running, paused, stopping (spinner), error (alert icon)
-  - All mutations check response.ok with requestId correlation in error messages (Ref: xxx)
-  - Stop failures keep timer recoverable with retry UI
-  - Zero-duration timers require explicit discard confirmation
-  - 10 second error toast duration for visibility
-  - Server validates clientId before creating time entry, timer persists on validation failure
-  - Cross-session/tab reliability using `BroadcastChannel` and `localStorage` fallback
-- **Hierarchical S3 Storage**: 3-tier storage configuration with automatic fallback (tenant-specific → system-level → env vars).
-- **Global Command Palette**: Keyboard-driven search (⌘K / Ctrl+K) and quick actions across clients, projects, and tasks.
-- **Enhanced Task Comments**: Full comment management with edit/delete permissions, resolve/unresolve, and @mention support with email notifications.
-- **Tenant-Scoped Chat System**: Slack-like messaging with channels and direct messages via Socket.IO, including file attachments using hierarchical S3 storage. Includes comprehensive stability features: infinite reconnection with automatic room rejoin, duplicate message guards, optimistic UI with pending/sent/failed states, retry mechanism for failed messages, consistent message ordering, stale pending cleanup (2-minute timeout), connection status indicator, and toast notifications when removed from channels.
-- **Chat Unread Tracking**: Real-time unread badge indicators using `chat_reads` table and auto-mark as read.
-- **Chat Message Search**: Tenant-scoped message search across accessible channels and DMs.
-- **Chat @Mentions**: Real-time @mention autocomplete and rendering with tenant-scoped validation.
-- **Chat Retention Policies**: Configurable message retention with system-level and tenant-level settings and an archive job.
-- **Chat Transcript Export**: JSON export of chat conversations to S3 for tenant admins.
-- **Chat Debugging**: Super Admin diagnostic tools with CHAT_DEBUG=true env flag enabling socket event logging, in-memory metrics, debug endpoints (/api/v1/super/debug/chat/*), and UI panel. Request IDs surface in error toasts for log correlation. See /docs/CHAT_DEBUGGING.md.
-- **Centralized Error Logging**: All 500+ server errors and key 4xx errors (403, 404, 429) are automatically captured to `error_logs` table with request context, secret redaction, and requestId correlation. Request IDs surface in tenant error toasts (Ref: abc12345) for support correlation. Super Admin UI panel for filtering/viewing errors with stack traces. See /docs/ERROR_LOGGING.md.
-- **Standardized Error Handling**: AppError class with standard error codes (VALIDATION_ERROR, UNAUTHORIZED, FORBIDDEN, NOT_FOUND, etc.), errorHandler middleware producing standard envelope with legacy compatibility, and requestIdMiddleware ensuring X-Request-Id header on all responses. See /docs/ERROR_HANDLING.md.
-- **Project Membership Model**: Projects require client assignment and track team membership. Employees see only projects they're members of; admins see all tenant projects. Project creators are automatically added as "owner" role members. Member management via ProjectDrawer with Overview and Team tabs.
-- **Client Divisions Data Model (DIV-1)**: Optional organizational divisions within clients for finer-grained access control. New tables: `client_divisions` (id, tenantId, clientId, name, description, color, isActive, timestamps) and `division_members` (id, tenantId, divisionId, userId, role, createdAt). Projects have optional `divisionId` FK for division assignment. Legacy clients/projects without divisions continue working unchanged. Server-side scoping helpers: `getEffectiveDivisionScope()` returns "ALL" for admins or division IDs for employees; `validateDivisionBelongsToClientTenant()` and `validateUserBelongsToTenant()` for tenant isolation.
-- **Customizable Notification System**: Real-time notifications with user-configurable preferences. Tables: `notifications` (id, tenantId, userId, type, title, message, payloadJson, readAt, createdAt) and `notification_preferences` (8 notification types: task_deadline, task_assigned, task_completed, comment_added, comment_mention, project_update, project_member_added, task_status_changed, plus email toggle). Notification triggers fire on task assignments, completions, status changes, comments, @mentions, project updates, and project member additions. Deadline checker runs every 6 hours to notify about tasks due within 24 hours. Real-time delivery via Socket.IO to user-specific rooms (user:{userId}). Centralized tenant isolation validates recipients belong to same tenant before sending. UI: NotificationCenter component with bell icon, unread count badge, tabbed interface (notifications/settings). See `server/features/notifications/`.
-- **Client Portal System**: External client access to tenant projects/tasks with restricted permissions. Tables: `client_user_access` (clientId, userId, workspaceId, accessLevel), `client_invites` (tokenPlaceholder, contactId, email, status, roleHint). Access levels: VIEWER (read-only) and COLLABORATOR (can add comments). Token-based invitation flow with secure registration. Client users route to /portal paths with ClientPortalLayout and ClientPortalSidebar. Time tracking hidden from client users. Security: Strict tenant isolation via getClientsForUser() and getClientUserAccessByUserAndClient() requiring both user.tenantId and client.tenantId to match. Warning logs for missing tenantId data integrity issues. See `server/features/client-portal/` and `server/features/clients/portal.router.ts`.
-- **My Time & My Calendar Dashboard (Sprint 3D)**: Personal productivity views with strict user-scoping (no cross-user visibility). My Time dashboard shows Today/This Week/This Month/All Time statistics with billable vs unbillable breakdown, weekly chart visualization, warnings for long-running days (>8h) and missing descriptions, quick actions (Start Timer, Edit Last Entry). My Calendar shows personal time entries, assigned tasks, and personal tasks with overdue highlighting, Month/Week/Day views, click-to-view details, and start timer from calendar slot selection. Routes: `/my-time`, `/my-calendar`. API endpoints: `/api/time-entries/my/stats`, `/api/my-calendar/events`.
+- **Multi-Tenancy**: Supports multi-tenancy with configurable enforcement levels, admin dashboard, white-label branding, per-tenant integrations, onboarding, invitations, bulk user import, and pre-provisioning.
+- **Authentication**: Session-based authentication using Passport.js with email/password and Google OAuth, including account linking, first-user bootstrap, and rate limiting.
+- **Real-time Communication**: Socket.IO for live updates, supporting a tenant-scoped chat system with channels, DMs, file attachments, unread tracking, message search, @mentions, retention policies, and export.
+- **Project Management**: Includes entities for workspaces, teams, clients, projects, tasks, activity logs, and time tracking. Projects support client assignment, team membership, and an optional division model for finer-grained access control.
+- **Task Management**: Tasks support subtasks, tags, comments with rich text, @mentions, and notifications.
+- **Workload Management**: Features workload forecast and reports for task distribution and budget utilization.
+- **Time Tracking**: Stopwatch-based time tracking with reliability features, cross-session persistence, and `My Time` dashboard.
+- **Notifications**: Customizable real-time notification system with user preferences for various event types (task, comment, project updates).
+- **Rich Text Editor**: JSON-only rich text storage using TipTap for descriptions and comments with server-side validation and mention parsing.
+- **Client Portal**: External client access to projects/tasks with restricted permissions (viewer/collaborator roles) and a token-based invitation flow.
+- **System Robustness**: Includes centralized error logging with request ID correlation, standardized API error handling, data purge capabilities, and tenant data health remediation tools.
+- **User Experience**: Global command palette, keyboard shortcuts, `useUnsavedChanges` hook for dirty state management, and a professional UI design with dark mode support.
+- **SaaS Agreement System**: Manages tenant SaaS agreements with lifecycle, versioning, and user acceptance tracking.
+- **Hierarchical S3 Storage**: Configurable 3-tier S3 storage (tenant-specific → system-level → env vars) for file attachments.
 
 ## External Dependencies
 - **PostgreSQL**: Primary database.

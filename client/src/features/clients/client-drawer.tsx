@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/richtext";
 import {
   Select,
   SelectContent,
@@ -244,10 +245,11 @@ export function ClientDrawer({
               <FormItem>
                 <FormLabel>Notes</FormLabel>
                 <FormControl>
-                  <Textarea
+                  <RichTextEditor
+                    value={field.value || ""}
+                    onChange={field.onChange}
                     placeholder="Additional notes about this client..."
-                    className="min-h-[120px] resize-none"
-                    {...field}
+                    minHeight="120px"
                     data-testid="textarea-notes"
                   />
                 </FormControl>

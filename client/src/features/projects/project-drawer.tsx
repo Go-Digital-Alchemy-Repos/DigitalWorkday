@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/form";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { RichTextEditor } from "@/components/richtext";
 import {
   Select,
   SelectContent,
@@ -258,10 +259,11 @@ export function ProjectDrawer({
                   <FormItem>
                     <FormLabel>Description</FormLabel>
                     <FormControl>
-                      <Textarea
+                      <RichTextEditor
+                        value={field.value || ""}
+                        onChange={field.onChange}
                         placeholder="Add a description..."
-                        className="min-h-[100px] resize-none"
-                        {...field}
+                        minHeight="100px"
                         data-testid="textarea-project-description"
                       />
                     </FormControl>
