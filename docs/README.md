@@ -1,55 +1,131 @@
 # MyWorkDay Documentation
 
 **Status:** Current  
-**Last Updated:** January 2026
+**Last Updated:** January 2026  
+**Version:** Sprint 2 Complete
 
 Welcome to the MyWorkDay documentation hub. MyWorkDay is a multi-tenant SaaS project management application with comprehensive features for project tracking, time management, client CRM, and team collaboration.
 
 ---
 
-## Quick Navigation
+## Documentation Categories
 
-| Category | Description |
+### 1. Architecture & Tenancy
+Core system design and multi-tenancy fundamentals.
+
+| Document | Description |
 |----------|-------------|
-| [01-GETTING-STARTED](./01-GETTING-STARTED/) | Installation, environment setup, first deployment |
-| [02-ARCHITECTURE](./02-ARCHITECTURE/) | System design, tech stack, database schema |
-| [03-FEATURES](./03-FEATURES/) | Feature guides for all major modules |
-| [04-API](./04-API/) | Complete API endpoint reference |
-| [05-FRONTEND](./05-FRONTEND/) | React components, state management, routing |
-| [06-BACKEND](./06-BACKEND/) | Express middleware, services, error handling |
-| [07-SECURITY](./07-SECURITY/) | Tenant isolation, authentication, authorization |
-| [08-DATABASE](./08-DATABASE/) | Schema reference, migrations, queries |
-| [09-TESTING](./09-TESTING/) | Unit, integration, and E2E testing guides |
-| [10-DEPLOYMENT](./10-DEPLOYMENT/) | Railway deployment, production setup |
-| [11-DEVELOPMENT](./11-DEVELOPMENT/) | Coding standards, debugging, adding features |
-| [12-OPERATIONS](./12-OPERATIONS/) | Monitoring, backups, maintenance |
-| [13-INTEGRATIONS](./13-INTEGRATIONS/) | Mailgun, S3, Stripe, Google OAuth |
-| [14-TROUBLESHOOTING](./14-TROUBLESHOOTING/) | Common errors and solutions |
-| [15-REFERENCE](./15-REFERENCE/) | Glossary, complete API reference, CLI commands |
-| [16-CHANGELOG](./16-CHANGELOG/) | Version history, migration guides |
+| [System Overview](./architecture/SYSTEM_OVERVIEW.md) | Tech stack, high-level architecture, component relationships |
+| [Tenancy Model](./architecture/TENANCY_MODEL.md) | tenant_id invariants, tenant-wide visibility, workspace role |
+| [Effective Tenant Context](./architecture/EFFECTIVE_TENANT_CONTEXT.md) | "Tenant Context Loaded" gate, context propagation |
+| [Database Schema](./architecture/DATABASE_SCHEMA.md) | Entity relationships, tenant-owned tables |
+
+### 2. Authentication & Authorization
+User authentication flows and permission models.
+
+| Document | Description |
+|----------|-------------|
+| [Authentication](./auth/AUTHENTICATION.md) | Cookie-based auth, session management, login flows |
+| [Google OAuth Setup](./auth/GOOGLE_OAUTH_SETUP.md) | Google OAuth integration configuration |
+| [Role Permissions](./auth/ROLE_PERMISSIONS.md) | Role hierarchy (super, tenant admin, employee, client) |
+| [Super Admin Act-As-Tenant](./auth/SUPER_ADMIN_ACT_AS.md) | Impersonation behavior and safeguards |
+
+### 3. Security & Data Isolation
+Security policies and tenant isolation enforcement.
+
+| Document | Description |
+|----------|-------------|
+| [Multi-Tenancy Security](./security/MULTI_TENANCY.md) | Enforcement modes, runtime guards |
+| [Tenant Data Visibility](./security/TENANT_DATA_VISIBILITY.md) | Visibility rules, what is tenant-wide vs user-scoped |
+| [Rate Limiting](./security/RATE_LIMITS.md) | API rate limiting, brute-force protection |
+| [Security Checklist](./security/SECURITY_CHECKLIST.md) | Audit checklist for new features |
+
+### 4. Storage & File Handling
+File upload, storage providers, and asset management.
+
+| Document | Description |
+|----------|-------------|
+| [Storage Overview](./storage/STORAGE_OVERVIEW.md) | Cloudflare R2 as primary, storage resolver hierarchy |
+| [Upload Paths](./storage/UPLOAD_PATHS.md) | Avatar, branding, task attachments, chat attachments |
+| [Signed URLs](./storage/SIGNED_URLS.md) | Signed vs public URLs, security considerations |
+
+### 5. Chat & Communication
+Real-time messaging system architecture.
+
+| Document | Description |
+|----------|-------------|
+| [Chat Architecture](./chat/CHAT_ARCHITECTURE.md) | Channels, DMs, tenant-scoped rooms |
+| [Chat Debugging](./chat/CHAT_DEBUGGING.md) | Debug mode, Socket.IO diagnostics |
+| [Membership Rules](./chat/MEMBERSHIP_RULES.md) | Channel/DM membership enforcement |
+
+### 6. Provisioning & Onboarding
+Tenant and user creation workflows.
+
+| Document | Description |
+|----------|-------------|
+| [Tenant Lifecycle](./provisioning/TENANT_LIFECYCLE.md) | Tenant creation, onboarding wizard, activation |
+| [User Provisioning](./provisioning/USER_PROVISIONING.md) | User creation, invitations, bulk import |
+| [Primary Workspace](./provisioning/PRIMARY_WORKSPACE.md) | Primary workspace logic, getPrimaryWorkspaceIdOrFail |
+
+### 7. Integrations
+External service integrations.
+
+| Document | Description |
+|----------|-------------|
+| [Integrations Overview](./integrations/INTEGRATIONS_OVERVIEW.md) | Available integrations and configuration |
+| [Mailgun Email](./integrations/MAILGUN.md) | Email sending configuration |
+| [Stripe Payments](./integrations/STRIPE.md) | Payment processing setup |
+
+### 8. Performance & Scaling
+Performance optimization and monitoring.
+
+| Document | Description |
+|----------|-------------|
+| [Performance Notes](./performance/PERFORMANCE_NOTES.md) | N+1 fixes, query optimization |
+| [Indexing Strategy](./performance/INDEXING_STRATEGY.md) | Database indexes for tenant-scoped queries |
+
+### 9. Super Admin / Tenant Admin Operations
+Administrative functionality guides.
+
+| Document | Description |
+|----------|-------------|
+| [Super Admin Guide](./admin/SUPER_ADMIN_GUIDE.md) | Platform administration, tenant management |
+| [Tenant Admin Guide](./admin/TENANT_ADMIN_GUIDE.md) | Tenant-level administration |
+| [System Health](./admin/SYSTEM_HEALTH.md) | Health checks, diagnostics |
+| [Tenancy Remediation](./admin/TENANCY_REMEDIATION.md) | Data health tools, backfill operations |
+
+### 10. Development & Contribution Guide
+Developer onboarding and coding standards.
+
+| Document | Description |
+|----------|-------------|
+| [Quick Start](./dev/QUICK_START.md) | Get running in 5 minutes |
+| [Environment Variables](./dev/ENVIRONMENT_VARIABLES.md) | Required configuration |
+| [Adding Features](./dev/ADDING_FEATURES.md) | Feature development workflow |
+| [Modular Architecture](./dev/MODULAR_ARCHITECTURE.md) | Feature-based code organization |
+| [Error Handling](./dev/ERROR_HANDLING.md) | Error logging, request correlation |
+| [Testing Guide](./dev/TESTING.md) | Unit, integration, E2E testing |
+| [Development Checklist](./dev/DEVELOPMENT_CHECKLIST.md) | Verification checklist for new features |
 
 ---
 
-## Quick Start
+## Quick Start Paths
 
 ### For New Developers
-
-1. **[Quick Start Guide](./01-GETTING-STARTED/QUICK_START.md)** - Get running in 5 minutes
-2. **[Environment Variables](./01-GETTING-STARTED/ENVIRONMENT_VARIABLES.md)** - Required configuration
-3. **[Architecture Overview](./02-ARCHITECTURE/SYSTEM_OVERVIEW.md)** - Understand the system
+1. [Quick Start](./dev/QUICK_START.md) - Get running in 5 minutes
+2. [Environment Variables](./dev/ENVIRONMENT_VARIABLES.md) - Required configuration
+3. [System Overview](./architecture/SYSTEM_OVERVIEW.md) - Understand the architecture
+4. [Tenant Data Visibility](./security/TENANT_DATA_VISIBILITY.md) - **Required reading** for all developers
 
 ### For Feature Development
-
-1. **[Project Structure](./02-ARCHITECTURE/PROJECT_STRUCTURE.md)** - File organization
-2. **[Adding Features](./11-DEVELOPMENT/ADDING_FEATURES.md)** - How to add new features
-3. **[API Conventions](./04-API/README.md)** - API design patterns
-4. **[Tenant Data Visibility](./07-SECURITY/TENANT_DATA_VISIBILITY.md)** - Data scoping rules (required reading)
+1. [Modular Architecture](./dev/MODULAR_ARCHITECTURE.md) - Code organization
+2. [Adding Features](./dev/ADDING_FEATURES.md) - Development workflow
+3. [Development Checklist](./dev/DEVELOPMENT_CHECKLIST.md) - **Use this for every PR**
+4. [Security Checklist](./security/SECURITY_CHECKLIST.md) - Security verification
 
 ### For Deployment
-
-1. **[Railway Deployment](./10-DEPLOYMENT/RAILWAY.md)** - Production deployment guide
-2. **[Environment Setup](./10-DEPLOYMENT/ENVIRONMENT_SETUP.md)** - Production configuration
-3. **[Troubleshooting](./14-TROUBLESHOOTING/DEPLOYMENT_ISSUES.md)** - Common deployment issues
+1. [Deployment Guide](./deployment/DEPLOYMENT.md) - Production deployment
+2. [Environment Setup](./deployment/ENVIRONMENT_SETUP.md) - Production configuration
 
 ---
 
@@ -61,43 +137,36 @@ Welcome to the MyWorkDay documentation hub. MyWorkDay is a multi-tenant SaaS pro
 | Backend | Express.js, TypeScript, Drizzle ORM |
 | Database | PostgreSQL (Neon) |
 | Real-time | Socket.IO |
+| Storage | Cloudflare R2 (S3-compatible) |
 | Deployment | Railway |
 
 ---
 
-## Key Features
+## Core Architectural Principles
 
-### Core Modules
-- **Project Management** - Workspaces, projects, kanban boards, tasks, subtasks
-- **Time Tracking** - Stopwatch timer, manual entries, reports
-- **Client CRM** - Client management with 17+ fields, contacts, portal invitations
-- **[Client Divisions](./DIVISIONS.md)** - Optional organizational divisions for access control
-- **Team Collaboration** - Teams, multi-assignee tasks, comments
-- **[Chat System](./CHAT.md)** - Slack-like channels and direct messages
+### 1. Tenant Isolation is Absolute
+- Every tenant-owned entity **must** have a `tenant_id` column
+- Every query **must** filter by `effectiveTenantId`
+- Workspace is organizational only, **never** a visibility boundary
 
-### Multi-Tenancy
-- **Tenant Isolation** - Complete data separation between tenants
-- **[Multi-Tenancy Security](./07-SECURITY/MULTI_TENANCY.md)** - Enforcement modes and implementation
-- **[Data Visibility Policy](./07-SECURITY/TENANT_DATA_VISIBILITY.md)** - What data is shared vs user-scoped
-- **White Label Branding** - Custom logos, colors, app names per tenant
-- **Super Admin Dashboard** - Global tenant management, reports, system health
+### 2. Storage Uses Unified Resolver
+- All file operations go through `getStorageConfig(tenantId)`
+- Priority: Tenant R2 → System R2 → Error
+- Never bypass the resolver for uploads
 
-### Developer Experience
-- **[Modular Architecture](./03-FEATURES/MODULAR_ARCHITECTURE.md)** - Feature-based code organization
-- **[Error Handling](./03-FEATURES/ERROR_HANDLING.md)** - Centralized error logging and request correlation
-- **[Chat Debugging](./CHAT_DEBUGGING.md)** - Debug mode for real-time troubleshooting
+### 3. Real-time is Tenant-Scoped
+- Socket.IO rooms are namespaced by tenant
+- Membership validation happens on every join/send
+- No cross-tenant message visibility possible
 
-### Integrations
-- **Email** - Mailgun integration for transactional emails
-- **Storage** - [S3-compatible file uploads](./UPLOADS_S3.md)
-- **Payments** - Stripe billing (optional)
-- **Authentication** - [Google OAuth](./GOOGLE_OAUTH_SETUP.md) (optional)
+### 4. Provisioning Uses Primary Workspace
+- All entity creation uses `getPrimaryWorkspaceIdOrFail(tenantId)`
+- Explicit errors if primary workspace missing
+- Audit logging on all provisioning operations
 
 ---
 
 ## Documentation Standards
-
-All documentation follows these conventions:
 
 - **Status Labels**: Current, Outdated, Draft
 - **Last Updated**: Date of last significant update
@@ -108,26 +177,11 @@ All documentation follows these conventions:
 
 ## Contributing to Documentation
 
-1. Keep documents focused on a single topic
+1. Follow the category structure above
 2. Include practical code examples
 3. Update the "Last Updated" date
 4. Link to related documentation
 5. Test all code examples before committing
-
----
-
-## Legacy Documentation
-
-The following documents from the previous structure are being migrated:
-
-| Legacy File | New Location |
-|-------------|--------------|
-| ARCHITECTURE_OVERVIEW.md | 02-ARCHITECTURE/SYSTEM_OVERVIEW.md |
-| ENDPOINTS.md | 04-API/API_REFERENCE.md |
-| FEATURE_INVENTORY.md | 03-FEATURES/README.md |
-| SECURITY_TENANCY.md | 07-SECURITY/MULTI_TENANCY.md |
-| DEPLOYMENT_RAILWAY.md | 10-DEPLOYMENT/RAILWAY.md |
-| ENVIRONMENT_VARIABLES.md | 01-GETTING-STARTED/ENVIRONMENT_VARIABLES.md |
 
 ---
 
