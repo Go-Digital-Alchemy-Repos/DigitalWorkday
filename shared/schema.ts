@@ -369,13 +369,34 @@ export const NoteCategory = {
 export const tenantNotes = pgTable("tenant_notes", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
-  authorUserId: varchar("author_user_id").notNull(), // Super user who created the note
+  authorUserId: varchar("author_user_id").notNull(), // User who created the note
+  lastEditedByUserId: varchar("last_edited_by_user_id"), // User who last edited the note
   body: text("body").notNull(),
   category: text("category").default("general"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   index("tenant_notes_tenant_idx").on(table.tenantId),
   index("tenant_notes_created_at_idx").on(table.createdAt),
+]);
+
+/**
+ * Tenant Note Versions table - stores historical versions of notes
+ * Each time a note is edited, the previous version is saved here
+ */
+export const tenantNoteVersions = pgTable("tenant_note_versions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  noteId: varchar("note_id").references(() => tenantNotes.id).notNull(),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  editorUserId: varchar("editor_user_id").notNull(), // User who made this edit
+  body: text("body").notNull(), // The content at this version
+  category: text("category").default("general"),
+  versionNumber: integer("version_number").notNull(), // Sequential version number
+  createdAt: timestamp("created_at").defaultNow().notNull(), // When this version was created
+}, (table) => [
+  index("tenant_note_versions_note_idx").on(table.noteId),
+  index("tenant_note_versions_tenant_idx").on(table.tenantId),
+  index("tenant_note_versions_created_at_idx").on(table.createdAt),
 ]);
 
 /**
