@@ -1,7 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
-import { Play, Pause, Square, Clock } from "lucide-react";
+import { Play, Pause, Square, Clock, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -168,7 +168,16 @@ export function GlobalActiveTimer() {
   }, [timer, timerLoading, toast]);
 
   const pauseMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/timer/pause"),
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/timer/pause");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || errorData.error || "Failed to pause timer";
+        const requestId = errorData.requestId || response.headers.get("x-request-id");
+        throw new Error(requestId ? `${errorMessage} (Ref: ${requestId})` : errorMessage);
+      }
+      return response.json();
+    },
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: [TIMER_QUERY_KEY] });
       const previousTimer = queryClient.getQueryData<ActiveTimer | null>([TIMER_QUERY_KEY]);
@@ -185,16 +194,25 @@ export function GlobalActiveTimer() {
       broadcastTimerUpdate();
       toast({ title: "Timer paused" });
     },
-    onError: (error, _, context) => {
+    onError: (error: Error, _, context) => {
       if (context?.previousTimer) {
         queryClient.setQueryData([TIMER_QUERY_KEY], context.previousTimer);
       }
-      toast({ title: "Failed to pause timer", description: String(error), variant: "destructive" });
+      toast({ title: "Failed to pause timer", description: error.message, variant: "destructive", duration: 10000 });
     },
   });
 
   const resumeMutation = useMutation({
-    mutationFn: () => apiRequest("POST", "/api/timer/resume"),
+    mutationFn: async () => {
+      const response = await apiRequest("POST", "/api/timer/resume");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || errorData.error || "Failed to resume timer";
+        const requestId = errorData.requestId || response.headers.get("x-request-id");
+        throw new Error(requestId ? `${errorMessage} (Ref: ${requestId})` : errorMessage);
+      }
+      return response.json();
+    },
     onMutate: async () => {
       await queryClient.cancelQueries({ queryKey: [TIMER_QUERY_KEY] });
       const previousTimer = queryClient.getQueryData<ActiveTimer | null>([TIMER_QUERY_KEY]);
@@ -212,17 +230,25 @@ export function GlobalActiveTimer() {
       broadcastTimerUpdate();
       toast({ title: "Timer resumed" });
     },
-    onError: (error, _, context) => {
+    onError: (error: Error, _, context) => {
       if (context?.previousTimer) {
         queryClient.setQueryData([TIMER_QUERY_KEY], context.previousTimer);
       }
-      toast({ title: "Failed to resume timer", description: String(error), variant: "destructive" });
+      toast({ title: "Failed to resume timer", description: error.message, variant: "destructive", duration: 10000 });
     },
   });
 
   const stopMutation = useMutation({
-    mutationFn: (data: { discard?: boolean; scope?: string; title?: string; description?: string | null; taskId?: string | null; clientId?: string | null }) =>
-      apiRequest("POST", "/api/timer/stop", data),
+    mutationFn: async (data: { discard?: boolean; scope?: string; title?: string; description?: string | null; taskId?: string | null; clientId?: string | null; projectId?: string | null }) => {
+      const response = await apiRequest("POST", "/api/timer/stop", data);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || errorData.error || "Failed to save time entry";
+        const requestId = errorData.requestId || response.headers.get("x-request-id");
+        throw new Error(requestId ? `${errorMessage} (Ref: ${requestId})` : errorMessage);
+      }
+      return response.json();
+    },
     onSuccess: (_, variables) => {
       invalidateTimer();
       broadcastTimerUpdate();
@@ -240,7 +266,8 @@ export function GlobalActiveTimer() {
       toast({ 
         title: "Failed to save entry", 
         description: error.message || "Please try again. Your timer is still active.", 
-        variant: "destructive" 
+        variant: "destructive",
+        duration: 10000, // Keep visible longer for user to see error
       });
       invalidateTimer();
     },
@@ -319,6 +346,7 @@ export function GlobalActiveTimer() {
       description: stopDescription.trim() || null,
       taskId: stopTaskId,
       clientId: stopClientId,
+      projectId: timer?.projectId || null,
     });
   };
 
@@ -327,46 +355,72 @@ export function GlobalActiveTimer() {
   }
 
   const isRunning = timer.status === "running";
+  const isStopping = stopMutation.isPending;
+  const hasStopError = stopMutation.isError;
 
   return (
     <>
-      <div className="flex items-center gap-2 px-2 py-1 rounded-md bg-destructive/10 border border-destructive/30" data-testid="global-timer">
-        <Clock className="h-4 w-4 text-destructive animate-pulse" />
+      <div 
+        className={`flex items-center gap-2 px-2 py-1 rounded-md border ${
+          hasStopError 
+            ? "bg-destructive/20 border-destructive" 
+            : isStopping 
+              ? "bg-yellow-500/10 border-yellow-500/30" 
+              : "bg-destructive/10 border-destructive/30"
+        }`} 
+        data-testid="global-timer"
+      >
+        {isStopping ? (
+          <Loader2 className="h-4 w-4 text-yellow-600 animate-spin" />
+        ) : hasStopError ? (
+          <AlertCircle className="h-4 w-4 text-destructive" />
+        ) : (
+          <Clock className="h-4 w-4 text-destructive animate-pulse" />
+        )}
         <span className="font-mono text-sm font-semibold text-destructive" data-testid="global-timer-display">
           {formatDuration(displaySeconds)}
         </span>
-        {isRunning ? (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => pauseMutation.mutate()}
-            disabled={pauseMutation.isPending}
-            data-testid="button-global-pause"
-          >
-            <Pause className="h-3 w-3 mr-1" />
-            Pause
-          </Button>
+        {isStopping ? (
+          <span className="text-xs text-yellow-600 font-medium">Saving...</span>
+        ) : hasStopError ? (
+          <span className="text-xs text-destructive font-medium">Save failed - Retry</span>
         ) : (
-          <Button
-            size="sm"
-            variant="ghost"
-            onClick={() => resumeMutation.mutate()}
-            disabled={resumeMutation.isPending}
-            data-testid="button-global-resume"
-          >
-            <Play className="h-3 w-3 mr-1" />
-            Resume
-          </Button>
+          <>
+            {isRunning ? (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => pauseMutation.mutate()}
+                disabled={pauseMutation.isPending}
+                data-testid="button-global-pause"
+              >
+                <Pause className="h-3 w-3 mr-1" />
+                Pause
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={() => resumeMutation.mutate()}
+                disabled={resumeMutation.isPending}
+                data-testid="button-global-resume"
+              >
+                <Play className="h-3 w-3 mr-1" />
+                Resume
+              </Button>
+            )}
+          </>
         )}
         <Button
           size="sm"
           variant="ghost"
           className="text-destructive hover:text-destructive"
           onClick={handleOpenStopDialog}
+          disabled={isStopping}
           data-testid="button-global-stop"
         >
           <Square className="h-3 w-3 mr-1" />
-          Stop
+          {hasStopError ? "Retry" : "Stop"}
         </Button>
       </div>
 
@@ -446,14 +500,28 @@ export function GlobalActiveTimer() {
               disabled={stopMutation.isPending}
               data-testid="button-global-discard"
             >
-              Discard
+              {stopMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  Discarding...
+                </>
+              ) : (
+                "Discard"
+              )}
             </Button>
             <Button
               onClick={handleSaveEntry}
               disabled={stopMutation.isPending || !stopTitle.trim() || !stopClientId}
               data-testid="button-global-save-entry"
             >
-              Save Entry
+              {stopMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Entry"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>

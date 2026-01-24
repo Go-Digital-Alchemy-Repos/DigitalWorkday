@@ -11,6 +11,7 @@ export interface ActiveTimer {
   clientId: string | null;
   projectId: string | null;
   taskId: string | null;
+  title: string | null;
   description: string | null;
   status: "running" | "paused";
   elapsedSeconds: number;
@@ -21,6 +22,9 @@ export interface ActiveTimer {
   project?: { id: string; name: string } | null;
   task?: { id: string; title: string } | null;
 }
+
+// Explicit timer UI states for clear user feedback
+export type TimerUIState = "idle" | "running" | "paused" | "stopping" | "error";
 
 const TIMER_QUERY_KEY = "/api/timer/current";
 const BROADCAST_CHANNEL_NAME = "active-timer-sync";
@@ -175,10 +179,16 @@ export function useActiveTimer() {
     },
   });
 
-  // Pause timer mutation
+  // Pause timer mutation (checks response.ok for no silent failures)
   const pauseMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", "/api/timer/pause");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || errorData.error || "Failed to pause timer";
+        const requestId = errorData.requestId || response.headers.get("x-request-id");
+        throw new Error(requestId ? `${errorMessage} (Ref: ${requestId})` : errorMessage);
+      }
       return response.json();
     },
     onMutate: async () => {
@@ -209,10 +219,16 @@ export function useActiveTimer() {
     },
   });
 
-  // Resume timer mutation
+  // Resume timer mutation (checks response.ok for no silent failures)
   const resumeMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("POST", "/api/timer/resume");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || errorData.error || "Failed to resume timer";
+        const requestId = errorData.requestId || response.headers.get("x-request-id");
+        throw new Error(requestId ? `${errorMessage} (Ref: ${requestId})` : errorMessage);
+      }
       return response.json();
     },
     onMutate: async () => {
@@ -247,14 +263,21 @@ export function useActiveTimer() {
   // Stop timer mutation (does NOT clear timer on error)
   const stopMutation = useMutation({
     mutationFn: async (data: {
-      clientId: string;
+      clientId?: string | null;
       projectId?: string | null;
       taskId?: string | null;
+      title?: string | null;
       description?: string | null;
       scope?: string;
-      saveEntry?: boolean;
+      discard?: boolean;
     }) => {
       const response = await apiRequest("POST", "/api/timer/stop", data);
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || errorData.error || "Failed to save time entry";
+        const requestId = errorData.requestId || response.headers.get("x-request-id");
+        throw new Error(requestId ? `${errorMessage} (Ref: ${requestId})` : errorMessage);
+      }
       return response.json();
     },
     onSuccess: () => {
@@ -262,45 +285,68 @@ export function useActiveTimer() {
       broadcastTimerUpdate();
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       // Do NOT clear timer on failure - keep it recoverable
       toast({
-        title: "Failed to stop timer",
+        title: "Failed to save time entry",
         description: error.message || "Please try again. Your timer is still active.",
         variant: "destructive",
+        duration: 10000, // Keep error visible longer
       });
       // Refetch to ensure UI stays in sync
       invalidateTimer();
     },
   });
 
-  // Delete timer without saving
+  // Delete timer without saving (checks response.ok for no silent failures)
   const deleteMutation = useMutation({
     mutationFn: async () => {
       const response = await apiRequest("DELETE", "/api/timer/current");
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({}));
+        const errorMessage = errorData.message || errorData.error || "Failed to discard timer";
+        const requestId = errorData.requestId || response.headers.get("x-request-id");
+        throw new Error(requestId ? `${errorMessage} (Ref: ${requestId})` : errorMessage);
+      }
       return response.json();
     },
     onSuccess: () => {
       invalidateTimer();
       broadcastTimerUpdate();
     },
-    onError: (error) => {
+    onError: (error: Error) => {
       toast({
         title: "Failed to discard timer",
         description: error.message || "Please try again",
         variant: "destructive",
+        duration: 10000,
       });
       invalidateTimer();
     },
   });
 
+  // Compute explicit UI state for clear feedback
+  const computeUIState = (): TimerUIState => {
+    if (stopMutation.isPending || deleteMutation.isPending) return "stopping";
+    if (error || stopMutation.isError) return "error";
+    if (!timer) return "idle";
+    if (timer.status === "running") return "running";
+    if (timer.status === "paused") return "paused";
+    return "idle";
+  };
+
+  const uiState = computeUIState();
+
   return {
     timer,
     isLoading,
     error,
+    uiState,
     hasActiveTimer: !!timer,
     isRunning: timer?.status === "running",
     isPaused: timer?.status === "paused",
+    isStopping: stopMutation.isPending || deleteMutation.isPending,
+    hasError: !!error || stopMutation.isError,
     refetch,
     invalidateTimer,
     broadcastTimerUpdate,

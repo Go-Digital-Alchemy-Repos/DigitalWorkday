@@ -1,0 +1,246 @@
+SPRINT 3 (MERGED) — TipTap Lightweight Rich Text (JSON ONLY) + UX Workflow & Polish + @Mentions in Comments
+
+CONTEXT:
+Multi-tenant React + Express + Postgres (Drizzle) app.
+We are improving UX and content editing across the app while keeping all existing functionality stable.
+We want a lightweight rich text editor using TipTap for all paragraph-style fields.
+We also want @mentions in COMMENTS with email notifications.
+
+TOP PRIORITIES:
+1) TipTap rich text with STRICT storage rules: JSON string ONLY (NO HTML stored anywhere)
+2) UX consistency: drawers, inline creation, empty states
+3) Small polish: shortcuts, unsaved changes prompts, hover previews, focus management
+4) @mentions in comments + email notifications
+
+ABSOLUTE SAFETY RULES (DO NOT VIOLATE):
+- DO NOT change API endpoint paths.
+- DO NOT change success response shapes (additive fields only if unavoidable).
+- DO NOT change database schema in this prompt (use existing TEXT columns).
+- DO NOT store raw HTML from TipTap (NO editor.getHTML() persisted).
+- DO NOT introduce embeds, iframes, tables, images-in-editor, or arbitrary HTML pasting.
+- Keep all changes scoped; do not refactor unrelated systems (tenancy/auth/chat/storage/timer) beyond what is required here.
+- Maintain backward compatibility with existing plain-text values.
+
+=====================================================================
+PART A — TIPTAP “LIGHTWEIGHT” RICH TEXT (JSON STRING ONLY; NO HTML)
+=====================================================================
+
+GOAL:
+Replace textarea inputs with TipTap for paragraph fields, and safely render content read-only.
+Persist ONLY TipTap JSON as a serialized string into existing TEXT columns.
+
+CRITICAL STORAGE OBLIGATION:
+- NEVER call editor.getHTML() for persistence.
+- NEVER store HTML in the database.
+- Persist only: JSON.stringify(editor.getJSON()) in TEXT columns.
+- For legacy records containing plain text, do NOT rewrite DB automatically; handle at runtime.
+
+EDITOR REQUIREMENTS (LIGHTWEIGHT):
+- Bold, italic, underline
+- Bullet list, ordered list
+- Links (http/https only)
+- Paragraphs + line breaks
+Optional: inline code (ok), code block (ok but keep simple)
+NO: images, tables, mentions in editor body (mentions are for comments UX only), embeds, custom nodes.
+
+IMPLEMENTATION DETAILS:
+1) Shared components:
+   - client/components/richtext/RichTextEditor.tsx
+   - client/components/richtext/RichTextRenderer.tsx
+   - client/components/richtext/richTextUtils.ts
+
+2) TipTap configuration:
+   - Use @tiptap/react
+   - Use StarterKit + Underline + Link (+ optional Code)
+   - Disable/strip HTML paste:
+     - Ensure paste transforms HTML -> plain text (no HTML parsing/import)
+   - Link rules:
+     - only allow http/https
+     - set rel="noopener noreferrer"
+     - set target="_blank"
+
+3) Value handling:
+   Stored value is TEXT. It can be either:
+   A) TipTap JSON string
+   B) Legacy plain text
+   Implement helper:
+   - parseRichTextValue(value): returns { type: 'tiptap', doc } | { type: 'text', text }
+   - toPlainText(value): extracts readable text for previews/lists.
+
+4) Rendering:
+   - Prefer rendering with a read-only TipTap editor instance using setContent(doc) to avoid unsafe HTML.
+   - If you use any HTML generation for display, it must be sanitized and never persisted.
+
+FIELDS TO UPGRADE:
+- Task description
+- Subtask description
+- Project description
+- Client notes
+- Time entry description
+- All comment fields (task comments, project comments, client comments if any)
+
+LIST/COMPACT VIEWS:
+- Use toPlainText(value) and show excerpt for rows/tooltips.
+
+SERVER VALIDATION (non-breaking):
+- Add zod validation for strings:
+  - max length (e.g. 50k)
+  - if string parses as JSON and looks like TipTap doc -> accept
+  - else accept as plain text
+- Explicitly reject if value looks like HTML persisted (e.g. starts with "<p" etc) with clear error message:
+  "Rich text must be stored as TipTap JSON string, not HTML."
+
+ACCEPTANCE (PART A):
+- All paragraph fields support lightweight formatting.
+- DB persists JSON string only for edited/new content.
+- Existing plain text still renders.
+- No HTML is stored.
+
+=====================================================================
+PART B — UX CONSISTENCY: DRAWERS, INLINE CREATION, EMPTY STATES
+=====================================================================
+
+B1) Standardize slide-out drawers for:
+- Tasks
+- Projects
+- Clients
+- Time entries
+Drawer rules:
+- full-height, wider than small modals
+- URL addressable
+- Esc closes (with unsaved changes guard)
+- consistent header and actions
+
+B2) Inline creation:
+- Add New Project from Projects page and “+” icon next to Projects in nav (tenant admin + employee)
+- From Client profile -> Projects tab: Add New Project or assign existing unassigned project (keep behavior)
+- From Time entry modal: “+ Create Task” if task not found (inherits selected project/tenant)
+- From My Tasks: New Personal Task with no client/project required
+
+B3) Empty states:
+- Replace blank lists with guided empty state + CTA buttons
+
+ACCEPTANCE (PART B):
+- Drawers replace the main edit/view modals where applicable
+- Inline create reduces navigation steps
+- Empty states feel intentional
+
+=====================================================================
+PART C — POLISH: SHORTCUTS, UNSAVED GUARD, HOVER PREVIEWS, FOCUS
+=====================================================================
+
+C1) Keyboard shortcuts (only when not typing in input/editor):
+- Shift+N -> New Task drawer
+- Shift+T -> Start/Stop timer (or open timer UI)
+- Esc -> Close drawer/modal
+Add a small tooltip/help sheet listing shortcuts.
+
+C2) Unsaved changes guard:
+- If user changed values in a drawer, confirm before closing.
+- Implement reusable hook: useUnsavedChangesGuard()
+
+C3) Hover previews:
+- Show tooltip preview for task rows using toPlainText(description)
+
+C4) Focus management:
+- Autofocus title/name field on create drawers
+- Toast on save
+
+ACCEPTANCE (PART C):
+- No accidental data loss
+- App feels faster and more polished
+
+=====================================================================
+PART D — @MENTIONS IN COMMENTS (WITH EMAIL NOTIFICATIONS)
+=====================================================================
+
+GOAL:
+In comment composer fields (task comments at minimum), support @mentions of tenant users.
+When a user is mentioned, notify them by email (Mailgun) and optionally in-app notification if you have it.
+
+SCOPE:
+- Mentions are required for COMMENTS only in this prompt.
+- Do NOT add mentions to chat messages in this prompt (separate).
+- Works for tenant admins/employees and super admins “acting as tenant” when in tenant mode.
+
+MENTION UX (FRONTEND):
+1) In the comment editor (TipTap editor instance for comments), support:
+- Typing “@” opens an autocomplete dropdown of tenant users (name + email)
+- Selecting a user inserts a mention token in the content.
+Keep it lightweight:
+- The stored comment body remains TipTap JSON string.
+- Mentions should be represented in the TipTap JSON as a dedicated node/mark OR a standardized text pattern.
+
+2) Mention parsing:
+- Implement a server-side parser that extracts mentioned user IDs from the TipTap JSON doc.
+- If using a mention node, ensure it includes userId.
+- If using text pattern (fallback), use a robust encoding e.g. @[display](user:<id>)
+
+BACKEND LOGIC:
+3) On comment creation and comment update:
+- Parse mentions -> list of mentioned userIds
+- Compute delta (new mentions only) to avoid spamming on edit
+- Create notification events (email):
+  Subject: “You were mentioned in a comment”
+  Body includes:
+   - Tenant name
+   - Link to the task/comment (deep link)
+   - Snippet of the comment plain-text
+
+4) Mailgun integration:
+- Use existing mailgun integration/config (system fallback, tenant override if supported).
+- If mailgun not configured:
+  - do not fail comment creation
+  - log a warning + surface a non-blocking UI message: “Email not configured; mention notifications not sent.”
+
+5) Permission rules:
+- Any tenant user can mention other users in same tenant.
+- Prevent cross-tenant mentions:
+  - mentioned userId must belong to effectiveTenantId.
+
+DATA STORAGE:
+- Do NOT add new DB tables in this prompt if avoidable.
+- If you already have a comment_mentions join table, use it.
+- If not, store mentioned userIds as a JSON array in the existing comment row ONLY if a column already exists.
+- Otherwise, do “compute on write + send notifications” without persisting mention list (acceptable for MVP).
+(If persistence is needed later, do a separate schema prompt.)
+
+TESTS:
+- Mention extraction from TipTap JSON
+- Email send called with correct recipients
+- Cross-tenant mention blocked
+- Editing a comment does not resend emails to the same users (delta logic)
+
+ACCEPTANCE (PART D):
+- @mention dropdown works in comment editor
+- Mentioned users receive email notifications (when configured)
+- No failures when mailgun not configured
+- No cross-tenant notifications
+
+=====================================================================
+TESTING / QA (REQUIRED)
+=====================================================================
+
+Automated tests:
+1) Rich text compatibility: plain text + tiptap JSON render
+2) Ensure server rejects persisted HTML strings for rich text fields
+3) Mention extraction + delta logic
+4) Mention email send (mocked) + non-blocking behavior when mailgun missing
+5) Unsaved changes guard triggers
+6) Shortcuts do not fire while cursor is in TipTap editor
+
+Manual QA:
+- Create task description with formatting -> refresh -> persists
+- Existing plain-text description still displays
+- Create comment, @mention user -> email received
+- Edit comment without changing mentions -> no duplicate email
+- Drawer close prompts on unsaved edits
+- Shift+N opens create task, Shift+T toggles timer, Esc closes drawer
+
+DELIVERABLES:
+- RichTextEditor + RichTextRenderer + utils
+- Updated forms/rendering to use TipTap JSON string persistence
+- Mention autocomplete in comment editor + mention parsing on backend
+- Email notification integration (using existing Mailgun config)
+- UX improvements (drawers, inline create, empty states, polish)
+- Update docs (/docs) and/or in-app App Docs: “Rich Text + Mentions”

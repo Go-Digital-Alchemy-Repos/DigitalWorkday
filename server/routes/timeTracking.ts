@@ -27,7 +27,11 @@ const startTimerSchema = z.object({
 const stopTimerSchema = z.object({
   discard: z.boolean().optional(),
   scope: z.enum(["in_scope", "out_of_scope"]).optional(),
-  description: z.string().optional(),
+  title: z.string().optional(),
+  description: z.string().nullable().optional(),
+  taskId: z.string().nullable().optional(),
+  clientId: z.string().nullable().optional(),
+  projectId: z.string().nullable().optional(),
 });
 
 router.get(
@@ -150,7 +154,8 @@ router.post(
       throw AppError.notFound("No active timer found");
     }
 
-    const { discard, scope, description } = req.body;
+    const { discard, scope, title, description, taskId, clientId, projectId } = req.body;
+    const requestId = req.headers["x-request-id"] as string | undefined;
 
     let finalElapsedSeconds = timer.elapsedSeconds;
     if (timer.status === "running" && timer.lastStartedAt) {
@@ -161,48 +166,80 @@ router.post(
       finalElapsedSeconds += sessionElapsed;
     }
 
+    // Use submitted values, falling back to timer values
+    const finalClientId = clientId !== undefined ? clientId : timer.clientId;
+    const finalProjectId = projectId !== undefined ? projectId : timer.projectId;
+    const finalTaskId = taskId !== undefined ? taskId : timer.taskId;
+    const finalDescription = description !== undefined ? description : timer.description;
+    const finalTitle = title || timer.title || null;
+
     let timeEntryId: string | null = null;
 
-    if (!discard && finalElapsedSeconds > 0) {
-      const endTime = new Date();
-      const startTime = new Date(endTime.getTime() - finalElapsedSeconds * 1000);
-
-      const timeEntry = await storage.createTimeEntry({
-        workspaceId,
-        userId,
-        clientId: timer.clientId,
-        projectId: timer.projectId,
-        taskId: timer.taskId,
-        description: description || timer.description,
-        startTime,
-        endTime,
+    // EXPLICIT DISCARD: User explicitly chose to discard - delete timer without saving
+    if (discard === true) {
+      console.log(`[Timer Stop] Explicit discard requested. timerId=${timer.id}, requestId=${requestId}`);
+      await storage.deleteActiveTimer(timer.id);
+      emitTimerStopped(timer.id, userId, null, workspaceId);
+      return res.json({
+        success: true,
+        timeEntryId: null,
+        discarded: true,
         durationSeconds: finalElapsedSeconds,
-        scope: scope || "in_scope",
-        isManual: false,
       });
-
-      timeEntryId = timeEntry.id;
-
-      emitTimeEntryCreated(
-        {
-          id: timeEntry.id,
-          workspaceId: timeEntry.workspaceId,
-          userId: timeEntry.userId,
-          clientId: timeEntry.clientId,
-          projectId: timeEntry.projectId,
-          taskId: timeEntry.taskId,
-          description: timeEntry.description,
-          startTime: timeEntry.startTime,
-          endTime: timeEntry.endTime,
-          durationSeconds: timeEntry.durationSeconds,
-          scope: timeEntry.scope as "in_scope" | "out_of_scope",
-          isManual: timeEntry.isManual,
-          createdAt: timeEntry.createdAt,
-        },
-        workspaceId
-      );
     }
 
+    // ZERO DURATION: Require explicit discard for zero-duration timers
+    if (finalElapsedSeconds === 0) {
+      console.warn(`[Timer Stop] Zero duration timer cannot be saved. timerId=${timer.id}, requestId=${requestId}`);
+      throw AppError.badRequest("Timer has zero duration. Please discard it explicitly or continue timing.");
+    }
+
+    // SAVE TIME ENTRY: Validate and create entry, then delete timer
+    if (!finalClientId) {
+      console.error(`[Timer Stop] Client required but missing. timerId=${timer.id}, requestId=${requestId}`);
+      throw AppError.badRequest("Client is required to save time entry");
+    }
+
+    const endTime = new Date();
+    const startTime = new Date(endTime.getTime() - finalElapsedSeconds * 1000);
+
+    const timeEntry = await storage.createTimeEntry({
+      workspaceId,
+      userId,
+      clientId: finalClientId,
+      projectId: finalProjectId,
+      taskId: finalTaskId,
+      title: finalTitle,
+      description: finalDescription,
+      startTime,
+      endTime,
+      durationSeconds: finalElapsedSeconds,
+      scope: scope || "in_scope",
+      isManual: false,
+    });
+
+    timeEntryId = timeEntry.id;
+
+    emitTimeEntryCreated(
+      {
+        id: timeEntry.id,
+        workspaceId: timeEntry.workspaceId,
+        userId: timeEntry.userId,
+        clientId: timeEntry.clientId,
+        projectId: timeEntry.projectId,
+        taskId: timeEntry.taskId,
+        description: timeEntry.description,
+        startTime: timeEntry.startTime,
+        endTime: timeEntry.endTime,
+        durationSeconds: timeEntry.durationSeconds,
+        scope: timeEntry.scope as "in_scope" | "out_of_scope",
+        isManual: timeEntry.isManual,
+        createdAt: timeEntry.createdAt,
+      },
+      workspaceId
+    );
+
+    // Only delete timer AFTER successful time entry creation
     await storage.deleteActiveTimer(timer.id);
 
     emitTimerStopped(timer.id, userId, timeEntryId, workspaceId);
@@ -210,7 +247,7 @@ router.post(
     res.json({
       success: true,
       timeEntryId,
-      discarded: discard || finalElapsedSeconds === 0,
+      discarded: false,
       durationSeconds: finalElapsedSeconds,
     });
   })
