@@ -1508,6 +1508,7 @@ router.get("/users/orphaned", requireSuperUser, async (req, res) => {
 
 // =============================================================================
 // GET ALL USERS - List all application users across all tenants
+// Also includes pending invitations when status=pending
 // =============================================================================
 router.get("/users", requireSuperUser, async (req, res) => {
   try {
@@ -1516,7 +1517,82 @@ router.get("/users", requireSuperUser, async (req, res) => {
     const limit = Math.min(100, Math.max(1, parseInt(pageSize as string) || 50));
     const offset = (pageNum - 1) * limit;
 
-    // Build conditions
+    // If status is "pending", return pending invitations instead of users
+    if (status === "pending") {
+      const inviteConditions: any[] = [
+        eq(invitations.status, "pending"),
+        gte(invitations.expiresAt, new Date()),
+      ];
+
+      if (search && typeof search === "string" && search.trim()) {
+        const searchTerm = `%${search.trim().toLowerCase()}%`;
+        inviteConditions.push(
+          sql`(LOWER(${invitations.email}) LIKE ${searchTerm} OR LOWER(${invitations.firstName}) LIKE ${searchTerm} OR LOWER(${invitations.lastName}) LIKE ${searchTerm})`
+        );
+      }
+
+      if (tenantId && typeof tenantId === "string" && tenantId !== "all") {
+        inviteConditions.push(eq(invitations.tenantId, tenantId));
+      }
+
+      if (role && typeof role === "string" && ["admin", "employee"].includes(role)) {
+        inviteConditions.push(eq(invitations.role, role));
+      }
+
+      // Get total count of pending invitations
+      const countResult = await db.select({ count: count() })
+        .from(invitations)
+        .where(and(...inviteConditions));
+      const totalCount = countResult[0]?.count || 0;
+
+      // Get pending invitations with tenant info
+      const inviteList = await db.select({
+        id: invitations.id,
+        email: invitations.email,
+        firstName: invitations.firstName,
+        lastName: invitations.lastName,
+        role: invitations.role,
+        tenantId: invitations.tenantId,
+        tenantName: tenants.name,
+        tenantStatus: tenants.status,
+        expiresAt: invitations.expiresAt,
+        createdAt: invitations.createdAt,
+      })
+        .from(invitations)
+        .leftJoin(tenants, eq(invitations.tenantId, tenants.id))
+        .where(and(...inviteConditions))
+        .orderBy(desc(invitations.createdAt))
+        .limit(limit)
+        .offset(offset);
+
+      // Transform to match user response format
+      return res.json({
+        users: inviteList.map(inv => ({
+          id: inv.id,
+          email: inv.email,
+          name: inv.firstName && inv.lastName ? `${inv.firstName} ${inv.lastName}` : null,
+          firstName: inv.firstName,
+          lastName: inv.lastName,
+          role: inv.role,
+          isActive: false,
+          isPendingInvite: true,
+          avatarUrl: null,
+          tenantId: inv.tenantId,
+          tenantName: inv.tenantName,
+          tenantStatus: inv.tenantStatus,
+          expiresAt: inv.expiresAt,
+          createdAt: inv.createdAt,
+          updatedAt: null,
+          hasPendingInvite: true,
+        })),
+        total: totalCount,
+        page: pageNum,
+        pageSize: limit,
+        totalPages: Math.ceil(totalCount / limit),
+      });
+    }
+
+    // Build conditions for regular users
     const conditions: any[] = [
       ne(users.role, UserRole.SUPER_USER), // Exclude super users (they're managed separately)
     ];
@@ -1565,6 +1641,7 @@ router.get("/users", requireSuperUser, async (req, res) => {
       tenantStatus: tenants.status,
       createdAt: users.createdAt,
       updatedAt: users.updatedAt,
+      passwordHash: users.passwordHash,
     })
       .from(users)
       .leftJoin(tenants, eq(users.tenantId, tenants.id))
@@ -1595,7 +1672,21 @@ router.get("/users", requireSuperUser, async (req, res) => {
 
     res.json({
       users: userList.map(u => ({
-        ...u,
+        id: u.id,
+        email: u.email,
+        name: u.name,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        role: u.role,
+        isActive: u.isActive,
+        isPendingInvite: false,
+        needsPassword: u.passwordHash === null,
+        avatarUrl: u.avatarUrl,
+        tenantId: u.tenantId,
+        tenantName: u.tenantName,
+        tenantStatus: u.tenantStatus,
+        createdAt: u.createdAt,
+        updatedAt: u.updatedAt,
         hasPendingInvite: pendingInvites[u.email] || false,
       })),
       total: totalCount,
