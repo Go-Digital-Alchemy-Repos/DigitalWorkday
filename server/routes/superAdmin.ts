@@ -3549,7 +3549,7 @@ router.get("/tenants/:tenantId/notes", requireSuperUser, async (req, res) => {
     const authorUsers = userIds.length > 0
       ? await db.select({ id: users.id, name: users.name, email: users.email })
           .from(users)
-          .where(sql`${users.id} = ANY(${userIds})`)
+          .where(inArray(users.id, userIds))
       : [];
     const authorMap = new Map(authorUsers.map(u => [u.id, u]));
 
@@ -3693,7 +3693,7 @@ router.get("/tenants/:tenantId/audit", requireSuperUser, async (req, res) => {
     const actorUsers = actorIds.length > 0
       ? await db.select({ id: users.id, name: users.name, email: users.email })
           .from(users)
-          .where(sql`${users.id} = ANY(${actorIds})`)
+          .where(inArray(users.id, actorIds))
       : [];
     const actorMap = new Map(actorUsers.map(u => [u.id, u]));
 

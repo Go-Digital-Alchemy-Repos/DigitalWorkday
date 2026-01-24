@@ -665,6 +665,8 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
   const [showManualPassword, setShowManualPassword] = useState(false);
   const [newNoteBody, setNewNoteBody] = useState("");
   const [newNoteCategory, setNewNoteCategory] = useState("general");
+  const [noteSearchQuery, setNoteSearchQuery] = useState("");
+  const [noteFilterCategory, setNoteFilterCategory] = useState<string>("all");
   const [csvData, setCsvData] = useState<Array<{ email: string; firstName?: string; lastName?: string; role?: string }>>([]);
   const [sendInviteEmails, setSendInviteEmails] = useState(false);
   const [bulkImportResults, setBulkImportResults] = useState<Array<{ email: string; success: boolean; inviteUrl?: string; emailSent?: boolean; error?: string }>>([]);
@@ -774,10 +776,19 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
     enabled: !!activeTenant && open && (activeTab === "overview" || activeTab === "notes"),
   });
 
-  const { data: notesResponse, isLoading: notesLoading } = useQuery<{ notes: TenantNote[] }>({
+  const { data: notesData, isLoading: notesLoading } = useQuery<TenantNote[]>({
     queryKey: ["/api/v1/super/tenants", activeTenant?.id, "notes"],
     queryFn: () => fetch(`/api/v1/super/tenants/${activeTenant?.id}/notes`, { credentials: "include" }).then(r => r.json()),
     enabled: !!activeTenant && open && activeTab === "notes",
+  });
+
+  // Filter and search notes
+  const filteredNotes = (notesData || []).filter((note) => {
+    const matchesSearch = noteSearchQuery.trim() === "" || 
+      note.body.toLowerCase().includes(noteSearchQuery.toLowerCase()) ||
+      note.author?.name?.toLowerCase().includes(noteSearchQuery.toLowerCase());
+    const matchesCategory = noteFilterCategory === "all" || note.category === noteFilterCategory;
+    return matchesSearch && matchesCategory;
   });
 
   const { data: auditResponse, isLoading: auditLoading } = useQuery<{ events: TenantAuditEvent[] }>({
@@ -2634,17 +2645,18 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
             <DataImportExportTab tenantId={activeTenant.id} tenantSlug={activeTenant.slug} />
           </TabsContent>
 
-          <TabsContent value="notes" className="space-y-6 mt-6">
-            <Card>
-              <CardHeader>
-                <CardTitle className="text-base flex items-center gap-2">
-                  <MessageSquare className="h-4 w-4" />
-                  Internal Notes
-                </CardTitle>
-                <CardDescription>Private notes visible only to super admins</CardDescription>
-              </CardHeader>
-              <CardContent className="space-y-4">
-                <div className="space-y-3">
+          <TabsContent value="notes" className="mt-6">
+            <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+              {/* Left Column - Add New Note */}
+              <Card className="h-fit">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <Send className="h-4 w-4" />
+                    Add Note
+                  </CardTitle>
+                  <CardDescription>Create a new internal note for this tenant</CardDescription>
+                </CardHeader>
+                <CardContent className="space-y-4">
                   <div className="flex items-center gap-2">
                     <Label className="text-sm font-medium">Category:</Label>
                     <Select value={newNoteCategory} onValueChange={setNewNoteCategory}>
@@ -2665,7 +2677,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                     value={newNoteBody}
                     onChange={setNewNoteBody}
                     placeholder="Add a note... Use the toolbar to format text, add links, etc."
-                    minHeight="100px"
+                    minHeight="150px"
                   />
                   <div className="flex justify-end">
                     <Button
@@ -2673,53 +2685,131 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                       disabled={!newNoteBody.trim() || newNoteBody === "<p></p>" || createNoteMutation.isPending}
                       data-testid="button-add-note"
                     >
-                      <Send className="h-4 w-4 mr-2" />
+                      {createNoteMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Send className="h-4 w-4 mr-2" />
+                      )}
                       Add Note
                     </Button>
                   </div>
-                </div>
+                </CardContent>
+              </Card>
 
-                {notesLoading ? (
-                  <div className="flex items-center justify-center py-4">
-                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              {/* Right Column - Notes List */}
+              <Card className="flex flex-col">
+                <CardHeader>
+                  <CardTitle className="text-base flex items-center gap-2">
+                    <MessageSquare className="h-4 w-4" />
+                    Notes History
+                    {notesData && notesData.length > 0 && (
+                      <Badge variant="secondary" className="ml-2">{notesData.length}</Badge>
+                    )}
+                  </CardTitle>
+                  <CardDescription>Private notes visible only to super admins</CardDescription>
+                </CardHeader>
+                <CardContent className="flex flex-col gap-4 flex-1">
+                  {/* Search and Filter Controls */}
+                  <div className="flex flex-col sm:flex-row gap-2">
+                    <div className="relative flex-1">
+                      <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                      <Input
+                        placeholder="Search notes..."
+                        value={noteSearchQuery}
+                        onChange={(e) => setNoteSearchQuery(e.target.value)}
+                        className="pl-9"
+                        data-testid="input-search-notes"
+                      />
+                    </div>
+                    <Select value={noteFilterCategory} onValueChange={setNoteFilterCategory}>
+                      <SelectTrigger className="w-full sm:w-40" data-testid="select-filter-category">
+                        <SelectValue placeholder="Filter by category" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="all">All Categories</SelectItem>
+                        <SelectItem value="general">General</SelectItem>
+                        <SelectItem value="onboarding">Onboarding</SelectItem>
+                        <SelectItem value="support">Support</SelectItem>
+                        <SelectItem value="billing">Billing</SelectItem>
+                        <SelectItem value="technical">Technical</SelectItem>
+                        <SelectItem value="accounts">Accounts</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                ) : notesResponse?.notes && notesResponse.notes.length > 0 ? (
-                  <div className="space-y-3">
-                    {notesResponse.notes.map((note) => (
-                      <div key={note.id} className="border rounded-md p-3 space-y-2" data-testid={`note-${note.id}`}>
-                        <div className="flex items-center justify-between gap-2">
-                          <div className="flex items-center gap-2">
-                            <Badge variant="secondary" className="text-xs">
-                              {note.category}
-                            </Badge>
-                            <span className="text-sm font-medium">{note.author?.name || "Unknown"}</span>
-                          </div>
-                          <div className="flex items-center gap-2">
-                            <span className="text-xs text-muted-foreground">
-                              {new Date(note.createdAt).toLocaleDateString()}
-                            </span>
+
+                  {/* Notes List - Scrollable */}
+                  <div className="flex-1 overflow-y-auto max-h-[500px] space-y-3 pr-1">
+                    {notesLoading ? (
+                      <div className="flex items-center justify-center py-8">
+                        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : filteredNotes.length > 0 ? (
+                      filteredNotes.map((note) => (
+                        <div 
+                          key={note.id} 
+                          className="border rounded-md p-4 space-y-3 bg-muted/30 hover-elevate" 
+                          data-testid={`note-${note.id}`}
+                        >
+                          {/* Note Header */}
+                          <div className="flex items-start justify-between gap-2">
+                            <div className="flex flex-col gap-1">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-semibold">{note.author?.name || "Unknown"}</span>
+                                <Badge 
+                                  variant="outline" 
+                                  className="text-xs capitalize"
+                                >
+                                  {note.category}
+                                </Badge>
+                              </div>
+                              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+                                <Clock className="h-3 w-3" />
+                                <span>
+                                  {new Date(note.createdAt).toLocaleDateString("en-US", {
+                                    weekday: "short",
+                                    year: "numeric",
+                                    month: "short",
+                                    day: "numeric",
+                                  })}
+                                  {" at "}
+                                  {new Date(note.createdAt).toLocaleTimeString("en-US", {
+                                    hour: "2-digit",
+                                    minute: "2-digit",
+                                  })}
+                                </span>
+                              </div>
+                            </div>
                             <Button
                               size="icon"
                               variant="ghost"
                               onClick={() => deleteNoteMutation.mutate(note.id)}
                               disabled={deleteNoteMutation.isPending}
+                              className="h-7 w-7 text-muted-foreground hover:text-destructive"
                               data-testid={`button-delete-note-${note.id}`}
                             >
-                              <Trash2 className="h-3 w-3 text-destructive" />
+                              <Trash2 className="h-3.5 w-3.5" />
                             </Button>
                           </div>
+                          {/* Note Content */}
+                          <div className="border-t pt-3">
+                            <RichTextViewer content={note.body} className="text-sm" />
+                          </div>
                         </div>
-                        <RichTextViewer content={note.body} className="text-sm" />
+                      ))
+                    ) : notesData && notesData.length > 0 ? (
+                      <div className="text-center py-8 text-sm text-muted-foreground">
+                        No notes match your search or filter.
                       </div>
-                    ))}
+                    ) : (
+                      <div className="text-center py-8 text-sm text-muted-foreground">
+                        <MessageSquare className="h-8 w-8 mx-auto mb-2 opacity-50" />
+                        No notes yet. Add a note to get started.
+                      </div>
+                    )}
                   </div>
-                ) : (
-                  <div className="text-center py-4 text-sm text-muted-foreground">
-                    No notes yet. Add a note above.
-                  </div>
-                )}
-              </CardContent>
-            </Card>
+                </CardContent>
+              </Card>
+            </div>
 
             <Card>
               <CardHeader>
