@@ -3523,7 +3523,7 @@ export async function registerRoutes(
         finalElapsedSeconds += additionalSeconds;
       }
 
-      const { discard, scope, description, clientId, projectId, taskId } = req.body;
+      const { discard, scope, title, description, clientId, projectId, taskId } = req.body;
 
       let timeEntryId: string | null = null;
 
@@ -3538,6 +3538,7 @@ export async function registerRoutes(
           clientId: clientId !== undefined ? clientId : timer.clientId,
           projectId: projectId !== undefined ? projectId : timer.projectId,
           taskId: taskId !== undefined ? taskId : timer.taskId,
+          title: title !== undefined ? title : null,
           description: description !== undefined ? description : timer.description,
           startTime,
           endTime,

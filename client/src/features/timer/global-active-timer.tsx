@@ -220,7 +220,7 @@ export function GlobalActiveTimer() {
   });
 
   const stopMutation = useMutation({
-    mutationFn: (data: { discard?: boolean; scope?: string; description?: string; taskId?: string | null; clientId?: string | null }) =>
+    mutationFn: (data: { discard?: boolean; scope?: string; title?: string; description?: string | null; taskId?: string | null; clientId?: string | null }) =>
       apiRequest("POST", "/api/timer/stop", data),
     onSuccess: (_, variables) => {
       invalidateTimer();
@@ -306,10 +306,10 @@ export function GlobalActiveTimer() {
       toast({ title: "Client is required", variant: "destructive" });
       return;
     }
-    const finalDescription = stopTitle.trim() + (stopDescription.trim() ? `\n\n${stopDescription.trim()}` : "");
     stopMutation.mutate({
       scope: stopScope,
-      description: finalDescription,
+      title: stopTitle.trim(),
+      description: stopDescription.trim() || null,
       taskId: stopTaskId,
       clientId: stopClientId,
     });
