@@ -75,6 +75,17 @@ import {
 import crypto from "crypto";
 import { db } from "./db";
 
+// Calendar Task - Lightweight DTO for calendar display (no heavy relations)
+export type CalendarTask = {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  dueDate: Date | null;
+  projectId: string | null;
+  assignees: Array<{ userId: string; user?: { id: string; name: string; email: string } }>;
+};
+
 // Project Activity Feed Types
 export type ProjectActivityItem = {
   id: string;
@@ -140,6 +151,8 @@ export interface IStorage {
   getTaskWithRelations(id: string): Promise<TaskWithRelations | undefined>;
   getTasksByProject(projectId: string): Promise<TaskWithRelations[]>;
   getTasksByUser(userId: string): Promise<TaskWithRelations[]>;
+  getCalendarTasksByTenant(tenantId: string, workspaceId: string, startDate: Date, endDate: Date): Promise<CalendarTask[]>;
+  getCalendarTasksByWorkspace(workspaceId: string, startDate: Date, endDate: Date): Promise<CalendarTask[]>;
   getChildTasks(parentTaskId: string): Promise<TaskWithRelations[]>;
   createTask(task: InsertTask): Promise<Task>;
   createChildTask(parentTaskId: string, task: InsertTask): Promise<Task>;
@@ -867,6 +880,119 @@ export class DatabaseStorage implements IStorage {
       if (!b.dueDate) return -1;
       return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
     });
+  }
+
+  async getCalendarTasksByTenant(tenantId: string, workspaceId: string, startDate: Date, endDate: Date): Promise<CalendarTask[]> {
+    // Optimized: Single query to get tasks with due dates in range
+    const tasksList = await db.select({
+      id: tasks.id,
+      title: tasks.title,
+      status: tasks.status,
+      priority: tasks.priority,
+      dueDate: tasks.dueDate,
+      projectId: tasks.projectId,
+    }).from(tasks)
+      .innerJoin(projects, eq(tasks.projectId, projects.id))
+      .where(and(
+        eq(projects.tenantId, tenantId),
+        eq(projects.workspaceId, workspaceId),
+        eq(tasks.isPersonal, false),
+        gte(tasks.dueDate, startDate),
+        lte(tasks.dueDate, endDate)
+      ))
+      .orderBy(asc(tasks.dueDate));
+    
+    if (tasksList.length === 0) return [];
+    
+    // Batch fetch assignees for all tasks in one query using inArray
+    const taskIds = tasksList.map(t => t.id);
+    const allAssignees = await db.select({
+      taskId: taskAssignees.taskId,
+      userId: taskAssignees.userId,
+      userName: users.name,
+      userEmail: users.email,
+    }).from(taskAssignees)
+      .leftJoin(users, eq(taskAssignees.userId, users.id))
+      .where(inArray(taskAssignees.taskId, taskIds));
+    
+    // Group assignees by task
+    const assigneesByTask = new Map<string, CalendarTask["assignees"]>();
+    for (const a of allAssignees) {
+      if (!assigneesByTask.has(a.taskId)) {
+        assigneesByTask.set(a.taskId, []);
+      }
+      assigneesByTask.get(a.taskId)!.push({
+        userId: a.userId,
+        user: a.userName ? { id: a.userId, name: a.userName, email: a.userEmail || "" } : undefined
+      });
+    }
+    
+    // Return lightweight CalendarTask DTOs
+    return tasksList.map(task => ({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      dueDate: task.dueDate,
+      projectId: task.projectId,
+      assignees: assigneesByTask.get(task.id) || [],
+    }));
+  }
+
+  async getCalendarTasksByWorkspace(workspaceId: string, startDate: Date, endDate: Date): Promise<CalendarTask[]> {
+    // Optimized: Single query to get tasks with due dates in range
+    const tasksList = await db.select({
+      id: tasks.id,
+      title: tasks.title,
+      status: tasks.status,
+      priority: tasks.priority,
+      dueDate: tasks.dueDate,
+      projectId: tasks.projectId,
+    }).from(tasks)
+      .innerJoin(projects, eq(tasks.projectId, projects.id))
+      .where(and(
+        eq(projects.workspaceId, workspaceId),
+        eq(tasks.isPersonal, false),
+        gte(tasks.dueDate, startDate),
+        lte(tasks.dueDate, endDate)
+      ))
+      .orderBy(asc(tasks.dueDate));
+    
+    if (tasksList.length === 0) return [];
+    
+    // Batch fetch assignees for all tasks in one query using inArray
+    const taskIds = tasksList.map(t => t.id);
+    const allAssignees = await db.select({
+      taskId: taskAssignees.taskId,
+      userId: taskAssignees.userId,
+      userName: users.name,
+      userEmail: users.email,
+    }).from(taskAssignees)
+      .leftJoin(users, eq(taskAssignees.userId, users.id))
+      .where(inArray(taskAssignees.taskId, taskIds));
+    
+    // Group assignees by task
+    const assigneesByTask = new Map<string, CalendarTask["assignees"]>();
+    for (const a of allAssignees) {
+      if (!assigneesByTask.has(a.taskId)) {
+        assigneesByTask.set(a.taskId, []);
+      }
+      assigneesByTask.get(a.taskId)!.push({
+        userId: a.userId,
+        user: a.userName ? { id: a.userId, name: a.userName, email: a.userEmail || "" } : undefined
+      });
+    }
+    
+    // Return lightweight CalendarTask DTOs
+    return tasksList.map(task => ({
+      id: task.id,
+      title: task.title,
+      status: task.status,
+      priority: task.priority,
+      dueDate: task.dueDate,
+      projectId: task.projectId,
+      assignees: assigneesByTask.get(task.id) || [],
+    }));
   }
 
   async createTask(insertTask: InsertTask): Promise<Task> {

@@ -3970,6 +3970,74 @@ export async function registerRoutes(
   });
 
   // =============================================================================
+  // CALENDAR - UNIFIED VIEW
+  // =============================================================================
+
+  // Get calendar events (tasks with due dates + time entries) by date range
+  // Uses optimized DB queries with date range filtering at the database level
+  app.get("/api/calendar/events", async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      const workspaceId = getCurrentWorkspaceId(req);
+      const { start, end } = req.query;
+
+      const startDate = start ? new Date(start as string) : new Date(new Date().setDate(new Date().getDate() - 30));
+      const endDate = end ? new Date(end as string) : new Date(new Date().setDate(new Date().getDate() + 30));
+
+      // Fetch tasks with due dates in range using optimized DB query (lightweight DTOs)
+      let tasksInRange;
+      if (tenantId && isStrictMode()) {
+        tasksInRange = await storage.getCalendarTasksByTenant(tenantId, workspaceId, startDate, endDate);
+      } else {
+        tasksInRange = await storage.getCalendarTasksByWorkspace(workspaceId, startDate, endDate);
+      }
+
+      // Fetch time entries in range
+      const timeFilters = {
+        startDate,
+        endDate,
+      };
+
+      let timeEntries;
+      if (tenantId && isStrictMode()) {
+        timeEntries = await storage.getTimeEntriesByTenant(tenantId, workspaceId, timeFilters);
+      } else {
+        timeEntries = await storage.getTimeEntriesByWorkspace(workspaceId, timeFilters);
+      }
+
+      // Fetch clients and projects for filter dropdowns
+      let clients;
+      let projects;
+      if (tenantId && isStrictMode()) {
+        clients = await storage.getClientsByTenant(tenantId, workspaceId);
+        projects = await storage.getProjectsByTenant(tenantId, workspaceId);
+      } else {
+        clients = await storage.getClientsByWorkspace(workspaceId);
+        projects = await storage.getProjectsByWorkspace(workspaceId);
+      }
+
+      // Fetch users for filter dropdown
+      let users;
+      if (tenantId) {
+        users = await storage.getUsersByTenant(tenantId);
+      } else {
+        users = await storage.getUsersByWorkspace(workspaceId);
+      }
+
+      res.json({
+        tasks: tasksInRange,
+        timeEntries,
+        clients,
+        projects,
+        users: users || [],
+      });
+    } catch (error) {
+      console.error("Error fetching calendar events:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+  // =============================================================================
   // TIME TRACKING - REPORTING
   // =============================================================================
 
