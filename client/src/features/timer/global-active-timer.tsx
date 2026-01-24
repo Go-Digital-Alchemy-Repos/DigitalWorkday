@@ -32,6 +32,7 @@ type ActiveTimer = {
   clientId: string | null;
   projectId: string | null;
   taskId: string | null;
+  title: string | null;
   description: string | null;
   status: "running" | "paused";
   elapsedSeconds: number;
@@ -278,6 +279,12 @@ export function GlobalActiveTimer() {
       return () => clearInterval(interval);
     }
   }, [timer]);
+
+  useEffect(() => {
+    if (timer?.title) {
+      setStopTitle(timer.title);
+    }
+  }, [timer?.title]);
 
   useEffect(() => {
     if (timer?.description) {

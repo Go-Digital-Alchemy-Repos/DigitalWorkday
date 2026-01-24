@@ -677,6 +677,7 @@ export const activeTimers = pgTable("active_timers", {
   clientId: varchar("client_id").references(() => clients.id),
   projectId: varchar("project_id").references(() => projects.id),
   taskId: varchar("task_id").references(() => tasks.id),
+  title: text("title"),
   description: text("description"),
   status: text("status").notNull().default("running"),
   elapsedSeconds: integer("elapsed_seconds").notNull().default(0),

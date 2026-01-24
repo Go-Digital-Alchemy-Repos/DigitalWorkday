@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { FullScreenDrawer, FullScreenDrawerFooter } from "@/components/ui/full-screen-drawer";
 import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import {
   Select,
@@ -38,6 +39,7 @@ export function StartTimerDrawer({
   const { toast } = useToast();
   const queryClient = useQueryClient();
   const [hasChanges, setHasChanges] = useState(false);
+  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
   const [divisionId, setDivisionId] = useState<string | null>(null);
@@ -98,7 +100,7 @@ export function StartTimerDrawer({
     : clientProjects;
 
   const startMutation = useMutation({
-    mutationFn: async (data: { clientId?: string | null; projectId?: string | null; taskId?: string | null; description?: string }) => {
+    mutationFn: async (data: { clientId?: string | null; projectId?: string | null; taskId?: string | null; title?: string; description?: string }) => {
       const response = await apiRequest("POST", "/api/timer/start", data);
       if (!response.ok) {
         const errorData = await response.json().catch(() => ({}));
@@ -132,6 +134,7 @@ export function StartTimerDrawer({
   });
 
   const resetForm = useCallback(() => {
+    setTitle("");
     setDescription("");
     setClientId(initialClientId);
     setDivisionId(null);
@@ -176,6 +179,7 @@ export function StartTimerDrawer({
       clientId,
       projectId,
       taskId,
+      title: title.trim() || undefined,
       description: description.trim() || undefined,
     });
   };
@@ -285,6 +289,19 @@ export function StartTimerDrawer({
         </div>
 
         <div className="space-y-2">
+          <Label>Title</Label>
+          <Input
+            value={title}
+            onChange={(e) => {
+              setTitle(e.target.value);
+              handleFieldChange();
+            }}
+            placeholder="Brief summary of work (e.g., Website updates)"
+            data-testid="input-start-timer-title"
+          />
+        </div>
+
+        <div className="space-y-2">
           <Label>Description</Label>
           <Textarea
             value={description}
@@ -292,7 +309,7 @@ export function StartTimerDrawer({
               setDescription(e.target.value);
               handleFieldChange();
             }}
-            placeholder="What are you working on?"
+            placeholder="Additional details about the work..."
             className="min-h-[100px] resize-none"
             data-testid="input-start-timer-description"
           />

@@ -3257,6 +3257,7 @@ export async function registerRoutes(
         clientId: req.body.clientId || null,
         projectId: req.body.projectId || null,
         taskId: req.body.taskId || null,
+        title: req.body.title || null,
         description: req.body.description || null,
         status: "running",
         elapsedSeconds: 0,
