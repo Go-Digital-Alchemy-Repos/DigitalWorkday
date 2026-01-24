@@ -38,7 +38,7 @@ export function TaskSelectorWithCreate({
   const [createOpen, setCreateOpen] = useState(false);
   const [newTaskTitle, setNewTaskTitle] = useState("");
   const [newTaskDescription, setNewTaskDescription] = useState("");
-  const [newTaskPriority, setNewTaskPriority] = useState<string>("medium");
+  const [newTaskPriority, setNewTaskPriority] = useState<"low" | "medium" | "high" | "urgent">("medium");
 
   const { data: tasks = [], isLoading: tasksLoading } = useQuery<Task[]>({
     queryKey: ["/api/projects", projectId, "tasks"],
@@ -155,9 +155,9 @@ export function TaskSelectorWithCreate({
               <Button
                 type="button"
                 variant="ghost"
-                size="icon"
-                className="h-6 w-6"
+                size="sm"
                 onClick={() => setCreateOpen(false)}
+                data-testid="button-cancel-create-task"
               >
                 <X className="h-4 w-4" />
               </Button>
@@ -185,7 +185,7 @@ export function TaskSelectorWithCreate({
             </div>
             <div className="space-y-2">
               <Label>Priority</Label>
-              <Select value={newTaskPriority} onValueChange={setNewTaskPriority}>
+              <Select value={newTaskPriority} onValueChange={(v) => setNewTaskPriority(v as "low" | "medium" | "high" | "urgent")}>
                 <SelectTrigger data-testid="select-new-task-priority">
                   <SelectValue />
                 </SelectTrigger>

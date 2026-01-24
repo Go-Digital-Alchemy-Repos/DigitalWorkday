@@ -59,7 +59,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
-import { TaskSelectorWithCreate } from "@/features/tasks";
+import { TaskSelectorWithCreate } from "@/features/tasks/task-selector-with-create";
 import { StartTimerDrawer } from "@/features/timer";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from "date-fns";
 
@@ -87,6 +87,7 @@ type TimeEntry = {
   clientId: string | null;
   projectId: string | null;
   taskId: string | null;
+  title: string | null;
   description: string | null;
   startTime: string;
   endTime: string | null;
@@ -457,31 +458,25 @@ function ActiveTimerPanel() {
             </div>
             <div className="space-y-2">
               <Label>Scope</Label>
-              <div className="flex rounded-lg border overflow-hidden" data-testid="toggle-stop-scope">
-                <button
+              <div className="flex gap-2" data-testid="toggle-stop-scope">
+                <Button
                   type="button"
-                  className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                    stopScope === "in_scope"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted hover:bg-muted/80"
-                  }`}
+                  variant={stopScope === "in_scope" ? "default" : "outline"}
+                  className="flex-1"
                   onClick={() => setStopScope("in_scope")}
                   data-testid="button-scope-in"
                 >
                   In Scope (Unbillable)
-                </button>
-                <button
+                </Button>
+                <Button
                   type="button"
-                  className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                    stopScope === "out_of_scope"
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted hover:bg-muted/80"
-                  }`}
+                  variant={stopScope === "out_of_scope" ? "default" : "outline"}
+                  className="flex-1"
                   onClick={() => setStopScope("out_of_scope")}
                   data-testid="button-scope-out"
                 >
                   Out of Scope (Billable)
-                </button>
+                </Button>
               </div>
             </div>
             {timer?.projectId && (
@@ -823,26 +818,12 @@ function ManualEntryDialog({
           </div>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-          <div className="space-y-2">
-            <Label>Task</Label>
-            <Select 
-              value={taskId || "none"} 
-              onValueChange={(v) => handleTaskChange(v === "none" ? null : v)}
-              disabled={!projectId}
-            >
-              <SelectTrigger data-testid="select-manual-task">
-                <SelectValue placeholder={projectId ? "Select task" : "Select project first"} />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">No task</SelectItem>
-                {openTasks.map((task) => (
-                  <SelectItem key={task.id} value={task.id}>
-                    {task.title}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          <TaskSelectorWithCreate
+            projectId={projectId}
+            taskId={taskId}
+            onTaskChange={handleTaskChange}
+            disabled={!projectId}
+          />
           {hasSubtasks && (
             <div className="space-y-2">
               <Label>Subtask</Label>
@@ -867,31 +848,25 @@ function ManualEntryDialog({
         </div>
         <div className="space-y-2">
           <Label>Scope</Label>
-          <div className="flex rounded-lg border overflow-hidden" data-testid="toggle-manual-scope">
-            <button
+          <div className="flex gap-2" data-testid="toggle-manual-scope">
+            <Button
               type="button"
-              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                scope === "in_scope"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted hover:bg-muted/80"
-              }`}
+              variant={scope === "in_scope" ? "default" : "outline"}
+              className="flex-1"
               onClick={() => setScope("in_scope")}
               data-testid="button-manual-scope-in"
             >
               In Scope (Unbillable)
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                scope === "out_of_scope"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted hover:bg-muted/80"
-              }`}
+              variant={scope === "out_of_scope" ? "default" : "outline"}
+              className="flex-1"
               onClick={() => setScope("out_of_scope")}
               data-testid="button-manual-scope-out"
             >
               Out of Scope (Billable)
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -928,6 +903,7 @@ function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerP
   const [projectId, setProjectId] = useState<string | null>(null);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [subtaskId, setSubtaskId] = useState<string | null>(null);
+  const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [entryDate, setEntryDate] = useState("");
   const [startTime, setStartTime] = useState("");
@@ -944,6 +920,7 @@ function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerP
       setProjectId(entry.projectId);
       setTaskId(entry.taskId);
       setSubtaskId(null);
+      setTitle(entry.title || "");
       setDescription(entry.description || "");
       setScope(entry.scope);
       
@@ -1016,6 +993,7 @@ function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerP
       clientId: string | null;
       projectId: string | null;
       taskId: string | null;
+      title: string | null;
       description: string | null;
       startTime: string;
       endTime: string | null;
@@ -1118,6 +1096,7 @@ function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerP
       clientId,
       projectId,
       taskId: finalTaskId,
+      title: title.trim() || null,
       description: description || null,
       startTime: calculatedStartTime.toISOString(),
       endTime: calculatedEndTime?.toISOString() || null,
@@ -1158,6 +1137,17 @@ function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerP
       >
         <div className="space-y-6">
           <div>
+            <Label>Title</Label>
+            <Input
+              value={title}
+              onChange={(e) => { setTitle(e.target.value); markChanged(); }}
+              placeholder="Brief summary of work"
+              className="mt-2"
+              data-testid="input-edit-title"
+            />
+          </div>
+
+          <div>
             <Label>Description</Label>
             <Textarea
               value={description}
@@ -1172,7 +1162,7 @@ function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerP
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
-              <Label>Client</Label>
+              <Label>Client <span className="text-destructive">*</span></Label>
               <Select
                 value={clientId || "none"}
                 onValueChange={(v) => handleClientChange(v === "none" ? null : v)}
@@ -1253,26 +1243,12 @@ function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerP
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div>
-              <Label>Task</Label>
-              <Select
-                value={taskId || "none"}
-                onValueChange={(v) => handleTaskChange(v === "none" ? null : v)}
-                disabled={!projectId}
-              >
-                <SelectTrigger className="mt-2" data-testid="select-edit-task">
-                  <SelectValue placeholder={projectId ? "Select task" : "Select project first"} />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">No task</SelectItem>
-                  {openTasks.map((task) => (
-                    <SelectItem key={task.id} value={task.id}>
-                      {task.title}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <TaskSelectorWithCreate
+              projectId={projectId}
+              taskId={taskId}
+              onTaskChange={(newTaskId) => { handleTaskChange(newTaskId); }}
+              disabled={!projectId}
+            />
 
             {hasSubtasks && (
               <div>
@@ -1377,15 +1353,26 @@ function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerP
 
           <div>
             <Label>Scope</Label>
-            <Select value={scope} onValueChange={(v) => { setScope(v as "in_scope" | "out_of_scope"); markChanged(); }}>
-              <SelectTrigger className="mt-2" data-testid="select-edit-scope">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="in_scope">In Scope (Billable)</SelectItem>
-                <SelectItem value="out_of_scope">Out of Scope</SelectItem>
-              </SelectContent>
-            </Select>
+            <div className="flex gap-2 mt-2" data-testid="toggle-edit-scope">
+              <Button
+                type="button"
+                variant={scope === "in_scope" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => { setScope("in_scope"); markChanged(); }}
+                data-testid="button-edit-scope-in"
+              >
+                In Scope (Unbillable)
+              </Button>
+              <Button
+                type="button"
+                variant={scope === "out_of_scope" ? "default" : "outline"}
+                className="flex-1"
+                onClick={() => { setScope("out_of_scope"); markChanged(); }}
+                data-testid="button-edit-scope-out"
+              >
+                Out of Scope (Billable)
+              </Button>
+            </div>
           </div>
 
           <Separator />
@@ -1531,13 +1518,13 @@ function TimeEntriesList() {
                           <div className="flex-1 min-w-0">
                             <div className="flex items-center gap-2 mb-1">
                               <p className="text-sm font-medium truncate">
-                                {(entry as any).title || entry.description || "No title"}
+                                {entry.title || entry.description || "No title"}
                               </p>
                               <Badge 
-                                variant={entry.scope === "in_scope" ? "default" : "secondary"}
+                                variant={entry.scope === "out_of_scope" ? "default" : "secondary"}
                                 className="text-xs"
                               >
-                                {entry.scope === "in_scope" ? "Billable" : "Non-billable"}
+                                {entry.scope === "out_of_scope" ? "Billable" : "Unbillable"}
                               </Badge>
                               {entry.isManual && (
                                 <Badge variant="outline" className="text-xs">Manual</Badge>
@@ -1687,14 +1674,14 @@ function ReportsSummary() {
             <p className="text-2xl font-mono font-bold">{formatDurationShort(summary.totalSeconds)}</p>
             <p className="text-xs text-muted-foreground">{summary.entryCount} entries</p>
           </div>
-          <div className="p-4 rounded-lg bg-primary/10">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Billable</p>
-            <p className="text-2xl font-mono font-bold text-primary">{formatDurationShort(summary.inScopeSeconds)}</p>
+          <div className="p-4 rounded-lg bg-muted/50">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Unbillable</p>
+            <p className="text-2xl font-mono font-bold">{formatDurationShort(summary.inScopeSeconds)}</p>
             <p className="text-xs text-muted-foreground">In scope</p>
           </div>
-          <div className="p-4 rounded-lg bg-muted/50">
-            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Non-billable</p>
-            <p className="text-2xl font-mono font-bold">{formatDurationShort(summary.outOfScopeSeconds)}</p>
+          <div className="p-4 rounded-lg bg-primary/10">
+            <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Billable</p>
+            <p className="text-2xl font-mono font-bold text-primary">{formatDurationShort(summary.outOfScopeSeconds)}</p>
             <p className="text-xs text-muted-foreground">Out of scope</p>
           </div>
         </div>
