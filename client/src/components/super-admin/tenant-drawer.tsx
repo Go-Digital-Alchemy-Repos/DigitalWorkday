@@ -2654,6 +2654,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                         <SelectItem value="support">Support</SelectItem>
                         <SelectItem value="billing">Billing</SelectItem>
                         <SelectItem value="technical">Technical</SelectItem>
+                        <SelectItem value="accounts">Accounts</SelectItem>
                       </SelectContent>
                     </Select>
                     <Input
