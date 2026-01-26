@@ -1,0 +1,316 @@
+You are continuing development on my React + Express multi-tenant SaaS application
+(single codebase, deployed on Railway).
+
+THIS IS A MASTER PROMPT WITH STRICT PHASE EXECUTION.
+You MUST complete phases in order and STOP after each phase internally before proceeding.
+DO NOT refactor globally. DO NOT merge phases. DO NOT skip steps.
+
+===============================================================================
+GLOBAL NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change existing endpoint paths.
+- Do NOT change existing API response shapes.
+- Do NOT remove existing features.
+- Do NOT wipe or reset data.
+- Do NOT change auth, tenancy, or agreement enforcement logic unless explicitly stated.
+- Additive schema changes ONLY, with migrations.
+- Preserve backward compatibility at all times.
+- Prefer diagnostics, validation, and UI clarity over refactors.
+- If uncertain, ADD logging/tests instead of changing behavior.
+
+===============================================================================
+PHASE A — STABILITY, OBSERVABILITY & ERROR VISIBILITY
+===============================================================================
+
+PHASE A-1: Super Admin Error Log + Request ID Correlation
+---------------------------------------------------------
+Goal: Stop guessing why tenant operations fail.
+
+Tasks:
+1) Ensure every HTTP response includes X-Request-Id header.
+2) Capture all server errors (>=500, key 4xx) into an internal error_logs store:
+   - requestId
+   - timestamp
+   - tenantId (nullable)
+   - userId (nullable)
+   - route + method
+   - status code
+   - sanitized message
+   - stack trace (server-only)
+3) Add Super Admin → System Status → Error Log tab:
+   - filterable table
+   - row drawer with full stack trace
+   - copy requestId button
+4) Tenant UI must show friendly error + requestId ONLY (no stack trace).
+5) Add tests verifying:
+   - requestId always present
+   - error log is super-admin only
+   - secrets are redacted
+
+Docs:
+- /docs/ERROR_LOGGING.md
+
+STOP internally when complete.
+
+---
+
+PHASE A-2: Error Envelope Standardization (NON-BREAKING)
+--------------------------------------------------------
+Goal: Make errors consistent internally without breaking the frontend.
+
+Tasks:
+1) Introduce AppError helper and shared error middleware.
+2) Preserve ALL existing error JSON shapes.
+3) Add optional fields ONLY when safe:
+   - code
+   - details
+4) Always rely on requestId via headers.
+5) Replace throw err cascades with next(err).
+6) Standardize validation errors (400) and forbidden/not found codes.
+
+Tests:
+- legacy error shapes preserved
+- validation error includes details
+- requestId header present
+
+Docs:
+- /docs/ERROR_HANDLING.md
+
+STOP internally when complete.
+
+---
+
+PHASE A-3: Tenant CRUD Smoke Tests + Fixes
+------------------------------------------
+Goal: Ensure tenant services (Clients, Projects, Tasks, Time Entries) actually work.
+
+Tasks:
+1) Add integration smoke tests for:
+   - Clients CRUD
+   - Projects CRUD
+   - Tasks + sub-tasks CRUD
+   - Time entries CRUD
+2) Validate tenant scoping, FK integrity, and required fields.
+3) Fix any discovered 500s with minimal patches + regression tests.
+4) Add requestId surfacing for failures.
+
+STOP internally when complete.
+
+---
+
+PHASE A-4: Chat Phase 0 — Audit & Instrumentation
+-------------------------------------------------
+Goal: Observe chat before changing behavior.
+
+Tasks:
+1) Add CHAT_DEBUG instrumentation (socket + API events).
+2) Add Super Admin → Chat Debug panel (metrics + recent events).
+3) No behavior changes.
+4) Add docs for enabling CHAT_DEBUG on Railway.
+
+Docs:
+- /docs/CHAT_DEBUGGING.md
+
+STOP internally when complete.
+
+---
+
+PHASE A-5: Chat Phase 1 — Stability Hardening
+---------------------------------------------
+Goal: Reliable chat under refresh, reconnect, and fast switching.
+
+Tasks:
+- socket reconnect rehydration
+- prevent duplicate listeners/messages
+- optimistic send → ack → retry
+- membership change propagation + immediate access revoke
+- cache invalidation
+
+Tests required.
+
+STOP internally when complete.
+
+===============================================================================
+PHASE B — CLIENT DIVISIONS (DEPARTMENT / SUBSIDIARY SUPPORT)
+===============================================================================
+
+PHASE B-1: Divisions Schema + Scoping Primitives (NO UI)
+--------------------------------------------------------
+Goal: Introduce divisions safely.
+
+Tasks:
+1) Add client_divisions table.
+2) Add division_members join table.
+3) Add nullable projects.divisionId.
+4) Add scoping helpers (tenant + division).
+5) Existing clients/projects MUST continue to work unchanged.
+
+Tests:
+- migration smoke
+- scoping helper tests
+
+STOP internally when complete.
+
+---
+
+PHASE B-2: Divisions API (Additive)
+-----------------------------------
+Goal: CRUD + membership endpoints.
+
+Tasks:
+- list/create/update divisions under client
+- add/remove division members
+- enforce tenant + client ownership
+
+Docs:
+- /docs/DIVISIONS.md
+
+STOP internally when complete.
+
+---
+
+PHASE B-3: Client UI — Divisions Tab
+------------------------------------
+Goal: Manage divisions inside client profile.
+
+Tasks:
+- Divisions tab
+- list divisions
+- create/edit division (drawer)
+- manage division members
+- employees see only assigned divisions
+
+STOP internally when complete.
+
+---
+
+PHASE B-4: Project Provisioning — Division Required When Applicable
+-------------------------------------------------------------------
+Goal: Separate projects by department.
+
+Rules:
+- If client has divisions → division selection REQUIRED.
+- If client has no divisions → unchanged behavior.
+
+Tasks:
+- UI conditional division selector
+- backend validation
+
+STOP internally when complete.
+
+---
+
+PHASE B-5: Division Awareness in Projects & Time Tracking
+---------------------------------------------------------
+Goal: Usability integration.
+
+Tasks:
+- Project filtering by division
+- Time tracking flow: Client → Division → Project → Task
+- Left nav shows division context (badge or grouping)
+
+STOP internally when complete.
+
+===============================================================================
+PHASE C — USABILITY & WORKFLOW UNIFICATION
+===============================================================================
+
+PHASE C-1: Task Drawer as “Work Hub”
+------------------------------------
+Goal: Reduce fragmentation.
+
+Tasks:
+- Task drawer shows:
+  - breadcrumbs
+  - start/stop time tracking
+  - related chat
+  - comments/@mentions
+- Reuse existing endpoints only.
+
+STOP internally when complete.
+
+---
+
+PHASE C-2: Navigation & Context Gating
+--------------------------------------
+Goal: Eliminate flicker and stale UI.
+
+Tasks:
+- Add “Tenant Context Loaded” gate everywhere.
+- Add breadcrumbs Client → Division → Project → Task.
+
+STOP internally when complete.
+
+---
+
+PHASE C-3: Perceived Speed Polish
+---------------------------------
+Goal: Make the app feel fast.
+
+Tasks:
+- skeleton loaders
+- optimistic UI
+- clear empty states
+
+STOP internally when complete.
+
+---
+
+PHASE C-4: Permission Clarity UX
+--------------------------------
+Goal: Reduce confusion.
+
+Tasks:
+- “Why can’t I see this?” tooltips/banners.
+- Disabled buttons explain why.
+
+STOP internally when complete.
+
+===============================================================================
+PHASE D — ORGANIZATION & MAINTAINABILITY
+===============================================================================
+
+PHASE D-1: Backend Feature-Based Organization
+---------------------------------------------
+Goal: Developer velocity.
+
+Tasks:
+- Split giant routes into server/features/*
+- Preserve paths and responses
+- Add README per feature folder
+
+STOP internally when complete.
+
+---
+
+PHASE D-2: Frontend Feature Organization
+----------------------------------------
+Goal: Maintainable UI.
+
+Tasks:
+- Move to client/src/features/*
+- Extract shared components
+- No UI redesign
+
+STOP internally when complete.
+
+---
+
+PHASE D-3: Documentation & App Docs Sync
+----------------------------------------
+Goal: Institutional memory.
+
+Tasks:
+- Update all /docs/*
+- Annotate major modules
+- Sync in-app App Docs
+
+STOP internally when complete.
+
+===============================================================================
+FINAL OUTPUT REQUIRED
+===============================================================================
+- Phase completion summary
+- Tests added per phase
+- Any known limitations
+- Clear note when ready for “Next 3 Prompts”
