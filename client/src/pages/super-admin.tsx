@@ -40,14 +40,29 @@ interface TenancyHealthResponse {
   persistenceEnabled: boolean;
 }
 
+interface TenantSettings {
+  displayName?: string;
+  appName?: string | null;
+  logoUrl?: string | null;
+  iconUrl?: string | null;
+  faviconUrl?: string | null;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
+  accentColor?: string | null;
+  loginMessage?: string | null;
+  supportEmail?: string | null;
+  whiteLabelEnabled?: boolean;
+  hideVendorBranding?: boolean;
+}
+
 interface TenantWithDetails extends Tenant {
-  settings?: {
-    displayName: string | null;
-    logoUrl: string | null;
-    primaryColor: string | null;
-    supportEmail: string | null;
-  } | null;
+  settings?: TenantSettings | null;
   userCount?: number;
+  primaryWorkspaceId?: string;
+  primaryWorkspace?: {
+    id: string;
+    name: string;
+  };
 }
 
 interface InviteResponse {
