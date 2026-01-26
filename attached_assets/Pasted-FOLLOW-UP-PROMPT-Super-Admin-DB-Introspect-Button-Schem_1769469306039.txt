@@ -1,0 +1,75 @@
+FOLLOW-UP PROMPT: Super Admin “DB Introspect” Button + Schema Drift Report (Safe)
+
+You are continuing development on my React + Express + Postgres multi-tenant app using Drizzle.
+We already have (or just added) a read-only db introspection script/report. Now add a Super Admin UI tool
+to run/view the schema drift report from inside the app.
+
+SAFETY RULES
+- READ-ONLY DB queries only (no writes, no migrations, no schema changes).
+- Super Admin ONLY access.
+- Do NOT expose secrets (DB URL, credentials, API keys).
+- Do NOT change any existing endpoint paths or response shapes (add-only endpoint is OK).
+- Keep output concise (tables/columns presence), avoid returning full DDL.
+
+FEATURE REQUIREMENTS
+A) Add a Super Admin endpoint (add-only)
+- GET /api/v1/super/system/db-introspect
+Returns JSON:
+{
+  "generatedAt": "...",
+  "database": { "hostHint": "railway-postgres", "nameHint": "...(masked)..." },
+  "tables": [
+     { "name": "notifications", "exists": true, "columns": ["id","user_id","tenant_id", ...] },
+     { "name": "notification_preferences", "exists": false, "columns": [] },
+     ...
+  ],
+  "requiredChecks": [
+     { "check": "notifications.tenant_id exists", "ok": true },
+     { "check": "notification_preferences table exists", "ok": false },
+     { "check": "tenant_settings.chat_retention_days exists", "ok": false }
+  ]
+}
+
+Implementation notes:
+- Use information_schema queries (read-only).
+- Mask DB identifying info (only hints).
+- If MAINTENANCE_TOOLS=false (or env flag you use), return 404/403 safely.
+
+B) Add Super Admin UI in System Status
+- New tab (or section) called “DB Introspect”
+- Button: “Run DB Introspect”
+- Shows:
+  - generatedAt timestamp
+  - Required checks list with pass/fail indicators
+  - Tables list with exists + key columns
+- Add “Copy JSON” button
+- Add “Download JSON” button (client-side download)
+
+C) Link it to Tenant Health & Error Log workflows
+- If requiredChecks fail, show a banner:
+  “Schema drift detected — migrations may be missing in production.”
+- Provide quick links:
+  - “Open Error Log”
+  - “Open Tenant Health & Repair”
+
+TESTS (MINIMUM)
+- db_introspect_super_admin_only.test.ts
+- db_introspect_read_only_queries.test.ts (verify only SELECTs used, no writes)
+- db_introspect_flag_disabled_blocks_access.test.ts
+
+DOCS
+- /docs/PROD_SCHEMA_REPORT.md:
+  - endpoint usage
+  - how to interpret required checks
+  - recommended next steps when failures found
+
+ACCEPTANCE CRITERIA
+- Super Admin can run/view schema drift report from UI on Railway.
+- Report does not expose secrets.
+- Endpoint is super-admin only and can be disabled via env flag.
+- No schema changes and no side effects.
+OUTPUT
+- Endpoint implementation file path
+- UI component path
+- Env flags used
+- Screenshot/description of where it appears in System Status
