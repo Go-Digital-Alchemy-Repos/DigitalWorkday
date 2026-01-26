@@ -1,0 +1,244 @@
+You are continuing development on my React + Express multi-tenant app (single codebase) deployed on Railway.
+FEATURE: Super Admin “Tenant Health & Repair Tools” (Diagnose + Safe Repair with Dry-Run)
+
+Context:
+Tenant Health currently reports blockers such as:
+- projects rows missing tenantId
+- tasks rows missing tenantId
+- teams rows missing tenantId
+- users rows missing tenantId
+…and we are seeing tenant-scoped features fail (e.g., Task creation 500). We need tools to detect, explain, and safely repair
+tenant-scoping/data integrity issues without ad-hoc SQL.
+
+This prompt is strictly for Super Admin System Status / Tenant Management maintenance tooling.
+
+===============================================================================
+ABSOLUTE NON-NEGOTIABLE SAFETY RULES
+===============================================================================
+- Do NOT change existing endpoint paths or response shapes (add-only endpoints OK).
+- Do NOT change auth/tenancy/agreement enforcement behavior.
+- Do NOT expose PII beyond what Super Admin already can access.
+- Repair actions MUST be super-admin only and MUST support DRY-RUN preview.
+- NO destructive operations (no deletes). Updates must be limited to setting tenantId (and/or workspaceId only if clearly required).
+- If tenantId cannot be derived with high confidence, do NOT auto-fix; mark as “manual review required”.
+- Every repair action must be logged to Error Log / Audit Log (requestId + who did it + what changed).
+
+===============================================================================
+GOALS
+===============================================================================
+1) Make Tenant Health actionable:
+- Show why a tenant is “Not ready”
+- Show which tables have missing/invalid tenantId and how many rows
+- Provide sample record IDs and derivation hints
+
+2) Provide safe repair tooling:
+- Dry-run preview of what would be updated
+- Apply repair only when derivation is unambiguous
+- Log everything
+
+3) Improve ongoing maintenance:
+- Add “Consistency Checks” that can be re-run anytime
+- Add “Report export” JSON snapshot for troubleshooting
+- Add guardrails to prevent reintroducing orphan rows (validation checks)
+
+===============================================================================
+PART A — DEFINE HEALTH CHECKS (READ-ONLY)
+===============================================================================
+A1) Implement a centralized health check service:
+server/features/super/tenantHealth/tenantHealthService.ts
+
+Health checks:
+1) Missing tenantId rows per table (global + optionally by tenant):
+- projects (tenantId is null)
+- tasks
+- teams
+- users
+- clients
+- timeEntries
+- workspaces (if applicable)
+- any join tables that should be tenant scoped (project_members, division_members, etc.)
+
+2) Cross-tenant foreign key mismatches:
+- projects.tenantId != clients.tenantId (via clientId)
+- tasks.tenantId != projects.tenantId (via projectId) IF tasks have tenantId
+- team rows linked to tenant objects with mismatched tenantId
+- timeEntries.projectId tenant mismatch
+(If some tables do not have tenantId by design, skip them and infer via joins.)
+
+3) Orphaned references:
+- projects with missing clientId (if required)
+- tasks with missing projectId (unless personal tasks)
+- membership rows referencing missing parents
+
+A2) Output format (internal DTO)
+Return:
+- summary counts
+- per-check details:
+  { checkName, severity, count, sampleIds[], derivationPathHint, recommendedAction }
+
+===============================================================================
+PART B — ADD SUPER ADMIN ENDPOINTS (ADD-ONLY)
+===============================================================================
+All endpoints must require:
+- authenticated super admin
+- (optional) CHAT_DEBUG-like flag e.g. MAINTENANCE_TOOLS=true for production safety
+
+Endpoints (add-only):
+1) GET /api/v1/super/system/health/tenancy
+- returns global health summary across all tenants
+
+2) GET /api/v1/super/tenants/:tenantId/health
+- returns health summary scoped to one tenant
+
+3) POST /api/v1/super/system/health/tenancy/repair-preview
+Body:
+{
+  tenantId?: string,          // optional, if omitted do global preview
+  tables?: string[],          // optional allowlist: ["projects","tasks",...]
+  limit?: number              // default 500
+}
+Returns:
+- proposedUpdates[] with:
+  { table, id, currentTenantId, derivedTenantId, confidence:"high"|"low", derivation:"clientId->tenantId"|"projectId->tenantId"|..., notes }
+
+4) POST /api/v1/super/system/health/tenancy/repair-apply
+Body:
+{
+  tenantId?: string,
+  tables?: string[],
+  limit?: number,
+  applyOnlyHighConfidence: true
+}
+Behavior:
+- apply ONLY “high confidence” derivations
+- return:
+  { updatedCountByTable, skippedLowConfidenceCountByTable, sampleUpdatedIds }
+
+IMPORTANT:
+- Both preview and apply must be transaction-protected per table batch.
+- Apply endpoint must require an explicit header:
+  X-Confirm-Repair: true
+to prevent accidental calls.
+
+===============================================================================
+PART C — TENANTID DERIVATION RULES (HIGH CONFIDENCE ONLY)
+===============================================================================
+Implement deterministic derivation paths, table by table:
+
+Examples:
+1) projects.tenantId:
+- if project.clientId exists -> derive tenantId from clients.tenantId
+- if project.workspaceId exists and workspace->tenantId exists -> also acceptable
+Confidence rules:
+- high if exactly one valid tenantId found and parent belongs to same tenant
+- low if missing clientId and missing workspaceId OR parent chain ambiguous
+
+2) tasks.tenantId (if tasks has tenantId column):
+- derive from tasks.projectId -> projects.tenantId
+- OR if personal task (no projectId) then derive from owning user tenantId (only if user tenantId is known and valid)
+Mark low confidence if both absent.
+
+3) teams.tenantId:
+- derive from team.workspaceId -> workspace.tenantId OR team.ownerUserId -> users.tenantId
+(high only if unambiguous)
+
+4) users.tenantId:
+- be careful: users may be global in some systems.
+If users are tenant-scoped in your system:
+- derive via user.workspaceId/tenantMemberships table if exists
+If not safely derivable, mark manual review.
+
+Do NOT “guess” tenantId using email domain.
+
+===============================================================================
+PART D — SUPER ADMIN UI: SYSTEM STATUS → “Tenant Health & Repair”
+===============================================================================
+Add a new tab in Super Admin System Status:
+- “Tenant Health & Repair”
+
+UI sections:
+1) Global Overview Cards:
+- Tenants total
+- Tenants ready
+- Tenants blocked
+- Orphan rows total (sum)
+
+2) Blockers table:
+Columns:
+- Tenant (name/id)
+- Status (Ready / Not ready)
+- Blocker counts (projects/tasks/teams/users missing tenantId)
+- Action: “View details”
+
+3) Tenant Detail Drawer:
+- Shows all checks + counts + sample IDs
+- Buttons:
+  - “Run Repair Preview (Dry Run)”
+  - “Apply High-Confidence Repair” (disabled until preview run)
+  - Copy JSON snapshot
+
+4) Repair Preview Panel:
+- Shows proposed updates grouped by table
+- Clearly shows “High confidence” vs “Manual review”
+- Require confirmation checkbox + explicit “Apply” action
+
+5) Logging:
+- Show last repair run timestamp and who ran it (from audit/error log)
+
+===============================================================================
+PART E — PREVENT REINTRODUCING ORPHANS (GUARDRAILS)
+===============================================================================
+Without changing endpoint shapes:
+- Add server-side assertions in create/update handlers for tenant-scoped tables:
+  - tenantId must be set/derived before insert
+  - validate parent chain belongs to same tenant
+- If validation fails:
+  - return existing error shape
+  - log to Error Log with requestId and “TENANCY_GUARD_FAIL”
+
+Do NOT change client UI behavior; just prevent silent bad inserts.
+
+===============================================================================
+TESTS (MANDATORY MINIMUM)
+===============================================================================
+1) tenancy_health_detects_missing_tenantid_rows.test.ts
+- seed rows with null tenantId -> check counts
+
+2) repair_preview_derives_high_confidence_updates.test.ts
+- project missing tenantId with valid clientId -> preview shows derived tenantId high
+
+3) repair_apply_updates_only_high_confidence.test.ts
+- low confidence rows are skipped
+
+4) endpoints_super_admin_only.test.ts
+- tenant admin/employee forbidden
+
+5) repair_apply_requires_confirm_header.test.ts
+- must include X-Confirm-Repair: true
+
+===============================================================================
+DOCUMENTATION
+===============================================================================
+- Create /docs/TENANT_HEALTH_REPAIR.md:
+  - checks performed
+  - derivation rules
+  - how to run preview/apply on Railway
+  - how to interpret “manual review required”
+- Update /docs/SUPER_ADMIN_SYSTEM_STATUS.md to include this new tab.
+
+===============================================================================
+ACCEPTANCE CRITERIA
+===============================================================================
+- Super Admin can see clear blockers with counts and samples.
+- Repair Preview shows exactly what would change, with confidence labeling.
+- Apply fixes only high-confidence rows, logs every change with requestId and actor.
+- Guardrails reduce future orphan inserts.
+- No endpoint path/shape changes; no destructive operations; tests pass.
+
+===============================================================================
+OUTPUT REQUIRED
+===============================================================================
+- List of checks implemented + tables covered
+- Exact derivation rules per table
+- What is considered “high confidence”
+- Manual verification checklist (local + Railway)
