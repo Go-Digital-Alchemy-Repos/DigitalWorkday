@@ -567,10 +567,13 @@ export async function registerRoutes(
       const workspaceId = getCurrentWorkspaceId(req);
       const creatorId = getCurrentUserId(req);
       
-      // Convert empty string teamId to null
+      // Convert empty string fields to null
       const body = { ...req.body };
       if (body.teamId === "") {
         body.teamId = null;
+      }
+      if (body.divisionId === "") {
+        body.divisionId = null;
       }
       
       // Extract memberIds before schema validation (not part of project schema)
