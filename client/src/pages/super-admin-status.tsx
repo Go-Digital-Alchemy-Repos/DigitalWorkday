@@ -1277,9 +1277,10 @@ function DebugToolsPanel() {
 
   const deleteMutation = useMutation({
     mutationFn: async (data: { table: string; id: string; confirmPhrase: string }) => {
-      return apiRequest("POST", "/api/v1/super/debug/quarantine/delete", data, {
+      const res = await apiRequest("POST", "/api/v1/super/debug/quarantine/delete", data, {
         "X-Confirm-Delete": "DELETE_QUARANTINED_ROW",
       });
+      return res.json();
     },
     onSuccess: () => {
       toast({ title: "Row deleted permanently" });
@@ -1294,12 +1295,13 @@ function DebugToolsPanel() {
   });
 
   const backfillMutation = useMutation({
-    mutationFn: async (mode: "dry_run" | "apply") => {
+    mutationFn: async (mode: "dry_run" | "apply"): Promise<BackfillResult> => {
       const headers: Record<string, string> = {};
       if (mode === "apply") {
         headers["X-Confirm-Backfill"] = "APPLY_TENANTID_BACKFILL";
       }
-      return apiRequest("POST", `/api/v1/super/debug/tenantid/backfill?mode=${mode}`, {}, headers);
+      const res = await apiRequest("POST", `/api/v1/super/debug/tenantid/backfill?mode=${mode}`, {}, headers);
+      return res.json();
     },
     onSuccess: (data: BackfillResult) => {
       setBackfillResult(data);
