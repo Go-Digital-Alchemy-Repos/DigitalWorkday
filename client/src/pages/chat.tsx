@@ -504,7 +504,8 @@ export default function ChatPage() {
   // Mutation for starting a new chat from drawer
   const startNewChatMutation = useMutation({
     mutationFn: async (userIds: string[]) => {
-      return apiRequest("POST", "/api/v1/chat/dm", { userIds });
+      const res = await apiRequest("POST", "/api/v1/chat/dm", { userIds });
+      return res.json();
     },
     onSuccess: (result: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });

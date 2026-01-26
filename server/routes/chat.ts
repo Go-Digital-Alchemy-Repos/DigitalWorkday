@@ -1004,15 +1004,18 @@ router.get(
 
     const users = await storage.getUsersByTenant(tenantId);
     
-    let result = users.map((u: any) => ({
-      id: u.id,
-      email: u.email,
-      firstName: u.firstName,
-      lastName: u.lastName,
-      role: u.role,
-      avatarUrl: u.avatarUrl,
-      displayName: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email,
-    }));
+    // Only include active users
+    let result = users
+      .filter((u: any) => u.isActive !== false)
+      .map((u: any) => ({
+        id: u.id,
+        email: u.email,
+        firstName: u.firstName,
+        lastName: u.lastName,
+        role: u.role,
+        avatarUrl: u.avatarUrl,
+        displayName: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email,
+      }));
 
     if (query) {
       result = result.filter(u => 
