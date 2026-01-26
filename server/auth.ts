@@ -76,6 +76,15 @@ export function getSessionMiddleware(): ReturnType<typeof session> {
 }
 
 export function setupAuth(app: Express): void {
+  // SECURITY: Fail fast in production if SESSION_SECRET is not configured
+  if (process.env.NODE_ENV === "production" && !process.env.SESSION_SECRET) {
+    throw new Error(
+      "FATAL: SESSION_SECRET environment variable is required in production. " +
+      "Sessions cannot be securely encrypted without it. " +
+      "Set SESSION_SECRET to a strong random string (minimum 32 characters)."
+    );
+  }
+
   const PgSession = connectPgSimple(session);
   const pool = new Pool({
     connectionString: process.env.DATABASE_URL,
@@ -1135,10 +1144,48 @@ export function setupPasswordResetEndpoints(app: Express): void {
         timestamp: new Date().toISOString(),
       }));
       
-      // TODO: Send email via Mailgun if configured
-      // For now, we just log the reset URL (in development only)
-      if (process.env.NODE_ENV !== "production") {
+      // Send password reset email via Mailgun if user has a tenant with email configured
+      let emailSent = false;
+      let emailError: string | null = null;
+      
+      if (user.tenantId) {
+        try {
+          const { emailOutboxService } = await import("./services/emailOutbox");
+          const result = await emailOutboxService.sendEmail({
+            tenantId: user.tenantId,
+            messageType: "forgot_password",
+            toEmail: user.email,
+            subject: "Password Reset Request",
+            textBody: `You requested a password reset for your account.\n\nClick this link to reset your password:\n${resetUrl}\n\nThis link will expire in 1 hour.\n\nIf you did not request this reset, you can safely ignore this email.`,
+            htmlBody: `
+              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
+                <h2>Password Reset Request</h2>
+                <p>You requested a password reset for your account.</p>
+                <p><a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 6px;">Reset Password</a></p>
+                <p style="color: #666; font-size: 14px;">This link will expire in 1 hour.</p>
+                <p style="color: #666; font-size: 14px;">If you did not request this reset, you can safely ignore this email.</p>
+              </div>
+            `,
+            requestId: (req as any).requestId,
+            metadata: { userId: user.id },
+          });
+          
+          emailSent = result.success;
+          if (!result.success) {
+            emailError = result.error || "Unknown error sending email";
+          }
+        } catch (error: any) {
+          emailError = error.message || "Failed to send email";
+          console.error("[auth] Password reset email error:", error);
+        }
+      }
+      
+      // Only log reset URL in non-production when email wasn't sent
+      if (process.env.NODE_ENV !== "production" && !emailSent) {
         console.log(`[auth] Password reset URL for ${email}: ${resetUrl}`);
+        if (emailError) {
+          console.log(`[auth] Email not sent: ${emailError}`);
+        }
       }
       
       res.json(genericResponse);

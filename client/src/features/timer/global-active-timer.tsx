@@ -182,9 +182,18 @@ export function GlobalActiveTimer() {
       await queryClient.cancelQueries({ queryKey: [TIMER_QUERY_KEY] });
       const previousTimer = queryClient.getQueryData<ActiveTimer | null>([TIMER_QUERY_KEY]);
       if (previousTimer) {
+        // Calculate elapsed seconds to match server-side pause behavior
+        let newElapsedSeconds = previousTimer.elapsedSeconds;
+        if (previousTimer.status === "running" && previousTimer.lastStartedAt) {
+          const lastStarted = new Date(previousTimer.lastStartedAt).getTime();
+          const now = Date.now();
+          newElapsedSeconds += Math.floor((now - lastStarted) / 1000);
+        }
+        
         queryClient.setQueryData<ActiveTimer | null>([TIMER_QUERY_KEY], {
           ...previousTimer,
           status: "paused",
+          elapsedSeconds: newElapsedSeconds,
         });
       }
       return { previousTimer };

@@ -1,0 +1,43 @@
+Replit Prompt
+
+You are working in the `/workspace/DASANA` repo. Review the current state of the app and implement the following improvements/debug tasks in priority order. Keep endpoints and DB schema unchanged unless explicitly required. Add tests where practical.
+
+1) Production SESSION_SECRET enforcement
+- In `server/auth.ts`, add a startup guard that fails fast when `NODE_ENV=production` and `SESSION_SECRET` is missing.
+- Ensure non-production behavior remains unchanged.
+
+2) Password reset email delivery
+- Implement the TODO in `server/auth.ts` to send password-reset emails via Mailgun or the configured email provider.
+- Do not log reset URLs in production. Keep safe logging in non-prod.
+- Add error handling if the email send fails.
+
+3) Timer pause/resume edge case
+- Fix the bug where pausing a timer and closing the browser causes incorrect resume duration.
+- Stabilize the timer state in the server (single source of truth).
+- Add a regression test.
+
+4) Section reorder race condition
+- Improve the reorder endpoint to avoid inconsistent ordering under concurrent updates.
+- Consider transactions + reindexing.
+- Add a test that simulates concurrent reorder operations.
+
+5) Rate limiting and CSRF
+- Add rate limiting to auth endpoints and file upload endpoints.
+- Add CSRF protection for sensitive operations.
+
+6) Consolidate helper middleware + type augmentation
+- Consolidate duplicate helpers (`getEffectiveTenantId`, `requireAuth`, etc.) into shared middleware.
+- Add Request type augmentation (e.g., `server/types.d.ts`) so `effectiveTenantId` and similar fields are typed.
+- Update call sites to use the shared middleware.
+
+7) Incremental route split
+- Start splitting `server/routes.ts` into domain modules (workspaces, projects, tasks, clients, time entries, users, settings, attachments).
+- Do this incrementally and keep routing behavior stable.
+
+8) Test cleanup FK failures
+- Update tests that delete users directly to use `safeDeleteAllUsers()` from `server/tests/fixtures.ts`.
+
+Deliverables:
+- Code changes implementing the above.
+- Tests updated/added.
+- Summary of changes and how to run tests.
