@@ -992,6 +992,39 @@ router.get(
   })
 );
 
+// GET /api/v1/chat/users - Get all tenant users for starting chats
+router.get(
+  "/users",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const { search } = req.query;
+    const query = typeof search === "string" ? search.toLowerCase().trim() : "";
+
+    const users = await storage.getUsersByTenant(tenantId);
+    
+    let result = users.map((u: any) => ({
+      id: u.id,
+      email: u.email,
+      firstName: u.firstName,
+      lastName: u.lastName,
+      role: u.role,
+      avatarUrl: u.avatarUrl,
+      displayName: `${u.firstName || ""} ${u.lastName || ""}`.trim() || u.email,
+    }));
+
+    if (query) {
+      result = result.filter(u => 
+        u.displayName.toLowerCase().includes(query) ||
+        u.email.toLowerCase().includes(query)
+      );
+    }
+
+    res.json(result);
+  })
+);
+
 // GET /api/v1/chat/users/mentionable - Get users that can be mentioned
 router.get(
   "/users/mentionable",

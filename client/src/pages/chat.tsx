@@ -270,28 +270,58 @@ export default function ChatPage() {
   });
 
   const searchResultsQuery = useQuery<{ messages: SearchResult[]; total: number }>({
-    queryKey: ["/api/v1/chat/search", { q: searchQuery }],
+    queryKey: ["/api/v1/chat/search", searchQuery],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (searchQuery) params.set("q", searchQuery);
+      const url = `/api/v1/chat/search${params.toString() ? `?${params}` : ""}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to search messages");
+      return res.json();
+    },
     enabled: searchOpen && searchQuery.length >= 2,
   });
 
   const mentionableUsersQuery = useQuery<MentionableUser[]>({
-    queryKey: ["/api/v1/chat/users/mentionable", { 
-      channelId: selectedChannel?.id, 
-      dmThreadId: selectedDm?.id,
-      q: mentionQuery 
-    }],
+    queryKey: ["/api/v1/chat/users/mentionable", selectedChannel?.id, selectedDm?.id, mentionQuery],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (selectedChannel?.id) params.set("channelId", selectedChannel.id);
+      if (selectedDm?.id) params.set("dmThreadId", selectedDm.id);
+      if (mentionQuery) params.set("q", mentionQuery);
+      const url = `/api/v1/chat/users/mentionable${params.toString() ? `?${params}` : ""}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch mentionable users");
+      return res.json();
+    },
     enabled: mentionOpen && (!!selectedChannel || !!selectedDm),
   });
 
   // Team panel: fetch all tenant users
   const { data: teamUsers = [], isLoading: isLoadingTeamUsers } = useQuery<TeamUser[]>({
-    queryKey: ["/api/v1/chat/users", { search: teamSearchQuery }],
+    queryKey: ["/api/v1/chat/users", "team", teamSearchQuery],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (teamSearchQuery) params.set("search", teamSearchQuery);
+      const url = `/api/v1/chat/users${params.toString() ? `?${params}` : ""}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch team users");
+      return res.json();
+    },
     enabled: sidebarTab === "team" || membersDrawerOpen,
   });
 
   // Separate query for Start Chat drawer to avoid cache conflicts
   const { data: startChatUsers = [], isLoading: isLoadingStartChatUsers } = useQuery<TeamUser[]>({
-    queryKey: ["/api/v1/chat/users", "startChat", { search: startChatSearchQuery }],
+    queryKey: ["/api/v1/chat/users", "startChat", startChatSearchQuery],
+    queryFn: async () => {
+      const params = new URLSearchParams();
+      if (startChatSearchQuery) params.set("search", startChatSearchQuery);
+      const url = `/api/v1/chat/users${params.toString() ? `?${params}` : ""}`;
+      const res = await fetch(url, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch users");
+      return res.json();
+    },
     enabled: startChatDrawerOpen,
   });
 
