@@ -44,6 +44,15 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useProjectSocket } from "@/lib/realtime";
 import type { Project, SectionWithTasks, TaskWithRelations, Section } from "@shared/schema";
 import { Link } from "wouter";
+import {
+  Breadcrumb,
+  BreadcrumbItem,
+  BreadcrumbLink,
+  BreadcrumbList,
+  BreadcrumbPage,
+  BreadcrumbSeparator,
+} from "@/components/ui/breadcrumb";
+import type { Client } from "@shared/schema";
 
 type ViewType = "board" | "list" | "calendar";
 
@@ -74,6 +83,12 @@ export default function ProjectPage() {
   const { data: project, isLoading: projectLoading } = useQuery<Project>({
     queryKey: ["/api/projects", projectId],
     enabled: !!projectId,
+  });
+
+  // Fetch client for breadcrumbs
+  const { data: client } = useQuery<Client>({
+    queryKey: ["/api/clients", project?.clientId],
+    enabled: !!project?.clientId,
   });
 
   const { data: sections, isLoading: sectionsLoading } = useQuery<SectionWithTasks[]>({
@@ -415,6 +430,43 @@ export default function ProjectPage() {
   return (
     <div className="flex flex-col h-full overflow-hidden">
       <div className="border-b border-border bg-background sticky top-0 z-10">
+        {/* Breadcrumbs: Client > Project (or just Project if no client) */}
+        <div className="px-4 md:px-6 pt-3 hidden md:block">
+          <Breadcrumb>
+            <BreadcrumbList>
+              {client ? (
+                <>
+                  <BreadcrumbItem>
+                    <BreadcrumbLink asChild>
+                      <Link href="/clients" data-testid="breadcrumb-clients">Clients</Link>
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator />
+                  <BreadcrumbItem>
+                    <BreadcrumbLink asChild>
+                      <Link href={`/clients/${client.id}`} data-testid="breadcrumb-client">
+                        {client.companyName}
+                      </Link>
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator />
+                </>
+              ) : (
+                <>
+                  <BreadcrumbItem>
+                    <BreadcrumbLink asChild>
+                      <Link href="/projects" data-testid="breadcrumb-projects">Projects</Link>
+                    </BreadcrumbLink>
+                  </BreadcrumbItem>
+                  <BreadcrumbSeparator />
+                </>
+              )}
+              <BreadcrumbItem>
+                <BreadcrumbPage data-testid="breadcrumb-project">{project.name}</BreadcrumbPage>
+              </BreadcrumbItem>
+            </BreadcrumbList>
+          </Breadcrumb>
+        </div>
         <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4">
           <div className="flex items-center gap-2 md:gap-3 min-w-0">
             <div

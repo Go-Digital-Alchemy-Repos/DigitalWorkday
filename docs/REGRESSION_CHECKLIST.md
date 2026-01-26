@@ -10,7 +10,7 @@ Manual regression checklist for verifying core functionality. Run through this c
 ### 1.1 Login
 - [ ] Navigate to `/login`
 - [ ] Enter valid credentials
-- [ ] Verify redirect to appropriate page (Super Admin → `/super-admin/dashboard`, Tenant User → `/`)
+- [ ] Verify redirect to appropriate page (Super Admin → `/super-admin/dashboard`, Tenant User → `/my-tasks`)
 - [ ] Verify session persists on page refresh
 
 ### 1.2 Registration (First User)
@@ -298,6 +298,34 @@ Manual regression checklist for verifying core functionality. Run through this c
 - [ ] Projects have tenantId after creation
 - [ ] Users have tenantId after invitation acceptance
 - [ ] Error responses include requestId for debugging
+
+---
+
+## 15. UX Foundation & Navigation
+
+### 15.1 My Work Landing
+- [ ] Tenant users (admin/employee) land on `/my-tasks` after login
+- [ ] Super users land on `/super-admin/dashboard` after login
+- [ ] My Tasks shows assigned tasks grouped by date (Overdue, Today, Tomorrow, Upcoming)
+- [ ] Empty state shows "Add a personal task" CTA when no tasks
+
+### 15.2 Breadcrumbs
+- [ ] Project page with client shows breadcrumbs: Clients > [Client Name] > [Project Name]
+- [ ] Project page without client shows breadcrumbs: Projects > [Project Name]
+- [ ] Breadcrumbs only appear on desktop (hidden on mobile)
+- [ ] Breadcrumb links navigate correctly to Clients list/Projects list and Client detail
+
+### 15.3 Empty States & CTAs
+- [ ] Home page: "No projects yet" shows "Create your first project" button
+- [ ] Home page: "No upcoming tasks" shows helpful explanation
+- [ ] My Tasks: Empty state shows "Add a personal task" button
+
+### 15.4 Tenant Context Gate (Flicker Prevention)
+- [ ] TenantContextGate prevents tenant routes from rendering until tenant context is confirmed
+- [ ] Shows loading spinner while tenant context is loading
+- [ ] Shows error state with Retry + Exit option on context load failure
+- [ ] No stale UI or flicker when switching between tenants (impersonation)
+- [ ] URL restoration works after tenant context loads
 
 ---
 

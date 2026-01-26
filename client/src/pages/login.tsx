@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, LogIn, UserPlus, Shield } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
 import { Separator } from "@/components/ui/separator";
+import { UserRole } from "@shared/schema";
 
 interface BootstrapStatus {
   bootstrapRequired: boolean;
@@ -115,7 +116,9 @@ export default function LoginPage() {
         title: "Welcome back!",
         description: "You have been logged in successfully",
       });
-      setLocation("/");
+      // Super users go to admin dashboard, tenant users land on "My Work" (my-tasks)
+      const isSuperUser = result.user?.role === UserRole.SUPER_USER;
+      setLocation(isSuperUser ? "/super-admin/dashboard" : "/my-tasks");
     } else {
       toast({
         title: "Login failed",
