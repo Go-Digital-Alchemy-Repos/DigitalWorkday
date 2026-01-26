@@ -49,6 +49,7 @@ import Mailgun from "mailgun.js";
 import FormData from "form-data";
 import { invalidateAgreementCache, clearAgreementCache } from "../middleware/agreementEnforcement";
 import { AgreementStatus } from "@shared/schema";
+import { tenancyHealthService } from "../services/tenancyHealth";
 
 const upload = multer({ 
   storage: multer.memoryStorage(),
@@ -8397,6 +8398,92 @@ router.get("/tenancy/health", requireSuperUser, async (req, res) => {
   } catch (error) {
     console.error("[tenancy] Failed to get tenancy health:", error);
     res.status(500).json({ error: "Failed to get tenancy health" });
+  }
+});
+
+// ==============================================================================
+// TENANT HEALTH & REPAIR TOOLS (Part B - New Endpoints)
+// ==============================================================================
+
+// GET /api/v1/super/system/health/tenancy - Global health summary
+router.get("/system/health/tenancy", requireSuperUser, async (req, res) => {
+  try {
+    const summary = await tenancyHealthService.getGlobalHealthSummary();
+    res.json(summary);
+  } catch (error) {
+    console.error("[tenancy-health] Failed to get global health:", error);
+    res.status(500).json({ error: "Failed to get global tenancy health" });
+  }
+});
+
+// POST /api/v1/super/system/health/tenancy/repair-preview - Dry-run repair preview
+const repairPreviewSchema = z.object({
+  tenantId: z.string().uuid().optional(),
+  tables: z.array(z.string()).optional(),
+  limit: z.number().min(1).max(1000).optional().default(500),
+});
+
+router.post("/system/health/tenancy/repair-preview", requireSuperUser, async (req, res) => {
+  try {
+    const data = repairPreviewSchema.parse(req.body);
+    const preview = await tenancyHealthService.generateRepairPreview({
+      tenantId: data.tenantId,
+      tables: data.tables,
+      limit: data.limit,
+    });
+    res.json(preview);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Invalid request", details: error.errors });
+    }
+    console.error("[tenancy-health] Failed to generate repair preview:", error);
+    res.status(500).json({ error: "Failed to generate repair preview" });
+  }
+});
+
+// POST /api/v1/super/system/health/tenancy/repair-apply - Apply high-confidence repairs
+const repairApplySchema = z.object({
+  tenantId: z.string().uuid().optional(),
+  tables: z.array(z.string()).optional(),
+  limit: z.number().min(1).max(1000).optional().default(500),
+  applyOnlyHighConfidence: z.boolean().optional().default(true),
+});
+
+router.post("/system/health/tenancy/repair-apply", requireSuperUser, async (req, res) => {
+  try {
+    // Require explicit confirmation header
+    const confirmHeader = req.headers["x-confirm-repair"];
+    if (confirmHeader !== "true") {
+      return res.status(400).json({ 
+        error: "Repair confirmation required",
+        message: "Include header 'X-Confirm-Repair: true' to confirm this operation",
+      });
+    }
+    
+    const data = repairApplySchema.parse(req.body);
+    const requestId = req.headers["x-request-id"] as string || `repair_${Date.now()}`;
+    const userId = (req as any).user?.id || "unknown";
+    
+    const result = await tenancyHealthService.applyRepairs(
+      {
+        tenantId: data.tenantId,
+        tables: data.tables,
+        limit: data.limit,
+        applyOnlyHighConfidence: data.applyOnlyHighConfidence,
+      },
+      { userId, requestId }
+    );
+    
+    // Log the repair action
+    console.log(`[tenancy-repair] Repair applied by ${userId}: ${result.totalUpdated} updated, ${result.totalSkipped} skipped (requestId=${requestId})`);
+    
+    res.json(result);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Invalid request", details: error.errors });
+    }
+    console.error("[tenancy-health] Failed to apply repairs:", error);
+    res.status(500).json({ error: "Failed to apply repairs" });
   }
 });
 
