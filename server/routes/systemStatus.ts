@@ -361,6 +361,19 @@ router.get("/error-logs", requireAuth, requireSuperUser, async (req: Request, re
     });
   } catch (error: any) {
     console.error("[status/error-logs] Failed to fetch error logs:", error);
+    // Check if table doesn't exist - return safe "not initialized" state
+    if (error?.message?.includes("does not exist") || error?.code === "42P01") {
+      return res.json({
+        ok: true,
+        requestId,
+        logs: [],
+        total: 0,
+        limit: parseInt(req.query.limit as string || "50", 10),
+        offset: parseInt(req.query.offset as string || "0", 10),
+        status: "not_initialized",
+        message: "Error logging table not yet initialized. Run migrations to enable.",
+      });
+    }
     res.status(500).json({
       ok: false,
       requestId,
@@ -422,6 +435,18 @@ router.get("/error-logs/:id", requireAuth, requireSuperUser, async (req: Request
     });
   } catch (error: any) {
     console.error("[status/error-logs/:id] Failed to fetch error log:", error);
+    // Check if table doesn't exist - return safe "not initialized" state
+    if (error?.message?.includes("does not exist") || error?.code === "42P01") {
+      return res.status(404).json({
+        ok: false,
+        requestId,
+        error: {
+          code: "ERROR_LOGS_NOT_INITIALIZED",
+          message: "Error logging table not yet initialized. Run migrations to enable.",
+          requestId,
+        },
+      });
+    }
     res.status(500).json({
       ok: false,
       requestId,
@@ -485,6 +510,18 @@ router.patch("/error-logs/:id/resolve", requireAuth, requireSuperUser, async (re
     });
   } catch (error: any) {
     console.error("[status/error-logs/:id/resolve] Failed to update error log:", error);
+    // Check if table doesn't exist - return safe "not initialized" state
+    if (error?.message?.includes("does not exist") || error?.code === "42P01") {
+      return res.status(404).json({
+        ok: false,
+        requestId,
+        error: {
+          code: "ERROR_LOGS_NOT_INITIALIZED",
+          message: "Error logging table not yet initialized. Run migrations to enable.",
+          requestId,
+        },
+      });
+    }
     res.status(500).json({
       ok: false,
       requestId,
