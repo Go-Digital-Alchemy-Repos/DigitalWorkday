@@ -15,6 +15,7 @@ import { errorLoggingMiddleware } from "./middleware/errorLogging";
 import { apiJsonResponseGuard, apiNotFoundHandler } from "./middleware/apiJsonGuard";
 import { logMigrationStatus } from "./scripts/migration-status";
 import { ensureSchemaReady } from "./startup/schemaReadiness";
+import { logAppInfo } from "./startup/appInfo";
 
 export const app = express();
 const httpServer = createServer(app);
@@ -119,6 +120,9 @@ app.use((req, res, next) => {
     console.error("[boot] Set AUTO_MIGRATE=true or run: npx drizzle-kit migrate");
     process.exit(1);
   }
+  
+  // Log app version and configuration
+  logAppInfo();
   
   // Log migration status at startup (already verified above, but provides visibility)
   await logMigrationStatus();

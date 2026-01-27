@@ -18,6 +18,14 @@ import { db } from "../db";
 import { tenants } from "@shared/schema";
 import { eq } from "drizzle-orm";
 
+const TENANT_DEBUG = process.env.TENANT_CONTEXT_DEBUG === "true";
+
+function debugLog(message: string, data?: Record<string, any>): void {
+  if (TENANT_DEBUG) {
+    console.log(`[tenantContext:debug] ${message}`, data ? JSON.stringify(data) : "");
+  }
+}
+
 export interface TenantContext {
   tenantId: string | null;
   effectiveTenantId: string | null;
@@ -33,6 +41,7 @@ export async function tenantContextMiddleware(req: Request, res: Response, next:
   const session = req.session as Record<string, any>;
 
   if (!user) {
+    debugLog("No user, skipping tenant context", { path: req.path });
     req.tenant = {
       tenantId: null,
       effectiveTenantId: null,
@@ -68,12 +77,22 @@ export async function tenantContextMiddleware(req: Request, res: Response, next:
       effectiveTenantId: effectiveTenantId,
       isSuperUser: true,
     };
+    debugLog("Super user tenant context", {
+      userId: user.id,
+      ownTenantId: user.tenantId,
+      effectiveTenantId,
+      source: headerTenantId ? "header" : impersonatedTenantId ? "impersonation" : actingAsTenantId ? "acting" : "none"
+    });
   } else {
     req.tenant = {
       tenantId: user.tenantId || null,
       effectiveTenantId: user.tenantId || null,
       isSuperUser: false,
     };
+    debugLog("Regular user tenant context", {
+      userId: user.id,
+      tenantId: user.tenantId
+    });
   }
 
   next();
