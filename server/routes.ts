@@ -27,6 +27,7 @@ import crypto from "crypto";
 import { storage } from "./storage";
 import { z } from "zod";
 import { captureError } from "./middleware/errorLogging";
+import { AppError, handleRouteError, sendError } from "./lib/errors";
 import subRoutes from "./routes/index";
 import webhookRoutes from "./routes/webhooks";
 import {
@@ -1584,12 +1585,11 @@ export async function registerRoutes(
     try {
       const task = await storage.getTaskWithRelations(req.params.id);
       if (!task) {
-        return res.status(404).json({ error: "Task not found" });
+        return sendError(res, AppError.notFound("Task"), req);
       }
       res.json(task);
     } catch (error) {
-      console.error("Error fetching task:", error);
-      res.status(500).json({ error: "Internal server error" });
+      return handleRouteError(res, error, "GET /api/tasks/:id", req);
     }
   });
 
@@ -1598,8 +1598,7 @@ export async function registerRoutes(
       const childTasks = await storage.getChildTasks(req.params.id);
       res.json(childTasks);
     } catch (error) {
-      console.error("Error fetching child tasks:", error);
-      res.status(500).json({ error: "Internal server error" });
+      return handleRouteError(res, error, "GET /api/tasks/:id/childtasks", req);
     }
   });
 
@@ -1830,19 +1829,16 @@ export async function registerRoutes(
 
       res.json(taskWithRelations);
     } catch (error) {
-      const sanitizedError = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[Task Update Error] requestId=${requestId} taskId=${req.params.id} error=${sanitizedError}`);
-      res.status(500).json({ error: "Unable to update task", requestId });
+      return handleRouteError(res, error, "PATCH /api/tasks/:id", req);
     }
   });
 
   app.delete("/api/tasks/:id", async (req, res) => {
-    const requestId = (req as any).requestId || 'unknown';
     try {
       // Get task before deletion to emit event with projectId
       const task = await storage.getTask(req.params.id);
       if (!task) {
-        return res.status(404).json({ error: "Task not found", requestId });
+        return sendError(res, AppError.notFound("Task"), req);
       }
 
       await storage.deleteTask(req.params.id);
@@ -1863,9 +1859,7 @@ export async function registerRoutes(
 
       res.status(204).send();
     } catch (error) {
-      const sanitizedError = error instanceof Error ? error.message : 'Unknown error';
-      console.error(`[Task Delete Error] requestId=${requestId} taskId=${req.params.id} error=${sanitizedError}`);
-      res.status(500).json({ error: "Unable to delete task", requestId });
+      return handleRouteError(res, error, "DELETE /api/tasks/:id", req);
     }
   });
 
@@ -1876,7 +1870,7 @@ export async function registerRoutes(
       // Get task before move to emit event with fromSectionId
       const taskBefore = await storage.getTask(req.params.id);
       if (!taskBefore) {
-        return res.status(404).json({ error: "Task not found" });
+        return sendError(res, AppError.notFound("Task"), req);
       }
       const fromSectionId = taskBefore.sectionId;
 
@@ -1896,8 +1890,7 @@ export async function registerRoutes(
 
       res.json(task);
     } catch (error) {
-      console.error("Error moving task:", error);
-      res.status(500).json({ error: "Internal server error" });
+      return handleRouteError(res, error, "POST /api/tasks/:id/move", req);
     }
   });
 
