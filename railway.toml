@@ -1,10 +1,20 @@
+# Railway deployment configuration for MyWorkDay
+# https://docs.railway.app/reference/config-as-code
+
 [build]
-builder = "nixpacks"
+builder = "NIXPACKS"
 buildCommand = "npm run build"
 
 [deploy]
-startCommand = "npx tsx server/scripts/migrate.ts && npm run start"
-healthcheckPath = "/api/health"
+startCommand = "npm run start"
+healthcheckPath = "/health"
 healthcheckTimeout = 300
-restartPolicyType = "on_failure"
-restartPolicyMaxRetries = 3
+restartPolicyType = "ON_FAILURE"
+restartPolicyMaxRetries = 10
+
+# Note: Migrations run automatically on startup when AUTO_MIGRATE=true
+# Required environment variables:
+#   AUTO_MIGRATE=true
+#   FAIL_ON_SCHEMA_ISSUES=true
+#   SESSION_SECRET=<random 32+ chars>
+#   DATABASE_URL (auto-set by Railway PostgreSQL plugin)

@@ -220,6 +220,8 @@ router.get("/status/auth-diagnostics", requireSuperUser, async (_req, res) => {
  * 
  * Returns detailed database status including:
  * - Migration count and last migration info
+ * - Full list of applied migrations with timestamps
+ * - Pending migrations (files not yet applied)
  * - Required tables/columns existence checks
  * - Database connection status
  * 
@@ -229,22 +231,86 @@ router.get("/status/db", requireSuperUser, async (_req, res) => {
   try {
     const schemaStatus = await checkSchemaReadiness();
     
+    // Get full migration history
+    let appliedMigrations: { hash: string; createdAt: string }[] = [];
+    let pendingMigrations: string[] = [];
+    
+    try {
+      const migrationsResult = await db.execute(sql`
+        SELECT hash, created_at 
+        FROM drizzle.__drizzle_migrations 
+        ORDER BY id ASC
+      `);
+      appliedMigrations = (migrationsResult.rows as any[]).map(row => ({
+        hash: row.hash,
+        createdAt: row.created_at,
+      }));
+      
+      // Check for pending migrations by reading migration folder
+      const fs = await import("fs");
+      const path = await import("path");
+      const migrationsPath = path.resolve(process.cwd(), "migrations");
+      
+      if (fs.existsSync(migrationsPath)) {
+        const migrationFiles = fs.readdirSync(migrationsPath)
+          .filter((f: string) => f.endsWith(".sql"))
+          .map((f: string) => f.replace(".sql", ""));
+        
+        const appliedHashes = new Set(appliedMigrations.map(m => m.hash));
+        pendingMigrations = migrationFiles.filter(f => !appliedHashes.has(f));
+      }
+    } catch (e) {
+      console.error("[status/db] Failed to get migration history:", e);
+    }
+    
+    // Count missing tables
+    const missingTables = schemaStatus.tablesCheck
+      .filter(t => !t.exists)
+      .map(t => t.table);
+    
+    // Count missing columns  
+    const missingColumns = schemaStatus.columnsCheck
+      .filter(c => !c.exists)
+      .map(c => `${c.table}.${c.column}`);
+    
     res.json({
       dbConnectionOk: schemaStatus.dbConnectionOk,
-      migrationsApplied: schemaStatus.migrationAppliedCount,
-      lastMigration: schemaStatus.lastMigrationHash,
-      lastMigrationTimestamp: schemaStatus.lastMigrationTimestamp,
       schemaReady: schemaStatus.isReady,
+      
+      // Migration details
+      migrations: {
+        total: schemaStatus.migrationAppliedCount,
+        lastApplied: schemaStatus.lastMigrationHash,
+        lastAppliedAt: schemaStatus.lastMigrationTimestamp,
+        applied: appliedMigrations,
+        pending: pendingMigrations,
+        pendingCount: pendingMigrations.length,
+      },
+      
+      // Tables check
       tables: {
         allExist: schemaStatus.allTablesExist,
+        missing: missingTables,
+        missingCount: missingTables.length,
         details: schemaStatus.tablesCheck,
       },
+      
+      // Columns check
       columns: {
         allExist: schemaStatus.allColumnsExist,
+        missing: missingColumns,
+        missingCount: missingColumns.length,
         details: schemaStatus.columnsCheck,
       },
+      
+      // Configuration
+      config: {
+        autoMigrateEnabled: process.env.AUTO_MIGRATE === "true",
+        failOnSchemaIssues: process.env.FAIL_ON_SCHEMA_ISSUES !== "false",
+        nodeEnv: process.env.NODE_ENV || "development",
+      },
+      
       errors: schemaStatus.errors,
-      autoMigrateEnabled: process.env.AUTO_MIGRATE === "true",
       checkedAt: new Date().toISOString(),
     });
   } catch (error: any) {

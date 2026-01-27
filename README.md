@@ -159,8 +159,21 @@ npm run test:watch       # Watch mode
 | Variable | Description |
 |----------|-------------|
 | `DATABASE_URL` | PostgreSQL connection string |
-| `SESSION_SECRET` | Session encryption key |
+| `SESSION_SECRET` | Session encryption key (min 32 characters) |
 | `APP_ENCRYPTION_KEY` | Tenant secret encryption (32 bytes, base64-encoded) |
+
+### Railway Deployment
+
+For Railway deployments, set these additional variables:
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `AUTO_MIGRATE` | Yes | Set to `true` - runs database migrations on startup |
+| `FAIL_ON_SCHEMA_ISSUES` | Yes | Set to `true` - fails fast if schema is incomplete |
+| `NODE_ENV` | Auto | Auto-set to `production` by Railway |
+| `DATABASE_URL` | Auto | Auto-set by Railway PostgreSQL plugin |
+
+See [Railway Deployment Guide](docs/RAILWAY_DEPLOYMENT_GUIDE.md) for complete setup instructions.
 
 ### Optional
 
