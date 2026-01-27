@@ -29,6 +29,13 @@
       "when": 1769533813913,
       "tag": "0003_fast_imperial_guard",
       "breakpoints": true
+    },
+    {
+      "idx": 4,
+      "version": "7",
+      "when": 1769534500000,
+      "tag": "0004_add_missing_production_tables",
+      "breakpoints": true
     }
   ]
 }
