@@ -630,6 +630,143 @@ export const divisionMembers = pgTable("division_members", {
 ]);
 
 // =============================================================================
+// CLIENT NOTES & DOCUMENT LIBRARY TABLES
+// =============================================================================
+
+/**
+ * Client Note Categories table - user-definable categories for client notes
+ * Comes with predefined categories but allows custom additions
+ */
+export const ClientNoteCategory = {
+  PROJECT: "project",
+  FEEDBACK: "feedback",
+  MEETING: "meeting",
+  REQUIREMENT: "requirement",
+  GENERAL: "general",
+} as const;
+
+export const clientNoteCategories = pgTable("client_note_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  name: text("name").notNull(),
+  color: text("color"),
+  isSystem: boolean("is_system").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("client_note_categories_tenant_idx").on(table.tenantId),
+  uniqueIndex("client_note_categories_name_tenant_idx").on(table.tenantId, table.name),
+]);
+
+/**
+ * Client Notes table - chronological notes attached to clients
+ * Used for tracking project details, feedback, requirements, etc.
+ * Tenant admins and employees can create, read, update, delete
+ */
+export const clientNotes = pgTable("client_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  authorUserId: varchar("author_user_id").references(() => users.id).notNull(),
+  lastEditedByUserId: varchar("last_edited_by_user_id").references(() => users.id),
+  body: jsonb("body").notNull(), // Rich text JSON format (TipTap)
+  categoryId: varchar("category_id").references(() => clientNoteCategories.id),
+  category: text("category").default("general"), // Fallback text category
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("client_notes_tenant_idx").on(table.tenantId),
+  index("client_notes_client_idx").on(table.clientId),
+  index("client_notes_created_at_idx").on(table.createdAt),
+  index("client_notes_category_idx").on(table.categoryId),
+]);
+
+/**
+ * Client Note Versions table - stores historical versions of notes
+ * Each time a note is edited, the previous version is saved here
+ */
+export const clientNoteVersions = pgTable("client_note_versions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  noteId: varchar("note_id").references(() => clientNotes.id, { onDelete: "cascade" }).notNull(),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  editorUserId: varchar("editor_user_id").references(() => users.id).notNull(),
+  body: jsonb("body").notNull(), // Rich text JSON format
+  category: text("category"),
+  categoryId: varchar("category_id").references(() => clientNoteCategories.id),
+  versionNumber: integer("version_number").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("client_note_versions_note_idx").on(table.noteId),
+  index("client_note_versions_tenant_idx").on(table.tenantId),
+  index("client_note_versions_created_at_idx").on(table.createdAt),
+]);
+
+/**
+ * Client Note Attachments table - file attachments for client notes
+ */
+export const clientNoteAttachments = pgTable("client_note_attachments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  noteId: varchar("note_id").references(() => clientNotes.id, { onDelete: "cascade" }).notNull(),
+  uploadedByUserId: varchar("uploaded_by_user_id").references(() => users.id).notNull(),
+  originalFileName: text("original_file_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  fileSizeBytes: integer("file_size_bytes").notNull(),
+  storageKey: text("storage_key").notNull(),
+  uploadStatus: text("upload_status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("client_note_attachments_note_idx").on(table.noteId),
+  index("client_note_attachments_tenant_idx").on(table.tenantId),
+]);
+
+/**
+ * Client Document Categories table - user-definable categories for organizing documents
+ */
+export const clientDocumentCategories = pgTable("client_document_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  color: text("color"),
+  sortOrder: integer("sort_order").default(0),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("client_doc_categories_tenant_idx").on(table.tenantId),
+  index("client_doc_categories_client_idx").on(table.clientId),
+  uniqueIndex("client_doc_categories_name_client_idx").on(table.clientId, table.name),
+]);
+
+/**
+ * Client Documents table - document library for each client
+ * Accepts all major file types, organized by categories
+ * Tenant admins/employees and future client users can access
+ */
+export const clientDocuments = pgTable("client_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  categoryId: varchar("category_id").references(() => clientDocumentCategories.id),
+  uploadedByUserId: varchar("uploaded_by_user_id").references(() => users.id).notNull(),
+  originalFileName: text("original_file_name").notNull(),
+  displayName: text("display_name"),
+  description: text("description"),
+  mimeType: text("mime_type").notNull(),
+  fileSizeBytes: integer("file_size_bytes").notNull(),
+  storageKey: text("storage_key").notNull(),
+  uploadStatus: text("upload_status").notNull().default("pending"),
+  isClientUploaded: boolean("is_client_uploaded").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("client_documents_tenant_idx").on(table.tenantId),
+  index("client_documents_client_idx").on(table.clientId),
+  index("client_documents_category_idx").on(table.categoryId),
+  index("client_documents_created_at_idx").on(table.createdAt),
+]);
+
+// =============================================================================
 // TIME TRACKING TABLES
 // =============================================================================
 
@@ -1973,6 +2110,40 @@ export const insertDivisionMemberSchema = createInsertSchema(divisionMembers).om
   createdAt: true,
 });
 
+// Client Notes & Document Library Insert Schemas
+export const insertClientNoteCategorySchema = createInsertSchema(clientNoteCategories).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertClientNoteSchema = createInsertSchema(clientNotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertClientNoteVersionSchema = createInsertSchema(clientNoteVersions).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertClientNoteAttachmentSchema = createInsertSchema(clientNoteAttachments).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertClientDocumentCategorySchema = createInsertSchema(clientDocumentCategories).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertClientDocumentSchema = createInsertSchema(clientDocuments).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Time Tracking Insert Schemas
 export const insertTimeEntrySchema = createInsertSchema(timeEntries).omit({
   id: true,
@@ -2193,6 +2364,38 @@ export type InsertClientDivision = z.infer<typeof insertClientDivisionSchema>;
 
 export type DivisionMember = typeof divisionMembers.$inferSelect;
 export type InsertDivisionMember = z.infer<typeof insertDivisionMemberSchema>;
+
+// Client Notes & Document Library Types
+export type ClientNoteCategory = typeof clientNoteCategories.$inferSelect;
+export type InsertClientNoteCategory = z.infer<typeof insertClientNoteCategorySchema>;
+
+export type ClientNote = typeof clientNotes.$inferSelect;
+export type InsertClientNote = z.infer<typeof insertClientNoteSchema>;
+
+export type ClientNoteVersion = typeof clientNoteVersions.$inferSelect;
+export type InsertClientNoteVersion = z.infer<typeof insertClientNoteVersionSchema>;
+
+export type ClientNoteAttachment = typeof clientNoteAttachments.$inferSelect;
+export type InsertClientNoteAttachment = z.infer<typeof insertClientNoteAttachmentSchema>;
+
+export type ClientDocumentCategory = typeof clientDocumentCategories.$inferSelect;
+export type InsertClientDocumentCategory = z.infer<typeof insertClientDocumentCategorySchema>;
+
+export type ClientDocument = typeof clientDocuments.$inferSelect;
+export type InsertClientDocument = z.infer<typeof insertClientDocumentSchema>;
+
+// Extended types for client notes
+export type ClientNoteWithAuthor = ClientNote & {
+  author?: User;
+  lastEditedBy?: User;
+  categoryObj?: ClientNoteCategory;
+  attachments?: ClientNoteAttachment[];
+};
+
+export type ClientDocumentWithUser = ClientDocument & {
+  uploadedBy?: User;
+  categoryObj?: ClientDocumentCategory;
+};
 
 // Time Tracking Types
 export type TimeEntry = typeof timeEntries.$inferSelect;

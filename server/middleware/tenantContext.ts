@@ -24,6 +24,10 @@ export interface TenantContext {
   isSuperUser: boolean;
 }
 
+export interface TenantRequest extends Request {
+  tenant?: TenantContext;
+}
+
 declare global {
   namespace Express {
     interface Request {
