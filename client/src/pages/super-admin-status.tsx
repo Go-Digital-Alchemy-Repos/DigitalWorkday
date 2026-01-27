@@ -657,7 +657,7 @@ function ChatDebugPanel() {
   );
 }
 
-function DbIntrospectPanel({ onNavigateTab }: { onNavigateTab: (tab: string) => void }) {
+function DbIntrospectPanel({ onNavigateTab, onNavigateLogsSubTab }: { onNavigateTab: (tab: string) => void; onNavigateLogsSubTab: (tab: string) => void }) {
   const { toast } = useToast();
   const [introspectData, setIntrospectData] = useState<DbIntrospectResponse | null>(null);
   const [isLoading, setIsLoading] = useState(false);
@@ -718,7 +718,7 @@ function DbIntrospectPanel({ onNavigateTab }: { onNavigateTab: (tab: string) => 
               Migrations may be missing in production. Review the failed checks below.
             </p>
             <div className="flex gap-2 mt-3">
-              <Button variant="outline" size="sm" onClick={() => onNavigateTab("error-logs")} data-testid="link-error-logs">
+              <Button variant="outline" size="sm" onClick={() => { onNavigateTab("logs"); onNavigateLogsSubTab("error"); }} data-testid="link-error-logs">
                 <FileWarning className="h-4 w-4 mr-2" />
                 Open Error Log
               </Button>
@@ -2884,6 +2884,8 @@ export default function SuperAdminStatusPage() {
   const { user } = useAuth();
   const { toast } = useToast();
   const [activeTab, setActiveTab] = useState("health");
+  const [toolsSubTab, setToolsSubTab] = useState("auth");
+  const [logsSubTab, setLogsSubTab] = useState("app");
   const [confirmDialog, setConfirmDialog] = useState<{ action: string; title: string; description: string } | null>(null);
   const [confirmPhrase, setConfirmPhrase] = useState("");
 
@@ -2928,9 +2930,6 @@ export default function SuperAdminStatusPage() {
     }
     runCheckMutation.mutate(action);
   };
-
-  const [toolsSubTab, setToolsSubTab] = useState("auth");
-  const [logsSubTab, setLogsSubTab] = useState("app");
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -3431,7 +3430,7 @@ export default function SuperAdminStatusPage() {
                 </TabsContent>
 
                 <TabsContent value="db" className="mt-4">
-                  <DbIntrospectPanel onNavigateTab={setActiveTab} />
+                  <DbIntrospectPanel onNavigateTab={setActiveTab} onNavigateLogsSubTab={setLogsSubTab} />
                 </TabsContent>
               </Tabs>
             </div>
