@@ -589,4 +589,108 @@ router.get("/integrations/sso/status", requireSuperUser, async (req: Request, re
   }
 });
 
+// =============================================================================
+// OPENAI AI INTEGRATION - SYSTEM-LEVEL CONFIGURATION
+// =============================================================================
+
+/**
+ * OpenAI configuration schema
+ */
+const openaiUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  model: z.string().optional(),
+  maxTokens: z.number().optional(),
+  temperature: z.string().optional(),
+  apiKey: z.string().optional(),
+});
+
+/**
+ * GET /api/v1/system/integrations/openai
+ * Get system-level OpenAI configuration
+ */
+router.get("/integrations/openai", requireSuperUser, async (req: Request, res: Response) => {
+  try {
+    const integration = await tenantIntegrationService.getIntegration(null, "openai");
+    
+    if (!integration) {
+      return res.json({
+        provider: "openai",
+        status: "not_configured",
+        publicConfig: null,
+        secretConfigured: false,
+        lastTestedAt: null,
+        isSystemDefault: true,
+      });
+    }
+    
+    res.json({
+      ...integration,
+      isSystemDefault: true,
+    });
+  } catch (error) {
+    console.error("[system-integrations] Error getting OpenAI integration:", error);
+    res.json({
+      provider: "openai",
+      status: "not_configured",
+      publicConfig: null,
+      secretConfigured: false,
+      lastTestedAt: null,
+      isSystemDefault: true,
+    });
+  }
+});
+
+/**
+ * PUT /api/v1/system/integrations/openai
+ * Update system-level OpenAI configuration
+ */
+router.put("/integrations/openai", requireSuperUser, async (req: Request, res: Response) => {
+  try {
+    if (process.env.NODE_ENV === "production" && !isEncryptionAvailable()) {
+      return res.status(400).json({
+        error: { code: "ENCRYPTION_REQUIRED", message: "Encryption key not configured. Cannot save secrets." },
+      });
+    }
+
+    const data = openaiUpdateSchema.parse(req.body);
+    
+    const result = await tenantIntegrationService.upsertIntegration(null, "openai", {
+      publicConfig: {
+        enabled: data.enabled ?? true,
+        model: data.model ?? "gpt-4o-mini",
+        maxTokens: data.maxTokens ?? 2000,
+        temperature: data.temperature ?? "0.7",
+      },
+      secretConfig: data.apiKey ? {
+        apiKey: data.apiKey,
+      } : undefined,
+    });
+    
+    res.json({
+      ...result,
+      isSystemDefault: true,
+    });
+  } catch (error) {
+    console.error("[system-integrations] Error updating OpenAI integration:", error);
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: { code: "VALIDATION_ERROR", message: "Invalid request data" } });
+    }
+    res.status(500).json({ error: { code: "SERVER_ERROR", message: "Failed to update OpenAI integration" } });
+  }
+});
+
+/**
+ * POST /api/v1/system/integrations/openai/test
+ * Test system-level OpenAI connection
+ */
+router.post("/integrations/openai/test", requireSuperUser, async (req: Request, res: Response) => {
+  try {
+    const result = await tenantIntegrationService.testIntegration(null, "openai");
+    res.json(result);
+  } catch (error) {
+    console.error("[system-integrations] Error testing OpenAI integration:", error);
+    res.json({ success: false, message: "Failed to test OpenAI integration" });
+  }
+});
+
 export default router;

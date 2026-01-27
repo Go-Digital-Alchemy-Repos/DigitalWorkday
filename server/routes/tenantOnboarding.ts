@@ -495,7 +495,7 @@ router.get("/settings", requireAuth, requireTenantAdmin, async (req, res) => {
 // INTEGRATION ENDPOINTS
 // =============================================================================
 
-const validProviders: IntegrationProvider[] = ["mailgun", "s3"];
+const validProviders: IntegrationProvider[] = ["mailgun", "s3", "r2", "openai"];
 
 function isValidProvider(provider: string): provider is IntegrationProvider {
   return validProviders.includes(provider as IntegrationProvider);
@@ -559,6 +559,22 @@ const s3UpdateSchema = z.object({
   secretAccessKey: z.string().optional(),
 });
 
+const r2UpdateSchema = z.object({
+  bucketName: z.string().optional(),
+  accountId: z.string().optional(),
+  keyPrefixTemplate: z.string().optional(),
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
+});
+
+const openaiUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  model: z.string().optional(),
+  maxTokens: z.number().optional(),
+  temperature: z.string().optional(),
+  apiKey: z.string().optional(),
+});
+
 router.put("/integrations/:provider", requireAuth, requireTenantAdmin, async (req, res) => {
   try {
     const tenantId = req.effectiveTenantId;
@@ -593,6 +609,35 @@ router.put("/integrations/:provider", requireAuth, requireTenantAdmin, async (re
           accessKeyId: data.accessKeyId,
           secretAccessKey: data.secretAccessKey,
         };
+      }
+    } else if (provider === "r2") {
+      const data = r2UpdateSchema.parse(req.body);
+      const endpoint = data.accountId 
+        ? `https://${data.accountId}.r2.cloudflarestorage.com`
+        : undefined;
+      publicConfig = {
+        bucketName: data.bucketName,
+        region: "auto",
+        accountId: data.accountId,
+        endpoint,
+        keyPrefixTemplate: data.keyPrefixTemplate || `tenants/${tenantId}/`,
+      };
+      if (data.accessKeyId || data.secretAccessKey) {
+        secretConfig = {
+          accessKeyId: data.accessKeyId,
+          secretAccessKey: data.secretAccessKey,
+        };
+      }
+    } else if (provider === "openai") {
+      const data = openaiUpdateSchema.parse(req.body);
+      publicConfig = {
+        enabled: data.enabled ?? true,
+        model: data.model ?? "gpt-4o-mini",
+        maxTokens: data.maxTokens ?? 2000,
+        temperature: data.temperature ?? "0.7",
+      };
+      if (data.apiKey) {
+        secretConfig = { apiKey: data.apiKey };
       }
     }
 

@@ -5,7 +5,7 @@ import { encryptValue, decryptValue, isEncryptionAvailable } from "../lib/encryp
 import Mailgun from "mailgun.js";
 import FormData from "form-data";
 
-export type IntegrationProvider = "mailgun" | "s3" | "r2" | "sso_google" | "sso_github";
+export type IntegrationProvider = "mailgun" | "s3" | "r2" | "sso_google" | "sso_github" | "openai";
 
 interface MailgunPublicConfig {
   domain: string;
@@ -72,8 +72,25 @@ export interface SsoGithubSecretConfig {
   clientSecret: string;
 }
 
-type PublicConfig = MailgunPublicConfig | S3PublicConfig | R2PublicConfig | SsoGooglePublicConfig | SsoGithubPublicConfig;
-type SecretConfig = MailgunSecretConfig | S3SecretConfig | R2SecretConfig | SsoGoogleSecretConfig | SsoGithubSecretConfig;
+/**
+ * OpenAI integration public configuration
+ */
+export interface OpenAIPublicConfig {
+  enabled: boolean;
+  model: string;
+  maxTokens: number;
+  temperature: string;
+}
+
+/**
+ * OpenAI integration secret configuration (encrypted)
+ */
+export interface OpenAISecretConfig {
+  apiKey: string;
+}
+
+type PublicConfig = MailgunPublicConfig | S3PublicConfig | R2PublicConfig | SsoGooglePublicConfig | SsoGithubPublicConfig | OpenAIPublicConfig;
+type SecretConfig = MailgunSecretConfig | S3SecretConfig | R2SecretConfig | SsoGoogleSecretConfig | SsoGithubSecretConfig | OpenAISecretConfig;
 
 interface SecretMaskedInfo {
   apiKeyMasked?: string | null;
@@ -161,6 +178,11 @@ export class TenantIntegrationService {
           secretMasked = {
             clientSecretMasked: maskSecret(ssoSecrets.clientSecret),
           };
+        } else if (provider === "openai") {
+          const aiSecrets = secrets as OpenAISecretConfig;
+          secretMasked = {
+            apiKeyMasked: maskSecret(aiSecrets.apiKey),
+          };
         }
       } catch (err) {
         debugLog("getIntegration - failed to decrypt secrets for masking", { tenantId, provider });
@@ -202,7 +224,7 @@ export class TenantIntegrationService {
       if (message.includes("does not exist") || message.includes("column")) {
         console.warn("[TenantIntegrations] listIntegrations table/column issue:", message);
         // Return empty list with not_configured status for all providers
-        return ["mailgun", "s3", "r2", "sso_google", "sso_github"].map(p => ({
+        return ["mailgun", "s3", "r2", "sso_google", "sso_github", "openai"].map(p => ({
           provider: p,
           status: IntegrationStatus.NOT_CONFIGURED,
           publicConfig: null,
@@ -213,7 +235,7 @@ export class TenantIntegrationService {
       throw dbError;
     }
 
-    const providers: IntegrationProvider[] = ["mailgun", "s3", "r2", "sso_google", "sso_github"];
+    const providers: IntegrationProvider[] = ["mailgun", "s3", "r2", "sso_google", "sso_github", "openai"];
     const result: IntegrationResponse[] = [];
 
     for (const provider of providers) {
@@ -235,6 +257,9 @@ export class TenantIntegrationService {
             } else if (provider === "sso_google" || provider === "sso_github") {
               const ssoSecrets = secrets as SsoGoogleSecretConfig | SsoGithubSecretConfig;
               secretMasked = { clientSecretMasked: maskSecret(ssoSecrets.clientSecret) };
+            } else if (provider === "openai") {
+              const aiSecrets = secrets as OpenAISecretConfig;
+              secretMasked = { apiKeyMasked: maskSecret(aiSecrets.apiKey) };
             }
           } catch {
             debugLog("listIntegrations - failed to decrypt secrets for masking", { tenantId, provider });
@@ -451,6 +476,9 @@ export class TenantIntegrationService {
           break;
         case "sso_github":
           testResult = await this.testSsoGitHub();
+          break;
+        case "openai":
+          testResult = await this.testOpenAI(tenantId);
           break;
         default:
           testResult = { success: false, message: `Unknown provider: ${provider}` };
@@ -715,6 +743,43 @@ export class TenantIntegrationService {
     }
 
     return { success: true, message: "GitHub SSO configuration is valid" };
+  }
+
+  private async testOpenAI(tenantId: string | null): Promise<{ success: boolean; message: string }> {
+    const integration = await this.getIntegration(tenantId, "openai");
+    
+    if (!integration?.publicConfig) {
+      return { success: false, message: "OpenAI is not configured" };
+    }
+
+    const config = integration.publicConfig as OpenAIPublicConfig;
+    if (!config.enabled) {
+      return { success: false, message: "OpenAI integration is disabled" };
+    }
+
+    const secrets = await this.getDecryptedSecrets(tenantId, "openai") as OpenAISecretConfig | null;
+    if (!secrets?.apiKey) {
+      return { success: false, message: "OpenAI API key is required" };
+    }
+
+    try {
+      const OpenAI = (await import("openai")).default;
+      const client = new OpenAI({ apiKey: secrets.apiKey });
+      
+      const response = await client.chat.completions.create({
+        model: config.model || "gpt-4o-mini",
+        messages: [{ role: "user", content: "Say 'OK' in one word." }],
+        max_tokens: 10,
+      });
+
+      if (response.choices && response.choices.length > 0) {
+        return { success: true, message: `OpenAI connection successful (model: ${response.model})` };
+      }
+      return { success: false, message: "No response from OpenAI API" };
+    } catch (error: any) {
+      console.error("[OpenAI] Test failed:", error);
+      return { success: false, message: error.message || "Failed to connect to OpenAI API" };
+    }
   }
 }
 
