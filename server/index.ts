@@ -14,7 +14,7 @@ import { errorHandler } from "./middleware/errorHandler";
 import { errorLoggingMiddleware } from "./middleware/errorLogging";
 import { apiJsonResponseGuard, apiNotFoundHandler } from "./middleware/apiJsonGuard";
 import { logMigrationStatus } from "./scripts/migration-status";
-import { ensureSchemaReady } from "./startup/schemaReadiness";
+import { ensureSchemaReady, getLastSchemaCheck } from "./startup/schemaReadiness";
 import { logAppInfo } from "./startup/appInfo";
 import { logNullTenantIdWarnings } from "./startup/tenantIdHealthCheck";
 
@@ -209,22 +209,45 @@ function setPhase(phase: typeof startupPhase) {
   console.log(`[startup] Phase: ${phase} started at ${new Date(now).toISOString()}`);
 }
 
-// Enhanced /ready endpoint with phase tracking
+// Enhanced /ready endpoint with phase tracking and schema status
 app.get("/ready", (_req, res) => {
   const now = Date.now();
   const totalDuration = now - serverStartTime;
   const phaseDuration = now - startupPhaseStart;
+  const uptime = process.uptime();
   
   const response: Record<string, any> = {
-    status: startupError ? "error" : appReady ? "ready" : startupPhase,
+    status: startupError ? "error" : appReady ? "ready" : "starting",
     phase: startupPhase,
+    uptime: Math.round(uptime),
+    startupDuration: appReady ? totalDuration : null,
     phaseDurationMs: phaseDuration,
     totalDurationMs: totalDuration,
     phaseTimings,
   };
   
   if (startupError) {
-    response.error = startupError.message;
+    response.lastError = startupError.message;
+  }
+  
+  // Include schema status if available (after schema phase completes)
+  const schemaCheck = getLastSchemaCheck();
+  if (schemaCheck) {
+    const missingTables = schemaCheck.tablesCheck.filter(t => !t.exists).map(t => t.table);
+    const presentTables = schemaCheck.tablesCheck.filter(t => t.exists).map(t => t.table);
+    
+    response.migrations = {
+      applied: schemaCheck.migrationAppliedCount,
+      lastApplied: schemaCheck.lastMigrationHash,
+    };
+    
+    response.requiredTables = {
+      present: presentTables,
+      missing: missingTables,
+      allPresent: missingTables.length === 0,
+    };
+    
+    response.schemaReady = schemaCheck.isReady;
   }
   
   // Always return 200 to pass health checks, status in body indicates readiness
