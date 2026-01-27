@@ -69,7 +69,7 @@ export function TenantSidebar() {
   });
 
   const { data: projects } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+    queryKey: ["/api/v1/projects"],
   });
 
   const { data: teams } = useQuery<Team[]>({
