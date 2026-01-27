@@ -123,6 +123,28 @@ app.use((req, res, next) => {
   next();
 });
 
+// Track application readiness for health checks
+let appReady = false;
+let startupError: Error | null = null;
+
+// Enhanced health check that reports readiness status
+app.get("/ready", (_req, res) => {
+  if (startupError) {
+    res.status(503).json({ status: "error", error: startupError.message });
+  } else if (appReady) {
+    res.status(200).json({ status: "ready" });
+  } else {
+    res.status(503).json({ status: "starting" });
+  }
+});
+
+// Start the server IMMEDIATELY so health checks pass
+const port = parseInt(process.env.PORT || "5000", 10);
+httpServer.listen(port, () => {
+  log(`[boot] Server listening on port ${port}`);
+});
+
+// Run async initialization in the background
 (async () => {
   // Boot logging for deployment verification
   const env = process.env.NODE_ENV || "development";
@@ -140,7 +162,9 @@ app.use((req, res, next) => {
     console.error("[boot]", schemaErr instanceof Error ? schemaErr.message : schemaErr);
     console.error("[boot] Application cannot start with incomplete schema.");
     console.error("[boot] Set AUTO_MIGRATE=true or run: npx drizzle-kit migrate");
-    process.exit(1);
+    startupError = schemaErr instanceof Error ? schemaErr : new Error(String(schemaErr));
+    // Don't exit - keep server running for health checks to report the error
+    return;
   }
   
   // Log app version and configuration
@@ -180,12 +204,10 @@ app.use((req, res, next) => {
     await setupVite(httpServer, app);
   }
 
-  // ALWAYS serve the app on the port specified in the environment variable PORT
-  // Other ports are firewalled. Default to 5000 if not specified.
-  // this serves both the API and the client.
-  // It is the only port that is not firewalled.
-  const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(port, () => {
-    log(`serving on port ${port}`);
-  });
-})();
+  // Mark app as ready
+  appReady = true;
+  log(`[boot] Application fully initialized and ready`);
+})().catch((err) => {
+  console.error("[boot] Unhandled startup error:", err);
+  startupError = err instanceof Error ? err : new Error(String(err));
+});
