@@ -487,4 +487,109 @@ router.patch("/error-logs/:id/resolve", requireAuth, requireSuperUser, async (re
   }
 });
 
+/**
+ * GET /status/diagnostics/schema - Schema diagnostics for Super Admins
+ * Returns presence and counts for key tables/columns (read-only, no secrets)
+ */
+router.get("/diagnostics/schema", requireAuth, requireSuperUser, async (req: Request, res: Response) => {
+  const requestId = req.requestId || generateRequestId();
+  try {
+    const diagnostics: {
+      table: string;
+      present: boolean;
+      count?: number;
+      columns?: { name: string; present: boolean }[];
+      recommendedAction?: string;
+    }[] = [];
+
+    // Key tables to check
+    const tablesToCheck = [
+      { name: "error_logs", required: true, checkColumns: ["request_id", "tenant_id"] },
+      { name: "notification_preferences", required: true, checkColumns: [] },
+      { name: "notifications", required: true, checkColumns: ["tenant_id"] },
+      { name: "tenant_settings", required: true, checkColumns: ["chat_retention_days"] },
+      { name: "tenants", required: true, checkColumns: [] },
+      { name: "users", required: true, checkColumns: ["tenant_id"] },
+      { name: "clients", required: true, checkColumns: ["tenant_id"] },
+      { name: "projects", required: true, checkColumns: ["tenant_id"] },
+      { name: "tasks", required: true, checkColumns: ["tenant_id"] },
+      { name: "active_timers", required: true, checkColumns: ["tenant_id"] },
+      { name: "time_entries", required: true, checkColumns: ["tenant_id"] },
+    ];
+
+    for (const tableConfig of tablesToCheck) {
+      try {
+        // Check if table exists and get count
+        const result = await db.execute(
+          sql.raw(`SELECT count(*)::int as count FROM ${tableConfig.name} LIMIT 1`)
+        );
+        const count = result.rows[0]?.count ?? 0;
+
+        // Check columns if specified
+        const columnChecks: { name: string; present: boolean }[] = [];
+        for (const col of tableConfig.checkColumns) {
+          try {
+            await db.execute(
+              sql.raw(`SELECT ${col} FROM ${tableConfig.name} LIMIT 0`)
+            );
+            columnChecks.push({ name: col, present: true });
+          } catch {
+            columnChecks.push({ name: col, present: false });
+          }
+        }
+
+        const missingColumns = columnChecks.filter(c => !c.present);
+        diagnostics.push({
+          table: tableConfig.name,
+          present: true,
+          count: typeof count === 'number' ? count : parseInt(count as string, 10),
+          columns: columnChecks.length > 0 ? columnChecks : undefined,
+          recommendedAction: missingColumns.length > 0 
+            ? `Missing columns: ${missingColumns.map(c => c.name).join(", ")}. Run migrations.`
+            : undefined,
+        });
+      } catch {
+        diagnostics.push({
+          table: tableConfig.name,
+          present: false,
+          recommendedAction: tableConfig.required 
+            ? "Table missing. Run migrations."
+            : undefined,
+        });
+      }
+    }
+
+    const allPresent = diagnostics.every(d => d.present);
+    const allColumnsPresent = diagnostics.every(
+      d => !d.columns || d.columns.every(c => c.present)
+    );
+
+    res.json({
+      ok: true,
+      requestId,
+      schema: {
+        healthy: allPresent && allColumnsPresent,
+        diagnostics,
+        summary: {
+          tablesChecked: diagnostics.length,
+          tablesPresent: diagnostics.filter(d => d.present).length,
+          tablesMissing: diagnostics.filter(d => !d.present).length,
+          hasColumnIssues: !allColumnsPresent,
+        },
+      },
+    });
+  } catch (error) {
+    console.error("[status/diagnostics/schema] Failed:", error);
+    res.status(500).json({
+      ok: false,
+      requestId,
+      error: {
+        code: "SCHEMA_DIAGNOSTICS_FAILED",
+        message: "Failed to run schema diagnostics",
+        requestId,
+      },
+    });
+  }
+});
+
 export default router;

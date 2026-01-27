@@ -108,6 +108,23 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Boot logging for deployment verification
+  const env = process.env.NODE_ENV || "development";
+  const version = process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) 
+    || process.env.GIT_COMMIT_SHA?.slice(0, 7) 
+    || "dev";
+  console.log(`[boot] environment=${env} version=${version}`);
+  
+  // Test database connection
+  try {
+    const { db } = await import("./db");
+    const { sql } = await import("drizzle-orm");
+    await db.execute(sql`SELECT 1`);
+    console.log("[boot] database=connected");
+  } catch (dbErr) {
+    console.error("[boot] database=FAILED", dbErr instanceof Error ? dbErr.message : dbErr);
+  }
+  
   // Log migration status at startup
   await logMigrationStatus();
   

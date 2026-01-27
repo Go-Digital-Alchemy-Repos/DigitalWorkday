@@ -241,9 +241,13 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
-  // Protect all /api routes except /api/auth/*, /api/v1/auth/*, /api/v1/super/bootstrap, and /api/v1/webhooks/*
+  // Protect all /api routes except /api/auth/*, /api/v1/auth/*, /api/v1/super/bootstrap, /api/health, and /api/v1/webhooks/*
   app.use("/api", (req, res, next) => {
-    if (req.path.startsWith("/auth") || req.path.startsWith("/v1/auth/") || req.path === "/v1/super/bootstrap" || req.path.startsWith("/v1/webhooks/")) {
+    if (req.path.startsWith("/auth") || 
+        req.path.startsWith("/v1/auth/") || 
+        req.path === "/v1/super/bootstrap" || 
+        req.path === "/health" ||
+        req.path.startsWith("/v1/webhooks/")) {
       return next();
     }
     return requireAuth(req, res, next);
@@ -274,8 +278,16 @@ export async function registerRoutes(
   app.use("/api/v1/webhooks", webhookRoutes);
 
   // Health check endpoint for Docker/Railway
+  // Returns minimal, non-sensitive information for deployment verification
   app.get("/api/health", (req, res) => {
-    res.json({ status: "ok", timestamp: new Date().toISOString() });
+    res.json({ 
+      ok: true,
+      service: "api",
+      timestamp: new Date().toISOString(),
+      version: process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) 
+        || process.env.GIT_COMMIT_SHA?.slice(0, 7) 
+        || "dev",
+    });
   });
 
   /**
