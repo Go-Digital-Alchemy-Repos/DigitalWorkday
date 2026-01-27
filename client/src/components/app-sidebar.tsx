@@ -52,7 +52,7 @@ const mainNavItems = [
   { title: "My Tasks", url: "/my-tasks", icon: CheckSquare },
   { title: "Projects", url: "/projects", icon: FolderKanban },
   { title: "Clients", url: "/clients", icon: Briefcase },
-  { title: "Time Tracking", url: "/time-tracking", icon: Clock },
+  { title: "My Time", url: "/my-time", icon: Clock },
   { title: "Chat", url: "/chat", icon: MessageCircle },
 ];
 

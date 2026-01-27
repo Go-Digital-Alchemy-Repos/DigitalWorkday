@@ -507,7 +507,7 @@ export default function MyCalendarPage() {
             </div>
             
             <div className="pt-4">
-              <Link href={`/time-tracking?edit=${selectedTimeEntry.id}`}>
+              <Link href={`/my-time?edit=${selectedTimeEntry.id}`}>
                 <Button data-testid="button-edit-time-entry">
                   Edit Time Entry
                 </Button>

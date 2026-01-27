@@ -1725,7 +1725,8 @@ function ReportsSummary() {
 
 const BROADCAST_CHANNEL_NAME = "active-timer-sync";
 
-export default function TimeTrackingPage() {
+// Exported content component for use in My Time page
+export function TimeTrackingContent() {
   const [startTimerDrawerOpen, setStartTimerDrawerOpen] = useState(false);
   const [manualEntryDrawerOpen, setManualEntryDrawerOpen] = useState(false);
 
@@ -1769,78 +1770,64 @@ export default function TimeTrackingPage() {
     };
   }, [refetchTimer]);
 
-  // Note: Timer queries are user-scoped on the server side via userId filter
-
   return (
-    <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
-        <div>
-          <h1 className="text-2xl font-semibold text-foreground" data-testid="text-time-tracking-title">
-            Time Tracking
-          </h1>
-          <p className="text-sm text-muted-foreground">
-            Track time spent on tasks and projects
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {hasActiveTimer ? (
-            <Tooltip>
-              <TooltipTrigger asChild>
-                <span className="inline-block" data-testid="disabled-start-timer-wrapper">
-                  <Button
-                    disabled
-                    className="pointer-events-none"
-                    data-testid="button-start-timer"
-                  >
-                    <Play className="h-4 w-4 mr-2" />
-                    Start Timer
-                  </Button>
-                </span>
-              </TooltipTrigger>
-              <TooltipContent>
-                <p>Stop the current timer before starting a new one</p>
-              </TooltipContent>
-            </Tooltip>
-          ) : (
-            <Button
-              onClick={() => setStartTimerDrawerOpen(true)}
-              data-testid="button-start-timer"
-            >
-              <Play className="h-4 w-4 mr-2" />
-              Start Timer
-            </Button>
-          )}
+    <div className="flex flex-col h-full">
+      <div className="flex items-center justify-end gap-2 mb-4">
+        {hasActiveTimer ? (
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="inline-block" data-testid="disabled-start-timer-wrapper">
+                <Button
+                  disabled
+                  className="pointer-events-none"
+                  data-testid="button-start-timer-content"
+                >
+                  <Play className="h-4 w-4 mr-2" />
+                  Start Timer
+                </Button>
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              <p>Stop the current timer before starting a new one</p>
+            </TooltipContent>
+          </Tooltip>
+        ) : (
           <Button
-            variant="outline"
-            onClick={() => setManualEntryDrawerOpen(true)}
-            data-testid="button-add-entry"
+            onClick={() => setStartTimerDrawerOpen(true)}
+            data-testid="button-start-timer-content"
           >
-            <Plus className="h-4 w-4 mr-2" />
-            Add Manual Entry
+            <Play className="h-4 w-4 mr-2" />
+            Start Timer
           </Button>
-        </div>
+        )}
+        <Button
+          variant="outline"
+          onClick={() => setManualEntryDrawerOpen(true)}
+          data-testid="button-add-entry-content"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Add Manual Entry
+        </Button>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
-        <Tabs defaultValue="entries">
-          <TabsList>
-            <TabsTrigger value="entries" data-testid="tab-entries">
-              <Clock className="h-4 w-4 mr-2" />
-              Entries
-            </TabsTrigger>
-            <TabsTrigger value="reports" data-testid="tab-reports">
-              <BarChart3 className="h-4 w-4 mr-2" />
-              Reports
-            </TabsTrigger>
-          </TabsList>
-          <TabsContent value="entries" className="mt-4">
-            <TimeEntriesList />
-          </TabsContent>
-          <TabsContent value="reports" className="mt-4">
-            <ReportsSummary />
-          </TabsContent>
-        </Tabs>
-      </div>
+      <Tabs defaultValue="entries" className="flex-1">
+        <TabsList>
+          <TabsTrigger value="entries" data-testid="tab-entries-content">
+            <Clock className="h-4 w-4 mr-2" />
+            Entries
+          </TabsTrigger>
+          <TabsTrigger value="reports" data-testid="tab-reports-content">
+            <BarChart3 className="h-4 w-4 mr-2" />
+            Reports
+          </TabsTrigger>
+        </TabsList>
+        <TabsContent value="entries" className="mt-4">
+          <TimeEntriesList />
+        </TabsContent>
+        <TabsContent value="reports" className="mt-4">
+          <ReportsSummary />
+        </TabsContent>
+      </Tabs>
 
       <StartTimerDrawer
         open={startTimerDrawerOpen}
@@ -1851,6 +1838,16 @@ export default function TimeTrackingPage() {
         open={manualEntryDrawerOpen}
         onOpenChange={setManualEntryDrawerOpen}
       />
+    </div>
+  );
+}
+
+// TimeTrackingPage is deprecated - route redirects to /my-time
+// Keeping as thin wrapper for backward compatibility if needed
+export default function TimeTrackingPage() {
+  return (
+    <div className="flex flex-col h-full overflow-hidden p-6">
+      <TimeTrackingContent />
     </div>
   );
 }

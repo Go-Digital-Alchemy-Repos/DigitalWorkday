@@ -53,7 +53,6 @@ const mainNavItems = [
   { title: "My Calendar", url: "/my-calendar", icon: CalendarDays },
   { title: "Projects", url: "/projects", icon: FolderKanban },
   { title: "Clients", url: "/clients", icon: Briefcase },
-  { title: "Time Tracking", url: "/time-tracking", icon: Clock },
   { title: "Team Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Chat", url: "/chat", icon: MessageCircle },
 ];

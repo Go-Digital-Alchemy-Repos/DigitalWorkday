@@ -837,9 +837,9 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
                         </Button>
                       )}
                       <Button variant="outline" size="sm" asChild>
-                        <Link href="/time-tracking">
+                        <Link href="/my-time">
                           <Clock className="h-4 w-4 mr-2" />
-                          Time Tracking
+                          My Time
                         </Link>
                       </Button>
                       <Button variant="outline" size="sm" asChild>

@@ -32,10 +32,10 @@ const navItems: NavItem[] = [
     matchPaths: ["/projects"]
   },
   { 
-    title: "Timer", 
-    href: "/time-tracking", 
+    title: "My Time", 
+    href: "/my-time", 
     icon: Clock,
-    matchPaths: ["/time-tracking"]
+    matchPaths: ["/my-time"]
   },
 ];
 

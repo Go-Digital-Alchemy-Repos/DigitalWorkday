@@ -1,15 +1,17 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Clock, Calendar, TrendingUp, AlertTriangle, Play, Edit, FileWarning, Timer } from "lucide-react";
+import { useLocation } from "wouter";
+import { Clock, Calendar, TrendingUp, AlertTriangle, Play, Edit, FileWarning, Timer, BarChart3, List } from "lucide-react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Progress } from "@/components/ui/progress";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { Link } from "wouter";
-import { FullScreenDrawer } from "@/components/ui/full-screen-drawer";
+import { TimeTrackingContent } from "./time-tracking";
 
 interface TimeStats {
   total: number;
@@ -272,12 +274,6 @@ function QuickActions({ lastEntryId, onEditEntry, onStartTimer }: {
             My Calendar
           </Button>
         </Link>
-        
-        <Link href="/time-tracking">
-          <Button size="sm" variant="ghost" data-testid="button-view-all-time">
-            View All Time Entries
-          </Button>
-        </Link>
       </CardContent>
     </Card>
   );
@@ -285,7 +281,17 @@ function QuickActions({ lastEntryId, onEditEntry, onStartTimer }: {
 
 export default function MyTimePage() {
   const { toast } = useToast();
-  const [editingEntryId, setEditingEntryId] = useState<string | null>(null);
+  const [location] = useLocation();
+  const [activeTab, setActiveTab] = useState("dashboard");
+  
+  // Auto-switch to entries tab when edit param is present in URL
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const editId = params.get("edit");
+    if (editId) {
+      setActiveTab("entries");
+    }
+  }, [location]);
   
   const { data: stats, isLoading, error } = useQuery<MyTimeStats>({
     queryKey: ["/api/time-entries/my/stats"],
@@ -308,8 +314,9 @@ export default function MyTimePage() {
     },
   });
   
-  const handleEditEntry = (id: string) => {
-    setEditingEntryId(id);
+  const handleEditEntry = (_id: string) => {
+    // Switch to the Time Entries tab where users can find and edit entries
+    setActiveTab("entries");
   };
   
   const handleStartTimer = () => {
@@ -329,74 +336,75 @@ export default function MyTimePage() {
   }
   
   return (
-    <div className="p-6 space-y-6 max-w-6xl mx-auto">
-      <div className="flex items-center justify-between">
+    <div className="flex flex-col h-full overflow-hidden">
+      <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
         <div>
           <h1 className="text-2xl font-semibold" data-testid="page-title">My Time</h1>
-          <p className="text-muted-foreground">Your personal time tracking overview</p>
+          <p className="text-sm text-muted-foreground">Your personal time tracking overview</p>
         </div>
       </div>
       
-      {isLoading ? (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardHeader className="pb-2">
-                <Skeleton className="h-4 w-20" />
-              </CardHeader>
-              <CardContent>
-                <Skeleton className="h-8 w-24 mb-4" />
-                <Skeleton className="h-2 w-full" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      ) : stats ? (
-        <>
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
-            <StatCard title="Today" stats={stats.today} icon={Clock} />
-            <StatCard title="This Week" stats={stats.thisWeek} icon={Calendar} />
-            <StatCard title="This Month" stats={stats.thisMonth} icon={TrendingUp} />
-            <StatCard title="All Time" stats={stats.allTime} icon={Timer} description="Total tracked" />
-          </div>
+      <div className="flex-1 overflow-auto p-6">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
+          <TabsList className="mb-4">
+            <TabsTrigger value="dashboard" data-testid="tab-dashboard">
+              <BarChart3 className="h-4 w-4 mr-2" />
+              Dashboard
+            </TabsTrigger>
+            <TabsTrigger value="entries" data-testid="tab-time-entries">
+              <List className="h-4 w-4 mr-2" />
+              Time Entries
+            </TabsTrigger>
+          </TabsList>
           
-          <div className="grid gap-4 md:grid-cols-2">
-            <WeeklyChart data={stats.dailyBreakdown} />
-            <div className="space-y-4">
-              <QuickActions 
-                lastEntryId={stats.lastEntryId} 
-                onEditEntry={handleEditEntry}
-                onStartTimer={handleStartTimer}
-              />
-              <WarningsPanel 
-                warnings={stats.warnings} 
-                onEditEntry={handleEditEntry}
-              />
-            </div>
-          </div>
-        </>
-      ) : null}
+          <TabsContent value="dashboard" className="flex-1 space-y-6">
+            {isLoading ? (
+              <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                {[1, 2, 3, 4].map((i) => (
+                  <Card key={i}>
+                    <CardHeader className="pb-2">
+                      <Skeleton className="h-4 w-20" />
+                    </CardHeader>
+                    <CardContent>
+                      <Skeleton className="h-8 w-24 mb-4" />
+                      <Skeleton className="h-2 w-full" />
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            ) : stats ? (
+              <>
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+                  <StatCard title="Today" stats={stats.today} icon={Clock} />
+                  <StatCard title="This Week" stats={stats.thisWeek} icon={Calendar} />
+                  <StatCard title="This Month" stats={stats.thisMonth} icon={TrendingUp} />
+                  <StatCard title="All Time" stats={stats.allTime} icon={Timer} description="Total tracked" />
+                </div>
+                
+                <div className="grid gap-4 md:grid-cols-2">
+                  <WeeklyChart data={stats.dailyBreakdown} />
+                  <div className="space-y-4">
+                    <QuickActions 
+                      lastEntryId={stats.lastEntryId} 
+                      onEditEntry={handleEditEntry}
+                      onStartTimer={handleStartTimer}
+                    />
+                    <WarningsPanel 
+                      warnings={stats.warnings} 
+                      onEditEntry={handleEditEntry}
+                    />
+                  </div>
+                </div>
+              </>
+            ) : null}
+          </TabsContent>
+          
+          <TabsContent value="entries" className="flex-1">
+            <TimeTrackingContent />
+          </TabsContent>
+        </Tabs>
+      </div>
       
-      {editingEntryId && (
-        <FullScreenDrawer
-          open={!!editingEntryId}
-          onOpenChange={(open) => !open && setEditingEntryId(null)}
-          title="Edit Time Entry"
-        >
-          <div className="p-6">
-            <p className="text-muted-foreground">
-              Time entry editing will redirect to the time tracking page.
-            </p>
-            <div className="mt-4">
-              <Link href={`/time-tracking?edit=${editingEntryId}`}>
-                <Button data-testid="button-go-to-edit">
-                  Go to Time Tracking
-                </Button>
-              </Link>
-            </div>
-          </div>
-        </FullScreenDrawer>
-      )}
     </div>
   );
 }

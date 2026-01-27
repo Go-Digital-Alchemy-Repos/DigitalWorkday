@@ -24,7 +24,6 @@ import ProjectsDashboard from "@/pages/projects-dashboard";
 import ProjectPage from "@/pages/project";
 import ClientsPage from "@/pages/clients";
 import ClientDetailPage from "@/pages/client-detail";
-import TimeTrackingPage from "@/pages/time-tracking";
 import LoginPage from "@/pages/login";
 import SettingsPage from "@/pages/settings";
 import SuperAdminPage from "@/pages/super-admin";
@@ -267,7 +266,7 @@ function TenantRouter() {
         {() => <TenantRouteGuard component={ClientDetailPage} />}
       </Route>
       <Route path="/time-tracking">
-        {() => <TenantRouteGuard component={TimeTrackingPage} />}
+        {() => <Redirect to={`/my-time${window.location.search}`} />}
       </Route>
       <Route path="/calendar">
         {() => <TenantRouteGuard component={CalendarPage} />}
@@ -367,7 +366,7 @@ function TenantLayout() {
           <CommandPalette
             onNewTask={() => setLocation("/my-tasks")}
             onNewProject={() => setLocation("/projects")}
-            onStartTimer={() => setLocation("/time-tracking")}
+            onStartTimer={() => setLocation("/my-time")}
           />
           <div className={`flex flex-col h-screen w-full ${isImpersonating ? "ring-2 ring-amber-500 ring-inset" : ""}`}>
             {/* Tenant impersonation banner (Act as Tenant mode) */}

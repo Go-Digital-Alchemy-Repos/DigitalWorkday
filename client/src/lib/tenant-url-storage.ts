@@ -19,9 +19,9 @@ const LAST_ATTEMPTED_TENANT_URL_KEY = "last_attempted_tenant_url_v1";
 export const TENANT_ROUTE_PREFIXES = [
   "/",
   "/my-tasks",
+  "/my-time",
   "/projects",
   "/clients",
-  "/time-tracking",
   "/settings",
   "/account",
   "/profile",
