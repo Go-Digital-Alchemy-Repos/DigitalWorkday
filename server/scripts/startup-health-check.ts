@@ -18,44 +18,32 @@ import * as fs from "fs";
 import * as path from "path";
 
 // Required tables for application to function
+// Must match server/startup/schemaReadiness.ts REQUIRED_TABLES
 const REQUIRED_TABLES = [
   "users",
-  "sessions", 
   "tenants",
   "workspaces",
-  "teams",
   "projects",
   "tasks",
   "clients",
-  "time_entries",
-  "active_timers",
-  "activity_logs",
-  "comments",
-  "tags",
-  "task_tags",
-  "task_assignees",
-  "team_members",
-  "subtasks",
+  "teams",
   "chat_channels",
+  "chat_dm_members",
   "chat_messages",
   "error_logs",
-  "notifications",
-  "saas_agreements",
-  "user_agreements",
+  "notification_preferences",
+  "time_entries",
+  "active_timers",
 ];
 
 // Critical columns that must exist
+// Must match server/startup/schemaReadiness.ts REQUIRED_COLUMNS
 const REQUIRED_COLUMNS = [
+  { table: "tenants", column: "chat_retention_days" },
+  { table: "active_timers", column: "title" },
   { table: "users", column: "tenant_id" },
-  { table: "users", column: "role" },
-  { table: "projects", column: "tenant_id" },
-  { table: "tasks", column: "tenant_id" },
-  { table: "clients", column: "tenant_id" },
-  { table: "teams", column: "tenant_id" },
-  { table: "workspaces", column: "tenant_id" },
-  { table: "time_entries", column: "tenant_id" },
-  { table: "tenants", column: "status" },
-  { table: "tenants", column: "enforcement_level" },
+  { table: "projects", column: "client_id" },
+  { table: "tasks", column: "project_id" },
 ];
 
 interface HealthCheckResult {
