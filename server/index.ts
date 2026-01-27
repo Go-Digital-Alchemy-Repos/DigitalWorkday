@@ -76,13 +76,23 @@ app.use(apiJsonResponseGuard);
 import { log } from "./lib/log";
 export { log };
 
-// Health check endpoint for deployment platforms (Railway, etc.)
-// This must respond immediately without database/auth dependencies
+// Health check endpoints for deployment platforms (Railway, Replit, etc.)
+// These must respond immediately without database/auth dependencies
+// Root endpoint for platforms that check / by default
+app.get("/", (req, res, next) => {
+  // If it's a health check (no Accept: text/html), return JSON
+  const acceptHeader = req.headers.accept || "";
+  if (!acceptHeader.includes("text/html")) {
+    return res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+  }
+  // Otherwise, let it fall through to static file serving for the React app
+  next();
+});
+
 app.get("/health", (_req, res) => {
   res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
 });
 
-// Also support /healthz for Kubernetes-style health checks
 app.get("/healthz", (_req, res) => {
   res.status(200).send("ok");
 });
