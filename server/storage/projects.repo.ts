@@ -9,18 +9,6 @@ import {
 import { db } from "../db";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
 
-export type ProjectActivityItem = {
-  id: string;
-  type: "task_created" | "task_updated" | "comment_added" | "time_logged";
-  timestamp: Date;
-  actorId: string;
-  actorName: string;
-  actorEmail: string;
-  entityId: string;
-  entityTitle: string;
-  metadata?: Record<string, unknown>;
-};
-
 export class ProjectsRepository {
   private getUser: (id: string) => Promise<User | undefined>;
   private getTaskWithRelations: (id: string) => Promise<TaskWithRelations | undefined>;
