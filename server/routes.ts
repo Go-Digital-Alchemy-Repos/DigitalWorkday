@@ -2001,6 +2001,19 @@ export async function registerRoutes(
 
   app.delete("/api/tasks/:taskId/assignees/:userId", async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
+      
+      // Validate task belongs to tenant before removing assignee
+      const task = tenantId 
+        ? await storage.getTaskByIdAndTenant(req.params.taskId, tenantId)
+        : isSuperUser(req) 
+          ? await storage.getTask(req.params.taskId) 
+          : null;
+      
+      if (!task) {
+        return sendError(res, AppError.notFound("Task"), req);
+      }
+      
       await storage.removeTaskAssignee(req.params.taskId, req.params.userId);
       res.status(204).send();
     } catch (error) {
@@ -2044,6 +2057,19 @@ export async function registerRoutes(
 
   app.get("/api/tasks/:taskId/subtasks", async (req, res) => {
     try {
+      const tenantId = getEffectiveTenantId(req);
+      
+      // Validate parent task belongs to tenant before returning subtasks
+      const task = tenantId 
+        ? await storage.getTaskByIdAndTenant(req.params.taskId, tenantId)
+        : isSuperUser(req) 
+          ? await storage.getTask(req.params.taskId) 
+          : null;
+      
+      if (!task) {
+        return sendError(res, AppError.notFound("Task"), req);
+      }
+      
       const subtasks = await storage.getSubtasksByTask(req.params.taskId);
       res.json(subtasks);
     } catch (error) {
@@ -2091,22 +2117,35 @@ export async function registerRoutes(
       const data = validateBody(req.body, updateSubtaskSchema, res);
       if (!data) return;
       
+      const tenantId = getEffectiveTenantId(req);
+      
+      // Get subtask first to validate parent task belongs to tenant
+      const existingSubtask = await storage.getSubtask(req.params.id);
+      if (!existingSubtask) {
+        return sendError(res, AppError.notFound("Subtask"), req);
+      }
+      
+      // Validate parent task belongs to tenant BEFORE updating
+      const parentTask = tenantId 
+        ? await storage.getTaskByIdAndTenant(existingSubtask.taskId, tenantId)
+        : isSuperUser(req) 
+          ? await storage.getTask(existingSubtask.taskId) 
+          : null;
+      
+      if (!parentTask) {
+        return sendError(res, AppError.notFound("Task"), req);
+      }
+      
       // Convert date strings to Date objects for database
-      const updateData = { ...data };
-      if (updateData.dueDate !== undefined) {
-        updateData.dueDate = updateData.dueDate ? new Date(updateData.dueDate as string) : null;
+      const updateData: any = { ...data };
+      if (updateData.dueDate !== undefined && typeof updateData.dueDate === 'string') {
+        updateData.dueDate = updateData.dueDate ? new Date(updateData.dueDate) : null;
       }
       
       const subtask = await storage.updateSubtask(req.params.id, updateData);
       if (!subtask) {
         return sendError(res, AppError.notFound("Subtask"), req);
       }
-
-      // Get parent task using tenant-scoped lookup
-      const tenantId = getEffectiveTenantId(req);
-      const parentTask = tenantId 
-        ? await storage.getTaskByIdAndTenant(subtask.taskId, tenantId)
-        : await storage.getTask(subtask.taskId);
 
       // Emit real-time event after successful DB operation (only for project tasks)
       if (parentTask && parentTask.projectId) {
@@ -2134,10 +2173,16 @@ export async function registerRoutes(
         return sendError(res, AppError.notFound("Subtask"), req);
       }
 
-      // Get parent task using tenant-scoped lookup
+      // Validate parent task belongs to tenant BEFORE deleting
       const parentTask = tenantId 
         ? await storage.getTaskByIdAndTenant(subtask.taskId, tenantId)
-        : await storage.getTask(subtask.taskId);
+        : isSuperUser(req) 
+          ? await storage.getTask(subtask.taskId) 
+          : null;
+      
+      if (!parentTask) {
+        return sendError(res, AppError.notFound("Task"), req);
+      }
 
       await storage.deleteSubtask(req.params.id);
 
