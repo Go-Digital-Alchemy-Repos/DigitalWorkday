@@ -1,0 +1,45 @@
+PROMPT A (RAILWAY: MIGRATIONS + STARTUP SAFETY CHECK)
+
+Goal: Fix production “relation does not exist / column does not exist” errors by ensuring Drizzle migrations run reliably on Railway BEFORE the app serves traffic.
+
+SAFETY RULES (MUST FOLLOW):
+- Do NOT delete any data.
+- Do NOT rename existing tables/columns unless a migration explicitly does so.
+- Do NOT change API response shapes.
+- Prefer additive migrations only (CREATE TABLE, ADD COLUMN, CREATE INDEX).
+- Keep changes isolated to: server/db, server/migrations, server/startup, server/scripts.
+
+WHAT TO DO:
+1) Identify how the app currently initializes the DB schema in production.
+   - Find Drizzle config + migrations folder.
+   - Confirm whether migrations are generated and committed.
+
+2) Add a startup “schema readiness check” that runs at boot on Railway:
+   - On server start, run Drizzle migrations automatically (or fail fast with a clear error).
+   - Ensure it is idempotent and safe.
+   - Add a config guard:
+     - if AUTO_MIGRATE=true => run migrations on boot
+     - else => do not auto-run, but log an actionable warning
+
+3) Add a /api/v1/system/status/db endpoint (Super Admin only) that returns:
+   - migrations applied count
+   - whether required tables/columns exist (boolean checks)
+   - last migration timestamp if available
+   - DB connection ok
+
+4) Add logging that clearly prints:
+   - migration start/finish
+   - any migration failures
+   - which required table/column check failed
+
+ACCEPTANCE CRITERIA:
+- Railway deployment no longer fails with “relation does not exist” for known missing entities after boot.
+- If a migration fails, the app fails fast with a clear message and does NOT partially start.
+
+CONTEXT (ERRORS WE’RE FIXING):
+- relation "chat_channels" does not exist
+- relation "chat_dm_members" does not exist
+- relation "error_logs" does not exist (breaks error logging)
+- relation "notification_preferences" does not exist
+- column "chat_retention_days" does not exist
+- column "title" does not exist (GET /api/timer/current)
