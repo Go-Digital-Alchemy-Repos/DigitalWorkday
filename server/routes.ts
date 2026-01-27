@@ -54,9 +54,13 @@ import {
   tenantAgreementAcceptances,
   AgreementStatus,
   workspaces,
+  clientNotes,
+  clientNoteVersions,
+  clientNoteCategories,
+  users,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, desc, sql, count, inArray } from "drizzle-orm";
 import { requireAuth } from "./auth";
 import { getEffectiveTenantId, requireTenantContext } from "./middleware/tenantContext";
 import { 
@@ -3338,6 +3342,376 @@ export async function registerRoutes(
     } catch (error) {
       console.error("Error removing division member:", error);
       res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
+
+  // =============================================================================
+  // CLIENT NOTES
+  // =============================================================================
+
+  // Schema for creating/updating notes
+  const createClientNoteSchema = z.object({
+    body: z.any(), // Rich text JSON from TipTap
+    category: z.string().default("general"),
+    categoryId: z.string().uuid().optional(),
+  });
+
+  const updateClientNoteSchema = z.object({
+    body: z.any().optional(),
+    category: z.string().optional(),
+    categoryId: z.string().uuid().optional().nullable(),
+  });
+
+  // GET /api/clients/:clientId/notes - Get all notes for a client
+  app.get("/api/clients/:clientId/notes", requireAuth, async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(403).json({ error: "Tenant context required" });
+      }
+
+      const { clientId } = req.params;
+      
+      const client = await storage.getClientByIdAndTenant(clientId, tenantId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const notes = await db.select({
+        id: clientNotes.id,
+        clientId: clientNotes.clientId,
+        authorUserId: clientNotes.authorUserId,
+        lastEditedByUserId: clientNotes.lastEditedByUserId,
+        body: clientNotes.body,
+        category: clientNotes.category,
+        categoryId: clientNotes.categoryId,
+        createdAt: clientNotes.createdAt,
+        updatedAt: clientNotes.updatedAt,
+      })
+        .from(clientNotes)
+        .where(and(eq(clientNotes.clientId, clientId), eq(clientNotes.tenantId, tenantId)))
+        .orderBy(desc(clientNotes.createdAt));
+
+      // Get version counts for all notes
+      const noteIds = notes.map(n => n.id);
+      let versionCounts: Map<string, number> = new Map();
+      if (noteIds.length > 0) {
+        const versionCountResults = await db.select({
+          noteId: clientNoteVersions.noteId,
+          count: count(),
+        })
+          .from(clientNoteVersions)
+          .where(inArray(clientNoteVersions.noteId, noteIds))
+          .groupBy(clientNoteVersions.noteId);
+        
+        versionCountResults.forEach(v => versionCounts.set(v.noteId, v.count));
+      }
+
+      // Enrich with author info
+      const userIds = Array.from(new Set(notes.map(n => n.authorUserId)));
+      const authorUsers = userIds.length > 0
+        ? await db.select({ id: users.id, firstName: users.firstName, lastName: users.lastName, email: users.email })
+            .from(users)
+            .where(inArray(users.id, userIds))
+        : [];
+      const authorMap = new Map(authorUsers.map(u => [u.id, u]));
+
+      const enrichedNotes = notes.map(note => ({
+        ...note,
+        author: authorMap.get(note.authorUserId) || { firstName: null, lastName: null, email: null },
+        versionCount: versionCounts.get(note.id) || 0,
+      }));
+
+      res.json({ ok: true, notes: enrichedNotes });
+    } catch (error) {
+      console.error("Error fetching client notes:", error);
+      res.status(500).json({ error: "Failed to fetch notes" });
+    }
+  });
+
+  // POST /api/clients/:clientId/notes - Create a new note
+  app.post("/api/clients/:clientId/notes", requireAuth, async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(403).json({ error: "Tenant context required" });
+      }
+
+      const { clientId } = req.params;
+      const data = createClientNoteSchema.parse(req.body);
+      
+      const client = await storage.getClientByIdAndTenant(clientId, tenantId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const userId = getCurrentUserId(req);
+      
+      const [note] = await db.insert(clientNotes).values({
+        tenantId,
+        clientId,
+        authorUserId: userId,
+        body: data.body,
+        category: data.category,
+        categoryId: data.categoryId || null,
+      }).returning();
+
+      const author = await storage.getUser(userId);
+
+      res.status(201).json({
+        ok: true,
+        note: {
+          ...note,
+          author: {
+            firstName: author?.firstName || null,
+            lastName: author?.lastName || null,
+            email: author?.email || null,
+          },
+          versionCount: 0,
+        },
+      });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error creating client note:", error);
+      res.status(500).json({ error: "Failed to create note" });
+    }
+  });
+
+  // PUT /api/clients/:clientId/notes/:noteId - Update a note
+  app.put("/api/clients/:clientId/notes/:noteId", requireAuth, async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(403).json({ error: "Tenant context required" });
+      }
+
+      const { clientId, noteId } = req.params;
+      const data = updateClientNoteSchema.parse(req.body);
+      const editorUserId = getCurrentUserId(req);
+
+      const client = await storage.getClientByIdAndTenant(clientId, tenantId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const [existingNote] = await db.select().from(clientNotes)
+        .where(and(
+          eq(clientNotes.id, noteId),
+          eq(clientNotes.clientId, clientId),
+          eq(clientNotes.tenantId, tenantId)
+        ));
+      
+      if (!existingNote) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+
+      // Get the current highest version number for this note
+      const [latestVersion] = await db.select({ 
+        maxVersion: sql<number>`COALESCE(MAX(${clientNoteVersions.versionNumber}), 0)` 
+      })
+        .from(clientNoteVersions)
+        .where(eq(clientNoteVersions.noteId, noteId));
+      
+      const nextVersionNumber = (latestVersion?.maxVersion || 0) + 1;
+
+      // Save the current version before updating
+      await db.insert(clientNoteVersions).values({
+        noteId: noteId,
+        tenantId: tenantId,
+        editorUserId: existingNote.lastEditedByUserId || existingNote.authorUserId,
+        body: existingNote.body,
+        category: existingNote.category,
+        categoryId: existingNote.categoryId,
+        versionNumber: nextVersionNumber,
+      });
+
+      // Update the note with new content
+      const [updated] = await db.update(clientNotes)
+        .set({
+          body: data.body ?? existingNote.body,
+          category: data.category ?? existingNote.category,
+          categoryId: data.categoryId ?? existingNote.categoryId,
+          lastEditedByUserId: editorUserId,
+          updatedAt: new Date(),
+        })
+        .where(eq(clientNotes.id, noteId))
+        .returning();
+
+      res.json({ ok: true, note: updated });
+    } catch (error) {
+      if (error instanceof z.ZodError) {
+        return res.status(400).json({ error: "Validation error", details: error.errors });
+      }
+      console.error("Error updating client note:", error);
+      res.status(500).json({ error: "Failed to update note" });
+    }
+  });
+
+  // GET /api/clients/:clientId/notes/:noteId/versions - Get version history
+  app.get("/api/clients/:clientId/notes/:noteId/versions", requireAuth, async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(403).json({ error: "Tenant context required" });
+      }
+
+      const { clientId, noteId } = req.params;
+
+      const client = await storage.getClientByIdAndTenant(clientId, tenantId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const [existingNote] = await db.select().from(clientNotes)
+        .where(and(
+          eq(clientNotes.id, noteId),
+          eq(clientNotes.clientId, clientId),
+          eq(clientNotes.tenantId, tenantId)
+        ));
+      
+      if (!existingNote) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+
+      // Get all versions for this note
+      const versions = await db.select({
+        id: clientNoteVersions.id,
+        noteId: clientNoteVersions.noteId,
+        editorUserId: clientNoteVersions.editorUserId,
+        body: clientNoteVersions.body,
+        category: clientNoteVersions.category,
+        versionNumber: clientNoteVersions.versionNumber,
+        createdAt: clientNoteVersions.createdAt,
+      })
+        .from(clientNoteVersions)
+        .where(eq(clientNoteVersions.noteId, noteId))
+        .orderBy(desc(clientNoteVersions.versionNumber));
+
+      // Get user info for the editors
+      const editorIds = [...new Set(versions.map(v => v.editorUserId))];
+      let editorMap: Record<string, { id: string; firstName: string | null; lastName: string | null; email: string }> = {};
+      
+      if (editorIds.length > 0) {
+        const editors = await db.select({
+          id: users.id,
+          firstName: users.firstName,
+          lastName: users.lastName,
+          email: users.email,
+        })
+          .from(users)
+          .where(inArray(users.id, editorIds));
+        
+        editors.forEach(e => {
+          editorMap[e.id] = e;
+        });
+      }
+
+      const enrichedVersions = versions.map(v => ({
+        ...v,
+        editor: editorMap[v.editorUserId] || { id: v.editorUserId, firstName: null, lastName: null, email: "" },
+      }));
+
+      res.json({
+        currentNote: existingNote,
+        versions: enrichedVersions,
+        totalVersions: versions.length,
+      });
+    } catch (error) {
+      console.error("Error fetching note versions:", error);
+      res.status(500).json({ error: "Failed to fetch note versions" });
+    }
+  });
+
+  // DELETE /api/clients/:clientId/notes/:noteId - Delete a note
+  app.delete("/api/clients/:clientId/notes/:noteId", requireAuth, async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(403).json({ error: "Tenant context required" });
+      }
+
+      const { clientId, noteId } = req.params;
+
+      const client = await storage.getClientByIdAndTenant(clientId, tenantId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const [existingNote] = await db.select().from(clientNotes)
+        .where(and(
+          eq(clientNotes.id, noteId),
+          eq(clientNotes.clientId, clientId),
+          eq(clientNotes.tenantId, tenantId)
+        ));
+      
+      if (!existingNote) {
+        return res.status(404).json({ error: "Note not found" });
+      }
+
+      // Delete the note (versions are cascade deleted)
+      await db.delete(clientNotes).where(eq(clientNotes.id, noteId));
+
+      res.json({ ok: true });
+    } catch (error) {
+      console.error("Error deleting client note:", error);
+      res.status(500).json({ error: "Failed to delete note" });
+    }
+  });
+
+  // GET /api/clients/:clientId/note-categories - Get note categories for a tenant
+  app.get("/api/clients/:clientId/note-categories", requireAuth, async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(403).json({ error: "Tenant context required" });
+      }
+
+      const { clientId } = req.params;
+      
+      const client = await storage.getClientByIdAndTenant(clientId, tenantId);
+      if (!client) {
+        return res.status(404).json({ error: "Client not found" });
+      }
+
+      const categories = await db.select()
+        .from(clientNoteCategories)
+        .where(eq(clientNoteCategories.tenantId, tenantId))
+        .orderBy(clientNoteCategories.name);
+
+      res.json({ ok: true, categories });
+    } catch (error) {
+      console.error("Error fetching note categories:", error);
+      res.status(500).json({ error: "Failed to fetch categories" });
+    }
+  });
+
+  // POST /api/clients/:clientId/note-categories - Create a note category
+  app.post("/api/clients/:clientId/note-categories", requireAuth, async (req, res) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) {
+        return res.status(403).json({ error: "Tenant context required" });
+      }
+
+      const { name, color } = req.body;
+      if (!name || typeof name !== "string") {
+        return res.status(400).json({ error: "Name is required" });
+      }
+
+      const [category] = await db.insert(clientNoteCategories).values({
+        tenantId,
+        name,
+        color: color || null,
+        isSystem: false,
+      }).returning();
+
+      res.status(201).json({ ok: true, category });
+    } catch (error) {
+      console.error("Error creating note category:", error);
+      res.status(500).json({ error: "Failed to create category" });
     }
   });
 
