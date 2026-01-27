@@ -119,11 +119,22 @@ export class TenantIntegrationService {
       ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
       : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
     
-    const [integration] = await db
-      .select()
-      .from(tenantIntegrations)
-      .where(condition)
-      .limit(1);
+    let integration;
+    try {
+      const [result] = await db
+        .select()
+        .from(tenantIntegrations)
+        .where(condition)
+        .limit(1);
+      integration = result;
+    } catch (dbError: unknown) {
+      const message = dbError instanceof Error ? dbError.message : String(dbError);
+      if (message.includes("does not exist") || message.includes("column")) {
+        console.warn("[TenantIntegrations] table/column issue:", message);
+        return null;
+      }
+      throw dbError;
+    }
 
     if (!integration) {
       debugLog("getIntegration - not found", { tenantId, provider });
@@ -180,10 +191,27 @@ export class TenantIntegrationService {
       ? eq(tenantIntegrations.tenantId, tenantId)
       : isNull(tenantIntegrations.tenantId);
     
-    const integrations = await db
-      .select()
-      .from(tenantIntegrations)
-      .where(condition);
+    let integrations: typeof tenantIntegrations.$inferSelect[] = [];
+    try {
+      integrations = await db
+        .select()
+        .from(tenantIntegrations)
+        .where(condition);
+    } catch (dbError: unknown) {
+      const message = dbError instanceof Error ? dbError.message : String(dbError);
+      if (message.includes("does not exist") || message.includes("column")) {
+        console.warn("[TenantIntegrations] listIntegrations table/column issue:", message);
+        // Return empty list with not_configured status for all providers
+        return ["mailgun", "s3", "r2", "sso_google", "sso_github"].map(p => ({
+          provider: p,
+          status: IntegrationStatus.NOT_CONFIGURED,
+          publicConfig: null,
+          secretConfigured: false,
+          lastTestedAt: null,
+        }));
+      }
+      throw dbError;
+    }
 
     const providers: IntegrationProvider[] = ["mailgun", "s3", "r2", "sso_google", "sso_github"];
     const result: IntegrationResponse[] = [];

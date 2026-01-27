@@ -7167,7 +7167,19 @@ router.get("/agreements/:id/signers", requireSuperUser, async (req, res) => {
 router.get("/integrations/status", requireSuperUser, async (req, res) => {
   try {
     // Check database-stored global integrations
-    const [settings] = await db.select().from(systemSettings).limit(1);
+    let settings: typeof systemSettings.$inferSelect | null = null;
+    try {
+      const [row] = await db.select().from(systemSettings).limit(1);
+      settings = row || null;
+    } catch (dbError: unknown) {
+      const message = dbError instanceof Error ? dbError.message : String(dbError);
+      if (message.includes("does not exist") || message.includes("column")) {
+        console.warn("[integrations] systemSettings table/column issue:", message);
+        // Continue with null settings - will report all as not configured
+      } else {
+        throw dbError;
+      }
+    }
     
     const mailgunConfigured = !!(
       settings?.mailgunDomain && 
@@ -7196,7 +7208,13 @@ router.get("/integrations/status", requireSuperUser, async (req, res) => {
     });
   } catch (error) {
     console.error("[integrations] Failed to check integration status:", error);
-    res.status(500).json({ error: "Failed to check integrations" });
+    // Return safe defaults instead of 500
+    res.json({
+      mailgun: false,
+      s3: false,
+      stripe: false,
+      encryptionConfigured: isEncryptionAvailable(),
+    });
   }
 });
 
@@ -7220,16 +7238,29 @@ const globalMailgunUpdateSchema = z.object({
 
 // GET /api/v1/super/integrations/mailgun - Get global Mailgun settings
 router.get("/integrations/mailgun", requireSuperUser, async (req, res) => {
+  const notConfiguredResponse = {
+    status: "not_configured",
+    config: null,
+    secretMasked: null,
+    lastTestedAt: null,
+  };
+
   try {
-    const [settings] = await db.select().from(systemSettings).limit(1);
+    let settings: typeof systemSettings.$inferSelect | null = null;
+    try {
+      const [row] = await db.select().from(systemSettings).limit(1);
+      settings = row || null;
+    } catch (dbError: unknown) {
+      const message = dbError instanceof Error ? dbError.message : String(dbError);
+      if (message.includes("does not exist") || message.includes("column")) {
+        console.warn("[integrations] systemSettings table/column issue:", message);
+        return res.json(notConfiguredResponse);
+      }
+      throw dbError;
+    }
     
     if (!settings) {
-      return res.json({
-        status: "not_configured",
-        config: null,
-        secretMasked: null,
-        lastTestedAt: null,
-      });
+      return res.json(notConfiguredResponse);
     }
 
     let apiKeyMasked: string | null = null;
@@ -7274,7 +7305,8 @@ router.get("/integrations/mailgun", requireSuperUser, async (req, res) => {
     });
   } catch (error) {
     console.error("[integrations] Failed to get Mailgun settings:", error);
-    res.status(500).json({ error: "Failed to get Mailgun settings" });
+    // Return not_configured instead of 500
+    res.json(notConfiguredResponse);
   }
 });
 
@@ -7441,16 +7473,29 @@ const globalS3UpdateSchema = z.object({
 
 // GET /api/v1/super/integrations/s3 - Get global S3 settings
 router.get("/integrations/s3", requireSuperUser, async (req, res) => {
+  const notConfiguredResponse = {
+    status: "not_configured",
+    config: null,
+    secretMasked: null,
+    lastTestedAt: null,
+  };
+
   try {
-    const [settings] = await db.select().from(systemSettings).limit(1);
+    let settings: typeof systemSettings.$inferSelect | null = null;
+    try {
+      const [row] = await db.select().from(systemSettings).limit(1);
+      settings = row || null;
+    } catch (dbError: unknown) {
+      const message = dbError instanceof Error ? dbError.message : String(dbError);
+      if (message.includes("does not exist") || message.includes("column")) {
+        console.warn("[integrations] systemSettings table/column issue:", message);
+        return res.json(notConfiguredResponse);
+      }
+      throw dbError;
+    }
     
     if (!settings) {
-      return res.json({
-        status: "not_configured",
-        config: null,
-        secretMasked: null,
-        lastTestedAt: null,
-      });
+      return res.json(notConfiguredResponse);
     }
 
     let accessKeyIdMasked: string | null = null;
@@ -7497,7 +7542,8 @@ router.get("/integrations/s3", requireSuperUser, async (req, res) => {
     });
   } catch (error) {
     console.error("[integrations] Failed to get S3 settings:", error);
-    res.status(500).json({ error: "Failed to get S3 settings" });
+    // Return not_configured instead of 500
+    res.json(notConfiguredResponse);
   }
 });
 
@@ -7630,16 +7676,29 @@ const globalStripeUpdateSchema = z.object({
 
 // GET /api/v1/super/integrations/stripe - Get global Stripe settings
 router.get("/integrations/stripe", requireSuperUser, async (req, res) => {
+  const notConfiguredResponse = {
+    status: "not_configured",
+    config: null,
+    secretMasked: null,
+    lastTestedAt: null,
+  };
+
   try {
-    const [settings] = await db.select().from(systemSettings).limit(1);
+    let settings: typeof systemSettings.$inferSelect | null = null;
+    try {
+      const [row] = await db.select().from(systemSettings).limit(1);
+      settings = row || null;
+    } catch (dbError: unknown) {
+      const message = dbError instanceof Error ? dbError.message : String(dbError);
+      if (message.includes("does not exist") || message.includes("column")) {
+        console.warn("[integrations] systemSettings table/column issue:", message);
+        return res.json(notConfiguredResponse);
+      }
+      throw dbError;
+    }
     
     if (!settings) {
-      return res.json({
-        status: "not_configured",
-        config: null,
-        secretMasked: null,
-        lastTestedAt: null,
-      });
+      return res.json(notConfiguredResponse);
     }
 
     let secretKeyMasked: string | null = null;
@@ -7682,7 +7741,8 @@ router.get("/integrations/stripe", requireSuperUser, async (req, res) => {
     });
   } catch (error) {
     console.error("[integrations] Failed to get Stripe settings:", error);
-    res.status(500).json({ error: "Failed to get Stripe settings" });
+    // Return not_configured instead of 500
+    res.json(notConfiguredResponse);
   }
 });
 

@@ -73,7 +73,8 @@ router.get("/integrations", requireSuperUser, async (req: Request, res: Response
     res.json({ integrations });
   } catch (error) {
     console.error("[system-integrations] Error listing integrations:", error);
-    res.status(500).json({ error: { code: "SERVER_ERROR", message: "Failed to list integrations" } });
+    // Return empty integrations list instead of 500
+    res.json({ integrations: [] });
   }
 });
 
@@ -102,7 +103,15 @@ router.get("/integrations/s3", requireSuperUser, async (req: Request, res: Respo
     });
   } catch (error) {
     console.error("[system-integrations] Error getting S3 integration:", error);
-    res.status(500).json({ error: { code: "SERVER_ERROR", message: "Failed to get S3 integration" } });
+    // Return not_configured instead of 500
+    res.json({
+      provider: "s3",
+      status: "not_configured",
+      publicConfig: null,
+      secretConfigured: false,
+      lastTestedAt: null,
+      isSystemDefault: true,
+    });
   }
 });
 
@@ -155,7 +164,7 @@ router.post("/integrations/s3/test", requireSuperUser, async (req: Request, res:
     res.json(result);
   } catch (error) {
     console.error("[system-integrations] Error testing S3 integration:", error);
-    res.status(500).json({ success: false, message: "Failed to test S3 integration" });
+    res.json({ success: false, message: "Failed to test S3 integration" });
   }
 });
 
@@ -188,7 +197,15 @@ router.get("/integrations/r2", requireSuperUser, async (req: Request, res: Respo
     });
   } catch (error) {
     console.error("[system-integrations] Error getting R2 integration:", error);
-    res.status(500).json({ error: { code: "SERVER_ERROR", message: "Failed to get R2 integration" } });
+    // Return not_configured instead of 500
+    res.json({
+      provider: "r2",
+      status: "not_configured",
+      publicConfig: null,
+      secretConfigured: false,
+      lastTestedAt: null,
+      isSystemDefault: true,
+    });
   }
 });
 
@@ -247,7 +264,7 @@ router.post("/integrations/r2/test", requireSuperUser, async (req: Request, res:
     res.json(result);
   } catch (error) {
     console.error("[system-integrations] Error testing R2 integration:", error);
-    res.status(500).json({ success: false, message: "Failed to test R2 integration" });
+    res.json({ success: false, message: "Failed to test R2 integration" });
   }
 });
 
@@ -264,7 +281,13 @@ router.get("/storage/status", requireSuperUser, async (req: Request, res: Respon
     });
   } catch (error) {
     console.error("[system-integrations] Error checking storage status:", error);
-    res.status(500).json({ error: { code: "SERVER_ERROR", message: "Failed to check storage status" } });
+    // Return safe defaults instead of 500
+    res.json({
+      configured: false,
+      provider: null,
+      source: null,
+      encryptionConfigured: isEncryptionAvailable(),
+    });
   }
 });
 
@@ -315,7 +338,16 @@ router.get("/integrations/sso/google", requireSuperUser, async (req: Request, re
     });
   } catch (error) {
     console.error("[system-integrations] Error getting Google SSO config:", error);
-    res.status(500).json({ error: { code: "SERVER_ERROR", message: "Failed to get Google SSO configuration" } });
+    // Return not_configured instead of 500
+    res.json({
+      provider: "sso_google",
+      status: "not_configured",
+      enabled: false,
+      clientId: null,
+      redirectUri: getDefaultRedirectUri("google"),
+      clientSecretPresent: false,
+      lastTestedAt: null,
+    });
   }
 });
 
@@ -393,7 +425,7 @@ router.post("/integrations/sso/google/test", requireSuperUser, async (req: Reque
     res.json(result);
   } catch (error) {
     console.error("[system-integrations] Error testing Google SSO:", error);
-    res.status(500).json({ success: false, message: "Failed to test Google SSO configuration" });
+    res.json({ success: false, message: "Failed to test Google SSO configuration" });
   }
 });
 
@@ -432,7 +464,16 @@ router.get("/integrations/sso/github", requireSuperUser, async (req: Request, re
     });
   } catch (error) {
     console.error("[system-integrations] Error getting GitHub SSO config:", error);
-    res.status(500).json({ error: { code: "SERVER_ERROR", message: "Failed to get GitHub SSO configuration" } });
+    // Return not_configured instead of 500
+    res.json({
+      provider: "sso_github",
+      status: "not_configured",
+      enabled: false,
+      clientId: null,
+      redirectUri: getDefaultRedirectUri("github"),
+      clientSecretPresent: false,
+      lastTestedAt: null,
+    });
   }
 });
 
@@ -510,7 +551,7 @@ router.post("/integrations/sso/github/test", requireSuperUser, async (req: Reque
     res.json(result);
   } catch (error) {
     console.error("[system-integrations] Error testing GitHub SSO:", error);
-    res.status(500).json({ success: false, message: "Failed to test GitHub SSO configuration" });
+    res.json({ success: false, message: "Failed to test GitHub SSO configuration" });
   }
 });
 
@@ -539,7 +580,12 @@ router.get("/integrations/sso/status", requireSuperUser, async (req: Request, re
     });
   } catch (error) {
     console.error("[system-integrations] Error getting SSO status:", error);
-    res.status(500).json({ error: { code: "SERVER_ERROR", message: "Failed to get SSO status" } });
+    // Return safe defaults instead of 500
+    res.json({
+      google: { configured: false, enabled: false },
+      github: { configured: false, enabled: false },
+      encryptionConfigured: isEncryptionAvailable(),
+    });
   }
 });
 
