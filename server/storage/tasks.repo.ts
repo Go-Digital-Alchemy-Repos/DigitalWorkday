@@ -19,6 +19,7 @@ import {
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, asc, gte, lte, inArray, sql } from "drizzle-orm";
+import { assertInsertHasTenantId } from "../lib/errors";
 
 export type CalendarTask = {
   id: string;
@@ -282,6 +283,7 @@ export class TasksRepository {
   }
 
   async createTask(insertTask: InsertTask): Promise<Task> {
+    assertInsertHasTenantId(insertTask, "tasks");
     const existingTasks = insertTask.sectionId 
       ? await db.select().from(tasks).where(and(
           eq(tasks.sectionId, insertTask.sectionId),
@@ -299,6 +301,7 @@ export class TasksRepository {
   }
 
   async createChildTask(parentTaskId: string, insertTask: InsertTask): Promise<Task> {
+    assertInsertHasTenantId(insertTask, "tasks (child)");
     const parentTask = await this.getTask(parentTaskId);
     if (!parentTask) {
       throw new Error("Parent task not found");

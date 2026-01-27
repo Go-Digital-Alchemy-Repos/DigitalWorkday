@@ -8,6 +8,7 @@ import {
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, asc, sql, inArray } from "drizzle-orm";
+import { assertInsertHasTenantId } from "../lib/errors";
 
 export class ProjectsRepository {
   private getUser: (id: string) => Promise<User | undefined>;
@@ -49,6 +50,7 @@ export class ProjectsRepository {
   }
 
   async createProject(insertProject: InsertProject): Promise<Project> {
+    assertInsertHasTenantId(insertProject, "projects");
     const [project] = await db.insert(projects).values(insertProject).returning();
     return project;
   }

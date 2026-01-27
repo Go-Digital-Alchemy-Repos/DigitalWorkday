@@ -96,6 +96,31 @@ Rate limiting is enabled by default in production and disabled in development fo
 | `RATE_LIMIT_UPLOAD_WINDOW_MS` | `60000` | File upload presign window (ms) |
 | `RATE_LIMIT_UPLOAD_MAX_IP` | `30` | Max upload presigns per IP per window |
 
+## Tenant Data Integrity
+
+### Prevention Guards
+The storage layer includes `assertInsertHasTenantId` guards on all tenant-scoped create methods to prevent rows from being created without a tenantId. Protected methods include:
+- `createProject`, `createClient`, `createTask`, `createTimeEntry`, `createActiveTimer`
+- `createWorkspace`, `createTeam`
+
+These guards throw `AppError` with code `TENANT_REQUIRED` if tenantId is missing.
+
+### Backfill Script
+The `server/scripts/backfillTenantId.ts` script handles orphaned rows that lack tenantId:
+```bash
+# Dry-run to preview changes
+npx tsx server/scripts/backfillTenantId.ts --dry-run
+
+# Live backfill
+npx tsx server/scripts/backfillTenantId.ts
+```
+
+Super Admin API endpoint: `GET /api/v1/super/tenancy/backfill?dryRun=true` for preview, `POST` without dryRun for live execution.
+
+### Notes
+- `super_users` are excluded from tenantId checks (platform-level accounts have NULL tenantId)
+- Orphan test/demo data without proper relationships requires manual review
+
 ## External Dependencies
 - **PostgreSQL**: Primary database.
 - **Socket.IO**: Real-time communication.

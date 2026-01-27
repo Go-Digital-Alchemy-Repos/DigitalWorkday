@@ -76,6 +76,7 @@ import {
 } from "@shared/schema";
 import crypto from "crypto";
 import { db } from "./db";
+import { assertInsertHasTenantId } from "./lib/errors";
 
 // Calendar Task - Lightweight DTO for calendar display (no heavy relations)
 export type CalendarTask = {
@@ -552,6 +553,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createWorkspace(insertWorkspace: InsertWorkspace): Promise<Workspace> {
+    assertInsertHasTenantId(insertWorkspace, "workspaces");
     const [workspace] = await db.insert(workspaces).values(insertWorkspace).returning();
     return workspace;
   }
@@ -586,6 +588,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTeam(insertTeam: InsertTeam): Promise<Team> {
+    assertInsertHasTenantId(insertTeam, "teams");
     const [team] = await db.insert(teams).values(insertTeam).returning();
     return team;
   }
@@ -1889,6 +1892,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry> {
+    assertInsertHasTenantId(entry, "time_entries");
     const [created] = await db.insert(timeEntries).values(entry).returning();
     return created;
   }
@@ -1942,6 +1946,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createActiveTimer(timer: InsertActiveTimer): Promise<ActiveTimer> {
+    assertInsertHasTenantId(timer, "active_timers");
     const [created] = await db.insert(activeTimers).values(timer).returning();
     return created;
   }

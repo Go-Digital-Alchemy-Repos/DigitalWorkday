@@ -7,6 +7,7 @@ import {
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, gte, lte, inArray } from "drizzle-orm";
+import { assertInsertHasTenantId } from "../lib/errors";
 
 export class TimeTrackingRepository {
   async getTimeEntry(id: string): Promise<TimeEntry | undefined> {
@@ -84,6 +85,7 @@ export class TimeTrackingRepository {
   }
 
   async createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry> {
+    assertInsertHasTenantId(entry, "time_entries");
     const [created] = await db.insert(timeEntries).values(entry).returning();
     return created;
   }
@@ -133,6 +135,7 @@ export class TimeTrackingRepository {
   }
 
   async createActiveTimer(timer: InsertActiveTimer): Promise<ActiveTimer> {
+    assertInsertHasTenantId(timer, "active_timers");
     const [created] = await db.insert(activeTimers).values(timer).returning();
     return created;
   }

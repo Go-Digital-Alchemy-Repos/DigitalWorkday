@@ -323,3 +323,20 @@ export function assertUserId(
   }
   return userId;
 }
+
+/**
+ * Assert that tenantId is present in the data object.
+ * Use this in storage layer create methods to prevent NULL tenantId inserts.
+ * 
+ * @param data - The insert data object to validate
+ * @param tableName - The table name for error context
+ * @throws AppError with TENANT_REQUIRED code if tenantId is missing
+ */
+export function assertInsertHasTenantId<T extends { tenantId?: string | null }>(
+  data: T,
+  tableName: string
+): asserts data is T & { tenantId: string } {
+  if (!data.tenantId) {
+    throw AppError.tenantRequired(`tenantId is required when creating ${tableName}`);
+  }
+}

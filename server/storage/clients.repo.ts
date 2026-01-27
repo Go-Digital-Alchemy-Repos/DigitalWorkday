@@ -13,6 +13,7 @@ import {
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, asc, inArray, isNull } from "drizzle-orm";
+import { assertInsertHasTenantId } from "../lib/errors";
 
 export class ClientsRepository {
   private getUser: (id: string) => Promise<User | undefined>;
@@ -57,6 +58,7 @@ export class ClientsRepository {
   }
 
   async createClient(insertClient: InsertClient): Promise<Client> {
+    assertInsertHasTenantId(insertClient, "clients");
     const [client] = await db.insert(clients).values(insertClient).returning();
     return client;
   }
