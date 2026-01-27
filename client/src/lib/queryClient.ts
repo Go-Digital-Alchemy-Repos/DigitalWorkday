@@ -207,6 +207,24 @@ function buildUrlFromQueryKey(queryKey: readonly unknown[]): string {
 
   for (const segment of queryKey) {
     if (typeof segment === "string") {
+      // Detect accidentally stringified objects (e.g., template literal with object)
+      if (segment.includes("[object Object]")) {
+        const stack = new Error().stack;
+        console.error(
+          "[queryClient] BUG DETECTED: [object Object] in query key path.\n" +
+          "This means an object was passed instead of a string ID.\n" +
+          "Query key:", JSON.stringify(queryKey), "\n" +
+          "Stack trace:", stack
+        );
+        // In development, throw to catch the bug immediately
+        if (import.meta.env.DEV) {
+          throw new Error(
+            `Invalid query key: path segment contains [object Object]. ` +
+            `Pass the ID property (.id) instead of the whole object. ` +
+            `Query key: ${JSON.stringify(queryKey)}`
+          );
+        }
+      }
       pathParts.push(segment);
     } else if (typeof segment === "object" && segment !== null) {
       queryParams = new URLSearchParams();

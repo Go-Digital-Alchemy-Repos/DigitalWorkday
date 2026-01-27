@@ -383,14 +383,19 @@ router.get("/error-logs/:id", requireAuth, requireSuperUser, async (req: Request
     const { id } = req.params;
     
     // Validate ID format - must be a valid UUID
+    // Catches common bugs like passing objects instead of IDs (results in "[object Object]")
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!id || !uuidRegex.test(id)) {
+      const isObjectString = id?.includes("[object");
       return res.status(400).json({
         ok: false,
         requestId,
         error: {
           code: "INVALID_ERROR_LOG_ID",
-          message: "Invalid error log ID format. Expected a valid UUID.",
+          message: isObjectString
+            ? "Invalid error log ID: received object instead of string. Check client-side code."
+            : "Invalid error log ID format. Expected a valid UUID.",
+          receivedId: id?.slice(0, 50), // Truncate for safety
           requestId,
         },
       });
@@ -439,14 +444,19 @@ router.patch("/error-logs/:id/resolve", requireAuth, requireSuperUser, async (re
     const { id } = req.params;
     
     // Validate ID format - must be a valid UUID
+    // Catches common bugs like passing objects instead of IDs (results in "[object Object]")
     const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
     if (!id || !uuidRegex.test(id)) {
+      const isObjectString = id?.includes("[object");
       return res.status(400).json({
         ok: false,
         requestId,
         error: {
           code: "INVALID_ERROR_LOG_ID",
-          message: "Invalid error log ID format. Expected a valid UUID.",
+          message: isObjectString
+            ? "Invalid error log ID: received object instead of string. Check client-side code."
+            : "Invalid error log ID format. Expected a valid UUID.",
+          receivedId: id?.slice(0, 50),
           requestId,
         },
       });
