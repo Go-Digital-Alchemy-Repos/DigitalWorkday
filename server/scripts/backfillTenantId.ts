@@ -297,26 +297,50 @@ async function backfillUsers(): Promise<BackfillResult> {
   };
 
   try {
-    result.missingCount = await countMissing("users");
+    // Count only non-super_user with NULL tenantId (super_users don't need tenantId)
+    const countResult = await db.execute(sql`
+      SELECT COUNT(*) as count FROM users 
+      WHERE tenant_id IS NULL AND role != 'super_user'
+    `);
+    result.missingCount = parseInt((countResult.rows[0] as any)?.count || "0");
     if (result.missingCount === 0) return result;
 
-    const missingRows = await db.execute(sql`
-      SELECT u.id, u.email, u.name,
+    // Check workspace membership for tenantId
+    const workspaceMemberRows = await db.execute(sql`
+      SELECT u.id, u.email, u.name, u.role,
              wm.workspace_id,
              w.tenant_id as workspace_tenant_id
       FROM users u
       LEFT JOIN workspace_members wm ON u.id = wm.user_id
       LEFT JOIN workspaces w ON wm.workspace_id = w.id AND w.tenant_id IS NOT NULL
-      WHERE u.tenant_id IS NULL
+      WHERE u.tenant_id IS NULL AND u.role != 'super_user'
     `);
 
     const userTenantMap = new Map<string, Set<string>>();
-    for (const row of missingRows.rows as any[]) {
+    const userEmails = new Map<string, string>();
+    for (const row of workspaceMemberRows.rows as any[]) {
+      userEmails.set(row.id, row.email);
       if (row.workspace_tenant_id) {
         if (!userTenantMap.has(row.id)) {
           userTenantMap.set(row.id, new Set());
         }
         userTenantMap.get(row.id)!.add(row.workspace_tenant_id);
+      }
+    }
+
+    // Also check invitations table for tenantId derivation
+    const invitationRows = await db.execute(sql`
+      SELECT u.id, i.tenant_id as invitation_tenant_id
+      FROM users u
+      JOIN invitations i ON u.email = i.email AND i.tenant_id IS NOT NULL
+      WHERE u.tenant_id IS NULL AND u.role != 'super_user'
+    `);
+    for (const row of invitationRows.rows as any[]) {
+      if (row.invitation_tenant_id) {
+        if (!userTenantMap.has(row.id)) {
+          userTenantMap.set(row.id, new Set());
+        }
+        userTenantMap.get(row.id)!.add(row.invitation_tenant_id);
       }
     }
 
@@ -336,12 +360,13 @@ async function backfillUsers(): Promise<BackfillResult> {
       }
     }
 
+    // Find users with no tenantId derivation path (excluding super_users)
     const allMissingUsers = await db.execute(sql`
-      SELECT id FROM users WHERE tenant_id IS NULL
+      SELECT id, email, role FROM users WHERE tenant_id IS NULL AND role != 'super_user'
     `);
     for (const row of allMissingUsers.rows as any[]) {
       if (!userTenantMap.has(row.id)) {
-        result.unresolvedIds.push(`${row.id} (no workspace membership)`);
+        result.unresolvedIds.push(`${row.id} (${row.email} - no workspace/invitation)`);
       }
     }
   } catch (error: any) {
