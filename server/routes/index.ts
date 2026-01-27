@@ -17,12 +17,16 @@ import chatRoutes from "./chat";
 import chatRetentionRoutes from "./chatRetention";
 import aiRoutes from "./ai";
 import featuresRoutes from "../features";
+import superSystemStatusRouter from "./super/systemStatus.router";
+import superIntegrationsRouter from "./super/integrations.router";
 
 const router = Router();
 
 router.use(featuresRoutes);
 router.use("/timer", timerRoutes);
 router.use("/v1/super", superAdminRoutes);
+router.use("/v1/super", superSystemStatusRouter);
+router.use("/v1/super", superIntegrationsRouter);
 router.use("/v1/super/debug", superDebugRoutes);
 router.use("/v1/super/debug/chat", chatDebugRoutes);
 router.use("/v1/super/chat", superChatRoutes);
