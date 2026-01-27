@@ -976,7 +976,7 @@ export function IntegrationsTab() {
               type="button"
               variant="outline"
               onClick={() => testOpenAIMutation.mutate()}
-              disabled={testOpenAIMutation.isPending || openaiIntegration?.status !== "configured"}
+              disabled={testOpenAIMutation.isPending || !openaiIntegration?.secretConfigured}
               data-testid="button-test-openai"
             >
               {testOpenAIMutation.isPending ? (
