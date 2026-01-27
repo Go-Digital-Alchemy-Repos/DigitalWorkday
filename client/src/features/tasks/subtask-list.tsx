@@ -25,6 +25,7 @@ interface SubtaskListProps {
   onDelete?: (subtaskId: string) => void;
   onUpdate?: (subtaskId: string, title: string) => void;
   onSubtaskUpdate?: () => void;
+  onSubtaskClick?: (subtask: Subtask) => void;
 }
 
 function getInitials(name: string): string {
@@ -47,6 +48,7 @@ export function SubtaskList({
   onDelete,
   onUpdate,
   onSubtaskUpdate,
+  onSubtaskClick,
 }: SubtaskListProps) {
   const { toast } = useToast();
   const [isAdding, setIsAdding] = useState(false);
@@ -288,10 +290,15 @@ export function SubtaskList({
                 ) : (
                   <span
                     className={cn(
-                      "flex-1 text-sm cursor-pointer min-w-0 truncate",
+                      "flex-1 text-sm cursor-pointer min-w-0 truncate hover:text-primary transition-colors",
                       subtask.completed && "line-through text-muted-foreground"
                     )}
-                    onClick={() => handleEdit(subtask)}
+                    onClick={() => onSubtaskClick?.(subtask)}
+                    onDoubleClick={(e) => {
+                      e.stopPropagation();
+                      handleEdit(subtask);
+                    }}
+                    title="Click to view details, double-click to edit title"
                   >
                     {subtask.title}
                   </span>

@@ -108,6 +108,8 @@ export function TaskDetailDrawer({
   );
   const [selectedChildTask, setSelectedChildTask] = useState<TaskWithRelations | null>(null);
   const [childDrawerOpen, setChildDrawerOpen] = useState(false);
+  const [selectedSubtask, setSelectedSubtask] = useState<any | null>(null);
+  const [subtaskDrawerOpen, setSubtaskDrawerOpen] = useState(false);
   const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
   
   const { isDirty, setDirty, markClean, confirmIfDirty, UnsavedChangesDialog } = useUnsavedChanges();
@@ -386,7 +388,7 @@ export function TaskDetailDrawer({
       <UnsavedChangesDialog />
       <Sheet open={open} onOpenChange={handleDrawerClose}>
         <SheetContent
-        className="w-full sm:max-w-xl overflow-y-auto p-0"
+        className="w-full sm:max-w-2xl overflow-y-auto p-0"
         data-testid="task-detail-drawer"
       >
         <SheetHeader className="sticky top-0 z-10 bg-background border-b border-border px-6 py-4">
@@ -750,6 +752,10 @@ export function TaskDetailDrawer({
             onDelete={(subtaskId) => deleteSubtaskMutation.mutate(subtaskId)}
             onUpdate={(subtaskId, title) => updateSubtaskTitleMutation.mutate({ subtaskId, title })}
             onSubtaskUpdate={onRefresh}
+            onSubtaskClick={(subtask) => {
+              setSelectedSubtask(subtask);
+              setSubtaskDrawerOpen(true);
+            }}
           />
 
           <Separator />
@@ -882,6 +888,29 @@ export function TaskDetailDrawer({
         onOpenChange={setChildDrawerOpen}
         onUpdate={handleChildTaskUpdate}
         onBack={() => setChildDrawerOpen(false)}
+        availableUsers={availableUsers}
+      />
+
+      <SubtaskDetailDrawer
+        subtask={selectedSubtask}
+        parentTaskTitle={task.title}
+        projectId={task.projectId || undefined}
+        workspaceId={workspaceId}
+        open={subtaskDrawerOpen}
+        onOpenChange={setSubtaskDrawerOpen}
+        onUpdate={(subtaskId, data) => {
+          if (data.title) {
+            updateSubtaskTitleMutation.mutate({ subtaskId, title: data.title });
+          } else {
+            apiRequest("PATCH", `/api/subtasks/${subtaskId}`, data).then(() => {
+              invalidateTaskQueries();
+              if (selectedSubtask && selectedSubtask.id === subtaskId) {
+                setSelectedSubtask({ ...selectedSubtask, ...data });
+              }
+            });
+          }
+        }}
+        onBack={() => setSubtaskDrawerOpen(false)}
         availableUsers={availableUsers}
       />
 

@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { X, Calendar, Users, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Loader2 } from "lucide-react";
+import { X, Calendar, Users, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Loader2, ChevronRight, CheckSquare, ListTodo } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -255,7 +255,7 @@ export function SubtaskDetailDrawer({
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent
-        className="w-[480px] sm:max-w-[480px] overflow-y-auto p-0"
+        className="w-full sm:max-w-xl overflow-y-auto p-0"
         data-testid="subtask-detail-drawer"
       >
         <SheetHeader className="sticky top-0 z-10 bg-background border-b border-border px-6 py-4">
@@ -282,8 +282,20 @@ export function SubtaskDetailDrawer({
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="text-xs text-muted-foreground mt-2">
-            Subtask of: {parentTaskTitle}
+          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-3 flex-wrap" data-testid="subtask-breadcrumbs">
+            <button
+              onClick={onBack}
+              className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer"
+              data-testid="breadcrumb-parent-task"
+            >
+              <CheckSquare className="h-3 w-3" />
+              <span className="truncate max-w-[150px]">{parentTaskTitle}</span>
+            </button>
+            <ChevronRight className="h-3 w-3 shrink-0" />
+            <span className="flex items-center gap-1 font-medium text-foreground">
+              <ListTodo className="h-3 w-3" />
+              <span className="truncate max-w-[150px]">{subtask.title}</span>
+            </span>
           </div>
         </SheetHeader>
 
