@@ -14,6 +14,7 @@ import { errorHandler } from "./middleware/errorHandler";
 import { errorLoggingMiddleware } from "./middleware/errorLogging";
 import { apiJsonResponseGuard, apiNotFoundHandler } from "./middleware/apiJsonGuard";
 import { logMigrationStatus } from "./scripts/migration-status";
+import { ensureSchemaReady } from "./startup/schemaReadiness";
 
 export const app = express();
 const httpServer = createServer(app);
@@ -107,17 +108,19 @@ app.use((req, res, next) => {
     || "dev";
   console.log(`[boot] environment=${env} version=${version}`);
   
-  // Test database connection
+  // Schema readiness check - runs migrations if AUTO_MIGRATE=true
+  // Fails fast if schema is not ready (missing tables/columns)
   try {
-    const { db } = await import("./db");
-    const { sql } = await import("drizzle-orm");
-    await db.execute(sql`SELECT 1`);
-    console.log("[boot] database=connected");
-  } catch (dbErr) {
-    console.error("[boot] database=FAILED", dbErr instanceof Error ? dbErr.message : dbErr);
+    await ensureSchemaReady();
+  } catch (schemaErr) {
+    console.error("[boot] FATAL: Schema readiness check failed");
+    console.error("[boot]", schemaErr instanceof Error ? schemaErr.message : schemaErr);
+    console.error("[boot] Application cannot start with incomplete schema.");
+    console.error("[boot] Set AUTO_MIGRATE=true or run: npx drizzle-kit migrate");
+    process.exit(1);
   }
   
-  // Log migration status at startup
+  // Log migration status at startup (already verified above, but provides visibility)
   await logMigrationStatus();
   
   // Run production parity check (logs issues but doesn't crash)

@@ -1,0 +1,73 @@
+PROMPT B (DB: ADD MISSING TABLES/COLUMNS + MAKE ERROR LOGGING WORK)
+
+Goal: Add the missing DB tables/columns referenced by production code, using additive Drizzle migrations only, so endpoints stop throwing 500s.
+
+SAFETY RULES:
+- Additive migrations only (no drops).
+- Do not change existing table/column names used by production unless absolutely necessary.
+- If you find the code expects a table/column that doesn’t match the current schema, prefer updating schema via migration to match the code (NOT vice versa), unless the code is clearly wrong.
+
+STEP-BY-STEP:
+1) Search server code for queries touching:
+   - error_logs (currently fails when trying to capture errors)
+   - chat_channels, chat_dm_members (chat)
+   - notification_preferences (mentions / notification settings)
+   - tenant settings: chat_retention_days
+   - timer/current: selecting title
+
+2) Create Drizzle migrations to add:
+   A) error_logs table (minimum fields):
+      - id (uuid pk)
+      - createdAt (timestamp)
+      - level (text)
+      - message (text)
+      - code (text nullable)
+      - requestId (text nullable)
+      - userId (uuid nullable)
+      - tenantId (uuid nullable)
+      - route (text nullable)
+      - method (text nullable)
+      - stack (text nullable)
+      - meta (jsonb nullable)
+      Add indexes on (tenantId, createdAt) and (requestId).
+
+   B) tenant_settings (or the table that stores tenant settings):
+      - ADD COLUMN chat_retention_days integer DEFAULT 30 (or safe default)
+      If the settings are stored in a jsonb column, then either:
+        - add the column anyway for current code expectations, OR
+        - update the query code to read from jsonb safely.
+      Prefer matching the code’s expectation to end the production error.
+
+   C) timer/current “title” missing:
+      - Determine which table the timer endpoint reads (activeTimers or timeEntries or timers).
+      - ADD COLUMN title text (nullable) to the correct table.
+      - Ensure code handles null title safely.
+
+   D) chat tables:
+      - Create chat_channels table (tenantId required, workspaceId optional if applicable)
+      - Create chat_dm_members table (channelId/userId mapping)
+      Keep minimum viable columns to satisfy queries.
+
+   E) notification_preferences table:
+      - Create table with: userId pk/fk, tenantId, emailNotifications boolean default true, createdAt, updatedAt.
+      Ensure queries that fetch prefs succeed.
+
+3) After migrations:
+   - Run migrations locally + in Railway.
+   - Add a small smoke test script (server/scripts/db-smoke.ts) that:
+     - checks required tables exist
+     - checks required columns exist
+     - outputs PASS/FAIL
+
+ACCEPTANCE CRITERIA (from logs):
+- No more “relation ... does not exist” for: chat_channels, chat_dm_members, notification_preferences, error_logs.
+- No more “column chat_retention_days does not exist”.
+- No more “column title does not exist” causing /api/timer/current 500.
+
+EVIDENCE FROM PROD LOGS:
+- “relation "chat_channels" does not exist”
+- “relation "chat_dm_members" does not exist”
+- “relation "error_logs" does not exist”
+- “column "title" does not exist” on GET /api/timer/current
+- “column "chat_retention_days" does not exist”
+- “relation "notification_preferences" does not exist”

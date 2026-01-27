@@ -42,6 +42,39 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **Hierarchical S3 Storage**: Configurable 3-tier S3 storage (tenant-specific → system-level → env vars) for file attachments.
 - **Centralized Type Augmentation**: `server/types.d.ts` provides TypeScript declarations for Express Request properties (tenant context, requestId, clientAccess) attached by middleware, eliminating `(req as any)` casts.
 
+## Database Migrations & Schema Readiness
+
+The application uses Drizzle ORM migrations with a startup schema readiness check to ensure database integrity before serving traffic.
+
+### Migration Commands
+```bash
+# Generate a new migration from schema changes
+npx drizzle-kit generate
+
+# Apply pending migrations
+npx drizzle-kit migrate
+
+# Push schema directly (development only)
+npx drizzle-kit push
+```
+
+### Startup Schema Check
+On boot, the server validates that all required tables and columns exist. This prevents "relation does not exist" errors in production.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `AUTO_MIGRATE` | `false` | Run Drizzle migrations automatically on boot |
+| `FAIL_ON_SCHEMA_ISSUES` | `true` | Fail startup if schema is incomplete (always true in production) |
+
+**Behavior:**
+- If `AUTO_MIGRATE=true`: Migrations run automatically before the app starts
+- If schema is incomplete and `AUTO_MIGRATE=false`: App fails with clear error message
+- In production: Always fails fast on schema issues
+- Super Admins can check schema status at `/api/v1/super/status/db`
+
+### Railway Deployment
+For Railway deployments, set `AUTO_MIGRATE=true` in environment variables to ensure migrations run on each deploy.
+
 ## Rate Limiting Environment Variables
 Rate limiting is enabled by default in production and disabled in development for convenience.
 

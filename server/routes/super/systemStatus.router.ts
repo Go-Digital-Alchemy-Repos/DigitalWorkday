@@ -9,6 +9,7 @@
  * Endpoints:
  * - GET /status/health - System health checks (db, s3, mailgun, encryption)
  * - GET /status/auth-diagnostics - Auth configuration diagnostics
+ * - GET /status/db - Database schema status (migrations, tables, columns)
  * - POST /status/checks/:type - Run specific checks
  */
 import { Router } from "express";
@@ -17,6 +18,7 @@ import { db } from "../../db";
 import { sql } from "drizzle-orm";
 import { isS3Configured } from "../../s3";
 import { isEncryptionAvailable } from "../../lib/encryption";
+import { checkSchemaReadiness } from "../../startup/schemaReadiness";
 
 const router = Router();
 
@@ -210,6 +212,47 @@ router.get("/status/auth-diagnostics", requireSuperUser, async (_req, res) => {
   } catch (error) {
     console.error("[auth-diagnostics] Failed:", error);
     res.status(500).json({ error: "Auth diagnostics failed" });
+  }
+});
+
+/**
+ * GET /status/db - Database and schema status
+ * 
+ * Returns detailed database status including:
+ * - Migration count and last migration info
+ * - Required tables/columns existence checks
+ * - Database connection status
+ * 
+ * Super Admin only.
+ */
+router.get("/status/db", requireSuperUser, async (_req, res) => {
+  try {
+    const schemaStatus = await checkSchemaReadiness();
+    
+    res.json({
+      dbConnectionOk: schemaStatus.dbConnectionOk,
+      migrationsApplied: schemaStatus.migrationAppliedCount,
+      lastMigration: schemaStatus.lastMigrationHash,
+      lastMigrationTimestamp: schemaStatus.lastMigrationTimestamp,
+      schemaReady: schemaStatus.isReady,
+      tables: {
+        allExist: schemaStatus.allTablesExist,
+        details: schemaStatus.tablesCheck,
+      },
+      columns: {
+        allExist: schemaStatus.allColumnsExist,
+        details: schemaStatus.columnsCheck,
+      },
+      errors: schemaStatus.errors,
+      autoMigrateEnabled: process.env.AUTO_MIGRATE === "true",
+      checkedAt: new Date().toISOString(),
+    });
+  } catch (error: any) {
+    console.error("[status/db] Database status check failed:", error);
+    res.status(500).json({ 
+      error: "Database status check failed",
+      message: error?.message || String(error),
+    });
   }
 });
 
