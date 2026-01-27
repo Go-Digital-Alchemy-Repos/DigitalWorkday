@@ -190,12 +190,48 @@ export async function apiRequest(
 }
 
 type UnauthorizedBehavior = "returnNull" | "throw";
+
+/**
+ * Build a URL from a query key.
+ * 
+ * Handles two formats:
+ * 1. Simple string: ["/api/path"] -> "/api/path"
+ * 2. With query params: ["/api/path", { key: value }] -> "/api/path?key=value"
+ * 
+ * Objects in the query key are converted to URL query parameters.
+ * String segments are joined with "/".
+ */
+function buildUrlFromQueryKey(queryKey: readonly unknown[]): string {
+  const pathParts: string[] = [];
+  let queryParams: URLSearchParams | null = null;
+
+  for (const segment of queryKey) {
+    if (typeof segment === "string") {
+      pathParts.push(segment);
+    } else if (typeof segment === "object" && segment !== null) {
+      queryParams = new URLSearchParams();
+      for (const [key, value] of Object.entries(segment)) {
+        if (value !== undefined && value !== null) {
+          queryParams.set(key, String(value));
+        }
+      }
+    }
+  }
+
+  let url = pathParts.join("/");
+  if (queryParams && queryParams.toString()) {
+    url += (url.includes("?") ? "&" : "?") + queryParams.toString();
+  }
+  return url;
+}
+
 export const getQueryFn: <T>(options: {
   on401: UnauthorizedBehavior;
 }) => QueryFunction<T> =
   ({ on401: unauthorizedBehavior }) =>
   async ({ queryKey }) => {
-    const res = await fetch(queryKey.join("/") as string, {
+    const url = buildUrlFromQueryKey(queryKey);
+    const res = await fetch(url, {
       credentials: "include",
       headers: buildHeaders(),
     });

@@ -381,6 +381,21 @@ router.get("/error-logs/:id", requireAuth, requireSuperUser, async (req: Request
   const requestId = req.requestId || generateRequestId();
   try {
     const { id } = req.params;
+    
+    // Validate ID format - must be a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!id || !uuidRegex.test(id)) {
+      return res.status(400).json({
+        ok: false,
+        requestId,
+        error: {
+          code: "INVALID_ERROR_LOG_ID",
+          message: "Invalid error log ID format. Expected a valid UUID.",
+          requestId,
+        },
+      });
+    }
+    
     const log = await storage.getErrorLog(id);
 
     if (!log) {
@@ -422,6 +437,21 @@ router.patch("/error-logs/:id/resolve", requireAuth, requireSuperUser, async (re
   const requestId = req.requestId || generateRequestId();
   try {
     const { id } = req.params;
+    
+    // Validate ID format - must be a valid UUID
+    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (!id || !uuidRegex.test(id)) {
+      return res.status(400).json({
+        ok: false,
+        requestId,
+        error: {
+          code: "INVALID_ERROR_LOG_ID",
+          message: "Invalid error log ID format. Expected a valid UUID.",
+          requestId,
+        },
+      });
+    }
+    
     const { resolved = true } = req.body;
 
     const log = await storage.markErrorLogResolved(id, resolved);
