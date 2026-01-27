@@ -1,0 +1,108 @@
+You are continuing development on my React + Express + Postgres (Drizzle) multi-tenant app (single codebase) deployed on Railway.
+
+TASK: Add a Railway Verification Checklist + lightweight deployment verification aids (non-destructive).
+
+ABSOLUTE SAFETY RULES
+- Do NOT change any endpoint paths or response shapes.
+- Do NOT change auth/tenancy/agreement enforcement behavior.
+- Do NOT introduce interactive DB commands (no drizzle-kit push prompts).
+- Do NOT wipe data.
+- Additive changes only: docs + small read-only endpoints + minimal boot logging.
+
+GOAL
+Create a repeatable post-deploy verification process and small diagnostics that make Railway issues easier to debug.
+
+PART 1 — Add Railway Verification Checklist to the repo
+1) Create a new file:
+   /docs/RAILWAY_VERIFICATION_CHECKLIST.md
+
+2) Populate it with a step-by-step checklist that covers:
+   A) Pre-deploy local checks:
+      - tests pass
+      - build passes
+      - confirm no interactive DB push in prod startup
+   B) Railway startup checks:
+      - service stays running
+      - migration runner ran or no pending migrations
+      - no interactive schema prompts
+   C) Auth sanity:
+      - login works on first attempt
+      - cookie/session persists after refresh
+      - logout works
+   D) Super Admin sanity:
+      - System Status loads
+      - Error Logs tab loads
+      - tenant switcher works
+      - Act-as-client fully impersonates + return banner works
+   E) Tenant core flows:
+      - create client
+      - create project (client required)
+      - create task (no 500)
+      - create sub-task
+      - assign task and confirm visibility in left nav
+   F) Time tracking:
+      - start timer (title present)
+      - pause/resume
+      - save entry with client→project→task(/subtask)
+      - edit entry
+   G) Notifications (if enabled):
+      - endpoints return 200/not configured, not 500
+   H) Integrations (super admin):
+      - mailgun/s3/stripe save persists after refresh (masked)
+      - status endpoint returns configured/not configured
+   I) Chat (if enabled):
+      - start new chat
+      - add members
+      - reconnect without duplicates
+   J) Error handling + requestId:
+      - trigger a validation error; UI shows requestId; requestId exists in super admin error logs
+
+Include a final “If anything fails” section:
+- copy requestId
+- check Super Admin Error Logs
+- check Railway logs around requestId
+- revert only the last batch
+
+PART 2 — Add a simple health endpoint (read-only)
+Add a read-only endpoint that DOES NOT expose secrets:
+- GET /api/health
+Return minimal JSON:
+{
+  "ok": true,
+  "service": "api",
+  "timestamp": "...",
+  "version": "<git sha or build id if available>"
+}
+If the route already exists, do not change its response shape; only add missing fields if safe.
+
+PART 3 — Add a Super Admin-only diagnostics endpoint (read-only)
+Add:
+- GET /api/v1/super/diagnostics/schema
+Super Admin only.
+Read-only: returns a report of whether key tables/columns exist (no secrets), for example:
+- error_logs table present?
+- notification_preferences table present?
+- notifications tenantId column present?
+- tenant settings chat_retention_days present?
+Return counts and boolean presence flags only; do not dump all schema details in production.
+If a table/column is missing, include a “recommended action” string (e.g., “run migrations”).
+
+PART 4 — Minimal boot logging for verification
+On server startup, log one concise line:
+- environment
+- whether DB connection succeeded
+- whether migration runner ran (if you have a migration step, print “migrations: ok” or “migrations: skipped”)
+Do NOT log secrets.
+
+PART 5 — Docs index update
+If you have an in-app “App Docs” area or a docs index page, add a link/reference to:
+- Railway Verification Checklist
+- Schema Diagnostics endpoint (super admin only)
+Make this additive and non-breaking.
+
+ACCEPTANCE CRITERIA
+- /docs/RAILWAY_VERIFICATION_CHECKLIST.md exists and is complete.
+- /api/health returns 200 with minimal non-sensitive info.
+- /api/v1/super/diagnostics/schema returns 200 for super admins and 403 for others.
+- No breaking changes to existing endpoints or response shapes.
+- No secrets exposed in logs or diagnostics.

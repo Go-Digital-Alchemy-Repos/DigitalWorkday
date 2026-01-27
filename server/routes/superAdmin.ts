@@ -1594,20 +1594,26 @@ router.post("/tenants/:tenantId/users/provision", requireSuperUser, async (req, 
 async function sendProvisionResetEmail(tenantId: string, email: string, resetUrl: string, tenantName: string): Promise<boolean> {
   try {
     const integration = await tenantIntegrationService.getIntegration(tenantId, "mailgun");
-    if (!integration?.isEnabled || !integration.config) {
+    if (!integration || integration.status !== "configured" || !integration.publicConfig) {
       return false;
     }
     
-    const config = integration.config as any;
-    if (!config.apiKey || !config.domain) {
+    const publicConfig = integration.publicConfig as { domain?: string; fromEmail?: string };
+    if (!publicConfig.domain) {
+      return false;
+    }
+    
+    // Get the decrypted API key from the service
+    const secretConfig = await tenantIntegrationService.getDecryptedSecrets(tenantId, "mailgun") as { apiKey?: string } | null;
+    if (!secretConfig?.apiKey) {
       return false;
     }
     
     const mailgun = new Mailgun(FormData);
-    const mg = mailgun.client({ username: "api", key: config.apiKey });
+    const mg = mailgun.client({ username: "api", key: secretConfig.apiKey });
     
-    await mg.messages.create(config.domain, {
-      from: config.fromEmail || `noreply@${config.domain}`,
+    await mg.messages.create(publicConfig.domain, {
+      from: publicConfig.fromEmail || `noreply@${publicConfig.domain}`,
       to: email,
       subject: `Set Your Password for ${tenantName}`,
       html: `
@@ -3321,24 +3327,32 @@ router.post("/tenants/:tenantId/import-users", requireSuperUser, async (req, res
         if (data.sendInvite) {
           try {
             const mailgunIntegration = await tenantIntegrationService.getIntegration(tenantId, "mailgun");
-            if (mailgunIntegration?.status === "configured" && mailgunIntegration.config) {
-              const inviteEmailService = new InviteEmailService({
-                apiKey: mailgunIntegration.config.apiKey as string,
-                domain: mailgunIntegration.config.domain as string,
-                senderEmail: mailgunIntegration.config.senderEmail as string,
-                senderName: mailgunIntegration.config.senderName as string,
-              });
+            if (mailgunIntegration?.status === "configured" && mailgunIntegration.publicConfig) {
+              const publicConfig = mailgunIntegration.publicConfig as { domain?: string; fromEmail?: string };
+              const secretConfig = await tenantIntegrationService.getDecryptedSecrets(tenantId, "mailgun") as { apiKey?: string } | null;
               
-              const tenantSettings = await storage.getTenantSettings(tenantId);
-              const appName = tenantSettings?.appName || tenantSettings?.displayName || "MyWorkDay";
-              
-              await inviteEmailService.sendInviteEmail({
-                recipientEmail: user.email,
-                recipientName: user.firstName || user.email.split("@")[0],
-                inviteUrl,
-                appName,
-              });
-              emailSent = true;
+              if (publicConfig.domain && secretConfig?.apiKey) {
+                const mailgun = new Mailgun(FormData);
+                const mg = mailgun.client({ username: "api", key: secretConfig.apiKey });
+                
+                const tenantSettings = await storage.getTenantSettings(tenantId);
+                const appName = tenantSettings?.appName || tenantSettings?.displayName || "MyWorkDay";
+                const recipientName = user.firstName || user.email.split("@")[0];
+                
+                await mg.messages.create(publicConfig.domain, {
+                  from: publicConfig.fromEmail || `noreply@${publicConfig.domain}`,
+                  to: user.email,
+                  subject: `You've been invited to join ${appName}`,
+                  html: `
+                    <h2>Welcome to ${appName}</h2>
+                    <p>Hi ${recipientName},</p>
+                    <p>You've been invited to join ${appName}. Click the link below to accept your invitation:</p>
+                    <p><a href="${inviteUrl}">Accept Invitation</a></p>
+                    <p>This invitation expires in 7 days.</p>
+                  `,
+                });
+                emailSent = true;
+              }
             }
           } catch (emailErr) {
             console.error(`Failed to send invite email to ${user.email}:`, emailErr);
