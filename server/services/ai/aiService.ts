@@ -148,10 +148,15 @@ export async function isAIEnabled(): Promise<boolean> {
 }
 
 export async function testAIConnection(): Promise<{ success: boolean; message: string; model?: string }> {
-  const config = await getAIConfig();
+  const configStatus = await getAIConfigStatus();
   
+  if (configStatus.error) {
+    return { success: false, message: configStatus.error };
+  }
+  
+  const config = configStatus.config;
   if (!config || !config.apiKey) {
-    return { success: false, message: "AI is not configured or API key is missing" };
+    return { success: false, message: "API key is missing" };
   }
 
   try {
