@@ -31,7 +31,8 @@ import { Pool } from "pg";
 import { 
   loginRateLimiter, 
   bootstrapRateLimiter, 
-  inviteAcceptRateLimiter 
+  inviteAcceptRateLimiter,
+  forgotPasswordRateLimiter 
 } from "./middleware/rateLimit";
 
 const scryptAsync = promisify(scrypt);
@@ -1084,7 +1085,7 @@ export function setupPasswordResetEndpoints(app: Express): void {
    * POST /api/v1/auth/forgot-password
    * Request a password reset link. Always returns success to prevent email enumeration.
    */
-  app.post("/api/v1/auth/forgot-password", loginRateLimiter, async (req, res) => {
+  app.post("/api/v1/auth/forgot-password", forgotPasswordRateLimiter, async (req, res) => {
     try {
       const { email } = req.body;
       

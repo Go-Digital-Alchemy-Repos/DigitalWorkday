@@ -33,6 +33,7 @@ import {
   StorageEncryptionNotAvailableError,
   getStorageStatus 
 } from "../storage/getStorageProvider";
+import { uploadRateLimiter } from "../middleware/rateLimit";
 
 const router = Router();
 
@@ -100,7 +101,7 @@ async function validateTaskAccess(
  * - key: S3 object key
  * - expiresInSeconds: URL expiration time
  */
-router.post("/presign", requireAuth, async (req: Request, res: Response) => {
+router.post("/presign", uploadRateLimiter, requireAuth, async (req: Request, res: Response) => {
   try {
     const parsed = presignRequestSchema.safeParse(req.body);
     if (!parsed.success) {

@@ -42,6 +42,27 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **Hierarchical S3 Storage**: Configurable 3-tier S3 storage (tenant-specific → system-level → env vars) for file attachments.
 - **Centralized Type Augmentation**: `server/types.d.ts` provides TypeScript declarations for Express Request properties (tenant context, requestId, clientAccess) attached by middleware, eliminating `(req as any)` casts.
 
+## Rate Limiting Environment Variables
+Rate limiting is enabled by default in production and disabled in development for convenience.
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RATE_LIMIT_ENABLED` | `true` | Master switch for rate limiting (set to `false` to disable) |
+| `RATE_LIMIT_DEV_ENABLED` | `false` | Enable rate limiting in development mode |
+| `RATE_LIMIT_DEBUG` | `false` | Log all rate limit checks (verbose) |
+| `RATE_LIMIT_LOGIN_WINDOW_MS` | `60000` | Login rate limit window (ms) |
+| `RATE_LIMIT_LOGIN_MAX_IP` | `10` | Max login attempts per IP per window |
+| `RATE_LIMIT_LOGIN_MAX_EMAIL` | `5` | Max login attempts per email per window |
+| `RATE_LIMIT_BOOTSTRAP_WINDOW_MS` | `60000` | Bootstrap registration window (ms) |
+| `RATE_LIMIT_BOOTSTRAP_MAX_IP` | `5` | Max bootstrap attempts per IP per window |
+| `RATE_LIMIT_INVITE_WINDOW_MS` | `60000` | Invite acceptance window (ms) |
+| `RATE_LIMIT_INVITE_MAX_IP` | `10` | Max invite accepts per IP per window |
+| `RATE_LIMIT_FORGOT_PASSWORD_WINDOW_MS` | `60000` | Forgot password window (ms) |
+| `RATE_LIMIT_FORGOT_PASSWORD_MAX_IP` | `5` | Max forgot password requests per IP |
+| `RATE_LIMIT_FORGOT_PASSWORD_MAX_EMAIL` | `3` | Max forgot password requests per email |
+| `RATE_LIMIT_UPLOAD_WINDOW_MS` | `60000` | File upload presign window (ms) |
+| `RATE_LIMIT_UPLOAD_MAX_IP` | `30` | Max upload presigns per IP per window |
+
 ## External Dependencies
 - **PostgreSQL**: Primary database.
 - **Socket.IO**: Real-time communication.
