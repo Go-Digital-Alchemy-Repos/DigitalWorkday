@@ -13,6 +13,7 @@ import { requestIdMiddleware } from "./middleware/requestId";
 import { errorHandler } from "./middleware/errorHandler";
 import { errorLoggingMiddleware } from "./middleware/errorLogging";
 import { apiJsonResponseGuard, apiNotFoundHandler } from "./middleware/apiJsonGuard";
+import { logMigrationStatus } from "./scripts/migration-status";
 
 export const app = express();
 const httpServer = createServer(app);
@@ -107,6 +108,9 @@ app.use((req, res, next) => {
 });
 
 (async () => {
+  // Log migration status at startup
+  await logMigrationStatus();
+  
   // Run production parity check (logs issues but doesn't crash)
   await runProductionParityCheck();
   
