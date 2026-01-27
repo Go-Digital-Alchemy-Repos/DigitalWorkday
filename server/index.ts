@@ -196,9 +196,11 @@ app.get("/ready", (_req, res) => {
 });
 
 // Start the server IMMEDIATELY so health checks pass
+// Bind to 0.0.0.0 explicitly for Replit Autoscale deployment
 const port = parseInt(process.env.PORT || "5000", 10);
-httpServer.listen(port, () => {
-  log(`[boot] Server listening on port ${port}`);
+const host = "0.0.0.0";
+httpServer.listen(port, host, () => {
+  log(`[boot] Server listening on ${host}:${port}`);
 });
 
 // Run async initialization in the background

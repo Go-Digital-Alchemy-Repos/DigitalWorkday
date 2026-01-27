@@ -985,8 +985,10 @@ export function setupTenantInviteEndpoints(app: Express): void {
         user = updatedUser;
       } else {
         // Create new user
+        const displayName = [firstName, lastName].filter(Boolean).join(" ") || invite.email.split("@")[0];
         const [newUser] = await db.insert(users)
           .values({
+            name: displayName,
             email: invite.email,
             passwordHash,
             firstName: firstName || null,
@@ -1000,7 +1002,11 @@ export function setupTenantInviteEndpoints(app: Express): void {
         user = newUser;
         
         // Add user to workspace
-        await storage.addUserToWorkspace(user.id, invite.workspaceId);
+        await storage.addWorkspaceMember({
+          userId: user.id,
+          workspaceId: invite.workspaceId,
+          role: invite.role === "admin" ? "admin" : "member",
+        });
       }
       
       // Mark invite as accepted
