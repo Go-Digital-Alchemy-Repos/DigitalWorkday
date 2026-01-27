@@ -69,6 +69,7 @@ import {
   CalendarX,
   Eye,
   EyeOff,
+  GripVertical,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -158,9 +159,10 @@ interface TaskSectionListProps {
   localOrder: string[];
   onDragEnd: (event: DragEndEvent, sectionId: string) => void;
   onAddTask?: () => void;
+  supportsAddTask?: boolean;
 }
 
-function TaskSectionList({ section, onTaskSelect, onStatusChange, localOrder, onDragEnd, onAddTask }: TaskSectionListProps) {
+function TaskSectionList({ section, onTaskSelect, onStatusChange, localOrder, onDragEnd, onAddTask, supportsAddTask = false }: TaskSectionListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -194,7 +196,6 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, localOrder, on
           <Button
             variant="ghost"
             size="icon"
-            className="h-7 w-7"
             onClick={onAddTask}
             data-testid={`button-add-${section.id}-task`}
           >
@@ -225,7 +226,26 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, localOrder, on
           </DndContext>
         ) : (
           <div className="border border-border border-dashed rounded-lg mt-2 px-4 py-6 text-center text-sm text-muted-foreground">
-            No tasks in this section
+            {supportsAddTask && onAddTask ? (
+              <div className="flex flex-col items-center gap-2">
+                <p>No tasks yet</p>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={onAddTask}
+                  className="gap-1"
+                  data-testid={`button-empty-add-${section.id}-task`}
+                >
+                  <Plus className="h-4 w-4" />
+                  Add a task
+                </Button>
+              </div>
+            ) : (
+              <div className="flex flex-col items-center gap-1">
+                <GripVertical className="h-4 w-4 text-muted-foreground/50" />
+                <p>Drag tasks here to prioritize this section</p>
+              </div>
+            )}
           </div>
         )}
       </CollapsibleContent>
@@ -608,6 +628,7 @@ export default function MyTasks() {
                     localOrder={sectionOrders[section.id] || []}
                     onDragEnd={handleDragEnd}
                     onAddTask={section.id === "personal" ? () => setShowNewTaskInput(true) : undefined}
+                    supportsAddTask={section.id === "personal"}
                   />
                 ))}
               </div>

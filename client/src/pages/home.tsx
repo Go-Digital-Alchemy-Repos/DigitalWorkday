@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { Link } from "wouter";
+import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import {
   FolderKanban,
@@ -19,6 +19,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { Project, TaskWithRelations, Team, Workspace, Client } from "@shared/schema";
 
 export default function Home() {
+  const [, setLocation] = useLocation();
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
 
@@ -144,7 +145,14 @@ export default function Home() {
 
       <div className="flex-1 p-4 md:p-6 space-y-4 md:space-y-6">
         <div className="grid gap-3 md:gap-4 grid-cols-2 md:grid-cols-2 lg:grid-cols-4">
-          <Card className="hover-elevate cursor-pointer">
+          <Card 
+            className="hover-elevate cursor-pointer" 
+            onClick={() => setLocation("/projects")}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && setLocation("/projects")}
+            data-testid="card-total-projects"
+          >
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Total Projects</CardTitle>
               <FolderKanban className="h-4 w-4 text-muted-foreground" />
@@ -158,7 +166,14 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className="hover-elevate cursor-pointer">
+          <Card 
+            className="hover-elevate cursor-pointer" 
+            onClick={() => setLocation("/my-tasks")}
+            role="button"
+            tabIndex={0}
+            onKeyDown={(e) => e.key === "Enter" && setLocation("/my-tasks")}
+            data-testid="card-my-tasks"
+          >
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">My Tasks</CardTitle>
               <CheckSquare className="h-4 w-4 text-muted-foreground" />
@@ -172,7 +187,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className="hover-elevate cursor-pointer">
+          <Card data-testid="card-teams">
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Teams</CardTitle>
               <Users className="h-4 w-4 text-muted-foreground" />
@@ -186,7 +201,7 @@ export default function Home() {
             </CardContent>
           </Card>
 
-          <Card className="hover-elevate cursor-pointer">
+          <Card className="hover-elevate" data-testid="card-completed-today">
             <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
               <CardTitle className="text-sm font-medium">Completed Today</CardTitle>
               <TrendingUp className="h-4 w-4 text-muted-foreground" />

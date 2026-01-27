@@ -23,7 +23,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, DollarSign, Plus, Pencil } from "lucide-react";
+import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, DollarSign, Plus, Pencil, X } from "lucide-react";
 import { ProjectDetailDrawer, ProjectDrawer } from "@/features/projects";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -176,6 +176,16 @@ export default function ProjectsDashboard() {
   const handleClientFilterChange = (newClientId: string) => {
     setClientFilter(newClientId);
     setDivisionFilter("all");
+  };
+
+  const hasActiveFilters = searchQuery || statusFilter !== "all" || clientFilter !== "all" || divisionFilter !== "all" || teamFilter !== "all";
+
+  const handleClearFilters = () => {
+    setSearchQuery("");
+    setStatusFilter("all");
+    setClientFilter("all");
+    setDivisionFilter("all");
+    setTeamFilter("all");
   };
 
   const filteredProjects = useMemo(() => {
@@ -353,6 +363,19 @@ export default function ProjectsDashboard() {
                 ))}
               </SelectContent>
             </Select>
+
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleClearFilters}
+                className="shrink-0 text-muted-foreground gap-1"
+                data-testid="button-clear-filters"
+              >
+                <X className="h-4 w-4" />
+                <span className="hidden md:inline">Clear filters</span>
+              </Button>
+            )}
           </div>
         </div>
 

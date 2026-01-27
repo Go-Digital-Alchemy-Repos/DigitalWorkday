@@ -53,12 +53,19 @@ import ClientPortalTasks from "@/pages/client-portal-tasks";
 import ClientPortalProjectDetail from "@/pages/client-portal-project-detail";
 import { ClientPortalSidebar } from "@/components/client-portal-sidebar";
 import { ClientPortalMobileNav } from "@/components/client-portal-mobile-nav";
-import { Loader2, MessageCircle } from "lucide-react";
+import { Loader2, MessageCircle, MoreVertical, Moon, Sun } from "lucide-react";
 import { useEffect } from "react";
 import { GlobalActiveTimer } from "@/features/timer";
 import { ChatDrawerProvider, useChatDrawer } from "@/contexts/chat-drawer-context";
 import { GlobalChatDrawer } from "@/components/global-chat-drawer";
 import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { useTheme } from "@/lib/theme-provider";
 import { NotificationCenter } from "@/components/notification-center";
 import { MobileNavBar } from "@/components/mobile-nav-bar";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -350,6 +357,43 @@ function ChatToggleButton() {
   );
 }
 
+function MobileHeaderMenu() {
+  const { toggleDrawer } = useChatDrawer();
+  const { theme, setTheme } = useTheme();
+  
+  return (
+    <DropdownMenu>
+      <DropdownMenuTrigger asChild>
+        <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
+          <MoreVertical className="h-4 w-4" />
+        </Button>
+      </DropdownMenuTrigger>
+      <DropdownMenuContent align="end">
+        <DropdownMenuItem onClick={toggleDrawer} data-testid="menu-item-chat">
+          <MessageCircle className="h-4 w-4 mr-2" />
+          Chat
+        </DropdownMenuItem>
+        <DropdownMenuItem 
+          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          data-testid="menu-item-theme"
+        >
+          {theme === "dark" ? (
+            <>
+              <Sun className="h-4 w-4 mr-2" />
+              Light mode
+            </>
+          ) : (
+            <>
+              <Moon className="h-4 w-4 mr-2" />
+              Dark mode
+            </>
+          )}
+        </DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
+  );
+}
+
 function TenantLayout() {
   const { isImpersonating } = useAppMode();
   const [, setLocation] = useLocation();
@@ -386,9 +430,14 @@ function TenantLayout() {
                   </div>
                   <div className="flex items-center gap-1 md:gap-2">
                     <GlobalActiveTimer />
-                    <ChatToggleButton />
+                    <div className="hidden md:flex items-center gap-1">
+                      <ChatToggleButton />
+                    </div>
                     <NotificationCenter />
                     <ThemeToggle className="hidden md:flex" />
+                    <div className="md:hidden">
+                      <MobileHeaderMenu />
+                    </div>
                     <UserMenu />
                   </div>
                 </header>
