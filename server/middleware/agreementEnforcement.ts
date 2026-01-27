@@ -66,6 +66,7 @@ const EXEMPT_ROUTE_PATTERNS = [
   /^\/api\/v1\/invitations\//,     // Invitation acceptance
   /^\/api\/v1\/super\//,           // Super admin routes
   /^\/api\/v1\/tenant\/branding/,  // Branding needed for app shell
+  /^\/api\/v1\/tenant\/context/,   // Tenant context needed for app shell gate
   /^\/api\/notifications/,         // Notifications for app shell
   /^\/$/,                          // Root path
   /^\/accept-terms/,               // Accept terms page
