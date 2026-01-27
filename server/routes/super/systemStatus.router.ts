@@ -231,9 +231,11 @@ router.get("/status/db", requireSuperUser, async (_req, res) => {
   try {
     const schemaStatus = await checkSchemaReadiness();
     
-    // Get full migration history
+    // Get full migration history with explicit error tracking
     let appliedMigrations: { hash: string; createdAt: string }[] = [];
     let pendingMigrations: string[] = [];
+    let migrationHistoryError: string | null = null;
+    let migrationsFolderAvailable = false;
     
     try {
       const migrationsResult = await db.execute(sql`
@@ -245,13 +247,25 @@ router.get("/status/db", requireSuperUser, async (_req, res) => {
         hash: row.hash,
         createdAt: row.created_at,
       }));
-      
-      // Check for pending migrations by reading migration folder
+    } catch (e: any) {
+      const errMsg = e?.message || String(e);
+      // Check if it's a "table doesn't exist" error (fresh database)
+      if (errMsg.includes("does not exist") || errMsg.includes("relation")) {
+        migrationHistoryError = "Migrations table not found - database may need initial migration";
+      } else {
+        migrationHistoryError = `Failed to query migrations: ${errMsg}`;
+      }
+      console.error("[status/db] Failed to get migration history:", errMsg);
+    }
+    
+    // Check for pending migrations by reading migration folder
+    try {
       const fs = await import("fs");
       const path = await import("path");
       const migrationsPath = path.resolve(process.cwd(), "migrations");
       
       if (fs.existsSync(migrationsPath)) {
+        migrationsFolderAvailable = true;
         const migrationFiles = fs.readdirSync(migrationsPath)
           .filter((f: string) => f.endsWith(".sql"))
           .map((f: string) => f.replace(".sql", ""));
@@ -259,8 +273,8 @@ router.get("/status/db", requireSuperUser, async (_req, res) => {
         const appliedHashes = new Set(appliedMigrations.map(m => m.hash));
         pendingMigrations = migrationFiles.filter(f => !appliedHashes.has(f));
       }
-    } catch (e) {
-      console.error("[status/db] Failed to get migration history:", e);
+    } catch (e: any) {
+      console.error("[status/db] Failed to read migrations folder:", e?.message || e);
     }
     
     // Count missing tables
@@ -273,18 +287,27 @@ router.get("/status/db", requireSuperUser, async (_req, res) => {
       .filter(c => !c.exists)
       .map(c => `${c.table}.${c.column}`);
     
+    // Build complete error list
+    const allErrors = [...schemaStatus.errors];
+    if (migrationHistoryError) {
+      allErrors.push(migrationHistoryError);
+    }
+    
     res.json({
       dbConnectionOk: schemaStatus.dbConnectionOk,
       schemaReady: schemaStatus.isReady,
       
-      // Migration details
+      // Migration details with explicit status
       migrations: {
+        status: migrationHistoryError ? "error" : "ok",
+        statusError: migrationHistoryError,
         total: schemaStatus.migrationAppliedCount,
         lastApplied: schemaStatus.lastMigrationHash,
         lastAppliedAt: schemaStatus.lastMigrationTimestamp,
         applied: appliedMigrations,
         pending: pendingMigrations,
         pendingCount: pendingMigrations.length,
+        folderAvailable: migrationsFolderAvailable,
       },
       
       // Tables check
@@ -310,7 +333,7 @@ router.get("/status/db", requireSuperUser, async (_req, res) => {
         nodeEnv: process.env.NODE_ENV || "development",
       },
       
-      errors: schemaStatus.errors,
+      errors: allErrors,
       checkedAt: new Date().toISOString(),
     });
   } catch (error: any) {
