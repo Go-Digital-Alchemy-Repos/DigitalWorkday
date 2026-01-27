@@ -83,7 +83,7 @@ import {
   createNoteCategorySchema,
 } from "@shared/schema";
 import { db } from "./db";
-import { eq, and, desc, sql, count, inArray } from "drizzle-orm";
+import { eq, and, desc, sql, count, inArray, isNull } from "drizzle-orm";
 import { requireAuth } from "./auth";
 import { getEffectiveTenantId, requireTenantContext } from "./middleware/tenantContext";
 import { 
@@ -5511,14 +5511,26 @@ export async function registerRoutes(
         });
       }
 
-      // Get active agreement for tenant
-      const activeAgreements = await db.select()
+      // Get active agreement for tenant (or global default if no tenant-specific)
+      // First: Check for tenant-specific active agreement
+      let activeAgreements = await db.select()
         .from(tenantAgreements)
         .where(and(
           eq(tenantAgreements.tenantId, tenantId),
           eq(tenantAgreements.status, AgreementStatus.ACTIVE)
         ))
         .limit(1);
+
+      // Second: If no tenant-specific, check for global default (tenantId = NULL)
+      if (activeAgreements.length === 0) {
+        activeAgreements = await db.select()
+          .from(tenantAgreements)
+          .where(and(
+            isNull(tenantAgreements.tenantId),
+            eq(tenantAgreements.status, AgreementStatus.ACTIVE)
+          ))
+          .limit(1);
+      }
 
       // No active agreement = no acceptance required
       if (activeAgreements.length === 0) {
