@@ -1,19 +1,13 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import {
-  Dialog,
-  DialogContent,
-  DialogHeader,
-  DialogTitle,
-  DialogDescription,
-  DialogFooter,
-} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   Select,
   SelectContent,
@@ -21,14 +15,22 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Input } from "@/components/ui/input";
-import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Plus,
   MoreHorizontal,
@@ -40,10 +42,15 @@ import {
   Loader2,
   Send,
   Save,
+  ChevronDown,
+  ChevronUp,
+  X,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
-import { formatDistanceToNow } from "date-fns";
+import { formatErrorForToast } from "@/lib/parseApiError";
+import { formatDistanceToNow, format } from "date-fns";
 import { RichTextEditor, RichTextViewer } from "@/components/ui/rich-text-editor";
+import { FullScreenDrawer } from "@/components/ui/full-screen-drawer";
 
 interface NoteAuthor {
   firstName: string | null;
@@ -189,28 +196,26 @@ function convertBodyToHtml(body: any): string {
 export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
   const { toast } = useToast();
   
-  const [createDialogOpen, setCreateDialogOpen] = useState(false);
-  const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [drawerMode, setDrawerMode] = useState<"closed" | "create" | "edit" | "history">("closed");
   const [editingNote, setEditingNote] = useState<ClientNote | null>(null);
+  const [historyNote, setHistoryNote] = useState<ClientNote | null>(null);
   const [deleteNote, setDeleteNote] = useState<ClientNote | null>(null);
-  const [versionHistoryDialogOpen, setVersionHistoryDialogOpen] = useState(false);
-  const [versionHistoryNoteId, setVersionHistoryNoteId] = useState<string | null>(null);
   
   const [noteBody, setNoteBody] = useState("");
   const [noteCategory, setNoteCategory] = useState("general");
-  const [editNoteBody, setEditNoteBody] = useState("");
-  const [editNoteCategory, setEditNoteCategory] = useState("general");
   
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set());
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   const { data: notesData, isLoading: notesLoading } = useQuery<{ ok: boolean; notes: ClientNote[] }>({
     queryKey: ["/api/clients", clientId, "notes"],
   });
 
   const { data: versionHistoryData, isLoading: versionHistoryLoading } = useQuery<VersionHistoryResponse>({
-    queryKey: ["/api/clients", clientId, "notes", versionHistoryNoteId, "versions"],
-    enabled: !!versionHistoryNoteId && versionHistoryDialogOpen,
+    queryKey: ["/api/clients", clientId, "notes", historyNote?.id, "versions"],
+    enabled: !!historyNote && drawerMode === "history",
   });
 
   const createNoteMutation = useMutation({
@@ -219,13 +224,12 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
-      setCreateDialogOpen(false);
-      setNoteBody("");
-      setNoteCategory("general");
+      closeDrawer();
       toast({ title: "Note created", description: "Your note has been saved." });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to create note.", variant: "destructive" });
+    onError: (error) => {
+      const { title, description } = formatErrorForToast(error);
+      toast({ title, description, variant: "destructive" });
     },
   });
 
@@ -235,17 +239,15 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
-      if (versionHistoryNoteId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes", versionHistoryNoteId, "versions"] });
+      if (historyNote) {
+        queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes", historyNote.id, "versions"] });
       }
-      setEditDialogOpen(false);
-      setEditingNote(null);
-      setEditNoteBody("");
-      setEditNoteCategory("general");
+      closeDrawer();
       toast({ title: "Note updated", description: "Your changes have been saved." });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to update note.", variant: "destructive" });
+    onError: (error) => {
+      const { title, description } = formatErrorForToast(error);
+      toast({ title, description, variant: "destructive" });
     },
   });
 
@@ -258,46 +260,104 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
       setDeleteNote(null);
       toast({ title: "Note deleted", description: "The note has been removed." });
     },
-    onError: () => {
-      toast({ title: "Error", description: "Failed to delete note.", variant: "destructive" });
+    onError: (error) => {
+      const { title, description } = formatErrorForToast(error);
+      toast({ title, description, variant: "destructive" });
     },
   });
 
-  const handleCreateNote = () => {
-    if (!noteBody.trim() || noteBody === "<p></p>") return;
-    createNoteMutation.mutate({ body: noteBody, category: noteCategory });
+  const closeDrawer = () => {
+    setDrawerMode("closed");
+    setEditingNote(null);
+    setHistoryNote(null);
+    setNoteBody("");
+    setNoteCategory("general");
+    setExpandedVersions(new Set());
+    setShowDiscardConfirm(false);
   };
 
-  const handleUpdateNote = () => {
-    if (!editingNote || !editNoteBody.trim() || editNoteBody === "<p></p>") return;
-    updateNoteMutation.mutate({
-      noteId: editingNote.id,
-      body: editNoteBody,
-      category: editNoteCategory,
-    });
+  const handleCancel = () => {
+    if (hasUnsavedChanges) {
+      setShowDiscardConfirm(true);
+    } else {
+      closeDrawer();
+    }
   };
 
-  const handleEditClick = (note: ClientNote) => {
+  const handleConfirmDiscard = () => {
+    setShowDiscardConfirm(false);
+    closeDrawer();
+  };
+
+  const openCreateDrawer = () => {
+    setNoteBody("");
+    setNoteCategory("general");
+    setDrawerMode("create");
+  };
+
+  const openEditDrawer = (note: ClientNote) => {
     setEditingNote(note);
-    setEditNoteBody(convertBodyToHtml(note.body));
-    setEditNoteCategory(note.category);
-    setEditDialogOpen(true);
+    setNoteBody(convertBodyToHtml(note.body));
+    setNoteCategory(note.category);
+    setDrawerMode("edit");
   };
 
-  const handleVersionHistoryClick = (noteId: string) => {
-    setVersionHistoryNoteId(noteId);
-    setVersionHistoryDialogOpen(true);
+  const openHistoryDrawer = (note: ClientNote) => {
+    setHistoryNote(note);
+    setDrawerMode("history");
+  };
+
+  const handleSaveNote = () => {
+    if (!noteBody.trim() || noteBody === "<p></p>") return;
+    
+    if (drawerMode === "create") {
+      createNoteMutation.mutate({ body: noteBody, category: noteCategory });
+    } else if (drawerMode === "edit" && editingNote) {
+      updateNoteMutation.mutate({
+        noteId: editingNote.id,
+        body: noteBody,
+        category: noteCategory,
+      });
+    }
+  };
+
+  const toggleVersionExpanded = (versionId: string) => {
+    setExpandedVersions(prev => {
+      const next = new Set(prev);
+      if (next.has(versionId)) {
+        next.delete(versionId);
+      } else {
+        next.add(versionId);
+      }
+      return next;
+    });
   };
 
   const notes = notesData?.notes || [];
   
-  const filteredNotes = notes.filter((note) => {
-    const bodyHtml = convertBodyToHtml(note.body);
-    const matchesSearch = !searchQuery || 
-      bodyHtml.toLowerCase().includes(searchQuery.toLowerCase());
-    const matchesCategory = filterCategory === "all" || note.category === filterCategory;
-    return matchesSearch && matchesCategory;
-  });
+  const filteredNotes = useMemo(() => {
+    return notes.filter((note) => {
+      const bodyHtml = convertBodyToHtml(note.body);
+      const matchesSearch = !searchQuery || 
+        bodyHtml.toLowerCase().includes(searchQuery.toLowerCase());
+      const matchesCategory = filterCategory === "all" || note.category === filterCategory;
+      return matchesSearch && matchesCategory;
+    });
+  }, [notes, searchQuery, filterCategory]);
+
+  const hasUnsavedChanges = useMemo(() => {
+    if (drawerMode === "create") {
+      return noteBody.trim() !== "" && noteBody !== "<p></p>";
+    }
+    if (drawerMode === "edit" && editingNote) {
+      const originalBody = convertBodyToHtml(editingNote.body);
+      return noteBody !== originalBody || noteCategory !== editingNote.category;
+    }
+    return false;
+  }, [drawerMode, noteBody, noteCategory, editingNote]);
+
+  const isLoading = createNoteMutation.isPending || updateNoteMutation.isPending;
+  const canSave = noteBody.trim() !== "" && noteBody !== "<p></p>";
 
   if (notesLoading) {
     return (
@@ -318,7 +378,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
     <div className="space-y-4">
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-lg font-medium">Notes</h3>
-        <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-create-note">
+        <Button onClick={openCreateDrawer} data-testid="button-create-note">
           <Plus className="h-4 w-4 mr-2" />
           Add Note
         </Button>
@@ -351,21 +411,21 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
       )}
 
       {notes.length === 0 ? (
-        <Card>
+        <Card data-testid="empty-state-no-notes">
           <CardContent className="p-8 text-center">
             <StickyNote className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="font-medium text-lg mb-2">No notes yet</h3>
             <p className="text-muted-foreground text-sm mb-4">
               Keep track of important information about this client.
             </p>
-            <Button onClick={() => setCreateDialogOpen(true)} data-testid="button-create-first-note">
+            <Button onClick={openCreateDrawer} data-testid="button-create-first-note">
               <Plus className="h-4 w-4 mr-2" />
               Add First Note
             </Button>
           </CardContent>
         </Card>
       ) : filteredNotes.length === 0 ? (
-        <Card>
+        <Card data-testid="empty-state-no-matching-notes">
           <CardContent className="p-8 text-center">
             <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
             <h3 className="font-medium text-lg mb-2">No matching notes</h3>
@@ -389,14 +449,14 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
                         <span className="font-medium text-sm">
                           {getAuthorDisplayName(note.author)}
                         </span>
-                        <Badge variant="secondary" className={CATEGORY_COLORS[note.category] || CATEGORY_COLORS.general}>
+                        <Badge variant="secondary" className={CATEGORY_COLORS[note.category] || CATEGORY_COLORS.general} data-testid={`badge-note-category-${note.id}`}>
                           {note.category}
                         </Badge>
                         {note.versionCount > 0 && (
                           <Badge 
                             variant="outline" 
-                            className="text-xs cursor-pointer hover-elevate"
-                            onClick={() => handleVersionHistoryClick(note.id)}
+                            className="text-xs cursor-pointer"
+                            onClick={() => openHistoryDrawer(note)}
                             data-testid={`note-version-badge-${note.id}`}
                           >
                             <History className="h-3 w-3 mr-1" />
@@ -420,12 +480,12 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
                       </Button>
                     </DropdownMenuTrigger>
                     <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => handleEditClick(note)} data-testid={`note-edit-${note.id}`}>
+                      <DropdownMenuItem onClick={() => openEditDrawer(note)} data-testid={`note-edit-${note.id}`}>
                         <Pencil className="h-4 w-4 mr-2" />
                         Edit
                       </DropdownMenuItem>
                       {note.versionCount > 0 && (
-                        <DropdownMenuItem onClick={() => handleVersionHistoryClick(note.id)} data-testid={`note-history-${note.id}`}>
+                        <DropdownMenuItem onClick={() => openHistoryDrawer(note)} data-testid={`note-history-${note.id}`}>
                           <History className="h-4 w-4 mr-2" />
                           View History
                         </DropdownMenuItem>
@@ -447,142 +507,188 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
         </div>
       )}
 
-      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Create Note</DialogTitle>
-            <DialogDescription>Add a note about this client.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Select value={noteCategory} onValueChange={setNoteCategory}>
-                <SelectTrigger data-testid="select-note-category">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORY_OPTIONS.map((cat) => (
-                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Note</Label>
-              <RichTextEditor
-                value={noteBody}
-                onChange={setNoteBody}
-                placeholder="Enter your note..."
-                minHeight="150px"
-                data-testid="editor-create-note"
-              />
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setCreateDialogOpen(false)} data-testid="button-cancel-create-note">
+      <FullScreenDrawer
+        open={drawerMode === "create" || drawerMode === "edit"}
+        onOpenChange={(open) => {
+          if (!open) {
+            if (hasUnsavedChanges) {
+              setShowDiscardConfirm(true);
+            } else {
+              closeDrawer();
+            }
+          }
+        }}
+        title={drawerMode === "create" ? "Create Note" : "Edit Note"}
+        description={drawerMode === "create" 
+          ? "Add a note about this client. Notes are visible to all team members."
+          : "Make changes to your note. Previous versions will be saved in the history."
+        }
+        width="2xl"
+        footer={
+          <div className="flex items-center justify-end gap-3">
+            <Button
+              type="button"
+              variant="ghost"
+              onClick={handleCancel}
+              disabled={isLoading}
+              data-testid="button-cancel-note"
+            >
               Cancel
             </Button>
             <Button
-              onClick={handleCreateNote}
-              disabled={!noteBody.trim() || noteBody === "<p></p>" || createNoteMutation.isPending}
+              onClick={handleSaveNote}
+              disabled={!canSave || isLoading}
               data-testid="button-save-note"
             >
-              {createNoteMutation.isPending ? (
+              {isLoading ? (
                 <>
                   <Loader2 className="h-4 w-4 mr-2 animate-spin" />
                   Saving...
                 </>
               ) : (
                 <>
-                  <Send className="h-4 w-4 mr-2" />
-                  Save Note
+                  {drawerMode === "create" ? <Send className="h-4 w-4 mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+                  {drawerMode === "create" ? "Save Note" : "Save Changes"}
                 </>
               )}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      <Dialog open={editDialogOpen} onOpenChange={(open) => {
-        if (!open) {
-          setEditDialogOpen(false);
-          setEditingNote(null);
-        }
-      }}>
-        <DialogContent className="max-w-2xl">
-          <DialogHeader>
-            <DialogTitle>Edit Note</DialogTitle>
-            <DialogDescription>Make changes to your note. Previous versions will be saved in the history.</DialogDescription>
-          </DialogHeader>
-          <div className="space-y-4 py-4">
-            <div className="space-y-2">
-              <Label>Category</Label>
-              <Select value={editNoteCategory} onValueChange={setEditNoteCategory}>
-                <SelectTrigger data-testid="select-edit-note-category">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORY_OPTIONS.map((cat) => (
-                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <div className="space-y-2">
-              <Label>Note</Label>
-              <RichTextEditor
-                value={editNoteBody}
-                onChange={setEditNoteBody}
-                placeholder="Edit your note..."
-                minHeight="150px"
-                data-testid="editor-edit-note"
-              />
-            </div>
           </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => {
-              setEditDialogOpen(false);
-              setEditingNote(null);
-            }} data-testid="button-cancel-edit-note">
-              Cancel
-            </Button>
-            <Button
-              onClick={handleUpdateNote}
-              disabled={!editNoteBody.trim() || editNoteBody === "<p></p>" || updateNoteMutation.isPending}
-              data-testid="button-update-note"
-            >
-              {updateNoteMutation.isPending ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Saving...
-                </>
-              ) : (
-                <>
-                  <Save className="h-4 w-4 mr-2" />
-                  Save Changes
-                </>
-              )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        }
+      >
+        <div className="space-y-6">
+          <div className="space-y-2">
+            <Label>Category</Label>
+            <Select value={noteCategory} onValueChange={setNoteCategory}>
+              <SelectTrigger data-testid="select-note-category">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CATEGORY_OPTIONS.map((cat) => (
+                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="space-y-2">
+            <Label>Note Content</Label>
+            <RichTextEditor
+              value={noteBody}
+              onChange={setNoteBody}
+              placeholder="Enter your note..."
+              minHeight="300px"
+              data-testid="editor-note-content"
+            />
+          </div>
+        </div>
+      </FullScreenDrawer>
 
-      <Dialog open={!!deleteNote} onOpenChange={(open) => !open && setDeleteNote(null)}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Delete Note</DialogTitle>
-            <DialogDescription>
+      <FullScreenDrawer
+        open={drawerMode === "history"}
+        onOpenChange={(open) => !open && closeDrawer()}
+        title="Note Version History"
+        description={historyNote ? `Viewing edit history for this note` : undefined}
+        width="2xl"
+      >
+        {versionHistoryLoading ? (
+          <div className="space-y-4">
+            {[1, 2, 3].map((i) => (
+              <Skeleton key={i} className="h-24 w-full" />
+            ))}
+          </div>
+        ) : versionHistoryData ? (
+          <div className="space-y-6">
+            <div className="border rounded-lg p-4 bg-muted/30" data-testid="panel-current-version">
+              <div className="flex items-center justify-between mb-2">
+                <span className="font-medium">Current Version</span>
+                <Badge variant="secondary" className={CATEGORY_COLORS[versionHistoryData.currentNote.category] || CATEGORY_COLORS.general} data-testid="badge-current-version-category">
+                  {versionHistoryData.currentNote.category}
+                </Badge>
+              </div>
+              <div className="text-sm">
+                <RichTextViewer content={convertBodyToHtml(versionHistoryData.currentNote.body)} />
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                Last updated {formatDistanceToNow(new Date(versionHistoryData.currentNote.updatedAt), { addSuffix: true })}
+              </p>
+            </div>
+
+            {versionHistoryData.versions.length > 0 && (
+              <div className="space-y-3">
+                <h4 className="font-medium text-sm text-muted-foreground">Previous Versions ({versionHistoryData.totalVersions})</h4>
+                {versionHistoryData.versions.map((version) => (
+                  <Card key={version.id} data-testid={`version-card-${version.id}`}>
+                    <CardContent className="p-4">
+                      <button 
+                        type="button"
+                        className="flex items-center justify-between w-full cursor-pointer text-left"
+                        onClick={() => toggleVersionExpanded(version.id)}
+                        data-testid={`button-toggle-version-${version.id}`}
+                      >
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-6 w-6">
+                            <AvatarFallback className="text-xs">
+                              {version.editor.firstName?.[0] || version.editor.email[0].toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div>
+                            <span className="text-sm font-medium">
+                              Version {version.versionNumber}
+                            </span>
+                            <span className="text-xs text-muted-foreground ml-2">
+                              by {version.editor.firstName && version.editor.lastName 
+                                ? `${version.editor.firstName} ${version.editor.lastName}` 
+                                : version.editor.email}
+                            </span>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(version.createdAt), "MMM d, yyyy h:mm a")}
+                          </span>
+                          {expandedVersions.has(version.id) ? (
+                            <ChevronUp className="h-4 w-4 text-muted-foreground" />
+                          ) : (
+                            <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                          )}
+                        </div>
+                      </button>
+                      {expandedVersions.has(version.id) && (
+                        <div className="mt-3 pt-3 border-t">
+                          <Badge variant="outline" className="mb-2" data-testid={`badge-version-category-${version.id}`}>{version.category}</Badge>
+                          <div className="text-sm">
+                            <RichTextViewer content={convertBodyToHtml(version.body)} />
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="text-center py-8 text-muted-foreground" data-testid="empty-state-no-version-history">
+            No version history available
+          </div>
+        )}
+      </FullScreenDrawer>
+
+      <AlertDialog open={!!deleteNote} onOpenChange={(open) => !open && setDeleteNote(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Note</AlertDialogTitle>
+            <AlertDialogDescription>
               Are you sure you want to delete this note? This action cannot be undone and will also remove all version history.
-            </DialogDescription>
-          </DialogHeader>
-          <DialogFooter>
-            <Button variant="outline" onClick={() => setDeleteNote(null)} data-testid="button-cancel-delete-note">
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteNote(null)} data-testid="button-cancel-delete-note">
               Cancel
-            </Button>
-            <Button
-              variant="destructive"
+            </AlertDialogCancel>
+            <AlertDialogAction
               onClick={() => deleteNote && deleteNoteMutation.mutate(deleteNote.id)}
               disabled={deleteNoteMutation.isPending}
+              className="bg-destructive text-destructive-foreground"
               data-testid="button-confirm-delete-note"
             >
               {deleteNoteMutation.isPending ? (
@@ -596,97 +702,29 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
                   Delete
                 </>
               )}
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
-      <Dialog open={versionHistoryDialogOpen} onOpenChange={(open) => {
-        if (!open) {
-          setVersionHistoryDialogOpen(false);
-          setVersionHistoryNoteId(null);
-        }
-      }}>
-        <DialogContent className="max-w-3xl max-h-[80vh]" data-testid="dialog-version-history">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <History className="h-5 w-5" />
-              Note Version History
-            </DialogTitle>
-            <DialogDescription>
-              View all previous versions of this note. Each edit creates a new version.
-            </DialogDescription>
-          </DialogHeader>
-          <div className="py-4">
-            {versionHistoryLoading ? (
-              <div className="flex items-center justify-center py-8">
-                <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-              </div>
-            ) : versionHistoryData?.versions && versionHistoryData.versions.length > 0 ? (
-              <div className="space-y-4 max-h-[50vh] overflow-y-auto pr-2">
-                <div className="border rounded-md p-4 bg-primary/5 border-primary/20">
-                  <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <Badge variant="default">Current</Badge>
-                      <Badge variant="outline" className="text-xs capitalize">
-                        {versionHistoryData.currentNote?.category}
-                      </Badge>
-                    </div>
-                    <span className="text-xs text-muted-foreground">
-                      {versionHistoryData.currentNote?.updatedAt 
-                        ? new Date(versionHistoryData.currentNote.updatedAt).toLocaleString()
-                        : new Date(versionHistoryData.currentNote?.createdAt || "").toLocaleString()}
-                    </span>
-                  </div>
-                  <RichTextViewer 
-                    content={convertBodyToHtml(versionHistoryData.currentNote?.body)} 
-                    className="text-sm" 
-                  />
-                </div>
-
-                {versionHistoryData.versions.map((version) => (
-                  <div key={version.id} className="border rounded-md p-4 bg-muted/30">
-                    <div className="flex items-center justify-between mb-3 flex-wrap gap-2">
-                      <div className="flex items-center gap-2 flex-wrap">
-                        <Badge variant="secondary">Version {version.versionNumber}</Badge>
-                        <Badge variant="outline" className="text-xs capitalize">
-                          {version.category}
-                        </Badge>
-                        <span className="text-xs text-muted-foreground">
-                          by {version.editor.firstName && version.editor.lastName
-                            ? `${version.editor.firstName} ${version.editor.lastName}`
-                            : version.editor.email}
-                        </span>
-                      </div>
-                      <span className="text-xs text-muted-foreground">
-                        {new Date(version.createdAt).toLocaleString()}
-                      </span>
-                    </div>
-                    <RichTextViewer content={convertBodyToHtml(version.body)} className="text-sm" />
-                  </div>
-                ))}
-              </div>
-            ) : (
-              <div className="text-center py-8 text-sm text-muted-foreground">
-                <History className="h-8 w-8 mx-auto mb-2 opacity-50" />
-                No previous versions. This note has never been edited.
-              </div>
-            )}
-          </div>
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setVersionHistoryDialogOpen(false);
-                setVersionHistoryNoteId(null);
-              }}
-              data-testid="button-close-version-history"
-            >
-              Close
-            </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+      <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Discard changes?</AlertDialogTitle>
+            <AlertDialogDescription>
+              You have unsaved changes. Are you sure you want to discard them?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setShowDiscardConfirm(false)} data-testid="button-keep-editing">
+              Keep editing
+            </AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmDiscard} data-testid="button-confirm-discard">
+              Discard
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
