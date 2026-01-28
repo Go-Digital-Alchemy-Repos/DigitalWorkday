@@ -1,0 +1,188 @@
+2026-01-27 23:37:03.38
+ff99ba88
+User
+[schema] Fix: Check migration SQL syntax or database permissions
+2026-01-27 23:37:03.38
+ff99ba88
+User
+[boot] Application cannot start with incomplete schema.
+2026-01-27 23:37:03.38
+ff99ba88
+User
+[schema] FATAL: Migration failed
+2026-01-27 23:56:14.43
+ff99ba88
+User
+[schema] Fix: Check migration SQL syntax or database permissions
+2026-01-27 23:56:14.43
+ff99ba88
+User
+[schema] FATAL: Migration failed
+2026-01-27 23:56:14.43
+ff99ba88
+User
+[schema] Error: relation "active_timers" already exists
+2026-01-27 23:56:14.43
+ff99ba88
+User
+[boot] Application cannot start with incomplete schema.
+2026-01-27 23:56:14.43
+ff99ba88
+User
+[migrations] Error: relation "active_timers" already exists
+2026-01-27 23:56:14.43
+ff99ba88
+User
+[boot] Fix: Set AUTO_MIGRATE=true or run: npx drizzle-kit migrate
+2026-01-27 23:56:14.43
+ff99ba88
+User
+[migrations] Fix: Check migration SQL syntax or database permissions
+2026-01-27 23:56:14.43
+ff99ba88
+User
+[boot] Migration failed: relation "active_timers" already exists
+2026-01-27 23:56:14.43
+ff99ba88
+User
+[migrations] MIGRATION FAILED after 114ms
+2026-01-27 23:56:14.43
+ff99ba88
+User
+[startup] Phase 2/6: schema FAILED after 665ms
+2026-01-27 23:56:14.43
+ff99ba88
+User
+[boot] FATAL: Schema readiness check failed
+2026-01-28 00:17:03.60
+ff99ba88
+User
+[migrations] MIGRATION FAILED after 1800ms
+2026-01-28 00:17:03.60
+ff99ba88
+User
+[migrations] Error: relation "active_timers" already exists
+2026-01-28 00:17:03.60
+ff99ba88
+User
+[migrations] Fix: Check migration SQL syntax or database permissions
+2026-01-28 00:17:03.69
+ff99ba88
+User
+[boot] Fix: Set AUTO_MIGRATE=true or run: npx drizzle-kit migrate
+2026-01-28 00:17:03.69
+ff99ba88
+User
+[boot] Application cannot start with incomplete schema.
+2026-01-28 00:17:03.69
+ff99ba88
+User
+[boot] Migration failed: relation "active_timers" already exists
+2026-01-28 00:17:03.69
+ff99ba88
+User
+[schema] Fix: Check migration SQL syntax or database permissions
+2026-01-28 00:17:03.69
+ff99ba88
+User
+[schema] FATAL: Migration failed
+2026-01-28 00:17:03.69
+ff99ba88
+User
+[startup] Phase 2/6: schema FAILED after 3421ms
+2026-01-28 00:17:03.69
+ff99ba88
+User
+[boot] FATAL: Schema readiness check failed
+2026-01-28 00:17:03.69
+ff99ba88
+User
+[schema] Error: relation "active_timers" already exists
+2026-01-28 14:07:05.11
+ff99ba88
+User
+[migrations] Error: relation "active_timers" already exists
+2026-01-28 14:07:05.11
+ff99ba88
+User
+[migrations] MIGRATION FAILED after 3199ms
+2026-01-28 14:07:05.11
+ff99ba88
+User
+[boot] Fix: Set AUTO_MIGRATE=true or run: npx drizzle-kit migrate
+2026-01-28 14:07:05.11
+ff99ba88
+User
+[schema] FATAL: Migration failed
+2026-01-28 14:07:05.11
+ff99ba88
+User
+[migrations] Fix: Check migration SQL syntax or database permissions
+2026-01-28 14:07:05.11
+ff99ba88
+User
+[schema] Fix: Check migration SQL syntax or database permissions
+2026-01-28 14:07:05.11
+ff99ba88
+User
+[boot] FATAL: Schema readiness check failed
+2026-01-28 14:07:05.11
+ff99ba88
+User
+[boot] Migration failed: relation "active_timers" already exists
+2026-01-28 14:07:05.11
+ff99ba88
+User
+[startup] Phase 2/6: schema FAILED after 6165ms
+2026-01-28 14:07:05.11
+ff99ba88
+User
+[schema] Error: relation "active_timers" already exists
+2026-01-28 14:07:05.11
+ff99ba88
+User
+[boot] Application cannot start with incomplete schema.
+2026-01-28 14:10:16.03
+be50383b
+User
+[migrations] MIGRATION FAILED after 158ms
+2026-01-28 14:10:16.03
+be50383b
+User
+[migrations] Fix: Check migration SQL syntax or database permissions
+2026-01-28 14:10:16.03
+be50383b
+User
+[migrations] Error: relation "active_timers" already exists
+2026-01-28 14:10:16.03
+be50383b
+User
+[boot] Application cannot start with incomplete schema.
+2026-01-28 14:10:16.03
+be50383b
+User
+[boot] Migration failed: relation "active_timers" already exists
+2026-01-28 14:10:16.03
+be50383b
+User
+[schema] FATAL: Migration failed
+2026-01-28 14:10:16.03
+be50383b
+User
+[schema] Fix: Check migration SQL syntax or database permissions
+2026-01-28 14:10:16.03
+be50383b
+User
+[schema] Error: relation "active_timers" already exists
+2026-01-28 14:10:16.03
+be50383b
+User
+[startup] Phase 2/6: schema FAILED after 735ms
+2026-01-28 14:10:16.03
+be50383b
+User
+[boot] FATAL: Schema readiness check failed
+2026-01-28 14:10:16.03
+be50383b
+User
+[boot] Fix: Set AUTO_MIGRATE=true or run: npx drizzle-kit migrate

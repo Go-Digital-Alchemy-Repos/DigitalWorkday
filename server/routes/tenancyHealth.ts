@@ -1091,4 +1091,121 @@ router.post("/v1/super/tenancy/remediate", requireAuth, requireSuperUser, async 
   }
 });
 
+// Mark existing migrations as applied (fixes "relation already exists" errors)
+router.get("/v1/super/migrations/status", requireAuth, requireSuperUser, async (req: Request, res: Response) => {
+  try {
+    // Read the migration journal
+    const fs = await import('fs');
+    const path = await import('path');
+    const journalPath = path.join(process.cwd(), 'migrations', 'meta', '_journal.json');
+    
+    if (!fs.existsSync(journalPath)) {
+      return res.json({ 
+        journalExists: false, 
+        migrations: [], 
+        appliedMigrations: [],
+        pendingMigrations: [] 
+      });
+    }
+    
+    const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
+    const journalMigrations = journal.entries || [];
+    
+    // Check which migrations are recorded in the database
+    let appliedHashes: string[] = [];
+    try {
+      const result = await db.execute(sql`SELECT hash, created_at FROM "__drizzle_migrations" ORDER BY id`);
+      appliedHashes = (result.rows as any[]).map(r => r.hash);
+    } catch (e) {
+      // Table doesn't exist yet
+    }
+    
+    const appliedSet = new Set(appliedHashes);
+    const pendingMigrations = journalMigrations.filter((m: any) => !appliedSet.has(m.tag));
+    
+    res.json({
+      journalExists: true,
+      totalInJournal: journalMigrations.length,
+      totalApplied: appliedHashes.length,
+      totalPending: pendingMigrations.length,
+      migrations: journalMigrations.map((m: any) => ({
+        tag: m.tag,
+        when: m.when,
+        applied: appliedSet.has(m.tag)
+      })),
+      pendingMigrations: pendingMigrations.map((m: any) => m.tag),
+    });
+  } catch (error) {
+    console.error("[Migrations] Status error:", error);
+    res.status(500).json({ error: { code: "internal_error", message: "Failed to get migration status" } });
+  }
+});
+
+router.post("/v1/super/migrations/mark-applied", requireAuth, requireSuperUser, async (req: Request, res: Response) => {
+  try {
+    const fs = await import('fs');
+    const path = await import('path');
+    const journalPath = path.join(process.cwd(), 'migrations', 'meta', '_journal.json');
+    
+    if (!fs.existsSync(journalPath)) {
+      return res.status(400).json({ error: { code: "no_journal", message: "No migration journal found" } });
+    }
+    
+    const journal = JSON.parse(fs.readFileSync(journalPath, 'utf-8'));
+    const entries = journal.entries || [];
+    
+    // Create the migrations table if it doesn't exist
+    await db.execute(sql.raw(`
+      CREATE TABLE IF NOT EXISTS "__drizzle_migrations" (
+        id SERIAL PRIMARY KEY,
+        hash TEXT NOT NULL,
+        created_at BIGINT NOT NULL
+      );
+    `));
+    
+    // Get existing migrations
+    let existingHashes: Set<string> = new Set();
+    try {
+      const existing = await db.execute(sql`SELECT hash FROM "__drizzle_migrations"`);
+      existingHashes = new Set((existing.rows as any[]).map(r => r.hash));
+    } catch (e) {
+      // Empty table
+    }
+    
+    // Insert missing migration records
+    let inserted = 0;
+    let skipped = 0;
+    
+    for (const entry of entries) {
+      const hash = entry.tag;
+      const createdAt = entry.when;
+      
+      if (existingHashes.has(hash)) {
+        skipped++;
+        continue;
+      }
+      
+      await db.execute(sql`
+        INSERT INTO "__drizzle_migrations" (hash, created_at)
+        VALUES (${hash}, ${createdAt})
+      `);
+      inserted++;
+    }
+    
+    console.log(`[Migrations] Marked ${inserted} migrations as applied, skipped ${skipped}`);
+    
+    res.json({
+      success: true,
+      inserted,
+      skipped,
+      message: inserted > 0 
+        ? `Marked ${inserted} migrations as applied. Restart the app to verify.`
+        : "All migrations were already marked as applied."
+    });
+  } catch (error) {
+    console.error("[Migrations] Mark applied error:", error);
+    res.status(500).json({ error: { code: "internal_error", message: "Failed to mark migrations as applied" } });
+  }
+});
+
 export default router;
