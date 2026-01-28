@@ -106,6 +106,11 @@ export default function ProjectPage() {
     enabled: !!selectedTask && !selectedTask.parentTaskId,
   });
 
+  const { data: tenantUsers = [] } = useQuery<{ id: string; email: string; firstName?: string | null; lastName?: string | null }[]>({
+    queryKey: ["/api/users"],
+    enabled: !!projectId,
+  });
+
   const displaySections = localSections || sections;
 
   const activeTask = activeTaskId
@@ -693,6 +698,7 @@ export default function ProjectPage() {
         onSubmit={handleCreateTask}
         sections={sections?.map((s) => ({ id: s.id, projectId: s.projectId, name: s.name, orderIndex: s.orderIndex, createdAt: s.createdAt })) || []}
         defaultSectionId={selectedSectionId}
+        tenantUsers={tenantUsers}
         isLoading={createTaskMutation.isPending}
       />
 

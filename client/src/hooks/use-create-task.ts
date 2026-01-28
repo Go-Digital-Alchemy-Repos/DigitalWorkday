@@ -12,6 +12,7 @@ export interface CreateTaskData {
   status?: "todo" | "in_progress" | "blocked" | "done";
   dueDate?: string | null;
   personalSectionId?: string;
+  assigneeIds?: string[];
 }
 
 export interface CreatePersonalTaskData {
