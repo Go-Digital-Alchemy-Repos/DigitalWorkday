@@ -121,9 +121,10 @@ function categorizeTasksForTwoColumn(tasks: TaskWithRelations[]): {
   const upcoming: TaskWithRelations[] = [];
 
   tasks.forEach((task) => {
-    const isPersonal = !task.projectId;
+    // Check isPersonal flag first, fall back to checking projectId for backwards compatibility
+    const isPersonalTask = task.isPersonal === true || (!task.projectId && task.isPersonal !== false);
     
-    if (isPersonal) {
+    if (isPersonalTask) {
       // All personal tasks go to Personal Tasks section
       personalTasks.push(task);
     } else {
