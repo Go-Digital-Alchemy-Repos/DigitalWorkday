@@ -40,10 +40,26 @@ let appReady = false;
 let startupError: Error | null = null;
 
 // Root endpoint for platforms that check / by default
+// CRITICAL: This MUST return 200 immediately for Cloud Run health checks
+// Use HEAD method detection since health checkers often use HEAD or GET without Accept header
+app.head("/", (_req, res) => {
+  res.status(200).end();
+});
+
+// For GET requests to /, check if it's likely a health check vs browser request
 app.get("/", (req, res, next) => {
-  // If it's a health check (no Accept: text/html), return JSON
+  // Cloud Run/Railway health checks typically:
+  // 1. Don't send Accept: text/html
+  // 2. Have short User-Agent strings or specific patterns
+  // 3. Don't send cookies
   const acceptHeader = req.headers.accept || "";
-  if (!acceptHeader.includes("text/html")) {
+  const userAgent = req.headers["user-agent"] || "";
+  
+  // If it looks like a health check (not a browser), return 200 immediately
+  const isBrowser = acceptHeader.includes("text/html") && 
+                    (userAgent.includes("Mozilla") || userAgent.includes("Chrome") || userAgent.includes("Safari"));
+  
+  if (!isBrowser) {
     return res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
   }
   // Otherwise, let it fall through to static file serving for the React app
@@ -326,7 +342,7 @@ app.get("/ready", (_req, res) => {
 // Bind to 0.0.0.0 explicitly for Replit Autoscale deployment
 const port = parseInt(process.env.PORT || "5000", 10);
 const host = "0.0.0.0";
-const PHASE_TIMEOUT_MS = 10000; // Warn if any phase takes >10 seconds
+const PHASE_TIMEOUT_MS = 5000; // Warn if any phase takes >5 seconds (Cloud Run health checks are strict)
 
 // Helper to run a phase with timing and timeout warning
 async function runPhase<T>(

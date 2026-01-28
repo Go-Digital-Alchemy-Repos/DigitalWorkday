@@ -50,3 +50,4 @@ APP_ENCRYPTION_KEY = "7daNCify1MZK5HwLNw+ajASnFnSStKbgOgVmkJIWRFY="
 [userenv.production]
 AUTO_MIGRATE = "true"
 APP_ENCRYPTION_KEY = "7daNCify1MZK5HwLNw+ajASnFnSStKbgOgVmkJIWRFY="
+SKIP_PARITY_CHECK = "true"
