@@ -29,6 +29,7 @@ import {
 } from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { ChildTaskList } from "./child-task-list";
 import { SubtaskList } from "./subtask-list";
 import { SubtaskDetailDrawer } from "./subtask-detail-drawer";
 import { CommentThread } from "@/components/comment-thread";
