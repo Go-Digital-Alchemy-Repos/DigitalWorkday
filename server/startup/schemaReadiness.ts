@@ -299,16 +299,25 @@ export async function ensureSchemaReady(): Promise<void> {
     console.log(
       "[schema] FAST_STARTUP enabled - running minimal startup checks",
     );
-    console.log("[schema] Verifying database connection...");
+    console.log("[schema] Verifying database connection (10s timeout)...");
+    
+    // Wrap the database check with a timeout to prevent hanging forever
+    const DB_CONNECT_TIMEOUT_MS = 10000;
     try {
-      await db.execute(sql`SELECT 1`);
+      const connectPromise = db.execute(sql`SELECT 1`);
+      const timeoutPromise = new Promise((_, reject) => 
+        setTimeout(() => reject(new Error(`Database connection timed out after ${DB_CONNECT_TIMEOUT_MS}ms`)), DB_CONNECT_TIMEOUT_MS)
+      );
+      
+      await Promise.race([connectPromise, timeoutPromise]);
       console.log("[schema] Database connection OK");
     } catch (error: any) {
       console.error(
         "[schema] FATAL: Database connection failed:",
         error?.message,
       );
-      throw new Error("Database connection failed");
+      console.error("[schema] Check DATABASE_URL environment variable and database accessibility");
+      throw new Error(`Database connection failed: ${error?.message}`);
     }
     
     // Still run migrations even in FAST_STARTUP mode if AUTO_MIGRATE is enabled

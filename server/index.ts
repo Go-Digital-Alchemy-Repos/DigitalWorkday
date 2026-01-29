@@ -89,6 +89,7 @@ app.get("/health", (_req, res) => {
     response.ok = false;
     response.ready = false;
     response.reason = "startup_failed";
+    response.error = startupError.message;
   } else if (!appReady) {
     response.reason = "starting";
   }
@@ -113,6 +114,7 @@ app.get("/api/health", (_req, res) => {
     response.ok = false;
     response.ready = false;
     response.reason = "startup_failed";
+    response.error = startupError.message;
   } else if (!appReady) {
     response.reason = "starting";
   }
