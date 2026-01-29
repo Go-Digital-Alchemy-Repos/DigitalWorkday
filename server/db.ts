@@ -5,26 +5,38 @@ import * as schema from "@shared/schema";
 
 const { Pool } = pg;
 
-if (!process.env.DATABASE_URL) {
-  throw new Error(
-    "DATABASE_URL must be set. Did you forget to provision a database?",
-  );
-}
-
+// Check for DATABASE_URL but don't throw immediately - allow server to start
+// This enables health check endpoints to respond even if DB is misconfigured
+const databaseUrl = process.env.DATABASE_URL;
 const isProduction = process.env.NODE_ENV === "production";
 
+// Log warning if DATABASE_URL is missing (will fail when actually used)
+if (!databaseUrl) {
+  console.error("[db] WARNING: DATABASE_URL is not set - database operations will fail");
+  console.error("[db] Fix: Ensure DATABASE_URL environment variable is configured");
+}
+
+// Create pool only if DATABASE_URL is available
+// Use a dummy URL if not available to allow module to load (will fail on actual use)
 export const pool = new Pool({
-  connectionString: process.env.DATABASE_URL,
+  connectionString: databaseUrl || "postgresql://dummy:dummy@localhost:5432/dummy",
   ssl: isProduction ? { rejectUnauthorized: false } : false,
   max: 10,
-  min: 2,
+  min: databaseUrl ? 2 : 0, // Don't create connections if no URL
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
 });
 
 export const db = drizzle(pool, { schema });
 
-console.log(`[db] Pool initialized: min=2 max=10 idleTimeout=30s connectTimeout=5s ssl=${isProduction}`);
+// Track if database is configured
+export const isDatabaseConfigured = !!databaseUrl;
+
+if (databaseUrl) {
+  console.log(`[db] Pool initialized: min=2 max=10 idleTimeout=30s connectTimeout=5s ssl=${isProduction}`);
+} else {
+  console.log(`[db] Pool NOT initialized - DATABASE_URL missing`);
+}
 
 export interface PoolStats {
   total: number;
@@ -43,6 +55,10 @@ export function getPoolStats(): PoolStats {
 }
 
 export async function connectWithRetry(maxRetries = 3): Promise<void> {
+  if (!isDatabaseConfigured) {
+    throw new Error("DATABASE_URL must be set. Did you forget to provision a database?");
+  }
+  
   for (let attempt = 1; attempt <= maxRetries; attempt++) {
     try {
       const start = Date.now();
@@ -71,6 +87,15 @@ export async function checkDbHealth(): Promise<{
   error?: string;
 }> {
   const poolStats = getPoolStats();
+  
+  if (!isDatabaseConfigured) {
+    return {
+      connected: false,
+      latencyMs: 0,
+      pool: poolStats,
+      error: "DATABASE_URL not configured",
+    };
+  }
   
   try {
     const start = Date.now();
