@@ -133,7 +133,17 @@ router.get("/:clientId/notes", requireAuth, requireTenantContext, async (req: Re
           eq(clientNoteVersions.tenantId, tenantId)
         ));
 
-      const attachments = await db.select()
+      const attachments = await db.select({
+        id: clientNoteAttachments.id,
+        noteId: clientNoteAttachments.noteId,
+        tenantId: clientNoteAttachments.tenantId,
+        originalFileName: clientNoteAttachments.originalFileName,
+        storageKey: clientNoteAttachments.storageKey,
+        mimeType: clientNoteAttachments.mimeType,
+        fileSizeBytes: clientNoteAttachments.fileSizeBytes,
+        createdAt: clientNoteAttachments.createdAt,
+        uploadedByUserId: clientNoteAttachments.uploadedByUserId,
+      })
         .from(clientNoteAttachments)
         .where(and(
           eq(clientNoteAttachments.noteId, note.id),
@@ -228,7 +238,17 @@ router.get("/:clientId/notes/:noteId", requireAuth, requireTenantContext, async 
       ))
       .orderBy(desc(clientNoteVersions.versionNumber));
 
-    const attachments = await db.select()
+    const attachments = await db.select({
+      id: clientNoteAttachments.id,
+      noteId: clientNoteAttachments.noteId,
+      tenantId: clientNoteAttachments.tenantId,
+      originalFileName: clientNoteAttachments.originalFileName,
+      storageKey: clientNoteAttachments.storageKey,
+      mimeType: clientNoteAttachments.mimeType,
+      fileSizeBytes: clientNoteAttachments.fileSizeBytes,
+      createdAt: clientNoteAttachments.createdAt,
+      uploadedByUserId: clientNoteAttachments.uploadedByUserId,
+    })
       .from(clientNoteAttachments)
       .where(and(
         eq(clientNoteAttachments.noteId, noteId),
