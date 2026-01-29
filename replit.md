@@ -1,5 +1,16 @@
 # MyWorkDay - Project Management Application
 
+## Stable Fallback Points
+
+| Date | Commit | Description |
+|------|--------|-------------|
+| 2026-01-29 | `022dd88` | ✅ **Production deployment working** - Fast startup (92ms), all health checks pass, login functional |
+
+To rollback to a stable point, use the Replit checkpoint system or git:
+```bash
+git checkout 022dd88  # Restore to working deployment state
+```
+
 ## Overview
 MyWorkDay is an Asana-inspired project management application designed to streamline project workflows and enhance team collaboration. It provides comprehensive tools for organizing projects, teams, and clients, featuring workspaces, tasks with subtasks, tags, comments, and activity tracking. The application aims to be a robust solution for managing diverse project needs and improving productivity by offering a centralized platform for project and client management, robust reporting, and real-time communication capabilities.
 
@@ -64,13 +75,31 @@ On boot, the server validates that all required tables and columns exist. This p
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `AUTO_MIGRATE` | `false` | Run Drizzle migrations automatically on boot |
+| `FAST_STARTUP` | `false` | Skip detailed schema checks for faster startup (production recommended) |
+| `SKIP_PARITY_CHECK` | `false` | Skip production parity check during startup |
 | `FAIL_ON_SCHEMA_ISSUES` | `true` | Fail startup if schema is incomplete (always true in production) |
 
 **Behavior:**
 - If `AUTO_MIGRATE=true`: Migrations run automatically before the app starts
+- If `FAST_STARTUP=true`: Only essential startup (schema + routes), diagnostics run in background
 - If schema is incomplete and `AUTO_MIGRATE=false`: App fails with clear error message
 - In production: Always fails fast on schema issues
 - Super Admins can check schema status at `/api/v1/super/status/db`
+
+### Production Deployment Settings (Replit)
+These environment variables are set in production for optimal deployment:
+```
+NODE_ENV=production
+FAST_STARTUP=true
+AUTO_MIGRATE=true
+SKIP_PARITY_CHECK=true
+```
+
+**Startup Performance:**
+- Health check endpoints (`/`, `/health`, `/healthz`) respond immediately with 200
+- Critical startup phases: 2 (schema check + routes) - completes in ~100ms
+- Background diagnostics run after app is marked ready
+- App is marked ready as soon as routes are registered
 
 ### Railway Deployment
 For Railway deployments, set `AUTO_MIGRATE=true` in environment variables to ensure migrations run on each deploy.
