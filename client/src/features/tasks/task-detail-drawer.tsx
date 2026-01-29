@@ -461,7 +461,7 @@ export function TaskDetailDrawer({
       setDescription(task.description || "");
       setEstimateMinutes(task.estimateMinutes ? String(task.estimateMinutes) : "");
     }
-  }, [task?.id]);
+  }, [task?.id, task?.description, task?.title, task?.estimateMinutes]);
 
   if (!task) return null;
 
