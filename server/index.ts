@@ -39,28 +39,33 @@ declare module "http" {
 let appReady = false;
 let startupError: Error | null = null;
 
-// Root endpoint for platforms that check / by default
-// CRITICAL: This MUST return 200 immediately for Cloud Run health checks
-// Use HEAD method detection since health checkers often use HEAD or GET without Accept header
+// Root endpoint - CRITICAL: Return 200 immediately for ALL requests during startup
+// Cloud Run health checks expect immediate responses - can't wait for async init
 app.head("/", (_req, res) => {
   res.status(200).end();
 });
 
-// For GET requests to /, check if it's likely a health check vs browser request
 app.get("/", (req, res, next) => {
-  // Cloud Run/Railway health checks typically:
-  // 1. Don't send Accept: text/html
-  // 2. Have short User-Agent strings or specific patterns
-  // 3. Don't send cookies
+  // During startup, always return 200 immediately for health checks
+  // This is critical for Cloud Run which won't wait for async initialization
+  if (!appReady) {
+    return res.status(200).json({ 
+      status: "starting", 
+      timestamp: new Date().toISOString(),
+      ready: false
+    });
+  }
+  
+  // After startup, check if it's a health check vs browser request
   const acceptHeader = req.headers.accept || "";
   const userAgent = req.headers["user-agent"] || "";
   
-  // If it looks like a health check (not a browser), return 200 immediately
+  // If it looks like a health check (not a browser), return 200 with status
   const isBrowser = acceptHeader.includes("text/html") && 
                     (userAgent.includes("Mozilla") || userAgent.includes("Chrome") || userAgent.includes("Safari"));
   
   if (!isBrowser) {
-    return res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+    return res.status(200).json({ status: "ok", timestamp: new Date().toISOString(), ready: true });
   }
   // Otherwise, let it fall through to static file serving for the React app
   next();
