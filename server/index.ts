@@ -39,35 +39,27 @@ declare module "http" {
 let appReady = false;
 let startupError: Error | null = null;
 
-// Root endpoint - CRITICAL: Return 200 immediately for ALL requests during startup
-// Cloud Run health checks expect immediate responses - can't wait for async init
+// Root endpoint - CRITICAL: Return 200 immediately WITHOUT any checks
+// Cloud Run health checks have very strict timeouts (4s default) - must respond instantly
 app.head("/", (_req, res) => {
+  // Simplest possible response - no body, no checks, just 200
   res.status(200).end();
 });
 
 app.get("/", (req, res, next) => {
-  // During startup, always return 200 immediately for health checks
-  // This is critical for Cloud Run which won't wait for async initialization
-  if (!appReady) {
-    return res.status(200).json({ 
-      status: "starting", 
-      timestamp: new Date().toISOString(),
-      ready: false
-    });
-  }
-  
-  // After startup, check if it's a health check vs browser request
+  // Check if it's a health check vs browser request FIRST
   const acceptHeader = req.headers.accept || "";
   const userAgent = req.headers["user-agent"] || "";
   
-  // If it looks like a health check (not a browser), return 200 with status
   const isBrowser = acceptHeader.includes("text/html") && 
                     (userAgent.includes("Mozilla") || userAgent.includes("Chrome") || userAgent.includes("Safari"));
   
+  // For health checks (non-browser), return 200 immediately - don't wait for app readiness
   if (!isBrowser) {
-    return res.status(200).json({ status: "ok", timestamp: new Date().toISOString(), ready: true });
+    return res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
   }
-  // Otherwise, let it fall through to static file serving for the React app
+  
+  // For browser requests, let it fall through to static file serving for the React app
   next();
 });
 
@@ -349,7 +341,7 @@ app.get("/ready", (_req, res) => {
 // Bind to 0.0.0.0 explicitly for Replit Autoscale deployment
 const port = parseInt(process.env.PORT || "5000", 10);
 const host = "0.0.0.0";
-const PHASE_TIMEOUT_MS = 5000; // Warn if any phase takes >5 seconds (Cloud Run health checks are strict)
+const PHASE_TIMEOUT_MS = 2000; // Warn if any phase takes >2 seconds (Cloud Run default health check timeout is 4s)
 
 // Helper to run a phase with timing and timeout warning
 async function runPhase<T>(
@@ -395,9 +387,13 @@ httpServer.listen(port, host, () => {
     || "dev";
   console.log(`[boot] environment=${env} version=${version}`);
   
+  // ============================================================================
+  // CRITICAL PATH: Only essential startup tasks that MUST complete before ready
+  // ============================================================================
+  
   // Phase 2: Schema readiness check - runs migrations if AUTO_MIGRATE=true
   try {
-    await runPhase("schema", "2/6", async () => {
+    await runPhase("schema", "2/4", async () => {
       await ensureSchemaReady();
     });
   } catch (schemaErr) {
@@ -411,39 +407,9 @@ httpServer.listen(port, host, () => {
     return;
   }
   
-  // Log app version and configuration
-  logAppInfo();
-  
-  // Phase 3: Migration status logging (already applied above, but provides visibility)
-  await runPhase("migrating", "3/6", async () => {
-    await logMigrationStatus();
-    // Run production parity check (logs issues but doesn't crash)
-    // Skip in production to speed up startup - can be run manually via super admin endpoints
-    if (process.env.SKIP_PARITY_CHECK !== "true" && process.env.NODE_ENV !== "production") {
-      await runProductionParityCheck();
-    } else if (process.env.NODE_ENV === "production") {
-      console.log("[Production Parity] Skipped in production for faster startup");
-    }
-    // Check for NULL tenantId values (logs warnings, doesn't crash)
-    await logNullTenantIdWarnings();
-  });
-  
-  // Phase 4: Bootstrap admin user if not exists (for production first run)
+  // Phase 3: Register routes (CRITICAL - must complete before ready)
   try {
-    await runPhase("bootstrapping", "4/6", async () => {
-      await bootstrapAdminUser();
-    });
-  } catch (bootstrapErr) {
-    setPhase("error");
-    console.error("[boot] Bootstrap failed:", bootstrapErr instanceof Error ? bootstrapErr.message : bootstrapErr);
-    console.error("[boot] Fix: Check database permissions and user table schema");
-    startupError = bootstrapErr instanceof Error ? bootstrapErr : new Error(String(bootstrapErr));
-    return;
-  }
-  
-  // Phase 5: Register routes
-  try {
-    await runPhase("routes", "5/6", async () => {
+    await runPhase("routes", "3/4", async () => {
       await registerRoutes(httpServer, app);
       
       // API 404 handler - BEFORE error handlers to catch unmatched /api routes first
@@ -470,12 +436,52 @@ httpServer.listen(port, host, () => {
     return;
   }
 
-  // Phase 6: Mark app as ready
+  // Phase 4: Mark app as READY immediately after routes are registered
+  // This ensures health checks pass quickly - diagnostics run in background
   setPhase("ready");
   appReady = true;
   const totalDuration = Date.now() - serverStartTime;
-  console.log(`[startup] Phase 6/6: App fully ready in ${totalDuration}ms`);
-  log(`[boot] Application fully initialized and ready`);
+  console.log(`[startup] Phase 4/4: App READY in ${totalDuration}ms`);
+  log(`[boot] Application ready - running background diagnostics...`);
+  
+  // ============================================================================
+  // BACKGROUND TASKS: Run AFTER app is marked ready (non-blocking)
+  // ============================================================================
+  
+  // Run background diagnostics without blocking the app
+  setImmediate(async () => {
+    try {
+      // Log app version and configuration
+      logAppInfo();
+      
+      // Migration status logging
+      console.log("[background] Starting diagnostic tasks...");
+      await logMigrationStatus();
+      
+      // Run production parity check (logs issues but doesn't crash)
+      if (process.env.SKIP_PARITY_CHECK !== "true" && process.env.NODE_ENV !== "production") {
+        await runProductionParityCheck();
+      } else if (process.env.NODE_ENV === "production") {
+        console.log("[Production Parity] Skipped in production for faster startup");
+      }
+      
+      // Check for NULL tenantId values (logs warnings, doesn't crash)
+      await logNullTenantIdWarnings();
+      
+      // Bootstrap admin user if not exists (for production first run)
+      try {
+        await bootstrapAdminUser();
+      } catch (bootstrapErr) {
+        console.error("[background] Bootstrap failed:", bootstrapErr instanceof Error ? bootstrapErr.message : bootstrapErr);
+        // Don't set startup error - app is already ready
+      }
+      
+      console.log("[background] Diagnostic tasks completed");
+    } catch (bgErr) {
+      console.error("[background] Error in background tasks:", bgErr);
+      // Don't fail - these are non-critical
+    }
+  });
 })().catch((err) => {
   setPhase("error");
   console.error("[boot] Unhandled startup error:", err);
