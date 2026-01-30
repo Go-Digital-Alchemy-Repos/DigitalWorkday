@@ -127,6 +127,7 @@ const updateClientSchema = z.object({
   primaryContactEmail: z.string().optional(),
   primaryContactPhone: z.string().optional(),
   notes: z.string().optional(),
+  parentClientId: z.string().nullable().optional(),
 });
 
 type UpdateClientForm = z.infer<typeof updateClientSchema>;
@@ -277,6 +278,12 @@ export default function ClientDetailPage() {
     enabled: !!clientId,
   });
 
+  // Fetch all clients for parent client selector (excluding the current client)
+  const { data: allClients = [] } = useQuery<ClientWithContacts[]>({
+    queryKey: ["/api/clients"],
+    enabled: !!clientId,
+  });
+
   const { data: unassignedProjects = [] } = useQuery<Project[]>({
     queryKey: ["/api/projects/unassigned", projectSearchQuery],
     enabled: addProjectOpen && projectView === "assign",
@@ -325,6 +332,7 @@ export default function ClientDetailPage() {
           primaryContactEmail: newData.primaryContactEmail || null,
           primaryContactPhone: newData.primaryContactPhone || null,
           notes: newData.notes || null,
+          parentClientId: newData.parentClientId || null,
         });
       }
       return { previousClient };
@@ -446,6 +454,7 @@ export default function ClientDetailPage() {
       primaryContactEmail: client.primaryContactEmail || "",
       primaryContactPhone: client.primaryContactPhone || "",
       notes: client.notes || "",
+      parentClientId: client.parentClientId || null,
     } : undefined,
   });
 
@@ -910,6 +919,36 @@ export default function ClientDetailPage() {
                                   <SelectItem value="active">Active</SelectItem>
                                   <SelectItem value="inactive">Inactive</SelectItem>
                                   <SelectItem value="prospect">Prospect</SelectItem>
+                                </SelectContent>
+                              </Select>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={clientForm.control}
+                          name="parentClientId"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Parent Client</FormLabel>
+                              <Select 
+                                onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
+                                value={field.value || "none"}
+                              >
+                                <FormControl>
+                                  <SelectTrigger data-testid="select-parent-client">
+                                    <SelectValue placeholder="No parent (top-level client)" />
+                                  </SelectTrigger>
+                                </FormControl>
+                                <SelectContent>
+                                  <SelectItem value="none">No parent (top-level client)</SelectItem>
+                                  {allClients
+                                    .filter(c => c.id !== clientId)
+                                    .map((c) => (
+                                      <SelectItem key={c.id} value={c.id}>
+                                        {c.companyName}
+                                      </SelectItem>
+                                    ))}
                                 </SelectContent>
                               </Select>
                               <FormMessage />

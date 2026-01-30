@@ -285,7 +285,7 @@ export interface IStorage {
   // Tenant-scoped methods (Phase 2A)
   getClientByIdAndTenant(id: string, tenantId: string): Promise<Client | undefined>;
   getClientsByTenant(tenantId: string, workspaceId?: string): Promise<ClientWithContacts[]>;
-  getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string })[]>;
+  getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number })[]>;
   getChildClients(parentClientId: string): Promise<Client[]>;
   validateParentClient(parentClientId: string, tenantId: string): Promise<boolean>;
   createClientWithTenant(client: InsertClient, tenantId: string): Promise<Client>;
@@ -2153,41 +2153,79 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string })[]> {
+  async getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number })[]> {
     // Get all clients for the tenant
     const allClients = await db.select()
       .from(clients)
       .where(eq(clients.tenantId, tenantId))
       .orderBy(asc(clients.companyName));
     
-    // Build hierarchy with depth calculation
-    const result: (Client & { depth: number; parentName?: string })[] = [];
-    
-    // First, add all top-level clients
-    const topLevel = allClients.filter(c => !c.parentClientId);
-    
-    // Build a map of clients by ID for parent lookup
-    const clientMap = new Map<string, Client>();
-    for (const client of allClients) {
-      clientMap.set(client.id, client);
+    if (allClients.length === 0) {
+      return [];
     }
     
-    // Recursive function to add client and its children
+    // Bulk fetch contact counts per client
+    const clientIds = allClients.map(c => c.id);
+    const contactCounts = await db.select({
+      clientId: clientContacts.clientId,
+      count: sql<number>`count(*)::int`,
+    })
+      .from(clientContacts)
+      .where(inArray(clientContacts.clientId, clientIds))
+      .groupBy(clientContacts.clientId);
+    
+    const contactCountMap = new Map(contactCounts.map(c => [c.clientId, c.count]));
+    
+    // Bulk fetch project counts per client
+    const projectCounts = await db.select({
+      clientId: projects.clientId,
+      count: sql<number>`count(*)::int`,
+    })
+      .from(projects)
+      .where(and(
+        inArray(projects.clientId, clientIds),
+        isNotNull(projects.clientId)
+      ))
+      .groupBy(projects.clientId);
+    
+    const projectCountMap = new Map(projectCounts.map(p => [p.clientId!, p.count]));
+    
+    // Build parent->children map for O(1) child lookups
+    const childrenMap = new Map<string | null, Client[]>();
+    for (const client of allClients) {
+      const parentId = client.parentClientId || null;
+      if (!childrenMap.has(parentId)) {
+        childrenMap.set(parentId, []);
+      }
+      childrenMap.get(parentId)!.push(client);
+    }
+    
+    // Build client map for parent name lookup
+    const clientMap = new Map(allClients.map(c => [c.id, c]));
+    
+    // Build hierarchy with depth calculation
+    type ClientWithHierarchy = Client & { depth: number; parentName?: string; contactCount: number; projectCount: number };
+    const result: ClientWithHierarchy[] = [];
+    
+    // Non-recursive function to add client and its children
     const addWithChildren = (client: Client, depth: number, parentName?: string) => {
       result.push({ 
         ...client, 
         depth, 
-        parentName 
+        parentName,
+        contactCount: contactCountMap.get(client.id) || 0,
+        projectCount: projectCountMap.get(client.id) || 0,
       });
       
-      // Find and add children
-      const children = allClients.filter(c => c.parentClientId === client.id);
+      // Get children from map
+      const children = childrenMap.get(client.id) || [];
       for (const child of children) {
         addWithChildren(child, depth + 1, client.companyName);
       }
     };
     
-    // Process top-level clients first, then their children recursively
+    // Process top-level clients first
+    const topLevel = childrenMap.get(null) || [];
     for (const client of topLevel) {
       addWithChildren(client, 0);
     }

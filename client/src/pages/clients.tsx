@@ -8,17 +8,30 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClientDrawer } from "@/features/clients";
-import { Plus, Building2, FolderKanban, User } from "lucide-react";
+import { Plus, Building2, FolderKanban, User, ChevronRight } from "lucide-react";
 import { Link } from "wouter";
 import { useToast } from "@/hooks/use-toast";
-import type { ClientWithContacts } from "@shared/schema";
+import type { ClientWithContacts, Client } from "@shared/schema";
+
+interface ClientWithHierarchy extends Client {
+  depth: number;
+  parentName?: string;
+  contactCount: number;
+  projectCount: number;
+}
 
 export default function ClientsPage() {
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const { toast } = useToast();
 
-  const { data: clients, isLoading } = useQuery<ClientWithContacts[]>({
+  // Fetch clients with hierarchy for display
+  const { data: hierarchyClients, isLoading } = useQuery<ClientWithHierarchy[]>({
+    queryKey: ["/api/v1/clients/hierarchy/list"],
+  });
+  
+  // Also fetch regular clients for mutation compatibility
+  const { data: clients } = useQuery<ClientWithContacts[]>({
     queryKey: ["/api/clients"],
   });
 
@@ -33,9 +46,14 @@ export default function ClientsPage() {
         id: `temp-${Date.now()}`,
         companyName: newClient.companyName,
         displayName: newClient.displayName || null,
+        legalName: null,
         status: newClient.status || "active",
         industry: newClient.industry || null,
+        companySize: null,
         website: newClient.website || null,
+        taxId: null,
+        foundedDate: null,
+        description: null,
         notes: newClient.notes || null,
         addressLine1: null,
         addressLine2: null,
@@ -45,6 +63,10 @@ export default function ClientsPage() {
         country: null,
         phone: null,
         email: null,
+        primaryContactName: null,
+        primaryContactEmail: null,
+        primaryContactPhone: null,
+        parentClientId: null,
         tenantId: "",
         workspaceId: "",
         createdAt: new Date(),
@@ -69,6 +91,7 @@ export default function ClientsPage() {
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/clients/hierarchy/list"] });
     },
   });
 
@@ -76,9 +99,10 @@ export default function ClientsPage() {
     await createClientMutation.mutateAsync(data);
   };
 
-  const filteredClients = clients?.filter((client) =>
+  const filteredClients = hierarchyClients?.filter((client) =>
     client.companyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    client.displayName?.toLowerCase().includes(searchQuery.toLowerCase())
+    client.displayName?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+    client.parentName?.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   const getStatusColor = (status: string) => {
@@ -184,6 +208,14 @@ export default function ClientsPage() {
                   <CardHeader className="pb-3">
                     <div className="flex items-start justify-between gap-2">
                       <div className="flex items-center gap-3">
+                        {client.depth > 0 && (
+                          <div 
+                            className="flex items-center text-muted-foreground shrink-0"
+                            style={{ paddingLeft: `${(client.depth - 1) * 12}px` }}
+                          >
+                            <ChevronRight className="h-4 w-4" />
+                          </div>
+                        )}
                         <Avatar className="h-10 w-10">
                           <AvatarFallback className="bg-primary/10 text-primary">
                             {getInitials(client.companyName)}
@@ -193,7 +225,11 @@ export default function ClientsPage() {
                           <CardTitle className="text-base truncate">
                             {client.companyName}
                           </CardTitle>
-                          {client.displayName && (
+                          {client.parentName ? (
+                            <p className="text-xs text-muted-foreground truncate">
+                              Sub-client of {client.parentName}
+                            </p>
+                          ) : client.displayName && (
                             <p className="text-xs text-muted-foreground truncate">
                               {client.displayName}
                             </p>
@@ -209,11 +245,11 @@ export default function ClientsPage() {
                     <div className="flex items-center gap-4 text-sm text-muted-foreground">
                       <div className="flex items-center gap-1">
                         <FolderKanban className="h-3.5 w-3.5" />
-                        <span>{client.projects?.length || 0} projects</span>
+                        <span>{client.projectCount} projects</span>
                       </div>
                       <div className="flex items-center gap-1">
                         <User className="h-3.5 w-3.5" />
-                        <span>{client.contacts?.length || 0} contacts</span>
+                        <span>{client.contactCount} contacts</span>
                       </div>
                     </div>
                     {client.industry && (
