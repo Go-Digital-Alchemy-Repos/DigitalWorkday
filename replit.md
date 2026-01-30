@@ -37,7 +37,7 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 ### Core Features and Design Patterns
 - **Multi-Tenancy**: Supports multi-tenancy with configurable enforcement levels, admin dashboard, white-label branding, per-tenant integrations, onboarding, invitations, bulk user import, and pre-provisioning.
 - **Authentication**: Session-based authentication using Passport.js with email/password and Google OAuth, including account linking, first-user bootstrap, and rate limiting.
-- **Real-time Communication**: Socket.IO for live updates, supporting a tenant-scoped chat system with channels, DMs, file attachments, unread tracking, message search, @mentions, retention policies, and export.
+- **Real-time Communication**: Socket.IO for live updates, supporting a tenant-scoped chat system with channels, DMs, file attachments, unread tracking, message search, @mentions, retention policies, and export. Features a draggable/resizable chat modal with minimize/maximize capabilities and persistent position/size via localStorage.
 - **Project Management**: Includes entities for workspaces, teams, clients, projects, tasks, activity logs, and time tracking. Projects support client assignment, team membership, and an optional division model for finer-grained access control.
 - **Client Notes & Documents**: Client detail pages include Notes and Documents tabs. Notes feature rich text (TipTap JSON), categorization (general, project, feedback, meeting, requirement), and version tracking with full edit history. Documents support S3 uploads with presigned URLs, categories per client, file metadata, and download functionality.
 - **Task Management**: Tasks support subtasks, tags, comments with rich text, @mentions, and notifications.
