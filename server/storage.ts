@@ -285,6 +285,9 @@ export interface IStorage {
   // Tenant-scoped methods (Phase 2A)
   getClientByIdAndTenant(id: string, tenantId: string): Promise<Client | undefined>;
   getClientsByTenant(tenantId: string, workspaceId?: string): Promise<ClientWithContacts[]>;
+  getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string })[]>;
+  getChildClients(parentClientId: string): Promise<Client[]>;
+  validateParentClient(parentClientId: string, tenantId: string): Promise<boolean>;
   createClientWithTenant(client: InsertClient, tenantId: string): Promise<Client>;
   updateClientWithTenant(id: string, tenantId: string, client: Partial<InsertClient>): Promise<Client | undefined>;
   deleteClientWithTenant(id: string, tenantId: string): Promise<boolean>;
@@ -2148,6 +2151,67 @@ export class DatabaseStorage implements IStorage {
       result.push({ ...client, contacts, projects: clientProjects });
     }
     return result;
+  }
+
+  async getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string })[]> {
+    // Get all clients for the tenant
+    const allClients = await db.select()
+      .from(clients)
+      .where(eq(clients.tenantId, tenantId))
+      .orderBy(asc(clients.companyName));
+    
+    // Build hierarchy with depth calculation
+    const result: (Client & { depth: number; parentName?: string })[] = [];
+    
+    // First, add all top-level clients
+    const topLevel = allClients.filter(c => !c.parentClientId);
+    
+    // Build a map of clients by ID for parent lookup
+    const clientMap = new Map<string, Client>();
+    for (const client of allClients) {
+      clientMap.set(client.id, client);
+    }
+    
+    // Recursive function to add client and its children
+    const addWithChildren = (client: Client, depth: number, parentName?: string) => {
+      result.push({ 
+        ...client, 
+        depth, 
+        parentName 
+      });
+      
+      // Find and add children
+      const children = allClients.filter(c => c.parentClientId === client.id);
+      for (const child of children) {
+        addWithChildren(child, depth + 1, client.companyName);
+      }
+    };
+    
+    // Process top-level clients first, then their children recursively
+    for (const client of topLevel) {
+      addWithChildren(client, 0);
+    }
+    
+    return result;
+  }
+
+  async getChildClients(parentClientId: string): Promise<Client[]> {
+    return db.select()
+      .from(clients)
+      .where(eq(clients.parentClientId, parentClientId))
+      .orderBy(asc(clients.companyName));
+  }
+
+  async validateParentClient(parentClientId: string, tenantId: string): Promise<boolean> {
+    if (!parentClientId) return true; // null parent is always valid
+    
+    const [parent] = await db.select()
+      .from(clients)
+      .where(and(
+        eq(clients.id, parentClientId),
+        eq(clients.tenantId, tenantId)
+      ));
+    return !!parent;
   }
 
   async createClientWithTenant(insertClient: InsertClient, tenantId: string): Promise<Client> {

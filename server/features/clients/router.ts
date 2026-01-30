@@ -61,6 +61,23 @@ router.get("/", async (req, res) => {
   }
 });
 
+// Get clients with hierarchy information (depth and parent name)
+router.get("/hierarchy/list", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    
+    if (!tenantId) {
+      return res.status(400).json({ error: "Tenant context required" });
+    }
+    
+    const clients = await storage.getClientsByTenantWithHierarchy(tenantId);
+    return res.json(clients);
+  } catch (error) {
+    console.error("Error fetching clients hierarchy:", error);
+    res.status(500).json({ error: "Internal server error" });
+  }
+});
+
 router.get("/:id", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
