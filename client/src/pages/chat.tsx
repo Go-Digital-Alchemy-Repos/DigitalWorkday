@@ -6,7 +6,7 @@ import { useToast } from "@/hooks/use-toast";
 import { getSocket, joinChatRoom, leaveChatRoom, onConnectionChange, isSocketConnected } from "@/lib/realtime/socket";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { Textarea } from "@/components/ui/textarea";
+import { ChatMessageInput } from "@/components/chat-message-input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card } from "@/components/ui/card";
@@ -590,12 +590,12 @@ export default function ChatPage() {
     }
   };
 
-  const handleMessageInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const value = e.target.value;
-    const cursorPos = e.target.selectionStart || 0;
-    setMessageInput(value);
+  const handleMessageInputChange = (newValue: string) => {
+    setMessageInput(newValue);
     
-    const textBeforeCursor = value.slice(0, cursorPos);
+    const textarea = messageInputRef.current;
+    const cursorPos = textarea?.selectionStart || newValue.length;
+    const textBeforeCursor = newValue.slice(0, cursorPos);
     const mentionMatch = textBeforeCursor.match(/@(\w*)$/);
     
     if (mentionMatch) {
@@ -2019,15 +2019,13 @@ export default function ChatPage() {
                   )}
                 </Button>
                 <div className="relative flex-1">
-                  <Textarea
+                  <ChatMessageInput
                     ref={messageInputRef}
                     value={messageInput}
-                    onChange={(e) => handleMessageInputChange(e as any)}
+                    onChange={handleMessageInputChange}
                     onKeyDown={handleMessageKeyDown}
                     placeholder={`Message ${selectedChannel ? "#" + selectedChannel.name : getDmDisplayName(selectedDm!)}`}
                     disabled={sendMessageMutation.isPending}
-                    className="resize-none min-h-[40px] max-h-[120px]"
-                    rows={1}
                     data-testid="input-message"
                   />
                   {mentionOpen && mentionableUsersQuery.data && mentionableUsersQuery.data.length > 0 && (
