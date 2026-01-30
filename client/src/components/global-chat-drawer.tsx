@@ -9,12 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from "@/components/ui/sheet";
+import { DraggableChatModal } from "@/components/draggable-chat-modal";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -26,7 +21,6 @@ import {
   Send,
   MessageCircle,
   Lock,
-  X,
   ChevronLeft,
   Paperclip,
   File,
@@ -37,6 +31,7 @@ import {
   Pencil,
   Trash2,
   Check,
+  X,
 } from "lucide-react";
 import { CHAT_EVENTS, CHAT_ROOM_EVENTS, ChatNewMessagePayload, ChatMessageUpdatedPayload, ChatMessageDeletedPayload } from "@shared/events";
 
@@ -467,55 +462,59 @@ export function GlobalChatDrawer() {
     return otherMembers.map((m) => m.user.name || m.user.email).join(", ");
   };
 
-  return (
-    <Sheet open={isOpen} onOpenChange={(open) => !open && closeDrawer()}>
-      <SheetContent 
-        side="right" 
-        className="w-[400px] sm:w-[450px] p-0 flex flex-col"
-        data-testid="global-chat-drawer"
-      >
-        <SheetHeader className="px-4 py-3 border-b shrink-0">
-          <div className="flex items-center justify-between">
-            {!showThreadList && (selectedChannel || selectedDm) ? (
-              <div className="flex items-center gap-2">
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={handleBack}
-                  data-testid="button-chat-back"
-                >
-                  <ChevronLeft className="h-4 w-4" />
-                </Button>
-                {selectedChannel && (
-                  <div className="flex items-center gap-2">
-                    {selectedChannel.isPrivate ? (
-                      <Lock className="h-4 w-4" />
-                    ) : (
-                      <Hash className="h-4 w-4" />
-                    )}
-                    <SheetTitle className="text-base">{selectedChannel.name}</SheetTitle>
-                  </div>
-                )}
-                {selectedDm && (
-                  <div className="flex items-center gap-2">
-                    <MessageCircle className="h-4 w-4" />
-                    <SheetTitle className="text-base">{getDmDisplayName(selectedDm)}</SheetTitle>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <SheetTitle>Chat</SheetTitle>
-            )}
+  const modalTitle = (() => {
+    if (!showThreadList && (selectedChannel || selectedDm)) {
+      if (selectedChannel) {
+        return (
+          <div className="flex items-center gap-2">
             <Button
               variant="ghost"
-              size="icon"
-              onClick={closeDrawer}
-              data-testid="button-close-chat-drawer"
+              size="sm"
+              onClick={handleBack}
+              data-testid="button-chat-back"
             >
-              <X className="h-4 w-4" />
+              <ChevronLeft className="h-4 w-4" />
             </Button>
+            {selectedChannel.isPrivate ? (
+              <Lock className="h-4 w-4" />
+            ) : (
+              <Hash className="h-4 w-4" />
+            )}
+            <span className="truncate">{selectedChannel.name}</span>
           </div>
-        </SheetHeader>
+        );
+      }
+      if (selectedDm) {
+        return (
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleBack}
+              data-testid="button-chat-back"
+            >
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <MessageCircle className="h-4 w-4" />
+            <span className="truncate">{getDmDisplayName(selectedDm)}</span>
+          </div>
+        );
+      }
+    }
+    return (
+      <div className="flex items-center gap-2">
+        <MessageCircle className="h-4 w-4" />
+        <span>Chat</span>
+      </div>
+    );
+  })();
+
+  return (
+    <DraggableChatModal
+      isOpen={isOpen}
+      onClose={closeDrawer}
+      title={modalTitle}
+    >
 
         {showThreadList ? (
           <div className="flex-1 overflow-hidden flex flex-col">
@@ -816,7 +815,6 @@ export function GlobalChatDrawer() {
             </form>
           </div>
         )}
-      </SheetContent>
-    </Sheet>
+    </DraggableChatModal>
   );
 }
