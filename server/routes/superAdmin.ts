@@ -8153,65 +8153,165 @@ router.post("/impersonate/stop", requireSuperUser, async (req, res) => {
 
 // =============================================================================
 // APP DOCUMENTATION - Browse and view application documentation
+// Organized by categories (subdirectories) with support for nested folder structure
 // =============================================================================
 
 const DOCS_DIR = path.join(process.cwd(), "docs");
 
-// GET /api/v1/super/docs - List all documentation files
+// Category display names and order (for organized folders like 01-GETTING-STARTED)
+const CATEGORY_CONFIG: Record<string, { displayName: string; icon: string; order: number }> = {
+  "01-GETTING-STARTED": { displayName: "Getting Started", icon: "rocket", order: 1 },
+  "02-ARCHITECTURE": { displayName: "Architecture", icon: "layout", order: 2 },
+  "03-FEATURES": { displayName: "Features", icon: "star", order: 3 },
+  "04-API": { displayName: "API Reference", icon: "code", order: 4 },
+  "05-FRONTEND": { displayName: "Frontend", icon: "monitor", order: 5 },
+  "06-BACKEND": { displayName: "Backend", icon: "server", order: 6 },
+  "07-SECURITY": { displayName: "Security", icon: "shield", order: 7 },
+  "08-DATABASE": { displayName: "Database", icon: "database", order: 8 },
+  "09-TESTING": { displayName: "Testing", icon: "check-circle", order: 9 },
+  "10-DEPLOYMENT": { displayName: "Deployment", icon: "cloud", order: 10 },
+  "11-DEVELOPMENT": { displayName: "Development", icon: "wrench", order: 11 },
+  "12-OPERATIONS": { displayName: "Operations", icon: "activity", order: 12 },
+  "13-INTEGRATIONS": { displayName: "Integrations", icon: "plug", order: 13 },
+  "14-TROUBLESHOOTING": { displayName: "Troubleshooting", icon: "alert-triangle", order: 14 },
+  "15-REFERENCE": { displayName: "Reference", icon: "book", order: 15 },
+  "16-CHANGELOG": { displayName: "Changelog", icon: "clock", order: 16 },
+  "admin": { displayName: "Admin", icon: "settings", order: 20 },
+  "architecture": { displayName: "Architecture (Legacy)", icon: "layout", order: 21 },
+  "auth": { displayName: "Authentication", icon: "key", order: 22 },
+  "chat": { displayName: "Chat System", icon: "message-circle", order: 23 },
+  "deployment": { displayName: "Deployment (Legacy)", icon: "cloud", order: 24 },
+  "dev": { displayName: "Developer Guide", icon: "terminal", order: 25 },
+  "integrations": { displayName: "Integrations (Legacy)", icon: "plug", order: 26 },
+  "performance": { displayName: "Performance", icon: "zap", order: 27 },
+  "provisioning": { displayName: "Provisioning", icon: "user-plus", order: 28 },
+  "security": { displayName: "Security (Legacy)", icon: "shield", order: 29 },
+  "storage": { displayName: "Storage", icon: "hard-drive", order: 30 },
+  "_root": { displayName: "General", icon: "file-text", order: 100 },
+};
+
+async function scanDocsDirectory(): Promise<{
+  categories: Array<{
+    id: string;
+    displayName: string;
+    icon: string;
+    order: number;
+    docs: Array<{
+      id: string;
+      filename: string;
+      title: string;
+      category: string;
+      relativePath: string;
+      sizeBytes: number;
+      modifiedAt: string;
+    }>;
+  }>;
+}> {
+  const categories: Map<string, typeof CATEGORY_CONFIG["_root"] & { docs: any[] }> = new Map();
+  
+  async function processDir(dirPath: string, categoryId: string) {
+    const entries = await fs.readdir(dirPath, { withFileTypes: true });
+    
+    for (const entry of entries) {
+      const fullPath = path.join(dirPath, entry.name);
+      
+      if (entry.isDirectory()) {
+        // Process subdirectory as a new category
+        await processDir(fullPath, entry.name);
+      } else if (entry.name.endsWith(".md")) {
+        const stat = await fs.stat(fullPath);
+        const content = await fs.readFile(fullPath, "utf-8");
+        const firstLine = content.split("\n").find(l => l.startsWith("# "));
+        const title = firstLine ? firstLine.replace(/^#\s*/, "") : entry.name.replace(".md", "");
+        
+        // Create relative path for fetching
+        const relativePath = path.relative(DOCS_DIR, fullPath).replace(/\\/g, "/");
+        const docId = relativePath.replace(/\//g, "__").replace(".md", "");
+        
+        // Get or create category
+        if (!categories.has(categoryId)) {
+          const config = CATEGORY_CONFIG[categoryId] || {
+            displayName: categoryId.replace(/^\d+-/, "").replace(/-/g, " ").replace(/_/g, " "),
+            icon: "folder",
+            order: 50,
+          };
+          categories.set(categoryId, { ...config, docs: [] });
+        }
+        
+        categories.get(categoryId)!.docs.push({
+          id: docId,
+          filename: entry.name,
+          title,
+          category: categoryId,
+          relativePath,
+          sizeBytes: stat.size,
+          modifiedAt: stat.mtime.toISOString(),
+        });
+      }
+    }
+  }
+  
+  await processDir(DOCS_DIR, "_root");
+  
+  // Convert to sorted array
+  const result = Array.from(categories.entries())
+    .map(([id, data]) => ({
+      id,
+      displayName: data.displayName,
+      icon: data.icon,
+      order: data.order,
+      docs: data.docs.sort((a, b) => a.title.localeCompare(b.title)),
+    }))
+    .sort((a, b) => a.order - b.order);
+  
+  return { categories: result };
+}
+
+// GET /api/v1/super/docs - List all documentation files organized by category
 router.get("/docs", requireSuperUser, async (req, res) => {
   try {
-    const files = await fs.readdir(DOCS_DIR);
-    const mdFiles = files.filter(f => f.endsWith(".md"));
-    
-    const docs = await Promise.all(mdFiles.map(async (filename) => {
-      const filepath = path.join(DOCS_DIR, filename);
-      const stat = await fs.stat(filepath);
-      const content = await fs.readFile(filepath, "utf-8");
-      const firstLine = content.split("\n").find(l => l.startsWith("# "));
-      const title = firstLine ? firstLine.replace(/^#\s*/, "") : filename.replace(".md", "");
-      
-      return {
-        filename,
-        title,
-        sizeBytes: stat.size,
-        modifiedAt: stat.mtime.toISOString(),
-      };
-    }));
-    
-    docs.sort((a, b) => a.title.localeCompare(b.title));
-    res.json({ docs });
+    const result = await scanDocsDirectory();
+    res.json(result);
   } catch (error) {
     console.error("[docs] Failed to list documentation:", error);
     res.status(500).json({ error: "Failed to list documentation" });
   }
 });
 
-// GET /api/v1/super/docs/:filename - Get a specific documentation file
-router.get("/docs/:filename", requireSuperUser, async (req, res) => {
+// GET /api/v1/super/docs/:docPath - Get a specific documentation file by path
+// docPath uses __ as separator instead of / for URL safety (e.g., "auth__AUTHENTICATION")
+router.get("/docs/:docPath", requireSuperUser, async (req, res) => {
   try {
-    const { filename } = req.params;
+    const { docPath } = req.params;
+    
+    // Convert path back (__ to /)
+    const relativePath = docPath.replace(/__/g, "/") + ".md";
     
     // Security: prevent directory traversal
-    if (filename.includes("..") || filename.includes("/") || filename.includes("\\")) {
-      return res.status(400).json({ error: "Invalid filename" });
+    if (relativePath.includes("..")) {
+      return res.status(400).json({ error: "Invalid path" });
     }
     
-    if (!filename.endsWith(".md")) {
-      return res.status(400).json({ error: "Only markdown files are allowed" });
-    }
+    const filepath = path.join(DOCS_DIR, relativePath);
     
-    const filepath = path.join(DOCS_DIR, filename);
+    // Ensure the resolved path is still within DOCS_DIR
+    const resolvedPath = path.resolve(filepath);
+    if (!resolvedPath.startsWith(path.resolve(DOCS_DIR))) {
+      return res.status(400).json({ error: "Invalid path" });
+    }
     
     try {
       const content = await fs.readFile(filepath, "utf-8");
       const stat = await fs.stat(filepath);
       const firstLine = content.split("\n").find(l => l.startsWith("# "));
-      const title = firstLine ? firstLine.replace(/^#\s*/, "") : filename.replace(".md", "");
+      const title = firstLine ? firstLine.replace(/^#\s*/, "") : path.basename(relativePath, ".md");
       
       res.json({
-        filename,
+        id: docPath,
+        filename: path.basename(relativePath),
         title,
         content,
+        relativePath,
         sizeBytes: stat.size,
         modifiedAt: stat.mtime.toISOString(),
       });

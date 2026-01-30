@@ -11,6 +11,7 @@ This section documents all major features and modules in MyWorkDay.
 
 | Document | Description |
 |----------|-------------|
+| [CLIENT_NOTES.md](./CLIENT_NOTES.md) | Client notes dashboard with categories |
 | [DIVISIONS.md](./DIVISIONS.md) | Client divisions for access control |
 | [CHAT.md](./CHAT.md) | Real-time messaging system |
 | [ERROR_HANDLING.md](./ERROR_HANDLING.md) | Error handling and logging |
@@ -42,7 +43,9 @@ This section documents all major features and modules in MyWorkDay.
 | Tasks | Multi-assignee, subtasks, comments, attachments | `task-detail-drawer.tsx` |
 | Time Tracking | Timer, manual entries, reports | `time-tracking.tsx`, `global-active-timer.tsx` |
 | Clients | CRM with 17 fields, contacts, portal invites | `clients.tsx`, `client-detail.tsx` |
+| Client Notes | Notes dashboard with categories, versioning | `client-notes-tab.tsx` |
 | My Tasks | Personal task views, custom sections | `my-tasks.tsx` |
+| Chat | Real-time messaging, channels, DMs, mentions | `global-chat-drawer.tsx` |
 
 ### Administration
 

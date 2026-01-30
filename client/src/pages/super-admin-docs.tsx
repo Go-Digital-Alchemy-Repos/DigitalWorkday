@@ -1,29 +1,81 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useAuth } from "@/lib/auth";
 import { Redirect } from "wouter";
-import { Loader2, FileText, Search, ArrowLeft, Calendar, HardDrive, RefreshCw, ExternalLink } from "lucide-react";
+import { 
+  Loader2, FileText, Search, ArrowLeft, Calendar, HardDrive, RefreshCw, ExternalLink,
+  ChevronDown, ChevronRight, Folder, FolderOpen,
+  Rocket, Layout, Star, Code, Monitor, Server, Shield, Database, CheckCircle,
+  Cloud, Wrench, Activity, Plug, AlertTriangle, Book, Clock, Settings, Key,
+  MessageCircle, Terminal, Zap, UserPlus, BookOpen
+} from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { queryClient } from "@/lib/queryClient";
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 
 interface DocFile {
+  id: string;
   filename: string;
   title: string;
+  category: string;
+  relativePath: string;
   sizeBytes: number;
   modifiedAt: string;
+}
+
+interface DocCategory {
+  id: string;
+  displayName: string;
+  icon: string;
+  order: number;
+  docs: DocFile[];
+}
+
+interface DocsResponse {
+  categories: DocCategory[];
 }
 
 interface DocContent {
+  id: string;
   filename: string;
   title: string;
   content: string;
+  relativePath: string;
   sizeBytes: number;
   modifiedAt: string;
 }
+
+const iconMap: Record<string, React.ComponentType<{ className?: string }>> = {
+  "rocket": Rocket,
+  "layout": Layout,
+  "star": Star,
+  "code": Code,
+  "monitor": Monitor,
+  "server": Server,
+  "shield": Shield,
+  "database": Database,
+  "check-circle": CheckCircle,
+  "cloud": Cloud,
+  "wrench": Wrench,
+  "activity": Activity,
+  "plug": Plug,
+  "alert-triangle": AlertTriangle,
+  "book": Book,
+  "clock": Clock,
+  "settings": Settings,
+  "key": Key,
+  "message-circle": MessageCircle,
+  "terminal": Terminal,
+  "zap": Zap,
+  "user-plus": UserPlus,
+  "hard-drive": HardDrive,
+  "file-text": FileText,
+  "folder": Folder,
+};
 
 function formatBytes(bytes: number): string {
   if (bytes < 1024) return `${bytes} B`;
@@ -189,12 +241,18 @@ function InlineContent({ text }: { text: string }) {
   return <>{parts}</>;
 }
 
+function CategoryIcon({ iconName, className }: { iconName: string; className?: string }) {
+  const IconComponent = iconMap[iconName] || FileText;
+  return <IconComponent className={className} />;
+}
+
 export default function SuperAdminDocs() {
   const { user, isLoading: authLoading } = useAuth();
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(["_root", "03-FEATURES", "07-SECURITY"]));
 
-  const { data: docsData, isLoading: docsLoading, refetch } = useQuery<{ docs: DocFile[] }>({
+  const { data: docsData, isLoading: docsLoading, refetch } = useQuery<DocsResponse>({
     queryKey: ["/api/v1/super/docs"],
     enabled: !!user && user.role === "super_user",
   });
@@ -203,6 +261,42 @@ export default function SuperAdminDocs() {
     queryKey: ["/api/v1/super/docs", selectedDoc],
     enabled: !!selectedDoc,
   });
+
+  // Filter categories and docs based on search
+  const filteredCategories = useMemo(() => {
+    if (!docsData?.categories) return [];
+    if (!searchQuery.trim()) return docsData.categories;
+
+    const query = searchQuery.toLowerCase();
+    return docsData.categories
+      .map(category => ({
+        ...category,
+        docs: category.docs.filter(doc =>
+          doc.title.toLowerCase().includes(query) ||
+          doc.filename.toLowerCase().includes(query)
+        ),
+      }))
+      .filter(category => category.docs.length > 0);
+  }, [docsData, searchQuery]);
+
+  // Stats
+  const stats = useMemo(() => {
+    if (!docsData?.categories) return { totalDocs: 0, totalCategories: 0 };
+    const totalDocs = docsData.categories.reduce((sum, cat) => sum + cat.docs.length, 0);
+    return { totalDocs, totalCategories: docsData.categories.length };
+  }, [docsData]);
+
+  const toggleCategory = (categoryId: string) => {
+    setExpandedCategories(prev => {
+      const next = new Set(prev);
+      if (next.has(categoryId)) {
+        next.delete(categoryId);
+      } else {
+        next.add(categoryId);
+      }
+      return next;
+    });
+  };
 
   if (authLoading) {
     return (
@@ -216,16 +310,19 @@ export default function SuperAdminDocs() {
     return <Redirect to="/" />;
   }
 
-  const filteredDocs = docsData?.docs?.filter(doc =>
-    doc.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-    doc.filename.toLowerCase().includes(searchQuery.toLowerCase())
-  ) || [];
-
   return (
     <div className="flex h-full">
+      {/* Sidebar with categories */}
       <div className="w-80 border-r bg-muted/30 flex flex-col">
         <div className="p-4 border-b">
-          <h2 className="text-lg font-semibold mb-3">App Documentation</h2>
+          <div className="flex items-center gap-2 mb-3">
+            <BookOpen className="h-5 w-5 text-primary" />
+            <h2 className="text-lg font-semibold">Documentation</h2>
+          </div>
+          <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
+            <Badge variant="secondary">{stats.totalDocs} docs</Badge>
+            <Badge variant="outline">{stats.totalCategories} categories</Badge>
+          </div>
           <div className="relative">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
@@ -243,35 +340,57 @@ export default function SuperAdminDocs() {
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
-            ) : filteredDocs.length === 0 ? (
+            ) : filteredCategories.length === 0 ? (
               <div className="text-center py-8 text-muted-foreground text-sm">
                 {searchQuery ? "No matching documents" : "No documentation files found"}
               </div>
             ) : (
               <div className="space-y-1">
-                {filteredDocs.map((doc) => (
-                  <button
-                    key={doc.filename}
-                    onClick={() => setSelectedDoc(doc.filename)}
-                    className={`w-full text-left p-3 rounded-md transition-colors hover-elevate ${
-                      selectedDoc === doc.filename
-                        ? "bg-primary/10 border border-primary/20"
-                        : "hover:bg-muted"
-                    }`}
-                    data-testid={`button-doc-${doc.filename.replace(".md", "")}`}
+                {filteredCategories.map((category) => (
+                  <Collapsible
+                    key={category.id}
+                    open={expandedCategories.has(category.id) || !!searchQuery}
                   >
-                    <div className="flex items-start gap-2">
-                      <FileText className="h-4 w-4 mt-0.5 text-muted-foreground flex-shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="font-medium text-sm truncate">{doc.title}</div>
-                        <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
-                          <span>{formatBytes(doc.sizeBytes)}</span>
-                          <span className="text-muted-foreground/50">|</span>
-                          <span className="truncate">{doc.filename}</span>
-                        </div>
+                    <CollapsibleTrigger asChild>
+                      <button
+                        onClick={() => toggleCategory(category.id)}
+                        className="w-full flex items-center gap-2 p-2 rounded-md hover-elevate text-left"
+                        data-testid={`button-category-${category.id}`}
+                      >
+                        {expandedCategories.has(category.id) || searchQuery ? (
+                          <ChevronDown className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        )}
+                        <CategoryIcon iconName={category.icon} className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                        <span className="flex-1 text-sm font-medium truncate">{category.displayName}</span>
+                        <Badge variant="secondary" className="text-xs">
+                          {category.docs.length}
+                        </Badge>
+                      </button>
+                    </CollapsibleTrigger>
+                    <CollapsibleContent>
+                      <div className="ml-6 pl-2 border-l space-y-0.5">
+                        {category.docs.map((doc) => (
+                          <button
+                            key={doc.id}
+                            onClick={() => setSelectedDoc(doc.id)}
+                            className={`w-full text-left p-2 rounded-md transition-colors text-sm ${
+                              selectedDoc === doc.id
+                                ? "bg-primary/10 border border-primary/20 text-primary"
+                                : "hover-elevate text-muted-foreground hover:text-foreground"
+                            }`}
+                            data-testid={`button-doc-${doc.id}`}
+                          >
+                            <div className="flex items-start gap-2">
+                              <FileText className="h-3.5 w-3.5 mt-0.5 flex-shrink-0" />
+                              <span className="truncate">{doc.title}</span>
+                            </div>
+                          </button>
+                        ))}
                       </div>
-                    </div>
-                  </button>
+                    </CollapsibleContent>
+                  </Collapsible>
                 ))}
               </div>
             )}
@@ -294,13 +413,46 @@ export default function SuperAdminDocs() {
         </div>
       </div>
 
+      {/* Main content area */}
       <div className="flex-1 flex flex-col">
         {!selectedDoc ? (
           <div className="flex-1 flex items-center justify-center text-muted-foreground">
-            <div className="text-center">
-              <FileText className="h-12 w-12 mx-auto mb-4 opacity-50" />
-              <p className="text-lg font-medium">Select a document to view</p>
-              <p className="text-sm mt-1">Choose from the list on the left</p>
+            <div className="text-center max-w-md">
+              <BookOpen className="h-16 w-16 mx-auto mb-4 opacity-30" />
+              <h3 className="text-xl font-semibold mb-2">App Documentation</h3>
+              <p className="text-sm mb-4">
+                Browse the documentation library organized by category. Select a document from the sidebar to view its contents.
+              </p>
+              <div className="grid grid-cols-2 gap-3 text-left">
+                <Card className="p-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Rocket className="h-4 w-4 text-primary" />
+                    <span className="font-medium">Getting Started</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Setup and configuration</p>
+                </Card>
+                <Card className="p-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Star className="h-4 w-4 text-primary" />
+                    <span className="font-medium">Features</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Core functionality docs</p>
+                </Card>
+                <Card className="p-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Shield className="h-4 w-4 text-primary" />
+                    <span className="font-medium">Security</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Auth & access control</p>
+                </Card>
+                <Card className="p-3">
+                  <div className="flex items-center gap-2 text-sm">
+                    <Cloud className="h-4 w-4 text-primary" />
+                    <span className="font-medium">Deployment</span>
+                  </div>
+                  <p className="text-xs text-muted-foreground mt-1">Production guides</p>
+                </Card>
+              </div>
             </div>
           </div>
         ) : contentLoading ? (
@@ -332,7 +484,7 @@ export default function SuperAdminDocs() {
                         {formatDate(docContent.modifiedAt)}
                       </span>
                       <Badge variant="secondary" className="text-xs">
-                        {docContent.filename}
+                        {docContent.relativePath}
                       </Badge>
                     </div>
                   </div>
