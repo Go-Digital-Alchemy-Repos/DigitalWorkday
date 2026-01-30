@@ -2,6 +2,7 @@ import { useEditor, EditorContent } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
+import TextAlign from "@tiptap/extension-text-align";
 import { useEffect } from "react";
 import { cn } from "@/lib/utils";
 import { getDocForEditor, toPlainText, getPreviewText } from "./richTextUtils";
@@ -32,6 +33,9 @@ export function RichTextRenderer({
           rel: "noopener noreferrer",
           target: "_blank",
         },
+      }),
+      TextAlign.configure({
+        types: ["paragraph", "heading"],
       }),
     ],
     content: getDocForEditor(value),

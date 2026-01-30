@@ -2,7 +2,8 @@ import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
-import { useEffect, useCallback, useState } from "react";
+import TextAlign from "@tiptap/extension-text-align";
+import { useEffect, useCallback, useState, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -14,6 +15,10 @@ import {
   Link as LinkIcon,
   Unlink,
   Smile,
+  AlignLeft,
+  AlignCenter,
+  AlignRight,
+  Paperclip,
 } from "lucide-react";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import EmojiPicker, { Theme, EmojiClickData } from "emoji-picker-react";
@@ -25,6 +30,7 @@ interface RichTextEditorProps {
   value: string | null | undefined;
   onChange: (value: string) => void;
   onBlur?: () => void;
+  onAttachmentClick?: () => void;
   placeholder?: string;
   className?: string;
   editorClassName?: string;
@@ -32,6 +38,8 @@ interface RichTextEditorProps {
   autoFocus?: boolean;
   minHeight?: string;
   showToolbar?: boolean;
+  showAlignment?: boolean;
+  showAttachment?: boolean;
   "data-testid"?: string;
 }
 
@@ -39,9 +47,12 @@ interface MenuBarProps {
   editor: Editor | null;
   onOpenLinkDialog: () => void;
   onEmojiSelect: (emoji: string) => void;
+  onAttachmentClick?: () => void;
+  showAlignment?: boolean;
+  showAttachment?: boolean;
 }
 
-function MenuBar({ editor, onOpenLinkDialog, onEmojiSelect }: MenuBarProps) {
+function MenuBar({ editor, onOpenLinkDialog, onEmojiSelect, onAttachmentClick, showAlignment = true, showAttachment = false }: MenuBarProps) {
   const { theme } = useTheme();
   const [emojiOpen, setEmojiOpen] = useState(false);
 
@@ -108,6 +119,41 @@ function MenuBar({ editor, onOpenLinkDialog, onEmojiSelect }: MenuBarProps) {
       >
         <ListOrdered className="h-4 w-4" />
       </Button>
+      {showAlignment && (
+        <>
+          <div className="w-px bg-border mx-1" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn("px-2", editor.isActive({ textAlign: "left" }) && "bg-muted")}
+            onClick={() => editor.chain().focus().setTextAlign("left").run()}
+            data-testid="button-align-left"
+          >
+            <AlignLeft className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn("px-2", editor.isActive({ textAlign: "center" }) && "bg-muted")}
+            onClick={() => editor.chain().focus().setTextAlign("center").run()}
+            data-testid="button-align-center"
+          >
+            <AlignCenter className="h-4 w-4" />
+          </Button>
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className={cn("px-2", editor.isActive({ textAlign: "right" }) && "bg-muted")}
+            onClick={() => editor.chain().focus().setTextAlign("right").run()}
+            data-testid="button-align-right"
+          >
+            <AlignRight className="h-4 w-4" />
+          </Button>
+        </>
+      )}
       <div className="w-px bg-border mx-1" />
       <Button
         type="button"
@@ -130,6 +176,21 @@ function MenuBar({ editor, onOpenLinkDialog, onEmojiSelect }: MenuBarProps) {
         >
           <Unlink className="h-4 w-4" />
         </Button>
+      )}
+      {showAttachment && onAttachmentClick && (
+        <>
+          <div className="w-px bg-border mx-1" />
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            className="px-2"
+            onClick={onAttachmentClick}
+            data-testid="button-attachment"
+          >
+            <Paperclip className="h-4 w-4" />
+          </Button>
+        </>
       )}
       <div className="w-px bg-border mx-1" />
       <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
@@ -168,6 +229,7 @@ export function RichTextEditor({
   value,
   onChange,
   onBlur,
+  onAttachmentClick,
   placeholder = "Enter text...",
   className,
   editorClassName,
@@ -175,6 +237,8 @@ export function RichTextEditor({
   autoFocus = false,
   minHeight = "100px",
   showToolbar = true,
+  showAlignment = true,
+  showAttachment = false,
   "data-testid": testId,
 }: RichTextEditorProps) {
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
@@ -196,6 +260,9 @@ export function RichTextEditor({
           target: "_blank",
         },
         validate: (href) => /^https?:\/\//.test(href),
+      }),
+      TextAlign.configure({
+        types: ["paragraph", "heading"],
       }),
     ],
     content: getDocForEditor(value),
@@ -283,7 +350,7 @@ export function RichTextEditor({
       )}
       data-testid={testId}
     >
-      {showToolbar && <MenuBar editor={editor} onOpenLinkDialog={openLinkDialog} onEmojiSelect={handleEmojiSelect} />}
+      {showToolbar && <MenuBar editor={editor} onOpenLinkDialog={openLinkDialog} onEmojiSelect={handleEmojiSelect} onAttachmentClick={onAttachmentClick} showAlignment={showAlignment} showAttachment={showAttachment} />}
       <EditorContent
         editor={editor}
         className={cn(
