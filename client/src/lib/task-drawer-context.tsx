@@ -18,6 +18,11 @@ export function useTaskDrawer() {
   return context;
 }
 
+export function useTaskDrawerOptional() {
+  const context = useContext(TaskDrawerContext);
+  return context;
+}
+
 interface TaskDrawerProviderProps {
   children: ReactNode;
 }

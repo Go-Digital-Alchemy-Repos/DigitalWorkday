@@ -15,7 +15,7 @@ import { getSocket } from "@/lib/realtime/socket";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { ServerToClientEvents } from "@shared/events";
-import { useTaskDrawer } from "@/lib/task-drawer-context";
+import { useTaskDrawerOptional } from "@/lib/task-drawer-context";
 
 interface Notification {
   id: string;
@@ -103,7 +103,8 @@ export function NotificationCenter() {
   const [activeTab, setActiveTab] = useState<"notifications" | "settings">("notifications");
   const queryClient = useQueryClient();
   const { toast } = useToast();
-  const { openTask } = useTaskDrawer();
+  const taskDrawer = useTaskDrawerOptional();
+  const openTask = taskDrawer?.openTask;
 
   const { data: notifications = [], isLoading: notificationsLoading } = useQuery<Notification[]>({
     queryKey: ["/api/notifications"],
@@ -302,7 +303,7 @@ const defaultPreferences: NotificationPreferences = {
                           if (!notification.readAt) {
                             markAsReadMutation.mutate(notification.id);
                           }
-                          if (isTaskType && taskId) {
+                          if (isTaskType && taskId && openTask) {
                             setIsOpen(false);
                             openTask(taskId);
                           }
