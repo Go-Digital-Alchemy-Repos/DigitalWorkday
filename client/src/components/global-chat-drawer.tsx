@@ -155,7 +155,10 @@ export function GlobalChatDrawer() {
 
   useEffect(() => {
     if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
+      const scrollAreaElement = scrollRef.current.querySelector('[data-radix-scroll-area-viewport]');
+      if (scrollAreaElement) {
+        scrollAreaElement.scrollTop = scrollAreaElement.scrollHeight;
+      }
     }
   }, [messages]);
 
