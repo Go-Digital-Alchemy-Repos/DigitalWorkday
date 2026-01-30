@@ -158,6 +158,7 @@ export function RichTextEditor({
               size="icon"
               variant="ghost"
               className="h-7 w-7"
+              aria-label="Insert emoji"
               data-testid="button-emoji"
             >
               <Smile className="h-3.5 w-3.5" />
