@@ -208,6 +208,7 @@ import {
   generateAvatarKey,
   uploadToS3,
 } from "./s3";
+import { getStorageStatus } from "./storage/getStorageProvider";
 import multer from "multer";
 
 const avatarUpload = multer({ 
@@ -2663,8 +2664,19 @@ export async function registerRoutes(
 
   app.get("/api/attachments/config", async (req, res) => {
     try {
+      // Use hierarchical storage resolution: tenant R2 > tenant S3 > system R2 > system S3 > env vars
+      // Note: This endpoint requires authentication via global /api middleware since it needs
+      // tenant context for proper hierarchical resolution. This is intentional because the
+      // AttachmentUploader component only appears in authenticated contexts (task-detail-drawer).
+      const user = req.user as any;
+      const tenantId = user?.tenantId || req.tenant?.effectiveTenantId || null;
+      
+      const storageStatus = await getStorageStatus(tenantId);
+      
       res.json({
-        configured: isS3Configured(),
+        configured: storageStatus.configured,
+        source: storageStatus.source,
+        provider: storageStatus.provider,
         maxFileSizeBytes: MAX_FILE_SIZE_BYTES,
         allowedMimeTypes: ALLOWED_MIME_TYPES,
       });

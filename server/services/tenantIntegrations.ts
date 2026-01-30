@@ -657,14 +657,16 @@ export class TenantIntegrationService {
       }
       case "s3": {
         const config = publicConfig as S3PublicConfig;
-        if (config.bucketName && config.region) {
+        // S3 requires bucketName, region, AND secrets (accessKeyId, secretAccessKey)
+        if (config.bucketName && config.region && hasSecret) {
           return IntegrationStatus.CONFIGURED;
         }
         break;
       }
       case "r2": {
         const config = publicConfig as R2PublicConfig;
-        if (config.bucketName && config.accountId) {
+        // R2 requires bucketName, accountId, AND secrets (accessKeyId, secretAccessKey)
+        if (config.bucketName && config.accountId && hasSecret) {
           return IntegrationStatus.CONFIGURED;
         }
         break;
