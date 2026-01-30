@@ -7,6 +7,7 @@ import { getSocket } from "@/lib/realtime/socket";
 import { useChatDrawer } from "@/contexts/chat-drawer-context";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Textarea } from "@/components/ui/textarea";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { DraggableChatModal } from "@/components/draggable-chat-modal";
@@ -16,6 +17,11 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
 import {
   Hash,
   Send,
@@ -32,7 +38,10 @@ import {
   Trash2,
   Check,
   X,
+  Smile,
 } from "lucide-react";
+import EmojiPicker, { Theme, EmojiClickData } from "emoji-picker-react";
+import { chatSounds } from "@/lib/sounds";
 import { CHAT_EVENTS, CHAT_ROOM_EVENTS, ChatNewMessagePayload, ChatMessageUpdatedPayload, ChatMessageDeletedPayload } from "@shared/events";
 
 interface ChatChannel {
@@ -106,8 +115,10 @@ export function GlobalChatDrawer() {
   const [isUploading, setIsUploading] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
+  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastMarkedReadRef = useRef<string | null>(null);
 
   const { data: channels = [] } = useQuery<ChatChannel[]>({
@@ -207,6 +218,11 @@ export function GlobalChatDrawer() {
       
       if (isCurrentChannel || isCurrentDm) {
         setMessages(prev => [...prev, payload.message as ChatMessage]);
+        // Play sound for messages from others
+        const msg = payload.message as ChatMessage;
+        if (msg.authorUserId !== user?.id) {
+          chatSounds.play("messageReceived");
+        }
       }
     };
 
@@ -269,6 +285,7 @@ export function GlobalChatDrawer() {
     onSuccess: () => {
       setMessageInput("");
       setPendingAttachments([]);
+      chatSounds.play("messageSent");
     },
   });
 
@@ -430,6 +447,24 @@ export function GlobalChatDrawer() {
       body: messageInput.trim() || " ",
       attachmentIds: pendingAttachments.map(a => a.id),
     });
+  };
+
+  const handleEmojiClick = (emojiData: EmojiClickData) => {
+    setMessageInput(prev => prev + emojiData.emoji);
+    setShowEmojiPicker(false);
+    textareaRef.current?.focus();
+  };
+
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (e.key === "Enter" && !e.shiftKey) {
+      e.preventDefault();
+      if (messageInput.trim() || pendingAttachments.length > 0) {
+        sendMessageMutation.mutate({
+          body: messageInput.trim() || " ",
+          attachmentIds: pendingAttachments.map(a => a.id),
+        });
+      }
+    }
   };
 
   const getFileIcon = (mimeType: string) => {
@@ -774,7 +809,7 @@ export function GlobalChatDrawer() {
                   })}
                 </div>
               )}
-              <div className="flex gap-2">
+              <div className="flex flex-col gap-2">
                 <input
                   ref={fileInputRef}
                   type="file"
@@ -783,35 +818,72 @@ export function GlobalChatDrawer() {
                   multiple
                   onChange={handleFileSelect}
                 />
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading || sendMessageMutation.isPending}
-                  data-testid="drawer-button-attach"
-                >
-                  {isUploading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Paperclip className="h-4 w-4" />
-                  )}
-                </Button>
-                <Input
+                <Textarea
+                  ref={textareaRef}
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
-                  placeholder={`Message ${selectedChannel ? "#" + selectedChannel.name : selectedDm ? getDmDisplayName(selectedDm) : ""}`}
+                  onKeyDown={handleKeyDown}
+                  placeholder={`Message ${selectedChannel ? "#" + selectedChannel.name : selectedDm ? getDmDisplayName(selectedDm) : ""}... (Enter to send, Shift+Enter for new line)`}
                   disabled={sendMessageMutation.isPending}
+                  className="min-h-[60px] max-h-[120px] resize-none text-sm"
+                  rows={2}
                   data-testid="drawer-input-message"
                 />
-                <Button
-                  type="submit"
-                  size="icon"
-                  disabled={(!messageInput.trim() && pendingAttachments.length === 0) || sendMessageMutation.isPending}
-                  data-testid="drawer-button-send"
-                >
-                  <Send className="h-4 w-4" />
-                </Button>
+                <div className="flex items-center justify-between">
+                  <div className="flex items-center gap-1">
+                    <Button
+                      type="button"
+                      size="icon"
+                      variant="ghost"
+                      onClick={() => fileInputRef.current?.click()}
+                      disabled={isUploading || sendMessageMutation.isPending}
+                      data-testid="drawer-button-attach"
+                    >
+                      {isUploading ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Paperclip className="h-4 w-4" />
+                      )}
+                    </Button>
+                    <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
+                      <PopoverTrigger asChild>
+                        <Button
+                          type="button"
+                          size="icon"
+                          variant="ghost"
+                          disabled={sendMessageMutation.isPending}
+                          data-testid="drawer-button-emoji"
+                        >
+                          <Smile className="h-4 w-4" />
+                        </Button>
+                      </PopoverTrigger>
+                      <PopoverContent 
+                        side="top" 
+                        align="start" 
+                        className="w-auto p-0 border-0"
+                        sideOffset={8}
+                      >
+                        <EmojiPicker
+                          onEmojiClick={handleEmojiClick}
+                          theme={document.documentElement.classList.contains("dark") ? Theme.DARK : Theme.LIGHT}
+                          width={300}
+                          height={350}
+                          searchPlaceHolder="Search emoji..."
+                          previewConfig={{ showPreview: false }}
+                        />
+                      </PopoverContent>
+                    </Popover>
+                  </div>
+                  <Button
+                    type="submit"
+                    size="sm"
+                    disabled={(!messageInput.trim() && pendingAttachments.length === 0) || sendMessageMutation.isPending}
+                    data-testid="drawer-button-send"
+                  >
+                    <Send className="h-4 w-4 mr-1" />
+                    Send
+                  </Button>
+                </div>
               </div>
             </form>
           </div>
