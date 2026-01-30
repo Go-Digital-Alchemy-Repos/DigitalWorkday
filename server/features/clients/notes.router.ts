@@ -85,6 +85,93 @@ router.post("/:clientId/notes/categories", requireAuth, requireTenantContext, as
   }
 });
 
+router.put("/:clientId/notes/categories/:categoryId", requireAuth, requireTenantContext, async (req: Request, res: Response) => {
+  const tenantReq = req as TenantRequest;
+  const tenantId = tenantReq.tenant?.effectiveTenantId;
+  const { categoryId } = req.params;
+
+  if (!tenantId) {
+    return res.status(400).json({ ok: false, error: { code: "TENANT_REQUIRED", message: "Tenant context required" } });
+  }
+
+  try {
+    const data = createCategorySchema.parse(req.body);
+
+    const [existing] = await db.select()
+      .from(clientNoteCategories)
+      .where(and(
+        eq(clientNoteCategories.id, categoryId),
+        eq(clientNoteCategories.tenantId, tenantId)
+      ));
+
+    if (!existing) {
+      return res.status(404).json({ ok: false, error: { code: "CATEGORY_NOT_FOUND", message: "Category not found" } });
+    }
+
+    if (existing.isSystem) {
+      return res.status(400).json({ ok: false, error: { code: "CANNOT_EDIT_SYSTEM", message: "Cannot edit system categories" } });
+    }
+
+    const [category] = await db.update(clientNoteCategories)
+      .set({
+        name: data.name,
+        color: data.color,
+      })
+      .where(eq(clientNoteCategories.id, categoryId))
+      .returning();
+
+    res.json({ ok: true, category });
+  } catch (error: any) {
+    if (error.code === "23505") {
+      return res.status(400).json({ ok: false, error: { code: "DUPLICATE_CATEGORY", message: "Category with this name already exists" } });
+    }
+    console.error("[client-notes] Error updating category:", error);
+    res.status(500).json({ ok: false, error: { code: "UPDATE_FAILED", message: "Failed to update category" } });
+  }
+});
+
+router.delete("/:clientId/notes/categories/:categoryId", requireAuth, requireTenantContext, async (req: Request, res: Response) => {
+  const tenantReq = req as TenantRequest;
+  const tenantId = tenantReq.tenant?.effectiveTenantId;
+  const { categoryId } = req.params;
+
+  if (!tenantId) {
+    return res.status(400).json({ ok: false, error: { code: "TENANT_REQUIRED", message: "Tenant context required" } });
+  }
+
+  try {
+    const [existing] = await db.select()
+      .from(clientNoteCategories)
+      .where(and(
+        eq(clientNoteCategories.id, categoryId),
+        eq(clientNoteCategories.tenantId, tenantId)
+      ));
+
+    if (!existing) {
+      return res.status(404).json({ ok: false, error: { code: "CATEGORY_NOT_FOUND", message: "Category not found" } });
+    }
+
+    if (existing.isSystem) {
+      return res.status(400).json({ ok: false, error: { code: "CANNOT_DELETE_SYSTEM", message: "Cannot delete system categories" } });
+    }
+
+    // Update notes using this category to use "general" instead
+    await db.update(clientNotes)
+      .set({ categoryId: null, category: "general" })
+      .where(and(
+        eq(clientNotes.categoryId, categoryId),
+        eq(clientNotes.tenantId, tenantId)
+      ));
+
+    await db.delete(clientNoteCategories).where(eq(clientNoteCategories.id, categoryId));
+
+    res.json({ ok: true, message: "Category deleted successfully" });
+  } catch (error: any) {
+    console.error("[client-notes] Error deleting category:", error);
+    res.status(500).json({ ok: false, error: { code: "DELETE_FAILED", message: "Failed to delete category" } });
+  }
+});
+
 router.get("/:clientId/notes", requireAuth, requireTenantContext, async (req: Request, res: Response) => {
   const tenantReq = req as TenantRequest;
   const tenantId = tenantReq.tenant?.effectiveTenantId;

@@ -2,7 +2,7 @@ import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
-import { Card, CardContent } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -32,6 +32,14 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
   Plus,
   MoreHorizontal,
   Pencil,
@@ -44,7 +52,9 @@ import {
   Save,
   ChevronDown,
   ChevronUp,
-  X,
+  Tag,
+  Settings,
+  FolderOpen,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatErrorForToast } from "@/lib/parseApiError";
@@ -94,16 +104,26 @@ interface VersionHistoryResponse {
   totalVersions: number;
 }
 
+interface NoteCategory {
+  id: string;
+  tenantId: string;
+  name: string;
+  color: string | null;
+  isSystem: boolean;
+  createdAt: string;
+}
+
 interface ClientNotesTabProps {
   clientId: string;
 }
 
-const CATEGORY_OPTIONS = [
-  { value: "general", label: "General" },
-  { value: "project", label: "Project" },
-  { value: "feedback", label: "Feedback" },
-  { value: "meeting", label: "Meeting" },
-  { value: "requirement", label: "Requirement" },
+// Default categories (fallback when no custom categories exist)
+const DEFAULT_CATEGORIES = [
+  { value: "general", label: "General", color: null },
+  { value: "project", label: "Project", color: "#3b82f6" },
+  { value: "feedback", label: "Feedback", color: "#eab308" },
+  { value: "meeting", label: "Meeting", color: "#a855f7" },
+  { value: "requirement", label: "Requirement", color: "#22c55e" },
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
@@ -113,6 +133,18 @@ const CATEGORY_COLORS: Record<string, string> = {
   meeting: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
   requirement: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
 };
+
+const COLOR_OPTIONS = [
+  { value: "", label: "Default (Gray)" },
+  { value: "#3b82f6", label: "Blue" },
+  { value: "#22c55e", label: "Green" },
+  { value: "#eab308", label: "Yellow" },
+  { value: "#a855f7", label: "Purple" },
+  { value: "#ef4444", label: "Red" },
+  { value: "#f97316", label: "Orange" },
+  { value: "#06b6d4", label: "Cyan" },
+  { value: "#ec4899", label: "Pink" },
+];
 
 function getAuthorDisplayName(author: NoteAuthor): string {
   if (author.firstName && author.lastName) {
@@ -127,6 +159,22 @@ function getAuthorInitials(author: NoteAuthor): string {
   if (author.firstName) return author.firstName[0].toUpperCase();
   if (author.email) return author.email[0].toUpperCase();
   return "?";
+}
+
+function getCategoryBadgeStyle(category: string, color: string | null): string {
+  if (color) {
+    return "";
+  }
+  return CATEGORY_COLORS[category.toLowerCase()] || CATEGORY_COLORS.general;
+}
+
+function getCategoryInlineStyle(color: string | null): React.CSSProperties {
+  if (!color) return {};
+  return {
+    backgroundColor: `${color}20`,
+    color: color,
+    borderColor: `${color}40`,
+  };
 }
 
 function convertBodyToHtml(body: any): string {
@@ -203,14 +251,29 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
   
   const [noteBody, setNoteBody] = useState("");
   const [noteCategory, setNoteCategory] = useState("general");
+  const [noteCategoryId, setNoteCategoryId] = useState<string | null>(null);
   
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
   const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set());
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  
+  // Category management state
+  const [showCategoryManager, setShowCategoryManager] = useState(false);
+  const [categoryDialogMode, setCategoryDialogMode] = useState<"create" | "edit">("create");
+  const [editingCategory, setEditingCategory] = useState<NoteCategory | null>(null);
+  const [categoryName, setCategoryName] = useState("");
+  const [categoryColor, setCategoryColor] = useState("");
+  const [deleteCategory, setDeleteCategory] = useState<NoteCategory | null>(null);
 
+  // Fetch notes
   const { data: notesData, isLoading: notesLoading } = useQuery<{ ok: boolean; notes: ClientNote[] }>({
     queryKey: ["/api/clients", clientId, "notes"],
+  });
+
+  // Fetch categories
+  const { data: categoriesData, isLoading: categoriesLoading } = useQuery<{ ok: boolean; categories: NoteCategory[] }>({
+    queryKey: ["/api/clients", clientId, "notes", "categories"],
   });
 
   const { data: versionHistoryData, isLoading: versionHistoryLoading } = useQuery<VersionHistoryResponse>({
@@ -218,8 +281,9 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
     enabled: !!historyNote && drawerMode === "history",
   });
 
+  // Mutations
   const createNoteMutation = useMutation({
-    mutationFn: async (data: { body: string; category: string }) => {
+    mutationFn: async (data: { body: string; category: string; categoryId?: string | null }) => {
       return apiRequest("POST", `/api/clients/${clientId}/notes`, data);
     },
     onSuccess: () => {
@@ -234,8 +298,8 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
   });
 
   const updateNoteMutation = useMutation({
-    mutationFn: async ({ noteId, body, category }: { noteId: string; body: string; category: string }) => {
-      return apiRequest("PUT", `/api/clients/${clientId}/notes/${noteId}`, { body, category });
+    mutationFn: async ({ noteId, body, category, categoryId }: { noteId: string; body: string; category: string; categoryId?: string | null }) => {
+      return apiRequest("PUT", `/api/clients/${clientId}/notes/${noteId}`, { body, category, categoryId });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
@@ -266,14 +330,71 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
     },
   });
 
+  // Category mutations
+  const createCategoryMutation = useMutation({
+    mutationFn: async (data: { name: string; color?: string }) => {
+      return apiRequest("POST", `/api/clients/${clientId}/notes/categories`, data);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes", "categories"] });
+      closeCategoryDialog();
+      toast({ title: "Category created", description: "Your category has been saved." });
+    },
+    onError: (error) => {
+      const { title, description } = formatErrorForToast(error);
+      toast({ title, description, variant: "destructive" });
+    },
+  });
+
+  const updateCategoryMutation = useMutation({
+    mutationFn: async ({ categoryId, name, color }: { categoryId: string; name: string; color?: string }) => {
+      return apiRequest("PUT", `/api/clients/${clientId}/notes/categories/${categoryId}`, { name, color });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes", "categories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
+      closeCategoryDialog();
+      toast({ title: "Category updated", description: "Your changes have been saved." });
+    },
+    onError: (error) => {
+      const { title, description } = formatErrorForToast(error);
+      toast({ title, description, variant: "destructive" });
+    },
+  });
+
+  const deleteCategoryMutation = useMutation({
+    mutationFn: async (categoryId: string) => {
+      return apiRequest("DELETE", `/api/clients/${clientId}/notes/categories/${categoryId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes", "categories"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
+      setDeleteCategory(null);
+      toast({ title: "Category deleted", description: "The category has been removed." });
+    },
+    onError: (error) => {
+      const { title, description } = formatErrorForToast(error);
+      toast({ title, description, variant: "destructive" });
+    },
+  });
+
   const closeDrawer = () => {
     setDrawerMode("closed");
     setEditingNote(null);
     setHistoryNote(null);
     setNoteBody("");
     setNoteCategory("general");
+    setNoteCategoryId(null);
     setExpandedVersions(new Set());
     setShowDiscardConfirm(false);
+  };
+
+  const closeCategoryDialog = () => {
+    setShowCategoryManager(false);
+    setCategoryDialogMode("create");
+    setEditingCategory(null);
+    setCategoryName("");
+    setCategoryColor("");
   };
 
   const handleCancel = () => {
@@ -292,6 +413,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
   const openCreateDrawer = () => {
     setNoteBody("");
     setNoteCategory("general");
+    setNoteCategoryId(null);
     setDrawerMode("create");
   };
 
@@ -299,6 +421,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
     setEditingNote(note);
     setNoteBody(convertBodyToHtml(note.body));
     setNoteCategory(note.category);
+    setNoteCategoryId(note.categoryId);
     setDrawerMode("edit");
   };
 
@@ -307,16 +430,47 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
     setDrawerMode("history");
   };
 
+  const openCreateCategoryDialog = () => {
+    setCategoryDialogMode("create");
+    setCategoryName("");
+    setCategoryColor("");
+    setEditingCategory(null);
+    setShowCategoryManager(true);
+  };
+
+  const openEditCategoryDialog = (category: NoteCategory) => {
+    setCategoryDialogMode("edit");
+    setCategoryName(category.name);
+    setCategoryColor(category.color || "");
+    setEditingCategory(category);
+    setShowCategoryManager(true);
+  };
+
   const handleSaveNote = () => {
     if (!noteBody.trim() || noteBody === "<p></p>") return;
     
     if (drawerMode === "create") {
-      createNoteMutation.mutate({ body: noteBody, category: noteCategory });
+      createNoteMutation.mutate({ body: noteBody, category: noteCategory, categoryId: noteCategoryId });
     } else if (drawerMode === "edit" && editingNote) {
       updateNoteMutation.mutate({
         noteId: editingNote.id,
         body: noteBody,
         category: noteCategory,
+        categoryId: noteCategoryId,
+      });
+    }
+  };
+
+  const handleSaveCategory = () => {
+    if (!categoryName.trim()) return;
+    
+    if (categoryDialogMode === "create") {
+      createCategoryMutation.mutate({ name: categoryName, color: categoryColor || undefined });
+    } else if (editingCategory) {
+      updateCategoryMutation.mutate({
+        categoryId: editingCategory.id,
+        name: categoryName,
+        color: categoryColor || undefined,
       });
     }
   };
@@ -334,16 +488,43 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
   };
 
   const notes = notesData?.notes || [];
+  const customCategories = categoriesData?.categories || [];
+  
+  // Combine default and custom categories for the dropdown
+  const allCategoryOptions = useMemo(() => {
+    const options = [...DEFAULT_CATEGORIES];
+    customCategories.forEach(cat => {
+      if (!options.find(o => o.value.toLowerCase() === cat.name.toLowerCase())) {
+        options.push({ value: cat.name.toLowerCase(), label: cat.name, color: cat.color });
+      }
+    });
+    return options;
+  }, [customCategories]);
+
+  // Get category stats
+  const categoryStats = useMemo(() => {
+    const stats: Record<string, number> = {};
+    notes.forEach(note => {
+      const cat = note.category.toLowerCase();
+      stats[cat] = (stats[cat] || 0) + 1;
+    });
+    return stats;
+  }, [notes]);
   
   const filteredNotes = useMemo(() => {
     return notes.filter((note) => {
       const bodyHtml = convertBodyToHtml(note.body);
       const matchesSearch = !searchQuery || 
         bodyHtml.toLowerCase().includes(searchQuery.toLowerCase());
-      const matchesCategory = filterCategory === "all" || note.category === filterCategory;
+      const matchesCategory = filterCategory === "all" || note.category.toLowerCase() === filterCategory.toLowerCase();
       return matchesSearch && matchesCategory;
     });
   }, [notes, searchQuery, filterCategory]);
+
+  // Latest notes (top 3 most recent)
+  const latestNotes = useMemo(() => {
+    return [...notes].slice(0, 3);
+  }, [notes]);
 
   const hasUnsavedChanges = useMemo(() => {
     if (drawerMode === "create") {
@@ -357,90 +538,70 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
   }, [drawerMode, noteBody, noteCategory, editingNote]);
 
   const isLoading = createNoteMutation.isPending || updateNoteMutation.isPending;
+  const isCategoryLoading = createCategoryMutation.isPending || updateCategoryMutation.isPending;
   const canSave = noteBody.trim() !== "" && noteBody !== "<p></p>";
 
-  if (notesLoading) {
+  if (notesLoading || categoriesLoading) {
     return (
       <div className="space-y-4">
-        {[1, 2, 3].map((i) => (
-          <Card key={i}>
-            <CardContent className="p-4">
-              <Skeleton className="h-4 w-32 mb-2" />
-              <Skeleton className="h-20 w-full" />
-            </CardContent>
-          </Card>
-        ))}
+        <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+          <div className="lg:col-span-3 space-y-4">
+            {[1, 2, 3].map((i) => (
+              <Card key={i}>
+                <CardContent className="p-4">
+                  <Skeleton className="h-4 w-32 mb-2" />
+                  <Skeleton className="h-20 w-full" />
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+          <div className="space-y-4">
+            <Skeleton className="h-32 w-full" />
+            <Skeleton className="h-48 w-full" />
+          </div>
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {/* Dashboard Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
-        <h3 className="text-lg font-medium">Notes</h3>
-        <Button onClick={openCreateDrawer} data-testid="button-create-note">
-          <Plus className="h-4 w-4 mr-2" />
-          Add Note
-        </Button>
+        <h3 className="text-lg font-medium">Notes Dashboard</h3>
+        <div className="flex gap-2">
+          <Button variant="outline" onClick={openCreateCategoryDialog} data-testid="button-manage-categories">
+            <Tag className="h-4 w-4 mr-2" />
+            Add Category
+          </Button>
+          <Button onClick={openCreateDrawer} data-testid="button-create-note">
+            <Plus className="h-4 w-4 mr-2" />
+            Add Note
+          </Button>
+        </div>
       </div>
 
-      {notes.length > 0 && (
-        <div className="flex flex-col sm:flex-row gap-2">
-          <div className="relative flex-1">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search notes..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-              data-testid="input-search-notes"
-            />
-          </div>
-          <Select value={filterCategory} onValueChange={setFilterCategory}>
-            <SelectTrigger className="w-full sm:w-40" data-testid="select-filter-category">
-              <SelectValue placeholder="Filter by category" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Categories</SelectItem>
-              {CATEGORY_OPTIONS.map((cat) => (
-                <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-      )}
-
-      {notes.length === 0 ? (
-        <Card data-testid="empty-state-no-notes">
-          <CardContent className="p-8 text-center">
-            <StickyNote className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="font-medium text-lg mb-2">No notes yet</h3>
-            <p className="text-muted-foreground text-sm mb-4">
-              Keep track of important information about this client.
-            </p>
-            <Button onClick={openCreateDrawer} data-testid="button-create-first-note">
-              <Plus className="h-4 w-4 mr-2" />
-              Add First Note
-            </Button>
-          </CardContent>
-        </Card>
-      ) : filteredNotes.length === 0 ? (
-        <Card data-testid="empty-state-no-matching-notes">
-          <CardContent className="p-8 text-center">
-            <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
-            <h3 className="font-medium text-lg mb-2">No matching notes</h3>
-            <p className="text-muted-foreground text-sm">
-              Try adjusting your search or filter criteria.
-            </p>
-          </CardContent>
-        </Card>
-      ) : (
-        <div className="space-y-3">
-          {filteredNotes.map((note) => (
-            <Card key={note.id} className="hover-elevate" data-testid={`note-card-${note.id}`}>
-              <CardContent className="p-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 flex-1 min-w-0">
+      {/* Dashboard Layout */}
+      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+        {/* Main Content Area */}
+        <div className="lg:col-span-3 space-y-4">
+          {/* Latest Notes Section */}
+          {latestNotes.length > 0 && (
+            <Card data-testid="section-latest-notes">
+              <CardHeader className="pb-3">
+                <CardTitle className="text-base flex items-center gap-2">
+                  <StickyNote className="h-4 w-4" />
+                  Latest Notes
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {latestNotes.map((note) => (
+                  <div 
+                    key={note.id} 
+                    className="flex items-start gap-3 p-3 rounded-lg bg-muted/30 hover-elevate cursor-pointer"
+                    onClick={() => openEditDrawer(note)}
+                    data-testid={`latest-note-${note.id}`}
+                  >
                     <Avatar className="h-8 w-8 shrink-0">
                       <AvatarFallback>{getAuthorInitials(note.author)}</AvatarFallback>
                     </Avatar>
@@ -449,64 +610,284 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
                         <span className="font-medium text-sm">
                           {getAuthorDisplayName(note.author)}
                         </span>
-                        <Badge variant="secondary" className={CATEGORY_COLORS[note.category] || CATEGORY_COLORS.general} data-testid={`badge-note-category-${note.id}`}>
+                        <Badge 
+                          variant="secondary" 
+                          className={getCategoryBadgeStyle(note.category, null)}
+                          style={getCategoryInlineStyle(customCategories.find(c => c.name.toLowerCase() === note.category.toLowerCase())?.color || null)}
+                        >
                           {note.category}
                         </Badge>
-                        {note.versionCount > 0 && (
-                          <Badge 
-                            variant="outline" 
-                            className="text-xs cursor-pointer"
-                            onClick={() => openHistoryDrawer(note)}
-                            data-testid={`note-version-badge-${note.id}`}
-                          >
-                            <History className="h-3 w-3 mr-1" />
-                            {note.versionCount} edit{note.versionCount > 1 ? "s" : ""}
-                          </Badge>
-                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
+                        </span>
                       </div>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
-                        {note.updatedAt !== note.createdAt && <span> (edited)</span>}
-                      </p>
-                      <div className="mt-2 text-sm">
+                      <div className="text-sm text-muted-foreground mt-1 line-clamp-2">
                         <RichTextViewer content={convertBodyToHtml(note.body)} />
                       </div>
                     </div>
                   </div>
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" className="shrink-0" data-testid={`note-menu-${note.id}`}>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem onClick={() => openEditDrawer(note)} data-testid={`note-edit-${note.id}`}>
-                        <Pencil className="h-4 w-4 mr-2" />
-                        Edit
-                      </DropdownMenuItem>
-                      {note.versionCount > 0 && (
-                        <DropdownMenuItem onClick={() => openHistoryDrawer(note)} data-testid={`note-history-${note.id}`}>
-                          <History className="h-4 w-4 mr-2" />
-                          View History
-                        </DropdownMenuItem>
-                      )}
-                      <DropdownMenuItem
-                        onClick={() => setDeleteNote(note)}
-                        className="text-destructive"
-                        data-testid={`note-delete-${note.id}`}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                ))}
               </CardContent>
             </Card>
-          ))}
-        </div>
-      )}
+          )}
 
+          {/* Search and Filter */}
+          {notes.length > 0 && (
+            <div className="flex flex-col sm:flex-row gap-2">
+              <div className="relative flex-1">
+                <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="Search notes..."
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  className="pl-9"
+                  data-testid="input-search-notes"
+                />
+              </div>
+              <Select value={filterCategory} onValueChange={setFilterCategory}>
+                <SelectTrigger className="w-full sm:w-40" data-testid="select-filter-category">
+                  <SelectValue placeholder="Filter by category" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All Categories</SelectItem>
+                  {allCategoryOptions.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* Notes List */}
+          {notes.length === 0 ? (
+            <Card data-testid="empty-state-no-notes">
+              <CardContent className="p-8 text-center">
+                <StickyNote className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="font-medium text-lg mb-2">No notes yet</h3>
+                <p className="text-muted-foreground text-sm mb-4">
+                  Keep track of important information about this client.
+                </p>
+                <Button onClick={openCreateDrawer} data-testid="button-create-first-note">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Add First Note
+                </Button>
+              </CardContent>
+            </Card>
+          ) : filteredNotes.length === 0 ? (
+            <Card data-testid="empty-state-no-matching-notes">
+              <CardContent className="p-8 text-center">
+                <Search className="h-12 w-12 mx-auto text-muted-foreground mb-4" />
+                <h3 className="font-medium text-lg mb-2">No matching notes</h3>
+                <p className="text-muted-foreground text-sm">
+                  Try adjusting your search or filter criteria.
+                </p>
+              </CardContent>
+            </Card>
+          ) : (
+            <div className="space-y-3">
+              {filteredNotes.map((note) => (
+                <Card key={note.id} className="hover-elevate" data-testid={`note-card-${note.id}`}>
+                  <CardContent className="p-4">
+                    <div className="flex items-start justify-between gap-3">
+                      <div className="flex items-start gap-3 flex-1 min-w-0">
+                        <Avatar className="h-8 w-8 shrink-0">
+                          <AvatarFallback>{getAuthorInitials(note.author)}</AvatarFallback>
+                        </Avatar>
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-medium text-sm">
+                              {getAuthorDisplayName(note.author)}
+                            </span>
+                            <Badge 
+                              variant="secondary" 
+                              className={getCategoryBadgeStyle(note.category, null)}
+                              style={getCategoryInlineStyle(customCategories.find(c => c.name.toLowerCase() === note.category.toLowerCase())?.color || null)}
+                              data-testid={`badge-note-category-${note.id}`}
+                            >
+                              {note.category}
+                            </Badge>
+                            {note.versionCount > 0 && (
+                              <Badge 
+                                variant="outline" 
+                                className="text-xs cursor-pointer"
+                                onClick={() => openHistoryDrawer(note)}
+                                data-testid={`note-version-badge-${note.id}`}
+                              >
+                                <History className="h-3 w-3 mr-1" />
+                                {note.versionCount} edit{note.versionCount > 1 ? "s" : ""}
+                              </Badge>
+                            )}
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
+                            {note.updatedAt !== note.createdAt && <span> (edited)</span>}
+                          </p>
+                          <div className="mt-2 text-sm">
+                            <RichTextViewer content={convertBodyToHtml(note.body)} />
+                          </div>
+                        </div>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="shrink-0" data-testid={`note-menu-${note.id}`}>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditDrawer(note)} data-testid={`note-edit-${note.id}`}>
+                            <Pencil className="h-4 w-4 mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          {note.versionCount > 0 && (
+                            <DropdownMenuItem onClick={() => openHistoryDrawer(note)} data-testid={`note-history-${note.id}`}>
+                              <History className="h-4 w-4 mr-2" />
+                              View History
+                            </DropdownMenuItem>
+                          )}
+                          <DropdownMenuItem
+                            onClick={() => setDeleteNote(note)}
+                            className="text-destructive"
+                            data-testid={`note-delete-${note.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
+                  </CardContent>
+                </Card>
+              ))}
+            </div>
+          )}
+        </div>
+
+        {/* Sidebar - Categories Panel */}
+        <div className="space-y-4">
+          {/* Categories Overview */}
+          <Card data-testid="panel-categories-overview">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center justify-between">
+                <span className="flex items-center gap-2">
+                  <FolderOpen className="h-4 w-4" />
+                  Categories
+                </span>
+                <Button variant="ghost" size="icon" onClick={openCreateCategoryDialog} data-testid="button-add-category-sidebar">
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              {/* Default Categories */}
+              {DEFAULT_CATEGORIES.map((cat) => {
+                const count = categoryStats[cat.value] || 0;
+                return (
+                  <div 
+                    key={cat.value}
+                    className={`flex items-center justify-between p-2 rounded-md cursor-pointer hover-elevate ${filterCategory === cat.value ? 'bg-primary/10' : ''}`}
+                    onClick={() => setFilterCategory(filterCategory === cat.value ? "all" : cat.value)}
+                    data-testid={`filter-category-${cat.value}`}
+                  >
+                    <div className="flex items-center gap-2">
+                      <div 
+                        className="w-3 h-3 rounded-full" 
+                        style={{ backgroundColor: cat.color || "#6b7280" }}
+                      />
+                      <span className="text-sm">{cat.label}</span>
+                    </div>
+                    <Badge variant="secondary" className="text-xs">{count}</Badge>
+                  </div>
+                );
+              })}
+
+              {/* Custom Categories */}
+              {customCategories.length > 0 && (
+                <>
+                  <div className="border-t my-2" />
+                  <p className="text-xs text-muted-foreground font-medium">Custom Categories</p>
+                  {customCategories.map((cat) => {
+                    const count = categoryStats[cat.name.toLowerCase()] || 0;
+                    return (
+                      <div 
+                        key={cat.id}
+                        className={`flex items-center justify-between p-2 rounded-md group ${filterCategory === cat.name.toLowerCase() ? 'bg-primary/10' : ''}`}
+                        data-testid={`custom-category-${cat.id}`}
+                      >
+                        <div 
+                          className="flex items-center gap-2 flex-1 cursor-pointer"
+                          onClick={() => setFilterCategory(filterCategory === cat.name.toLowerCase() ? "all" : cat.name.toLowerCase())}
+                        >
+                          <div 
+                            className="w-3 h-3 rounded-full" 
+                            style={{ backgroundColor: cat.color || "#6b7280" }}
+                          />
+                          <span className="text-sm">{cat.name}</span>
+                        </div>
+                        <div className="flex items-center gap-1">
+                          <Badge variant="secondary" className="text-xs">{count}</Badge>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" data-testid={`category-menu-${cat.id}`}>
+                                <MoreHorizontal className="h-3 w-3" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => openEditCategoryDialog(cat)} data-testid={`category-edit-${cat.id}`}>
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => setDeleteCategory(cat)}
+                                className="text-destructive"
+                                data-testid={`category-delete-${cat.id}`}
+                              >
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </>
+              )}
+
+              {customCategories.length === 0 && (
+                <p className="text-xs text-muted-foreground text-center py-2">
+                  No custom categories yet
+                </p>
+              )}
+            </CardContent>
+          </Card>
+
+          {/* Stats Card */}
+          <Card data-testid="panel-notes-stats">
+            <CardHeader className="pb-3">
+              <CardTitle className="text-base flex items-center gap-2">
+                <Settings className="h-4 w-4" />
+                Statistics
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-2">
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Total Notes</span>
+                <span className="font-medium">{notes.length}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Categories Used</span>
+                <span className="font-medium">{Object.keys(categoryStats).length}</span>
+              </div>
+              <div className="flex items-center justify-between text-sm">
+                <span className="text-muted-foreground">Custom Categories</span>
+                <span className="font-medium">{customCategories.length}</span>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+      </div>
+
+      {/* Create/Edit Note Drawer */}
       <FullScreenDrawer
         open={drawerMode === "create" || drawerMode === "edit"}
         onOpenChange={(open) => {
@@ -563,7 +944,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                {CATEGORY_OPTIONS.map((cat) => (
+                {allCategoryOptions.map((cat) => (
                   <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
                 ))}
               </SelectContent>
@@ -582,6 +963,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
         </div>
       </FullScreenDrawer>
 
+      {/* Version History Drawer */}
       <FullScreenDrawer
         open={drawerMode === "history"}
         onOpenChange={(open) => !open && closeDrawer()}
@@ -673,6 +1055,73 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
         )}
       </FullScreenDrawer>
 
+      {/* Category Create/Edit Dialog */}
+      <Dialog open={showCategoryManager} onOpenChange={(open) => !open && closeCategoryDialog()}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{categoryDialogMode === "create" ? "Create Category" : "Edit Category"}</DialogTitle>
+            <DialogDescription>
+              {categoryDialogMode === "create" 
+                ? "Add a new category for organizing your notes."
+                : "Update this category's name and color."}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4 py-4">
+            <div className="space-y-2">
+              <Label htmlFor="category-name">Name</Label>
+              <Input
+                id="category-name"
+                value={categoryName}
+                onChange={(e) => setCategoryName(e.target.value)}
+                placeholder="Category name"
+                data-testid="input-category-name"
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="category-color">Color</Label>
+              <Select value={categoryColor} onValueChange={setCategoryColor}>
+                <SelectTrigger data-testid="select-category-color">
+                  <SelectValue placeholder="Choose a color" />
+                </SelectTrigger>
+                <SelectContent>
+                  {COLOR_OPTIONS.map((color) => (
+                    <SelectItem key={color.value} value={color.value}>
+                      <div className="flex items-center gap-2">
+                        <div 
+                          className="w-4 h-4 rounded-full border"
+                          style={{ backgroundColor: color.value || "#6b7280" }}
+                        />
+                        {color.label}
+                      </div>
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="ghost" onClick={closeCategoryDialog} data-testid="button-cancel-category">
+              Cancel
+            </Button>
+            <Button 
+              onClick={handleSaveCategory} 
+              disabled={!categoryName.trim() || isCategoryLoading}
+              data-testid="button-save-category"
+            >
+              {isCategoryLoading ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                categoryDialogMode === "create" ? "Create" : "Save"
+              )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Delete Note Confirmation */}
       <AlertDialog open={!!deleteNote} onOpenChange={(open) => !open && setDeleteNote(null)}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -707,6 +1156,42 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
         </AlertDialogContent>
       </AlertDialog>
 
+      {/* Delete Category Confirmation */}
+      <AlertDialog open={!!deleteCategory} onOpenChange={(open) => !open && setDeleteCategory(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Category</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete this category? Notes using this category will be moved to "General".
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel onClick={() => setDeleteCategory(null)} data-testid="button-cancel-delete-category">
+              Cancel
+            </AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteCategory && deleteCategoryMutation.mutate(deleteCategory.id)}
+              disabled={deleteCategoryMutation.isPending}
+              className="bg-destructive text-destructive-foreground"
+              data-testid="button-confirm-delete-category"
+            >
+              {deleteCategoryMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Deleting...
+                </>
+              ) : (
+                <>
+                  <Trash2 className="h-4 w-4 mr-2" />
+                  Delete
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Discard Changes Confirmation */}
       <AlertDialog open={showDiscardConfirm} onOpenChange={setShowDiscardConfirm}>
         <AlertDialogContent>
           <AlertDialogHeader>
