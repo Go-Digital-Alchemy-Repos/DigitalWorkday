@@ -78,7 +78,6 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
 
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
-    enabled: isAdmin,
   });
 
   const { data: teams } = useQuery<Team[]>({
@@ -478,8 +477,9 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
             </div>
           </CardContent>
         </Card>
+        )}
 
-        <Card className="lg:col-span-1">
+        <Card className={isAdmin ? "lg:col-span-1" : "lg:col-span-1"}>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
             <div>
               <CardTitle className="text-lg">Teams</CardTitle>
@@ -515,6 +515,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
         </Card>
       </div>
 
+      {isAdmin && (
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Pending Invitations</CardTitle>
@@ -583,7 +584,10 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
           </div>
         </CardContent>
       </Card>
+      )}
 
+      {isAdmin && (
+      <>
       <UserDrawer
         open={newUserOpen}
         onOpenChange={setNewUserOpen}
@@ -606,6 +610,8 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
         userTeamIds={editingUserTeamIds}
         userClientIds={editingUserClientIds}
       />
+      </>
+      )}
 
       <TeamDrawer
         open={createTeamOpen}

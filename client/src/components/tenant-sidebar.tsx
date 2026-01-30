@@ -315,6 +315,25 @@ export function TenantSidebar() {
           </Collapsible>
         </SidebarGroup>
 
+        {/* Team Manager - available to all tenant members */}
+        <SidebarGroup>
+          <SidebarGroupContent>
+            <SidebarMenu>
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={location === "/user-manager" || location.startsWith("/user-manager/")}
+                >
+                  <Link href="/user-manager" data-testid="link-user-manager">
+                    <UsersRound className="h-4 w-4" />
+                    <span>{isAdmin || isSuperUser ? "User Manager" : "Team Manager"}</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
+            </SidebarMenu>
+          </SidebarGroupContent>
+        </SidebarGroup>
+
         {(isAdmin || isSuperUser) && (
           <SidebarGroup>
             <SidebarGroupContent>
@@ -327,17 +346,6 @@ export function TenantSidebar() {
                     <Link href="/account" data-testid="link-account-settings">
                       <UserCog className="h-4 w-4" />
                       <span>Account</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location === "/user-manager" || location.startsWith("/user-manager/")}
-                  >
-                    <Link href="/user-manager" data-testid="link-user-manager">
-                      <UsersRound className="h-4 w-4" />
-                      <span>User Manager</span>
                     </Link>
                   </SidebarMenuButton>
                 </SidebarMenuItem>

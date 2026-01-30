@@ -968,7 +968,7 @@ export async function registerRoutes(
   app.get("/api/teams", async (req, res) => {
     try {
       const tenantId = getEffectiveTenantId(req);
-      const workspaceId = getCurrentWorkspaceId(req);
+      const workspaceId = await getCurrentWorkspaceIdAsync(req);
       
       if (tenantId) {
         const teams = await storage.getTeamsByTenant(tenantId, workspaceId);
@@ -1017,7 +1017,7 @@ export async function registerRoutes(
   app.post("/api/teams", async (req, res) => {
     try {
       const tenantId = getEffectiveTenantId(req);
-      const workspaceId = getCurrentWorkspaceId(req);
+      const workspaceId = await getCurrentWorkspaceIdAsync(req);
       
       const data = insertTeamSchema.parse({
         ...req.body,
@@ -5067,7 +5067,7 @@ export async function registerRoutes(
     next();
   };
 
-  app.get("/api/users", requireAdmin, async (req, res) => {
+  app.get("/api/users", async (req, res) => {
     try {
       const users = await storage.getUsersByWorkspace(
         getCurrentWorkspaceId(req),
