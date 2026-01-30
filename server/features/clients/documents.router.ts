@@ -32,8 +32,8 @@ const initiateUploadSchema = z.object({
   mimeType: z.string().min(1),
   fileSizeBytes: z.number().positive(),
   categoryId: z.string().uuid().optional().nullable(),
-  displayName: z.string().optional(),
-  description: z.string().optional(),
+  displayName: z.string().optional().nullable(),
+  description: z.string().optional().nullable(),
 });
 
 const updateDocumentSchema = z.object({
