@@ -116,16 +116,12 @@ interface MailgunSettings {
 
 interface S3Settings {
   status: "configured" | "not_configured";
-  config: {
-    region: string | null;
+  publicConfig: {
     bucketName: string | null;
-    publicBaseUrl: string | null;
-    cloudfrontUrl: string | null;
+    region: string | null;
+    keyPrefixTemplate: string | null;
   } | null;
-  secretMasked: {
-    accessKeyIdMasked: string | null;
-    secretAccessKeyMasked: string | null;
-  } | null;
+  secretConfigured: boolean;
   lastTestedAt: string | null;
 }
 
@@ -1055,7 +1051,7 @@ export default function SuperAdminSettingsPage() {
   });
 
   const { data: s3Settings, isLoading: s3Loading } = useQuery<S3Settings>({
-    queryKey: ["/api/v1/super/integrations/s3"],
+    queryKey: ["/api/v1/system/integrations/s3"],
     enabled: activeTab === "integrations",
   });
 
@@ -1090,8 +1086,7 @@ export default function SuperAdminSettingsPage() {
   const [s3Form, setS3Form] = useState({
     region: "",
     bucketName: "",
-    publicBaseUrl: "",
-    cloudfrontUrl: "",
+    keyPrefixTemplate: "",
     accessKeyId: "",
     secretAccessKey: "",
   });
@@ -1202,10 +1197,10 @@ export default function SuperAdminSettingsPage() {
 
   const saveS3Mutation = useMutation({
     mutationFn: async (data: any) => {
-      return apiRequest("PUT", "/api/v1/super/integrations/s3", data);
+      return apiRequest("PUT", "/api/v1/system/integrations/s3", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/s3"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/system/integrations/s3"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/status"] });
       toast({ title: "S3 settings saved successfully" });
       setS3Form(prev => ({ ...prev, accessKeyId: "", secretAccessKey: "" }));
@@ -1292,11 +1287,11 @@ export default function SuperAdminSettingsPage() {
 
   const testS3Mutation = useMutation({
     mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/v1/super/integrations/s3/test", {});
+      const response = await apiRequest("POST", "/api/v1/system/integrations/s3/test", {});
       return response.json();
     },
     onSuccess: (data: { success: boolean; message: string }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/s3"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/system/integrations/s3"] });
       if (data.success) {
         toast({ title: "S3 test successful", description: data.message });
       } else {
@@ -1326,10 +1321,10 @@ export default function SuperAdminSettingsPage() {
 
   const clearS3SecretMutation = useMutation({
     mutationFn: async (secretName: string) => {
-      return apiRequest("DELETE", `/api/v1/super/integrations/s3/secret/${secretName}`);
+      return apiRequest("DELETE", `/api/v1/system/integrations/s3/secret/${secretName}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/s3"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/system/integrations/s3"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/status"] });
       toast({ title: "Secret cleared successfully" });
     },
@@ -2153,7 +2148,7 @@ export default function SuperAdminSettingsPage() {
                           <Label htmlFor="s3-region">Region</Label>
                           <Input
                             id="s3-region"
-                            value={s3Form.region || s3Settings?.config?.region || ""}
+                            value={s3Form.region || s3Settings?.publicConfig?.region || ""}
                             onChange={(e) => setS3Form({ ...s3Form, region: e.target.value })}
                             placeholder="us-east-1"
                             data-testid="input-s3-region"
@@ -2163,7 +2158,7 @@ export default function SuperAdminSettingsPage() {
                           <Label htmlFor="s3-bucket">Bucket Name</Label>
                           <Input
                             id="s3-bucket"
-                            value={s3Form.bucketName || s3Settings?.config?.bucketName || ""}
+                            value={s3Form.bucketName || s3Settings?.publicConfig?.bucketName || ""}
                             onChange={(e) => setS3Form({ ...s3Form, bucketName: e.target.value })}
                             placeholder="my-app-bucket"
                             data-testid="input-s3-bucket"
@@ -2172,25 +2167,16 @@ export default function SuperAdminSettingsPage() {
                       </div>
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                        <div className="space-y-2">
-                          <Label htmlFor="s3-public-url">Public Base URL (Optional)</Label>
+                        <div className="space-y-2 col-span-2">
+                          <Label htmlFor="s3-key-prefix">Key Prefix Template (Optional)</Label>
                           <Input
-                            id="s3-public-url"
-                            value={s3Form.publicBaseUrl || s3Settings?.config?.publicBaseUrl || ""}
-                            onChange={(e) => setS3Form({ ...s3Form, publicBaseUrl: e.target.value })}
-                            placeholder="https://bucket.s3.amazonaws.com"
-                            data-testid="input-s3-public-url"
+                            id="s3-key-prefix"
+                            value={s3Form.keyPrefixTemplate || s3Settings?.publicConfig?.keyPrefixTemplate || ""}
+                            onChange={(e) => setS3Form({ ...s3Form, keyPrefixTemplate: e.target.value })}
+                            placeholder="uploads/{tenantId}/"
+                            data-testid="input-s3-key-prefix"
                           />
-                        </div>
-                        <div className="space-y-2">
-                          <Label htmlFor="s3-cloudfront-url">CloudFront URL (Optional)</Label>
-                          <Input
-                            id="s3-cloudfront-url"
-                            value={s3Form.cloudfrontUrl || s3Settings?.config?.cloudfrontUrl || ""}
-                            onChange={(e) => setS3Form({ ...s3Form, cloudfrontUrl: e.target.value })}
-                            placeholder="https://d123abc.cloudfront.net"
-                            data-testid="input-s3-cloudfront-url"
-                          />
+                          <p className="text-xs text-muted-foreground">Use {"{tenantId}"} as placeholder</p>
                         </div>
                       </div>
 
@@ -2203,7 +2189,7 @@ export default function SuperAdminSettingsPage() {
                               type={showS3AccessKey ? "text" : "password"}
                               value={s3Form.accessKeyId}
                               onChange={(e) => setS3Form({ ...s3Form, accessKeyId: e.target.value })}
-                              placeholder={s3Settings?.secretMasked?.accessKeyIdMasked || "Enter Access Key ID"}
+                              placeholder={s3Settings?.secretConfigured ? "Configured (enter new to replace)" : "Enter Access Key ID"}
                               data-testid="input-s3-access-key"
                             />
                             <Button
@@ -2216,7 +2202,7 @@ export default function SuperAdminSettingsPage() {
                               {showS3AccessKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </Button>
                           </div>
-                          {s3Settings?.secretMasked?.accessKeyIdMasked && (
+                          {s3Settings?.secretConfigured && (
                             <Button
                               type="button"
                               variant="outline"
@@ -2230,9 +2216,9 @@ export default function SuperAdminSettingsPage() {
                             </Button>
                           )}
                         </div>
-                        {s3Settings?.secretMasked?.accessKeyIdMasked && !s3Form.accessKeyId && (
+                        {s3Settings?.secretConfigured && !s3Form.accessKeyId && (
                           <p className="text-xs text-muted-foreground">
-                            Current: {s3Settings.secretMasked.accessKeyIdMasked} (enter new value to replace)
+                            Credentials are configured (enter new value to replace)
                           </p>
                         )}
                       </div>
@@ -2246,7 +2232,7 @@ export default function SuperAdminSettingsPage() {
                               type={showS3SecretKey ? "text" : "password"}
                               value={s3Form.secretAccessKey}
                               onChange={(e) => setS3Form({ ...s3Form, secretAccessKey: e.target.value })}
-                              placeholder={s3Settings?.secretMasked?.secretAccessKeyMasked || "Enter Secret Access Key"}
+                              placeholder={s3Settings?.secretConfigured ? "Configured (enter new to replace)" : "Enter Secret Access Key"}
                               data-testid="input-s3-secret-key"
                             />
                             <Button
@@ -2259,7 +2245,7 @@ export default function SuperAdminSettingsPage() {
                               {showS3SecretKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                             </Button>
                           </div>
-                          {s3Settings?.secretMasked?.secretAccessKeyMasked && (
+                          {s3Settings?.secretConfigured && (
                             <Button
                               type="button"
                               variant="outline"
@@ -2273,11 +2259,6 @@ export default function SuperAdminSettingsPage() {
                             </Button>
                           )}
                         </div>
-                        {s3Settings?.secretMasked?.secretAccessKeyMasked && !s3Form.secretAccessKey && (
-                          <p className="text-xs text-muted-foreground">
-                            Current: {s3Settings.secretMasked.secretAccessKeyMasked} (enter new value to replace)
-                          </p>
-                        )}
                       </div>
 
                       <div className="flex flex-wrap justify-end gap-2 pt-4">
@@ -2299,11 +2280,10 @@ export default function SuperAdminSettingsPage() {
                           onClick={() => {
                             const data: any = {};
                             if (s3Form.region) data.region = s3Form.region;
-                            else if (s3Settings?.config?.region) data.region = s3Settings.config.region;
+                            else if (s3Settings?.publicConfig?.region) data.region = s3Settings.publicConfig.region;
                             if (s3Form.bucketName) data.bucketName = s3Form.bucketName;
-                            else if (s3Settings?.config?.bucketName) data.bucketName = s3Settings.config.bucketName;
-                            if (s3Form.publicBaseUrl !== undefined) data.publicBaseUrl = s3Form.publicBaseUrl || s3Settings?.config?.publicBaseUrl || "";
-                            if (s3Form.cloudfrontUrl !== undefined) data.cloudfrontUrl = s3Form.cloudfrontUrl || s3Settings?.config?.cloudfrontUrl || "";
+                            else if (s3Settings?.publicConfig?.bucketName) data.bucketName = s3Settings.publicConfig.bucketName;
+                            if (s3Form.keyPrefixTemplate !== undefined) data.keyPrefixTemplate = s3Form.keyPrefixTemplate || s3Settings?.publicConfig?.keyPrefixTemplate || "";
                             if (s3Form.accessKeyId) data.accessKeyId = s3Form.accessKeyId;
                             if (s3Form.secretAccessKey) data.secretAccessKey = s3Form.secretAccessKey;
                             saveS3Mutation.mutate(data);

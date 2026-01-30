@@ -168,6 +168,27 @@ router.post("/integrations/s3/test", requireSuperUser, async (req: Request, res:
   }
 });
 
+/**
+ * DELETE /api/v1/system/integrations/s3/secret/:secretName
+ * Clear a specific S3 secret
+ */
+router.delete("/integrations/s3/secret/:secretName", requireSuperUser, async (req: Request, res: Response) => {
+  try {
+    const { secretName } = req.params;
+    const validSecrets = ["accessKeyId", "secretAccessKey"];
+    
+    if (!validSecrets.includes(secretName)) {
+      return res.status(400).json({ error: { code: "INVALID_SECRET", message: "Invalid secret name" } });
+    }
+    
+    await tenantIntegrationService.clearSecret(null, "s3", secretName);
+    res.json({ success: true });
+  } catch (error) {
+    console.error("[system-integrations] Error clearing S3 secret:", error);
+    res.status(500).json({ error: { code: "SERVER_ERROR", message: "Failed to clear S3 secret" } });
+  }
+});
+
 // =============================================================================
 // CLOUDFLARE R2 STORAGE - SYSTEM-LEVEL CONFIGURATION (PREFERRED DEFAULT)
 // =============================================================================

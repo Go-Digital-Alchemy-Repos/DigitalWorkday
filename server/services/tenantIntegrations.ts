@@ -783,6 +783,45 @@ export class TenantIntegrationService {
       return { success: false, message: error.message || "Failed to connect to OpenAI API" };
     }
   }
+
+  async clearSecret(tenantId: string | null, provider: IntegrationProvider, secretName: string): Promise<void> {
+    const condition = tenantId
+      ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
+      : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
+
+    const [integration] = await db
+      .select()
+      .from(tenantIntegrations)
+      .where(condition)
+      .limit(1);
+
+    if (!integration || !integration.configEncrypted) {
+      return;
+    }
+
+    try {
+      const secrets = JSON.parse(decryptValue(integration.configEncrypted)) as SecretConfig;
+      delete (secrets as any)[secretName];
+      
+      const hasRemainingSecrets = Object.keys(secrets).some(key => !!(secrets as any)[key]);
+      const configEncrypted = hasRemainingSecrets ? encryptValue(JSON.stringify(secrets)) : null;
+      const status = this.determineStatus(provider, integration.configPublic as PublicConfig, hasRemainingSecrets);
+
+      await db
+        .update(tenantIntegrations)
+        .set({
+          configEncrypted,
+          status,
+          updatedAt: new Date(),
+        })
+        .where(eq(tenantIntegrations.id, integration.id));
+
+      debugLog("clearSecret - completed", { tenantId, provider, secretName });
+    } catch (err) {
+      console.error(`[TenantIntegrations] Failed to clear secret ${secretName} for ${provider}:`, err);
+      throw err;
+    }
+  }
 }
 
 export const tenantIntegrationService = new TenantIntegrationService();
