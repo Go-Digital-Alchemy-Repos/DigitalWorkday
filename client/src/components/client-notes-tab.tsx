@@ -135,7 +135,7 @@ const CATEGORY_COLORS: Record<string, string> = {
 };
 
 const COLOR_OPTIONS = [
-  { value: "", label: "Default (Gray)" },
+  { value: "default", label: "Default (Gray)" },
   { value: "#3b82f6", label: "Blue" },
   { value: "#22c55e", label: "Green" },
   { value: "#eab308", label: "Yellow" },
@@ -394,7 +394,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
     setCategoryDialogMode("create");
     setEditingCategory(null);
     setCategoryName("");
-    setCategoryColor("");
+    setCategoryColor("default");
   };
 
   const handleCancel = () => {
@@ -433,7 +433,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
   const openCreateCategoryDialog = () => {
     setCategoryDialogMode("create");
     setCategoryName("");
-    setCategoryColor("");
+    setCategoryColor("default");
     setEditingCategory(null);
     setShowCategoryManager(true);
   };
@@ -441,7 +441,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
   const openEditCategoryDialog = (category: NoteCategory) => {
     setCategoryDialogMode("edit");
     setCategoryName(category.name);
-    setCategoryColor(category.color || "");
+    setCategoryColor(category.color || "default");
     setEditingCategory(category);
     setShowCategoryManager(true);
   };
@@ -449,14 +449,18 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
   const handleSaveNote = () => {
     if (!noteBody.trim() || noteBody === "<p></p>") return;
     
+    // Find the matching custom category to get its ID
+    const customCat = customCategories.find(c => c.name.toLowerCase() === noteCategory.toLowerCase());
+    const effectiveCategoryId = customCat ? customCat.id : null;
+    
     if (drawerMode === "create") {
-      createNoteMutation.mutate({ body: noteBody, category: noteCategory, categoryId: noteCategoryId });
+      createNoteMutation.mutate({ body: noteBody, category: noteCategory, categoryId: effectiveCategoryId });
     } else if (drawerMode === "edit" && editingNote) {
       updateNoteMutation.mutate({
         noteId: editingNote.id,
         body: noteBody,
         category: noteCategory,
-        categoryId: noteCategoryId,
+        categoryId: effectiveCategoryId,
       });
     }
   };
@@ -464,13 +468,15 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
   const handleSaveCategory = () => {
     if (!categoryName.trim()) return;
     
+    const colorValue = categoryColor === "default" ? undefined : categoryColor || undefined;
+    
     if (categoryDialogMode === "create") {
-      createCategoryMutation.mutate({ name: categoryName, color: categoryColor || undefined });
+      createCategoryMutation.mutate({ name: categoryName, color: colorValue });
     } else if (editingCategory) {
       updateCategoryMutation.mutate({
         categoryId: editingCategory.id,
         name: categoryName,
-        color: categoryColor || undefined,
+        color: colorValue,
       });
     }
   };
@@ -521,9 +527,11 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
     });
   }, [notes, searchQuery, filterCategory]);
 
-  // Latest notes (top 3 most recent)
+  // Latest notes (top 3 most recent, explicitly sorted by createdAt desc)
   const latestNotes = useMemo(() => {
-    return [...notes].slice(0, 3);
+    return [...notes]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, 3);
   }, [notes]);
 
   const hasUnsavedChanges = useMemo(() => {
