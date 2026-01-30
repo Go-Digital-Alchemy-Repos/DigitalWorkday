@@ -517,6 +517,7 @@ export const clients = pgTable("clients", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id),
   workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
+  parentClientId: varchar("parent_client_id"), // Self-referential: null = top-level client, set = child/sub-client
   companyName: text("company_name").notNull(),
   displayName: text("display_name"),
   legalName: text("legal_name"),
@@ -545,6 +546,7 @@ export const clients = pgTable("clients", {
   index("clients_workspace_idx").on(table.workspaceId),
   index("clients_status_idx").on(table.status),
   index("clients_tenant_idx").on(table.tenantId),
+  index("clients_parent_idx").on(table.parentClientId),
 ]);
 
 /**

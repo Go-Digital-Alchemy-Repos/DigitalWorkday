@@ -43,6 +43,13 @@
       "when": 1769811228769,
       "tag": "0005_black_miracleman",
       "breakpoints": true
+    },
+    {
+      "idx": 6,
+      "version": "7",
+      "when": 1769813434224,
+      "tag": "0006_crazy_typhoid_mary",
+      "breakpoints": true
     }
   ]
 }
