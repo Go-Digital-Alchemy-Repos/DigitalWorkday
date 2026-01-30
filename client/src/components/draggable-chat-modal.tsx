@@ -293,7 +293,7 @@ export function DraggableChatModal({
       </div>
 
       {!state.isMinimized && (
-        <div className="flex-1 overflow-hidden relative">
+        <div className="flex-1 overflow-hidden relative flex flex-col">
           {children}
           
           {!state.isMaximized && (
