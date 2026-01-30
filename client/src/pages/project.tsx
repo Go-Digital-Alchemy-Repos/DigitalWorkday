@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute } from "wouter";
 import { useCreateTask } from "@/hooks/use-create-task";
@@ -44,6 +44,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useProjectSocket } from "@/lib/realtime";
 import type { Project, SectionWithTasks, TaskWithRelations, Section } from "@shared/schema";
 import { Link } from "wouter";
+import { usePromptDialog } from "@/components/prompt-dialog";
 import {
   Breadcrumb,
   BreadcrumbItem,
@@ -74,6 +75,14 @@ export default function ProjectPage() {
   const [selectedSectionId, setSelectedSectionId] = useState<string | undefined>();
   const [localSections, setLocalSections] = useState<SectionWithTasks[] | null>(null);
   const [activeTaskId, setActiveTaskId] = useState<string | null>(null);
+
+  const { prompt: promptSectionName, PromptDialogComponent: SectionNameDialog } = usePromptDialog({
+    title: "Create Section",
+    description: "Enter a name for the new section",
+    label: "Section Name",
+    placeholder: "e.g., In Progress, Review, Done",
+    confirmText: "Create",
+  });
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -204,12 +213,12 @@ export default function ProjectPage() {
     },
   });
 
-  const handleAddSection = useCallback(() => {
-    const sectionName = prompt("Enter section name:");
+  const handleAddSection = useCallback(async () => {
+    const sectionName = await promptSectionName();
     if (sectionName && sectionName.trim()) {
       createSectionMutation.mutate(sectionName.trim());
     }
-  }, [createSectionMutation]);
+  }, [createSectionMutation, promptSectionName]);
 
   const handleDragStart = useCallback((event: DragStartEvent) => {
     setActiveTaskId(event.active.id as string);
@@ -735,6 +744,8 @@ export default function ProjectPage() {
           )}
         </SheetContent>
       </Sheet>
+
+      <SectionNameDialog />
     </div>
   );
 }

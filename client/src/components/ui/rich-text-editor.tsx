@@ -3,7 +3,8 @@ import StarterKit from "@tiptap/starter-kit";
 import Link from "@tiptap/extension-link";
 import { Button } from "./button";
 import { Bold, Italic, Link as LinkIcon, List, ListOrdered, Undo, Redo } from "lucide-react";
-import { useCallback, useEffect } from "react";
+import { useCallback, useEffect, useState } from "react";
+import { PromptDialog } from "@/components/prompt-dialog";
 
 interface RichTextEditorProps {
   value: string;
@@ -51,20 +52,25 @@ export function RichTextEditor({
     },
   });
 
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkDefaultValue, setLinkDefaultValue] = useState("");
+
   useEffect(() => {
     if (editor && value !== editor.getHTML()) {
       editor.commands.setContent(value);
     }
   }, [value, editor]);
 
-  const setLink = useCallback(() => {
+  const openLinkDialog = useCallback(() => {
+    if (!editor) return;
+    const previousUrl = editor.getAttributes("link").href || "";
+    setLinkDefaultValue(previousUrl);
+    setLinkDialogOpen(true);
+  }, [editor]);
+
+  const handleLinkConfirm = useCallback((url: string) => {
     if (!editor) return;
     
-    const previousUrl = editor.getAttributes("link").href;
-    const url = window.prompt("Enter URL:", previousUrl);
-
-    if (url === null) return;
-
     if (url === "") {
       editor.chain().focus().extendMarkRange("link").unsetLink().run();
       return;
@@ -126,7 +132,7 @@ export function RichTextEditor({
           type="button"
           size="icon"
           variant={editor.isActive("link") ? "default" : "ghost"}
-          onClick={setLink}
+          onClick={openLinkDialog}
           className="h-7 w-7"
           data-testid="button-link"
         >
@@ -187,6 +193,18 @@ export function RichTextEditor({
           cursor: pointer;
         }
       `}</style>
+
+      <PromptDialog
+        open={linkDialogOpen}
+        onOpenChange={setLinkDialogOpen}
+        title="Insert Link"
+        description="Enter the URL for the link"
+        label="URL"
+        placeholder="https://..."
+        defaultValue={linkDefaultValue}
+        confirmText="Insert"
+        onConfirm={handleLinkConfirm}
+      />
     </div>
   );
 }

@@ -2,7 +2,7 @@ import { useEditor, EditorContent, type Editor } from "@tiptap/react";
 import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
-import { useEffect, useCallback } from "react";
+import { useEffect, useCallback, useState } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -15,6 +15,7 @@ import {
   Unlink,
 } from "lucide-react";
 import { getDocForEditor, serializeDocToString } from "./richTextUtils";
+import { PromptDialog } from "@/components/prompt-dialog";
 
 interface RichTextEditorProps {
   value: string | null | undefined;
@@ -30,28 +31,12 @@ interface RichTextEditorProps {
   "data-testid"?: string;
 }
 
-function MenuBar({ editor }: { editor: Editor | null }) {
-  const setLink = useCallback(() => {
-    if (!editor) return;
+interface MenuBarProps {
+  editor: Editor | null;
+  onOpenLinkDialog: () => void;
+}
 
-    const previousUrl = editor.getAttributes("link").href;
-    const url = window.prompt("Enter URL (https://...)", previousUrl || "https://");
-
-    if (url === null) return;
-
-    if (url === "") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      return;
-    }
-
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      alert("Please enter a valid URL starting with http:// or https://");
-      return;
-    }
-
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-  }, [editor]);
-
+function MenuBar({ editor, onOpenLinkDialog }: MenuBarProps) {
   if (!editor) return null;
 
   return (
@@ -59,8 +44,8 @@ function MenuBar({ editor }: { editor: Editor | null }) {
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={cn("h-7 w-7", editor.isActive("bold") && "bg-muted")}
+        size="sm"
+        className={cn("px-2", editor.isActive("bold") && "bg-muted")}
         onClick={() => editor.chain().focus().toggleBold().run()}
         disabled={!editor.can().chain().focus().toggleBold().run()}
         data-testid="button-bold"
@@ -70,8 +55,8 @@ function MenuBar({ editor }: { editor: Editor | null }) {
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={cn("h-7 w-7", editor.isActive("italic") && "bg-muted")}
+        size="sm"
+        className={cn("px-2", editor.isActive("italic") && "bg-muted")}
         onClick={() => editor.chain().focus().toggleItalic().run()}
         disabled={!editor.can().chain().focus().toggleItalic().run()}
         data-testid="button-italic"
@@ -81,8 +66,8 @@ function MenuBar({ editor }: { editor: Editor | null }) {
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={cn("h-7 w-7", editor.isActive("underline") && "bg-muted")}
+        size="sm"
+        className={cn("px-2", editor.isActive("underline") && "bg-muted")}
         onClick={() => editor.chain().focus().toggleUnderline().run()}
         disabled={!editor.can().chain().focus().toggleUnderline().run()}
         data-testid="button-underline"
@@ -93,8 +78,8 @@ function MenuBar({ editor }: { editor: Editor | null }) {
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={cn("h-7 w-7", editor.isActive("bulletList") && "bg-muted")}
+        size="sm"
+        className={cn("px-2", editor.isActive("bulletList") && "bg-muted")}
         onClick={() => editor.chain().focus().toggleBulletList().run()}
         data-testid="button-bullet-list"
       >
@@ -103,8 +88,8 @@ function MenuBar({ editor }: { editor: Editor | null }) {
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={cn("h-7 w-7", editor.isActive("orderedList") && "bg-muted")}
+        size="sm"
+        className={cn("px-2", editor.isActive("orderedList") && "bg-muted")}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
         data-testid="button-ordered-list"
       >
@@ -114,9 +99,9 @@ function MenuBar({ editor }: { editor: Editor | null }) {
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={cn("h-7 w-7", editor.isActive("link") && "bg-muted")}
-        onClick={setLink}
+        size="sm"
+        className={cn("px-2", editor.isActive("link") && "bg-muted")}
+        onClick={onOpenLinkDialog}
         data-testid="button-link"
       >
         <LinkIcon className="h-4 w-4" />
@@ -125,8 +110,8 @@ function MenuBar({ editor }: { editor: Editor | null }) {
         <Button
           type="button"
           variant="ghost"
-          size="icon"
-          className="h-7 w-7"
+          size="sm"
+          className="px-2"
           onClick={() => editor.chain().focus().unsetLink().run()}
           data-testid="button-unlink"
         >
@@ -150,6 +135,9 @@ export function RichTextEditor({
   showToolbar = true,
   "data-testid": testId,
 }: RichTextEditorProps) {
+  const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+  const [linkDefaultValue, setLinkDefaultValue] = useState("");
+
   const editor = useEditor({
     extensions: [
       StarterKit.configure({
@@ -217,6 +205,28 @@ export function RichTextEditor({
     }
   }, [editor, disabled]);
 
+  const openLinkDialog = useCallback(() => {
+    if (!editor) return;
+    const previousUrl = editor.getAttributes("link").href || "";
+    setLinkDefaultValue(previousUrl || "https://");
+    setLinkDialogOpen(true);
+  }, [editor]);
+
+  const handleLinkConfirm = useCallback((url: string) => {
+    if (!editor) return;
+    
+    if (url === "") {
+      editor.chain().focus().extendMarkRange("link").unsetLink().run();
+      return;
+    }
+
+    if (!url.startsWith("http://") && !url.startsWith("https://")) {
+      return;
+    }
+
+    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+  }, [editor]);
+
   return (
     <div
       className={cn(
@@ -226,7 +236,7 @@ export function RichTextEditor({
       )}
       data-testid={testId}
     >
-      {showToolbar && <MenuBar editor={editor} />}
+      {showToolbar && <MenuBar editor={editor} onOpenLinkDialog={openLinkDialog} />}
       <EditorContent
         editor={editor}
         className={cn(
@@ -241,6 +251,18 @@ export function RichTextEditor({
           "[&_.ProseMirror.is-editor-empty:first-child::before]:pointer-events-none",
           "[&_.ProseMirror.is-editor-empty:first-child::before]:h-0"
         )}
+      />
+
+      <PromptDialog
+        open={linkDialogOpen}
+        onOpenChange={setLinkDialogOpen}
+        title="Insert Link"
+        description="Enter a URL starting with http:// or https://"
+        label="URL"
+        placeholder="https://..."
+        defaultValue={linkDefaultValue}
+        confirmText="Insert"
+        onConfirm={handleLinkConfirm}
       />
     </div>
   );

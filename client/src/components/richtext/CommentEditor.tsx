@@ -17,6 +17,7 @@ import {
 } from "lucide-react";
 import { getDocForEditor, serializeDocToString } from "./richTextUtils";
 import type { User } from "@shared/schema";
+import { PromptDialog } from "@/components/prompt-dialog";
 
 interface CommentEditorProps {
   value?: string;
@@ -123,28 +124,14 @@ function MentionList({ query, users, command }: MentionSuggestionProps) {
   );
 }
 
-function MenuBar({ editor, onSubmit, isSubmitting }: { editor: Editor | null; onSubmit?: () => void; isSubmitting?: boolean }) {
-  const setLink = useCallback(() => {
-    if (!editor) return;
+interface CommentMenuBarProps {
+  editor: Editor | null;
+  onSubmit?: () => void;
+  isSubmitting?: boolean;
+  onOpenLinkDialog: () => void;
+}
 
-    const previousUrl = editor.getAttributes("link").href;
-    const url = window.prompt("Enter URL (https://...)", previousUrl || "https://");
-
-    if (url === null) return;
-
-    if (url === "") {
-      editor.chain().focus().extendMarkRange("link").unsetLink().run();
-      return;
-    }
-
-    if (!url.startsWith("http://") && !url.startsWith("https://")) {
-      alert("Please enter a valid URL starting with http:// or https://");
-      return;
-    }
-
-    editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
-  }, [editor]);
-
+function MenuBar({ editor, onSubmit, isSubmitting, onOpenLinkDialog }: CommentMenuBarProps) {
   if (!editor) return null;
 
   return (
@@ -152,8 +139,8 @@ function MenuBar({ editor, onSubmit, isSubmitting }: { editor: Editor | null; on
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={cn("h-6 w-6", editor.isActive("bold") && "bg-muted")}
+        size="sm"
+        className={cn("px-1.5", editor.isActive("bold") && "bg-muted")}
         onClick={() => editor.chain().focus().toggleBold().run()}
         disabled={!editor.can().chain().focus().toggleBold().run()}
         data-testid="button-comment-bold"
@@ -163,8 +150,8 @@ function MenuBar({ editor, onSubmit, isSubmitting }: { editor: Editor | null; on
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={cn("h-6 w-6", editor.isActive("italic") && "bg-muted")}
+        size="sm"
+        className={cn("px-1.5", editor.isActive("italic") && "bg-muted")}
         onClick={() => editor.chain().focus().toggleItalic().run()}
         disabled={!editor.can().chain().focus().toggleItalic().run()}
         data-testid="button-comment-italic"
@@ -174,8 +161,8 @@ function MenuBar({ editor, onSubmit, isSubmitting }: { editor: Editor | null; on
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={cn("h-6 w-6", editor.isActive("underline") && "bg-muted")}
+        size="sm"
+        className={cn("px-1.5", editor.isActive("underline") && "bg-muted")}
         onClick={() => editor.chain().focus().toggleUnderline().run()}
         disabled={!editor.can().chain().focus().toggleUnderline().run()}
         data-testid="button-comment-underline"
@@ -186,8 +173,8 @@ function MenuBar({ editor, onSubmit, isSubmitting }: { editor: Editor | null; on
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={cn("h-6 w-6", editor.isActive("bulletList") && "bg-muted")}
+        size="sm"
+        className={cn("px-1.5", editor.isActive("bulletList") && "bg-muted")}
         onClick={() => editor.chain().focus().toggleBulletList().run()}
         data-testid="button-comment-bullet-list"
       >
@@ -196,8 +183,8 @@ function MenuBar({ editor, onSubmit, isSubmitting }: { editor: Editor | null; on
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={cn("h-6 w-6", editor.isActive("orderedList") && "bg-muted")}
+        size="sm"
+        className={cn("px-1.5", editor.isActive("orderedList") && "bg-muted")}
         onClick={() => editor.chain().focus().toggleOrderedList().run()}
         data-testid="button-comment-ordered-list"
       >
@@ -207,9 +194,9 @@ function MenuBar({ editor, onSubmit, isSubmitting }: { editor: Editor | null; on
       <Button
         type="button"
         variant="ghost"
-        size="icon"
-        className={cn("h-6 w-6", editor.isActive("link") && "bg-muted")}
-        onClick={setLink}
+        size="sm"
+        className={cn("px-1.5", editor.isActive("link") && "bg-muted")}
+        onClick={onOpenLinkDialog}
         data-testid="button-comment-link"
       >
         <LinkIcon className="h-3 w-3" />
@@ -219,7 +206,6 @@ function MenuBar({ editor, onSubmit, isSubmitting }: { editor: Editor | null; on
         <Button
           type="button"
           size="sm"
-          className="h-6"
           onClick={onSubmit}
           disabled={isSubmitting}
           data-testid="button-comment-submit"
@@ -251,6 +237,8 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
     const [mentionPopupOpen, setMentionPopupOpen] = useState(false);
     const [mentionQuery, setMentionQuery] = useState("");
     const [mentionCommand, setMentionCommand] = useState<((props: { id: string; label: string }) => void) | null>(null);
+    const [linkDialogOpen, setLinkDialogOpen] = useState(false);
+    const [linkDefaultValue, setLinkDefaultValue] = useState("");
 
     const editor = useEditor({
       extensions: [
@@ -352,6 +340,28 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
       onSubmit?.(content);
     }, [editor, onSubmit]);
 
+    const openLinkDialog = useCallback(() => {
+      if (!editor) return;
+      const previousUrl = editor.getAttributes("link").href || "";
+      setLinkDefaultValue(previousUrl || "https://");
+      setLinkDialogOpen(true);
+    }, [editor]);
+
+    const handleLinkConfirm = useCallback((url: string) => {
+      if (!editor) return;
+      
+      if (url === "") {
+        editor.chain().focus().extendMarkRange("link").unsetLink().run();
+        return;
+      }
+
+      if (!url.startsWith("http://") && !url.startsWith("https://")) {
+        return;
+      }
+
+      editor.chain().focus().extendMarkRange("link").setLink({ href: url }).run();
+    }, [editor]);
+
     useEffect(() => {
       if (editor) {
         editor.setEditable(!disabled);
@@ -387,7 +397,19 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
             />
           </div>
         )}
-        <MenuBar editor={editor} onSubmit={handleSubmit} isSubmitting={isSubmitting} />
+        <MenuBar editor={editor} onSubmit={handleSubmit} isSubmitting={isSubmitting} onOpenLinkDialog={openLinkDialog} />
+
+        <PromptDialog
+          open={linkDialogOpen}
+          onOpenChange={setLinkDialogOpen}
+          title="Insert Link"
+          description="Enter a URL starting with http:// or https://"
+          label="URL"
+          placeholder="https://..."
+          defaultValue={linkDefaultValue}
+          confirmText="Insert"
+          onConfirm={handleLinkConfirm}
+        />
       </div>
     );
   }
