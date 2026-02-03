@@ -259,9 +259,12 @@ export function GlobalActiveTimer() {
       return response.json();
     },
     onSuccess: (_, variables) => {
+      // Immediately clear the timer from cache so UI updates instantly
+      queryClient.setQueryData([TIMER_QUERY_KEY], null);
       invalidateTimer();
       broadcastTimerUpdate();
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
       if (variables.discard) {
         toast({ title: "Timer discarded" });
       } else {
@@ -386,7 +389,7 @@ export function GlobalActiveTimer() {
         ) : (
           <Clock className="h-4 w-4 text-destructive animate-pulse" />
         )}
-        <span className="font-mono text-sm font-semibold text-destructive" data-testid="global-timer-display">
+        <span className="text-sm font-semibold text-destructive tabular-nums" data-testid="global-timer-display">
           {formatDuration(displaySeconds)}
         </span>
         {isStopping ? (
