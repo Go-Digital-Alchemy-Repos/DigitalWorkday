@@ -5191,6 +5191,30 @@ export async function registerRoutes(
     }
   });
 
+  // Get all tenant users - for assignee selection, @mentions, etc.
+  app.get("/api/tenant/users", async (req, res) => {
+    try {
+      const currentUser = req.user as any;
+      const tenantId = req.tenant?.effectiveTenantId || currentUser?.tenantId;
+      
+      if (!tenantId) {
+        return res.status(400).json({ error: "Tenant context required" });
+      }
+      
+      const tenantUsers = await storage.getUsersByTenant(tenantId);
+      // Filter to only active users and exclude client portal users
+      const activeUsers = tenantUsers.filter(u => 
+        u.isActive !== false && 
+        u.role !== "client_viewer" && 
+        u.role !== "client_collaborator"
+      );
+      res.json(activeUsers);
+    } catch (error) {
+      console.error("Error fetching tenant users:", error);
+      res.status(500).json({ error: "Internal server error" });
+    }
+  });
+
   app.post("/api/users", requireAdmin, async (req, res) => {
     try {
       const { firstName, lastName, email, role, teamIds, clientIds } = req.body;

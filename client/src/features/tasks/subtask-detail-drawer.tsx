@@ -128,9 +128,10 @@ export function SubtaskDetailDrawer({
     enabled: !!subtask?.id && open && isActualSubtask,
   });
 
-  const { data: workspaceMembers = [] } = useQuery<(WorkspaceMember & { user?: User })[]>({
-    queryKey: ["/api/workspaces", workspaceId, "members"],
-    enabled: !!workspaceId && open,
+  // Use tenant users endpoint for comprehensive user list
+  const { data: tenantUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/tenant/users"],
+    enabled: open,
   });
 
   const { data: workspaceTags = [] } = useQuery<TagType[]>({
@@ -378,9 +379,7 @@ export function SubtaskDetailDrawer({
                       <PopoverContent className="w-48 p-1" align="start">
                         <ScrollArea className="max-h-48">
                           <div className="space-y-0.5">
-                            {workspaceMembers.map((member) => {
-                              if (!member.user) return null;
-                              const user = member.user;
+                            {tenantUsers.map((user) => {
                               const isAssigned = assignedUserIds.has(user.id);
                               if (isAssigned) return null;
                               return (
@@ -400,7 +399,7 @@ export function SubtaskDetailDrawer({
                                 </button>
                               );
                             })}
-                            {workspaceMembers.filter((m) => m.user && !assignedUserIds.has(m.user.id)).length === 0 && (
+                            {tenantUsers.filter((u) => !assignedUserIds.has(u.id)).length === 0 && (
                               <div className="px-2 py-2 text-xs text-muted-foreground">
                                 All members assigned
                               </div>

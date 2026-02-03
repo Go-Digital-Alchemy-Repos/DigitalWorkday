@@ -9,12 +9,12 @@ import { Input } from "@/components/ui/input";
 import { AvatarGroup } from "@/components/avatar-group";
 import { cn } from "@/lib/utils";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import type { User, WorkspaceMember } from "@shared/schema";
+import type { User } from "@shared/schema";
 
 interface MultiSelectAssigneesProps {
   taskId: string;
   assignees: Partial<User>[];
-  workspaceId: string;
+  workspaceId?: string; // Optional now since we use tenant users
   disabled?: boolean;
   onAssigneeChange?: () => void;
 }
@@ -38,9 +38,10 @@ export function MultiSelectAssignees({
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  const { data: workspaceMembers = [] } = useQuery<(WorkspaceMember & { user?: User })[]>({
-    queryKey: ["/api/workspaces", workspaceId, "members"],
-    enabled: !!workspaceId,
+  // Use tenant users endpoint for comprehensive user list
+  const { data: tenantUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/tenant/users"],
+    enabled: open, // Only fetch when popover is open
   });
 
   const addAssigneeMutation = useMutation({
@@ -67,12 +68,14 @@ export function MultiSelectAssignees({
 
   const assigneeIds = new Set(assignees.map((a) => a.id));
   
-  const filteredMembers = workspaceMembers.filter((member) => {
-    if (!member.user) return false;
-    const name = member.user.name?.toLowerCase() || "";
-    const email = member.user.email?.toLowerCase() || "";
+  const filteredUsers = tenantUsers.filter((user) => {
+    const name = user.name?.toLowerCase() || "";
+    const email = user.email?.toLowerCase() || "";
+    const firstName = user.firstName?.toLowerCase() || "";
+    const lastName = user.lastName?.toLowerCase() || "";
     const searchLower = search.toLowerCase();
-    return name.includes(searchLower) || email.includes(searchLower);
+    return name.includes(searchLower) || email.includes(searchLower) || 
+           firstName.includes(searchLower) || lastName.includes(searchLower);
   });
 
   const toggleAssignee = (userId: string) => {
@@ -115,14 +118,12 @@ export function MultiSelectAssignees({
         </div>
         <ScrollArea className="max-h-64">
           <div className="p-1">
-            {filteredMembers.length === 0 ? (
+            {filteredUsers.length === 0 ? (
               <div className="px-2 py-4 text-center text-sm text-muted-foreground">
                 No members found
               </div>
             ) : (
-              filteredMembers.map((member) => {
-                if (!member.user) return null;
-                const user = member.user;
+              filteredUsers.map((user) => {
                 const isSelected = assigneeIds.has(user.id);
                 
                 return (

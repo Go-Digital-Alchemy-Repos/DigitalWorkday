@@ -107,8 +107,9 @@ export function CommentThread({
   const [editBody, setEditBody] = useState("");
   const commentEditorRef = useRef<CommentEditorRef>(null);
 
-  const { data: workspaceUsers = [] } = useQuery<User[]>({
-    queryKey: ["/api/users"],
+  // Use tenant users endpoint for @mentions
+  const { data: tenantUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/tenant/users"],
   });
 
   const handleSubmit = (content?: string) => {
@@ -183,7 +184,7 @@ export function CommentThread({
                       <CommentEditor
                         value={editBody}
                         onChange={setEditBody}
-                        users={workspaceUsers}
+                        users={tenantUsers}
                         data-testid="textarea-edit-comment"
                       />
                       <div className="flex gap-1">
@@ -286,7 +287,7 @@ export function CommentThread({
             onChange={setBody}
             onSubmit={handleSubmit}
             placeholder="Write a comment... Type @ to mention someone"
-            users={workspaceUsers}
+            users={tenantUsers}
             data-testid="textarea-comment"
           />
         </div>
