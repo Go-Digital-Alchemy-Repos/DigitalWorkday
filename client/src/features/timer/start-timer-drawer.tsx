@@ -277,7 +277,6 @@ export function StartTimerDrawer({
         </div>
 
         <div className="space-y-2">
-          <Label>Task</Label>
           <TaskSelectorWithCreate
             taskId={taskId}
             onTaskChange={(id: string | null) => {
