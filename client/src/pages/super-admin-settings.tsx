@@ -1095,6 +1095,7 @@ export default function SuperAdminSettingsPage() {
     bucketName: "",
     accountId: "",
     keyPrefixTemplate: "",
+    publicUrl: "",
     accessKeyId: "",
     secretAccessKey: "",
   });
@@ -1151,6 +1152,7 @@ export default function SuperAdminSettingsPage() {
         bucketName: r2Settings.publicConfig?.bucketName || "",
         accountId: r2Settings.publicConfig?.accountId || "",
         keyPrefixTemplate: r2Settings.publicConfig?.keyPrefixTemplate || "",
+        publicUrl: r2Settings.publicConfig?.publicUrl || "",
         accessKeyId: "",
         secretAccessKey: "",
       });
@@ -2006,6 +2008,23 @@ export default function SuperAdminSettingsPage() {
                         </p>
                       </div>
 
+                      <div className="space-y-2">
+                        <Label htmlFor="r2-public-url">Public Access URL</Label>
+                        <Input
+                          id="r2-public-url"
+                          value={r2Form.publicUrl}
+                          onChange={(e) => {
+                            setR2Dirty(true);
+                            setR2Form({ ...r2Form, publicUrl: e.target.value });
+                          }}
+                          placeholder="https://pub-xxx.r2.dev or https://files.example.com"
+                          data-testid="input-r2-public-url"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          The public URL for accessing uploaded files. Use your R2 r2.dev subdomain or a custom domain.
+                        </p>
+                      </div>
+
                       <Separator />
 
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
@@ -2096,6 +2115,7 @@ export default function SuperAdminSettingsPage() {
                             if (r2Form.bucketName) data.bucketName = r2Form.bucketName;
                             if (r2Form.accountId) data.accountId = r2Form.accountId;
                             if (r2Form.keyPrefixTemplate) data.keyPrefixTemplate = r2Form.keyPrefixTemplate;
+                            if (r2Form.publicUrl) data.publicUrl = r2Form.publicUrl;
                             if (r2Form.accessKeyId) data.accessKeyId = r2Form.accessKeyId;
                             if (r2Form.secretAccessKey) data.secretAccessKey = r2Form.secretAccessKey;
                             saveR2Mutation.mutate(data);

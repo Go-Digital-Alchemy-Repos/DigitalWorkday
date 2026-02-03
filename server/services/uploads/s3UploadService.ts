@@ -288,6 +288,25 @@ export function getFileUrl(key: string, config?: S3Config): string {
   if (!bucket) {
     throw new StorageNotConfiguredError("S3 bucket name not configured");
   }
+  
+  // For Cloudflare R2, use the public URL if configured
+  // R2 requires either:
+  // 1. Public bucket access via r2.dev subdomain (e.g., https://pub-xxxx.r2.dev)
+  // 2. Custom domain attached to bucket (e.g., https://files.example.com)
+  if (config?.provider === "r2") {
+    if (config.publicUrl) {
+      // Remove trailing slash if present for consistent URL building
+      const baseUrl = config.publicUrl.replace(/\/$/, "");
+      return `${baseUrl}/${key}`;
+    }
+    // Fallback: Use endpoint with bucket path style
+    // Note: This may not work for public access without proper bucket configuration
+    if (config.endpoint) {
+      return `${config.endpoint}/${bucket}/${key}`;
+    }
+  }
+  
+  // AWS S3 format
   return `https://${bucket}.s3.${region}.amazonaws.com/${key}`;
 }
 

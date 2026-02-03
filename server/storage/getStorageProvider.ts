@@ -25,6 +25,7 @@ export interface S3Config {
   secretAccessKey: string;
   keyPrefixTemplate?: string;
   endpoint?: string;
+  publicUrl?: string; // Public URL for R2 bucket (r2.dev or custom domain)
   provider?: "s3" | "r2";
 }
 
@@ -48,6 +49,7 @@ interface S3PublicConfig {
   region: string;
   keyPrefixTemplate?: string;
   endpoint?: string;
+  publicUrl?: string;
 }
 
 interface S3SecretConfig {
@@ -147,6 +149,7 @@ function buildConfigFromIntegration(
     secretAccessKey: secretConfig.secretAccessKey!,
     keyPrefixTemplate: publicConfig.keyPrefixTemplate,
     endpoint: publicConfig.endpoint,
+    publicUrl: publicConfig.publicUrl,
     provider,
   };
 }

@@ -39,6 +39,7 @@ const r2UpdateSchema = z.object({
   bucketName: z.string().optional(),
   accountId: z.string().optional(),
   keyPrefixTemplate: z.string().optional(),
+  publicUrl: z.string().optional(), // Public access URL for R2 bucket (r2.dev URL or custom domain)
   accessKeyId: z.string().optional(),
   secretAccessKey: z.string().optional(),
 });
@@ -255,6 +256,7 @@ router.put("/integrations/r2", requireSuperUser, async (req: Request, res: Respo
         accountId: data.accountId,
         endpoint,
         keyPrefixTemplate: data.keyPrefixTemplate,
+        publicUrl: data.publicUrl, // Public access URL for viewing uploaded files
       },
       secretConfig: {
         accessKeyId: data.accessKeyId,
