@@ -299,11 +299,11 @@ export default function MyTimePage() {
   
   const startTimerMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", "/api/active-timer/start", {});
+      return apiRequest("POST", "/api/timer/start", {});
     },
     onSuccess: () => {
       toast({ title: "Timer started" });
-      queryClient.invalidateQueries({ queryKey: ["/api/active-timer"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
     },
     onError: (error: Error) => {
       toast({ 
