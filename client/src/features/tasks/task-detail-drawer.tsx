@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check } from "lucide-react";
+import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
@@ -10,6 +10,7 @@ import { RichTextEditor, RichTextRenderer } from "@/components/richtext";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
 import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
   Dialog,
@@ -115,6 +116,10 @@ export function TaskDetailDrawer({
   const [completionTimeMinutes, setCompletionTimeMinutes] = useState(0);
   const [completionTimeDescription, setCompletionTimeDescription] = useState("");
   const [isCompletingTask, setIsCompletingTask] = useState(false);
+  const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
+  const [isCreatingTag, setIsCreatingTag] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#3b82f6");
   
   const { isDirty, setDirty, markClean, confirmIfDirty, UnsavedChangesDialog } = useUnsavedChanges();
 
@@ -159,6 +164,70 @@ export function TaskDetailDrawer({
     if (task?.projectId) {
       queryClient.invalidateQueries({ queryKey: ["/api/projects", task.projectId, "tasks"] });
     }
+  };
+
+  // Workspace tags query for adding existing tags
+  const { data: workspaceTags = [] } = useQuery<TagType[]>({
+    queryKey: ["/api/workspaces", workspaceId, "tags"],
+    enabled: !!workspaceId && open,
+  });
+
+  // Get IDs of tags already on this task
+  const taskTagIds = new Set((task?.tags || []).map((tt) => tt.tagId));
+
+  const addTagToTaskMutation = useMutation({
+    mutationFn: async (tagId: string) => {
+      return apiRequest("POST", `/api/tasks/${task?.id}/tags`, { tagId });
+    },
+    onSuccess: () => {
+      invalidateTaskQueries();
+      if (task?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.id] });
+      }
+      setTagPopoverOpen(false);
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to add tag", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const removeTagFromTaskMutation = useMutation({
+    mutationFn: async (tagId: string) => {
+      return apiRequest("DELETE", `/api/tasks/${task?.id}/tags/${tagId}`);
+    },
+    onSuccess: () => {
+      invalidateTaskQueries();
+      if (task?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.id] });
+      }
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to remove tag", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const createTagMutation = useMutation({
+    mutationFn: async ({ name, color }: { name: string; color: string }) => {
+      const res = await apiRequest("POST", `/api/workspaces/${workspaceId}/tags`, { name, color });
+      return res.json() as Promise<TagType>;
+    },
+    onSuccess: async (newTag: TagType) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces", workspaceId, "tags"] });
+      // Auto-add the new tag to the task
+      addTagToTaskMutation.mutate(newTag.id);
+      setIsCreatingTag(false);
+      setNewTagName("");
+      setNewTagColor("#3b82f6");
+      toast({ title: "Tag created and added" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to create tag", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleCreateTag = () => {
+    if (!newTagName.trim() || !workspaceId) return;
+    createTagMutation.mutate({ name: newTagName.trim(), color: newTagColor });
   };
 
   const addSubtaskMutation = useMutation({
@@ -882,20 +951,147 @@ export function TaskDetailDrawer({
           <Separator />
 
           <div className="space-y-2">
-            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <Tag className="h-3.5 w-3.5" />
-              Tags
-            </label>
+            <div className="flex items-center justify-between">
+              <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                <Tag className="h-3.5 w-3.5" />
+                Tags
+              </label>
+              <Popover open={tagPopoverOpen} onOpenChange={(open) => {
+                setTagPopoverOpen(open);
+                if (!open) {
+                  setIsCreatingTag(false);
+                  setNewTagName("");
+                }
+              }}>
+                <PopoverTrigger asChild>
+                  <Button variant="ghost" size="sm" className="h-6 px-2" data-testid="button-add-tag">
+                    <Plus className="h-3.5 w-3.5 mr-1" />
+                    Add
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-56 p-2" align="end">
+                  {isCreatingTag ? (
+                    <div className="space-y-2">
+                      <div className="text-xs font-medium text-muted-foreground">Create new tag</div>
+                      <Input
+                        value={newTagName}
+                        onChange={(e) => setNewTagName(e.target.value)}
+                        placeholder="Tag name..."
+                        className="h-8 text-sm"
+                        autoFocus
+                        onKeyDown={(e) => {
+                          if (e.key === "Enter") handleCreateTag();
+                          if (e.key === "Escape") {
+                            setIsCreatingTag(false);
+                            setNewTagName("");
+                          }
+                        }}
+                        data-testid="input-new-tag-name"
+                      />
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="color"
+                          value={newTagColor}
+                          onChange={(e) => setNewTagColor(e.target.value)}
+                          className="h-8 w-8 rounded border cursor-pointer"
+                          data-testid="input-new-tag-color"
+                        />
+                        <span className="text-xs text-muted-foreground">Pick color</span>
+                      </div>
+                      <div className="flex gap-1">
+                        <Button
+                          size="sm"
+                          className="flex-1"
+                          onClick={handleCreateTag}
+                          disabled={!newTagName.trim() || createTagMutation.isPending}
+                          data-testid="button-create-tag-submit"
+                        >
+                          {createTagMutation.isPending ? (
+                            <Loader2 className="h-3 w-3 animate-spin" />
+                          ) : (
+                            "Create"
+                          )}
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => {
+                            setIsCreatingTag(false);
+                            setNewTagName("");
+                          }}
+                          data-testid="button-cancel-create-tag"
+                        >
+                          Cancel
+                        </Button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div className="space-y-1">
+                      <ScrollArea className="max-h-48">
+                        <div className="space-y-0.5">
+                          {workspaceTags.map((tag) => {
+                            if (taskTagIds.has(tag.id)) return null;
+                            return (
+                              <button
+                                key={tag.id}
+                                className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover-elevate"
+                                onClick={() => addTagToTaskMutation.mutate(tag.id)}
+                                data-testid={`button-add-tag-${tag.id}`}
+                              >
+                                <div
+                                  className="h-3 w-3 rounded-full"
+                                  style={{ backgroundColor: tag.color || "#888" }}
+                                />
+                                <span className="text-sm truncate">{tag.name}</span>
+                              </button>
+                            );
+                          })}
+                          {workspaceTags.filter((t) => !taskTagIds.has(t.id)).length === 0 && (
+                            <div className="px-2 py-2 text-xs text-muted-foreground">
+                              {workspaceTags.length === 0 ? "No tags in workspace" : "All tags added"}
+                            </div>
+                          )}
+                        </div>
+                      </ScrollArea>
+                      {workspaceId && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full justify-start text-xs"
+                          onClick={() => setIsCreatingTag(true)}
+                          data-testid="button-create-new-tag"
+                        >
+                          <Plus className="h-3 w-3 mr-1" />
+                          Create new tag
+                        </Button>
+                      )}
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
             <div className="flex flex-wrap gap-1.5">
               {taskTags.map((tag) => (
-                <TagBadge key={tag.id} name={tag.name} color={tag.color} />
+                <Badge
+                  key={tag.id}
+                  variant="secondary"
+                  className="gap-1 pr-1"
+                  style={{ backgroundColor: `${tag.color}20`, borderColor: tag.color }}
+                  data-testid={`task-tag-${tag.id}`}
+                >
+                  <span style={{ color: tag.color }}>{tag.name}</span>
+                  <button
+                    className="ml-1 h-3 w-3 rounded-full hover:bg-destructive/20 flex items-center justify-center"
+                    onClick={() => removeTagFromTaskMutation.mutate(tag.id)}
+                    data-testid={`button-remove-tag-${tag.id}`}
+                  >
+                    <X className="h-2 w-2" />
+                  </button>
+                </Badge>
               ))}
               {taskTags.length === 0 && (
                 <span className="text-sm text-muted-foreground">No tags</span>
               )}
-              <Button variant="ghost" size="sm" className="h-6 text-xs" data-testid="button-add-tag">
-                Add tag
-              </Button>
             </div>
           </div>
 

@@ -103,6 +103,9 @@ export function SubtaskDetailDrawer({
   const [assigneePopoverOpen, setAssigneePopoverOpen] = useState(false);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
+  const [isCreatingTag, setIsCreatingTag] = useState(false);
+  const [newTagName, setNewTagName] = useState("");
+  const [newTagColor, setNewTagColor] = useState("#3b82f6");
 
   const isActualSubtask = isSubtask(subtask);
 
@@ -196,6 +199,30 @@ export function SubtaskDetailDrawer({
       toast({ title: "Failed to remove tag", description: error.message, variant: "destructive" });
     },
   });
+
+  const createTagMutation = useMutation({
+    mutationFn: async ({ name, color }: { name: string; color: string }) => {
+      const res = await apiRequest("POST", `/api/workspaces/${workspaceId}/tags`, { name, color });
+      return res.json() as Promise<TagType>;
+    },
+    onSuccess: async (newTag: TagType) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces", workspaceId, "tags"] });
+      // Auto-add the new tag to the subtask
+      addTagMutation.mutate(newTag.id);
+      setIsCreatingTag(false);
+      setNewTagName("");
+      setNewTagColor("#3b82f6");
+      toast({ title: "Tag created and added" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to create tag", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleCreateTag = () => {
+    if (!newTagName.trim() || !workspaceId) return;
+    createTagMutation.mutate({ name: newTagName.trim(), color: newTagColor });
+  };
 
   useEffect(() => {
     if (subtask) {
@@ -527,40 +554,117 @@ export function SubtaskDetailDrawer({
                 Tags
               </label>
               {isActualSubtask && (
-                <Popover open={tagPopoverOpen} onOpenChange={setTagPopoverOpen}>
+                <Popover open={tagPopoverOpen} onOpenChange={(open) => {
+                  setTagPopoverOpen(open);
+                  if (!open) {
+                    setIsCreatingTag(false);
+                    setNewTagName("");
+                  }
+                }}>
                   <PopoverTrigger asChild>
                     <Button variant="ghost" size="sm" className="h-6 px-2" data-testid="button-add-subtask-tag">
                       <Plus className="h-3.5 w-3.5 mr-1" />
                       Add
                     </Button>
                   </PopoverTrigger>
-                  <PopoverContent className="w-48 p-1" align="end">
-                    <ScrollArea className="max-h-48">
-                      <div className="space-y-0.5">
-                        {workspaceTags.map((tag) => {
-                          if (assignedTagIds.has(tag.id)) return null;
-                          return (
-                            <button
-                              key={tag.id}
-                              className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover-elevate"
-                              onClick={() => addTagMutation.mutate(tag.id)}
-                              data-testid={`button-subtask-add-tag-${tag.id}`}
-                            >
-                              <div
-                                className="h-3 w-3 rounded-full"
-                                style={{ backgroundColor: tag.color || "#888" }}
-                              />
-                              <span className="text-sm truncate">{tag.name}</span>
-                            </button>
-                          );
-                        })}
-                        {workspaceTags.filter((t) => !assignedTagIds.has(t.id)).length === 0 && (
-                          <div className="px-2 py-2 text-xs text-muted-foreground">
-                            {workspaceTags.length === 0 ? "No tags available" : "All tags added"}
+                  <PopoverContent className="w-56 p-2" align="end">
+                    {isCreatingTag ? (
+                      <div className="space-y-2">
+                        <div className="text-xs font-medium text-muted-foreground">Create new tag</div>
+                        <Input
+                          value={newTagName}
+                          onChange={(e) => setNewTagName(e.target.value)}
+                          placeholder="Tag name..."
+                          className="h-8 text-sm"
+                          autoFocus
+                          onKeyDown={(e) => {
+                            if (e.key === "Enter") handleCreateTag();
+                            if (e.key === "Escape") {
+                              setIsCreatingTag(false);
+                              setNewTagName("");
+                            }
+                          }}
+                          data-testid="input-new-tag-name"
+                        />
+                        <div className="flex items-center gap-2">
+                          <input
+                            type="color"
+                            value={newTagColor}
+                            onChange={(e) => setNewTagColor(e.target.value)}
+                            className="h-8 w-8 rounded border cursor-pointer"
+                            data-testid="input-new-tag-color"
+                          />
+                          <span className="text-xs text-muted-foreground">Pick color</span>
+                        </div>
+                        <div className="flex gap-1">
+                          <Button
+                            size="sm"
+                            className="flex-1"
+                            onClick={handleCreateTag}
+                            disabled={!newTagName.trim() || createTagMutation.isPending}
+                            data-testid="button-create-tag-submit"
+                          >
+                            {createTagMutation.isPending ? (
+                              <Loader2 className="h-3 w-3 animate-spin" />
+                            ) : (
+                              "Create"
+                            )}
+                          </Button>
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => {
+                              setIsCreatingTag(false);
+                              setNewTagName("");
+                            }}
+                            data-testid="button-cancel-create-tag"
+                          >
+                            Cancel
+                          </Button>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="space-y-1">
+                        <ScrollArea className="max-h-48">
+                          <div className="space-y-0.5">
+                            {workspaceTags.map((tag) => {
+                              if (assignedTagIds.has(tag.id)) return null;
+                              return (
+                                <button
+                                  key={tag.id}
+                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover-elevate"
+                                  onClick={() => addTagMutation.mutate(tag.id)}
+                                  data-testid={`button-subtask-add-tag-${tag.id}`}
+                                >
+                                  <div
+                                    className="h-3 w-3 rounded-full"
+                                    style={{ backgroundColor: tag.color || "#888" }}
+                                  />
+                                  <span className="text-sm truncate">{tag.name}</span>
+                                </button>
+                              );
+                            })}
+                            {workspaceTags.filter((t) => !assignedTagIds.has(t.id)).length === 0 && (
+                              <div className="px-2 py-2 text-xs text-muted-foreground">
+                                {workspaceTags.length === 0 ? "No tags in workspace" : "All tags added"}
+                              </div>
+                            )}
                           </div>
+                        </ScrollArea>
+                        {workspaceId && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="w-full justify-start text-xs"
+                            onClick={() => setIsCreatingTag(true)}
+                            data-testid="button-create-new-tag"
+                          >
+                            <Plus className="h-3 w-3 mr-1" />
+                            Create new tag
+                          </Button>
                         )}
                       </div>
-                    </ScrollArea>
+                    )}
                   </PopoverContent>
                 </Popover>
               )}
