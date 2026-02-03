@@ -21,6 +21,7 @@ import {
 } from "lucide-react";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { S3Dropzone } from "@/components/common/S3Dropzone";
+import { ColorPicker } from "@/components/ui/color-picker";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -133,6 +134,7 @@ interface R2Settings {
     accountId: string | null;
     endpoint: string | null;
     keyPrefixTemplate: string | null;
+    publicUrl: string | null;
   } | null;
   secretConfigured: boolean;
   secretMasked: {
@@ -1551,38 +1553,20 @@ export default function SuperAdminSettingsPage() {
                       </div>
                     </div>
                     <div className="grid gap-4 md:grid-cols-2">
-                      <div className="space-y-2">
-                        <Label htmlFor="defaultPrimaryColor">Primary Color</Label>
-                        <div className="flex gap-2">
-                          <Input
-                            id="defaultPrimaryColor"
-                            placeholder="#3B82F6"
-                            defaultValue={systemSettings?.defaultPrimaryColor || ""}
-                            onChange={(e) => setBrandingForm({ ...brandingForm, defaultPrimaryColor: e.target.value })}
-                            data-testid="input-primary-color"
-                          />
-                          <div 
-                            className="w-10 h-10 rounded border"
-                            style={{ backgroundColor: brandingForm.defaultPrimaryColor || systemSettings?.defaultPrimaryColor || "#3B82F6" }}
-                          />
-                        </div>
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="defaultSecondaryColor">Secondary Color</Label>
-                        <div className="flex gap-2">
-                          <Input
-                            id="defaultSecondaryColor"
-                            placeholder="#64748B"
-                            defaultValue={systemSettings?.defaultSecondaryColor || ""}
-                            onChange={(e) => setBrandingForm({ ...brandingForm, defaultSecondaryColor: e.target.value })}
-                            data-testid="input-secondary-color"
-                          />
-                          <div 
-                            className="w-10 h-10 rounded border"
-                            style={{ backgroundColor: brandingForm.defaultSecondaryColor || systemSettings?.defaultSecondaryColor || "#64748B" }}
-                          />
-                        </div>
-                      </div>
+                      <ColorPicker
+                        label="Primary Color"
+                        value={brandingForm.defaultPrimaryColor || systemSettings?.defaultPrimaryColor || "#83ba3b"}
+                        defaultValue="#83ba3b"
+                        onChange={(value) => setBrandingForm({ ...brandingForm, defaultPrimaryColor: value })}
+                        data-testid="input-primary-color"
+                      />
+                      <ColorPicker
+                        label="Secondary Color"
+                        value={brandingForm.defaultSecondaryColor || systemSettings?.defaultSecondaryColor || "#64748B"}
+                        defaultValue="#64748B"
+                        onChange={(value) => setBrandingForm({ ...brandingForm, defaultSecondaryColor: value })}
+                        data-testid="input-secondary-color"
+                      />
                     </div>
                     
                     <div className="border-t pt-6">
