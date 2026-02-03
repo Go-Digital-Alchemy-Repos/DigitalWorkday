@@ -166,7 +166,20 @@ export function TaskDetailDrawer({
     mutationFn: async ({ taskId, title }: { taskId: string; title: string }) => {
       return apiRequest("POST", `/api/tasks/${taskId}/subtasks`, { title });
     },
-    onSuccess: invalidateTaskQueries,
+    onSuccess: () => {
+      invalidateTaskQueries();
+      // Also explicitly invalidate the specific task query for task-drawer-context
+      if (task?.id) {
+        queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.id] });
+      }
+    },
+    onError: (error: any) => {
+      toast({
+        title: "Failed to add subtask",
+        description: error.message || "An error occurred",
+        variant: "destructive",
+      });
+    },
   });
 
   const toggleSubtaskMutation = useMutation({
