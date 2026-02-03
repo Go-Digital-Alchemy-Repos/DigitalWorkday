@@ -170,8 +170,17 @@
     @apply border-border;
   }
 
+  html {
+    font-family: var(--font-sans);
+  }
+
   body {
     @apply font-sans antialiased bg-background text-foreground;
+  }
+
+  /* Ensure Inter is used for all text elements */
+  input, textarea, select, button {
+    font-family: inherit;
   }
 }
 
