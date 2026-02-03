@@ -383,7 +383,7 @@ export function CsvImportPanel({
                 <tbody>
                   {importResults.map((result, i) => (
                     <tr key={i} className="border-b last:border-0">
-                      <td className="p-2 font-mono text-xs truncate max-w-[200px]">{result.name}</td>
+                      <td className="p-2 text-xs truncate max-w-[200px]">{result.name}</td>
                       <td className="p-2">
                         {result.status === "created" && (
                           <Badge variant="default" className="bg-green-600 text-xs">Created</Badge>

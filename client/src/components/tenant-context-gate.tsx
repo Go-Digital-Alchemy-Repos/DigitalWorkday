@@ -276,13 +276,13 @@ export function TenantContextGate({ children }: TenantContextGateProps) {
             
             {showErrorDetails && (
               <div className="mt-2 p-3 bg-muted rounded-md text-left space-y-1">
-                <p className="text-xs font-mono break-all">
+                <p className="text-xs break-all">
                   <strong>Effective Tenant ID:</strong> {effectiveTenantId || "none"}
                 </p>
-                <p className="text-xs font-mono break-all">
+                <p className="text-xs break-all">
                   <strong>App Mode:</strong> {appMode}
                 </p>
-                <p className="text-xs font-mono break-all">
+                <p className="text-xs break-all">
                   <strong>Is Impersonating:</strong> {String(isImpersonating)}
                 </p>
                 {errorStatus === 403 && (
@@ -293,7 +293,7 @@ export function TenantContextGate({ children }: TenantContextGateProps) {
                   </p>
                 )}
                 {rawBody && !rawBody.includes("<!DOCTYPE") && (
-                  <p className="text-xs font-mono break-all mt-1">
+                  <p className="text-xs break-all mt-1">
                     <strong>Response:</strong> {rawBody.slice(0, 500)}
                   </p>
                 )}

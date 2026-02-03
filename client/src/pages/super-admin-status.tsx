@@ -574,9 +574,9 @@ function ChatDebugPanel() {
                 <tbody>
                   {sockets.map((s) => (
                     <tr key={s.socketId} className="border-b last:border-0">
-                      <td className="py-2 px-2 font-mono text-xs">{s.socketId.slice(0, 12)}...</td>
-                      <td className="py-2 px-2 font-mono text-xs">{s.userId?.slice(0, 8) || '-'}...</td>
-                      <td className="py-2 px-2 font-mono text-xs">{s.tenantId?.slice(0, 8) || '-'}...</td>
+                      <td className="py-2 px-2 text-xs">{s.socketId.slice(0, 12)}...</td>
+                      <td className="py-2 px-2 text-xs">{s.userId?.slice(0, 8) || '-'}...</td>
+                      <td className="py-2 px-2 text-xs">{s.tenantId?.slice(0, 8) || '-'}...</td>
                       <td className="py-2 px-2">{s.roomsCount}</td>
                       <td className="py-2 px-2 text-xs">{new Date(s.connectedAt).toLocaleTimeString()}</td>
                     </tr>
@@ -629,10 +629,10 @@ function ChatDebugPanel() {
                           {e.eventType}
                         </Badge>
                       </td>
-                      <td className="py-2 px-2 font-mono text-xs">
+                      <td className="py-2 px-2 text-xs">
                         {e.userId?.slice(0, 8) || '-'}
                       </td>
-                      <td className="py-2 px-2 font-mono text-xs">
+                      <td className="py-2 px-2 text-xs">
                         {e.conversationId || e.roomName || '-'}
                       </td>
                       <td className="py-2 px-2 text-xs text-muted-foreground">
@@ -640,7 +640,7 @@ function ChatDebugPanel() {
                         {e.disconnectReason && <span>{e.disconnectReason}</span>}
                         {e.payloadSize !== undefined && <span>{e.payloadSize} chars</span>}
                         {e.requestId && (
-                          <span className="font-mono" title="Request ID">
+                          <span title="Request ID">
                             req:{e.requestId.slice(0, 8)}
                           </span>
                         )}
@@ -1008,7 +1008,7 @@ function ErrorLogPanel() {
                       <td className="py-2 px-2">
                         <Badge variant="outline">{log.method}</Badge>
                       </td>
-                      <td className="py-2 px-2 font-mono text-xs max-w-[200px] truncate" title={log.path}>
+                      <td className="py-2 px-2 text-xs max-w-[200px] truncate" title={log.path}>
                         {log.path}
                       </td>
                       <td className="py-2 px-2 max-w-[200px] truncate" title={log.message}>
@@ -1142,7 +1142,7 @@ function ErrorLogPanel() {
                 <div>
                   <Label className="text-xs text-muted-foreground">Stack Trace (Server-side only)</Label>
                   <ScrollArea className="h-[200px] bg-muted p-3 rounded mt-1">
-                    <pre className="text-xs font-mono whitespace-pre-wrap">{selectedLog.stack}</pre>
+                    <pre className="text-xs whitespace-pre-wrap">{selectedLog.stack}</pre>
                   </ScrollArea>
                 </div>
               )}
@@ -1151,7 +1151,7 @@ function ErrorLogPanel() {
                 <div>
                   <Label className="text-xs text-muted-foreground">Metadata</Label>
                   <ScrollArea className="h-[100px] bg-muted p-3 rounded mt-1">
-                    <pre className="text-xs font-mono">{JSON.stringify(selectedLog.meta, null, 2)}</pre>
+                    <pre className="text-xs">{JSON.stringify(selectedLog.meta, null, 2)}</pre>
                   </ScrollArea>
                 </div>
               )}
@@ -1594,7 +1594,7 @@ function TenantHealthRepairPanel() {
                     <div className="grid gap-2">
                       {Object.entries(globalHealth.byTable).map(([table, count]) => (
                         <div key={table} className="flex justify-between items-center gap-2 py-2 px-3 rounded-lg bg-muted/30" data-testid={`row-table-${table}`}>
-                          <span className="font-mono text-sm">{table}</span>
+                          <span className="text-sm">{table}</span>
                           <Badge variant={count > 0 ? "destructive" : "secondary"} data-testid={`badge-count-${table}`}>
                             {count}
                           </Badge>
@@ -1651,7 +1651,7 @@ function TenantHealthRepairPanel() {
                     <div className="grid gap-2">
                       {Object.entries(repairPreview.byTable).map(([table, counts]) => (
                         <div key={table} className="flex flex-wrap justify-between items-center gap-2 py-2 px-3 rounded-lg bg-muted/30" data-testid={`preview-row-${table}`}>
-                          <span className="font-mono text-sm">{table}</span>
+                          <span className="text-sm">{table}</span>
                           <div className="flex flex-wrap gap-2">
                             <Badge variant="default" className="text-xs">{counts.high} high</Badge>
                             <Badge variant="secondary" className="text-xs">{counts.low} low</Badge>
@@ -1664,7 +1664,7 @@ function TenantHealthRepairPanel() {
                       <ScrollArea className="h-64 border rounded-lg">
                         <div className="p-3 space-y-2">
                           {repairPreview.proposedUpdates.slice(0, 50).map((update, i) => (
-                            <div key={i} className="p-2 rounded-lg bg-muted/50 text-sm font-mono" data-testid={`preview-update-${i}`}>
+                            <div key={i} className="p-2 rounded-lg bg-muted/50 text-sm" data-testid={`preview-update-${i}`}>
                               <div className="flex flex-wrap justify-between items-start gap-2">
                                 <div className="flex-1 min-w-0">
                                   <div className="flex flex-wrap items-center gap-2">
@@ -1947,7 +1947,7 @@ function DebugToolsPanel() {
               </div>
               <div className="space-y-2">
                 <h4 className="text-sm font-medium">Required Confirmation Phrases</h4>
-                <div className="space-y-1 text-sm font-mono">
+                <div className="space-y-1 text-sm">
                   {Object.entries(debugConfig.confirmPhrases).map(([key, value]) => (
                     <div key={key} className="flex justify-between items-center gap-2">
                       <span className="text-muted-foreground capitalize">{key}:</span>
@@ -2029,7 +2029,7 @@ function DebugToolsPanel() {
                                     {row.name || row.title || row.email || row.id}
                                   </div>
                                   <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
-                                    <span className="font-mono">{row.id.slice(0, 8)}...</span>
+                                    <span>{row.id.slice(0, 8)}...</span>
                                     {row.createdAt && (
                                       <span>Created: {new Date(row.createdAt).toLocaleDateString()}</span>
                                     )}
@@ -2291,7 +2291,7 @@ function DebugToolsPanel() {
                           </div>
                           <p className="text-sm text-muted-foreground">{issue.description}</p>
                           {issue.sampleIds.length > 0 && (
-                            <div className="mt-2 text-xs font-mono text-muted-foreground">
+                            <div className="mt-2 text-xs text-muted-foreground">
                               Sample IDs: {issue.sampleIds.slice(0, 3).join(", ")}
                               {issue.sampleIds.length > 3 && "..."}
                             </div>
@@ -2544,7 +2544,7 @@ function DebugToolsPanel() {
           <div className="space-y-4 py-4">
             <div className="p-3 border rounded-lg bg-muted/50">
               <div className="font-medium">{deleteDialog?.row?.name || deleteDialog?.row?.title || deleteDialog?.row?.email}</div>
-              <div className="text-xs font-mono text-muted-foreground">{deleteDialog?.row?.id}</div>
+              <div className="text-xs text-muted-foreground">{deleteDialog?.row?.id}</div>
             </div>
             <div className="space-y-2">
               <Label>Type DELETE_QUARANTINED_ROW to confirm</Label>
@@ -2816,10 +2816,10 @@ function SuperEmailLogsPanel() {
                         </td>
                         <td className="px-4 py-3">{MESSAGE_TYPE_LABELS[email.messageType] || email.messageType}</td>
                         <td className="px-4 py-3">
-                          <span className="font-mono text-xs truncate max-w-[100px] block">{email.tenantId || "-"}</span>
+                          <span className="text-xs truncate max-w-[100px] block">{email.tenantId || "-"}</span>
                         </td>
                         <td className="px-4 py-3">
-                          <span className="font-mono text-xs">{email.toEmail}</span>
+                          <span className="text-xs">{email.toEmail}</span>
                         </td>
                         <td className="px-4 py-3">
                           <span className="truncate max-w-[200px] block">{email.subject}</span>

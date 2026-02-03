@@ -448,7 +448,7 @@ export function ProvisionUserDrawer({
               <Input 
                 value={result.resetUrl} 
                 readOnly 
-                className="text-xs font-mono"
+                className="text-xs"
               />
               <Button 
                 size="icon" 

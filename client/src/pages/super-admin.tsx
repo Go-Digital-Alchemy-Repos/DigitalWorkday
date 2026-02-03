@@ -663,7 +663,7 @@ export default function SuperAdminPage() {
                   <Input 
                     value={lastInviteUrl} 
                     readOnly 
-                    className="text-xs font-mono"
+                    className="text-xs"
                     data-testid="input-invite-url"
                   />
                   <Button size="icon" variant="outline" onClick={copyInviteUrl} data-testid="button-copy-invite-url">
@@ -822,7 +822,7 @@ export default function SuperAdminPage() {
                   <tbody>
                     {importResults.results.map((result, idx) => (
                       <tr key={idx} className="border-t">
-                        <td className="p-2 font-mono text-xs">{result.email}</td>
+                        <td className="p-2 text-xs">{result.email}</td>
                         <td className="p-2 text-xs">{result.firstName} {result.lastName}</td>
                         <td className="p-2">
                           {result.success ? (
@@ -915,7 +915,7 @@ export default function SuperAdminPage() {
                       <tbody>
                         {csvUsers.slice(0, 10).map((user, idx) => (
                           <tr key={idx} className="border-t">
-                            <td className="p-2 font-mono text-xs">{user.email}</td>
+                            <td className="p-2 text-xs">{user.email}</td>
                             <td className="p-2 text-xs">{user.firstName || "-"}</td>
                             <td className="p-2 text-xs">{user.lastName || "-"}</td>
                             <td className="p-2">
@@ -1151,7 +1151,7 @@ export default function SuperAdminPage() {
                     </div>
                     <div>
                       <span className="text-muted-foreground">Enforcement Mode:</span>
-                      <span className="ml-2 font-mono text-xs bg-muted px-2 py-1 rounded">
+                      <span className="ml-2 text-xs bg-muted px-2 py-1 rounded">
                         TENANCY_ENFORCEMENT={healthData.currentMode}
                       </span>
                     </div>

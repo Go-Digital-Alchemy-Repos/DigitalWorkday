@@ -2965,7 +2965,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                       <div key={event.id} className="flex items-start gap-3 border-l-2 border-muted pl-3 pb-3">
                         <div className="flex-1 space-y-1">
                           <div className="flex items-center gap-2">
-                            <Badge variant="outline" className="text-xs font-mono">
+                            <Badge variant="outline" className="text-xs">
                               {event.eventType.replace(/_/g, " ")}
                             </Badge>
                             <span className="text-xs text-muted-foreground">
@@ -3922,7 +3922,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                             Copy Link
                           </Button>
                         </div>
-                        <div className="mt-2 text-xs text-muted-foreground font-mono truncate">
+                        <div className="mt-2 text-xs text-muted-foreground truncate">
                           {lastInviteUrl}
                         </div>
                       </div>
@@ -4191,7 +4191,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                         <tbody>
                           {csvData.slice(0, 10).map((user, i) => (
                             <tr key={i} className="border-b last:border-0">
-                              <td className="p-2 font-mono text-xs">{user.email}</td>
+                              <td className="p-2 text-xs">{user.email}</td>
                               <td className="p-2">{[user.firstName, user.lastName].filter(Boolean).join(' ') || '-'}</td>
                               <td className="p-2">
                                 <Badge variant="secondary" className="text-xs">{user.role || 'employee'}</Badge>
@@ -4263,7 +4263,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                         <tbody>
                           {bulkImportResults.map((result, i) => (
                             <tr key={i} className="border-b last:border-0">
-                              <td className="p-2 font-mono text-xs">{result.email}</td>
+                              <td className="p-2 text-xs">{result.email}</td>
                               <td className="p-2">
                                 {result.success ? (
                                   <div className="flex items-center gap-1">

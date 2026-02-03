@@ -278,7 +278,7 @@ function ActiveTimerPanel() {
                 <Timer className="h-8 w-8 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-3xl font-mono font-bold text-foreground" data-testid="text-timer-display">
+                <p className="text-3xl tabular-nums font-bold text-foreground" data-testid="text-timer-display">
                   00:00:00
                 </p>
                 <p className="text-sm text-muted-foreground">No active timer</p>
@@ -311,7 +311,7 @@ function ActiveTimerPanel() {
                 <Timer className={`h-8 w-8 ${timer.status === "running" ? "text-primary" : "text-muted-foreground"}`} />
               </div>
               <div>
-                <p className="text-4xl font-mono font-bold text-foreground" data-testid="text-timer-display">
+                <p className="text-4xl tabular-nums font-bold text-foreground" data-testid="text-timer-display">
                   {formatDuration(displaySeconds)}
                 </p>
                 <Badge variant={timer.status === "running" ? "default" : "secondary"}>
@@ -416,7 +416,7 @@ function ActiveTimerPanel() {
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="text-center">
-              <p className="text-3xl font-mono font-bold">{formatDuration(displaySeconds)}</p>
+              <p className="text-3xl tabular-nums font-bold">{formatDuration(displaySeconds)}</p>
               <p className="text-sm text-muted-foreground mt-1">Total time tracked</p>
             </div>
             <div className="space-y-2">
@@ -1546,7 +1546,7 @@ function TimeEntriesList() {
                           </div>
                           <div className="flex items-center gap-3">
                             <div className="text-right">
-                              <p className="text-sm font-mono font-medium">
+                              <p className="text-sm tabular-nums font-medium">
                                 {formatDurationShort(entry.durationSeconds)}
                               </p>
                               <p className="text-xs text-muted-foreground">
@@ -1671,17 +1671,17 @@ function ReportsSummary() {
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <div className="p-4 rounded-lg bg-muted/50">
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Total Time</p>
-            <p className="text-2xl font-mono font-bold">{formatDurationShort(summary.totalSeconds)}</p>
+            <p className="text-2xl tabular-nums font-bold">{formatDurationShort(summary.totalSeconds)}</p>
             <p className="text-xs text-muted-foreground">{summary.entryCount} entries</p>
           </div>
           <div className="p-4 rounded-lg bg-muted/50">
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Unbillable</p>
-            <p className="text-2xl font-mono font-bold">{formatDurationShort(summary.inScopeSeconds)}</p>
+            <p className="text-2xl tabular-nums font-bold">{formatDurationShort(summary.inScopeSeconds)}</p>
             <p className="text-xs text-muted-foreground">In scope</p>
           </div>
           <div className="p-4 rounded-lg bg-primary/10">
             <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Billable</p>
-            <p className="text-2xl font-mono font-bold text-primary">{formatDurationShort(summary.outOfScopeSeconds)}</p>
+            <p className="text-2xl tabular-nums font-bold text-primary">{formatDurationShort(summary.outOfScopeSeconds)}</p>
             <p className="text-xs text-muted-foreground">Out of scope</p>
           </div>
         </div>
@@ -1693,7 +1693,7 @@ function ReportsSummary() {
               {summary.byClient.map((client) => (
                 <div key={client.id} className="flex items-center justify-between p-2 rounded bg-muted/30">
                   <span className="text-sm">{client.name}</span>
-                  <span className="text-sm font-mono">{formatDurationShort(client.seconds)}</span>
+                  <span className="text-sm tabular-nums">{formatDurationShort(client.seconds)}</span>
                 </div>
               ))}
             </div>
@@ -1712,7 +1712,7 @@ function ReportsSummary() {
                       <span className="text-xs text-muted-foreground ml-2">({project.clientName})</span>
                     )}
                   </div>
-                  <span className="text-sm font-mono">{formatDurationShort(project.seconds)}</span>
+                  <span className="text-sm tabular-nums">{formatDurationShort(project.seconds)}</span>
                 </div>
               ))}
             </div>

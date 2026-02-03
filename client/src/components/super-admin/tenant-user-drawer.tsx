@@ -764,7 +764,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
                                     Copy
                                   </Button>
                                 </div>
-                                <div className="mt-2 text-xs text-muted-foreground font-mono truncate">
+                                <div className="mt-2 text-xs text-muted-foreground truncate">
                                   {lastGeneratedUrl}
                                 </div>
                               </div>
@@ -907,7 +907,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
                             Copy
                           </Button>
                         </div>
-                        <div className="mt-2 text-xs text-muted-foreground font-mono truncate">
+                        <div className="mt-2 text-xs text-muted-foreground truncate">
                           {lastResetLinkUrl}
                         </div>
                         <div className="mt-1 text-xs text-muted-foreground">

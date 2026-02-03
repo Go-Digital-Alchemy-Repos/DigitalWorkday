@@ -216,7 +216,7 @@ export function EmailLogsTab() {
                             <span className="text-sm">{MESSAGE_TYPE_LABELS[email.messageType] || email.messageType}</span>
                           </TableCell>
                           <TableCell>
-                            <span className="text-sm font-mono">{email.toEmail}</span>
+                            <span className="text-sm">{email.toEmail}</span>
                           </TableCell>
                           <TableCell>
                             <span className="text-sm truncate max-w-[200px] block">{email.subject}</span>

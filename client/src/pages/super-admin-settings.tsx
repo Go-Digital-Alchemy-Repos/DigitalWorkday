@@ -554,7 +554,7 @@ function AgreementsManagementTab({
                 value={form.body}
                 onChange={(e) => setForm({ ...form, body: e.target.value })}
                 placeholder="Enter agreement content..."
-                className="w-full min-h-[300px] p-3 border rounded-md font-mono text-sm resize-y"
+                className="w-full min-h-[300px] p-3 border rounded-md text-sm resize-y"
                 data-testid="textarea-agreement-body"
               />
             </div>
@@ -1652,7 +1652,7 @@ export default function SuperAdminSettingsPage() {
                           API keys and secrets cannot be saved until the APP_ENCRYPTION_KEY environment variable is set. 
                           Generate a 32-byte base64 key and add it to your deployment environment.
                         </p>
-                        <p className="text-xs text-yellow-600 dark:text-yellow-400 font-mono mt-2">
+                        <p className="text-xs text-yellow-600 dark:text-yellow-400 mt-2">
                           Generate key: node -e "console.log(require('crypto').randomBytes(32).toString('base64'))"
                         </p>
                       </div>

@@ -395,7 +395,7 @@ export default function TenantOnboarding() {
                           className="w-6 h-6 rounded border"
                           style={{ backgroundColor: formData.primaryColor }}
                         />
-                        <span className="font-mono text-sm">{formData.primaryColor}</span>
+                        <span className="text-sm">{formData.primaryColor}</span>
                       </div>
                     </div>
                     {formData.supportEmail && (

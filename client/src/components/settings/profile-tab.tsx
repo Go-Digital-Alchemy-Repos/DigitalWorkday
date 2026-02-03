@@ -45,7 +45,7 @@ function TenantIdCopy({ tenantId }: { tenantId?: string }) {
     <div className="space-y-1">
       <div className="flex items-center gap-2">
         <code 
-          className="flex-1 px-3 py-2 bg-muted rounded-md text-sm font-mono truncate"
+          className="flex-1 px-3 py-2 bg-muted rounded-md text-sm truncate"
           data-testid="text-tenant-id"
         >
           {tenantId}
@@ -224,7 +224,7 @@ export function ProfileTab() {
             </div>
             <div className="space-y-2">
               <Label className="text-muted-foreground">Slug</Label>
-              <div className="text-sm font-mono">
+              <div className="text-sm">
                 {tenant?.slug || "-"}
               </div>
             </div>

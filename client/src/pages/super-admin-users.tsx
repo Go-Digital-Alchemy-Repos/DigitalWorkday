@@ -1076,7 +1076,7 @@ export default function SuperAdminUsers() {
                           <Input 
                             value={generatedAppUserInviteUrl} 
                             readOnly 
-                            className="font-mono text-xs"
+                            className="text-xs"
                             data-testid="input-invite-url"
                           />
                           <Button 
@@ -1589,7 +1589,7 @@ export default function SuperAdminUsers() {
                       <Input 
                         value={generatedResetUrl} 
                         readOnly 
-                        className="font-mono text-sm"
+                        className="text-sm"
                         data-testid="input-reset-url"
                       />
                       <Button 
@@ -1659,7 +1659,7 @@ export default function SuperAdminUsers() {
               <Input 
                 value={generatedInviteUrl || ""} 
                 readOnly 
-                className="font-mono text-sm"
+                className="text-sm"
                 data-testid="input-invite-url"
               />
               <Button size="icon" variant="outline" onClick={handleCopyInviteLink} data-testid="button-copy-link">
@@ -1857,7 +1857,7 @@ export default function SuperAdminUsers() {
                   <Input 
                     value={generatedAppUserResetUrl} 
                     readOnly 
-                    className="font-mono text-sm"
+                    className="text-sm"
                     data-testid="input-app-user-reset-url"
                   />
                   <Button 
