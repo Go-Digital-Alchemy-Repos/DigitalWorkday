@@ -78,6 +78,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { TenantUserDrawer } from "./tenant-user-drawer";
 import { ProvisionUserDrawer } from "./provision-user-drawer";
 import { S3Dropzone } from "@/components/common/S3Dropzone";
+import { ColorPicker } from "@/components/ui/color-picker";
 import { RichTextEditor, RichTextViewer } from "@/components/ui/rich-text-editor";
 import type { Tenant } from "@shared/schema";
 
@@ -1954,26 +1955,20 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                   />
                 </div>
                 <div className="grid grid-cols-2 gap-4">
-                  <div className="space-y-2">
-                    <Label htmlFor="wizard-primary-color">Primary Color</Label>
-                    <Input
-                      id="wizard-primary-color"
-                      type="color"
-                      value={brandingData.primaryColor || "#3b82f6"}
-                      onChange={(e) => setBrandingData(prev => ({ ...prev, primaryColor: e.target.value }))}
-                      data-testid="input-wizard-primary-color"
-                    />
-                  </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="wizard-accent-color">Accent Color</Label>
-                    <Input
-                      id="wizard-accent-color"
-                      type="color"
-                      value={brandingData.accentColor || "#8b5cf6"}
-                      onChange={(e) => setBrandingData(prev => ({ ...prev, accentColor: e.target.value }))}
-                      data-testid="input-wizard-accent-color"
-                    />
-                  </div>
+                  <ColorPicker
+                    label="Primary Color"
+                    value={brandingData.primaryColor || "#83ba3b"}
+                    defaultValue="#83ba3b"
+                    onChange={(value) => setBrandingData(prev => ({ ...prev, primaryColor: value }))}
+                    data-testid="input-wizard-primary-color"
+                  />
+                  <ColorPicker
+                    label="Accent Color"
+                    value={brandingData.accentColor || "#8b5cf6"}
+                    defaultValue="#8b5cf6"
+                    onChange={(value) => setBrandingData(prev => ({ ...prev, accentColor: value }))}
+                    data-testid="input-wizard-accent-color"
+                  />
                 </div>
                 <Button 
                   onClick={() => saveBrandingMutation.mutate(brandingData)}
@@ -4365,60 +4360,27 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                     />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-3">
-                    <div className="space-y-2">
-                      <Label htmlFor="primaryColor">Primary Color</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="primaryColor"
-                          placeholder="#3b82f6"
-                          value={brandingData.primaryColor || ""}
-                          onChange={(e) => handleBrandingChange("primaryColor", e.target.value)}
-                          className="flex-1"
-                        />
-                        <Input
-                          type="color"
-                          value={brandingData.primaryColor || "#3b82f6"}
-                          onChange={(e) => handleBrandingChange("primaryColor", e.target.value)}
-                          className="w-10 p-1 h-9"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="secondaryColor">Secondary Color</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="secondaryColor"
-                          placeholder="#64748b"
-                          value={brandingData.secondaryColor || ""}
-                          onChange={(e) => handleBrandingChange("secondaryColor", e.target.value)}
-                          className="flex-1"
-                        />
-                        <Input
-                          type="color"
-                          value={brandingData.secondaryColor || "#64748b"}
-                          onChange={(e) => handleBrandingChange("secondaryColor", e.target.value)}
-                          className="w-10 p-1 h-9"
-                        />
-                      </div>
-                    </div>
-                    <div className="space-y-2">
-                      <Label htmlFor="accentColor">Accent Color</Label>
-                      <div className="flex gap-2">
-                        <Input
-                          id="accentColor"
-                          placeholder="#10b981"
-                          value={brandingData.accentColor || ""}
-                          onChange={(e) => handleBrandingChange("accentColor", e.target.value)}
-                          className="flex-1"
-                        />
-                        <Input
-                          type="color"
-                          value={brandingData.accentColor || "#10b981"}
-                          onChange={(e) => handleBrandingChange("accentColor", e.target.value)}
-                          className="w-10 p-1 h-9"
-                        />
-                      </div>
-                    </div>
+                    <ColorPicker
+                      label="Primary Color"
+                      value={brandingData.primaryColor || "#83ba3b"}
+                      defaultValue="#83ba3b"
+                      onChange={(value) => handleBrandingChange("primaryColor", value)}
+                      data-testid="input-primary-color"
+                    />
+                    <ColorPicker
+                      label="Secondary Color"
+                      value={brandingData.secondaryColor || "#64748b"}
+                      defaultValue="#64748b"
+                      onChange={(value) => handleBrandingChange("secondaryColor", value)}
+                      data-testid="input-secondary-color"
+                    />
+                    <ColorPicker
+                      label="Accent Color"
+                      value={brandingData.accentColor || "#10b981"}
+                      defaultValue="#10b981"
+                      onChange={(value) => handleBrandingChange("accentColor", value)}
+                      data-testid="input-accent-color"
+                    />
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="supportEmail">Support Email</Label>

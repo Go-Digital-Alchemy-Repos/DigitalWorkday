@@ -11,6 +11,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Palette, ImageIcon, Type, Save, Loader2 } from "lucide-react";
 import { S3Dropzone } from "@/components/common/S3Dropzone";
 import { useAuth } from "@/lib/auth";
+import { ColorPicker } from "@/components/ui/color-picker";
 
 interface SystemSettings {
   id: number;
@@ -215,63 +216,27 @@ export function BrandingTab() {
         </CardHeader>
         <CardContent className="space-y-4">
           <div className="grid gap-4 sm:grid-cols-3">
-            <div className="space-y-2">
-              <Label htmlFor="primaryColor">Primary Color</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="primaryColor"
-                  placeholder="#3b82f6"
-                  value={formData.primaryColor || ""}
-                  onChange={(e) => handleChange("primaryColor", e.target.value)}
-                  className="flex-1"
-                  data-testid="input-primary-color"
-                />
-                <Input
-                  type="color"
-                  value={formData.primaryColor || "#3b82f6"}
-                  onChange={(e) => handleChange("primaryColor", e.target.value)}
-                  className="w-12 p-1 h-9"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="secondaryColor">Secondary Color</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="secondaryColor"
-                  placeholder="#64748b"
-                  value={formData.secondaryColor || ""}
-                  onChange={(e) => handleChange("secondaryColor", e.target.value)}
-                  className="flex-1"
-                  data-testid="input-secondary-color"
-                />
-                <Input
-                  type="color"
-                  value={formData.secondaryColor || "#64748b"}
-                  onChange={(e) => handleChange("secondaryColor", e.target.value)}
-                  className="w-12 p-1 h-9"
-                />
-              </div>
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="accentColor">Accent Color</Label>
-              <div className="flex gap-2">
-                <Input
-                  id="accentColor"
-                  placeholder="#10b981"
-                  value={formData.accentColor || ""}
-                  onChange={(e) => handleChange("accentColor", e.target.value)}
-                  className="flex-1"
-                  data-testid="input-accent-color"
-                />
-                <Input
-                  type="color"
-                  value={formData.accentColor || "#10b981"}
-                  onChange={(e) => handleChange("accentColor", e.target.value)}
-                  className="w-12 p-1 h-9"
-                />
-              </div>
-            </div>
+            <ColorPicker
+              label="Primary Color"
+              value={formData.primaryColor || "#83ba3b"}
+              defaultValue="#83ba3b"
+              onChange={(value) => handleChange("primaryColor", value)}
+              data-testid="input-primary-color"
+            />
+            <ColorPicker
+              label="Secondary Color"
+              value={formData.secondaryColor || "#64748b"}
+              defaultValue="#64748b"
+              onChange={(value) => handleChange("secondaryColor", value)}
+              data-testid="input-secondary-color"
+            />
+            <ColorPicker
+              label="Accent Color"
+              value={formData.accentColor || "#10b981"}
+              defaultValue="#10b981"
+              onChange={(value) => handleChange("accentColor", value)}
+              data-testid="input-accent-color"
+            />
           </div>
         </CardContent>
       </Card>

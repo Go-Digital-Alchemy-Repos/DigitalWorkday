@@ -9,6 +9,7 @@ import { Progress } from "@/components/ui/progress";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Building2, Palette, Mail, CheckCircle2, ArrowRight, ArrowLeft, Loader2 } from "lucide-react";
+import { ColorPicker } from "@/components/ui/color-picker";
 
 interface TenantInfo {
   tenant: {
@@ -77,7 +78,7 @@ export default function TenantOnboarding() {
   const [formData, setFormData] = useState({
     displayName: "",
     logoUrl: "",
-    primaryColor: "#3B82F6",
+    primaryColor: "#83ba3b",
     supportEmail: "",
   });
 
@@ -93,7 +94,7 @@ export default function TenantOnboarding() {
       setFormData({
         displayName: tenantInfo.tenantSettings.displayName || tenantInfo.tenant.name || "",
         logoUrl: tenantInfo.tenantSettings.logoUrl || "",
-        primaryColor: tenantInfo.tenantSettings.primaryColor || "#3B82F6",
+        primaryColor: tenantInfo.tenantSettings.primaryColor || "#83ba3b",
         supportEmail: tenantInfo.tenantSettings.supportEmail || "",
       });
     } else if (tenantInfo?.tenant) {
@@ -297,24 +298,13 @@ export default function TenantOnboarding() {
                   </p>
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="primaryColor">Primary Color</Label>
-                  <div className="flex gap-3 items-center">
-                    <Input
-                      id="primaryColor"
-                      type="color"
-                      value={formData.primaryColor}
-                      onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
-                      className="w-16 h-10 p-1 cursor-pointer"
-                      data-testid="input-primary-color"
-                    />
-                    <Input
-                      value={formData.primaryColor}
-                      onChange={(e) => setFormData({ ...formData, primaryColor: e.target.value })}
-                      placeholder="#3B82F6"
-                      className="flex-1"
-                      data-testid="input-primary-color-hex"
-                    />
-                  </div>
+                  <ColorPicker
+                    label="Primary Color"
+                    value={formData.primaryColor}
+                    defaultValue="#83ba3b"
+                    onChange={(value) => setFormData({ ...formData, primaryColor: value })}
+                    data-testid="input-primary-color"
+                  />
                   <p className="text-sm text-muted-foreground">
                     Choose a brand color for your workspace
                   </p>
