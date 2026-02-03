@@ -155,6 +155,11 @@ router.post(
   asyncHandler(async (req: Request, res: Response) => {
     const userId = getCurrentUserId(req);
     const workspaceId = getCurrentWorkspaceId(req);
+    const tenantId = getEffectiveTenantId(req);
+
+    if (!tenantId) {
+      throw AppError.badRequest("Tenant context required");
+    }
 
     const timer = await storage.getActiveTimerByUser(userId);
     if (!timer) {
@@ -211,6 +216,7 @@ router.post(
     const startTime = new Date(endTime.getTime() - finalElapsedSeconds * 1000);
 
     const timeEntry = await storage.createTimeEntry({
+      tenantId,
       workspaceId,
       userId,
       clientId: finalClientId,
