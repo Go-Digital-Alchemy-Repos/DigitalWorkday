@@ -1660,48 +1660,103 @@ export default function SuperAdminSettingsPage() {
                     </div>
                   ) : (
                     <div className="flex flex-wrap gap-4">
-                      <div className="flex items-center gap-2 p-3 border rounded-lg">
+                      <a 
+                        href="#section-mailgun" 
+                        className="flex items-center gap-2 p-3 border rounded-lg hover-elevate cursor-pointer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          document.getElementById("section-mailgun")?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                        data-testid="link-mailgun-section"
+                      >
                         <Mail className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-medium">Mailgun</span>
                         <Badge variant={integrationStatus?.mailgun ? "default" : "secondary"} className="ml-2">
                           {integrationStatus?.mailgun ? "Configured" : "Not Configured"}
                         </Badge>
-                      </div>
-                      <div className="flex items-center gap-2 p-3 border rounded-lg">
+                      </a>
+                      <a 
+                        href="#section-r2" 
+                        className="flex items-center gap-2 p-3 border rounded-lg hover-elevate cursor-pointer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          document.getElementById("section-r2")?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                        data-testid="link-r2-section"
+                      >
+                        <Cloud className="h-4 w-4 text-muted-foreground" />
+                        <span className="text-sm font-medium">R2 Storage</span>
+                        <Badge variant={r2Settings?.status === "configured" ? "default" : "secondary"} className="ml-2">
+                          {r2Settings?.status === "configured" ? "Configured" : "Not Configured"}
+                        </Badge>
+                      </a>
+                      <a 
+                        href="#section-s3" 
+                        className="flex items-center gap-2 p-3 border rounded-lg hover-elevate cursor-pointer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          document.getElementById("section-s3")?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                        data-testid="link-s3-section"
+                      >
                         <HardDrive className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-medium">S3 Storage</span>
                         <Badge variant={integrationStatus?.s3 ? "default" : "secondary"} className="ml-2">
                           {integrationStatus?.s3 ? "Configured" : "Not Configured"}
                         </Badge>
-                      </div>
-                      <div className="flex items-center gap-2 p-3 border rounded-lg">
+                      </a>
+                      <a 
+                        href="#section-stripe" 
+                        className="flex items-center gap-2 p-3 border rounded-lg hover-elevate cursor-pointer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          document.getElementById("section-stripe")?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                        data-testid="link-stripe-section"
+                      >
                         <CreditCard className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-medium">Stripe</span>
                         <Badge variant={integrationStatus?.stripe ? "default" : "secondary"} className="ml-2">
                           {integrationStatus?.stripe ? "Configured" : "Not Configured"}
                         </Badge>
-                      </div>
-                      <div className="flex items-center gap-2 p-3 border rounded-lg">
+                      </a>
+                      <a 
+                        href="#section-google-sso" 
+                        className="flex items-center gap-2 p-3 border rounded-lg hover-elevate cursor-pointer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          document.getElementById("section-google-sso")?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                        data-testid="link-google-sso-section"
+                      >
                         <Globe className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-medium">Google SSO</span>
                         <Badge variant={ssoGoogleSettings?.enabled ? "default" : "secondary"} className="ml-2">
                           {ssoGoogleSettings?.enabled ? "Enabled" : ssoGoogleSettings?.status === "configured" ? "Configured" : "Not Configured"}
                         </Badge>
-                      </div>
-                      <div className="flex items-center gap-2 p-3 border rounded-lg">
+                      </a>
+                      <a 
+                        href="#section-github-sso" 
+                        className="flex items-center gap-2 p-3 border rounded-lg hover-elevate cursor-pointer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          document.getElementById("section-github-sso")?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                        data-testid="link-github-sso-section"
+                      >
                         <Globe className="h-4 w-4 text-muted-foreground" />
                         <span className="text-sm font-medium">GitHub SSO</span>
                         <Badge variant={ssoGithubSettings?.enabled ? "default" : "secondary"} className="ml-2">
                           {ssoGithubSettings?.enabled ? "Enabled" : ssoGithubSettings?.status === "configured" ? "Configured" : "Not Configured"}
                         </Badge>
-                      </div>
+                      </a>
                     </div>
                   )}
                 </CardContent>
               </Card>
 
               {/* Mailgun Configuration */}
-              <Card>
+              <Card id="section-mailgun">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div>
@@ -1909,7 +1964,7 @@ export default function SuperAdminSettingsPage() {
               </Card>
 
               {/* Cloudflare R2 Configuration (Preferred Default) */}
-              <Card>
+              <Card id="section-r2">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div>
@@ -2122,7 +2177,7 @@ export default function SuperAdminSettingsPage() {
               </Card>
 
               {/* S3 Configuration (Fallback) */}
-              <Card>
+              <Card id="section-s3">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div>
@@ -2309,7 +2364,7 @@ export default function SuperAdminSettingsPage() {
               </Card>
 
               {/* Stripe Configuration */}
-              <Card>
+              <Card id="section-stripe">
                 <CardHeader>
                   <div className="flex items-center justify-between">
                     <div>
@@ -2507,7 +2562,7 @@ export default function SuperAdminSettingsPage() {
                 <CardContent>
                   <div className="space-y-6">
                     {/* Google SSO */}
-                    <div className="border rounded-lg p-4 space-y-4">
+                    <div id="section-google-sso" className="border rounded-lg p-4 space-y-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-muted rounded-lg">
@@ -2654,7 +2709,7 @@ export default function SuperAdminSettingsPage() {
                     </div>
 
                     {/* GitHub SSO */}
-                    <div className="border rounded-lg p-4 space-y-4">
+                    <div id="section-github-sso" className="border rounded-lg p-4 space-y-4">
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-3">
                           <div className="p-2 bg-muted rounded-lg">
