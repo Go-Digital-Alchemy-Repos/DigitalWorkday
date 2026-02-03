@@ -76,10 +76,10 @@ interface IntegrationStatus {
 interface SsoGoogleSettings {
   status: "configured" | "not_configured";
   enabled: boolean;
-  config: {
-    clientId: string | null;
-    redirectUri: string | null;
-    source: "database" | "environment" | "none";
+  clientId: string | null;
+  redirectUri: string | null;
+  config?: {
+    source?: "database" | "environment" | "none";
   } | null;
   secretMasked: {
     clientSecretMasked: string | null;
@@ -90,10 +90,10 @@ interface SsoGoogleSettings {
 interface SsoGithubSettings {
   status: "configured" | "not_configured";
   enabled: boolean;
-  config: {
-    clientId: string | null;
-    redirectUri: string | null;
-    source: "database" | "environment" | "none";
+  clientId: string | null;
+  redirectUri: string | null;
+  config?: {
+    source?: "database" | "environment" | "none";
   } | null;
   secretMasked: {
     clientSecretMasked: string | null;
@@ -1165,9 +1165,9 @@ export default function SuperAdminSettingsPage() {
     if (ssoGoogleSettings && !ssoGoogleDirty) {
       setSsoGoogleForm({
         enabled: ssoGoogleSettings.enabled || false,
-        clientId: ssoGoogleSettings.config?.clientId || "",
+        clientId: ssoGoogleSettings.clientId || "",
         clientSecret: "",
-        redirectUri: ssoGoogleSettings.config?.redirectUri || "",
+        redirectUri: ssoGoogleSettings.redirectUri || "",
       });
     }
   }, [ssoGoogleSettings, ssoGoogleDirty]);
@@ -1176,9 +1176,9 @@ export default function SuperAdminSettingsPage() {
     if (ssoGithubSettings && !ssoGithubDirty) {
       setSsoGithubForm({
         enabled: ssoGithubSettings.enabled || false,
-        clientId: ssoGithubSettings.config?.clientId || "",
+        clientId: ssoGithubSettings.clientId || "",
         clientSecret: "",
-        redirectUri: ssoGithubSettings.config?.redirectUri || "",
+        redirectUri: ssoGithubSettings.redirectUri || "",
       });
     }
   }, [ssoGithubSettings, ssoGithubDirty]);
