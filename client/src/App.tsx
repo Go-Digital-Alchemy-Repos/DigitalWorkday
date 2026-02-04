@@ -314,7 +314,7 @@ function TenantRouter() {
         {() => <TenantRouteGuard component={TeamDetailPage} />}
       </Route>
       <Route path="/profile">
-        {() => <TenantRouteGuard component={UserProfilePage} />}
+        {() => <ProtectedRoute component={UserProfilePage} />}
       </Route>
       <Route component={NotFound} />
     </Switch>
