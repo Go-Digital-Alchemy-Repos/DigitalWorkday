@@ -127,13 +127,27 @@ export function SubtaskList({
     },
   });
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (newTitle.trim()) {
-      onAdd?.(newTitle.trim());
+      const titleToAdd = newTitle.trim();
       setNewTitle("");
       setIsAdding(false);
-      // Explicitly invalidate to ensure the task detail (which owns the subtasks array) is refreshed
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] });
+      
+      try {
+        if (onAdd) {
+          await onAdd(titleToAdd);
+        }
+        // Explicitly invalidate to ensure the task detail (which owns the subtasks array) is refreshed
+        await queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] });
+      } catch (error) {
+        setNewTitle(titleToAdd);
+        setIsAdding(true);
+        toast({
+          title: "Failed to add subtask",
+          description: "There was an error saving your subtask. Please try again.",
+          variant: "destructive",
+        });
+      }
     }
   };
 
