@@ -135,11 +135,24 @@ export function SubtaskList({
       
       try {
         if (onAdd) {
-          await onAdd(titleToAdd);
+          // Wrap in a promise to ensure it's awaited if it's a mutation
+          const result = onAdd(titleToAdd);
+          if (result instanceof Promise) {
+            await result;
+          }
         }
-        // Explicitly invalidate to ensure the task detail (which owns the subtasks array) is refreshed
-        await queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] });
-        await queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+        
+        // Final fallback invalidation to be sure
+        if (taskId) {
+          await Promise.all([
+            queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] }),
+            queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] })
+          ]);
+        }
+        
+        if (onSubtaskUpdate) {
+          onSubtaskUpdate();
+        }
       } catch (error) {
         setNewTitle(titleToAdd);
         setIsAdding(true);

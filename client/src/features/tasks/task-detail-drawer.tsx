@@ -236,13 +236,12 @@ export function TaskDetailDrawer({
       return apiRequest("POST", `/api/tasks/${taskId}/subtasks`, { title });
     },
     onSuccess: () => {
+      // Invalidate both broad and specific queries
       invalidateTaskQueries();
-      // Also explicitly invalidate the specific task query for task-drawer-context
       if (task?.id) {
         queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.id] });
       }
-      // Ensure the subtasks list specifically is refreshed
-      queryClient.invalidateQueries({ queryKey: [`/api/time-entries?taskId=${task?.id}`] });
+      onRefresh?.();
     },
     onError: (error: any) => {
       toast({
@@ -1083,10 +1082,10 @@ export function TaskDetailDrawer({
                   key={tag.id}
                   variant="secondary"
                   className="gap-1 pr-1"
-                  style={{ backgroundColor: `${tag.color}20`, borderColor: tag.color }}
+                  style={{ backgroundColor: tag.color ? `${tag.color}20` : undefined, borderColor: tag.color || undefined }}
                   data-testid={`task-tag-${tag.id}`}
                 >
-                  <span style={{ color: tag.color }}>{tag.name}</span>
+                  <span style={{ color: tag.color || undefined }}>{tag.name}</span>
                   <button
                     className="ml-1 h-3 w-3 rounded-full hover:bg-destructive/20 flex items-center justify-center"
                     onClick={() => removeTagFromTaskMutation.mutate(tag.id)}
