@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { FullScreenDrawer, FullScreenDrawerFooter } from "@/components/ui/full-screen-drawer";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -39,7 +39,7 @@ interface TimeEntryDrawerProps {
   isLoading?: boolean;
   mode: "create" | "edit";
   clients?: Array<{ id: string; companyName: string; displayName: string | null }>;
-  projects?: Array<{ id: string; name: string }>;
+  projects?: Array<{ id: string; name: string; clientId?: string | null }>;
 }
 
 export function TimeEntryDrawer({
@@ -62,6 +62,11 @@ export function TimeEntryDrawer({
   const [taskId, setTaskId] = useState<string | null>(null);
   const [scope, setScope] = useState<"in_scope" | "out_of_scope">("in_scope");
   const [date, setDate] = useState<Date>(new Date());
+
+  const filteredProjects = useMemo(() => {
+    if (!clientId) return [];
+    return projects.filter(p => p.clientId === clientId);
+  }, [projects, clientId]);
 
   useEffect(() => {
     if (open && entry && mode === "edit") {
@@ -223,7 +228,10 @@ export function TimeEntryDrawer({
             <Select
               value={clientId || "none"}
               onValueChange={(v) => {
-                setClientId(v === "none" ? null : v);
+                const newClientId = v === "none" ? null : v;
+                setClientId(newClientId);
+                setProjectId(null);
+                setTaskId(null);
                 handleFieldChange();
               }}
             >
@@ -247,15 +255,16 @@ export function TimeEntryDrawer({
               value={projectId || "none"}
               onValueChange={(v) => {
                 setProjectId(v === "none" ? null : v);
+                setTaskId(null); // Reset task when project changes
                 handleFieldChange();
               }}
             >
               <SelectTrigger className="mt-2" data-testid="select-project">
-                <SelectValue placeholder="Select project" />
+                <SelectValue placeholder={clientId ? "Select project" : "Select client first"} />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No project</SelectItem>
-                {projects.map((p) => (
+                {filteredProjects.map((p: any) => (
                   <SelectItem key={p.id} value={p.id}>
                     {p.name}
                   </SelectItem>

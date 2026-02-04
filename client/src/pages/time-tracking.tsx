@@ -572,7 +572,7 @@ function ManualEntryDialog({
 
   const clientHasDivisions = clientDivisions.length > 0;
 
-  const { data: clientProjects = [] } = useQuery<Array<{ id: string; name: string; divisionId?: string | null }>>({
+  const { data: clientProjects = [] } = useQuery<Array<{ id: string; name: string; clientId: string | null; divisionId?: string | null }>>({
     queryKey: ["/api/clients", clientId, "projects"],
     queryFn: () => fetch(`/api/clients/${clientId}/projects`, { credentials: "include" }).then((r) => r.json()),
     enabled: !!clientId && open,
