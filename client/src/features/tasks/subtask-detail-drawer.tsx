@@ -323,6 +323,7 @@ export function SubtaskDetailDrawer({
         dueDate: localDueDate || null
       });
       toast({ title: "Subtask saved" });
+      onBack?.();
     }
   };
 
