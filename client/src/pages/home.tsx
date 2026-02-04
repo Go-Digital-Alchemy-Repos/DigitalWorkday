@@ -831,15 +831,6 @@ export default function Home() {
                 : "Here's what's on your plate today"}
             </p>
           </div>
-          {isAdmin && (
-            <Button
-              onClick={() => setCreateProjectOpen(true)}
-              data-testid="button-new-project-header"
-            >
-              <Plus className="mr-1 h-4 w-4" />
-              New Project
-            </Button>
-          )}
         </div>
       </div>
 
