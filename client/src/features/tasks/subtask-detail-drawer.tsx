@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { X, Calendar, Users, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Loader2, ChevronRight, CheckSquare, ListTodo } from "lucide-react";
+import { X, Calendar, Users, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -225,6 +225,35 @@ export function SubtaskDetailDrawer({
     },
   });
 
+  const toggleCompleteMutation = useMutation({
+    mutationFn: async (completed: boolean) => {
+      if (!subtask) return;
+      return apiRequest("PATCH", `/api/subtasks/${subtask.id}`, { 
+        completed,
+        status: completed ? "done" : "todo"
+      });
+    },
+    onSuccess: (_, completed) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({ 
+        title: completed ? "Subtask completed" : "Subtask reopened",
+        description: completed ? "Great work!" : "Subtask is now active again"
+      });
+      if (completed) {
+        onBack?.();
+      }
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to update subtask", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleMarkComplete = () => {
+    if (!subtask) return;
+    const isCompleted = isActualSubtask && (subtask as Subtask).completed;
+    toggleCompleteMutation.mutate(!isCompleted);
+  };
+
   const handleCreateTag = () => {
     if (!newTagName.trim() || !workspaceId) return;
     createTagMutation.mutate({ name: newTagName.trim(), color: newTagColor });
@@ -333,14 +362,35 @@ export function SubtaskDetailDrawer({
               <SheetTitle className="sr-only">Subtask Details</SheetTitle>
               <StatusBadge status={subtask.status as any} />
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              data-testid="button-close-subtask-drawer"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              {isActualSubtask && (
+                <Button
+                  variant={(subtask as Subtask).completed ? "outline" : "default"}
+                  size="sm"
+                  onClick={handleMarkComplete}
+                  disabled={toggleCompleteMutation.isPending}
+                  className="gap-1.5"
+                  data-testid="button-toggle-complete-subtask"
+                >
+                  {toggleCompleteMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (subtask as Subtask).completed ? (
+                    <Circle className="h-4 w-4" />
+                  ) : (
+                    <CheckCircle2 className="h-4 w-4" />
+                  )}
+                  {(subtask as Subtask).completed ? "Reopen" : "Mark Complete"}
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpenChange(false)}
+                data-testid="button-close-subtask-drawer"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-3 flex-wrap" data-testid="subtask-breadcrumbs">
             <button
