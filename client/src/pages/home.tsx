@@ -401,6 +401,14 @@ function EmployeeDashboardSection({
       return updated.getTime() === today.getTime();
     });
 
+    const stats = {
+      total: tasks.length,
+      done: tasks.filter(t => t.status === "done").length,
+      inProgress: tasks.filter(t => t.status === "in_progress").length,
+      todo: tasks.filter(t => t.status === "todo").length,
+      blocked: tasks.filter(t => t.status === "blocked").length,
+    };
+
     return {
       overdue,
       dueToday,
@@ -408,6 +416,7 @@ function EmployeeDashboardSection({
       highPriority,
       completedToday,
       totalOpen: openTasks.length,
+      stats,
     };
   }, [myTasks]);
 
@@ -516,6 +525,15 @@ function EmployeeDashboardSection({
           </CardContent>
         </Card>
       </div>
+
+      <Card>
+        <CardContent className="pt-6">
+          <TaskProgressBar 
+            stats={taskBreakdown.stats} 
+            showMilestones 
+          />
+        </CardContent>
+      </Card>
 
       {(taskBreakdown.overdue.length > 0 || taskBreakdown.dueToday.length > 0) && (
         <Card className="border-amber-200 dark:border-amber-800">
