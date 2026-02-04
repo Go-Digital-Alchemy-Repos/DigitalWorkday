@@ -1434,6 +1434,9 @@ export default function SuperAdminSettingsPage() {
                           valueUrl={brandingForm.defaultLogoUrl !== undefined ? brandingForm.defaultLogoUrl : systemSettings?.defaultLogoUrl}
                           onUploaded={(fileUrl) => setBrandingForm({ ...brandingForm, defaultLogoUrl: fileUrl })}
                           onRemoved={() => setBrandingForm({ ...brandingForm, defaultLogoUrl: null })}
+                          enableCropping
+                          cropShape="rect"
+                          cropAspectRatio={4}
                         />
                         <S3Dropzone
                           category="global-branding-icon"
@@ -1442,6 +1445,9 @@ export default function SuperAdminSettingsPage() {
                           valueUrl={brandingForm.defaultIconUrl !== undefined ? brandingForm.defaultIconUrl : systemSettings?.defaultIconUrl}
                           onUploaded={(fileUrl) => setBrandingForm({ ...brandingForm, defaultIconUrl: fileUrl })}
                           onRemoved={() => setBrandingForm({ ...brandingForm, defaultIconUrl: null })}
+                          enableCropping
+                          cropShape="rect"
+                          cropAspectRatio={1}
                         />
                         <S3Dropzone
                           category="global-branding-favicon"
@@ -1450,6 +1456,9 @@ export default function SuperAdminSettingsPage() {
                           valueUrl={brandingForm.defaultFaviconUrl !== undefined ? brandingForm.defaultFaviconUrl : systemSettings?.defaultFaviconUrl}
                           onUploaded={(fileUrl) => setBrandingForm({ ...brandingForm, defaultFaviconUrl: fileUrl })}
                           onRemoved={() => setBrandingForm({ ...brandingForm, defaultFaviconUrl: null })}
+                          enableCropping
+                          cropShape="rect"
+                          cropAspectRatio={1}
                         />
                       </div>
                     </div>

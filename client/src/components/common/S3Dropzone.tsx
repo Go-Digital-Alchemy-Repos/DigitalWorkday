@@ -21,8 +21,9 @@ import { useState, useCallback, useRef } from "react";
 import { useS3Upload, type UploadCategory, type AssetType } from "@/hooks/useS3Upload";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
-import { Upload, X, Image, FileText, AlertCircle, Check } from "lucide-react";
+import { Upload, X, FileText, AlertCircle, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { ImageCropper } from "./ImageCropper";
 
 interface UploadContext {
   projectId?: string;
@@ -43,6 +44,9 @@ interface S3DropzoneProps {
   maxSizeMB?: number;
   disabled?: boolean;
   className?: string;
+  enableCropping?: boolean;
+  cropAspectRatio?: number;
+  cropShape?: "rect" | "round";
 }
 
 function isImageUrl(url: string): boolean {
@@ -63,9 +67,16 @@ export function S3Dropzone({
   accept,
   disabled = false,
   className,
+  enableCropping = false,
+  cropAspectRatio = 1,
+  cropShape = "round",
 }: S3DropzoneProps) {
   const [isDragging, setIsDragging] = useState(false);
   const [uploadSuccess, setUploadSuccess] = useState(false);
+  const [cropperOpen, setCropperOpen] = useState(false);
+  const [imageToCrop, setImageToCrop] = useState<string | null>(null);
+  const [originalFileName, setOriginalFileName] = useState<string>("");
+  const [originalMimeType, setOriginalMimeType] = useState<string>("image/png");
   const fileInputRef = useRef<HTMLInputElement>(null);
   
   const { upload, progress, isUploading, error, reset } = useS3Upload({
@@ -95,6 +106,19 @@ export function S3Dropzone({
     e.stopPropagation();
   }, []);
 
+  const isImageFile = (file: File): boolean => {
+    return file.type.startsWith("image/") && !file.type.includes("svg");
+  };
+
+  const readFileAsDataURL = (file: File): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onload = () => resolve(reader.result as string);
+      reader.onerror = reject;
+      reader.readAsDataURL(file);
+    });
+  };
+
   const handleDrop = useCallback(async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
@@ -104,19 +128,65 @@ export function S3Dropzone({
 
     const files = e.dataTransfer.files;
     if (files.length > 0) {
-      await handleFileUpload(files[0]);
+      await handleFileSelection(files[0]);
     }
-  }, [disabled, isUploading]);
+  }, [disabled, isUploading, enableCropping]);
 
   const handleFileSelect = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const files = e.target.files;
     if (files && files.length > 0) {
-      await handleFileUpload(files[0]);
+      await handleFileSelection(files[0]);
     }
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
-  }, []);
+  }, [enableCropping]);
+
+  const handleFileSelection = async (file: File) => {
+    reset();
+    setUploadSuccess(false);
+
+    if (enableCropping && isImageFile(file)) {
+      try {
+        const dataUrl = await readFileAsDataURL(file);
+        setImageToCrop(dataUrl);
+        setOriginalFileName(file.name);
+        setOriginalMimeType(file.type || "image/png");
+        setCropperOpen(true);
+      } catch (err) {
+        console.error("Error reading file:", err);
+      }
+    } else {
+      await handleFileUpload(file);
+    }
+  };
+
+  const handleCropComplete = async (croppedBlob: Blob, mimeType: string) => {
+    const mimeToExt: Record<string, string> = {
+      "image/png": "png",
+      "image/jpeg": "jpg",
+      "image/webp": "webp",
+    };
+    const extension = mimeToExt[mimeType] || "png";
+    const baseName = originalFileName.replace(/\.[^/.]+$/, "");
+    const croppedFileName = `${baseName}_cropped.${extension}`;
+    const croppedFile = new File([croppedBlob], croppedFileName, {
+      type: mimeType,
+    });
+
+    setCropperOpen(false);
+    setImageToCrop(null);
+    setOriginalFileName("");
+    setOriginalMimeType("image/png");
+    await handleFileUpload(croppedFile);
+  };
+
+  const handleCropperClose = () => {
+    setCropperOpen(false);
+    setImageToCrop(null);
+    setOriginalFileName("");
+    setOriginalMimeType("image/png");
+  };
 
   const handleFileUpload = async (file: File) => {
     reset();
@@ -313,6 +383,18 @@ export function S3Dropzone({
           </div>
         )}
       </div>
+
+      {imageToCrop && (
+        <ImageCropper
+          imageSrc={imageToCrop}
+          open={cropperOpen}
+          onClose={handleCropperClose}
+          onCropComplete={handleCropComplete}
+          aspectRatio={cropAspectRatio}
+          cropShape={cropShape}
+          originalMimeType={originalMimeType}
+        />
+      )}
     </div>
   );
 }

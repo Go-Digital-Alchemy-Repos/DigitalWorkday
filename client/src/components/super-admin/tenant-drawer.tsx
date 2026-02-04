@@ -4339,6 +4339,9 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                       inheritedUrl={systemSettings?.defaultLogoUrl}
                       onUploaded={(fileUrl) => handleBrandingChange("logoUrl", fileUrl)}
                       onRemoved={() => handleBrandingChange("logoUrl", null)}
+                      enableCropping
+                      cropShape="rect"
+                      cropAspectRatio={4}
                     />
                     <S3Dropzone
                       category="tenant-branding-icon"
@@ -4348,6 +4351,9 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                       inheritedUrl={systemSettings?.defaultIconUrl}
                       onUploaded={(fileUrl) => handleBrandingChange("iconUrl", fileUrl)}
                       onRemoved={() => handleBrandingChange("iconUrl", null)}
+                      enableCropping
+                      cropShape="rect"
+                      cropAspectRatio={1}
                     />
                     <S3Dropzone
                       category="tenant-branding-favicon"
@@ -4357,6 +4363,9 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
                       inheritedUrl={systemSettings?.defaultFaviconUrl}
                       onUploaded={(fileUrl) => handleBrandingChange("faviconUrl", fileUrl)}
                       onRemoved={() => handleBrandingChange("faviconUrl", null)}
+                      enableCropping
+                      cropShape="rect"
+                      cropAspectRatio={1}
                     />
                   </div>
                   <div className="grid gap-4 sm:grid-cols-3">

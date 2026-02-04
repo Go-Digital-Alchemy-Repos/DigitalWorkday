@@ -181,6 +181,9 @@ export function BrandingTab() {
               inheritedUrl={systemSettings?.defaultLogoUrl}
               onUploaded={(fileUrl) => handleChange("logoUrl", fileUrl)}
               onRemoved={() => handleChange("logoUrl", null)}
+              enableCropping
+              cropShape="rect"
+              cropAspectRatio={4}
             />
             <S3Dropzone
               category="tenant-branding-icon"
@@ -190,6 +193,9 @@ export function BrandingTab() {
               inheritedUrl={systemSettings?.defaultIconUrl}
               onUploaded={(fileUrl) => handleChange("iconUrl", fileUrl)}
               onRemoved={() => handleChange("iconUrl", null)}
+              enableCropping
+              cropShape="rect"
+              cropAspectRatio={1}
             />
             <S3Dropzone
               category="tenant-branding-favicon"
@@ -199,6 +205,9 @@ export function BrandingTab() {
               inheritedUrl={systemSettings?.defaultFaviconUrl}
               onUploaded={(fileUrl) => handleChange("faviconUrl", fileUrl)}
               onRemoved={() => handleChange("faviconUrl", null)}
+              enableCropping
+              cropShape="rect"
+              cropAspectRatio={1}
             />
           </div>
         </CardContent>

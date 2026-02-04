@@ -184,6 +184,9 @@ export default function UserProfilePage() {
                     valueUrl={user.avatarUrl}
                     onUploaded={handleAvatarUploaded}
                     onRemoved={handleAvatarRemove}
+                    enableCropping
+                    cropShape="round"
+                    cropAspectRatio={1}
                   />
                 </div>
               </div>
