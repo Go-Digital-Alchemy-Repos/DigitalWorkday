@@ -109,6 +109,9 @@ export function SubtaskDetailDrawer({
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#3b82f6");
   const [hasChanges, setHasChanges] = useState(false);
+  const [localDueDate, setLocalDueDate] = useState<Date | null>(
+    subtask?.dueDate ? new Date(subtask.dueDate) : null
+  );
 
   const isActualSubtask = isSubtask(subtask);
 
@@ -235,8 +238,10 @@ export function SubtaskDetailDrawer({
           ? subtask.description 
           : subtask.description ? JSON.stringify(subtask.description) : ""
       );
+      setLocalDueDate(subtask.dueDate ? new Date(subtask.dueDate) : null);
+      setHasChanges(false);
     }
-  }, [subtask]);
+  }, [subtask?.id]); // Only reset when the actual subtask ID changes
 
   if (!subtask) return null;
 
@@ -288,7 +293,8 @@ export function SubtaskDetailDrawer({
     if (title.trim()) {
       onUpdate?.(subtask.id, { 
         title: title.trim(),
-        description: description || null
+        description: description || null,
+        dueDate: localDueDate || null
       });
       setHasChanges(false);
       toast({ title: "Subtask saved" });
@@ -296,7 +302,8 @@ export function SubtaskDetailDrawer({
   };
 
   const handleDueDateChange = (date: Date | undefined) => {
-    onUpdate?.(subtask.id, { dueDate: date || null });
+    setLocalDueDate(date || null);
+    setHasChanges(true);
     setDueDatePopoverOpen(false);
   };
 
@@ -503,8 +510,8 @@ export function SubtaskDetailDrawer({
                       className="h-8 justify-start px-2 font-normal"
                       data-testid="button-subtask-due-date"
                     >
-                      {subtask.dueDate ? (
-                        format(new Date(subtask.dueDate), "MMM d, yyyy")
+                      {localDueDate ? (
+                        format(localDueDate, "MMM d, yyyy")
                       ) : (
                         <span className="text-muted-foreground">Set due date</span>
                       )}
@@ -513,11 +520,11 @@ export function SubtaskDetailDrawer({
                   <PopoverContent className="w-auto p-0" align="start">
                     <CalendarComponent
                       mode="single"
-                      selected={subtask.dueDate ? new Date(subtask.dueDate) : undefined}
+                      selected={localDueDate || undefined}
                       onSelect={handleDueDateChange}
                       initialFocus
                     />
-                    {subtask.dueDate && (
+                    {localDueDate && (
                       <div className="p-2 border-t">
                         <Button
                           variant="ghost"
@@ -778,16 +785,16 @@ export function SubtaskDetailDrawer({
         </div>
       </ScrollArea>
 
-      <div className="p-4 border-t bg-background mt-auto">
-        <Button 
-          className="w-full" 
-          onClick={handleSaveAll}
-          disabled={!hasChanges && title === subtask.title}
-          data-testid="button-save-subtask"
-        >
-          Save Subtask
-        </Button>
-      </div>
+          <div className="p-4 border-t bg-background mt-auto">
+            <Button 
+              className="w-full" 
+              onClick={handleSaveAll}
+              disabled={!hasChanges && title === subtask.title}
+              data-testid="button-save-subtask"
+            >
+              Save Subtask
+            </Button>
+          </div>
     </div>
   </SheetContent>
 </Sheet>
