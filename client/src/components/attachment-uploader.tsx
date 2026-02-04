@@ -268,7 +268,18 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragOver(false);
+    // Only set isDragOver to false if we're leaving the dropzone itself, not just entering a child
+    const relatedTarget = e.relatedTarget as Node | null;
+    const currentTarget = e.currentTarget as Node;
+    if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
   }, []);
 
   const downloadMutation = useMutation({
@@ -341,7 +352,7 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
       </div>
 
       <div
-        className={`border-2 border-dashed rounded-lg p-4 transition-colors ${
+        className={`border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer ${
           isDragOver 
             ? "border-primary bg-primary/5" 
             : "border-muted-foreground/20 hover:border-muted-foreground/40"
@@ -349,6 +360,8 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
         onDrop={handleDrop}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
+        onDragEnter={handleDragEnter}
+        onClick={() => fileInputRef.current?.click()}
         data-testid="dropzone-attachments"
       >
         <input
@@ -359,18 +372,11 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
           onChange={(e) => handleFileSelect(e.target.files)}
           data-testid="input-file-attachments"
         />
-        <div className="flex flex-col items-center justify-center gap-2 text-center">
+        <div className="flex flex-col items-center justify-center gap-2 text-center pointer-events-none">
           <Upload className="h-6 w-6 text-muted-foreground" />
           <div className="text-sm text-muted-foreground">
             <span>Drop files here or </span>
-            <button
-              type="button"
-              className="text-primary hover:underline cursor-pointer"
-              onClick={() => fileInputRef.current?.click()}
-              data-testid="button-attach-file"
-            >
-              browse
-            </button>
+            <span className="text-primary hover:underline">browse</span>
           </div>
           <p className="text-xs text-muted-foreground">
             Max {formatFileSize(config.maxFileSizeBytes)} per file
