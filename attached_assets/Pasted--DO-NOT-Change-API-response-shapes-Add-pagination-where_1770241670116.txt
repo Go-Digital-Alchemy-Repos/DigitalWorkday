@@ -1,0 +1,88 @@
+**DO NOT:**
+- Change API response shapes
+- Add pagination where it doesn't exist (separate prompt)
+- Restructure storage layer
+- Touch auth or tenancy logic
+
+### Acceptance Criteria
+- [ ] Projects list endpoint reduces queries by 50%+
+- [ ] Tenant detail endpoint uses batched queries
+- [ ] Response times documented before/after
+- [ ] No API contract changes
+
+### Test Coverage to Add
+- Load tests for optimized endpoints
+- Regression tests for response shape
+
+### Risk Level
+**Medium** - Performance changes can have subtle effects
+
+### Recommended Run Order
+**5 of 5** - Optimization after stability
+
+---
+
+## Prompt 6: Route Module Extraction by Table/Feature (Non-Destructive)
+
+### Objective
+Split the oversized `server/routes.ts` into smaller route modules grouped by table or feature without altering behavior.
+
+### Scope Boundaries
+**DO:**
+- Create route modules under `server/routes/` grouped by table or feature (e.g., `tasks`, `projects`, `clients`, `timeTracking`)
+- Move route handlers from `server/routes.ts` into those modules
+- Keep all route paths, middleware, and response shapes identical
+- Update the main route aggregator to compose the new modules
+- Add inline comments describing table/feature ownership in each module
+
+**DO NOT:**
+- Change database schema or migrations
+- Modify request/response payload shapes
+- Introduce new endpoints or remove existing ones
+- Change auth/tenancy enforcement logic
+- Rename route paths or alter URL structures
+
+### Acceptance Criteria
+- [ ] `server/routes.ts` reduced to a thin aggregator (no large handlers)
+- [ ] Each major table/feature has a dedicated route module
+- [ ] All routes remain reachable under the same paths
+- [ ] No API contract changes (verified via existing tests or manual smoke checks)
+
+### Test Coverage to Add
+- Minimal smoke tests ensuring main route groups still respond (if tests exist)
+
+### Risk Level
+**Low** - Refactor only, no behavioral changes
+
+### Recommended Run Order
+**6 of 6** - Safe refactor after functional stabilization
+
+---
+
+## Summary Table
+
+| Order | Prompt | Risk | Focus Area |
+|-------|--------|------|------------|
+| 1 | Test Fixtures & Coverage | Low | Testing infrastructure |
+| 2 | Agreement Gating Hardening | Medium | Security |
+| 3 | Time Entry Editability | Low | Feature |
+| 4 | Tenant Drawer Usability | Low | UX Polish |
+| 5 | Performance Optimization | Medium | Performance |
+| 6 | Route Module Extraction | Low | Code organization |
+
+---
+
+## Additional Backlog (Not Prioritized)
+
+These items were identified but not included in the immediate roadmap:
+
+- **Mailgun Settings Persistence/Masking** - Tenant integration secrets handling
+- **S3 Upload Consistency** - Unified upload service for branding/avatars
+- **Navigation Mode Switching** - Super vs tenant mode edge cases
+- **Rate Limiting** - API protection for production
+- **Error Response Standardization** - Consistent error shapes
+
+---
+
+*Created: January 14, 2026*
+*Review Frequency: After each prompt completion*
