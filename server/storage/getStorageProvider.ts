@@ -31,7 +31,7 @@ export interface S3Config {
 
 export interface StorageProviderResult {
   config: S3Config;
-  source: "tenant" | "system";
+  source: "tenant" | "system" | "env";
   sourceId: string | null;
 }
 
@@ -215,6 +215,31 @@ export async function getStorageProvider(tenantId: string | null): Promise<Stora
     };
   }
 
+  // Check for Cloudflare R2 environment variables (preferred over AWS S3)
+  const r2AccountId = process.env.CF_R2_ACCOUNT_ID;
+  const r2AccessKeyId = process.env.CF_R2_ACCESS_KEY_ID;
+  const r2SecretAccessKey = process.env.CF_R2_SECRET_ACCESS_KEY;
+  const r2BucketName = process.env.CF_R2_BUCKET_NAME;
+  const r2PublicUrl = process.env.CF_R2_PUBLIC_URL;
+
+  if (r2AccountId && r2AccessKeyId && r2SecretAccessKey && r2BucketName) {
+    debugLog("Using environment variable R2 configuration", { tenantId });
+    return {
+      config: {
+        bucketName: r2BucketName,
+        region: "auto",
+        accessKeyId: r2AccessKeyId,
+        secretAccessKey: r2SecretAccessKey,
+        endpoint: `https://${r2AccountId}.r2.cloudflarestorage.com`,
+        publicUrl: r2PublicUrl,
+        provider: "r2",
+      },
+      source: "env" as const,
+      sourceId: null,
+    };
+  }
+
+  // Check for AWS S3 environment variables (legacy fallback)
   const envRegion = process.env.AWS_REGION;
   const envAccessKeyId = process.env.AWS_ACCESS_KEY_ID;
   const envSecretAccessKey = process.env.AWS_SECRET_ACCESS_KEY;
@@ -231,7 +256,7 @@ export async function getStorageProvider(tenantId: string | null): Promise<Stora
         keyPrefixTemplate: process.env.AWS_S3_KEY_PREFIX,
         provider: "s3",
       },
-      source: "system",
+      source: "env" as const,
       sourceId: null,
     };
   }
@@ -323,7 +348,16 @@ export async function getStorageStatus(tenantId: string | null): Promise<{
     }
   }
 
-  const envConfigured = !!(
+  // Check for R2 env vars (preferred)
+  const envR2Configured = !!(
+    process.env.CF_R2_ACCOUNT_ID &&
+    process.env.CF_R2_ACCESS_KEY_ID &&
+    process.env.CF_R2_SECRET_ACCESS_KEY &&
+    process.env.CF_R2_BUCKET_NAME
+  );
+
+  // Check for S3 env vars (legacy fallback)
+  const envS3Configured = !!(
     process.env.AWS_REGION &&
     process.env.AWS_ACCESS_KEY_ID &&
     process.env.AWS_SECRET_ACCESS_KEY &&
@@ -346,8 +380,13 @@ export async function getStorageStatus(tenantId: string | null): Promise<{
     source = "system";
     provider = "s3";
     configured = true;
-  } else if (envConfigured) {
+  } else if (envR2Configured) {
     source = "env";
+    provider = "r2";
+    configured = true;
+  } else if (envS3Configured) {
+    source = "env";
+    provider = "s3";
     configured = true;
   }
 

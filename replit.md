@@ -50,7 +50,7 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **Super Admin Capabilities**: Full tenant user management including inline editing (firstName, lastName, email, role), permanent user deletion with confirmation dialogs, password reset with session invalidation, and comprehensive tenant health diagnostics with repair automation.
 - **User Experience**: Global command palette, keyboard shortcuts, `useUnsavedChanges` hook for dirty state management, and a professional UI design with dark mode support.
 - **SaaS Agreement System**: Manages tenant SaaS agreements with lifecycle, versioning, and user acceptance tracking.
-- **Hierarchical S3 Storage**: Configurable 3-tier S3 storage (tenant-specific → system-level → env vars) for file attachments.
+- **Hierarchical Storage (R2/S3)**: Configurable storage with resolution order: tenant R2 → tenant S3 → system R2 → system S3 → env R2 → env S3. Cloudflare R2 is the preferred default provider.
 - **Centralized Type Augmentation**: `server/types.d.ts` provides TypeScript declarations for Express Request properties (tenant context, requestId, clientAccess) attached by middleware, eliminating `(req as any)` casts.
 
 ## Database Migrations & Schema Readiness
@@ -157,4 +157,5 @@ Super Admin API endpoint: `GET /api/v1/super/tenancy/backfill?dryRun=true` for p
 - **Passport.js**: Session-based authentication.
 - **Railway**: Deployment platform.
 - **Mailgun**: Email sending.
-- **AWS S3 (or compatible)**: File storage for attachments and exports.
+- **Cloudflare R2**: Primary file storage for profile images, documents, attachments, and exports (S3-compatible API).
+- **AWS S3 (or compatible)**: Legacy fallback file storage for attachments and exports.
