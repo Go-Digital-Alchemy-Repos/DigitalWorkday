@@ -40,6 +40,7 @@ interface CommentThreadProps {
   comments: CommentWithUser[];
   taskId: string;
   currentUserId?: string;
+  users?: User[];
   onAdd?: (body: string) => void;
   onUpdate?: (id: string, body: string) => void;
   onDelete?: (id: string) => void;
@@ -96,6 +97,7 @@ export function CommentThread({
   comments,
   taskId,
   currentUserId,
+  users,
   onAdd,
   onUpdate,
   onDelete,
@@ -107,10 +109,13 @@ export function CommentThread({
   const [editBody, setEditBody] = useState("");
   const commentEditorRef = useRef<CommentEditorRef>(null);
 
-  // Use tenant users endpoint for @mentions
+  // Use tenant users endpoint for @mentions as fallback
   const { data: tenantUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/tenant/users"],
+    enabled: !users || users.length === 0,
   });
+
+  const mentionUsers = users && users.length > 0 ? users : tenantUsers;
 
   const handleSubmit = (content?: string) => {
     const commentBody = content || body;
@@ -184,7 +189,7 @@ export function CommentThread({
                       <CommentEditor
                         value={editBody}
                         onChange={setEditBody}
-                        users={tenantUsers}
+                        users={mentionUsers}
                         data-testid="textarea-edit-comment"
                       />
                       <div className="flex gap-1">
@@ -287,7 +292,7 @@ export function CommentThread({
             onChange={setBody}
             onSubmit={handleSubmit}
             placeholder="Write a comment... Type @ to mention someone"
-            users={tenantUsers}
+            users={mentionUsers}
             data-testid="textarea-comment"
           />
         </div>

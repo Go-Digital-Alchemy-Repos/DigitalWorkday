@@ -1121,6 +1121,7 @@ export function TaskDetailDrawer({
             onDelete={(id) => deleteCommentMutation.mutate(id)}
             onResolve={(id) => resolveCommentMutation.mutate(id)}
             onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
+            users={availableUsers}
           />
 
           <Separator />
