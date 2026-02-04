@@ -133,11 +133,14 @@ function categorizeTasksForTwoColumn(tasks: TaskWithRelations[]): {
         noDueDate.push(task);
       } else {
         const dueDate = new Date(task.dueDate);
-        if (isPast(dueDate) && !isToday(dueDate)) {
+        const pastCheck = isPast(dueDate);
+        const todayCheck = isToday(dueDate);
+        const futureCheck = isFuture(dueDate);
+        if (pastCheck && !todayCheck) {
           overdue.push(task);
-        } else if (isToday(dueDate)) {
+        } else if (todayCheck) {
           today.push(task);
-        } else if (isFuture(dueDate)) {
+        } else if (futureCheck) {
           upcoming.push(task);
         }
       }
