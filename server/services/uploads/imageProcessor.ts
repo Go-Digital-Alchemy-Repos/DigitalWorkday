@@ -1,13 +1,30 @@
 /**
  * Global Image Compression Pipeline
  * 
- * Provides consistent image processing across all upload paths.
+ * Provides consistent image processing across upload paths.
  * Uses sharp for high-performance server-side image manipulation.
  * 
- * DESIGN DECISIONS:
+ * ARCHITECTURE:
+ * This application has two upload paths, each with compression:
+ * 
+ * 1. SERVER-SIDE PROXY (/api/v1/uploads/upload):
+ *    - Files sent to server, processed by this module, uploaded to R2
+ *    - Used for: branding assets, task attachments via proxy
+ *    - Compression: Automatic via processImage()
+ * 
+ * 2. CLIENT-SIDE PRESIGNED (/api/v1/uploads/presign):
+ *    - Files uploaded directly to R2 via presigned URL
+ *    - Used for: avatars (via ImageCropper which handles compression)
+ *    - Compression: Client-side via ImageCropper component
+ * 
+ * This dual approach ensures compression happens for all image uploads
+ * while maintaining the performance benefits of direct uploads for
+ * user-initiated avatar changes.
+ * 
+ * COMPRESSION CONFIGS:
  * - Avatar images: Max 400x400, WebP preferred (0.85 quality)
- * - Branding logos: Max 1200x400, preserve original format when possible
- * - Icons/favicons: Max 512x512, preserve format for ICO/SVG
+ * - Branding logos: Max 1200x400, preserve original format
+ * - Icons/favicons: Max 512x512/64x64, preserve format for ICO/SVG
  * - Task attachments: Max 2000x2000, moderate compression
  * 
  * FORMAT HANDLING:

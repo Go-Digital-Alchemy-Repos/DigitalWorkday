@@ -22,6 +22,7 @@ import { S3Client, PutObjectCommand, DeleteObjectCommand } from "@aws-sdk/client
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import crypto from "crypto";
 import { getStorageProvider, getStorageStatus, createS3ClientFromConfig, StorageNotConfiguredError, type S3Config } from "../../storage/getStorageProvider";
+import { processImage, isImageMimeType } from "./imageProcessor";
 
 export type UploadCategory =
   | "global-branding-logo"
@@ -325,6 +326,11 @@ export async function createPresignedUpload(
 /**
  * Upload a file directly to storage (server-side proxy upload)
  * This bypasses CORS restrictions by uploading from the server
+ * 
+ * Images are automatically compressed and optimized:
+ * - Resized to category-specific max dimensions
+ * - Converted to efficient formats (WebP for photos, PNG for transparency)
+ * - Quality-optimized to reduce storage costs
  */
 export async function uploadToStorage(
   category: UploadCategory,
@@ -338,17 +344,47 @@ export async function uploadToStorage(
     throw new Error(validation.error);
   }
 
+  let finalBuffer = buffer;
+  let finalContentType = contentType;
+  let finalFilename = filename;
+
+  // Apply image compression pipeline for image uploads
+  if (isImageMimeType(contentType)) {
+    try {
+      const processed = await processImage(buffer, contentType, category);
+      finalBuffer = processed.buffer;
+      finalContentType = processed.mimeType;
+      
+      // Update filename extension if format changed
+      if (processed.mimeType !== contentType) {
+        const extMap: Record<string, string> = {
+          "image/webp": ".webp",
+          "image/png": ".png",
+          "image/jpeg": ".jpg",
+        };
+        const newExt = extMap[processed.mimeType];
+        if (newExt) {
+          const baseName = filename.replace(/\.[^.]+$/, "");
+          finalFilename = baseName + newExt;
+        }
+      }
+    } catch (error) {
+      console.error("[uploadToStorage] Image processing failed, using original:", error);
+      // Continue with original file if processing fails
+    }
+  }
+
   const storageProvider = await getStorageProvider(context.tenantId || null);
   const client = createS3ClientFromConfig(storageProvider.config);
   const bucket = storageProvider.config.bucketName;
 
-  const key = generateS3Key(category, filename, context);
+  const key = generateS3Key(category, finalFilename, context);
 
   const command = new PutObjectCommand({
     Bucket: bucket,
     Key: key,
-    Body: buffer,
-    ContentType: contentType,
+    Body: finalBuffer,
+    ContentType: finalContentType,
   });
 
   await client.send(command);

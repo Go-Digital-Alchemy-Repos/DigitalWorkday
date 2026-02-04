@@ -51,6 +51,89 @@ function formatFileSize(bytes: number): string {
   return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
 }
 
+const ATTACHMENT_MAX_DIMENSION = 2000;
+const ATTACHMENT_WEBP_QUALITY = 0.85;
+
+async function compressImageIfNeeded(file: File): Promise<{ file: File; mimeType: string }> {
+  if (!file.type.startsWith("image/")) {
+    return { file, mimeType: file.type };
+  }
+  
+  if (file.type === "image/svg+xml" || file.type === "image/x-icon" || file.type === "image/vnd.microsoft.icon") {
+    return { file, mimeType: file.type };
+  }
+  
+  return new Promise((resolve) => {
+    const img = new window.Image();
+    const url = URL.createObjectURL(file);
+    
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      
+      let width = img.width;
+      let height = img.height;
+      
+      if (width <= ATTACHMENT_MAX_DIMENSION && height <= ATTACHMENT_MAX_DIMENSION) {
+        if (file.type === "image/webp" || file.type === "image/png" || file.type === "image/gif") {
+          resolve({ file, mimeType: file.type });
+          return;
+        }
+      }
+      
+      if (width > ATTACHMENT_MAX_DIMENSION || height > ATTACHMENT_MAX_DIMENSION) {
+        const scale = Math.min(ATTACHMENT_MAX_DIMENSION / width, ATTACHMENT_MAX_DIMENSION / height);
+        width = Math.round(width * scale);
+        height = Math.round(height * scale);
+      }
+      
+      const canvas = document.createElement("canvas");
+      canvas.width = width;
+      canvas.height = height;
+      const ctx = canvas.getContext("2d");
+      
+      if (!ctx) {
+        resolve({ file, mimeType: file.type });
+        return;
+      }
+      
+      ctx.imageSmoothingEnabled = true;
+      ctx.imageSmoothingQuality = "high";
+      ctx.drawImage(img, 0, 0, width, height);
+      
+      let outputType = "image/webp";
+      let quality: number | undefined = ATTACHMENT_WEBP_QUALITY;
+      
+      if (file.type === "image/png" || file.type === "image/gif") {
+        outputType = "image/png";
+        quality = undefined;
+      }
+      
+      canvas.toBlob(
+        (blob) => {
+          if (blob) {
+            const ext = outputType === "image/webp" ? ".webp" : ".png";
+            const baseName = file.name.replace(/\.[^.]+$/, "");
+            const compressedFile = new window.File([blob], baseName + ext, { type: outputType });
+            console.log(`[attachment] Compressed ${file.name}: ${(file.size / 1024).toFixed(1)}KB → ${(blob.size / 1024).toFixed(1)}KB`);
+            resolve({ file: compressedFile, mimeType: outputType });
+          } else {
+            resolve({ file, mimeType: file.type });
+          }
+        },
+        outputType,
+        quality
+      );
+    };
+    
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      resolve({ file, mimeType: file.type });
+    };
+    
+    img.src = url;
+  });
+}
+
 export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -76,13 +159,15 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
     }]);
 
     try {
+      const { file: processedFile, mimeType } = await compressImageIfNeeded(file);
+      
       const presignResponse = await apiRequest(
         "POST",
         `/api/projects/${projectId}/tasks/${taskId}/attachments/presign`,
         {
-          fileName: file.name,
-          mimeType: file.type || "application/octet-stream",
-          fileSizeBytes: file.size,
+          fileName: processedFile.name,
+          mimeType: mimeType || "application/octet-stream",
+          fileSizeBytes: processedFile.size,
         }
       );
 
@@ -91,7 +176,7 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
       const s3Response = await fetch(upload.url, {
         method: upload.method,
         headers: upload.headers,
-        body: file,
+        body: processedFile,
       });
 
       if (!s3Response.ok) {
