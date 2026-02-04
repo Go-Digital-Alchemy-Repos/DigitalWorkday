@@ -844,6 +844,17 @@ export default function Home() {
       </div>
 
       <div className="flex-1 p-4 md:p-6 space-y-4 md:space-y-6">
+        {taskStats.total > 0 && (
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-lg">Your Task Progress</CardTitle>
+            </CardHeader>
+            <CardContent>
+              <TaskProgressBar stats={taskStats} showMilestones />
+            </CardContent>
+          </Card>
+        )}
+
         {isAdmin ? (
           <AdminDashboardSection
             analytics={analytics}
@@ -862,17 +873,6 @@ export default function Home() {
             timeStatsLoading={timeStatsLoading}
             onTaskClick={handleTaskClick}
           />
-        )}
-
-        {taskStats.total > 0 && (
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-lg">Your Task Progress</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <TaskProgressBar stats={taskStats} showMilestones />
-            </CardContent>
-          </Card>
         )}
 
         <div className="grid gap-6 lg:grid-cols-2">
