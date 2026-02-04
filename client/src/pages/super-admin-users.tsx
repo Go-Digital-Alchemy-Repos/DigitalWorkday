@@ -345,9 +345,9 @@ export default function SuperAdminUsers() {
   };
 
   const handleOpenPasswordDrawer = (admin: PlatformAdmin, method: "SET_PASSWORD" | "RESET_LINK") => {
+    resetPasswordForm();
     setAdminToProvision(admin);
     setPasswordMethod(method);
-    resetPasswordForm();
     setPasswordDrawerOpen(true);
   };
 
