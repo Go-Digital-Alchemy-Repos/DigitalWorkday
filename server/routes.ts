@@ -5332,9 +5332,20 @@ export async function registerRoutes(
 
       const updatedUser = await storage.updateUser(user.id, updates);
       
+      // Debug logging for avatar update issues (especially Railway)
+      if (updates.avatarUrl !== undefined) {
+        console.log("[profile-update] User ID:", user.id);
+        console.log("[profile-update] New avatarUrl:", updates.avatarUrl);
+        console.log("[profile-update] Updated user avatarUrl:", updatedUser?.avatarUrl);
+        console.log("[profile-update] Session ID:", req.sessionID);
+      }
+      
       // Update the session user object so /api/auth/me returns fresh data
       if (req.user) {
         Object.assign(req.user, updatedUser);
+        if (updates.avatarUrl !== undefined) {
+          console.log("[profile-update] req.user.avatarUrl after Object.assign:", (req.user as any).avatarUrl);
+        }
       }
       
       res.json({ user: updatedUser });

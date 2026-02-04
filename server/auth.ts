@@ -257,6 +257,13 @@ export function setupAuth(app: Express): void {
       console.log("[auth/me] Session keys:", Object.keys(session || {}));
     }
     
+    // Debug logging for avatar issues (enable with DEBUG_AVATAR=true)
+    if (process.env.DEBUG_AVATAR === "true") {
+      console.log("[auth/me] Session ID:", req.sessionID);
+      console.log("[auth/me] User ID:", user?.id);
+      console.log("[auth/me] User avatarUrl:", user?.avatarUrl);
+    }
+    
     // Include impersonation context if active
     const impersonation = session.isImpersonatingUser ? {
       isImpersonating: true,
