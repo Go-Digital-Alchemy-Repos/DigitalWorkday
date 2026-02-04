@@ -324,70 +324,11 @@ interface DashboardSummaryProps {
 
 function DashboardSummary({ stats, onTaskSelect, isLoading }: DashboardSummaryProps) {
   if (isLoading) {
-    return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-          {[1, 2, 3, 4].map((i) => (
-            <Card key={i}>
-              <CardContent className="p-4">
-                <Skeleton className="h-4 w-20 mb-2" />
-                <Skeleton className="h-8 w-12" />
-              </CardContent>
-            </Card>
-          ))}
-        </div>
-      </div>
-    );
+    return null;
   }
 
   return (
     <div className="space-y-4">
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
-        <Card className={stats.overdueCount > 0 ? "border-red-500/30 bg-red-500/5" : ""} data-testid="card-overdue-stats">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <AlertCircle className={`h-4 w-4 ${stats.overdueCount > 0 ? "text-red-500" : ""}`} />
-              <span className="text-xs font-medium">Overdue</span>
-            </div>
-            <p className={`text-2xl font-bold ${stats.overdueCount > 0 ? "text-red-500" : ""}`}>
-              {stats.overdueCount}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card className={stats.todayCount > 0 ? "border-blue-500/30 bg-blue-500/5" : ""} data-testid="card-today-stats">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Clock className={`h-4 w-4 ${stats.todayCount > 0 ? "text-blue-500" : ""}`} />
-              <span className="text-xs font-medium">Due Today</span>
-            </div>
-            <p className={`text-2xl font-bold ${stats.todayCount > 0 ? "text-blue-500" : ""}`}>
-              {stats.todayCount}
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-inprogress-stats">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <Zap className="h-4 w-4 text-yellow-500" />
-              <span className="text-xs font-medium">In Progress</span>
-            </div>
-            <p className="text-2xl font-bold">{stats.inProgressCount}</p>
-          </CardContent>
-        </Card>
-
-        <Card className="border-green-500/30 bg-green-500/5" data-testid="card-completed-stats">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-2 text-muted-foreground mb-1">
-              <CheckCircle2 className="h-4 w-4 text-green-500" />
-              <span className="text-xs font-medium">Done This Week</span>
-            </div>
-            <p className="text-2xl font-bold text-green-500">{stats.completedThisWeek}</p>
-          </CardContent>
-        </Card>
-      </div>
-
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
         <Card data-testid="card-quick-insights">
           <CardHeader className="pb-2 pt-4 px-4">
