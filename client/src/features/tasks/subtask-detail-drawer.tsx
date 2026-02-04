@@ -276,7 +276,12 @@ export function SubtaskDetailDrawer({
     const currentDesc = typeof subtask.description === 'string' 
       ? subtask.description 
       : subtask.description ? JSON.stringify(subtask.description) : "";
-    setHasChanges(value !== currentDesc);
+    
+    // Normalize empty strings/nulls for comparison
+    const normalizedValue = value || "";
+    const normalizedCurrent = currentDesc || "";
+    
+    setHasChanges(normalizedValue !== normalizedCurrent);
   };
 
   const handleDescriptionBlur = () => {
