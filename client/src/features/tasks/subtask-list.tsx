@@ -132,6 +132,8 @@ export function SubtaskList({
       onAdd?.(newTitle.trim());
       setNewTitle("");
       setIsAdding(false);
+      // Explicitly invalidate to ensure the task detail (which owns the subtasks array) is refreshed
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] });
     }
   };
 

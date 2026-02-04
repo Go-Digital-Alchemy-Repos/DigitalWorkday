@@ -241,6 +241,8 @@ export function TaskDetailDrawer({
       if (task?.id) {
         queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.id] });
       }
+      // Ensure the subtasks list specifically is refreshed
+      queryClient.invalidateQueries({ queryKey: [`/api/time-entries?taskId=${task?.id}`] });
     },
     onError: (error: any) => {
       toast({
