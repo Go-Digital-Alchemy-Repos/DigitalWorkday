@@ -235,6 +235,11 @@ export function setupAuth(app: Express): void {
   });
 
   app.get("/api/auth/me", (req, res) => {
+    // Prevent caching to ensure fresh user data (especially for avatar updates)
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    
     if (!req.isAuthenticated()) {
       return res.status(401).json({ error: "Not authenticated" });
     }

@@ -5300,6 +5300,11 @@ export async function registerRoutes(
   }).strict();
 
   app.patch("/api/users/me", requireAuth, async (req, res) => {
+    // Prevent caching to ensure fresh user data
+    res.set('Cache-Control', 'no-store, no-cache, must-revalidate, private');
+    res.set('Pragma', 'no-cache');
+    res.set('Expires', '0');
+    
     try {
       const user = req.user as any;
 
