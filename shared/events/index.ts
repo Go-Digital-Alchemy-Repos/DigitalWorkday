@@ -645,6 +645,36 @@ export interface ChatSendPayload {
 }
 
 // =============================================================================
+// PRESENCE EVENTS (User Online/Offline Status)
+// =============================================================================
+
+export const PRESENCE_EVENTS = {
+  PING: 'presence:ping',
+  UPDATE: 'presence:update',
+  BULK_UPDATE: 'presence:bulkUpdate',
+} as const;
+
+export interface PresenceState {
+  userId: string;
+  online: boolean;
+  lastSeenAt: Date | string;
+}
+
+export interface PresencePingPayload {
+  // Minimal payload - server derives userId/tenantId from session
+}
+
+export interface PresenceUpdatePayload {
+  userId: string;
+  online: boolean;
+  lastSeenAt: Date | string;
+}
+
+export interface PresenceBulkUpdatePayload {
+  users: PresenceState[];
+}
+
+// =============================================================================
 // NOTIFICATION EVENTS
 // =============================================================================
 
@@ -748,6 +778,9 @@ export type ServerToClientEvents = {
   [NOTIFICATION_EVENTS.READ]: (payload: NotificationReadPayload) => void;
   [NOTIFICATION_EVENTS.ALL_READ]: (payload: NotificationAllReadPayload) => void;
   [NOTIFICATION_EVENTS.DELETED]: (payload: NotificationDeletedPayload) => void;
+  // Presence events
+  [PRESENCE_EVENTS.UPDATE]: (payload: PresenceUpdatePayload) => void;
+  [PRESENCE_EVENTS.BULK_UPDATE]: (payload: PresenceBulkUpdatePayload) => void;
 };
 
 export type ClientToServerEvents = {
@@ -761,4 +794,6 @@ export type ClientToServerEvents = {
   [CHAT_ROOM_EVENTS.JOIN]: (payload: ChatJoinPayload) => void;
   [CHAT_ROOM_EVENTS.LEAVE]: (payload: ChatLeavePayload) => void;
   [CHAT_ROOM_EVENTS.SEND]: (payload: ChatSendPayload) => void;
+  // Presence events
+  [PRESENCE_EVENTS.PING]: (payload: PresencePingPayload) => void;
 };

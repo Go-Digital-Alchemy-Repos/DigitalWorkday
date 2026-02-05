@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarPresenceIndicator } from "@/components/ui/presence-indicator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
@@ -409,12 +410,15 @@ function DmRow({ dm, currentUserId, isSelected, onClick }: DmRowProps) {
             <Users className="h-4 w-4 text-muted-foreground" />
           </div>
         ) : firstMember ? (
-          <Avatar className="h-8 w-8">
-            <AvatarImage src={firstMember.user.avatarUrl || undefined} />
-            <AvatarFallback className="text-xs">
-              {getInitials(firstMember.user.name || firstMember.user.email)}
-            </AvatarFallback>
-          </Avatar>
+          <div className="relative">
+            <Avatar className="h-8 w-8">
+              <AvatarImage src={firstMember.user.avatarUrl || undefined} />
+              <AvatarFallback className="text-xs">
+                {getInitials(firstMember.user.name || firstMember.user.email)}
+              </AvatarFallback>
+            </Avatar>
+            <AvatarPresenceIndicator userId={firstMember.userId} avatarSize={32} />
+          </div>
         ) : (
           <Avatar className="h-8 w-8">
             <AvatarFallback className="text-xs">?</AvatarFallback>

@@ -22,6 +22,7 @@ import {
   ROOM_EVENTS,
   CHAT_ROOM_EVENTS,
   CONNECTION_EVENTS,
+  PRESENCE_EVENTS,
   ConnectionConnectedPayload
 } from '@shared/events';
 import { randomUUID } from 'crypto';
@@ -29,6 +30,15 @@ import { log } from '../lib/log';
 import { getSessionMiddleware } from '../auth';
 import passport from 'passport';
 import { chatDebugStore, isChatDebugEnabled } from './chatDebug';
+import { 
+  markConnected, 
+  markDisconnected, 
+  recordPing, 
+  toPresencePayload,
+  startPresenceCleanup,
+  onUserOffline,
+  getOnlineUsersForTenant
+} from './presence';
 
 // Extended socket interface with authenticated user data
 interface AuthenticatedSocket extends Socket<ClientToServerEvents, ServerToClientEvents> {
@@ -108,12 +118,45 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
     };
     socket.emit(CONNECTION_EVENTS.CONNECTED, connectedPayload);
 
-    // Automatically join user's personal notification room
+    // Automatically join user's personal notification room and tenant room
     if (authSocket.userId) {
       const userRoom = `user:${authSocket.userId}`;
       socket.join(userRoom);
       log(`Client ${socket.id} joined personal room: ${userRoom}`, 'socket.io');
     }
+
+    // Join tenant room for presence updates and tenant-wide broadcasts
+    if (authSocket.tenantId) {
+      const tenantRoom = `tenant:${authSocket.tenantId}`;
+      socket.join(tenantRoom);
+      log(`Client ${socket.id} joined tenant room: ${tenantRoom}`, 'socket.io');
+    }
+
+    // Track user presence on connection
+    if (authSocket.userId && authSocket.tenantId) {
+      const { info, statusChanged } = markConnected(authSocket.tenantId, authSocket.userId);
+      if (statusChanged) {
+        // Broadcast presence update to tenant room
+        const tenantRoom = `tenant:${authSocket.tenantId}`;
+        io?.to(tenantRoom).emit(PRESENCE_EVENTS.UPDATE, toPresencePayload(info));
+      }
+      
+      // Send bulk presence update to the newly connected client
+      // so they get current online status of all users in their tenant
+      const onlineUsers = getOnlineUsersForTenant(authSocket.tenantId);
+      if (onlineUsers.length > 0) {
+        socket.emit(PRESENCE_EVENTS.BULK_UPDATE, {
+          users: onlineUsers.map(toPresencePayload),
+        });
+      }
+    }
+
+    // Handle presence ping (heartbeat)
+    socket.on(PRESENCE_EVENTS.PING, () => {
+      if (authSocket.userId && authSocket.tenantId) {
+        recordPing(authSocket.tenantId, authSocket.userId);
+      }
+    });
 
     // Handle joining a project room
     socket.on(ROOM_EVENTS.JOIN_PROJECT, ({ projectId }) => {
@@ -264,7 +307,26 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
         tenantId: authSocket.tenantId || undefined,
         disconnectReason: reason,
       });
+
+      // Track user presence on disconnection
+      if (authSocket.userId && authSocket.tenantId) {
+        const { info, statusChanged } = markDisconnected(authSocket.tenantId, authSocket.userId);
+        if (statusChanged) {
+          // Broadcast presence update to tenant room
+          const tenantRoom = `tenant:${authSocket.tenantId}`;
+          io?.to(tenantRoom).emit(PRESENCE_EVENTS.UPDATE, toPresencePayload(info));
+        }
+      }
     });
+  });
+
+  // Start presence cleanup for stale sessions
+  startPresenceCleanup();
+  
+  // Register callback to emit presence updates when users go offline due to stale sessions
+  onUserOffline((tenantId, userId, info) => {
+    const tenantRoom = `tenant:${tenantId}`;
+    io?.to(tenantRoom).emit(PRESENCE_EVENTS.UPDATE, toPresencePayload(info));
   });
 
   log('Socket.IO server initialized', 'socket.io');

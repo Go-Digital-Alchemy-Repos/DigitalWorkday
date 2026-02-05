@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { AvatarPresenceIndicator } from "@/components/ui/presence-indicator";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import {
@@ -199,14 +200,17 @@ export function ChatContextPanel({
                           className="flex items-center gap-2 p-2 rounded-md hover-elevate"
                           data-testid={`member-${member.userId}`}
                         >
-                          <Avatar className="h-7 w-7">
-                            {member.user.avatarUrl && (
-                              <AvatarImage src={member.user.avatarUrl} />
-                            )}
-                            <AvatarFallback className="text-xs">
-                              {getInitials(member.user.name || member.user.email)}
-                            </AvatarFallback>
-                          </Avatar>
+                          <div className="relative">
+                            <Avatar className="h-7 w-7">
+                              {member.user.avatarUrl && (
+                                <AvatarImage src={member.user.avatarUrl} />
+                              )}
+                              <AvatarFallback className="text-xs">
+                                {getInitials(member.user.name || member.user.email)}
+                              </AvatarFallback>
+                            </Avatar>
+                            <AvatarPresenceIndicator userId={member.userId} avatarSize={28} size="sm" />
+                          </div>
                           <span className="text-sm truncate flex-1">
                             {member.user.name || member.user.email}
                           </span>
@@ -263,14 +267,17 @@ export function ChatContextPanel({
             {selectedDm && otherMember && (
               <div className="p-4 space-y-6">
                 <div className="flex flex-col items-center text-center space-y-3">
-                  <Avatar className="h-20 w-20">
-                    {otherMember.avatarUrl && (
-                      <AvatarImage src={otherMember.avatarUrl} />
-                    )}
-                    <AvatarFallback className="text-xl">
-                      {getInitials(otherMember.name || otherMember.email)}
-                    </AvatarFallback>
-                  </Avatar>
+                  <div className="relative">
+                    <Avatar className="h-20 w-20">
+                      {otherMember.avatarUrl && (
+                        <AvatarImage src={otherMember.avatarUrl} />
+                      )}
+                      <AvatarFallback className="text-xl">
+                        {getInitials(otherMember.name || otherMember.email)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <AvatarPresenceIndicator userId={otherMember.id} avatarSize={80} size="lg" />
+                  </div>
                   <div>
                     <h3 className="font-semibold">
                       {otherMember.name || "Unknown User"}

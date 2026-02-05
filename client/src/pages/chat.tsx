@@ -81,6 +81,7 @@ import {
   PopoverTrigger,
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
+import { PresenceIndicator, AvatarPresenceIndicator } from "@/components/ui/presence-indicator";
 import { CHAT_EVENTS, CHAT_ROOM_EVENTS, ChatNewMessagePayload, ChatMessageUpdatedPayload, ChatMessageDeletedPayload, ChatMemberJoinedPayload, ChatMemberLeftPayload, ChatMemberAddedPayload, ChatMemberRemovedPayload, ChatConversationReadPayload } from "@shared/events";
 
 interface ChatChannel {
@@ -1671,11 +1672,14 @@ export default function ChatPage() {
                         onCheckedChange={() => toggleUserSelection(teamUser.id)}
                         data-testid={`checkbox-user-${teamUser.id}`}
                       />
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-xs">
-                          {getInitials(teamUser.displayName)}
-                        </AvatarFallback>
-                      </Avatar>
+                      <div className="relative">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-xs">
+                            {getInitials(teamUser.displayName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <AvatarPresenceIndicator userId={teamUser.id} avatarSize={32} />
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{teamUser.displayName}</p>
                         <p className="text-xs text-muted-foreground truncate">{teamUser.email}</p>
@@ -1963,11 +1967,14 @@ export default function ChatPage() {
                           className="w-full px-3 py-2 text-left text-sm hover-elevate flex items-center gap-2"
                           data-testid={`mention-user-${u.id}`}
                         >
-                          <Avatar className="h-6 w-6">
-                            <AvatarFallback className="text-xs">
-                              {u.displayName.charAt(0).toUpperCase()}
-                            </AvatarFallback>
-                          </Avatar>
+                          <div className="relative">
+                            <Avatar className="h-6 w-6">
+                              <AvatarFallback className="text-xs">
+                                {u.displayName.charAt(0).toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <AvatarPresenceIndicator userId={u.id} avatarSize={24} size="sm" />
+                          </div>
                           <div className="min-w-0 flex-1">
                             <div className="font-medium truncate">{u.displayName}</div>
                             <div className="text-xs text-muted-foreground truncate">{u.email}</div>
@@ -2282,11 +2289,14 @@ export default function ChatPage() {
                         }}
                         data-testid={`add-member-${u.id}`}
                       >
-                        <Avatar className="h-6 w-6">
-                          <AvatarFallback className="text-xs">
-                            {getInitials(u.displayName)}
-                          </AvatarFallback>
-                        </Avatar>
+                        <div className="relative">
+                          <Avatar className="h-6 w-6">
+                            <AvatarFallback className="text-xs">
+                              {getInitials(u.displayName)}
+                            </AvatarFallback>
+                          </Avatar>
+                          <AvatarPresenceIndicator userId={u.id} avatarSize={24} size="sm" />
+                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium truncate">{u.displayName}</p>
                           <p className="text-xs text-muted-foreground truncate">{u.email}</p>
@@ -2318,11 +2328,14 @@ export default function ChatPage() {
                       className="flex items-center gap-2 p-2 rounded"
                       data-testid={`member-${member.userId}`}
                     >
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-xs">
-                          {getInitials(member.user?.name || member.user?.email || "?")}
-                        </AvatarFallback>
-                      </Avatar>
+                      <div className="relative">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-xs">
+                            {getInitials(member.user?.name || member.user?.email || "?")}
+                          </AvatarFallback>
+                        </Avatar>
+                        <AvatarPresenceIndicator userId={member.userId} avatarSize={32} />
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">
                           {member.user?.name || member.user?.email || "Unknown"}
@@ -2535,11 +2548,14 @@ export default function ChatPage() {
                         onCheckedChange={() => toggleStartChatUserSelection(teamUser.id)}
                         data-testid={`start-chat-checkbox-${teamUser.id}`}
                       />
-                      <Avatar className="h-8 w-8">
-                        <AvatarFallback className="text-xs">
-                          {getInitials(teamUser.displayName)}
-                        </AvatarFallback>
-                      </Avatar>
+                      <div className="relative">
+                        <Avatar className="h-8 w-8">
+                          <AvatarFallback className="text-xs">
+                            {getInitials(teamUser.displayName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <AvatarPresenceIndicator userId={teamUser.id} avatarSize={32} />
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium truncate">{teamUser.displayName}</p>
                         <p className="text-xs text-muted-foreground truncate">{teamUser.email}</p>
