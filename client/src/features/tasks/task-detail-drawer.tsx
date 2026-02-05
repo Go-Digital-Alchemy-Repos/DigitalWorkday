@@ -937,6 +937,8 @@ export function TaskDetailDrawer({
             subtasks={task.subtasks || []}
             taskId={task.id}
             workspaceId={workspaceId}
+            projectId={task.projectId}
+            clientId={task.clientId}
             taskTitle={task.title}
             taskDescription={task.description || undefined}
             onAdd={(title) => addSubtaskMutation.mutate({ taskId: task.id, title })}

@@ -50,6 +50,13 @@
       "when": 1769813434224,
       "tag": "0006_crazy_typhoid_mary",
       "breakpoints": true
+    },
+    {
+      "idx": 7,
+      "version": "7",
+      "when": 1770255511630,
+      "tag": "0007_bizarre_juggernaut",
+      "breakpoints": true
     }
   ]
 }

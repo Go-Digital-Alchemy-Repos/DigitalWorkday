@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, GripVertical, X, CalendarIcon, UserCircle, Sparkles, Loader2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -8,6 +8,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Calendar } from "@/components/ui/calendar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { LogTimeOnCompleteDialog } from "@/components/log-time-on-complete-dialog";
 import { cn } from "@/lib/utils";
 import { format } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -18,6 +19,8 @@ interface SubtaskListProps {
   subtasks: Subtask[];
   taskId: string;
   workspaceId?: string;
+  projectId?: string | null;
+  clientId?: string | null;
   taskTitle?: string;
   taskDescription?: string;
   onAdd?: (title: string) => void;
@@ -41,6 +44,8 @@ export function SubtaskList({
   subtasks,
   taskId,
   workspaceId,
+  projectId,
+  clientId,
   taskTitle,
   taskDescription,
   onAdd,
@@ -56,6 +61,8 @@ export function SubtaskList({
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editingTitle, setEditingTitle] = useState("");
   const [aiSuggestions, setAiSuggestions] = useState<Array<{ title: string; description?: string }>>([]);
+  const [pendingCompleteSubtask, setPendingCompleteSubtask] = useState<Subtask | null>(null);
+  const [showLogTimeDialog, setShowLogTimeDialog] = useState(false);
 
   const { data: workspaceMembers = [] } = useQuery<(WorkspaceMember & { user?: User })[]>({
     queryKey: ["/api/workspaces", workspaceId, "members"],
@@ -192,6 +199,36 @@ export function SubtaskList({
     });
   };
 
+  const handleSubtaskToggle = useCallback((subtaskId: string, completed: boolean) => {
+    if (!completed) {
+      onToggle?.(subtaskId, false);
+      return;
+    }
+
+    const subtask = subtasks.find(s => s.id === subtaskId);
+    if (!subtask) {
+      onToggle?.(subtaskId, true);
+      return;
+    }
+
+    setPendingCompleteSubtask(subtask);
+    setShowLogTimeDialog(true);
+  }, [subtasks, onToggle]);
+
+  const handleCompleteSubtask = useCallback(async () => {
+    if (!pendingCompleteSubtask) return;
+    onToggle?.(pendingCompleteSubtask.id, true);
+    setShowLogTimeDialog(false);
+    setPendingCompleteSubtask(null);
+  }, [pendingCompleteSubtask, onToggle]);
+
+  const handleSkipTimeLog = useCallback(async () => {
+    if (!pendingCompleteSubtask) return;
+    onToggle?.(pendingCompleteSubtask.id, true);
+    setShowLogTimeDialog(false);
+    setPendingCompleteSubtask(null);
+  }, [pendingCompleteSubtask, onToggle]);
+
   const completedCount = subtasks.filter((s) => s.completed).length;
 
   const getAssigneeUser = (assigneeId: string | null): User | undefined => {
@@ -298,7 +335,7 @@ export function SubtaskList({
                 <GripVertical className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 cursor-grab flex-shrink-0" />
                 <Checkbox
                   checked={subtask.completed}
-                  onCheckedChange={(checked) => onToggle?.(subtask.id, checked as boolean)}
+                  onCheckedChange={(checked) => handleSubtaskToggle(subtask.id, checked as boolean)}
                   data-testid={`checkbox-subtask-${subtask.id}`}
                 />
                 {editingId === subtask.id ? (
@@ -493,6 +530,27 @@ export function SubtaskList({
         <p className="text-xs text-muted-foreground py-2">
           No subtasks yet. Click "Add" to create one.
         </p>
+      )}
+
+      {pendingCompleteSubtask && (
+        <LogTimeOnCompleteDialog
+          open={showLogTimeDialog}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowLogTimeDialog(false);
+              setPendingCompleteSubtask(null);
+            }
+          }}
+          itemType="subtask"
+          itemId={pendingCompleteSubtask.id}
+          itemTitle={pendingCompleteSubtask.title}
+          taskId={taskId}
+          projectId={projectId}
+          clientId={clientId}
+          workspaceId={workspaceId || ""}
+          onComplete={handleCompleteSubtask}
+          onSkip={handleSkipTimeLog}
+        />
       )}
     </div>
   );

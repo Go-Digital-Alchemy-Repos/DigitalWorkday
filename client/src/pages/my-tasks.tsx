@@ -98,8 +98,9 @@ import { useAuth } from "@/lib/auth";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { TaskProgressBar } from "@/components/task-progress-bar";
 import { PageShell, PageHeader, EmptyState, LoadingState, DataToolbar } from "@/components/layout";
+import { LogTimeOnCompleteDialog } from "@/components/log-time-on-complete-dialog";
 import type { FilterConfig, SortOption } from "@/components/layout";
-import type { TaskWithRelations, Workspace, User as UserType } from "@shared/schema";
+import type { TaskWithRelations, Workspace, User as UserType, TimeEntry } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 
 type TaskSection = {
@@ -448,6 +449,8 @@ export default function MyTasks() {
   const [showNewTaskDrawer, setShowNewTaskDrawer] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
+  const [pendingCompleteTask, setPendingCompleteTask] = useState<TaskWithRelations | null>(null);
+  const [showLogTimeDialog, setShowLogTimeDialog] = useState(false);
   
   // Debounce search input
   useEffect(() => {
@@ -484,6 +487,11 @@ export default function MyTasks() {
 
   const { data: tasks, isLoading } = useQuery<TaskWithRelations[]>({
     queryKey: ["/api/tasks/my"],
+  });
+
+  const { data: pendingTaskTimeEntries = [] } = useQuery<TimeEntry[]>({
+    queryKey: ["/api/tasks", pendingCompleteTask?.id, "time-entries"],
+    enabled: !!pendingCompleteTask,
   });
 
   // Get taskId from URL for deep linking
@@ -622,12 +630,45 @@ export default function MyTasks() {
     window.history.replaceState({}, '', url.pathname + url.search);
   };
 
-  const handleStatusChange = (taskId: string, completed: boolean) => {
-    updateTaskMutation.mutate({
-      taskId,
-      data: { status: completed ? "done" : "todo" },
+  const handleStatusChange = useCallback((taskId: string, completed: boolean) => {
+    if (!completed) {
+      updateTaskMutation.mutate({
+        taskId,
+        data: { status: "todo" },
+      });
+      return;
+    }
+
+    const task = tasks?.find(t => t.id === taskId);
+    if (!task) {
+      updateTaskMutation.mutate({
+        taskId,
+        data: { status: "done" },
+      });
+      return;
+    }
+
+    setPendingCompleteTask(task);
+    setShowLogTimeDialog(true);
+  }, [tasks, updateTaskMutation]);
+
+  const handleCompleteTask = useCallback(async () => {
+    if (!pendingCompleteTask) return;
+    await updateTaskMutation.mutateAsync({
+      taskId: pendingCompleteTask.id,
+      data: { status: "done" },
     });
-  };
+    setPendingCompleteTask(null);
+  }, [pendingCompleteTask, updateTaskMutation]);
+
+  const handleSkipTimeLog = useCallback(async () => {
+    if (!pendingCompleteTask) return;
+    await updateTaskMutation.mutateAsync({
+      taskId: pendingCompleteTask.id,
+      data: { status: "done" },
+    });
+    setPendingCompleteTask(null);
+  }, [pendingCompleteTask, updateTaskMutation]);
 
   const handlePriorityChange = useCallback((taskId: string, priority: "low" | "medium" | "high" | "urgent") => {
     updateTaskMutation.mutate({ taskId, data: { priority } });
@@ -981,6 +1022,26 @@ export default function MyTasks() {
         currentUserId={user?.id}
         isLoading={createPersonalTaskMutation.isPending}
       />
+
+      {pendingCompleteTask && (
+        <LogTimeOnCompleteDialog
+          open={showLogTimeDialog}
+          onOpenChange={(open) => {
+            if (!open) {
+              setShowLogTimeDialog(false);
+              setPendingCompleteTask(null);
+            }
+          }}
+          itemType="task"
+          itemId={pendingCompleteTask.id}
+          itemTitle={pendingCompleteTask.title}
+          projectId={pendingCompleteTask.projectId}
+          clientId={pendingCompleteTask.project?.clientId || null}
+          workspaceId={pendingCompleteTask.project?.workspaceId || currentWorkspace?.id || ""}
+          onComplete={handleCompleteTask}
+          onSkip={handleSkipTimeLog}
+        />
+      )}
     </div>
   );
 }

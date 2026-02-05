@@ -793,6 +793,7 @@ export const timeEntries = pgTable("time_entries", {
   clientId: varchar("client_id").references(() => clients.id),
   projectId: varchar("project_id").references(() => projects.id),
   taskId: varchar("task_id").references(() => tasks.id),
+  subtaskId: varchar("subtask_id").references(() => subtasks.id),
   title: text("title"),
   description: text("description"),
   scope: text("scope").notNull().default("in_scope"),
@@ -807,6 +808,7 @@ export const timeEntries = pgTable("time_entries", {
   index("time_entries_client_idx").on(table.clientId),
   index("time_entries_project_idx").on(table.projectId),
   index("time_entries_task_idx").on(table.taskId),
+  index("time_entries_subtask_idx").on(table.subtaskId),
   index("time_entries_date_idx").on(table.startTime),
   index("time_entries_tenant_idx").on(table.tenantId),
 ]);
@@ -1865,6 +1867,10 @@ export const timeEntriesRelations = relations(timeEntries, ({ one }) => ({
   task: one(tasks, {
     fields: [timeEntries.taskId],
     references: [tasks.id],
+  }),
+  subtask: one(subtasks, {
+    fields: [timeEntries.subtaskId],
+    references: [subtasks.id],
   }),
 }));
 
