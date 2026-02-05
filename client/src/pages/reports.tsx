@@ -94,8 +94,8 @@ export default function ReportsPage() {
   if (currentView === "landing") {
     return (
       <ScrollArea className="h-full">
-        <div className="container max-w-7xl py-8 px-6">
-          <div className="flex items-center gap-3 mb-8">
+        <div className="container max-w-7xl p-6">
+          <div className="flex items-center gap-3 mb-6">
             <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
               <BarChart3 className="h-6 w-6 text-primary" />
             </div>
@@ -152,7 +152,7 @@ export default function ReportsPage() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="container max-w-7xl py-8 px-6">
+      <div className="container max-w-7xl p-6">
         <div className="flex items-center gap-3 mb-6">
           <Button 
             variant="ghost" 

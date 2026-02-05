@@ -39,8 +39,8 @@ export default function AccountPage() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="container max-w-5xl py-8 px-6">
-        <div className="flex items-center gap-3 mb-8">
+      <div className="container max-w-5xl p-6">
+        <div className="flex items-center gap-3 mb-6">
           <UserCog className="h-8 w-8 text-primary" />
           <div>
             <h1 className="text-2xl font-semibold">Account</h1>

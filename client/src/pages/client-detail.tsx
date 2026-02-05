@@ -519,11 +519,11 @@ export default function ClientDetailPage() {
   if (isLoading) {
     return (
       <div className="flex flex-col h-full overflow-hidden">
-        <div className="flex items-center gap-4 px-6 py-4 border-b border-border shrink-0">
+        <div className="flex items-center gap-4 px-4 md:px-6 py-3 md:py-4 border-b border-border shrink-0">
           <Skeleton className="h-8 w-8" />
           <Skeleton className="h-6 w-48" />
         </div>
-        <div className="flex-1 overflow-auto p-6">
+        <div className="flex-1 overflow-auto p-4 md:p-6">
           <Skeleton className="h-64 w-full" />
         </div>
       </div>
@@ -547,7 +547,7 @@ export default function ClientDetailPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
+      <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-border shrink-0">
         <div className="flex items-center gap-4">
           <Link href="/clients">
             <Button variant="ghost" size="icon" data-testid="button-back-to-clients">

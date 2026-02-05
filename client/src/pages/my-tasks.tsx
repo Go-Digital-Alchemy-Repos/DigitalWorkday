@@ -922,7 +922,7 @@ export default function MyTasks() {
         </div>
 
         {taskStats.total > 0 && (
-          <div className="px-3 md:px-6 pb-4">
+          <div className="px-4 md:px-6 pb-4">
             <TaskProgressBar stats={taskStats} showMilestones />
           </div>
         )}

@@ -26,7 +26,7 @@ export default function UserManagerPage() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="container max-w-6xl py-8 px-6">
+      <div className="container max-w-6xl p-6">
         <div className="flex items-center gap-3 mb-6">
           <UsersRound className="h-8 w-8 text-primary" />
           <div>

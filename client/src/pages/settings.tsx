@@ -33,7 +33,7 @@ export default function SettingsPage() {
 
   return (
     <div className="h-full overflow-auto">
-      <div className="container max-w-6xl mx-auto py-6 px-4">
+      <div className="container max-w-6xl mx-auto p-6">
         <div className="flex items-center gap-3 mb-6">
           <SettingsIcon className="h-8 w-8 text-primary" />
           <div>

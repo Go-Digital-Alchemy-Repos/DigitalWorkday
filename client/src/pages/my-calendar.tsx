@@ -298,7 +298,7 @@ export default function MyCalendarPage() {
   
   return (
     <div className="flex flex-col h-full">
-      <div className="flex items-center justify-between p-4 border-b flex-wrap gap-2">
+      <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b flex-wrap gap-2">
         <div className="flex items-center gap-2">
           <h1 className="font-semibold text-[24px]" data-testid="page-title">My Calendar</h1>
           <Badge variant="secondary" className="text-xs">Personal View</Badge>

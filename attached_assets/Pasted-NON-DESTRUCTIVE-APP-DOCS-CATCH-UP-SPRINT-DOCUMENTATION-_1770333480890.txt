@@ -1,0 +1,86 @@
+NON-DESTRUCTIVE: APP DOCS “CATCH-UP” SPRINT (DOCUMENTATION ONLY)
+
+GOAL
+Update the in-app **Super Admin → App Docs** so it accurately documents all features, routes/APIs, and configuration that have been added or changed since our last documentation sprint.
+
+IMPORTANT: Documentation work ONLY.
+- Do NOT modify business logic or UI features (except minor doc formatting within the App Docs area).
+- Do NOT refactor code.
+- Do NOT change endpoints, database, or behavior.
+
+────────────────────────────────────────────────────────
+STEP 1 — ESTABLISH BASELINE & DIFF
+1) Identify where App Docs content is stored (DB tables, markdown files, etc.).
+2) Identify the date/time or commit hash of the “last documentation sprint” by checking:
+   - existing App Docs entries mentioning the sprint
+   - recent commits/tags
+   - any /docs notes
+3) Build a “changes since sprint” inventory by scanning:
+   - server routes and controllers/modules
+   - migrations/schema changes
+   - new UI pages/components
+   - new background jobs / cron / queue workers
+   - new socket events
+   - new env vars/config
+
+Create /docs/APP_DOCS/CHANGELOG_SINCE_LAST_SPRINT.md containing:
+- grouped list of changes by area (Chat, Comments/Mentions, Presence/Read Receipts, Theme/Theming, Reports, Admin Tools, etc.)
+- links/paths to key files and endpoints involved
+
+Do not write App Docs yet until this changelog exists.
+
+────────────────────────────────────────────────────────
+STEP 2 — UPDATE IN-APP APP DOCS (SUPER ADMIN)
+For each change group found in the changelog, update App Docs with:
+1) Feature overview (what it is, who can access it)
+2) UI location(s) and key workflows
+3) API endpoints (method + path + purpose)
+4) Socket events (if any)
+5) Data model notes (tables/columns added, if any)
+6) Permissions/RBAC notes (tenant scoping, admin-only, etc.)
+7) Edge cases / known limitations
+8) “How to test” checklist (manual verification steps)
+
+Required sections to include (if applicable to what was added):
+- Chat UX upgrades (Channels + DMs layout)
+- Typing indicators
+- Presence (online/idle/offline)
+- Read receipts + unread counts + jump-to-unread
+- Threaded replies
+- Mentions standardization (@mentions)
+- Rich Text Editor standardization (code block, lists, alignment)
+- Theme system (light/dark/system + accent presets)
+- Theme migration/token usage guidelines
+- Any new Super Admin tools (Chat Data Settings, exports, purge jobs) if implemented
+
+────────────────────────────────────────────────────────
+STEP 3 — API REGISTRY + CONFIG DOCS
+1) Update the internal “API Registry” section/page(s) in App Docs:
+   - ensure every new/modified endpoint is listed
+   - ensure request/response examples (brief) exist where helpful
+2) Update “Configuration” docs:
+   - new ENV vars
+   - storage providers (S3/R2) if used
+   - cron/job runner config if used
+   - feature flags if used
+
+────────────────────────────────────────────────────────
+STEP 4 — QUALITY BAR
+1) App Docs entries must be consistent in structure:
+   - Title
+   - Summary
+   - Roles/Access
+   - UI locations
+   - API endpoints
+   - Socket events
+   - Data model
+   - Testing checklist
+2) Ensure no stale/contradictory docs remain:
+   - if old docs reference renamed modules or outdated flows, update them.
+
+────────────────────────────────────────────────────────
+FINAL OUTPUT REQUIRED
+After updating App Docs, provide:
+1) A list of App Docs pages added/updated (titles)
+2) The changelog doc path created (/docs/APP_DOCS/CHANGELOG_SINCE_LAST_SPRINT.md)
+3) A quick “coverage check” summary: which major areas were documented and which were not (if any)

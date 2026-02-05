@@ -1,0 +1,181 @@
+NON-DESTRUCTIVE THEME FOUNDATION: Create Tailwind + CSS Variable Theme Token System (Light/Dark + Accent)
+
+GOAL
+Create a token-based theming system using CSS variables + Tailwind mappings so the app can support:
+- Light mode
+- Dark mode
+- Accent color presets
+While keeping the current look as the default.
+
+STRICT NON-DESTRUCTIVE RULES
+1) Do NOT redesign screens or change layouts.
+2) Do NOT change business logic, routes, or APIs.
+3) Do NOT hardcode new hex colors in components—create tokens first.
+4) Do NOT migrate all components in this prompt. This prompt only creates the theme foundation + minimal wiring.
+5) Default appearance must remain visually the same after this change.
+
+────────────────────────────────────────────────────────
+PHASE 1 — CREATE THE THEME TOKEN FILES (CSS VARIABLES)
+1) Add a new global theme CSS file (or extend the existing globals file) with token definitions.
+Preferred location (adjust to your structure):
+- client/src/styles/theme.css   OR   client/src/styles/globals.css
+
+2) Implement semantic tokens as CSS variables (HSL recommended for Tailwind/shadcn):
+Required tokens:
+- --background, --foreground
+- --card, --card-foreground
+- --popover, --popover-foreground
+- --muted, --muted-foreground
+- --border, --input
+- --primary, --primary-foreground
+- --secondary, --secondary-foreground
+- --accent, --accent-foreground
+- --destructive, --destructive-foreground
+- --ring
+
+3) Define base themes using classes on <html>:
+- .theme-light  (default)
+- .theme-dark
+
+4) Define accent presets as classes on <html> (accent affects primary + ring + accent only):
+- .accent-blue   (default)
+- .accent-indigo
+- .accent-teal
+- .accent-green
+- .accent-orange
+- .accent-slate
+
+Use these recommended values:
+
+LIGHT BASE (theme-light)
+--background: 0 0% 100%
+--foreground: 222 47% 11%
+--card: 0 0% 100%
+--card-foreground: 222 47% 11%
+--popover: 0 0% 100%
+--popover-foreground: 222 47% 11%
+--muted: 210 40% 96%
+--muted-foreground: 215 16% 47%
+--border: 214 32% 91%
+--input: 214 32% 91%
+--secondary: 210 40% 96%
+--secondary-foreground: 222 47% 11%
+--destructive: 0 84% 60%
+--destructive-foreground: 210 40% 98%
+--ring: (should follow accent ring)
+
+DARK BASE (theme-dark)
+--background: 222 47% 11%
+--foreground: 210 40% 98%
+--card: 222 47% 13%
+--card-foreground: 210 40% 98%
+--popover: 222 47% 11%
+--popover-foreground: 210 40% 98%
+--muted: 217 33% 17%
+--muted-foreground: 215 20% 65%
+--border: 217 33% 17%
+--input: 217 33% 17%
+--secondary: 217 33% 17%
+--secondary-foreground: 210 40% 98%
+--destructive: 0 63% 31%
+--destructive-foreground: 210 40% 98%
+--ring: (should follow accent ring)
+
+ACCENTS (set --primary, --primary-foreground, --accent, --accent-foreground, --ring):
+accent-blue:
+  --primary: 221 83% 53%
+  --primary-foreground: 210 40% 98%
+  --accent: 221 83% 53%
+  --accent-foreground: 210 40% 98%
+  --ring: 217 91% 60%
+
+accent-indigo:
+  --primary: 243 75% 59%
+  --primary-foreground: 210 40% 98%
+  --accent: 243 75% 59%
+  --accent-foreground: 210 40% 98%
+  --ring: 239 84% 67%
+
+accent-teal:
+  --primary: 173 80% 32%
+  --primary-foreground: 210 40% 98%
+  --accent: 173 80% 32%
+  --accent-foreground: 210 40% 98%
+  --ring: 172 66% 50%
+
+accent-green:
+  --primary: 142 71% 45%
+  --primary-foreground: 210 40% 98%
+  --accent: 142 71% 45%
+  --accent-foreground: 210 40% 98%
+  --ring: 142 76% 55%
+
+accent-orange:
+  --primary: 20 91% 48%
+  --primary-foreground: 210 40% 98%
+  --accent: 20 91% 48%
+  --accent-foreground: 210 40% 98%
+  --ring: 25 95% 53%
+
+accent-slate:
+  --primary: 215 25% 27%
+  --primary-foreground: 210 40% 98%
+  --accent: 215 25% 27%
+  --accent-foreground: 210 40% 98%
+  --ring: 215 16% 47%
+
+NOTE: If the app already uses shadcn-style tokens, adapt these values into the existing structure rather than duplicating.
+
+────────────────────────────────────────────────────────
+PHASE 2 — TAILWIND CONFIG MAPPING (TOKENS → UTILITIES)
+1) Update tailwind.config.* so Tailwind colors reference CSS variables:
+Example mapping style:
+colors: {
+  background: "hsl(var(--background))",
+  foreground: "hsl(var(--foreground))",
+  card: {
+    DEFAULT: "hsl(var(--card))",
+    foreground: "hsl(var(--card-foreground))",
+  },
+  primary: {
+    DEFAULT: "hsl(var(--primary))",
+    foreground: "hsl(var(--primary-foreground))",
+  },
+  ...etc
+}
+
+2) Ensure existing utilities like:
+bg-background, text-foreground, border-border, bg-card, text-muted-foreground, ring-ring
+are available and do not conflict with existing config.
+
+────────────────────────────────────────────────────────
+PHASE 3 — MINIMAL APP WIRING (DEFAULTS ONLY)
+1) Ensure the theme CSS file is imported globally.
+2) On initial load, apply default classes to <html>:
+- theme-light
+- accent-blue
+Do not add settings UI yet.
+
+3) If the app already has theme classes, keep them and just align tokens.
+
+────────────────────────────────────────────────────────
+PHASE 4 — VALIDATION
+1) Run dev server and confirm app looks the same as before (default theme-light + accent-blue).
+2) Quick manual toggle test (dev-only):
+- temporarily swap class to theme-dark and confirm legibility.
+- swap accent class and confirm buttons/links/ring change.
+
+────────────────────────────────────────────────────────
+PHASE 5 — DOCS
+Create:
+- /docs/UX/theme_tokens.md
+Include:
+- token list and purpose
+- how to add new accents
+- how to apply theme classes
+
+DELIVERABLES
+- A working token-based theme foundation
+- Tailwind mapped to tokens
+- Default app appearance unchanged
+- Light/dark + accent support available via root classes

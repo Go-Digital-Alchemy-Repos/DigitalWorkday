@@ -1,0 +1,179 @@
+NON-DESTRUCTIVE THEMING: ThemeProvider + User Settings UI + Persistence (Light/Dark/System + Accent)
+
+PREREQ
+Assumes the token-based theme foundation already exists:
+- .theme-light / .theme-dark classes
+- .accent-* classes
+- Tailwind mapped to CSS variables
+
+GOAL
+Add a complete theme control system:
+1) Theme mode: Light / Dark / System
+2) Accent preset: blue/indigo/teal/green/orange/slate
+3) Persist per user (preferred) with localStorage fallback
+4) Optional tenant default accent (tenant admin) without breaking user overrides
+5) Default behavior preserves current look: theme-light + accent-blue
+
+STRICT NON-DESTRUCTIVE RULES
+- Do NOT redesign pages.
+- Do NOT change existing auth/RBAC behaviors.
+- Additive DB/API changes only if needed.
+- If server persistence is not safe yet, use localStorage-only (no breaking).
+
+────────────────────────────────────────────────────────
+PHASE 1 — THEME PROVIDER (CLIENT)
+1) Create a theme module:
+client/src/theme/
+  - themeTypes.ts
+  - themeStorage.ts
+  - ThemeProvider.tsx
+  - useTheme.ts
+
+2) Theme state model:
+- mode: "light" | "dark" | "system"
+- accent: "blue" | "indigo" | "teal" | "green" | "orange" | "slate"
+
+3) Apply classes to <html>:
+- theme-light OR theme-dark (computed)
+- accent-blue, accent-indigo, etc.
+
+System mode:
+- use matchMedia("(prefers-color-scheme: dark)")
+- listen to changes and update if mode="system"
+
+Reduced motion:
+- no special behavior needed, but ensure class flips do not re-mount app.
+
+4) Persistence layer (client):
+- localStorage keys:
+  - myworkday.theme.mode
+  - myworkday.theme.accent
+- On startup:
+  - load localStorage
+  - if missing, fallback to tenant default accent if provided
+  - else default: mode="light", accent="blue"
+
+────────────────────────────────────────────────────────
+PHASE 2 — OPTIONAL SERVER PERSISTENCE (ADDITIVE, SAFE)
+Preferred: store theme settings per user profile if you already have a user settings table.
+
+1) Discovery:
+- Identify existing user profile/settings storage and APIs.
+- If an existing “update user settings” endpoint exists, extend it ADDITIVELY with:
+  - themeMode
+  - themeAccent
+
+If none exists, implement a minimal additive approach:
+
+2) DB (additive):
+Option A (preferred): add columns to an existing user_preferences/user_settings table:
+- themeMode text nullable
+- themeAccent text nullable
+
+Option B: create new table user_ui_preferences:
+- id
+- tenantId
+- userId (unique per tenant)
+- themeMode (nullable)
+- themeAccent (nullable)
+- createdAt, updatedAt
+
+3) API (additive):
+- GET /api/me/ui-preferences
+  returns: { themeMode?, themeAccent? }
+- PATCH /api/me/ui-preferences
+  body: { themeMode?, themeAccent? }
+  returns updated preferences
+
+Rules:
+- tenant-scoped
+- authenticated only
+- never returns another user’s settings
+
+4) Client strategy:
+- On login/app init:
+  - fetch /api/me/ui-preferences (if available)
+  - hydrate theme state (server wins over localStorage)
+  - if server has nulls, use localStorage/defaults
+- On user change:
+  - update localStorage immediately
+  - PATCH server in background (best-effort; show toast on failure)
+
+If server persistence is not available or risky, keep localStorage only and document TODO.
+
+────────────────────────────────────────────────────────
+PHASE 3 — SETTINGS UI (USER)
+1) Add a “Appearance” section to an existing User Settings/Profile area:
+- Theme Mode selector:
+  - Light
+  - Dark
+  - System
+- Accent selector:
+  - swatches for blue, indigo, teal, green, orange, slate
+  - show checkmark on selected
+  - show label on hover or below
+
+2) The UI must:
+- update theme instantly
+- persist preference
+- remain consistent with design system components
+
+3) Accessibility:
+- swatches keyboard-focusable
+- aria-labels
+- visible focus ring uses --ring
+
+────────────────────────────────────────────────────────
+PHASE 4 — OPTIONAL TENANT DEFAULT ACCENT (TENANT ADMIN)
+Goal: allow a tenant admin to set a default accent for that tenant (new users inherit), while user preference overrides.
+
+1) DB (additive):
+If tenant settings table exists, add:
+- defaultAccent (nullable text)
+- defaultThemeMode (optional; default "system" or null)
+
+2) API (additive):
+- GET /api/tenant/settings (or existing)
+- PATCH /api/tenant/settings (tenant-admin only)
+  body: { defaultAccent?, defaultThemeMode? }
+
+3) Client behavior:
+- If user has explicit accent saved, use it
+- Else use tenant defaultAccent
+- Else fallback to blue
+
+Do not force-change any existing user theme values.
+
+4) Add Tenant Admin UI:
+- “Branding / Appearance” section
+- pick default accent
+- explanatory text: “User preferences override tenant default.”
+
+────────────────────────────────────────────────────────
+PHASE 5 — QA / VALIDATION
+1) Confirm default remains: theme-light + accent-blue.
+2) Switching mode updates root classes correctly:
+- mode=dark => theme-dark
+- mode=system => follows OS
+3) Switching accent updates primary/ring/selected styles without breaking layout.
+4) Persistence:
+- refresh browser => preferences persist
+- logout/login => server settings re-apply (if implemented)
+5) No console errors; no hydration mismatches in React.
+
+────────────────────────────────────────────────────────
+PHASE 6 — DOCS
+Update:
+- /docs/UX/theme_tokens.md (add usage examples)
+Create:
+- /docs/UX/theme_provider.md:
+  - how mode and accent are applied
+  - precedence order: user -> tenant default -> localStorage -> defaults
+  - how to add a new accent preset safely
+
+DELIVERABLES
+- ThemeProvider + hook
+- Settings UI for mode/accent
+- Persistence (localStorage minimum; server if feasible)
+- Optional tenant default accent
+- Docs updated
