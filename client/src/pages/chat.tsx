@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, ApiError } from "@/lib/queryClient";
-import { useChatUrlState, ConversationListPanel } from "@/features/chat";
+import { useChatUrlState, ConversationListPanel, ChatMessageTimeline } from "@/features/chat";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { getSocket, joinChatRoom, leaveChatRoom, onConnectionChange, isSocketConnected } from "@/lib/realtime/socket";
@@ -171,10 +171,7 @@ export default function ChatPage() {
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
-  const [editingBody, setEditingBody] = useState("");
   const [dmSeenBy, setDmSeenBy] = useState<{ userId: string; messageId: string } | null>(null);
-  const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastMarkedReadRef = useRef<string | null>(null);
   
@@ -718,11 +715,6 @@ export default function ChatPage() {
     }
   }, [messages.length, selectedChannel?.id, selectedDm?.id]);
 
-  useEffect(() => {
-    if (scrollRef.current) {
-      scrollRef.current.scrollTop = scrollRef.current.scrollHeight;
-    }
-  }, [messages]);
 
   // Auto-focus message input when conversation is selected
   useEffect(() => {
@@ -1593,239 +1585,30 @@ export default function ChatPage() {
               </div>
             </div>
 
-            <ScrollArea className="flex-1 p-4" ref={scrollRef}>
-              <div className="space-y-4">
-                {messages.length === 0 && !channelMessagesQuery.isLoading && !dmMessagesQuery.isLoading && (
-                  <div className="flex flex-col items-center justify-center h-40 text-muted-foreground" data-testid="empty-messages">
-                    <MessageCircle className="h-12 w-12 mb-2 opacity-50" />
-                    <p className="text-sm">No messages yet</p>
-                    <p className="text-xs">Be the first to send a message!</p>
-                  </div>
-                )}
-                {(channelMessagesQuery.isLoading || dmMessagesQuery.isLoading) && messages.length === 0 && (
-                  <div className="space-y-4" data-testid="messages-loading">
-                    {[1, 2, 3].map(i => (
-                      <div key={i} className="flex gap-3 animate-pulse">
-                        <div className="h-8 w-8 rounded-full bg-muted" />
-                        <div className="flex-1 space-y-2">
-                          <div className="h-4 bg-muted rounded w-24" />
-                          <div className="h-4 bg-muted rounded w-3/4" />
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
-                {messages.map((message) => {
-                  const isDeleted = !!message.deletedAt;
-                  const isOwnMessage = message.authorUserId === user?.id;
-                  const isTenantAdmin = user?.role === "admin";
-                  const isEditing = editingMessageId === message.id;
-                  const canEdit = isOwnMessage && !isDeleted && !message._status;
-                  const canDelete = (isOwnMessage || isTenantAdmin) && !isDeleted && !message._status;
-                  const isPending = message._status === 'pending';
-                  const isFailed = message._status === 'failed';
-                  
-                  return (
-                  <div 
-                    key={message._tempId || message.id} 
-                    className={`flex gap-3 group ${isPending ? 'opacity-60' : ''} ${isFailed ? 'bg-destructive/10 p-2 rounded-md' : ''}`} 
-                    data-testid={`message-${message._tempId || message.id}`}
-                  >
-                    <Avatar className="h-8 w-8 flex-shrink-0">
-                      <AvatarFallback>
-                        {getInitials(message.author?.name || message.author?.email || "?")}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-baseline gap-2">
-                        <span className="font-semibold text-sm">
-                          {message.author?.name || message.author?.email || "Unknown"}
-                        </span>
-                        <span className="text-xs text-muted-foreground">
-                          {formatTime(message.createdAt)}
-                        </span>
-                        {isPending && (
-                          <span className="text-xs text-muted-foreground flex items-center gap-1">
-                            <Loader2 className="h-3 w-3 animate-spin" />
-                            Sending...
-                          </span>
-                        )}
-                        {isFailed && (
-                          <span className="text-xs text-destructive flex items-center gap-1">
-                            <AlertCircle className="h-3 w-3" />
-                            Failed
-                          </span>
-                        )}
-                        {message.editedAt && !isDeleted && (
-                          <span className="text-xs text-muted-foreground">(edited)</span>
-                        )}
-                        {(canEdit || canDelete) && !isEditing && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button 
-                                variant="ghost" 
-                                size="icon" 
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity"
-                                data-testid={`message-menu-${message.id}`}
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="start">
-                              {canEdit && (
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    setEditingMessageId(message.id);
-                                    setEditingBody(message.body);
-                                  }}
-                                  data-testid={`message-edit-${message.id}`}
-                                >
-                                  <Pencil className="h-4 w-4 mr-2" />
-                                  Edit
-                                </DropdownMenuItem>
-                              )}
-                              {canDelete && (
-                                <DropdownMenuItem
-                                  onClick={() => deleteMessageMutation.mutate(message.id)}
-                                  className="text-destructive focus:text-destructive"
-                                  data-testid={`message-delete-${message.id}`}
-                                >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
-                                </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
-                      </div>
-                      {isEditing ? (
-                        <div className="flex items-center gap-2 mt-1">
-                          <Input
-                            value={editingBody}
-                            onChange={(e) => setEditingBody(e.target.value)}
-                            className="flex-1 text-sm"
-                            autoFocus
-                            onKeyDown={(e) => {
-                              if (e.key === "Enter" && !e.shiftKey) {
-                                e.preventDefault();
-                                if (editingBody.trim()) {
-                                  editMessageMutation.mutate({ messageId: message.id, body: editingBody.trim() });
-                                }
-                              }
-                              if (e.key === "Escape") {
-                                setEditingMessageId(null);
-                                setEditingBody("");
-                              }
-                            }}
-                            data-testid={`message-edit-input-${message.id}`}
-                          />
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              if (editingBody.trim()) {
-                                editMessageMutation.mutate({ messageId: message.id, body: editingBody.trim() });
-                              }
-                            }}
-                            disabled={editMessageMutation.isPending || !editingBody.trim()}
-                            data-testid={`message-edit-save-${message.id}`}
-                          >
-                            <Check className="h-4 w-4" />
-                          </Button>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            onClick={() => {
-                              setEditingMessageId(null);
-                              setEditingBody("");
-                            }}
-                            data-testid={`message-edit-cancel-${message.id}`}
-                          >
-                            <X className="h-4 w-4" />
-                          </Button>
-                        </div>
-                      ) : (
-                        <>
-                          <p className={`text-sm break-words ${isDeleted ? "text-muted-foreground italic" : ""}`}>
-                            {isDeleted ? message.body : renderMessageBody(message.body)}
-                          </p>
-                          {isFailed && message._tempId && (
-                            <div className="flex items-center gap-2 mt-2">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                onClick={() => retryFailedMessage(message)}
-                                data-testid={`message-retry-${message._tempId}`}
-                              >
-                                <RefreshCw className="h-3 w-3 mr-1" />
-                                Retry
-                              </Button>
-                              <Button
-                                size="sm"
-                                variant="ghost"
-                                onClick={() => removeFailedMessage(message._tempId!)}
-                                data-testid={`message-remove-${message._tempId}`}
-                              >
-                                <X className="h-3 w-3 mr-1" />
-                                Remove
-                              </Button>
-                            </div>
-                          )}
-                        </>
-                      )}
-                      {message.attachments && message.attachments.length > 0 && !isDeleted && (
-                        <div className="mt-2 flex flex-wrap gap-2">
-                          {message.attachments.map(attachment => {
-                            const FileIcon = getFileIcon(attachment.mimeType);
-                            const isImage = attachment.mimeType.startsWith("image/");
-                            return (
-                              <a
-                                key={attachment.id}
-                                href={attachment.url}
-                                target="_blank"
-                                rel="noopener noreferrer"
-                                className="flex items-center gap-2 p-2 rounded-md bg-muted hover-elevate"
-                                data-testid={`attachment-${attachment.id}`}
-                              >
-                                {isImage ? (
-                                  <img 
-                                    src={attachment.url} 
-                                    alt={attachment.fileName}
-                                    className="h-16 w-16 object-cover rounded"
-                                  />
-                                ) : (
-                                  <>
-                                    <FileIcon className="h-4 w-4 text-muted-foreground" />
-                                    <span className="text-xs truncate max-w-[150px]">{attachment.fileName}</span>
-                                    <span className="text-xs text-muted-foreground">({formatFileSize(attachment.sizeBytes)})</span>
-                                  </>
-                                )}
-                              </a>
-                            );
-                          })}
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                  );
-                })}
-                {messages.length === 0 && (
-                  <div className="text-center py-8 text-muted-foreground">
-                    <MessageCircle className="h-12 w-12 mx-auto mb-2 opacity-50" />
-                    <p>No messages yet. Start the conversation!</p>
-                  </div>
-                )}
-                {/* DM "Seen" indicator - shows when other user has read the last message */}
-                {selectedDm && dmSeenBy && messages.length > 0 && dmSeenBy.messageId === messages[messages.length - 1]?.id && (
-                  <div className="flex justify-end pr-4 pb-2" data-testid="dm-seen-indicator">
-                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                      <CheckCheck className="h-3 w-3" />
-                      Seen
-                    </span>
-                  </div>
-                )}
+            <ChatMessageTimeline
+              messages={messages}
+              currentUserId={user?.id}
+              currentUserRole={user?.role}
+              isLoading={channelMessagesQuery.isLoading || dmMessagesQuery.isLoading}
+              onEditMessage={(messageId, body) => editMessageMutation.mutate({ messageId, body })}
+              onDeleteMessage={(messageId) => deleteMessageMutation.mutate(messageId)}
+              onRetryMessage={retryFailedMessage}
+              onRemoveFailedMessage={removeFailedMessage}
+              renderMessageBody={renderMessageBody}
+              getFileIcon={getFileIcon}
+              formatFileSize={formatFileSize}
+              isDm={!!selectedDm}
+              className="flex-1"
+            />
+            {/* DM "Seen" indicator - shows when other user has read the last message */}
+            {selectedDm && dmSeenBy && messages.length > 0 && dmSeenBy.messageId === messages[messages.length - 1]?.id && (
+              <div className="flex justify-end pr-4 pb-2 border-t" data-testid="dm-seen-indicator">
+                <span className="text-xs text-muted-foreground flex items-center gap-1 pt-1">
+                  <CheckCheck className="h-3 w-3" />
+                  Seen
+                </span>
               </div>
-            </ScrollArea>
+            )}
 
             <form 
               onSubmit={handleSendMessage} 
