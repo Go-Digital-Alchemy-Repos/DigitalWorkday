@@ -1590,6 +1590,9 @@ export default function ChatPage() {
               currentUserId={user?.id}
               currentUserRole={user?.role}
               isLoading={channelMessagesQuery.isLoading || dmMessagesQuery.isLoading}
+              hasMoreMessages={false}
+              onLoadMore={() => {}}
+              isLoadingMore={false}
               onEditMessage={(messageId, body) => editMessageMutation.mutate({ messageId, body })}
               onDeleteMessage={(messageId) => deleteMessageMutation.mutate(messageId)}
               onRetryMessage={retryFailedMessage}
