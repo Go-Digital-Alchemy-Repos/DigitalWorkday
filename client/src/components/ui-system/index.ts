@@ -1,6 +1,12 @@
 export { PageHeader } from "./PageHeader";
 export { SectionHeader } from "./SectionHeader";
-export { MetricCard } from "./MetricCard";
+export { 
+  MetricCard, 
+  MetricGrid, 
+  StatItem,
+  type MetricCardVariant,
+  type TrendDirection,
+} from "./MetricCard";
 export { EmptyState } from "./EmptyState";
 export { 
   LoadingSkeleton, 
