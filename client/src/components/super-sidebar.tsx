@@ -8,6 +8,7 @@ import {
   FileText,
   MessageSquareText,
   Users,
+  PieChart,
 } from "lucide-react";
 import dasanaLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -31,7 +32,8 @@ const superAdminNavItems = [
   { title: "User Manager", url: "/super-admin/users", icon: Users, exact: false },
   { title: "System Settings", url: "/super-admin/settings", icon: Wrench, exact: false },
   { title: "System Health", url: "/super-admin/status", icon: Activity, exact: false },
-  { title: "App Docs", url: "/super-admin/docs", icon: FileText, exact: false },
+  { title: "App Docs", url: "/super-admin/docs", icon: FileText, exact: true },
+  { title: "Docs Coverage", url: "/super-admin/docs-coverage", icon: PieChart, exact: false },
 ];
 
 export function SuperSidebar() {
