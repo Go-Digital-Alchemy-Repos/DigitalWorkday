@@ -5,7 +5,15 @@ import { useCreatePersonalTask, useCreateSubtask } from "@/hooks/use-create-task
 const MY_TASKS_FILTERS_KEY = "my-tasks-filters";
 const MY_TASKS_ORDERS_KEY = "my-tasks-section-orders";
 
-function loadSavedFilters(): { statusFilter: string; priorityFilter: string; showCompleted: boolean } {
+type SavedFilters = {
+  statusFilter: string;
+  priorityFilter: string;
+  dueDateFilter: string;
+  sortBy: string;
+  showCompleted: boolean;
+};
+
+function loadSavedFilters(): SavedFilters {
   try {
     const saved = localStorage.getItem(MY_TASKS_FILTERS_KEY);
     if (saved) {
@@ -13,14 +21,16 @@ function loadSavedFilters(): { statusFilter: string; priorityFilter: string; sho
       return {
         statusFilter: parsed.statusFilter || "all",
         priorityFilter: parsed.priorityFilter || "all",
+        dueDateFilter: parsed.dueDateFilter || "all",
+        sortBy: parsed.sortBy || "due_date",
         showCompleted: parsed.showCompleted ?? false,
       };
     }
   } catch {}
-  return { statusFilter: "all", priorityFilter: "all", showCompleted: false };
+  return { statusFilter: "all", priorityFilter: "all", dueDateFilter: "all", sortBy: "due_date", showCompleted: false };
 }
 
-function saveFilters(filters: { statusFilter: string; priorityFilter: string; showCompleted: boolean }) {
+function saveFilters(filters: SavedFilters) {
   try {
     localStorage.setItem(MY_TASKS_FILTERS_KEY, JSON.stringify(filters));
   } catch {}
@@ -58,8 +68,6 @@ import {
 } from "@dnd-kit/sortable";
 import {
   CheckSquare,
-  Filter,
-  SortAsc,
   Calendar,
   AlertCircle,
   Clock,
@@ -79,24 +87,18 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
-import {
   Collapsible,
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
 import { SortableTaskCard, TaskDetailDrawer, PersonalTaskCreateDrawer } from "@/features/tasks";
-import { isToday, isPast, isFuture, subDays } from "date-fns";
+import { isToday, isPast, isFuture, subDays, isWithinInterval, addDays, startOfDay } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { TaskProgressBar } from "@/components/task-progress-bar";
-import { PageShell, PageHeader, EmptyState, LoadingState } from "@/components/layout";
+import { PageShell, PageHeader, EmptyState, LoadingState, DataToolbar } from "@/components/layout";
+import type { FilterConfig, SortOption } from "@/components/layout";
 import type { TaskWithRelations, Workspace, User as UserType } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 
@@ -164,13 +166,15 @@ interface TaskSectionListProps {
   section: TaskSection;
   onTaskSelect: (task: TaskWithRelations) => void;
   onStatusChange: (taskId: string, completed: boolean) => void;
+  onPriorityChange: (taskId: string, priority: "low" | "medium" | "high" | "urgent") => void;
+  onDueDateChange: (taskId: string, dueDate: Date | null) => void;
   localOrder: string[];
   onDragEnd: (event: DragEndEvent, sectionId: string) => void;
   onAddTask?: () => void;
   supportsAddTask?: boolean;
 }
 
-function TaskSectionList({ section, onTaskSelect, onStatusChange, localOrder, onDragEnd, onAddTask, supportsAddTask = false }: TaskSectionListProps) {
+function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChange, onDueDateChange, localOrder, onDragEnd, onAddTask, supportsAddTask = false }: TaskSectionListProps) {
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -227,6 +231,9 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, localOrder, on
                     view="list"
                     onSelect={() => onTaskSelect(task)}
                     onStatusChange={(completed) => onStatusChange(task.id, completed)}
+                    onPriorityChange={(priority) => onPriorityChange(task.id, priority)}
+                    onDueDateChange={(dueDate) => onDueDateChange(task.id, dueDate)}
+                    showQuickActions
                   />
                 ))}
               </div>
@@ -439,28 +446,37 @@ export default function MyTasks() {
   const isEmployee = user?.role === UserRole.EMPLOYEE;
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
   const [showNewTaskDrawer, setShowNewTaskDrawer] = useState(false);
+  const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
+  
+  // Debounce search input
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
   
   // Handle quick action from mobile nav (opens new task drawer via URL param)
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     if (params.get('action') === 'new') {
       setShowNewTaskDrawer(true);
-      // Clean up the URL without causing a page reload
       const url = new URL(window.location.href);
       url.searchParams.delete('action');
-      window.history.replaceState({}, '', url.pathname);
+      window.history.replaceState({}, '', url.pathname + url.search);
     }
   }, []);
 
   const savedFilters = useMemo(() => loadSavedFilters(), []);
   const [statusFilter, setStatusFilter] = useState<string>(savedFilters.statusFilter);
   const [priorityFilter, setPriorityFilter] = useState<string>(savedFilters.priorityFilter);
+  const [dueDateFilter, setDueDateFilter] = useState<string>(savedFilters.dueDateFilter);
+  const [sortBy, setSortBy] = useState<string>(savedFilters.sortBy);
   const [showCompleted, setShowCompleted] = useState<boolean>(savedFilters.showCompleted);
   const [sectionOrders, setSectionOrders] = useState<Record<string, string[]>>(() => loadSavedOrders());
 
   useEffect(() => {
-    saveFilters({ statusFilter, priorityFilter, showCompleted });
-  }, [statusFilter, priorityFilter, showCompleted]);
+    saveFilters({ statusFilter, priorityFilter, dueDateFilter, sortBy, showCompleted });
+  }, [statusFilter, priorityFilter, dueDateFilter, sortBy, showCompleted]);
 
   useEffect(() => {
     saveOrders(sectionOrders);
@@ -469,6 +485,58 @@ export default function MyTasks() {
   const { data: tasks, isLoading } = useQuery<TaskWithRelations[]>({
     queryKey: ["/api/tasks/my"],
   });
+
+  // Get taskId from URL for deep linking
+  const urlTaskId = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('taskId');
+  }, []);
+
+  // Fetch individual task for deep linking if not in the main tasks list
+  const { data: linkedTask } = useQuery<TaskWithRelations>({
+    queryKey: ["/api/tasks", urlTaskId],
+    enabled: !!urlTaskId && !selectedTask && !!tasks && !tasks.find(t => t.id === urlTaskId),
+  });
+
+  // Deep linking: open task from URL param (from tasks list or dedicated fetch)
+  useEffect(() => {
+    if (isLoading || selectedTask || !urlTaskId) return;
+    
+    // First check if the task is in our loaded list
+    if (tasks) {
+      const task = tasks.find(t => t.id === urlTaskId);
+      if (task) {
+        setSelectedTask(task);
+        return;
+      }
+    }
+    
+    // If not in list, use the separately fetched task
+    if (linkedTask) {
+      setSelectedTask(linkedTask);
+    }
+  }, [tasks, linkedTask, isLoading, selectedTask, urlTaskId]);
+
+  // Keyboard shortcuts
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape' && selectedTask) {
+        handleCloseDrawer();
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [selectedTask]);
+
+  const handleCloseDrawer = useCallback(() => {
+    setSelectedTask(null);
+    // Remove taskId from URL without page reload
+    const url = new URL(window.location.href);
+    if (url.searchParams.has('taskId')) {
+      url.searchParams.delete('taskId');
+      window.history.replaceState({}, '', url.pathname + (url.search || ''));
+    }
+  }, []);
 
   const { data: currentWorkspace } = useQuery<Workspace>({
     queryKey: ["/api/workspaces/current"],
@@ -548,6 +616,10 @@ export default function MyTasks() {
 
   const handleTaskSelect = (task: TaskWithRelations) => {
     setSelectedTask(task);
+    // Add taskId to URL for deep linking
+    const url = new URL(window.location.href);
+    url.searchParams.set('taskId', task.id);
+    window.history.replaceState({}, '', url.pathname + url.search);
   };
 
   const handleStatusChange = (taskId: string, completed: boolean) => {
@@ -556,6 +628,17 @@ export default function MyTasks() {
       data: { status: completed ? "done" : "todo" },
     });
   };
+
+  const handlePriorityChange = useCallback((taskId: string, priority: "low" | "medium" | "high" | "urgent") => {
+    updateTaskMutation.mutate({ taskId, data: { priority } });
+  }, [updateTaskMutation]);
+
+  const handleDueDateChange = useCallback((taskId: string, dueDate: Date | null) => {
+    updateTaskMutation.mutate({ 
+      taskId, 
+      data: { dueDate: dueDate ? dueDate.toISOString() : null } 
+    });
+  }, [updateTaskMutation]);
 
   const handleDragEnd = (event: DragEndEvent, sectionId: string) => {
     const { active, over } = event;
@@ -586,14 +669,139 @@ export default function MyTasks() {
     });
   };
 
-  const filteredTasks = tasks?.filter((task) => {
-    if (task.status === "done" && !showCompleted) return false;
-    if (statusFilter !== "all" && task.status !== statusFilter) return false;
-    if (priorityFilter !== "all" && task.priority !== priorityFilter) return false;
-    return true;
-  }) || [];
+  // Filter configs for DataToolbar
+  const filterConfigs: FilterConfig[] = useMemo(() => [
+    {
+      key: "status",
+      label: "Status",
+      options: [
+        { value: "all", label: "Open Tasks" },
+        { value: "todo", label: "To Do" },
+        { value: "in_progress", label: "In Progress" },
+        { value: "blocked", label: "Blocked" },
+        { value: "done", label: "Done" },
+      ],
+    },
+    {
+      key: "priority",
+      label: "Priority",
+      options: [
+        { value: "all", label: "All Priority" },
+        { value: "urgent", label: "Urgent" },
+        { value: "high", label: "High" },
+        { value: "medium", label: "Medium" },
+        { value: "low", label: "Low" },
+      ],
+    },
+    {
+      key: "dueDate",
+      label: "Due Date",
+      options: [
+        { value: "all", label: "All Dates" },
+        { value: "overdue", label: "Overdue" },
+        { value: "today", label: "Today" },
+        { value: "this_week", label: "This Week" },
+        { value: "no_date", label: "No Due Date" },
+      ],
+    },
+  ], []);
 
-  const { leftColumn, rightColumn } = categorizeTasksForTwoColumn(filteredTasks);
+  const sortOptions: SortOption[] = useMemo(() => [
+    { value: "due_date", label: "Due Date" },
+    { value: "updated", label: "Last Updated" },
+    { value: "priority", label: "Priority" },
+    { value: "title", label: "Title" },
+  ], []);
+
+  const filterValues = useMemo(() => ({
+    status: statusFilter,
+    priority: priorityFilter,
+    dueDate: dueDateFilter,
+  }), [statusFilter, priorityFilter, dueDateFilter]);
+
+  const handleFilterChange = useCallback((key: string, value: string) => {
+    if (key === "status") setStatusFilter(value);
+    if (key === "priority") setPriorityFilter(value);
+    if (key === "dueDate") setDueDateFilter(value);
+  }, []);
+
+  const handleClearFilters = useCallback(() => {
+    setStatusFilter("all");
+    setPriorityFilter("all");
+    setDueDateFilter("all");
+    setSearchQuery("");
+  }, []);
+
+  const filteredTasks = useMemo(() => {
+    if (!tasks) return [];
+    
+    const now = startOfDay(new Date());
+    const weekEnd = addDays(now, 7);
+
+    return tasks.filter((task) => {
+      // Status filter
+      if (task.status === "done" && !showCompleted && statusFilter !== "done") return false;
+      if (statusFilter !== "all" && task.status !== statusFilter) return false;
+      
+      // Priority filter
+      if (priorityFilter !== "all" && task.priority !== priorityFilter) return false;
+      
+      // Due date filter
+      if (dueDateFilter !== "all") {
+        const dueDate = task.dueDate ? new Date(task.dueDate) : null;
+        if (dueDateFilter === "overdue") {
+          if (!dueDate || !isPast(dueDate) || isToday(dueDate)) return false;
+        } else if (dueDateFilter === "today") {
+          if (!dueDate || !isToday(dueDate)) return false;
+        } else if (dueDateFilter === "this_week") {
+          if (!dueDate || !isWithinInterval(dueDate, { start: now, end: weekEnd })) return false;
+        } else if (dueDateFilter === "no_date") {
+          if (dueDate) return false;
+        }
+      }
+      
+      // Search filter
+      if (debouncedSearch) {
+        const search = debouncedSearch.toLowerCase();
+        const matchTitle = task.title.toLowerCase().includes(search);
+        const matchDescription = task.description?.toLowerCase().includes(search);
+        const matchProject = task.project?.name?.toLowerCase().includes(search);
+        if (!matchTitle && !matchDescription && !matchProject) return false;
+      }
+      
+      return true;
+    });
+  }, [tasks, statusFilter, priorityFilter, dueDateFilter, showCompleted, debouncedSearch]);
+
+  // Sort filtered tasks
+  const sortedTasks = useMemo(() => {
+    const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
+    
+    return [...filteredTasks].sort((a, b) => {
+      if (sortBy === "due_date") {
+        if (!a.dueDate && !b.dueDate) return 0;
+        if (!a.dueDate) return 1;
+        if (!b.dueDate) return -1;
+        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
+      }
+      if (sortBy === "updated") {
+        const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+        const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        return bTime - aTime;
+      }
+      if (sortBy === "priority") {
+        const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] ?? 4;
+        const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] ?? 4;
+        return aPriority - bPriority;
+      }
+      if (sortBy === "title") {
+        return a.title.localeCompare(b.title);
+      }
+      return 0;
+    });
+  }, [filteredTasks, sortBy]);
+
+  const { leftColumn, rightColumn } = categorizeTasksForTwoColumn(sortedTasks);
 
   const totalTasks = filteredTasks.length;
 
@@ -625,73 +833,49 @@ export default function MyTasks() {
               <h1 className="text-lg md:text-2xl font-semibold">My Tasks</h1>
               <span className="text-xs md:text-sm text-muted-foreground">({totalTasks})</span>
             </div>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowNewTaskDrawer(true)}
-              data-testid="button-add-personal-task"
-              className="md:hidden"
-            >
-              <Plus className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setShowNewTaskDrawer(true)}
-              data-testid="button-add-personal-task-desktop"
-              className="hidden md:flex"
-            >
-              <Plus className="h-4 w-4 mr-1" />
-              Personal Task
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={showCompleted ? "secondary" : "ghost"}
+                size="sm"
+                onClick={() => setShowCompleted(!showCompleted)}
+                className="gap-1 shrink-0"
+                data-testid="button-toggle-completed"
+              >
+                {showCompleted ? <Eye className="h-4 w-4" /> : <EyeOff className="h-4 w-4" />}
+                <span className="hidden md:inline">{showCompleted ? "Show done" : "Hide done"}</span>
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowNewTaskDrawer(true)}
+                data-testid="button-add-personal-task"
+                className="md:hidden"
+              >
+                <Plus className="h-4 w-4" />
+              </Button>
+              <Button
+                onClick={() => setShowNewTaskDrawer(true)}
+                data-testid="button-add-personal-task-desktop"
+                className="hidden md:flex"
+              >
+                <Plus className="h-4 w-4 mr-1" />
+                Personal Task
+              </Button>
+            </div>
           </div>
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-hide">
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[110px] md:w-[130px] shrink-0" data-testid="select-status-filter">
-                <Filter className="h-4 w-4 mr-1 md:mr-2" />
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">Open Tasks</SelectItem>
-                <SelectItem value="todo">To Do</SelectItem>
-                <SelectItem value="in_progress">In Progress</SelectItem>
-                <SelectItem value="blocked">Blocked</SelectItem>
-                <SelectItem value="done">Done</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select value={priorityFilter} onValueChange={setPriorityFilter}>
-              <SelectTrigger className="w-[100px] md:w-[130px] shrink-0" data-testid="select-priority-filter">
-                <SortAsc className="h-4 w-4 mr-1 md:mr-2" />
-                <SelectValue placeholder="Priority" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Priority</SelectItem>
-                <SelectItem value="urgent">Urgent</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="medium">Medium</SelectItem>
-                <SelectItem value="low">Low</SelectItem>
-              </SelectContent>
-            </Select>
-            <Button
-              variant={showCompleted ? "secondary" : "ghost"}
-              size="sm"
-              onClick={() => setShowCompleted(!showCompleted)}
-              className="gap-1 md:gap-2 shrink-0"
-              data-testid="button-toggle-completed"
-            >
-              {showCompleted ? (
-                <>
-                  <Eye className="h-4 w-4" />
-                  <span className="hidden md:inline">Show done</span>
-                </>
-              ) : (
-                <>
-                  <EyeOff className="h-4 w-4" />
-                  <span className="hidden md:inline">Hide done</span>
-                </>
-              )}
-            </Button>
-          </div>
+          <DataToolbar
+            searchValue={searchQuery}
+            onSearchChange={setSearchQuery}
+            searchPlaceholder="Search tasks..."
+            filters={filterConfigs}
+            filterValues={filterValues}
+            onFilterChange={handleFilterChange}
+            onClearFilters={handleClearFilters}
+            sortOptions={sortOptions}
+            sortValue={sortBy}
+            onSortChange={setSortBy}
+            className="mb-0"
+          />
         </div>
 
         {taskStats.total > 0 && (
@@ -725,6 +909,8 @@ export default function MyTasks() {
                     section={section}
                     onTaskSelect={handleTaskSelect}
                     onStatusChange={handleStatusChange}
+                    onPriorityChange={handlePriorityChange}
+                    onDueDateChange={handleDueDateChange}
                     localOrder={sectionOrders[section.id] || []}
                     onDragEnd={handleDragEnd}
                   />
@@ -739,6 +925,8 @@ export default function MyTasks() {
                     section={section}
                     onTaskSelect={handleTaskSelect}
                     onStatusChange={handleStatusChange}
+                    onPriorityChange={handlePriorityChange}
+                    onDueDateChange={handleDueDateChange}
                     localOrder={sectionOrders[section.id] || []}
                     onDragEnd={handleDragEnd}
                     onAddTask={section.id === "personal" ? () => setShowNewTaskDrawer(true) : undefined}
@@ -752,7 +940,7 @@ export default function MyTasks() {
               icon={<CheckCircle2 className="h-12 w-12" />}
               title="You're all caught up!"
               description={
-                statusFilter !== "all" || priorityFilter !== "all"
+                statusFilter !== "all" || priorityFilter !== "all" || dueDateFilter !== "all" || debouncedSearch
                   ? "No tasks match your current filters"
                   : "Tasks assigned to you will appear here"
               }
@@ -774,7 +962,7 @@ export default function MyTasks() {
       <TaskDetailDrawer
         task={selectedTask}
         open={!!selectedTask}
-        onOpenChange={(open) => !open && setSelectedTask(null)}
+        onOpenChange={(open) => !open && handleCloseDrawer()}
         onUpdate={(taskId: string, data: Partial<TaskWithRelations>) => {
           updateTaskMutation.mutate({ taskId, data });
         }}

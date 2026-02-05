@@ -8,6 +8,9 @@ interface SortableTaskCardProps {
   view?: "list" | "board";
   onSelect?: () => void;
   onStatusChange?: (completed: boolean) => void;
+  onPriorityChange?: (priority: "low" | "medium" | "high" | "urgent") => void;
+  onDueDateChange?: (dueDate: Date | null) => void;
+  showQuickActions?: boolean;
 }
 
 export function SortableTaskCard({
@@ -15,6 +18,9 @@ export function SortableTaskCard({
   view = "board",
   onSelect,
   onStatusChange,
+  onPriorityChange,
+  onDueDateChange,
+  showQuickActions = false,
 }: SortableTaskCardProps) {
   const {
     attributes,
@@ -37,8 +43,11 @@ export function SortableTaskCard({
         view={view}
         onSelect={onSelect}
         onStatusChange={onStatusChange}
+        onPriorityChange={onPriorityChange}
+        onDueDateChange={onDueDateChange}
         dragHandleProps={{ ...attributes, ...listeners }}
         isDragging={isDragging}
+        showQuickActions={showQuickActions}
       />
     </div>
   );

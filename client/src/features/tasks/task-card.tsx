@@ -1,12 +1,31 @@
 import { forwardRef, useState, useRef, useEffect } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
+import { Button } from "@/components/ui/button";
 import { PriorityBadge } from "@/components/priority-badge";
 import { DueDateBadge } from "@/components/due-date-badge";
 import { TagBadge } from "@/components/tag-badge";
 import { AvatarGroup } from "@/components/avatar-group";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
-import { MessageSquare, Paperclip, GripVertical, User as UserIcon } from "lucide-react";
+import { 
+  GripVertical, 
+  User as UserIcon,
+  CheckCircle2,
+  Flag,
+  CalendarDays,
+} from "lucide-react";
 import type { TaskWithRelations, User, Tag } from "@shared/schema";
 import { getPreviewText } from "@/components/richtext/richTextUtils";
 
@@ -15,14 +34,18 @@ interface TaskCardProps {
   view?: "list" | "board";
   onSelect?: () => void;
   onStatusChange?: (completed: boolean) => void;
+  onPriorityChange?: (priority: "low" | "medium" | "high" | "urgent") => void;
+  onDueDateChange?: (dueDate: Date | null) => void;
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
   isDragging?: boolean;
+  showQuickActions?: boolean;
 }
 
 export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskCard(
-  { task, view = "list", onSelect, onStatusChange, dragHandleProps, isDragging },
+  { task, view = "list", onSelect, onStatusChange, onPriorityChange, onDueDateChange, dragHandleProps, isDragging, showQuickActions = false },
   ref
 ) {
+  const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
   const isCompleted = task.status === "done";
   const [justCompleted, setJustCompleted] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
@@ -137,7 +160,9 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
       ref={ref}
       className={cn(
         "group relative grid items-center gap-3 px-4 py-3 min-h-[52px] border-b border-border hover-elevate cursor-pointer transition-all duration-150",
-        dragHandleProps ? "grid-cols-[auto_auto_1fr_auto_auto_auto]" : "grid-cols-[auto_1fr_auto_auto_auto]",
+        showQuickActions 
+          ? (dragHandleProps ? "grid-cols-[auto_auto_1fr_auto_auto_auto_auto]" : "grid-cols-[auto_1fr_auto_auto_auto_auto]")
+          : (dragHandleProps ? "grid-cols-[auto_auto_1fr_auto_auto_auto]" : "grid-cols-[auto_1fr_auto_auto_auto]"),
         isCompleted && "opacity-60",
         isDragging && "opacity-50 shadow-lg bg-card",
         justCompleted && "task-complete-pulse"
@@ -206,6 +231,101 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
       <div className="flex items-center">
         <PriorityBadge priority={task.priority as any} showLabel={false} size="sm" />
       </div>
+
+      {showQuickActions && (
+        <div 
+          className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => onStatusChange?.(!isCompleted)}
+            title={isCompleted ? "Mark incomplete" : "Mark complete"}
+            data-testid={`quick-complete-${task.id}`}
+          >
+            <CheckCircle2 className={cn("h-4 w-4", isCompleted && "text-green-500")} />
+          </Button>
+          
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Set priority"
+                data-testid={`quick-priority-${task.id}`}
+              >
+                <Flag className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={() => onPriorityChange?.("urgent")}>
+                <span className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-red-500" />
+                  Urgent
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onPriorityChange?.("high")}>
+                <span className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-orange-500" />
+                  High
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onPriorityChange?.("medium")}>
+                <span className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-yellow-500" />
+                  Medium
+                </span>
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={() => onPriorityChange?.("low")}>
+                <span className="flex items-center gap-2">
+                  <span className="h-2 w-2 rounded-full bg-blue-500" />
+                  Low
+                </span>
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+          
+          <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                title="Set due date"
+                data-testid={`quick-duedate-${task.id}`}
+              >
+                <CalendarDays className="h-4 w-4" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="end">
+              <Calendar
+                mode="single"
+                selected={task.dueDate ? new Date(task.dueDate) : undefined}
+                onSelect={(date) => {
+                  onDueDateChange?.(date || null);
+                  setDueDatePopoverOpen(false);
+                }}
+                initialFocus
+              />
+              {task.dueDate && (
+                <div className="p-2 border-t">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => {
+                      onDueDateChange?.(null);
+                      setDueDatePopoverOpen(false);
+                    }}
+                  >
+                    Clear due date
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
+      )}
     </div>
   );
 });
