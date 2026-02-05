@@ -45,7 +45,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { Building2, X, Archive, RotateCcw, Search } from "lucide-react";
+import { Building2, X, Archive, RotateCcw, Search, LogOut, Eye } from "lucide-react";
 import type { Project, ClientWithContacts, Team } from "@shared/schema";
 
 const PROJECT_COLORS = [
@@ -195,6 +195,56 @@ export function ProjectSettingsSheet({
       });
     },
   });
+
+  const { data: hiddenStatus } = useQuery<{ isHidden: boolean }>({
+    queryKey: [`/api/projects/${project.id}/hidden`],
+    enabled: open,
+  });
+
+  const hideProjectMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("POST", `/api/projects/${project.id}/hide`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${project.id}/hidden`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({
+        title: "Project hidden",
+        description: "This project has been removed from your sidebar.",
+      });
+      onOpenChange(false);
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to hide project.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const unhideProjectMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("DELETE", `/api/projects/${project.id}/hide`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${project.id}/hidden`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      toast({
+        title: "Project visible",
+        description: "This project is now visible in your sidebar.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to show project.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const isHidden = hiddenStatus?.isHidden ?? false;
 
   const currentClient = clients.find((c) => c.id === project.clientId);
   const isArchived = project.status === "archived";
@@ -536,6 +586,69 @@ export function ProjectSettingsSheet({
               </div>
             </>
           )}
+
+          <Separator />
+
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Visibility</Label>
+            <div className="p-3 rounded-lg bg-muted">
+              <div className="flex items-center justify-between">
+                <div>
+                  <p className="text-sm font-medium">
+                    {isHidden ? "Hidden from your view" : "Visible in your sidebar"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {isHidden 
+                      ? "This project won't appear in your sidebar. You can still access it directly."
+                      : "Hide this project to remove it from your sidebar."}
+                  </p>
+                </div>
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant={isHidden ? "outline" : "secondary"}
+                      size="sm"
+                      disabled={hideProjectMutation.isPending || unhideProjectMutation.isPending}
+                      data-testid={isHidden ? "button-show-project" : "button-hide-project"}
+                    >
+                      {isHidden ? (
+                        <>
+                          <Eye className="h-4 w-4 mr-1" />
+                          Show
+                        </>
+                      ) : (
+                        <>
+                          <LogOut className="h-4 w-4 mr-1" />
+                          Leave
+                        </>
+                      )}
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>
+                        {isHidden ? "Show Project" : "Leave Project"}
+                      </AlertDialogTitle>
+                      <AlertDialogDescription>
+                        {isHidden 
+                          ? "This project will appear in your sidebar again. You'll see updates and can work on tasks."
+                          : "This project will be hidden from your sidebar. You can still access it through direct links or the projects dashboard. Your work on this project will be preserved."}
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel data-testid="button-cancel-visibility">Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => isHidden ? unhideProjectMutation.mutate() : hideProjectMutation.mutate()}
+                        data-testid="button-confirm-visibility"
+                      >
+                        {isHidden ? "Show Project" : "Leave Project"}
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              </div>
+            </div>
+          </div>
         </div>
       </SheetContent>
     </Sheet>
