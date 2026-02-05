@@ -250,3 +250,24 @@ server/
 - Storage/service imports stay with handlers
 - Helper functions move with their handlers when tightly coupled
 - Type definitions stay in `@shared/schema.ts`
+
+---
+
+## Route Registry Baseline (Pre-Refactor Snapshot)
+
+**Date:** 2026-02-05
+
+| File | Total Endpoints | Snapshot File |
+|------|-----------------|---------------|
+| `server/routes.ts` | 155 | `docs/01-REFACTOR/route-snapshot-routes.txt` |
+| `server/routes/superAdmin.ts` | 127 | `docs/01-REFACTOR/route-snapshot-superAdmin.txt` |
+| **Total** | **282** | - |
+
+Snapshots contain: `LINE_NUMBER METHOD PATH` for each endpoint.
+
+**Verification command:**
+```bash
+# After refactor, regenerate and diff:
+grep -n "^\s*\(app\|router\)\.\(get\|post\|put\|patch\|delete\)" server/routes.ts | wc -l
+# Should match 155 (or less if some are moved to modules)
+```
