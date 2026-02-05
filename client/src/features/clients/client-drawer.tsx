@@ -1,5 +1,6 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
+import { useQuery } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { FullScreenDrawer, FullScreenDrawerFooter } from "@/components/ui/full-screen-drawer";
@@ -22,11 +23,13 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Building2 } from "lucide-react";
 import type { Client } from "@shared/schema";
 
 const clientSchema = z.object({
   companyName: z.string().min(1, "Company name is required"),
   displayName: z.string().optional(),
+  parentClientId: z.string().optional(),
   status: z.enum(["active", "inactive", "prospect"]).default("active"),
   industry: z.string().optional(),
   website: z.string().optional(),
@@ -54,12 +57,22 @@ export function ClientDrawer({
 }: ClientDrawerProps) {
   const [hasChanges, setHasChanges] = useState(false);
 
+  const { data: potentialParents } = useQuery<Client[]>({
+    queryKey: ["/api/clients"],
+    enabled: open,
+  });
+
+  const topLevelClients = potentialParents?.filter(
+    (c) => !c.parentClientId && c.status === "active" && c.id !== client?.id
+  ) || [];
+
   const form = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
     mode: "onChange",
     defaultValues: {
       companyName: "",
       displayName: "",
+      parentClientId: "",
       status: "active",
       industry: "",
       website: "https://",
@@ -72,6 +85,7 @@ export function ClientDrawer({
       form.reset({
         companyName: client.companyName,
         displayName: client.displayName || "",
+        parentClientId: client.parentClientId || "",
         status: client.status as "active" | "inactive" | "prospect",
         industry: client.industry || "",
         website: client.website || "https://",
@@ -81,6 +95,7 @@ export function ClientDrawer({
       form.reset({
         companyName: "",
         displayName: "",
+        parentClientId: "",
         status: "active",
         industry: "",
         website: "https://",
@@ -178,6 +193,45 @@ export function ClientDrawer({
               )}
             />
           </div>
+
+          {topLevelClients.length > 0 && (
+            <FormField
+              control={form.control}
+              name="parentClientId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Parent Client</FormLabel>
+                  <Select 
+                    onValueChange={(value) => field.onChange(value === "_none_" ? "" : value)} 
+                    value={field.value || "_none_"}
+                  >
+                    <FormControl>
+                      <SelectTrigger data-testid="select-parent-client">
+                        <SelectValue placeholder="None (Top-level client)" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      <SelectItem value="_none_">
+                        <span className="text-muted-foreground">None (Top-level client)</span>
+                      </SelectItem>
+                      {topLevelClients.map((parent) => (
+                        <SelectItem key={parent.id} value={parent.id}>
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-muted-foreground" />
+                            {parent.companyName}
+                          </div>
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                  <FormDescription>
+                    Select a parent to make this a sub-client (division)
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField
