@@ -62,6 +62,7 @@ import { useToast } from "@/hooks/use-toast";
 import { TaskSelectorWithCreate } from "@/features/tasks/task-selector-with-create";
 import { StartTimerDrawer } from "@/features/timer";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from "date-fns";
+import { RichTextEditor } from "@/components/richtext";
 
 type ActiveTimer = {
   id: string;
@@ -397,13 +398,14 @@ function ActiveTimerPanel() {
             </div>
             <div>
               <Label className="text-xs text-muted-foreground">Description</Label>
-              <Textarea
-                value={timer.description || ""}
-                onChange={(e) => updateMutation.mutate({ description: e.target.value })}
-                placeholder="What are you working on?"
-                className="min-h-[60px] resize-none"
-                data-testid="input-timer-description"
-              />
+              <div className="min-h-[80px] border rounded-md focus-within:ring-1 focus-within:ring-ring transition-shadow mt-1">
+                <RichTextEditor
+                  value={timer.description || ""}
+                  onChange={(val) => updateMutation.mutate({ description: val })}
+                  placeholder="What are you working on?"
+                  className="border-0 focus-visible:ring-0"
+                />
+              </div>
             </div>
           </div>
         </CardContent>
@@ -448,13 +450,14 @@ function ActiveTimerPanel() {
             </div>
             <div className="space-y-2">
               <Label>Description</Label>
-              <Textarea
-                value={stopDescription}
-                onChange={(e) => setStopDescription(e.target.value)}
-                placeholder="What did you work on?"
-                className="min-h-[80px]"
-                data-testid="input-stop-description"
-              />
+              <div className="min-h-[100px] border rounded-md focus-within:ring-1 focus-within:ring-ring transition-shadow">
+                <RichTextEditor
+                  value={stopDescription}
+                  onChange={(val) => setStopDescription(val)}
+                  placeholder="What did you work on?"
+                  className="border-0 focus-visible:ring-0"
+                />
+              </div>
             </div>
             <div className="space-y-2">
               <Label>Scope</Label>
