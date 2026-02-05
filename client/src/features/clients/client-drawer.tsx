@@ -56,6 +56,7 @@ export function ClientDrawer({
 
   const form = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
+    mode: "onChange",
     defaultValues: {
       companyName: "",
       displayName: "",
@@ -131,6 +132,7 @@ export function ClientDrawer({
           onSave={form.handleSubmit(handleSubmit)}
           isLoading={isLoading}
           saveLabel={mode === "create" ? "Create Client" : "Save Changes"}
+          saveDisabled={!form.formState.isValid}
         />
       }
     >
@@ -142,7 +144,7 @@ export function ClientDrawer({
               name="companyName"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Company Name *</FormLabel>
+                  <FormLabel required>Company Name</FormLabel>
                   <FormControl>
                     <Input
                       placeholder="Acme Inc."

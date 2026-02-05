@@ -1,0 +1,117 @@
+NON-DESTRUCTIVE FEATURE ADD: Hierarchical Clients (Parent/Sub-client “Divisions”)
+
+IMPORTANT RULES (NON-DESTRUCTIVE)
+1) Do NOT drop, recreate, or rename the existing clients table or client id type.
+2) Do NOT change existing endpoint paths or response shapes in a breaking way.
+3) Implement hierarchy as additive changes only (new nullable fields, new optional query params).
+4) Preserve tenant scoping and RBAC exactly as current system enforces it.
+5) All existing client behavior must continue to work for clients with no parent.
+
+PHASE 0 — DISCOVERY (READ ONLY)
+A) Inspect current schema and confirm:
+   - clients table name and primary key type
+   - whether tenantId exists on clients
+   - current archival/deletion pattern (isArchived, archivedAt, deletedAt, etc.)
+B) Inventory all current references to clients.id across tables (time entries, tasks, invoices, etc.)
+C) Inventory all client endpoints and current response shapes and how the UI consumes them.
+Document findings in:
+- /docs/00-AUDIT/CLIENTS_HIERARCHY_BASELINE.md
+No code changes yet.
+
+PHASE 1 — DATABASE (ADDITIVE MIGRATION ONLY)
+Goal: Add hierarchy + archiving support without breaking existing data.
+
+1) Add a nullable parent reference to clients:
+   - Add column: parentId (same type as clients.id, nullable)
+   - Add FK constraint: parentId references clients.id
+   - Enforce tenant safety:
+     - When setting parentId, validate parent belongs to same tenant (server-side).
+     - If possible, add a composite constraint strategy or ensure validation prevents cross-tenant parent links.
+
+2) Add archive flag ONLY if missing:
+   - If clients already have a soft-delete mechanism, reuse it.
+   - Otherwise add isArchived boolean default false (or archivedAt timestamp, whichever best matches existing style).
+   - Do NOT remove or rename existing archive fields.
+
+3) Add indexes (only if missing / appropriate):
+   - (tenantId, parentId)
+   - (tenantId, isArchived) or (tenantId, archivedAt) depending on current archive strategy
+
+4) Create drizzle migrations for additive columns and indexes; do not touch existing data.
+
+PHASE 2 — API (BACKWARD COMPATIBLE)
+Endpoints should remain:
+GET    /api/clients
+POST   /api/clients
+PATCH  /api/clients/:id
+DELETE /api/clients/:id  (soft archive)
+
+Rules:
+1) GET /api/clients:
+   - Must return all clients as it does today.
+   - Add OPTIONAL query params:
+     - includeArchived=true|false (default false if current UI expects active only; otherwise keep current default)
+     - hierarchical=true|false (default false for backward compatibility)
+   - When hierarchical=true:
+     - Return clients ordered so sub-clients appear immediately after parent
+     - Include a computed field like depth (0 for parent, 1 for child) if helpful
+     - Keep all existing fields unchanged.
+
+2) POST /api/clients:
+   - Accept optional parentId
+   - Validate parentId refers to an existing top-level client (parentId is null) unless we explicitly allow nesting deeper than 1 level.
+   - Validate same-tenant parent.
+   - Do not require parentId.
+
+3) PATCH /api/clients/:id:
+   - Allow updating name/description and parentId (optional)
+   - Prevent cycles (a client cannot become its own ancestor)
+   - Prevent setting parentId to a client that is archived (unless explicitly allowed)
+
+4) DELETE /api/clients/:id:
+   - Implement soft archive consistent with existing approach
+   - Decide behavior for children:
+     - Default: archiving a parent does NOT automatically archive children (safer, non-destructive)
+     - Add a warning in UI if parent has children
+
+PHASE 3 — UI (CONSISTENT + INCREMENTAL)
+1) Client list:
+   - Display hierarchy with indentation:
+     - Parent clients (depth 0)
+     - Sub-clients under parent (depth 1)
+   - Add a visual connector (line/icon) for sub-clients
+   - Add badge “Division” for sub-clients
+   - Add toggle: “Show archived”
+   - Sorting:
+     - Parents A→Z
+     - Within each parent, children A→Z
+
+2) Client create/edit form:
+   - Add optional “Parent Client” dropdown
+   - The dropdown should ONLY show top-level clients (parentId is null and not archived)
+   - If editing a sub-client, allow changing its parent (same rules)
+
+3) Keep existing client detail pages working unchanged.
+
+PHASE 4 — DOCUMENTATION (REQUIRED)
+Update Super Admin > App Docs:
+- “Clients: Hierarchy & Divisions”
+- API Registry updates for /api/clients changes (optional params)
+- Rules: tenant scoping, cycle prevention, archive behavior, parent-only dropdown
+
+PHASE 5 — TESTS (MINIMUM)
+1) API tests:
+   - can create sub-client with parentId
+   - cannot create cycle
+   - cannot set parentId across tenants
+   - hierarchical listing order is correct
+2) UI sanity:
+   - client list shows indentation + badge
+   - parent dropdown shows only top-level clients
+
+DELIVERABLES
+- Hierarchical client management with parentId (additive)
+- Soft archive support (reused or additive)
+- Hierarchical client listing UI + parent dropdown filtered to top-level
+- Docs updated in App Docs + API Registry
+- No breaking changes to existing data or endpoints

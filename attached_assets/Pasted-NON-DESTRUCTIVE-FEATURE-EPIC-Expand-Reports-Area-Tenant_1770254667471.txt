@@ -1,0 +1,190 @@
+NON-DESTRUCTIVE FEATURE EPIC: Expand “Reports” Area (Tenant Admin + Super Admin) with Themed, Dynamic Dashboards
+Primary focus: Time Tracking Reports (filters + summary cards + charts + table + export) with strict RBAC.
+
+NON-DESTRUCTIVE RULES
+1) Do not remove or break existing routes, pages, or report functionality.
+2) Additive changes only: new routes/pages/components are allowed; avoid changing existing endpoint response shapes.
+3) Keep the app’s existing UI look/feel (Inter everywhere, existing Tailwind/shadcn patterns).
+4) Keep tenancy isolation: every query must be tenant-scoped.
+5) Ensure good performance for large datasets (aggregation queries, pagination/virtualization).
+
+PHASE 0 — DISCOVERY / DOCUMENTATION FIRST (NO CODE CHANGES)
+A) Inventory current Reports UI/route(s) and any existing report endpoints.
+B) Confirm how roles are represented (Tenant Admin, Super Admin, Employee) and where middleware enforces them.
+C) Confirm existing time entry schema (fields: userId, tenantId, clientId, taskId/subtaskId, duration, date, billable, notes/description, createdAt).
+D) Add/Update Super Admin > App Docs:
+   - “Reports System Overview”
+   - “Time Tracking Reports Spec (v1)”
+   - API Registry stubs for any new report endpoints planned
+Do not refactor yet—just document current state and gaps.
+
+PHASE 1 — REPORTS IA (INFORMATION ARCHITECTURE) + NAV BY THEME
+Goal: When entering Reports, show themed report categories (e.g., Time Tracking, Workload, Profitability, Clients, Projects).
+
+1) Create a new Reports landing page:
+   - Presents report “themes” as cards/sections:
+     • Time Tracking
+     • Workload
+     • Profitability (future)
+     • Clients (future)
+     • Projects (future)
+   - Each theme card includes: description + “Open” button + last updated timestamp (optional)
+2) Add nested routing for reports:
+   /reports
+   /reports/time-tracking
+   /reports/workload (stub page for now)
+3) Ensure role gating:
+   - Tenant Admin + Super Admin can access /reports/*
+   - Employees cannot access Reports area
+4) Keep any existing Reports entrypoint working; add a redirect or new nav item if needed, but do not remove old links.
+
+PHASE 2 — TIME TRACKING REPORTS (v1) UI + UX REQUIREMENTS
+Build /reports/time-tracking as an “intelligent” dashboard with:
+
+A) Filter Controls (reactive, update view)
+- Date range picker (start/end)
+- Year selector (quick preset that sets range; optional but requested)
+- User/employee selector (single/multi-select)
+- Client selector (dropdown; if hierarchical clients exist, show hierarchy)
+- Optional: “Billable only” toggle
+Rules:
+- Filters should sync to URL query params (shareable links).
+- Provide sensible defaults: last 30 days, all employees, all clients.
+
+B) Summary Cards (top row)
+- Total Hours Tracked
+- Billable Hours
+- Number of Time Entries
+- Active Employees Count (unique users with entries in range)
+Cards update with filters; show loading skeletons.
+
+C) Charts/Visualizations (Recharts preferred)
+- Bar: Hours by Client
+- Bar: Hours by Employee
+- Pie: Billable vs Non-Billable
+Rules:
+- Charts reflect current filters.
+- Clicking a chart element should optionally apply a filter (e.g., click a client bar to filter to that client) if easy—otherwise just tooltip + legend.
+
+D) Data Table (detailed entries)
+- Sortable + searchable table of time entries matching filters
+- Columns: Date, Employee, Client, Task, Duration, Billable
+- Also include Description/Notes as expandable row or tooltip to prevent clutter
+- Pagination or virtualization:
+  - Use server-side pagination if dataset can be large
+  - Keep sort/search stable and predictable
+Rules:
+- Clicking a row can open an entity drawer (time entry detail) if one exists; otherwise open a read-only dialog.
+
+E) Export Options
+- CSV export of FILTERED data
+- Columns must include: date, user name, user email, client name, task name, duration (hours), billable, description/notes, createdAt
+Rules:
+- Export must reflect current filters, sort order optional (fine either way, but document behavior).
+- Export should stream or generate efficiently; avoid loading all rows into the browser if large.
+
+F) Access Control
+- Only Tenant Admin + Super Admin can view /reports/time-tracking and call its endpoints.
+- Employees can see ONLY their own time entries in their personal dashboard (existing behavior). Do not expand employee report access.
+
+PHASE 3 — BACKEND REPORT ENDPOINTS (ADDITIVE, PERFORMANCE-FIRST)
+Implement dedicated report endpoints instead of forcing the client to compute aggregates.
+
+Add a new route module:
+- server/routes/modules/reports.routes.ts (or server/routes/modules/reports/timeTracking.routes.ts)
+Mount under:
+- /api/reports/time-tracking (or similar consistent base path)
+
+Endpoints (suggested, keep additive):
+1) GET /api/reports/time-tracking/summary
+   Query params: startDate, endDate, year?, userIds?, clientIds?
+   Returns:
+   - totalHours
+   - billableHours
+   - timeEntryCount
+   - activeEmployeeCount
+
+2) GET /api/reports/time-tracking/by-client
+   Returns array: { clientId, clientName, hoursTotal, hoursBillable }
+
+3) GET /api/reports/time-tracking/by-employee
+   Returns array: { userId, userName, userEmail, hoursTotal, hoursBillable }
+
+4) GET /api/reports/time-tracking/entries
+   Query params: startDate, endDate, userIds?, clientIds?, search?, sortBy?, sortDir?, page?, pageSize?
+   Returns:
+   - rows: entry DTOs for table
+   - pagination: { page, pageSize, totalRows }
+DTO fields: id, date, durationMinutes (or hours), billable, user, client, task, description, createdAt
+
+5) GET /api/reports/time-tracking/export.csv
+   Same filters as entries; returns CSV file download
+   Must be tenant-scoped, admin-only.
+
+RBAC middleware:
+- Add/Reuse requireTenantAdminOrSuperAdmin middleware.
+- Ensure tenant scoping on every query.
+
+DB/Query requirements:
+- Use efficient aggregation queries (GROUP BY clientId, userId).
+- Ensure proper indexes exist (tenantId + date, tenantId + userId + date, tenantId + clientId + date). Add indexes only if missing (additive migrations).
+- If hierarchical clients exist, include children in filter when parent selected (document behavior).
+
+PHASE 4 — CLIENT IMPLEMENTATION DETAILS (INTELLIGENT + DYNAMIC)
+1) Build a “ReportsShell” page layout:
+   - PageHeader (title + subtitle)
+   - FilterBar component shared by report pages
+   - Responsive grid for cards + charts + table
+2) Use TanStack Query for:
+   - summary
+   - charts datasets
+   - entries (paginated)
+3) Prevent UI jank:
+   - show skeletons while loading
+   - keep previous data while fetching (stale-while-revalidate)
+   - debounce search input
+4) URL-sync:
+   - All filters should reflect in query params (shareable deep links)
+5) Add “Saved Views” (optional if easy, otherwise stub):
+   - Allow admins to save a filter preset (name + params)
+   - Show as quick chips at top
+
+PHASE 5 — DOCUMENTATION UPDATES (REQUIRED)
+In Super Admin > App Docs:
+- Create/Update:
+  1) Reports > Overview (themes)
+  2) Reports > Time Tracking Dashboard (how filters work, what metrics mean)
+  3) API Registry entries for each new endpoint (request params, response shapes)
+  4) Performance notes (pagination, aggregation, expected limits)
+- Ensure “Sync API Docs” includes these routes, with manual notes preserved.
+
+PHASE 6 — TESTS (MINIMUM SAFETY NET)
+Backend:
+- Admin can access report endpoints; employee cannot (403/401).
+- Tenant isolation: cannot query other tenant’s entries via userId/clientId.
+- Summary math correctness for a small seeded dataset.
+
+Frontend (if test infra exists):
+- Filters update URL params and refetch data.
+- Export button triggers file download with correct filters.
+
+DELIVERABLES / ACCEPTANCE CRITERIA
+1) Reports landing page with themed navigation (Time Tracking + Workload stub).
+2) Time Tracking Reports dashboard:
+   - filters (date range, year, user(s), client(s))
+   - summary cards
+   - charts (hours by client, hours by employee, billable pie)
+   - table with pagination/virtual scrolling
+   - CSV export of filtered dataset
+3) Admin-only access enforced server-side and client-side.
+4) Docs updated in App Docs + API Registry.
+
+IMPLEMENTATION NOTE (IMPORTANT)
+Do NOT attempt to build all report themes at once.
+Deliver Time Tracking first as a reusable pattern, then reuse the same shell + filter framework for Workload/Profitability later.
+
+After completion, output:
+- list of new/changed files
+- list of new endpoints + query params
+- any DB migrations/indexes added
+- any known limitations (e.g., hierarchical client handling)

@@ -88,6 +88,7 @@ export function ProjectDrawer({
 
   const form = useForm<ProjectFormData>({
     resolver: zodResolver(projectSchema),
+    mode: "onChange",
     defaultValues: {
       name: "",
       description: "",
@@ -212,7 +213,7 @@ export function ProjectDrawer({
           onSave={form.handleSubmit(handleSubmit)}
           isLoading={isLoading}
           saveLabel={mode === "create" ? "Create Project" : "Save Changes"}
-          saveDisabled={!hasClientAssigned}
+          saveDisabled={!form.formState.isValid || !hasClientAssigned}
         />
       }
     >
@@ -239,7 +240,7 @@ export function ProjectDrawer({
                 name="name"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Project Name *</FormLabel>
+                    <FormLabel required>Project Name</FormLabel>
                     <FormControl>
                       <Input
                         placeholder="Enter project name..."
@@ -277,11 +278,11 @@ export function ProjectDrawer({
                 name="clientId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Client *</FormLabel>
+                    <FormLabel required>Client</FormLabel>
                     <Select onValueChange={handleClientChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-client">
-                          <SelectValue placeholder="Select a client (required)" />
+                          <SelectValue placeholder="Select a client" />
                         </SelectTrigger>
                       </FormControl>
                       <SelectContent>

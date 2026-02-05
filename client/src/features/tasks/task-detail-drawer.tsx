@@ -11,7 +11,6 @@ import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { Calendar as CalendarComponent } from "@/components/ui/calendar";
 import {
   Dialog,
   DialogContent,
@@ -21,13 +20,6 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { cn } from "@/lib/utils";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { SubtaskList } from "./subtask-list";
@@ -43,6 +35,7 @@ import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { StartTimerDrawer } from "@/features/timer";
 import { useToast } from "@/hooks/use-toast";
+import { FormFieldWrapper, DatePickerWithChips, PrioritySelector, StatusSelector, type PriorityLevel, type TaskStatus } from "@/components/forms";
 import type { TaskWithRelations, User, Tag as TagType, Comment, Project, Client } from "@shared/schema";
 
 type ActiveTimer = {
@@ -777,114 +770,59 @@ export function TaskDetailDrawer({
             )}
 
             <div className="grid grid-cols-2 gap-4">
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <Users className="h-3.5 w-3.5" />
-                  Assignees
-                </label>
-                <div className="flex items-center">
-                  <MultiSelectAssignees
-                    taskId={task.id}
-                    assignees={assigneeUsers}
-                    workspaceId={workspaceId}
-                    onAssigneeChange={onRefresh}
-                  />
-                </div>
-              </div>
+              <FormFieldWrapper
+                label="Assignees"
+                labelIcon={<Users className="h-3.5 w-3.5" />}
+              >
+                <MultiSelectAssignees
+                  taskId={task.id}
+                  assignees={assigneeUsers}
+                  workspaceId={workspaceId}
+                  onAssigneeChange={onRefresh}
+                />
+              </FormFieldWrapper>
 
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <Calendar className="h-3.5 w-3.5" />
-                  Due Date
-                </label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      className={cn(
-                        "w-[140px] justify-start text-left font-normal",
-                        !task.dueDate && "text-muted-foreground"
-                      )}
-                      data-testid="button-due-date"
-                    >
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {task.dueDate ? format(new Date(task.dueDate), "MMM d, yyyy") : "Set date"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0" align="start">
-                    <CalendarComponent
-                      mode="single"
-                      selected={task.dueDate ? new Date(task.dueDate) : undefined}
-                      onSelect={(date) => {
-                        onUpdate?.(task.id, { dueDate: date || null });
-                      }}
-                      initialFocus
-                    />
-                    {task.dueDate && (
-                      <div className="border-t p-2">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="w-full"
-                          onClick={() => onUpdate?.(task.id, { dueDate: null })}
-                          data-testid="button-clear-due-date"
-                        >
-                          Clear date
-                        </Button>
-                      </div>
-                    )}
-                  </PopoverContent>
-                </Popover>
-              </div>
+              <FormFieldWrapper
+                label="Due Date"
+                labelIcon={<Calendar className="h-3.5 w-3.5" />}
+              >
+                <DatePickerWithChips
+                  value={task.dueDate ? new Date(task.dueDate) : null}
+                  onChange={(date) => onUpdate?.(task.id, { dueDate: date || null })}
+                  className="w-[180px] h-8"
+                  data-testid="button-due-date"
+                />
+              </FormFieldWrapper>
 
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <Flag className="h-3.5 w-3.5" />
-                  Priority
-                </label>
-                <Select
-                  value={task.priority}
-                  onValueChange={(value) => onUpdate?.(task.id, { priority: value })}
-                >
-                  <SelectTrigger className="w-[140px] h-8" data-testid="select-priority">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="low">Low</SelectItem>
-                    <SelectItem value="medium">Medium</SelectItem>
-                    <SelectItem value="high">High</SelectItem>
-                    <SelectItem value="urgent">Urgent</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <FormFieldWrapper
+                label="Priority"
+                labelIcon={<Flag className="h-3.5 w-3.5" />}
+              >
+                <PrioritySelector
+                  value={task.priority as PriorityLevel}
+                  onChange={(value) => onUpdate?.(task.id, { priority: value })}
+                  className="w-[140px] h-8"
+                  data-testid="select-priority"
+                />
+              </FormFieldWrapper>
 
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <Layers className="h-3.5 w-3.5" />
-                  Status
-                </label>
-                <Select
-                  value={task.status}
-                  onValueChange={handleStatusChange}
-                >
-                  <SelectTrigger className="w-[140px] h-8" data-testid="select-status">
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="todo">To Do</SelectItem>
-                    <SelectItem value="in_progress">In Progress</SelectItem>
-                    <SelectItem value="blocked">Blocked</SelectItem>
-                    <SelectItem value="done">Done</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+              <FormFieldWrapper
+                label="Status"
+                labelIcon={<Layers className="h-3.5 w-3.5" />}
+              >
+                <StatusSelector
+                  value={task.status as TaskStatus}
+                  onChange={handleStatusChange}
+                  className="w-[140px] h-8"
+                  data-testid="select-status"
+                />
+              </FormFieldWrapper>
 
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <Clock className="h-3.5 w-3.5" />
-                  Estimate (min)
-                </label>
+              <FormFieldWrapper
+                label="Estimate"
+                labelIcon={<Clock className="h-3.5 w-3.5" />}
+                helpText="Time in minutes"
+              >
                 <Input
                   type="number"
                   min="0"
@@ -901,29 +839,25 @@ export function TaskDetailDrawer({
                   className="w-[140px] h-8"
                   data-testid="input-estimate-minutes"
                 />
-              </div>
+              </FormFieldWrapper>
 
-              <div className="space-y-2">
-                <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                  <Eye className="h-3.5 w-3.5" />
-                  Watchers
-                </label>
-                <div className="flex items-center">
-                  <MultiSelectWatchers
-                    taskId={task.id}
-                    watchers={watcherUsers}
-                    workspaceId={workspaceId}
-                    onWatcherChange={onRefresh}
-                  />
-                </div>
-              </div>
+              <FormFieldWrapper
+                label="Watchers"
+                labelIcon={<Eye className="h-3.5 w-3.5" />}
+              >
+                <MultiSelectWatchers
+                  taskId={task.id}
+                  watchers={watcherUsers}
+                  workspaceId={workspaceId}
+                  onWatcherChange={onRefresh}
+                />
+              </FormFieldWrapper>
             </div>
           </div>
 
           <Separator />
 
-          <div className="space-y-2">
-            <label className="text-xs font-medium text-muted-foreground">Description</label>
+          <FormFieldWrapper label="Description">
             <RichTextEditor
               value={description}
               onChange={handleDescriptionChange}
