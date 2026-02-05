@@ -126,25 +126,25 @@ function categorizeTasksForTwoColumn(tasks: TaskWithRelations[]): {
     // Check isPersonal flag first, fall back to checking projectId for backwards compatibility
     const isPersonalTask = task.isPersonal === true || (!task.projectId && task.isPersonal !== false);
     
+    // Personal tasks go to their dedicated section AND to date-based sections
     if (isPersonalTask) {
-      // All personal tasks go to Personal Tasks section
       personalTasks.push(task);
+    }
+    
+    // ALL tasks (including personal) are categorized by due date
+    if (!task.dueDate) {
+      noDueDate.push(task);
     } else {
-      // Project tasks
-      if (!task.dueDate) {
-        noDueDate.push(task);
-      } else {
-        const dueDate = new Date(task.dueDate);
-        const pastCheck = isPast(dueDate);
-        const todayCheck = isToday(dueDate);
-        const futureCheck = isFuture(dueDate);
-        if (pastCheck && !todayCheck) {
-          overdue.push(task);
-        } else if (todayCheck) {
-          today.push(task);
-        } else if (futureCheck) {
-          upcoming.push(task);
-        }
+      const dueDate = new Date(task.dueDate);
+      const pastCheck = isPast(dueDate);
+      const todayCheck = isToday(dueDate);
+      const futureCheck = isFuture(dueDate);
+      if (pastCheck && !todayCheck) {
+        overdue.push(task);
+      } else if (todayCheck) {
+        today.push(task);
+      } else if (futureCheck) {
+        upcoming.push(task);
       }
     }
   });
@@ -688,12 +688,14 @@ export default function MyTasks() {
     setSectionOrders(prev => {
       const currentOrder = prev[sectionId] || [];
       const allTasks = filteredTasks.filter(t => {
-        const isPersonal = !t.projectId;
-        if (sectionId === "personal") return isPersonal;
-        if (sectionId === "no-date") return !isPersonal && !t.dueDate;
-        if (sectionId === "overdue") return !isPersonal && t.dueDate && isPast(new Date(t.dueDate)) && !isToday(new Date(t.dueDate));
-        if (sectionId === "today") return !isPersonal && t.dueDate && isToday(new Date(t.dueDate));
-        if (sectionId === "upcoming") return !isPersonal && t.dueDate && isFuture(new Date(t.dueDate));
+        const isPersonalTask = t.isPersonal === true || (!t.projectId && t.isPersonal !== false);
+        // Personal tasks section only contains personal tasks
+        if (sectionId === "personal") return isPersonalTask;
+        // All other sections include ALL tasks (personal and project-based) categorized by date
+        if (sectionId === "no-date") return !t.dueDate;
+        if (sectionId === "overdue") return t.dueDate && isPast(new Date(t.dueDate)) && !isToday(new Date(t.dueDate));
+        if (sectionId === "today") return t.dueDate && isToday(new Date(t.dueDate));
+        if (sectionId === "upcoming") return t.dueDate && isFuture(new Date(t.dueDate));
         return false;
       });
       
