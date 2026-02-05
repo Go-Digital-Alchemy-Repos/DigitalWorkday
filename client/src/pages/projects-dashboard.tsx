@@ -19,15 +19,15 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Badge } from "@/components/ui/badge";
-import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, DollarSign, Plus, Pencil, X } from "lucide-react";
+import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, DollarSign, Plus, X } from "lucide-react";
 import { ProjectDetailDrawer, ProjectDrawer } from "@/features/projects";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { AccessInfoBanner } from "@/components/access-info-banner";
+import { PageShell, PageHeader, EmptyState, LoadingState, ErrorState } from "@/components/layout";
 import type { Project, Client, Team, ClientDivision } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 import { format } from "date-fns";
@@ -82,7 +82,7 @@ export default function ProjectsDashboard() {
   const { user } = useAuth();
   const isEmployee = user?.role === UserRole.EMPLOYEE;
 
-  const { data: projects, isLoading: projectsLoading } = useQuery<ProjectWithCounts[]>({
+  const { data: projects, isLoading: projectsLoading, error: projectsError, refetch: refetchProjects } = useQuery<ProjectWithCounts[]>({
     queryKey: ["/api/v1/projects", { includeCounts: true }],
   });
 
@@ -228,28 +228,40 @@ export default function ProjectsDashboard() {
     return team?.name || "-";
   };
 
-  return (
-    <div className="h-full overflow-auto">
-      <div className="container max-w-7xl mx-auto py-4 md:py-6 px-3 md:px-4">
-        <div className="flex items-center justify-between mb-4 md:mb-6 gap-2">
-          <div className="flex items-center gap-2 md:gap-3 min-w-0">
-            <FolderKanban className="h-6 w-6 md:h-8 md:w-8 text-primary shrink-0" />
-            <div className="min-w-0">
-              <h1 className="text-xl md:text-2xl font-bold truncate">Projects</h1>
-              <p className="text-muted-foreground text-xs md:text-sm hidden md:block">
-                View and manage all projects across your workspace
-              </p>
-            </div>
-          </div>
-          <Button onClick={() => setCreateProjectOpen(true)} data-testid="button-new-project" size="sm" className="md:h-9 shrink-0">
-            <Plus className="h-4 w-4 md:mr-2" />
-            <span className="hidden md:inline">New Project</span>
-          </Button>
-        </div>
+  if (projectsError) {
+    return (
+      <PageShell className="max-w-7xl mx-auto">
+        <PageHeader
+          title="Projects"
+          subtitle="View and manage all projects across your workspace"
+          icon={<FolderKanban className="h-6 w-6" />}
+        />
+        <ErrorState
+          error={projectsError as Error}
+          title="Failed to load projects"
+          onRetry={() => refetchProjects()}
+        />
+      </PageShell>
+    );
+  }
 
-        {isEmployee && (
-          <AccessInfoBanner variant="projects" className="mb-4" />
-        )}
+  return (
+    <PageShell className="max-w-7xl mx-auto">
+      <PageHeader
+        title="Projects"
+        subtitle="View and manage all projects across your workspace"
+        icon={<FolderKanban className="h-6 w-6" />}
+        actions={
+          <Button onClick={() => setCreateProjectOpen(true)} data-testid="button-new-project">
+            <Plus className="h-4 w-4 mr-2" />
+            New Project
+          </Button>
+        }
+      />
+
+      {isEmployee && (
+        <AccessInfoBanner variant="projects" className="mb-4" />
+      )}
 
         {analytics?.totals && (
           <div className="grid gap-3 grid-cols-2 md:grid-cols-4 mb-6">
@@ -380,56 +392,25 @@ export default function ProjectsDashboard() {
         </div>
 
         {projectsLoading ? (
-          <div className="border rounded-lg overflow-hidden">
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead className="w-[250px]">Project Name</TableHead>
-                  <TableHead>Client</TableHead>
-                  <TableHead>Team</TableHead>
-                  <TableHead>Status</TableHead>
-                  <TableHead className="text-center">Open</TableHead>
-                  <TableHead className="text-center">Overdue</TableHead>
-                  <TableHead className="text-center">Today</TableHead>
-                  <TableHead className="w-[100px]">Progress</TableHead>
-                  <TableHead className="text-center">Budget</TableHead>
-                  <TableHead>Activity</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {[1, 2, 3, 4, 5].map((i) => (
-                  <TableRow key={i}>
-                    <TableCell><Skeleton className="h-5 w-40" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-24" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-20" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16 rounded-full" /></TableCell>
-                    <TableCell className="text-center"><Skeleton className="h-5 w-8 mx-auto" /></TableCell>
-                    <TableCell className="text-center"><Skeleton className="h-5 w-8 mx-auto" /></TableCell>
-                    <TableCell className="text-center"><Skeleton className="h-5 w-8 mx-auto" /></TableCell>
-                    <TableCell><Skeleton className="h-2 w-full" /></TableCell>
-                    <TableCell className="text-center"><Skeleton className="h-5 w-12 mx-auto" /></TableCell>
-                    <TableCell><Skeleton className="h-5 w-16" /></TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </div>
+          <LoadingState type="table" rows={5} />
         ) : filteredProjects.length === 0 ? (
-          <div className="flex flex-col items-center justify-center py-16 text-center">
-            <FolderKanban className="h-12 w-12 text-muted-foreground mb-4" />
-            <h3 className="text-lg font-medium mb-1">No projects found</h3>
-            <p className="text-muted-foreground text-sm mb-4">
-              {searchQuery || statusFilter !== "all" || clientFilter !== "all" || divisionFilter !== "all" || teamFilter !== "all"
+          <EmptyState
+            icon={<FolderKanban className="h-12 w-12" />}
+            title="No projects found"
+            description={
+              searchQuery || statusFilter !== "all" || clientFilter !== "all" || divisionFilter !== "all" || teamFilter !== "all"
                 ? "Try adjusting your filters"
-                : "Create your first project to get started"}
-            </p>
-            {!(searchQuery || statusFilter !== "all" || clientFilter !== "all" || divisionFilter !== "all" || teamFilter !== "all") && (
-              <Button onClick={() => setCreateProjectOpen(true)} data-testid="button-add-first-project">
-                <Plus className="h-4 w-4 mr-2" />
-                Create Project
-              </Button>
-            )}
-          </div>
+                : "Create your first project to get started"
+            }
+            action={
+              !(searchQuery || statusFilter !== "all" || clientFilter !== "all" || divisionFilter !== "all" || teamFilter !== "all") && (
+                <Button onClick={() => setCreateProjectOpen(true)} data-testid="button-add-first-project">
+                  <Plus className="h-4 w-4 mr-2" />
+                  Create Project
+                </Button>
+              )
+            }
+          />
         ) : (
           <>
             {/* Mobile card view */}
@@ -694,7 +675,6 @@ export default function ProjectsDashboard() {
         <div className="mt-4 text-sm text-muted-foreground">
           Showing {filteredProjects.length} of {projects?.length || 0} projects
         </div>
-      </div>
 
       <ProjectDetailDrawer
         project={selectedProject}
@@ -719,6 +699,6 @@ export default function ProjectsDashboard() {
         isLoading={createProjectMutation.isPending}
         mode="create"
       />
-    </div>
+    </PageShell>
   );
 }
