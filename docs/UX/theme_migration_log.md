@@ -64,3 +64,25 @@ Full audit of `client/src/` found zero hard-coded color patterns. The codebase a
 - CSS accent presets added to `client/src/index.css` (green, blue, indigo, teal, orange, slate)
 - `ThemeProvider` extended with accent support in `client/src/lib/theme-provider.tsx`
 - Documentation created at `docs/UX/theme_tokens.md`
+
+### 2026-02-05 — Batch 1: App Shell + Global Surfaces
+
+**Result:** No migration needed.
+
+Verified sidebar/nav, main page backgrounds, cards, popovers, and dividers. All already use semantic tokens (`bg-background`, `bg-sidebar`, `bg-card`, `bg-popover`, `border-border`, etc.) via shadcn sidebar primitives and component library.
+
+**Files changed:** 0
+
+### 2026-02-05 — Batch 2: Forms + Buttons + Focus States
+
+**Result:** No migration needed.
+
+Verified all buttons, inputs, selects, textareas, focus rings, labels, and helper text. All already use semantic tokens:
+- Buttons: `bg-primary text-primary-foreground`, `bg-destructive text-destructive-foreground`, `bg-secondary text-secondary-foreground`, and ghost/outline variants via shadcn `<Button>` component
+- Inputs/selects/textareas: `bg-background`, `border-input`, `focus-visible:ring-ring`
+- Labels: `text-foreground`
+- Helper/muted text: `text-muted-foreground`
+
+Zero hard-coded `bg-blue-*`, `text-gray-*`, `ring-blue-*`, `border-gray-*`, or similar patterns found.
+
+**Files changed:** 0
