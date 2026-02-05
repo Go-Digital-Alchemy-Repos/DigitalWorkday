@@ -19,9 +19,11 @@ import aiRoutes from "./ai";
 import featuresRoutes from "../features";
 import superSystemStatusRouter from "./super/systemStatus.router";
 import superIntegrationsRouter from "./super/integrations.router";
+import { searchRouter } from "./modules/search/search.router";
 
 const router = Router();
 
+router.use(searchRouter);
 router.use(featuresRoutes);
 router.use("/timer", timerRoutes);
 router.use("/v1/super", superAdminRoutes);

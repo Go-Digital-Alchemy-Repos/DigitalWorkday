@@ -97,12 +97,13 @@ import {
 } from "./middleware/tenancyEnforcement";
 import { UserRole } from "@shared/schema";
 import { deleteFromStorageByUrl } from "./services/uploads/s3UploadService";
+import { 
+  getCurrentUserId, 
+  getCurrentWorkspaceId, 
+  getCurrentWorkspaceIdAsync, 
+  isSuperUser 
+} from "./routes/helpers";
 
-function getCurrentUserId(req: Request): string {
-  return req.user?.id || "demo-user-id";
-}
-
-// Helper function to generate human-readable project update description
 function getProjectUpdateDescription(updates: Record<string, unknown>): string | null {
   const descriptions: string[] = [];
   
@@ -118,82 +119,6 @@ function getProjectUpdateDescription(updates: Record<string, unknown>): string |
   if (descriptions.length === 0) return null;
   if (descriptions.length === 1) return descriptions[0];
   return descriptions.slice(0, -1).join(', ') + ' and ' + descriptions.slice(-1);
-}
-
-// Cache for tenant primary workspaces to avoid repeated DB lookups
-const tenantWorkspaceCache = new Map<string, { workspaceId: string; expiry: number }>();
-const WORKSPACE_CACHE_TTL = 60000; // 1 minute
-
-async function getCurrentWorkspaceIdAsync(req: Request): Promise<string> {
-  // Get the effective tenant ID from middleware or user
-  const tenantId = req.tenant?.effectiveTenantId || req.user?.tenantId;
-  
-  if (!tenantId) {
-    // No tenant context - fall back to demo workspace for super users
-    return "demo-workspace-id";
-  }
-  
-  // Check cache first
-  const cached = tenantWorkspaceCache.get(tenantId);
-  if (cached && cached.expiry > Date.now()) {
-    return cached.workspaceId;
-  }
-  
-  // Look up tenant's primary workspace
-  const [primaryWorkspace] = await db.select()
-    .from(workspaces)
-    .where(and(eq(workspaces.tenantId, tenantId), eq(workspaces.isPrimary, true)))
-    .limit(1);
-  
-  if (primaryWorkspace) {
-    // Cache the result
-    tenantWorkspaceCache.set(tenantId, {
-      workspaceId: primaryWorkspace.id,
-      expiry: Date.now() + WORKSPACE_CACHE_TTL
-    });
-    return primaryWorkspace.id;
-  }
-  
-  // Fallback: get any workspace for this tenant
-  const [anyWorkspace] = await db.select()
-    .from(workspaces)
-    .where(eq(workspaces.tenantId, tenantId))
-    .limit(1);
-  
-  if (anyWorkspace) {
-    tenantWorkspaceCache.set(tenantId, {
-      workspaceId: anyWorkspace.id,
-      expiry: Date.now() + WORKSPACE_CACHE_TTL
-    });
-    return anyWorkspace.id;
-  }
-  
-  // No workspace found for tenant - return demo as last resort
-  console.warn(`[getCurrentWorkspaceIdAsync] No workspace found for tenant ${tenantId}`);
-  return "demo-workspace-id";
-}
-
-// Sync version for backward compatibility - uses cached value or falls back to demo
-function getCurrentWorkspaceId(req: Request): string {
-  const tenantId = req.tenant?.effectiveTenantId || req.user?.tenantId;
-  
-  if (!tenantId) {
-    return "demo-workspace-id";
-  }
-  
-  // Check cache for sync access
-  const cached = tenantWorkspaceCache.get(tenantId);
-  if (cached && cached.expiry > Date.now()) {
-    return cached.workspaceId;
-  }
-  
-  // If not cached, trigger async lookup (for next request) and return demo temporarily
-  getCurrentWorkspaceIdAsync(req).catch(() => {});
-  return "demo-workspace-id";
-}
-
-function isSuperUser(req: Request): boolean {
-  return (req.user as any)?.role === UserRole.SUPER_USER;
 }
 import {
   isS3Configured,
@@ -306,101 +231,7 @@ export async function registerRoutes(
   // Mount webhook routes (bypasses auth, uses signature verification)
   app.use("/api/v1/webhooks", webhookRoutes);
 
-  /**
-   * Global Search Endpoint for Command Palette
-   * 
-   * Provides tenant-scoped search across clients, projects, and tasks.
-   * Used by the command palette (⌘K/Ctrl+K) for quick navigation.
-   * 
-   * Security:
-   * - REQUIRES tenant context (returns 403 if missing)
-   * - Uses only tenant-scoped storage methods (no fallbacks)
-   * - Tasks fetched via project ownership (inherently tenant-scoped)
-   * 
-   * Performance:
-   * - Parallel fetches for clients and projects
-   * - Single batch query for tasks (getTasksByProjectIds)
-   * - In-memory filtering with simple scoring (startsWith = 2, includes = 1)
-   * - Results limited to maxResults (default 10, max 50)
-   * 
-   * @query q - Search query string (min 2 chars for results)
-   * @query limit - Max results per category (default 10, max 50)
-   * @returns { clients, projects, tasks } - Matching items with id, name, type
-   */
-  app.get("/api/search", async (req, res) => {
-    try {
-      const tenantId = getEffectiveTenantId(req);
-      
-      // Strict tenant enforcement - no fallback for security
-      if (!tenantId) {
-        return sendError(res, AppError.forbidden("Tenant context required for search"), req);
-      }
-
-      const { q, limit = "10" } = req.query;
-      const searchQuery = String(q || "").trim().toLowerCase();
-      const maxResults = Math.min(parseInt(String(limit), 10) || 10, 50);
-      
-      if (!searchQuery) {
-        return res.json({ clients: [], projects: [], tasks: [] });
-      }
-
-      const workspaceId = await getCurrentWorkspaceIdAsync(req);
-
-      // Parallel tenant-scoped search across entities
-      const [clientsList, projectsList] = await Promise.all([
-        storage.getClientsByTenant(tenantId, workspaceId),
-        storage.getProjectsByTenant(tenantId, workspaceId),
-      ]);
-
-      // Get tasks efficiently using project IDs with tenant validation at DB level
-      const projectIds = projectsList.map(p => p.id);
-      let tasksList: Array<{ id: string; title: string; projectId: string | null; status: string | null; tenantId: string | null }> = [];
-      
-      if (projectIds.length > 0) {
-        // Query tasks for tenant's projects (inherently tenant-scoped via project ownership)
-        const taskMap = await storage.getTasksByProjectIds(projectIds);
-        for (const tasks of taskMap.values()) {
-          tasksList.push(...tasks.map(t => ({
-            id: t.id,
-            title: t.title || "",
-            projectId: t.projectId,
-            status: t.status,
-            tenantId: tenantId,
-          })));
-        }
-      }
-
-      // Filter and score results
-      const filterAndScore = <T extends { id: string }>(
-        items: T[],
-        getSearchText: (item: T) => string
-      ) => {
-        return items
-          .map(item => {
-            const text = getSearchText(item).toLowerCase();
-            if (!text.includes(searchQuery)) return null;
-            const score = text.startsWith(searchQuery) ? 2 : 1;
-            return { item, score };
-          })
-          .filter((r): r is { item: T; score: number } => r !== null)
-          .sort((a, b) => b.score - a.score)
-          .slice(0, maxResults)
-          .map(r => r.item);
-      };
-
-      const clients = filterAndScore(clientsList, c => c.companyName);
-      const projects = filterAndScore(projectsList, p => p.name);
-      const filteredTasks = filterAndScore(tasksList, t => t.title);
-
-      res.json({ 
-        clients: clients.map(c => ({ id: c.id, name: c.companyName, type: "client" })),
-        projects: projects.map(p => ({ id: p.id, name: p.name, type: "project", status: p.status })),
-        tasks: filteredTasks.map(t => ({ id: t.id, name: t.title, type: "task", projectId: t.projectId, status: t.status })),
-      });
-    } catch (error) {
-      return handleRouteError(res, error, "GET /api/search", req);
-    }
-  });
+  // [EXTRACTED] Search endpoint moved to server/routes/modules/search/search.router.ts
 
   app.get("/api/workspaces/current", async (req, res) => {
     try {
