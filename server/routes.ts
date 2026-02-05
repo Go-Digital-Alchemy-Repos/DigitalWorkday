@@ -4635,7 +4635,7 @@ export async function registerRoutes(
             id: entry.id,
             date: entryDate.toISOString(),
             duration: seconds,
-            clientName: entry.client?.name,
+            clientName: entry.client?.displayName || entry.client?.legalName,
             projectName: entry.project?.name,
           });
         }
