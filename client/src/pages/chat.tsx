@@ -1616,7 +1616,6 @@ export default function ChatPage() {
               Team
             </TabsTrigger>
           </TabsList>
-
           {/* Chats Tab - Using new ConversationListPanel */}
           <TabsContent value="chats" className="flex-1 flex flex-col overflow-hidden mt-0 p-0">
             <ConversationListPanel
@@ -1632,7 +1631,6 @@ export default function ChatPage() {
               className="flex-1"
             />
           </TabsContent>
-
           {/* Team Tab */}
           <TabsContent value="team" className="flex-1 flex flex-col overflow-hidden mt-0 p-0">
             <div className="p-4 border-b">
