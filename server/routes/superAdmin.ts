@@ -8329,6 +8329,79 @@ router.get("/docs/:docPath", requireSuperUser, async (req, res) => {
   }
 });
 
+// POST /api/v1/super/docs/sync - Sync API docs from route definitions
+import { scanAllRoutes, createStubDocument, mergeContent, generateAutoSection } from "../utils/routeScanner";
+
+router.post("/docs/sync", requireSuperUser, async (req, res) => {
+  try {
+    const API_REGISTRY_DIR = path.join(DOCS_DIR, "17-API-REGISTRY");
+    
+    // Ensure directory exists
+    await fs.mkdir(API_REGISTRY_DIR, { recursive: true });
+    
+    // Scan all routes
+    const domains = await scanAllRoutes();
+    
+    const results = {
+      created: [] as string[],
+      updated: [] as string[],
+      skipped: [] as string[],
+      errors: [] as string[],
+    };
+    
+    for (const [domainKey, domainRoutes] of domains) {
+      // Skip domains with very few routes (likely not worth documenting)
+      if (domainRoutes.routes.length === 0) {
+        results.skipped.push(domainKey);
+        continue;
+      }
+      
+      const filename = `${domainRoutes.displayName.replace(/\s+/g, "-").toUpperCase()}.md`;
+      const filepath = path.join(API_REGISTRY_DIR, filename);
+      
+      try {
+        // Check if file exists
+        let existingContent: string | null = null;
+        try {
+          existingContent = await fs.readFile(filepath, "utf-8");
+        } catch (err: any) {
+          if (err.code !== "ENOENT") throw err;
+        }
+        
+        if (existingContent) {
+          // Merge: update auto-generated section, preserve manual content
+          const autoSection = generateAutoSection(domainRoutes);
+          const newContent = mergeContent(existingContent, autoSection);
+          await fs.writeFile(filepath, newContent, "utf-8");
+          results.updated.push(filename);
+        } else {
+          // Create new stub document
+          const content = createStubDocument(domainRoutes);
+          await fs.writeFile(filepath, content, "utf-8");
+          results.created.push(filename);
+        }
+      } catch (err: any) {
+        console.error(`[docs/sync] Failed to process ${domainKey}:`, err);
+        results.errors.push(`${domainKey}: ${err.message}`);
+      }
+    }
+    
+    res.json({
+      success: true,
+      summary: {
+        created: results.created.length,
+        updated: results.updated.length,
+        skipped: results.skipped.length,
+        errors: results.errors.length,
+      },
+      details: results,
+    });
+  } catch (error) {
+    console.error("[docs/sync] Failed to sync API docs:", error);
+    res.status(500).json({ error: "Failed to sync API docs" });
+  }
+});
+
 // =============================================================================
 // DATA IMPORT/EXPORT ENDPOINTS
 // For provisioning large tenants - clients, team members, time entries
