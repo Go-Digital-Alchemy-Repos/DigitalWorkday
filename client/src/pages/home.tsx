@@ -277,54 +277,62 @@ function AdminDashboardSection({
           </CardContent>
         </Card>
 
-        <Card className={unassigned && unassigned.totalCount > 0 ? "border-amber-200 dark:border-amber-800" : ""}>
+        <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
               <CardTitle className="flex items-center gap-2">
-                Needs Attention
-                {unassigned && unassigned.totalCount > 0 && (
+                Recent Messages
+                {recentMessages && recentMessages.length > 0 && (
                   <Badge variant="secondary" className="ml-1">
-                    {unassigned.totalCount}
+                    {recentMessages.length}
                   </Badge>
                 )}
               </CardTitle>
-              <CardDescription>Unassigned tasks needing owners</CardDescription>
+              <CardDescription>New messages since your last login</CardDescription>
             </div>
+            <Link href="/chat">
+              <Button variant="ghost" size="sm">
+                Open Chat
+                <ArrowRight className="ml-1 h-4 w-4" />
+              </Button>
+            </Link>
           </CardHeader>
           <CardContent>
-            {unassignedLoading ? (
+            {messagesLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3].map((i) => (
                   <Skeleton key={i} className="h-12 w-full" />
                 ))}
               </div>
-            ) : unassigned && unassigned.tasks.length > 0 ? (
+            ) : recentMessages && recentMessages.length > 0 ? (
               <div className="space-y-2">
-                {unassigned.tasks.slice(0, 5).map((task) => (
+                {recentMessages.slice(0, 5).map((msg) => (
                   <Link 
-                    key={task.id} 
-                    href={`/projects/${task.projectId}`}
+                    key={msg.id} 
+                    href={`/chat?type=${msg.channelId ? 'channel' : 'dm'}&id=${msg.channelId || msg.dmThreadId}`}
                   >
                     <div
                       className="flex items-center gap-3 p-2 rounded-lg hover-elevate cursor-pointer"
-                      data-testid={`unassigned-task-${task.id}`}
                     >
-                      <AlertCircle className="h-4 w-4 text-amber-500 shrink-0" />
+                      <Avatar className="h-8 w-8 shrink-0">
+                        <AvatarImage src={msg.author?.avatarUrl || undefined} />
+                        <AvatarFallback className="text-[10px]">
+                          {getInitials(msg.author?.firstName, msg.author?.lastName, msg.author?.email)}
+                        </AvatarFallback>
+                      </Avatar>
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{task.title}</p>
+                        <div className="flex items-center justify-between gap-2">
+                          <p className="text-sm font-medium truncate">
+                            {msg.author?.firstName ? `${msg.author.firstName} ${msg.author.lastName || ''}` : msg.author?.email}
+                          </p>
+                          <span className="text-[10px] text-muted-foreground shrink-0">
+                            {new Date(msg.createdAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                        </div>
                         <p className="text-xs text-muted-foreground truncate">
-                          {task.projectName}
+                          {msg.content}
                         </p>
                       </div>
-                      {task.priority === "urgent" || task.priority === "high" ? (
-                        <Badge variant="destructive" className="shrink-0">
-                          {task.priority}
-                        </Badge>
-                      ) : (
-                        <Badge variant="secondary" className="shrink-0">
-                          {task.priority}
-                        </Badge>
-                      )}
                     </div>
                   </Link>
                 ))}
@@ -332,8 +340,8 @@ function AdminDashboardSection({
             ) : (
               <div className="flex flex-col items-center justify-center py-8 text-center">
                 <CheckSquare className="h-8 w-8 text-green-500 mb-2" />
-                <p className="text-sm text-muted-foreground">All tasks are assigned</p>
-                <p className="text-xs text-muted-foreground mt-1">Great job keeping the team organized</p>
+                <p className="text-sm text-muted-foreground">No new messages</p>
+                <p className="text-xs text-muted-foreground mt-1">You're all caught up!</p>
               </div>
             )}
           </CardContent>
@@ -734,6 +742,11 @@ export default function Home() {
 
   const { data: unassigned, isLoading: unassignedLoading } = useQuery<{ tasks: UnassignedTask[]; totalCount: number }>({
     queryKey: ["/api/v1/workload/unassigned"],
+    enabled: !!user && isAdmin,
+  });
+
+  const { data: recentMessages, isLoading: messagesLoading } = useQuery<any[]>({
+    queryKey: ["/api/v1/chat/messages/recent-since-login"],
     enabled: !!user && isAdmin,
   });
 

@@ -272,6 +272,47 @@ router.delete(
 );
 
 router.get(
+  "/messages/recent-since-login",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const user = await storage.getUser(userId);
+    if (!user) return res.json([]);
+
+    const sinceDate = user.updatedAt || new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    const messages = await db.select({
+      id: chatMessages.id,
+      content: chatMessages.body,
+      createdAt: chatMessages.createdAt,
+      channelId: chatMessages.channelId,
+      dmThreadId: chatMessages.dmThreadId,
+      authorId: chatMessages.authorUserId,
+    })
+    .from(chatMessages)
+    .where(
+      and(
+        eq(chatMessages.tenantId, tenantId),
+        sql`${chatMessages.createdAt} > ${sinceDate}`,
+        sql`${chatMessages.authorUserId} != ${userId}`,
+        isNull(chatMessages.archivedAt)
+      )
+    )
+    .orderBy(desc(chatMessages.createdAt))
+    .limit(10);
+
+    const enrichedMessages = await Promise.all(messages.map(async (msg) => {
+      const author = await storage.getUser(msg.authorId);
+      return { ...msg, author };
+    }));
+
+    res.json(enrichedMessages);
+  })
+);
+
+router.get(
   "/channels/:channelId/messages",
   asyncHandler(async (req: Request, res: Response) => {
     const tenantId = getCurrentTenantId(req);
