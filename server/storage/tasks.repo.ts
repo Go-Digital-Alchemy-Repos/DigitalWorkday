@@ -716,6 +716,7 @@ export class TasksRepository {
         .limit(limit);
 
       for (const comment of recentComments) {
+        if (!comment.taskId) continue; // Skip comments without a taskId
         userIds.add(comment.userId);
         const task = taskCache.get(comment.taskId);
         activityItems.push({

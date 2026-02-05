@@ -57,6 +57,13 @@
       "when": 1770255511630,
       "tag": "0007_bizarre_juggernaut",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "7",
+      "when": 1770271144170,
+      "tag": "0008_fine_leech",
+      "breakpoints": true
     }
   ]
 }

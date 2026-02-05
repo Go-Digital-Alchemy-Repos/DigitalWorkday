@@ -57,6 +57,7 @@ import {
   type ChatDmMember, type InsertChatDmMember,
   type ChatMessage, type InsertChatMessage,
   type ChatAttachment, type InsertChatAttachment,
+  type ChatExportJob, type InsertChatExportJob,
   type ErrorLog, type InsertErrorLog,
   type ClientDivision, type InsertClientDivision,
   type DivisionMember, type InsertDivisionMember,
@@ -69,7 +70,7 @@ import {
   clientDivisions, divisionMembers,
   timeEntries, activeTimers,
   invitations, appSettings, tenants, tenantSettings, personalTaskSections,
-  chatChannels, chatChannelMembers, chatDmThreads, chatDmMembers, chatMessages, chatAttachments, chatReads, errorLogs,
+  chatChannels, chatChannelMembers, chatDmThreads, chatDmMembers, chatMessages, chatAttachments, chatReads, chatExportJobs, errorLogs,
   notifications, notificationPreferences,
   UserRole,
   type CommentMention, type InsertCommentMention,
@@ -474,6 +475,12 @@ export interface IStorage {
     orphanedChannels: number;
     underMemberedDmThreads: number;
   }>;
+
+  // Chat - Export Jobs (Super Admin)
+  createChatExportJob(job: InsertChatExportJob): Promise<ChatExportJob>;
+  getChatExportJob(id: string): Promise<ChatExportJob | undefined>;
+  updateChatExportJob(id: string, updates: Partial<InsertChatExportJob>): Promise<ChatExportJob | undefined>;
+  listChatExportJobs(filters?: { status?: string; limit?: number }): Promise<ChatExportJob[]>;
 
   // Error Logs - Super Admin Monitoring
   createErrorLog(log: InsertErrorLog): Promise<ErrorLog>;
@@ -3947,6 +3954,41 @@ export class DatabaseStorage implements IStorage {
       orphanedChannels,
       underMemberedDmThreads,
     };
+  }
+
+  // =============================================================================
+  // Chat - Export Jobs (Super Admin)
+  // =============================================================================
+
+  async createChatExportJob(job: InsertChatExportJob): Promise<ChatExportJob> {
+    const [exportJob] = await db.insert(chatExportJobs).values(job).returning();
+    return exportJob;
+  }
+
+  async getChatExportJob(id: string): Promise<ChatExportJob | undefined> {
+    const [exportJob] = await db.select().from(chatExportJobs).where(eq(chatExportJobs.id, id));
+    return exportJob || undefined;
+  }
+
+  async updateChatExportJob(id: string, updates: Partial<InsertChatExportJob>): Promise<ChatExportJob | undefined> {
+    const [updated] = await db.update(chatExportJobs)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(eq(chatExportJobs.id, id))
+      .returning();
+    return updated || undefined;
+  }
+
+  async listChatExportJobs(filters?: { status?: string; limit?: number }): Promise<ChatExportJob[]> {
+    let query = db.select().from(chatExportJobs).orderBy(desc(chatExportJobs.createdAt));
+    
+    if (filters?.status) {
+      query = query.where(eq(chatExportJobs.status, filters.status)) as any;
+    }
+    
+    const limit = filters?.limit || 20;
+    query = query.limit(limit) as any;
+    
+    return query;
   }
 
   // =============================================================================

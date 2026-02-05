@@ -1491,6 +1491,35 @@ export const chatMentions = pgTable("chat_mentions", {
   index("chat_mentions_user_idx").on(table.mentionedUserId),
 ]);
 
+/**
+ * Chat Export Jobs - Tracks background export jobs for chat data backup
+ * Super Admin only feature for exporting chat data before purge
+ */
+export const chatExportJobs = pgTable("chat_export_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  requestedByUserId: varchar("requested_by_user_id").references(() => users.id).notNull(),
+  scopeType: varchar("scope_type", { length: 20 }).notNull(), // "tenant" | "all"
+  tenantId: varchar("tenant_id").references(() => tenants.id), // Nullable for "all" scope
+  cutoffType: varchar("cutoff_type", { length: 20 }).notNull(), // "date" | "retention"
+  cutoffDate: timestamp("cutoff_date"), // Used when cutoffType is "date"
+  retainDays: integer("retain_days"), // Used when cutoffType is "retention"
+  includeAttachmentFiles: boolean("include_attachment_files").default(false).notNull(),
+  format: varchar("format", { length: 10 }).default("jsonl").notNull(), // "jsonl" | "json" | "csv"
+  status: varchar("status", { length: 20 }).default("queued").notNull(), // "queued" | "processing" | "completed" | "failed"
+  progress: jsonb("progress"), // { phase, processedMessages, totalMessages, processedChannels, totalChannels, processedDms, totalDms }
+  outputLocation: jsonb("output_location"), // { bucket, key, size }
+  error: text("error"),
+  startedAt: timestamp("started_at"),
+  finishedAt: timestamp("finished_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("chat_export_jobs_user_idx").on(table.requestedByUserId),
+  index("chat_export_jobs_tenant_idx").on(table.tenantId),
+  index("chat_export_jobs_status_idx").on(table.status),
+  index("chat_export_jobs_created_idx").on(table.createdAt),
+]);
+
 // =============================================================================
 // RELATIONS
 // =============================================================================
@@ -2329,6 +2358,12 @@ export const insertChatMentionSchema = createInsertSchema(chatMentions).omit({
   createdAt: true,
 });
 
+export const insertChatExportJobSchema = createInsertSchema(chatExportJobs).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 // Enhanced user insert schema with role validation
 export const insertUserWithRoleSchema = insertUserSchema.extend({
   role: z.enum([UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.CLIENT]).default(UserRole.EMPLOYEE),
@@ -2631,6 +2666,28 @@ export type ChatMessageWithAuthor = ChatMessage & {
 
 export type ChatMention = typeof chatMentions.$inferSelect;
 export type InsertChatMention = z.infer<typeof insertChatMentionSchema>;
+
+export type ChatExportJob = typeof chatExportJobs.$inferSelect;
+export type InsertChatExportJob = z.infer<typeof insertChatExportJobSchema>;
+
+// Chat Export Job progress and output location types
+export interface ChatExportProgress {
+  conversations?: number;
+  messages?: number;
+  attachments?: number;
+  bytesWritten?: number;
+  elapsedMs?: number;
+  cursor?: string; // For resume capability
+}
+
+export interface ChatExportOutputLocation {
+  provider: "r2" | "local";
+  bucket?: string;
+  key?: string;
+  path?: string;
+  downloadUrl?: string;
+  expiresAt?: string;
+}
 
 // ============================================================================
 // UPDATE SCHEMAS (for PATCH endpoints - all fields optional)

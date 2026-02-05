@@ -22,10 +22,12 @@ import {
   Image,
   File,
   ChevronLeft,
-  AlertTriangle
+  AlertTriangle,
+  Archive
 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Redirect } from "wouter";
+import { ChatDataExport } from "@/components/super-admin/ChatDataExport";
 
 interface Tenant {
   id: string;
@@ -202,6 +204,9 @@ export default function SuperChatMonitoringPage() {
         <Tabs defaultValue="monitoring" className="h-full flex flex-col">
           <TabsList className="mb-4" data-testid="chat-system-tabs">
             <TabsTrigger value="monitoring" data-testid="tab-chat-monitoring">Chat Monitoring</TabsTrigger>
+            <TabsTrigger value="export" data-testid="tab-chat-export">
+              <Archive className="w-4 h-4 mr-1" /> Export/Backup
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="monitoring" className="flex-1 overflow-auto mt-0 space-y-4">
@@ -444,6 +449,10 @@ export default function SuperChatMonitoringPage() {
           </Card>
         </div>
             </div>
+          </TabsContent>
+
+          <TabsContent value="export" className="flex-1 overflow-auto mt-0">
+            <ChatDataExport />
           </TabsContent>
         </Tabs>
       </div>

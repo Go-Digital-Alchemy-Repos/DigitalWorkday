@@ -20,6 +20,7 @@ import aiRoutes from "./ai";
 import featuresRoutes from "../features";
 import superSystemStatusRouter from "./super/systemStatus.router";
 import superIntegrationsRouter from "./super/integrations.router";
+import superChatExportRouter from "./super/chatExport.router";
 import { searchRouter } from "./modules/search/search.router";
 
 const router = Router();
@@ -30,6 +31,7 @@ router.use("/timer", timerRoutes);
 router.use("/v1/super", superAdminRoutes);
 router.use("/v1/super", superSystemStatusRouter);
 router.use("/v1/super", superIntegrationsRouter);
+router.use("/v1/super/chat", superChatExportRouter);
 router.use("/v1/super/debug", superDebugRoutes);
 router.use("/v1/super/debug/chat", chatDebugRoutes);
 router.use("/v1/super/chat", superChatRoutes);
