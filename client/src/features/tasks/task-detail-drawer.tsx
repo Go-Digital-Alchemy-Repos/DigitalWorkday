@@ -82,6 +82,7 @@ interface TaskDetailDrawerProps {
   availableUsers?: User[];
   workspaceId?: string;
   isLoading?: boolean;
+  isError?: boolean;
 }
 
 export function TaskDetailDrawer({
@@ -95,6 +96,7 @@ export function TaskDetailDrawer({
   availableUsers = [],
   workspaceId = "",
   isLoading = false,
+  isError = false,
 }: TaskDetailDrawerProps) {
   const { user: currentUser } = useAuth();
   const [editingTitle, setEditingTitle] = useState(false);
@@ -507,6 +509,38 @@ export function TaskDetailDrawer({
       setEstimateMinutes(task.estimateMinutes ? String(task.estimateMinutes) : "");
     }
   }, [task?.id, task?.description, task?.title, task?.estimateMinutes]);
+
+  if (isError) {
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent 
+          className="w-full sm:max-w-2xl overflow-y-auto p-0"
+          data-testid="task-detail-drawer-error"
+        >
+          <SheetHeader className="sticky top-0 z-10 bg-background border-b border-border px-6 py-4">
+            <SheetDescription className="sr-only">Error loading task</SheetDescription>
+            <div className="flex items-center justify-between">
+              <SheetTitle className="text-destructive">Error</SheetTitle>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpenChange(false)}
+                data-testid="button-close-drawer"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </SheetHeader>
+          <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+            <div className="text-muted-foreground mb-4">Failed to load task details</div>
+            <Button variant="outline" onClick={() => onOpenChange(false)}>
+              Close
+            </Button>
+          </div>
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   if (isLoading || !task) {
     return (

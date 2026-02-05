@@ -61,8 +61,9 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
       if (timeoutRef.current) {
         clearTimeout(timeoutRef.current);
       }
+      cancelPrefetch();
     };
-  }, []);
+  }, [cancelPrefetch]);
 
   const handleStatusChange = (checked: boolean) => {
     if (checked && !isCompleted) {
