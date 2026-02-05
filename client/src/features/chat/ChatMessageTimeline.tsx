@@ -30,6 +30,8 @@ import {
   Copy,
   Quote,
   ListTodo,
+  MessagesSquare,
+  ArrowDown,
 } from "lucide-react";
 
 export interface ChatMessage {
@@ -38,6 +40,7 @@ export interface ChatMessage {
   authorUserId: string;
   channelId?: string | null;
   dmThreadId?: string | null;
+  parentMessageId?: string | null;
   createdAt: Date | string;
   editedAt?: Date | string | null;
   deletedAt?: Date | string | null;
@@ -58,6 +61,12 @@ export interface ChatMessage {
   _status?: "pending" | "failed";
 }
 
+export interface ThreadSummary {
+  replyCount: number;
+  lastReplyAt: Date | string | null;
+  lastReplyAuthorId: string | null;
+}
+
 interface ChatMessageTimelineProps {
   messages: ChatMessage[];
   currentUserId?: string;
@@ -73,6 +82,10 @@ interface ChatMessageTimelineProps {
   onCopyMessage?: (body: string) => void;
   onQuoteReply?: (authorName: string, body: string) => void;
   onCreateTaskFromMessage?: (message: ChatMessage) => void;
+  onOpenThread?: (messageId: string) => void;
+  threadSummaries?: Map<string, ThreadSummary>;
+  firstUnreadMessageId?: string | null;
+  onMarkAsRead?: () => void;
   renderMessageBody?: (body: string) => React.ReactNode;
   getFileIcon?: (mimeType: string) => React.ComponentType<{ className?: string }>;
   formatFileSize?: (bytes: number) => string;
@@ -203,6 +216,10 @@ export function ChatMessageTimeline({
   onCopyMessage,
   onQuoteReply,
   onCreateTaskFromMessage,
+  onOpenThread,
+  threadSummaries,
+  firstUnreadMessageId,
+  onMarkAsRead,
   renderMessageBody,
   getFileIcon,
   formatFileSize,
@@ -211,8 +228,10 @@ export function ChatMessageTimeline({
 }: ChatMessageTimelineProps) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const bottomRef = useRef<HTMLDivElement>(null);
+  const unreadDividerRef = useRef<HTMLDivElement>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasNewMessages, setHasNewMessages] = useState(false);
+  const [showJumpToUnread, setShowJumpToUnread] = useState(!!firstUnreadMessageId);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const lastMessageCountRef = useRef(messages.length);
@@ -235,6 +254,18 @@ export function ChatMessageTimeline({
     setIsAtBottom(true);
   }, []);
 
+  const scrollToUnread = useCallback(() => {
+    if (unreadDividerRef.current) {
+      unreadDividerRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
+      setShowJumpToUnread(false);
+    }
+  }, []);
+
+  // Update showJumpToUnread when firstUnreadMessageId changes
+  useEffect(() => {
+    setShowJumpToUnread(!!firstUnreadMessageId);
+  }, [firstUnreadMessageId]);
+
   useEffect(() => {
     const scrollContainer = scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]");
     if (!scrollContainer) return;
@@ -250,6 +281,41 @@ export function ChatMessageTimeline({
     scrollContainer.addEventListener("scroll", handleScroll);
     return () => scrollContainer.removeEventListener("scroll", handleScroll);
   }, [checkIfAtBottom]);
+
+  // Track if we've already marked as read to prevent duplicate calls
+  const hasMarkedAsReadRef = useRef(false);
+  
+  // Reset the flag when firstUnreadMessageId changes (new conversation or new unreads)
+  useEffect(() => {
+    hasMarkedAsReadRef.current = false;
+  }, [firstUnreadMessageId]);
+
+  // Use IntersectionObserver to detect when unread divider is scrolled past (not just visible)
+  useEffect(() => {
+    if (!firstUnreadMessageId || !onMarkAsRead || !unreadDividerRef.current) return;
+
+    // Don't set up observer if already marked as read
+    if (hasMarkedAsReadRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        const entry = entries[0];
+        // Only mark as read when the divider has been scrolled past (top is above viewport)
+        // and not on initial visibility
+        if (!entry.isIntersecting && entry.boundingClientRect.top < 0) {
+          if (!hasMarkedAsReadRef.current) {
+            hasMarkedAsReadRef.current = true;
+            onMarkAsRead();
+            setShowJumpToUnread(false);
+          }
+        }
+      },
+      { threshold: 0 }
+    );
+
+    observer.observe(unreadDividerRef.current);
+    return () => observer.disconnect();
+  }, [firstUnreadMessageId, onMarkAsRead]);
 
   useEffect(() => {
     if (messages.length > lastMessageCountRef.current) {
@@ -359,7 +425,8 @@ export function ChatMessageTimeline({
             </div>
           )}
 
-          {messageGroups.map((group) => (
+          {messageGroups.map((group) => {
+            return (
             <div key={group.id} data-testid={`message-group-${group.id}`}>
               {group.dateSeparator && (
                 <div className="flex items-center gap-4 py-4" data-testid="date-separator">
@@ -370,6 +437,7 @@ export function ChatMessageTimeline({
                   <div className="flex-1 h-px bg-border" />
                 </div>
               )}
+
 
               <div className="flex gap-3 py-1 group/message-group">
                 <div className="w-8 flex-shrink-0">
@@ -413,15 +481,28 @@ export function ChatMessageTimeline({
                     const isPending = message._status === "pending";
                     const isFailed = message._status === "failed";
                     const showTimestamp = idx > 0;
+                    const isFirstUnread = message.id === firstUnreadMessageId || message._tempId === firstUnreadMessageId;
 
                     return (
-                      <div
-                        key={message._tempId || message.id}
-                        className={`group relative py-0.5 ${isPending ? "opacity-60" : ""} ${
-                          isFailed ? "bg-destructive/10 px-2 -mx-2 rounded" : ""
-                        }`}
-                        data-testid={`message-${message._tempId || message.id}`}
-                      >
+                      <div key={message._tempId || message.id}>
+                        {/* Unread divider shown before the first unread message */}
+                        {isFirstUnread && (
+                          <div
+                            ref={unreadDividerRef}
+                            className="flex items-center gap-4 py-3 -mx-4 px-4"
+                            data-testid="unread-divider"
+                          >
+                            <div className="flex-1 h-px bg-destructive" />
+                            <span className="text-xs font-medium text-destructive px-2">New messages</span>
+                            <div className="flex-1 h-px bg-destructive" />
+                          </div>
+                        )}
+                        <div
+                          className={`group relative py-0.5 ${isPending ? "opacity-60" : ""} ${
+                            isFailed ? "bg-destructive/10 px-2 -mx-2 rounded" : ""
+                          }`}
+                          data-testid={`message-${message._tempId || message.id}`}
+                        >
                         {showTimestamp && (
                           <Tooltip>
                             <TooltipTrigger asChild>
@@ -570,6 +651,21 @@ export function ChatMessageTimeline({
                                   })}
                                 </div>
                               )}
+
+                            {/* Thread reply count indicator */}
+                            {!message.parentMessageId && threadSummaries?.get(message.id) && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenThread?.(message.id)}
+                                className="mt-1 flex items-center gap-1.5 text-xs text-primary hover:underline cursor-pointer"
+                                data-testid={`thread-replies-${message.id}`}
+                              >
+                                <MessagesSquare className="h-3.5 w-3.5" />
+                                <span>
+                                  {threadSummaries.get(message.id)!.replyCount} {threadSummaries.get(message.id)!.replyCount === 1 ? 'reply' : 'replies'}
+                                </span>
+                              </button>
+                            )}
                           </div>
 
                           {!isDeleted && !isEditing && (
@@ -615,6 +711,15 @@ export function ChatMessageTimeline({
                                   <ListTodo className="h-4 w-4 mr-2" />
                                   Create task
                                 </DropdownMenuItem>
+                                {onOpenThread && !message.parentMessageId && (
+                                  <DropdownMenuItem
+                                    onClick={() => onOpenThread(message.id)}
+                                    data-testid={`message-thread-${message.id}`}
+                                  >
+                                    <MessagesSquare className="h-4 w-4 mr-2" />
+                                    Reply in thread
+                                  </DropdownMenuItem>
+                                )}
                                 {canEdit && (
                                   <DropdownMenuItem
                                     onClick={() => {
@@ -641,13 +746,15 @@ export function ChatMessageTimeline({
                             </DropdownMenu>
                           )}
                         </div>
+                        </div>
                       </div>
                     );
                   })}
                 </div>
               </div>
             </div>
-          ))}
+            );
+          })}
 
           <div ref={bottomRef} />
         </div>
@@ -664,6 +771,21 @@ export function ChatMessageTimeline({
           >
             <ChevronDown className="h-4 w-4" />
             New messages
+          </Button>
+        </div>
+      )}
+
+      {showJumpToUnread && firstUnreadMessageId && !hasNewMessages && (
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
+          <Button
+            variant="secondary"
+            size="sm"
+            onClick={scrollToUnread}
+            className="shadow-lg gap-2"
+            data-testid="button-jump-to-unread"
+          >
+            <ArrowDown className="h-4 w-4" />
+            Jump to unread
           </Button>
         </div>
       )}

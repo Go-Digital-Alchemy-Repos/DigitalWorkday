@@ -29,6 +29,7 @@ const createChannelSchema = z.object({
 const sendMessageSchema = z.object({
   body: z.string().min(1).max(10000),
   attachmentIds: z.array(z.string()).max(10).optional(),
+  parentMessageId: z.string().optional(), // For threaded replies
 });
 
 const createDmSchema = z.object({
@@ -331,9 +332,33 @@ router.get(
 
     const limit = parseInt(req.query.limit as string) || 50;
     const before = req.query.before ? new Date(req.query.before as string) : undefined;
+    const after = req.query.after ? new Date(req.query.after as string) : undefined;
 
-    const messages = await storage.getChatMessages("channel", req.params.channelId, limit, before);
+    const messages = await storage.getChatMessages("channel", req.params.channelId, limit, before, after);
     res.json(messages);
+  })
+);
+
+// Get first unread message ID for channel
+router.get(
+  "/channels/:channelId/first-unread",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const channel = await storage.getChatChannel(req.params.channelId);
+    if (!channel || channel.tenantId !== tenantId) {
+      throw AppError.notFound("Channel not found");
+    }
+
+    const member = await storage.getChatChannelMember(req.params.channelId, userId);
+    if (!member && channel.isPrivate) {
+      throw AppError.forbidden("Not a member of this private channel");
+    }
+
+    const firstUnreadId = await storage.getFirstUnreadMessageId("channel", req.params.channelId, userId);
+    res.json({ firstUnreadMessageId: firstUnreadId });
   })
 );
 
@@ -377,12 +402,26 @@ router.post(
       }
     }
 
+    // Validate parentMessageId if provided (must belong to same channel)
+    const parentMessageId = req.body.parentMessageId;
+    if (parentMessageId) {
+      const parentMessage = await storage.getChatMessage(parentMessageId);
+      if (!parentMessage || parentMessage.channelId !== channel.id) {
+        throw AppError.badRequest("Invalid parent message");
+      }
+      // Prevent nested threads (replies to replies)
+      if (parentMessage.parentMessageId) {
+        throw AppError.badRequest("Cannot reply to a reply - threads are single level only");
+      }
+    }
+
     const data = insertChatMessageSchema.parse({
       tenantId,
       channelId: channel.id,
       dmThreadId: null,
       authorUserId: userId,
       body: req.body.body,
+      parentMessageId: parentMessageId || null,
     });
 
     const message = await storage.createChatMessage(data);
@@ -413,6 +452,7 @@ router.post(
         dmThreadId: message.dmThreadId,
         authorUserId: message.authorUserId,
         body: message.body,
+        parentMessageId: message.parentMessageId,
         createdAt: message.createdAt,
         editedAt: message.editedAt,
         attachments: attachments.map(a => ({
@@ -431,7 +471,11 @@ router.post(
       },
     };
 
-    emitToChatChannel(channel.id, CHAT_EVENTS.NEW_MESSAGE, payload);
+    // Emit different event for thread replies vs main messages
+    const eventName = message.parentMessageId 
+      ? CHAT_EVENTS.THREAD_REPLY_CREATED 
+      : CHAT_EVENTS.NEW_MESSAGE;
+    emitToChatChannel(channel.id, eventName, payload);
 
     chatDebugStore.logEvent({
       eventType: 'message_broadcast',
@@ -444,6 +488,108 @@ router.post(
     });
 
     res.status(201).json({ ...message, author });
+  })
+);
+
+// =============================================================================
+// THREAD ENDPOINTS
+// =============================================================================
+
+// GET /api/v1/chat/messages/:messageId/thread - Get replies to a message
+router.get(
+  "/messages/:messageId/thread",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const parentMessage = await storage.getChatMessage(req.params.messageId);
+    if (!parentMessage || parentMessage.tenantId !== tenantId) {
+      throw AppError.notFound("Message not found");
+    }
+
+    // Verify access to the conversation
+    if (parentMessage.channelId) {
+      const channel = await storage.getChatChannel(parentMessage.channelId);
+      if (!channel || channel.tenantId !== tenantId) {
+        throw AppError.notFound("Channel not found");
+      }
+      const member = await storage.getChatChannelMember(parentMessage.channelId, userId);
+      if (!member && channel.isPrivate) {
+        throw AppError.forbidden("Not a member of this private channel");
+      }
+    } else if (parentMessage.dmThreadId) {
+      const isMember = await storage.isUserInDmThread(parentMessage.dmThreadId, userId);
+      if (!isMember) {
+        throw AppError.forbidden("Not a member of this DM");
+      }
+    }
+
+    const limit = parseInt(req.query.limit as string) || 100;
+    const replies = await storage.getThreadReplies(req.params.messageId, limit);
+    
+    // Include parent message with author
+    const parentAuthor = await storage.getUser(parentMessage.authorUserId);
+    
+    res.json({
+      parentMessage: { ...parentMessage, author: parentAuthor },
+      replies,
+    });
+  })
+);
+
+// GET /api/v1/chat/channels/:channelId/thread-summaries - Get thread summaries for channel
+router.get(
+  "/channels/:channelId/thread-summaries",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const channel = await storage.getChatChannel(req.params.channelId);
+    if (!channel || channel.tenantId !== tenantId) {
+      throw AppError.notFound("Channel not found");
+    }
+
+    const member = await storage.getChatChannelMember(req.params.channelId, userId);
+    if (!member && channel.isPrivate) {
+      throw AppError.forbidden("Not a member of this private channel");
+    }
+
+    const summaries = await storage.getThreadSummariesForConversation("channel", req.params.channelId);
+    
+    // Convert Map to object for JSON serialization
+    const result: Record<string, { replyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null }> = {};
+    summaries.forEach((value, key) => {
+      result[key] = value;
+    });
+
+    res.json(result);
+  })
+);
+
+// GET /api/v1/chat/dm/:dmThreadId/thread-summaries - Get thread summaries for DM
+router.get(
+  "/dm/:dmThreadId/thread-summaries",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const isMember = await storage.isUserInDmThread(req.params.dmThreadId, userId);
+    if (!isMember) {
+      throw AppError.forbidden("Not a member of this DM");
+    }
+
+    const summaries = await storage.getThreadSummariesForConversation("dm", req.params.dmThreadId);
+    
+    // Convert Map to object for JSON serialization
+    const result: Record<string, { replyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null }> = {};
+    summaries.forEach((value, key) => {
+      result[key] = value;
+    });
+
+    res.json(result);
   })
 );
 
@@ -530,9 +676,34 @@ router.get(
 
     const limit = parseInt(req.query.limit as string) || 50;
     const before = req.query.before ? new Date(req.query.before as string) : undefined;
+    const after = req.query.after ? new Date(req.query.after as string) : undefined;
 
-    const messages = await storage.getChatMessages("dm", req.params.dmId, limit, before);
+    const messages = await storage.getChatMessages("dm", req.params.dmId, limit, before, after);
     res.json(messages);
+  })
+);
+
+// Get first unread message ID for DM
+router.get(
+  "/dm/:dmId/first-unread",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const thread = await storage.getChatDmThread(req.params.dmId);
+    if (!thread || thread.tenantId !== tenantId) {
+      throw AppError.notFound("DM thread not found");
+    }
+
+    const threads = await storage.getUserChatDmThreads(tenantId, userId);
+    const isMember = threads.some(t => t.id === thread.id);
+    if (!isMember) {
+      throw AppError.forbidden("Not a member of this DM thread");
+    }
+
+    const firstUnreadId = await storage.getFirstUnreadMessageId("dm", req.params.dmId, userId);
+    res.json({ firstUnreadMessageId: firstUnreadId });
   })
 );
 
@@ -577,12 +748,26 @@ router.post(
       }
     }
 
+    // Validate parentMessageId if provided (must belong to same DM thread)
+    const parentMessageId = req.body.parentMessageId;
+    if (parentMessageId) {
+      const parentMessage = await storage.getChatMessage(parentMessageId);
+      if (!parentMessage || parentMessage.dmThreadId !== thread.id) {
+        throw AppError.badRequest("Invalid parent message");
+      }
+      // Prevent nested threads (replies to replies)
+      if (parentMessage.parentMessageId) {
+        throw AppError.badRequest("Cannot reply to a reply - threads are single level only");
+      }
+    }
+
     const data = insertChatMessageSchema.parse({
       tenantId,
       channelId: null,
       dmThreadId: thread.id,
       authorUserId: userId,
       body: req.body.body,
+      parentMessageId: parentMessageId || null,
     });
 
     const message = await storage.createChatMessage(data);
@@ -614,6 +799,7 @@ router.post(
         dmThreadId: message.dmThreadId,
         authorUserId: message.authorUserId,
         body: message.body,
+        parentMessageId: message.parentMessageId,
         createdAt: message.createdAt,
         editedAt: message.editedAt,
         attachments: attachments.map(a => ({
@@ -632,7 +818,11 @@ router.post(
       },
     };
 
-    emitToChatDm(thread.id, CHAT_EVENTS.NEW_MESSAGE, payload);
+    // Emit different event for thread replies vs main messages
+    const eventName = message.parentMessageId 
+      ? CHAT_EVENTS.THREAD_REPLY_CREATED 
+      : CHAT_EVENTS.NEW_MESSAGE;
+    emitToChatDm(thread.id, eventName, payload);
 
     chatDebugStore.logEvent({
       eventType: 'message_broadcast',

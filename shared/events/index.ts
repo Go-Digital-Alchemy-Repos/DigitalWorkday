@@ -532,6 +532,7 @@ export const CHAT_EVENTS = {
   MEMBER_REMOVED: 'chat:memberRemoved',
   CONVERSATION_READ: 'chat:conversationRead',
   TYPING_UPDATE: 'chat:typing:update',
+  THREAD_REPLY_CREATED: 'chat:thread:replyCreated',
 } as const;
 
 export const TYPING_EVENTS = {
@@ -553,6 +554,7 @@ export interface ChatMessagePayload {
   dmThreadId: string | null;
   authorUserId: string;
   body: string;
+  parentMessageId: string | null;
   createdAt: Date;
   editedAt: Date | null;
   author?: {
@@ -805,6 +807,7 @@ export type ServerToClientEvents = {
   [CHAT_EVENTS.MEMBER_REMOVED]: (payload: ChatMemberRemovedPayload) => void;
   [CHAT_EVENTS.CONVERSATION_READ]: (payload: ChatConversationReadPayload) => void;
   [CHAT_EVENTS.TYPING_UPDATE]: (payload: ChatTypingUpdatePayload) => void;
+  [CHAT_EVENTS.THREAD_REPLY_CREATED]: (payload: ChatNewMessagePayload) => void;
   // Connection events
   [CONNECTION_EVENTS.CONNECTED]: (payload: ConnectionConnectedPayload) => void;
   // Notification events

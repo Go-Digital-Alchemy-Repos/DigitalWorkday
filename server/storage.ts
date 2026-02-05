@@ -428,7 +428,8 @@ export interface IStorage {
 
   // Chat - Messages
   getChatMessage(id: string): Promise<ChatMessage | undefined>;
-  getChatMessages(targetType: 'channel' | 'dm', targetId: string, limit?: number, before?: Date): Promise<(ChatMessage & { author: User; attachments?: ChatAttachment[] })[]>;
+  getChatMessages(targetType: 'channel' | 'dm', targetId: string, limit?: number, before?: Date, after?: Date): Promise<(ChatMessage & { author: User; attachments?: ChatAttachment[] })[]>;
+  getFirstUnreadMessageId(targetType: 'channel' | 'dm', targetId: string, userId: string): Promise<string | null>;
   createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
   updateChatMessage(id: string, updates: Partial<InsertChatMessage>): Promise<ChatMessage | undefined>;
   deleteChatMessage(id: string): Promise<void>;
@@ -440,6 +441,11 @@ export interface IStorage {
     limit?: number;
     offset?: number;
   }): Promise<{ messages: any[]; total: number }>;
+
+  // Chat - Threads
+  getThreadReplies(parentMessageId: string, limit?: number): Promise<(ChatMessage & { author: User })[]>;
+  getThreadReplyCount(parentMessageId: string): Promise<number>;
+  getThreadSummariesForConversation(targetType: 'channel' | 'dm', targetId: string): Promise<Map<string, { replyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null }>>;
 
   // Chat - Attachments
   createChatAttachment(attachment: InsertChatAttachment): Promise<ChatAttachment>;
@@ -3450,24 +3456,24 @@ export class DatabaseStorage implements IStorage {
     return message || undefined;
   }
 
-  async getChatMessages(targetType: 'channel' | 'dm', targetId: string, limit = 50, before?: Date): Promise<(ChatMessage & { author: User })[]> {
-    let query = db.select().from(chatMessages);
-
-    if (targetType === 'channel') {
-      query = query.where(
-        before 
-          ? and(eq(chatMessages.channelId, targetId), lte(chatMessages.createdAt, before))
-          : eq(chatMessages.channelId, targetId)
-      ) as typeof query;
-    } else {
-      query = query.where(
-        before 
-          ? and(eq(chatMessages.dmThreadId, targetId), lte(chatMessages.createdAt, before))
-          : eq(chatMessages.dmThreadId, targetId)
-      ) as typeof query;
+  async getChatMessages(targetType: 'channel' | 'dm', targetId: string, limit = 50, before?: Date, after?: Date): Promise<(ChatMessage & { author: User })[]> {
+    const targetColumn = targetType === 'channel' ? chatMessages.channelId : chatMessages.dmThreadId;
+    
+    // Build conditions array
+    const conditions: SQL[] = [eq(targetColumn, targetId), isNull(chatMessages.deletedAt)];
+    if (before) {
+      conditions.push(lte(chatMessages.createdAt, before));
+    }
+    if (after) {
+      conditions.push(gte(chatMessages.createdAt, after));
     }
 
-    const messages = await query.orderBy(desc(chatMessages.createdAt)).limit(limit);
+    const messages = await db.select()
+      .from(chatMessages)
+      .where(and(...conditions))
+      .orderBy(desc(chatMessages.createdAt))
+      .limit(limit);
+      
     if (messages.length === 0) return [];
 
     const authorIds = [...new Set(messages.map(m => m.authorUserId))];
@@ -3478,6 +3484,50 @@ export class DatabaseStorage implements IStorage {
       .map(m => ({ ...m, author: authorMap.get(m.authorUserId)! }))
       .filter(m => m.author)
       .reverse();
+  }
+
+  async getFirstUnreadMessageId(targetType: 'channel' | 'dm', targetId: string, userId: string): Promise<string | null> {
+    // Get the user's last read message for this conversation
+    const readRecord = targetType === 'channel' 
+      ? await this.getChatReadForChannel(userId, targetId)
+      : await this.getChatReadForDm(userId, targetId);
+    
+    if (!readRecord?.lastReadMessageId) {
+      // No read record - first message in conversation is the first unread
+      const targetColumn = targetType === 'channel' ? chatMessages.channelId : chatMessages.dmThreadId;
+      const [firstMsg] = await db.select({ id: chatMessages.id })
+        .from(chatMessages)
+        .where(and(
+          eq(targetColumn, targetId),
+          isNull(chatMessages.deletedAt),
+          isNull(chatMessages.parentMessageId) // Only main messages, not thread replies
+        ))
+        .orderBy(chatMessages.createdAt)
+        .limit(1);
+      return firstMsg?.id || null;
+    }
+
+    // Get the timestamp of the last read message
+    const [lastReadMsg] = await db.select({ createdAt: chatMessages.createdAt })
+      .from(chatMessages)
+      .where(eq(chatMessages.id, readRecord.lastReadMessageId));
+
+    if (!lastReadMsg) return null;
+
+    // Find the first message after the last read message
+    const targetColumn = targetType === 'channel' ? chatMessages.channelId : chatMessages.dmThreadId;
+    const [firstUnread] = await db.select({ id: chatMessages.id })
+      .from(chatMessages)
+      .where(and(
+        eq(targetColumn, targetId),
+        gt(chatMessages.createdAt, lastReadMsg.createdAt),
+        isNull(chatMessages.deletedAt),
+        isNull(chatMessages.parentMessageId) // Only main messages, not thread replies
+      ))
+      .orderBy(chatMessages.createdAt)
+      .limit(1);
+
+    return firstUnread?.id || null;
   }
 
   async createChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
@@ -3495,6 +3545,98 @@ export class DatabaseStorage implements IStorage {
 
   async deleteChatMessage(id: string): Promise<void> {
     await db.update(chatMessages).set({ deletedAt: new Date() }).where(eq(chatMessages.id, id));
+  }
+
+  // Chat Thread Methods
+  async getThreadReplies(parentMessageId: string, limit = 100): Promise<(ChatMessage & { author: User })[]> {
+    const replies = await db.select().from(chatMessages)
+      .where(and(
+        eq(chatMessages.parentMessageId, parentMessageId),
+        isNull(chatMessages.deletedAt)
+      ))
+      .orderBy(asc(chatMessages.createdAt))
+      .limit(limit);
+
+    if (replies.length === 0) return [];
+
+    const authorIds = [...new Set(replies.map(m => m.authorUserId))];
+    const authorRows = await db.select().from(users).where(inArray(users.id, authorIds));
+    const authorMap = new Map(authorRows.map(u => [u.id, u]));
+
+    return replies
+      .map(m => ({ ...m, author: authorMap.get(m.authorUserId)! }))
+      .filter(m => m.author);
+  }
+
+  async getThreadReplyCount(parentMessageId: string): Promise<number> {
+    const result = await db.select({ count: sql<number>`count(*)` })
+      .from(chatMessages)
+      .where(and(
+        eq(chatMessages.parentMessageId, parentMessageId),
+        isNull(chatMessages.deletedAt)
+      ));
+    return Number(result[0]?.count || 0);
+  }
+
+  async getThreadSummariesForConversation(targetType: 'channel' | 'dm', targetId: string): Promise<Map<string, { replyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null }>> {
+    // Get all parent message IDs that have replies in this conversation
+    const summaries = new Map<string, { replyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null }>();
+
+    // Subquery to get parent messages in this conversation
+    const parentIdsQuery = targetType === 'channel'
+      ? await db.select({ id: chatMessages.id })
+          .from(chatMessages)
+          .where(and(
+            eq(chatMessages.channelId, targetId),
+            isNull(chatMessages.parentMessageId),
+            isNull(chatMessages.deletedAt)
+          ))
+      : await db.select({ id: chatMessages.id })
+          .from(chatMessages)
+          .where(and(
+            eq(chatMessages.dmThreadId, targetId),
+            isNull(chatMessages.parentMessageId),
+            isNull(chatMessages.deletedAt)
+          ));
+
+    const parentIds = parentIdsQuery.map(p => p.id);
+    if (parentIds.length === 0) return summaries;
+
+    // Get reply counts and last reply info for each parent
+    const replyStats = await db.select({
+      parentMessageId: chatMessages.parentMessageId,
+      count: sql<number>`count(*)`,
+      lastReplyAt: sql<Date>`max(${chatMessages.createdAt})`,
+    })
+      .from(chatMessages)
+      .where(and(
+        inArray(chatMessages.parentMessageId, parentIds),
+        isNull(chatMessages.deletedAt)
+      ))
+      .groupBy(chatMessages.parentMessageId);
+
+    // Get the last reply author for each parent
+    for (const stat of replyStats) {
+      if (!stat.parentMessageId) continue;
+      
+      // Get the last reply to find the author
+      const [lastReply] = await db.select({ authorUserId: chatMessages.authorUserId })
+        .from(chatMessages)
+        .where(and(
+          eq(chatMessages.parentMessageId, stat.parentMessageId),
+          isNull(chatMessages.deletedAt)
+        ))
+        .orderBy(desc(chatMessages.createdAt))
+        .limit(1);
+
+      summaries.set(stat.parentMessageId, {
+        replyCount: Number(stat.count),
+        lastReplyAt: stat.lastReplyAt,
+        lastReplyAuthorId: lastReply?.authorUserId || null,
+      });
+    }
+
+    return summaries;
   }
 
   async searchChatMessages(tenantId: string, userId: string, options: {
