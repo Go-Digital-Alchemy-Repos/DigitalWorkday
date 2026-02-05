@@ -125,6 +125,8 @@ Categories are defined in `CATEGORY_CONFIG` (server-side):
 
 | Directory | Display Name | Icon | Order |
 |-----------|--------------|------|-------|
+| `00-AUDIT` | Audit Reports | check-circle | 0 |
+| `01-REFACTOR` | Refactor Workflows | git-branch | 0.5 |
 | `01-GETTING-STARTED` | Getting Started | rocket | 1 |
 | `02-ARCHITECTURE` | Architecture | layout | 2 |
 | `03-FEATURES` | Features | star | 3 |
@@ -251,6 +253,31 @@ Unlisted directories get auto-generated display names with `folder` icon and ord
 | `client/src/App.tsx` | Route definition |
 | `server/routes/superAdmin.ts` | API endpoints (lines 8155-8326) |
 | `server/middleware/tenantContext.ts` | `requireSuperUser` middleware |
+
+---
+
+## API Registry Integration
+
+The App Docs system includes an **API Registry** category (`17-API-REGISTRY`) that documents all API endpoints. These docs can be auto-generated from route files.
+
+### Sync API Docs Feature
+
+| Item | Value |
+|------|-------|
+| **Button Location** | Super Admin > App Docs (top right) |
+| **Endpoint** | `POST /api/v1/super/docs/sync` |
+| **Scanner** | `server/utils/routeScanner.ts` |
+
+**How it works:**
+1. Scans route files in `server/routes/` and `server/features/`
+2. Extracts HTTP method and path from `router.get/post/patch/put/delete()` calls
+3. Generates/updates docs in `docs/17-API-REGISTRY/`
+4. Uses HTML comment markers for safe merge (preserves manual sections)
+
+### Process Enforcement
+
+All route extractions must include documentation updates. See:
+- [Incremental Route Extraction Workflow](../01-REFACTOR/00-INCREMENTAL_ROUTE_EXTRACTION.md)
 
 ---
 
