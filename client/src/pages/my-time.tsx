@@ -339,7 +339,10 @@ export default function MyTimePage() {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-6 py-4 border-b border-border shrink-0">
         <div>
-          <h1 className="text-2xl font-semibold" data-testid="page-title">My Time</h1>
+          <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="page-title">
+            <Clock className="h-6 w-6" />
+            My Time
+          </h1>
           <p className="text-sm text-muted-foreground">Your personal time tracking overview</p>
         </div>
         <Button onClick={handleStartTimer} data-testid="button-start-timer">
