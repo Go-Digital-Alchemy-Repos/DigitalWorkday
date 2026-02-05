@@ -1,5 +1,5 @@
 import { useState, useMemo } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -10,12 +10,13 @@ import {
   ChevronDown, ChevronRight, Folder, FolderOpen,
   Rocket, Layout, Star, Code, Monitor, Server, Shield, Database, CheckCircle,
   Cloud, Wrench, Activity, Plug, AlertTriangle, Book, Clock, Settings, Key,
-  MessageCircle, Terminal, Zap, UserPlus, BookOpen
+  MessageCircle, Terminal, Zap, UserPlus, BookOpen, FileCode
 } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { ScrollArea } from "@/components/ui/scroll-area";
-import { queryClient } from "@/lib/queryClient";
+import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
+import { useToast } from "@/hooks/use-toast";
 
 interface DocFile {
   id: string;
@@ -246,15 +247,53 @@ function CategoryIcon({ iconName, className }: { iconName: string; className?: s
   return <IconComponent className={className} />;
 }
 
+interface SyncResult {
+  success: boolean;
+  summary: {
+    created: number;
+    updated: number;
+    skipped: number;
+    errors: number;
+  };
+  details: {
+    created: string[];
+    updated: string[];
+    skipped: string[];
+    errors: string[];
+  };
+}
+
 export default function SuperAdminDocs() {
   const { user, isLoading: authLoading } = useAuth();
   const [selectedDoc, setSelectedDoc] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
-  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(["_root", "03-FEATURES", "07-SECURITY"]));
+  const [expandedCategories, setExpandedCategories] = useState<Set<string>>(new Set(["_root", "03-FEATURES", "07-SECURITY", "17-API-REGISTRY"]));
+  const { toast } = useToast();
 
   const { data: docsData, isLoading: docsLoading, refetch } = useQuery<DocsResponse>({
     queryKey: ["/api/v1/super/docs"],
     enabled: !!user && user.role === "super_user",
+  });
+
+  const syncMutation = useMutation<SyncResult>({
+    mutationFn: async () => {
+      const res = await apiRequest("POST", "/api/v1/super/docs/sync");
+      return res.json();
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/docs"] });
+      toast({
+        title: "API Docs Synced",
+        description: `Created ${data.summary.created}, Updated ${data.summary.updated}, Skipped ${data.summary.skipped}${data.summary.errors > 0 ? `, Errors: ${data.summary.errors}` : ""}`,
+      });
+    },
+    onError: (error) => {
+      toast({
+        title: "Sync Failed",
+        description: error instanceof Error ? error.message : "Failed to sync API docs",
+        variant: "destructive",
+      });
+    },
   });
 
   const { data: docContent, isLoading: contentLoading } = useQuery<DocContent>({
@@ -396,7 +435,22 @@ export default function SuperAdminDocs() {
             )}
           </div>
         </ScrollArea>
-        <div className="p-3 border-t">
+        <div className="p-3 border-t space-y-2">
+          <Button
+            variant="default"
+            size="sm"
+            className="w-full"
+            onClick={() => syncMutation.mutate()}
+            disabled={syncMutation.isPending}
+            data-testid="button-sync-api-docs"
+          >
+            {syncMutation.isPending ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <FileCode className="h-4 w-4 mr-2" />
+            )}
+            Sync API Docs
+          </Button>
           <Button
             variant="outline"
             size="sm"
