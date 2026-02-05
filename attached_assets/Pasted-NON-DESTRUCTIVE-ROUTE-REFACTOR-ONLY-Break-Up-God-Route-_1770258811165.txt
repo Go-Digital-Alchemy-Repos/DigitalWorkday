@@ -1,0 +1,120 @@
+NON-DESTRUCTIVE ROUTE REFACTOR ONLY: Break Up “God Route Files” Into Domain Routers
++ DOCUMENTATION SYNC (NO OTHER CHANGES)
+
+SCOPE (ONLY THIS)
+Address only the oversized “god route files” in the server by reorganizing routes into smaller, domain-based router modules.
+After refactoring, update App Docs to accurately reflect the new route organization.
+Do NOT work on UX, features, schema changes, comments, reports, or anything else.
+
+NON-DESTRUCTIVE RULES (CRITICAL)
+1) DO NOT change any endpoint URLs, HTTP methods, request/response shapes, auth behavior, or middleware order.
+2) DO NOT rename or remove existing routes.
+3) DO NOT change business logic inside handlers.
+4) DO NOT modify database schema.
+5) Move one domain at a time per file.
+6) Route parity must be provable before/after.
+7) Documentation updates must reflect reality but must not alter behavior.
+
+────────────────────────────────────────────────────────
+STEP 1 — INVENTORY & PLAN (CREATE DOCS FIRST)
+1) Identify all “god route files” (>= 800 lines).
+2) For each file, list:
+   - line count
+   - base path(s)
+   - all endpoints (METHOD + PATH)
+   - middleware order
+3) Create:
+   /docs/01-REFACTOR/GOD_ROUTES_PLAN.md
+   Including:
+   - prioritized list (largest → smallest)
+   - proposed domain splits for each file
+   - extraction order (one domain per change-set)
+
+Do NOT refactor until this doc exists.
+
+────────────────────────────────────────────────────────
+STEP 2 — CREATE MODULE STRUCTURE (NO ROUTES MOVED YET)
+1) Create modular route structure:
+   server/routes/modules/
+     super-admin/
+     tenant-admin/
+     tasks/
+     projects/
+     clients/
+     time-entries/
+     notifications/
+     reports/
+     auth/
+     integrations/
+     chat/
+     onboarding/
+
+2) Add index barrels as needed.
+3) Create empty router files for planned domains
+   (export Router instances only; no routes yet).
+
+Do NOT change routing behavior.
+
+────────────────────────────────────────────────────────
+STEP 3 — ROUTE REGISTRY SNAPSHOT (SAFETY)
+1) Add a dev-only route registry script that prints:
+   METHOD + full PATH
+2) Save output to:
+   /docs/01-REFACTOR/route_registry_before.txt
+
+This is used only for parity checks.
+
+────────────────────────────────────────────────────────
+STEP 4 — EXTRACT ROUTES (ONE DOMAIN AT A TIME)
+For each god route file:
+
+1) Select ONE domain group from the plan.
+2) Move only those routes into the new domain router file.
+3) Preserve exactly:
+   - METHOD + PATH
+   - middleware order
+   - handler logic
+4) Move shared helpers ONLY if necessary (no logic changes).
+5) Mount the new router at the exact same base path.
+6) Remove extracted routes from the original file.
+
+After each extraction:
+- run build/typecheck
+- regenerate route registry and save:
+  /docs/01-REFACTOR/route_registry_after_<domain>.txt
+- confirm parity with the “before” snapshot.
+
+────────────────────────────────────────────────────────
+STEP 5 — APP DOCS UPDATE (DOCUMENTATION ONLY)
+After ALL route extractions are complete:
+
+1) Update Super Admin > App Docs to reflect the new structure:
+   - Document route organization by domain/module
+   - Note which router files own which endpoint groups
+   - Clarify that this was an internal refactor with NO API changes
+
+2) Update the API Registry docs:
+   - Keep endpoint paths identical
+   - Update “Source Module” or “Route Group” metadata if present
+   - Do NOT rewrite endpoint descriptions unless incorrect
+
+3) Add a short App Docs entry:
+   “Route Architecture Refactor”
+   - Purpose: maintainability & stability
+   - Date completed
+   - Confirmation: no behavior or API changes
+
+────────────────────────────────────────────────────────
+STEP 6 — COMPLETION CRITERIA
+This task is complete when:
+1) All identified god route files are reduced to small mounting files.
+2) Domain router files are logically scoped and readable.
+3) Route registry parity matches exactly (before vs final).
+4) App Docs and API Registry accurately reflect the new structure.
+
+FINAL OUTPUT REQUIRED
+- List of original god route files with before/after line counts
+- List of new domain router files created
+- Route registry parity confirmation
+- App Docs pages updated (titles/locations)
+- Any middleware-order edge cases preserved
