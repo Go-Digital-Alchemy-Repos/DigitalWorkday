@@ -37,7 +37,7 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T00:11:27.572Z
+**Last Synced:** 2026-02-05T02:15:12.360Z
 
 **Synced From:**
 - `server/features/clients/divisions.router.ts`
@@ -46,13 +46,13 @@
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/clients/clients/:clientId/divisions` |
-| POST | `/api/v1/clients/clients/:clientId/divisions` |
-| PATCH | `/api/v1/clients/divisions/:divisionId` |
-| GET | `/api/v1/clients/divisions/:divisionId/members` |
-| POST | `/api/v1/clients/divisions/:divisionId/members` |
-| DELETE | `/api/v1/clients/divisions/:divisionId/members/:userId` |
-| GET | `/api/v1/clients/divisions/:divisionId/projects` |
-| GET | `/api/v1/clients/divisions/:divisionId/tasks` |
+| GET | `/api/v1/clients/:clientId/divisions` |
+| POST | `/api/v1/clients/:clientId/divisions` |
+| PATCH | `/api/v1/divisions/:divisionId` |
+| GET | `/api/v1/divisions/:divisionId/members` |
+| POST | `/api/v1/divisions/:divisionId/members` |
+| DELETE | `/api/v1/divisions/:divisionId/members/:userId` |
+| GET | `/api/v1/divisions/:divisionId/projects` |
+| GET | `/api/v1/divisions/:divisionId/tasks` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

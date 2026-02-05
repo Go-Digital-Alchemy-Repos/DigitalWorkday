@@ -37,7 +37,7 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T00:11:27.562Z
+**Last Synced:** 2026-02-05T02:15:12.094Z
 
 **Synced From:**
 - `server/routes/super/integrations.router.ts`

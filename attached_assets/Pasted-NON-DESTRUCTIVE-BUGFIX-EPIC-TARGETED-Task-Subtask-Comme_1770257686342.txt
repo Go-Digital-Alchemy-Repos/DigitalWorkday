@@ -1,0 +1,193 @@
+NON-DESTRUCTIVE BUGFIX EPIC (TARGETED): Task/Subtask Comments Not Posting + @Mentions Not Working (Plus Notifications)
+
+GOAL
+Fix two specific bugs and implement a reusable @mention system across the app:
+
+BUG #1 (Comments not saving / not appearing):
+- When a user types a comment and clicks “Post Comment”, the comment does not appear saved.
+- Expected: comment is created successfully and immediately appears below the composer, showing:
+  - comment message/body
+  - author (name; optionally avatar/email)
+  - timestamp
+
+BUG #2 (@mentions not working):
+- Typing “@” does nothing; no user suggestions appear.
+- Expected: typing “@” opens a dropdown of tenant users, filters as you type, and inserting a mention tags a user.
+- Mentioned user receives a notification in-app and can optionally receive an email.
+- @mention tagging should become a standard capability for text inputs across the app (at least comment composer first, then reusable component/hook for later expansion).
+
+NON-DESTRUCTIVE RULES
+1) Do not remove or break existing task/subtask pages, drawers, or APIs.
+2) Do not change existing endpoint paths or response shapes in a breaking way; add new endpoints/fields only.
+3) Keep changes localized to comments, mentions, notifications, and any minimal supporting schema additions.
+4) Maintain strict tenant scoping and RBAC.
+5) Keep UI consistent with existing theme (Inter, shadcn/tailwind patterns).
+
+──────────────────────────────────────────────────────────────────────────────
+PHASE 0 — DEBUG FIRST: IDENTIFY WHY COMMENTS “DON’T SAVE” (NO BIG REFACTOR)
+1) Find the Task/Subtask Comment composer UI and determine:
+   - which API endpoint is called on “Post Comment”
+   - what payload is sent
+   - whether the request fails (400/401/500) or succeeds but UI doesn’t update
+   - whether the query cache is invalidated or updated
+
+2) Add temporary (dev-only) logging around the post action:
+   - log request payload and response
+   - log errors including requestId
+Do not leave noisy logs in production—use a debug flag or remove after diagnosis.
+
+3) Create /docs/BUGS/comments_bug1_post_not_appearing.md with:
+   - reproduction steps
+   - root cause summary
+   - fix plan
+
+──────────────────────────────────────────────────────────────────────────────
+PHASE 1 — FIX BUG #1: COMMENT CREATION + IMMEDIATE UI UPDATE (RELIABLE)
+Server-side:
+1) Ensure the create-comment endpoint returns the created comment in the response, fully hydrated:
+   - id, body, createdAt
+   - author: { id, name, email? }
+   - parent reference: taskId or subtaskId
+2) Ensure tenant scoping:
+   - validate parent task/subtask exists and belongs to tenant
+3) Ensure consistent error shape:
+   { error: { code, message, requestId, details? } }
+
+Client-side:
+4) On success, immediately insert the returned comment into the visible list:
+   - If using TanStack Query, update the correct cache key:
+     ["comments","task",taskId] or ["comments","subtask",subtaskId]
+   - Prevent duplicates by id
+5) Reset the composer:
+   - clear textarea
+   - disable button while saving
+6) Show author and timestamp in the comment list rows.
+
+Validation:
+7) Add a visible error message if the post fails (no silent failure).
+
+Documentation:
+8) Update the doc created in Phase 0 with the implemented fix details.
+
+──────────────────────────────────────────────────────────────────────────────
+PHASE 2 — FIX BUG #2: IMPLEMENT @MENTIONS IN COMMENTS (TENANT USERS)
+A) Backend Support (Additive)
+1) Add a tenant-scoped user search endpoint for mentions (admin/employee allowed; tenant-scoped):
+   - GET /api/mentions/users?query=... (or /api/users?search=... if it already exists)
+   - Returns minimal fields: id, name, email, avatarUrl? (if exists)
+   - Always limited (e.g., max 20)
+   - Must only return users in the same tenant and visible to requester per RBAC rules.
+
+2) Add mention parsing/recording on comment creation:
+   - When a comment is created, detect mentioned users and create mention records (additive).
+   - If comment body stores mention markup, standardize a format:
+     - Recommended: store in plain text but also store structured metadata:
+       mentions: [{ userId, start, end }]
+   - Do NOT break existing comments; mentions metadata can be optional.
+
+3) Add a new table if needed (additive only):
+   comment_mentions:
+   - id
+   - tenantId
+   - commentId
+   - mentionedUserId
+   - createdAt
+Indexes:
+   (tenantId, mentionedUserId, createdAt)
+   (tenantId, commentId)
+
+B) Frontend @Mention UX (Comments first)
+1) Implement a reusable Mention-enabled text input for comments:
+   - When user types “@”, show a dropdown of tenant users.
+   - Default: show first 10–20 users even with empty query after “@”
+   - As user types after “@”, filter list (client-side + server search) with debounce.
+   - On selection, insert a mention token into the text.
+
+2) Mention token rendering:
+   - Display selected mentions as highlighted text in the input (if using a rich text editor),
+     OR insert a stable token like “@{Name}” with hidden metadata.
+   - Keep it simple and consistent with your existing editor:
+     - If you already use TipTap or similar, implement mention extension.
+     - If not, implement a lightweight textarea-based mention approach:
+       - detect current “@word” and show menu positioned near caret
+       - store mentions metadata alongside the comment payload.
+
+3) After posting, render mentions in the comment display as highlighted links/badges:
+   - Clicking a mention could open that user profile (optional).
+
+C) Notifications for Mentions (In-app + Optional Email)
+1) When a comment with mentions is created:
+   - Create notification records for each mentioned user:
+     - type: "mention"
+     - entityType: "taskComment" or "subtaskComment"
+     - entityId: commentId
+     - context: taskId/subtaskId + task title
+     - actor: author userId
+2) In Notifications UI:
+   - Show: “{Author} mentioned you in a comment on {Task/Subtask}”
+   - Clicking takes user directly to the task/subtask and scrolls/highlights the comment.
+
+3) Email option:
+   - Add a user notification preference:
+     - “Email me when I’m mentioned in a comment” (default OFF unless your system defaults ON)
+   - If enabled, send an email for mention notifications.
+   - Do not block comment posting on email sending; enqueue or fire-and-forget safely.
+
+D) Make Mentions Standard Across the App (Framework, Not Full Rollout)
+1) Extract the mention logic into reusable parts:
+   - client: useMentions() hook + MentionInput component
+   - server: /api/mentions/users endpoint
+2) Update App Docs:
+   - “Mentions System” (how it works, where it’s used, how to add to new fields)
+3) Do NOT attempt to retrofit every input in the app in this pass.
+   - Deliver comments first.
+   - Add a TODO list in docs for next fields (task description, notes, etc.)
+
+──────────────────────────────────────────────────────────────────────────────
+PHASE 3 — QA CHECKLIST (REQUIRED)
+BUG #1 Verification:
+- Post comment on a task → comment appears immediately with author + timestamp
+- Post comment on a subtask → comment appears immediately with author + timestamp
+- Refresh page → comment persists, no duplicates
+
+BUG #2 Verification:
+- Type “@” → dropdown appears with tenant users
+- Type “@mi” → list filters down
+- Select a user → mention inserted into comment body
+- Post comment → mention persists in display (highlighted)
+- Mentioned user receives:
+  - in-app notification (always)
+  - email only if their preference enabled
+
+Tenant/RBAC Safety:
+- Mention search returns only tenant users
+- Cannot mention users from other tenants
+- Comment creation cannot mention foreign tenant users even if ids are spoofed
+
+Performance:
+- Mention search endpoint is limited and debounced
+
+──────────────────────────────────────────────────────────────────────────────
+PHASE 4 — TESTS (MINIMUM)
+Backend:
+1) Create comment returns created comment DTO including author
+2) Mention search endpoint tenant-scoped
+3) Mention notification created for mentioned user
+Frontend (if feasible):
+4) @ opens dropdown, filters, inserts mention
+5) Post comment updates UI immediately
+
+DELIVERABLES
+- Fix comment posting and immediate UI update for tasks and subtasks
+- Working @mention dropdown + selection
+- Mention notifications in-app + optional email preference
+- Reusable mention component/hook for expansion later
+- Updated documentation in Super Admin > App Docs (Comments + Mentions + API Registry)
+
+OUTPUT REQUIRED
+After implementation, provide:
+- root causes found for BUG #1 and BUG #2
+- files changed
+- endpoints added/updated
+- migrations added (if any)
+- any limitations/TODOs for extending mentions to other fields

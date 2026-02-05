@@ -1,4 +1,4 @@
-# Tenant Billing API
+# Time Tracking API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Tenant Billing |
-| **Route File(s)** | `server/routes/tenantBilling.ts` |
-| **Base Path(s)** | /api/v1/tenant |
+| **Domain** | Time Tracking |
+| **Route File(s)** | `server/routes/timeTracking.ts` |
+| **Base Path(s)** | /api/timer/current, /api/timer/start, /api/timer/pause, /api/timer/resume, /api/timer/stop |
 
 ---
 
@@ -37,19 +37,21 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T02:15:12.282Z
+**Last Synced:** 2026-02-05T02:15:12.283Z
 
 **Synced From:**
-- `server/routes/tenantBilling.ts`
+- `server/routes/timeTracking.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/tenant/billing` |
-| POST | `/api/v1/tenant/billing/initialize` |
-| POST | `/api/v1/tenant/billing/portal-session` |
-| GET | `/api/v1/tenant/billing/invoices` |
-| PATCH | `/api/v1/tenant/billing/email` |
+| GET | `/api/timer/current` |
+| POST | `/api/timer/start` |
+| POST | `/api/timer/pause` |
+| POST | `/api/timer/resume` |
+| POST | `/api/timer/stop` |
+| PATCH | `/api/timer/current` |
+| DELETE | `/api/timer/current` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

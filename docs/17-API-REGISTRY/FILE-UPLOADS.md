@@ -37,7 +37,7 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T00:11:27.569Z
+**Last Synced:** 2026-02-05T02:15:12.283Z
 
 **Synced From:**
 - `server/routes/uploads.ts`

@@ -37,7 +37,7 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T00:11:27.563Z
+**Last Synced:** 2026-02-05T02:15:12.095Z
 
 **Synced From:**
 - `server/routes/superAdmin.ts`
@@ -160,11 +160,13 @@
 | GET | `/api/v1/super/docs` |
 | GET | `/api/v1/super/docs/:docPath` |
 | POST | `/api/v1/super/docs/sync` |
+| GET | `/api/v1/super/docs/coverage` |
 | GET | `/api/v1/super/tenants/:tenantId/export/clients` |
 | GET | `/api/v1/super/tenants/:tenantId/export/users` |
 | GET | `/api/v1/super/tenants/:tenantId/export/time-entries` |
 | POST | `/api/v1/super/tenants/:tenantId/import/clients` |
 | POST | `/api/v1/super/tenants/:tenantId/import/time-entries` |
+| POST | `/api/v1/super/tenants/:tenantId/import/user-client-summary` |
 | GET | `/api/v1/super/ai/config` |
 | PUT | `/api/v1/super/ai/config` |
 | POST | `/api/v1/super/ai/test` |

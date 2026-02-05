@@ -37,7 +37,7 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T00:11:27.572Z
+**Last Synced:** 2026-02-05T02:15:12.285Z
 
 **Synced From:**
 - `server/features/client-portal/portal.router.ts`
@@ -47,18 +47,18 @@
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/clients/dashboard` |
-| GET | `/api/v1/clients/projects` |
-| GET | `/api/v1/clients/projects/:projectId` |
-| GET | `/api/v1/clients/tasks` |
-| GET | `/api/v1/clients/tasks/:taskId` |
-| POST | `/api/v1/clients/tasks/:taskId/comments` |
-| GET | `/api/v1/clients/profile` |
-| GET | `/api/v1/clients/:clientId/users` |
-| POST | `/api/v1/clients/:clientId/users/invite` |
-| PATCH | `/api/v1/clients/:clientId/users/:userId` |
-| DELETE | `/api/v1/clients/:clientId/users/:userId` |
-| GET | `/api/v1/clients/register/validate` |
-| POST | `/api/v1/clients/register/complete` |
+| GET | `/api/clients/dashboard` |
+| GET | `/api/clients/projects` |
+| GET | `/api/clients/projects/:projectId` |
+| GET | `/api/clients/tasks` |
+| GET | `/api/clients/tasks/:taskId` |
+| POST | `/api/clients/tasks/:taskId/comments` |
+| GET | `/api/clients/profile` |
+| GET | `/api/clients/:clientId/users` |
+| POST | `/api/clients/:clientId/users/invite` |
+| PATCH | `/api/clients/:clientId/users/:userId` |
+| DELETE | `/api/clients/:clientId/users/:userId` |
+| GET | `/api/clients/register/validate` |
+| POST | `/api/clients/register/complete` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

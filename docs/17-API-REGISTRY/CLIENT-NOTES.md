@@ -37,7 +37,7 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T00:11:27.574Z
+**Last Synced:** 2026-02-05T02:15:12.361Z
 
 **Synced From:**
 - `server/features/clients/notes.router.ts`
@@ -46,15 +46,15 @@
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/clients/:clientId/notes/categories` |
-| POST | `/api/v1/clients/:clientId/notes/categories` |
-| PUT | `/api/v1/clients/:clientId/notes/categories/:categoryId` |
-| DELETE | `/api/v1/clients/:clientId/notes/categories/:categoryId` |
-| GET | `/api/v1/clients/:clientId/notes` |
-| POST | `/api/v1/clients/:clientId/notes` |
-| GET | `/api/v1/clients/:clientId/notes/:noteId` |
-| PUT | `/api/v1/clients/:clientId/notes/:noteId` |
-| DELETE | `/api/v1/clients/:clientId/notes/:noteId` |
-| GET | `/api/v1/clients/:clientId/notes/:noteId/versions` |
+| GET | `/api/clients/:clientId/notes/categories` |
+| POST | `/api/clients/:clientId/notes/categories` |
+| PUT | `/api/clients/:clientId/notes/categories/:categoryId` |
+| DELETE | `/api/clients/:clientId/notes/categories/:categoryId` |
+| GET | `/api/clients/:clientId/notes` |
+| POST | `/api/clients/:clientId/notes` |
+| GET | `/api/clients/:clientId/notes/:noteId` |
+| PUT | `/api/clients/:clientId/notes/:noteId` |
+| DELETE | `/api/clients/:clientId/notes/:noteId` |
+| GET | `/api/clients/:clientId/notes/:noteId/versions` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

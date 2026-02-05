@@ -124,9 +124,21 @@ export function TaskDetailDrawer({
 
   const invalidateCommentQueries = () => {
     if (task) {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.id, "comments"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/tasks/${task.id}/comments`] });
     }
   };
+
+  const { data: taskComments = [] } = useQuery<(Comment & { user?: User })[]>({
+    queryKey: [`/api/tasks/${task?.id}/comments`],
+    enabled: !!task?.id && open,
+  });
+
+  const addCommentMutation = useMutation({
+    mutationFn: async (body: string) => {
+      return apiRequest("POST", `/api/tasks/${task?.id}/comments`, { body });
+    },
+    onSuccess: invalidateCommentQueries,
+  });
 
   const updateCommentMutation = useMutation({
     mutationFn: async ({ id, body }: { id: string; body: string }) => {
@@ -573,7 +585,6 @@ export function TaskDetailDrawer({
   const assigneeUsers: Partial<User>[] = task.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [];
   const watcherUsers: Partial<User>[] = task.watchers?.map((w) => w.user).filter(Boolean) as Partial<User>[] || [];
   const taskTags: TagType[] = task.tags?.map((tt) => tt.tag).filter(Boolean) as TagType[] || [];
-  const comments: (Comment & { user?: User })[] = [];
   
   const handleTitleSave = () => {
     if (title.trim() && title !== task.title) {
@@ -852,7 +863,7 @@ export function TaskDetailDrawer({
               >
                 <DatePickerWithChips
                   value={task.dueDate ? new Date(task.dueDate) : null}
-                  onChange={(date) => onUpdate?.(task.id, { dueDate: date ? date.toISOString() : null })}
+                  onChange={(date) => onUpdate?.(task.id, { dueDate: date as any })}
                   className="w-[180px] h-8"
                   data-testid="button-due-date"
                 />
@@ -939,7 +950,7 @@ export function TaskDetailDrawer({
             taskId={task.id}
             workspaceId={workspaceId}
             projectId={task.projectId}
-            clientId={task.clientId}
+            clientId={task.project?.clientId}
             taskTitle={task.title}
             taskDescription={task.description || undefined}
             onAdd={(title) => addSubtaskMutation.mutate({ taskId: task.id, title })}
@@ -1115,10 +1126,10 @@ export function TaskDetailDrawer({
           <Separator />
 
           <CommentThread
-            comments={comments}
+            comments={taskComments}
             taskId={task.id}
             currentUserId={currentUser?.id}
-            onAdd={(body) => onAddComment?.(task.id, body)}
+            onAdd={(body) => addCommentMutation.mutate(body)}
             onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
             onDelete={(id) => deleteCommentMutation.mutate(id)}
             onResolve={(id) => resolveCommentMutation.mutate(id)}

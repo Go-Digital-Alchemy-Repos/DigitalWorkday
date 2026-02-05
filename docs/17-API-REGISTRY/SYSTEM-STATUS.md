@@ -37,7 +37,7 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T00:11:27.567Z
+**Last Synced:** 2026-02-05T02:15:12.281Z
 
 **Synced From:**
 - `server/routes/systemStatus.ts`
@@ -53,7 +53,5 @@
 | GET | `/api/v1/super/status/error-logs/:id` |
 | PATCH | `/api/v1/super/status/error-logs/:id/resolve` |
 | GET | `/api/v1/super/status/diagnostics/schema` |
-| GET | `/api/v1/super/status/error-logs` |
-| PATCH | `/api/v1/super/status/error-logs/:id/resolve` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

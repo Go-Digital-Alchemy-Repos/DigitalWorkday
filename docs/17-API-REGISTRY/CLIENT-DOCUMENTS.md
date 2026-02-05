@@ -37,7 +37,7 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T00:11:27.573Z
+**Last Synced:** 2026-02-05T02:15:12.360Z
 
 **Synced From:**
 - `server/features/clients/documents.router.ts`
@@ -46,15 +46,15 @@
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/clients/:clientId/documents/categories` |
-| POST | `/api/v1/clients/:clientId/documents/categories` |
-| PATCH | `/api/v1/clients/:clientId/documents/categories/:categoryId` |
-| DELETE | `/api/v1/clients/:clientId/documents/categories/:categoryId` |
-| GET | `/api/v1/clients/:clientId/documents` |
-| POST | `/api/v1/clients/:clientId/documents/upload` |
-| POST | `/api/v1/clients/:clientId/documents/:documentId/complete` |
-| PATCH | `/api/v1/clients/:clientId/documents/:documentId` |
-| DELETE | `/api/v1/clients/:clientId/documents/:documentId` |
-| GET | `/api/v1/clients/:clientId/documents/:documentId/download` |
+| GET | `/api/clients/:clientId/documents/categories` |
+| POST | `/api/clients/:clientId/documents/categories` |
+| PATCH | `/api/clients/:clientId/documents/categories/:categoryId` |
+| DELETE | `/api/clients/:clientId/documents/categories/:categoryId` |
+| GET | `/api/clients/:clientId/documents` |
+| POST | `/api/clients/:clientId/documents/upload` |
+| POST | `/api/clients/:clientId/documents/:documentId/complete` |
+| PATCH | `/api/clients/:clientId/documents/:documentId` |
+| DELETE | `/api/clients/:clientId/documents/:documentId` |
+| GET | `/api/clients/:clientId/documents/:documentId/download` |
 
 <!-- === END AUTO-GENERATED SECTION === -->
