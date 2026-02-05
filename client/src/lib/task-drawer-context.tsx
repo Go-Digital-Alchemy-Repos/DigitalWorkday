@@ -30,9 +30,10 @@ interface TaskDrawerProviderProps {
 export function TaskDrawerProvider({ children }: TaskDrawerProviderProps) {
   const [taskIdToOpen, setTaskIdToOpen] = useState<string | null>(null);
 
-  const { data: task } = useQuery<TaskWithRelations>({
+  const { data: task, isLoading } = useQuery<TaskWithRelations>({
     queryKey: ["/api/tasks", taskIdToOpen],
     enabled: !!taskIdToOpen,
+    staleTime: 30000,
   });
 
   const openTask = useCallback((taskId: string) => {
@@ -43,17 +44,20 @@ export function TaskDrawerProvider({ children }: TaskDrawerProviderProps) {
     setTaskIdToOpen(null);
   }, []);
 
+  const isOpen = !!taskIdToOpen;
+
   return (
     <TaskDrawerContext.Provider value={{ openTask, closeTask }}>
       {children}
-      {task && (
+      {isOpen && (
         <TaskDetailDrawer
-          task={task}
-          open={!!taskIdToOpen && !!task}
+          task={task || null}
+          open={isOpen}
           onOpenChange={(open) => {
             if (!open) closeTask();
           }}
-          workspaceId={task.project?.workspaceId || ""}
+          workspaceId={task?.project?.workspaceId || ""}
+          isLoading={isLoading}
         />
       )}
     </TaskDrawerContext.Provider>

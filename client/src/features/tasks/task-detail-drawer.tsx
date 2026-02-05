@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { TaskDrawerSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -80,6 +81,7 @@ interface TaskDetailDrawerProps {
   availableTags?: TagType[];
   availableUsers?: User[];
   workspaceId?: string;
+  isLoading?: boolean;
 }
 
 export function TaskDetailDrawer({
@@ -92,6 +94,7 @@ export function TaskDetailDrawer({
   availableTags = [],
   availableUsers = [],
   workspaceId = "",
+  isLoading = false,
 }: TaskDetailDrawerProps) {
   const { user: currentUser } = useAuth();
   const [editingTitle, setEditingTitle] = useState(false);
@@ -505,7 +508,33 @@ export function TaskDetailDrawer({
     }
   }, [task?.id, task?.description, task?.title, task?.estimateMinutes]);
 
-  if (!task) return null;
+  if (isLoading || !task) {
+    return (
+      <Sheet open={open} onOpenChange={onOpenChange}>
+        <SheetContent 
+          className="w-full sm:max-w-2xl overflow-y-auto p-0"
+          data-testid="task-detail-drawer-loading"
+        >
+          <SheetHeader className="sticky top-0 z-10 bg-background border-b border-border px-6 py-4">
+            <SheetDescription className="sr-only">Loading task details</SheetDescription>
+            <div className="flex items-center justify-between">
+              <SheetTitle className="sr-only">Loading Task</SheetTitle>
+              <div className="h-6 w-24 bg-muted animate-pulse rounded" />
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpenChange(false)}
+                data-testid="button-close-drawer"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
+          </SheetHeader>
+          <TaskDrawerSkeleton />
+        </SheetContent>
+      </Sheet>
+    );
+  }
 
   const assigneeUsers: Partial<User>[] = task.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [];
   const watcherUsers: Partial<User>[] = task.watchers?.map((w) => w.user).filter(Boolean) as Partial<User>[] || [];

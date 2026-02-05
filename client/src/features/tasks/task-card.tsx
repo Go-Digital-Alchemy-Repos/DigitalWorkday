@@ -28,6 +28,7 @@ import {
 } from "lucide-react";
 import type { TaskWithRelations, User, Tag } from "@shared/schema";
 import { getPreviewText } from "@/components/richtext/richTextUtils";
+import { usePrefetchTask } from "@/hooks/use-prefetch";
 
 interface TaskCardProps {
   task: TaskWithRelations;
@@ -47,6 +48,7 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
 ) {
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
   const isCompleted = task.status === "done";
+  const { prefetch: prefetchTask, cancel: cancelPrefetch } = usePrefetchTask();
   const [justCompleted, setJustCompleted] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const assigneeUsers: Partial<User>[] = task.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [];
@@ -81,6 +83,8 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
           justCompleted && "task-complete-pulse"
         )}
         onClick={onSelect}
+        onMouseEnter={() => prefetchTask(task.id)}
+        onMouseLeave={cancelPrefetch}
         data-testid={`task-card-${task.id}`}
       >
         <div className="flex flex-col gap-2">
@@ -168,6 +172,8 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
         justCompleted && "task-complete-pulse"
       )}
       onClick={onSelect}
+      onMouseEnter={() => prefetchTask(task.id)}
+      onMouseLeave={cancelPrefetch}
       data-testid={`task-card-${task.id}`}
     >
       {dragHandleProps && (
