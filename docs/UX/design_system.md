@@ -10,6 +10,7 @@ This design system provides foundational UI components and tokens to ensure visu
 - [DataToolbar Standard](./data_toolbar.md) - List page toolbar with search, filters, and actions
 - [Dashboard Cards](./dashboard_cards.md) - MetricCard component for dashboard statistics
 - [Empty States](./empty_states.md) - Guided empty states for all content areas
+- [Avatar System](./avatar_system.md) - User identity display with presence indicators
 
 ## Installation
 All components are available from `@/components/ui-system`:

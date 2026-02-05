@@ -39,7 +39,14 @@ export {
   type SortOption,
   type FilterOption,
 } from "./DataToolbar";
-export { AvatarWithStatus } from "./AvatarWithStatus";
+export { 
+  AvatarWithStatus, 
+  AvatarGroup, 
+  UserBadge, 
+  AssigneeList,
+  type AvatarSize,
+  type PresenceStatus,
+} from "./AvatarWithStatus";
 export { PageTitle, SectionTitle, BodyText, MutedText, LabelText } from "./Typography";
 export { spacing, radius, shadows } from "./tokens";
 export {
