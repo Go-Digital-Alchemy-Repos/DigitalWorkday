@@ -2,7 +2,17 @@ export { PageHeader } from "./PageHeader";
 export { SectionHeader } from "./SectionHeader";
 export { MetricCard } from "./MetricCard";
 export { EmptyState } from "./EmptyState";
-export { LoadingSkeleton } from "./LoadingSkeleton";
+export { 
+  LoadingSkeleton, 
+  ChatMessageSkeleton, 
+  DashboardSkeleton, 
+  TaskListSkeleton, 
+  ProjectListSkeleton, 
+  ClientListSkeleton, 
+  DrawerSkeleton,
+  KanbanSkeleton,
+  type SkeletonVariant 
+} from "./LoadingSkeleton";
 export { DetailDrawer, type DetailDrawerTab } from "./DetailDrawer";
 export { DataToolbar } from "./DataToolbar";
 export { AvatarWithStatus } from "./AvatarWithStatus";
