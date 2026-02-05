@@ -1,4 +1,6 @@
 import "dotenv/config";
+// Import config early to validate env vars before anything else runs
+import { config, logConfigStatus } from "./config";
 import express, { type Request, Response, NextFunction } from "express";
 import { registerRoutes } from "./routes";
 import { serveStatic } from "./static";
