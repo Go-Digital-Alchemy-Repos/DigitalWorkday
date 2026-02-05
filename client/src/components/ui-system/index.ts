@@ -8,3 +8,25 @@ export { DataToolbar } from "./DataToolbar";
 export { AvatarWithStatus } from "./AvatarWithStatus";
 export { PageTitle, SectionTitle, BodyText, MutedText, LabelText } from "./Typography";
 export { spacing, radius, shadows } from "./tokens";
+export {
+  Motion,
+  AnimatePresence,
+  MotionFade,
+  MotionSlide,
+  MotionList,
+  MotionListItem,
+  MotionScale,
+  MotionCheck,
+  MotionPresence,
+  useReducedMotion,
+  fadeVariants,
+  slideUpVariants,
+  slideDownVariants,
+  slideRightVariants,
+  scaleVariants,
+  listItemVariants,
+  staggerContainer,
+  checkVariants,
+  pulseVariants,
+  sendVariants,
+} from "./motion";

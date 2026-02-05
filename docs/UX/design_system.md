@@ -5,6 +5,7 @@ This design system provides foundational UI components and tokens to ensure visu
 
 **Related Documentation:**
 - [DetailDrawer Pattern](./detail_drawer_pattern.md) - Standard slide-over panel implementation
+- [Motion Guidelines](./motion_guidelines.md) - Animation and micro-interaction standards
 
 ## Installation
 All components are available from `@/components/ui-system`:
