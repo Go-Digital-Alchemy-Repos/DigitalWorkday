@@ -40,7 +40,7 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **Client Portal**: External client access to projects/tasks with restricted permissions and a token-based invitation flow.
 - **System Robustness**: Includes centralized error logging, standardized API error handling, data purge capabilities, tenant data health remediation tools, startup production parity check, and tenant core flows smoke tests.
 - **Super Admin Capabilities**: Full tenant user management including inline editing, permanent user deletion, password reset, and comprehensive tenant health diagnostics with repair automation.
-- **User Experience**: Global command palette, keyboard shortcuts, `useUnsavedChanges` hook for dirty state management, and a professional UI design with dark mode support.
+- **User Experience**: Global command palette, keyboard shortcuts, `useUnsavedChanges` hook for dirty state management, and a professional UI design with dark mode support. Includes a CSS-variable-based accent color theming system with six presets (green/blue/indigo/teal/orange/slate) managed via `useTheme()` hook from `client/src/lib/theme-provider.tsx`. See `docs/UX/theme_tokens.md` for full documentation.
 - **SaaS Agreement System**: Manages tenant SaaS agreements with lifecycle, versioning, and user acceptance tracking.
 - **Cloudflare R2 Storage**: Cloudflare R2 is the exclusive storage provider for all file uploads. All image uploads are automatically compressed through a server-side and client-side pipeline.
 - **Centralized Type Augmentation**: `server/types.d.ts` provides TypeScript declarations for Express Request properties attached by middleware.
