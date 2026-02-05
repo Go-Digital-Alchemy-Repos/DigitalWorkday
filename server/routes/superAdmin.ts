@@ -32,7 +32,7 @@
 import { Router } from "express";
 import { storage } from "../storage";
 import { requireSuperUser } from "../middleware/tenantContext";
-import { insertTenantSchema, TenantStatus, UserRole, tenants, workspaces, invitations, tenantSettings, tenantNotes, tenantNoteVersions, tenantAuditEvents, NoteCategory, clients, clientContacts, clientDivisions, projects, tasks, users, teams, systemSettings, tenantAgreements, tenantAgreementAcceptances, timeEntries, updateSystemSettingsSchema, platformInvitations, platformAuditEvents, workspaceMembers, teamMembers, projectMembers, divisionMembers, activityLog, comments, passwordResetTokens, chatReads, chatMessages, chatChannelMembers, chatChannels, notifications, notificationPreferences, activeTimers, clientUserAccess, clientInvites, tenantIntegrations, appSettings, errorLogs, emailOutbox, sections, taskAssignees, taskWatchers, personalTaskSections, subtasks, tags, taskTags, taskAttachments, commentMentions, chatDmThreads, chatDmMembers, chatAttachments, chatMentions, tenancyWarnings } from "@shared/schema";
+import { insertTenantSchema, TenantStatus, UserRole, tenants, workspaces, invitations, tenantSettings, tenantNotes, tenantNoteVersions, tenantAuditEvents, NoteCategory, clients, clientContacts, clientDivisions, projects, tasks, users, teams, systemSettings, tenantAgreements, tenantAgreementAcceptances, timeEntries, updateSystemSettingsSchema, platformInvitations, platformAuditEvents, workspaceMembers, teamMembers, projectMembers, divisionMembers, activityLog, comments, passwordResetTokens, chatReads, chatMessages, chatChannelMembers, chatChannels, notifications, notificationPreferences, activeTimers, clientUserAccess, clientInvites, tenantIntegrations, appSettings, errorLogs, emailOutbox, sections, taskAssignees, taskWatchers, personalTaskSections, subtasks, tags, taskTags, taskAttachments, commentMentions, chatDmThreads, chatDmMembers, chatAttachments, chatMentions, tenancyWarnings, hiddenProjects, subtaskAssignees, clientNotes, clientNoteVersions, clientNoteAttachments, clientDocuments, chatExportJobs } from "@shared/schema";
 import { hashPassword } from "../auth";
 import { z } from "zod";
 import { db } from "../db";
@@ -2254,21 +2254,82 @@ router.delete("/users/:userId", requireSuperUser, async (req, res) => {
     }
     
     if (existingUser.role === UserRole.SUPER_USER) {
-      return res.status(403).json({ error: "Cannot delete super users through this endpoint" });
+      return res.status(403).json({ error: "Cannot delete super users through this endpoint. Use the Platform Admins section instead." });
     }
     
-    // Use transaction for atomicity
+    const actorId = superUser?.id;
+    if (!actorId) {
+      return res.status(401).json({ error: "Actor identity required for user deletion" });
+    }
     await db.transaction(async (tx) => {
-      // Delete related data first (foreign key constraints)
+      // 1. Delete user-specific membership/junction rows
       await tx.delete(taskAssignees).where(eq(taskAssignees.userId, userId));
       await tx.delete(taskWatchers).where(eq(taskWatchers.userId, userId));
       await tx.delete(workspaceMembers).where(eq(workspaceMembers.userId, userId));
       await tx.delete(teamMembers).where(eq(teamMembers.userId, userId));
       await tx.delete(projectMembers).where(eq(projectMembers.userId, userId));
+      await tx.delete(divisionMembers).where(eq(divisionMembers.userId, userId));
+      await tx.delete(hiddenProjects).where(eq(hiddenProjects.userId, userId));
+      await tx.delete(personalTaskSections).where(eq(personalTaskSections.userId, userId));
+      await tx.delete(subtaskAssignees).where(eq(subtaskAssignees.userId, userId));
+      await tx.delete(clientUserAccess).where(eq(clientUserAccess.userId, userId));
+
+      // 2. Delete user-specific operational data
       await tx.delete(notifications).where(eq(notifications.userId, userId));
       await tx.delete(notificationPreferences).where(eq(notificationPreferences.userId, userId));
-      
-      // Delete the user
+      await tx.delete(activeTimers).where(eq(activeTimers.userId, userId));
+      await tx.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
+      await tx.delete(timeEntries).where(eq(timeEntries.userId, userId));
+
+      // 3. Delete chat-related rows (notNull FK - must delete)
+      await tx.delete(chatMentions).where(eq(chatMentions.mentionedUserId, userId));
+      await tx.delete(chatReads).where(eq(chatReads.userId, userId));
+      await tx.delete(chatChannelMembers).where(eq(chatChannelMembers.userId, userId));
+      await tx.delete(chatDmMembers).where(eq(chatDmMembers.userId, userId));
+      await tx.delete(chatMessages).where(eq(chatMessages.authorUserId, userId));
+      await tx.delete(chatExportJobs).where(eq(chatExportJobs.requestedByUserId, userId));
+
+      // 4. Reassign chat channels created by this user (notNull created_by)
+      await tx.update(chatChannels).set({ createdBy: actorId }).where(eq(chatChannels.createdBy, userId));
+
+      // 5. Delete comment-related rows (notNull FK)
+      await tx.delete(commentMentions).where(eq(commentMentions.mentionedUserId, userId));
+      await tx.delete(comments).where(eq(comments.userId, userId));
+
+      // 6. Delete activity logs (notNull actorUserId)
+      await tx.delete(activityLog).where(eq(activityLog.actorUserId, userId));
+
+      // 7. Delete file-related rows
+      await tx.delete(taskAttachments).where(eq(taskAttachments.uploadedByUserId, userId));
+      await tx.delete(clientNoteAttachments).where(eq(clientNoteAttachments.uploadedByUserId, userId));
+      await tx.delete(clientNoteVersions).where(eq(clientNoteVersions.editorUserId, userId));
+      await tx.delete(clientNotes).where(eq(clientNotes.authorUserId, userId));
+      await tx.delete(clientDocuments).where(eq(clientDocuments.uploadedByUserId, userId));
+
+      // 8. Delete agreement acceptances
+      await tx.delete(tenantAgreementAcceptances).where(eq(tenantAgreementAcceptances.userId, userId));
+
+      // 9. Null out nullable references (preserve data, remove user link)
+      await tx.update(tasks).set({ assigneeId: null }).where(eq(tasks.assigneeId, userId));
+      await tx.update(tasks).set({ createdBy: null }).where(eq(tasks.createdBy, userId));
+      await tx.update(subtasks).set({ assigneeId: null }).where(eq(subtasks.assigneeId, userId));
+      await tx.update(projects).set({ createdBy: null }).where(eq(projects.createdBy, userId));
+      await tx.update(sections).set({ createdBy: null }).where(eq(sections.createdBy, userId));
+      await tx.update(invitations).set({ createdByUserId: null }).where(eq(invitations.createdByUserId, userId));
+      await tx.update(appSettings).set({ updatedByUserId: null }).where(eq(appSettings.updatedByUserId, userId));
+      await tx.update(comments).set({ resolvedByUserId: null }).where(eq(comments.resolvedByUserId, userId));
+      await tx.update(clientNotes).set({ lastEditedByUserId: null }).where(eq(clientNotes.lastEditedByUserId, userId));
+      await tx.update(workspaces).set({ createdBy: null }).where(eq(workspaces.createdBy, userId));
+      await tx.update(schema.projectTemplates).set({ createdBy: null }).where(eq(schema.projectTemplates.createdBy, userId));
+      await tx.update(tenantAgreements).set({ createdByUserId: null }).where(eq(tenantAgreements.createdByUserId, userId));
+      await tx.update(errorLogs).set({ userId: null }).where(eq(errorLogs.userId, userId));
+      await tx.update(platformAuditEvents).set({ actorUserId: null }).where(eq(platformAuditEvents.actorUserId, userId));
+      await tx.update(platformAuditEvents).set({ targetUserId: null }).where(eq(platformAuditEvents.targetUserId, userId));
+      await tx.update(platformInvitations).set({ targetUserId: null }).where(eq(platformInvitations.targetUserId, userId));
+      await tx.update(platformInvitations).set({ createdByUserId: actorId }).where(eq(platformInvitations.createdByUserId, userId));
+      await tx.update(passwordResetTokens).set({ createdByUserId: null }).where(eq(passwordResetTokens.createdByUserId, userId));
+
+      // 10. Delete the user
       await tx.delete(users).where(eq(users.id, userId));
     });
     
@@ -6419,15 +6480,83 @@ router.delete("/admins/:id", requireSuperUser, async (req, res) => {
       });
     }
     
-    // Delete related records
-    // 1. Delete password reset tokens
-    await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, id));
-    
-    // 2. Delete platform invitations for this admin
-    await db.delete(platformInvitations).where(eq(platformInvitations.userId, id));
-    
-    // 3. Finally, delete the admin user
-    await db.delete(users).where(and(eq(users.id, id), eq(users.role, UserRole.SUPER_USER)));
+    const actorId = actor?.id;
+    if (!actorId) {
+      return res.status(401).json({ error: "Actor identity required for user deletion" });
+    }
+    await db.transaction(async (tx) => {
+      // 1. Delete user-specific membership/junction rows
+      await tx.delete(taskAssignees).where(eq(taskAssignees.userId, id));
+      await tx.delete(taskWatchers).where(eq(taskWatchers.userId, id));
+      await tx.delete(workspaceMembers).where(eq(workspaceMembers.userId, id));
+      await tx.delete(teamMembers).where(eq(teamMembers.userId, id));
+      await tx.delete(projectMembers).where(eq(projectMembers.userId, id));
+      await tx.delete(divisionMembers).where(eq(divisionMembers.userId, id));
+      await tx.delete(hiddenProjects).where(eq(hiddenProjects.userId, id));
+      await tx.delete(personalTaskSections).where(eq(personalTaskSections.userId, id));
+      await tx.delete(subtaskAssignees).where(eq(subtaskAssignees.userId, id));
+      await tx.delete(clientUserAccess).where(eq(clientUserAccess.userId, id));
+
+      // 2. Delete user-specific operational data
+      await tx.delete(notifications).where(eq(notifications.userId, id));
+      await tx.delete(notificationPreferences).where(eq(notificationPreferences.userId, id));
+      await tx.delete(activeTimers).where(eq(activeTimers.userId, id));
+      await tx.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, id));
+      await tx.delete(timeEntries).where(eq(timeEntries.userId, id));
+
+      // 3. Delete chat-related rows (notNull FK - must delete)
+      await tx.delete(chatMentions).where(eq(chatMentions.mentionedUserId, id));
+      await tx.delete(chatReads).where(eq(chatReads.userId, id));
+      await tx.delete(chatChannelMembers).where(eq(chatChannelMembers.userId, id));
+      await tx.delete(chatDmMembers).where(eq(chatDmMembers.userId, id));
+      await tx.delete(chatMessages).where(eq(chatMessages.authorUserId, id));
+      await tx.delete(chatExportJobs).where(eq(chatExportJobs.requestedByUserId, id));
+
+      // 4. Reassign chat channels created by this user (notNull created_by)
+      await tx.update(chatChannels).set({ createdBy: actorId }).where(eq(chatChannels.createdBy, id));
+
+      // 5. Delete comment-related rows (notNull FK)
+      await tx.delete(commentMentions).where(eq(commentMentions.mentionedUserId, id));
+      await tx.delete(comments).where(eq(comments.userId, id));
+
+      // 6. Delete activity logs (notNull actorUserId)
+      await tx.delete(activityLog).where(eq(activityLog.actorUserId, id));
+
+      // 7. Delete file-related rows
+      await tx.delete(taskAttachments).where(eq(taskAttachments.uploadedByUserId, id));
+      await tx.delete(clientNoteAttachments).where(eq(clientNoteAttachments.uploadedByUserId, id));
+      await tx.delete(clientNoteVersions).where(eq(clientNoteVersions.editorUserId, id));
+      await tx.delete(clientNotes).where(eq(clientNotes.authorUserId, id));
+      await tx.delete(clientDocuments).where(eq(clientDocuments.uploadedByUserId, id));
+
+      // 8. Delete agreement acceptances
+      await tx.delete(tenantAgreementAcceptances).where(eq(tenantAgreementAcceptances.userId, id));
+
+      // 9. Handle platform invitations (targetUserId nullable, createdByUserId notNull)
+      await tx.update(platformInvitations).set({ targetUserId: null }).where(eq(platformInvitations.targetUserId, id));
+      await tx.update(platformInvitations).set({ createdByUserId: actorId }).where(eq(platformInvitations.createdByUserId, id));
+
+      // 10. Null out nullable references (preserve data, remove user link)
+      await tx.update(tasks).set({ assigneeId: null }).where(eq(tasks.assigneeId, id));
+      await tx.update(tasks).set({ createdBy: null }).where(eq(tasks.createdBy, id));
+      await tx.update(subtasks).set({ assigneeId: null }).where(eq(subtasks.assigneeId, id));
+      await tx.update(projects).set({ createdBy: null }).where(eq(projects.createdBy, id));
+      await tx.update(sections).set({ createdBy: null }).where(eq(sections.createdBy, id));
+      await tx.update(invitations).set({ createdByUserId: null }).where(eq(invitations.createdByUserId, id));
+      await tx.update(appSettings).set({ updatedByUserId: null }).where(eq(appSettings.updatedByUserId, id));
+      await tx.update(comments).set({ resolvedByUserId: null }).where(eq(comments.resolvedByUserId, id));
+      await tx.update(clientNotes).set({ lastEditedByUserId: null }).where(eq(clientNotes.lastEditedByUserId, id));
+      await tx.update(workspaces).set({ createdBy: null }).where(eq(workspaces.createdBy, id));
+      await tx.update(schema.projectTemplates).set({ createdBy: null }).where(eq(schema.projectTemplates.createdBy, id));
+      await tx.update(tenantAgreements).set({ createdByUserId: null }).where(eq(tenantAgreements.createdByUserId, id));
+      await tx.update(errorLogs).set({ userId: null }).where(eq(errorLogs.userId, id));
+      await tx.update(platformAuditEvents).set({ actorUserId: null }).where(eq(platformAuditEvents.actorUserId, id));
+      await tx.update(platformAuditEvents).set({ targetUserId: null }).where(eq(platformAuditEvents.targetUserId, id));
+      await tx.update(passwordResetTokens).set({ createdByUserId: null }).where(eq(passwordResetTokens.createdByUserId, id));
+
+      // 11. Finally, delete the admin user
+      await tx.delete(users).where(and(eq(users.id, id), eq(users.role, UserRole.SUPER_USER)));
+    });
     
     // Record audit event (platform-level)
     await db.insert(platformAuditEvents).values({

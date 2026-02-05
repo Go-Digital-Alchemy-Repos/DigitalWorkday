@@ -469,7 +469,9 @@ export default function SuperAdminUsers() {
       setSelectedAppUser(null);
     },
     onError: (error: any) => {
-      toast({ title: error.message || "Failed to delete user", variant: "destructive" });
+      const parsed = parseApiError(error);
+      toast({ title: "Failed to delete user", description: parsed.message, variant: "destructive" });
+      setAppUserToDelete(null);
     },
   });
 
