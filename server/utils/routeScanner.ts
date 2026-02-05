@@ -55,39 +55,47 @@ const DOMAIN_MAP: Record<string, { domain: string; displayName: string }> = {
   "integrations.router.ts": { domain: "super-integrations", displayName: "Super Integrations" },
 };
 
-// Base path prefixes from routes/index.ts
+// Base path prefixes from routes/index.ts and features/*/index.ts
+// Note: These must match the actual Express router.use() mount paths
+// The main router is mounted at /api, so all paths here are relative to that
 const BASE_PATH_MAP: Record<string, string> = {
-  "timeTracking.ts": "/api/timer",
-  "superAdmin.ts": "/api/v1/super",
-  "superDebug.ts": "/api/v1/super/debug",
-  "superChat.ts": "/api/v1/super/chat",
-  "chatDebug.ts": "/api/v1/super/debug/chat",
-  "tenantOnboarding.ts": "/api/v1/tenant",
-  "tenantBilling.ts": "/api/v1/tenant",
-  "projectsDashboard.ts": "/api/v1",
-  "workloadReports.ts": "/api/v1",
-  "uploads.ts": "/api/v1/uploads",
-  "emailOutbox.ts": "/api/v1",
-  "systemStatus.ts": "/api/v1/super/status",
-  "systemIntegrations.ts": "/api/v1/system",
-  "chat.ts": "/api/v1/chat",
-  "chatRetention.ts": "/api/v1",
-  "ai.ts": "/api/v1/ai",
-  "tenancyHealth.ts": "/api",
+  // Routes in server/routes/
+  "timeTracking.ts": "/api/timer",          // router.use("/timer", timerRoutes)
+  "superAdmin.ts": "/api/v1/super",         // router.use("/v1/super", superAdminRoutes)
+  "superDebug.ts": "/api/v1/super/debug",   // router.use("/v1/super/debug", superDebugRoutes)
+  "superChat.ts": "/api/v1/super/chat",     // router.use("/v1/super/chat", superChatRoutes)
+  "chatDebug.ts": "/api/v1/super/debug/chat", // router.use("/v1/super/debug/chat", chatDebugRoutes)
+  "tenantOnboarding.ts": "/api/v1/tenant",  // router.use("/v1/tenant", tenantOnboardingRoutes)
+  "tenantBilling.ts": "/api/v1/tenant",     // router.use("/v1/tenant", tenantBillingRoutes)
+  "projectsDashboard.ts": "/api/v1",        // router.use("/v1", projectsDashboardRoutes)
+  "workloadReports.ts": "/api/v1",          // router.use("/v1", workloadReportsRoutes)
+  "uploads.ts": "/api/v1/uploads",          // router.use("/v1/uploads", uploadRoutes)
+  "emailOutbox.ts": "/api/v1",              // router.use("/v1", emailOutboxRoutes)
+  "systemStatus.ts": "/api/v1/super/status", // router.use("/v1/super/status", systemStatusRoutes)
+  "systemIntegrations.ts": "/api/v1/system", // router.use("/v1/system", systemIntegrationsRoutes)
+  "chat.ts": "/api/v1/chat",                // router.use("/v1/chat", chatRoutes)
+  "chatRetention.ts": "/api/v1",            // router.use("/v1", chatRetentionRoutes)
+  "ai.ts": "/api/v1/ai",                    // router.use("/v1/ai", aiRoutes)
+  "tenancyHealth.ts": "/api",               // router.use(tenancyHealthRoutes)
   "webhooks.ts": "/api/v1",
-  // Features - these use nested paths
-  "router.ts": "/api/v1/clients",
-  "notes.router.ts": "/api/v1/clients",
-  "documents.router.ts": "/api/v1/clients",
-  "divisions.router.ts": "/api/v1/clients",
-  "portal.router.ts": "/api/v1/clients",
-  "notifications.router.ts": "/api/v1/notifications",
-  "systemStatus.router.ts": "/api/v1/super",
-  "integrations.router.ts": "/api/v1/super",
+  // Features in server/features/
+  // features/index.ts is mounted at /api (no prefix from routes/index.ts)
+  // features/clients/index.ts: router.use("/clients", clientsRouter) -> /api/clients
+  "router.ts": "/api/clients",              // Features clients router
+  "notes.router.ts": "/api/clients",        // router.use("/clients", notesRouter)
+  "documents.router.ts": "/api/clients",    // router.use("/clients", documentsRouter)
+  "portal.router.ts": "/api/clients",       // router.use("/clients", portalRouter)
+  "divisions.router.ts": "/api/v1",         // router.use("/v1", divisionsRouter) - routes already have /clients prefix
+  "notifications.router.ts": "/api/v1/notifications", // features/notifications
+  // Routes in server/routes/super/
+  "systemStatus.router.ts": "/api/v1/super", // router.use("/v1/super", superSystemStatusRouter)
+  "integrations.router.ts": "/api/v1/super", // router.use("/v1/super", superIntegrationsRouter)
 };
 
 /**
  * Extract routes from a TypeScript file using regex
+ * Handles both single-line and multi-line route definitions
+ * Uses flexible patterns that work with various whitespace and formatting
  */
 async function extractRoutesFromFile(filePath: string): Promise<RouteDefinition[]> {
   const routes: RouteDefinition[] = [];
@@ -102,32 +110,69 @@ async function extractRoutesFromFile(filePath: string): Promise<RouteDefinition[
     const content = await fs.readFile(filePath, "utf-8");
     const lines = content.split("\n");
     
-    // Match router.get/post/patch/put/delete patterns
-    const routePattern = /router\.(get|post|patch|put|delete)\s*\(\s*["'`]([^"'`]+)["'`]/gi;
+    // Find line numbers for each match
+    const findLineNumber = (index: number): number => {
+      let charCount = 0;
+      for (let i = 0; i < lines.length; i++) {
+        charCount += lines[i].length + 1; // +1 for newline
+        if (charCount > index) return i + 1;
+      }
+      return lines.length;
+    };
     
-    for (let i = 0; i < lines.length; i++) {
-      const line = lines[i];
-      let match;
-      routePattern.lastIndex = 0;
+    // Main pattern: router.method( followed by path string anywhere (handles multi-line)
+    // Uses [\s\S]*? to match any whitespace/newlines between ( and the path
+    // The {0,100} limit prevents catastrophic backtracking
+    const routePattern = /router\.(get|post|patch|put|delete)\s*\([\s\S]{0,100}?["'`](\/[^"'`]*)["'`]/gi;
+    
+    // router.route("/path") followed by .method() (handles chaining)
+    // Uses [\s\S]*? to handle line breaks between route() and method()
+    const routeChainPattern = /router\.route\s*\(\s*["'`](\/[^"'`]*)["'`]\s*\)[\s\S]{0,50}?\.(get|post|patch|put|delete)\s*\(/gi;
+    
+    const addedRoutes = new Set<string>();
+    
+    // Process main route patterns
+    let match;
+    while ((match = routePattern.exec(content)) !== null) {
+      const method = match[1].toUpperCase();
+      const routePath = match[2];
+      const fullPath = `${basePath}${routePath}`.replace(/\/+/g, "/");
+      const routeKey = `${method}:${fullPath}`;
       
-      while ((match = routePattern.exec(line)) !== null) {
-        const method = match[1].toUpperCase();
-        let routePath = match[2];
-        
-        // Combine base path with route path
-        const fullPath = routePath.startsWith("/") 
-          ? `${basePath}${routePath}`
-          : `${basePath}/${routePath}`;
-        
+      if (!addedRoutes.has(routeKey)) {
+        addedRoutes.add(routeKey);
         routes.push({
           method,
-          path: fullPath.replace(/\/+/g, "/"), // Clean up double slashes
+          path: fullPath,
           file: path.relative(process.cwd(), filePath),
           domain: domainInfo.domain,
-          line: i + 1,
+          line: findLineNumber(match.index),
         });
       }
     }
+    
+    // Process router.route() chaining patterns
+    while ((match = routeChainPattern.exec(content)) !== null) {
+      const routePath = match[1];
+      const method = match[2].toUpperCase();
+      const fullPath = `${basePath}${routePath}`.replace(/\/+/g, "/");
+      const routeKey = `${method}:${fullPath}`;
+      
+      if (!addedRoutes.has(routeKey)) {
+        addedRoutes.add(routeKey);
+        routes.push({
+          method,
+          path: fullPath,
+          file: path.relative(process.cwd(), filePath),
+          domain: domainInfo.domain,
+          line: findLineNumber(match.index),
+        });
+      }
+    }
+    
+    // Sort routes by line number for consistent output
+    routes.sort((a, b) => a.line - b.line);
+    
   } catch (error) {
     console.error(`[routeScanner] Failed to parse ${filePath}:`, error);
   }
@@ -215,6 +260,7 @@ export function generateAutoSection(domainRoutes: DomainRoutes): string {
 
 /**
  * Merge auto-generated content with existing manual content
+ * Validates marker order and handles edge cases safely
  */
 export function mergeContent(existingContent: string, autoSection: string): string {
   const autoStartMarker = "<!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->";
@@ -224,13 +270,19 @@ export function mergeContent(existingContent: string, autoSection: string): stri
   const startIdx = existingContent.indexOf(autoStartMarker);
   const endIdx = existingContent.indexOf(autoEndMarker);
   
-  if (startIdx !== -1 && endIdx !== -1) {
-    // Replace existing auto section
+  // Validate markers are in correct order (start before end)
+  if (startIdx !== -1 && endIdx !== -1 && startIdx < endIdx) {
+    // Valid existing auto section - replace it
     const before = existingContent.substring(0, startIdx);
     const after = existingContent.substring(endIdx + autoEndMarker.length);
     return before.trimEnd() + "\n\n" + autoSection + after;
+  } else if (startIdx !== -1 || endIdx !== -1) {
+    // Malformed markers (only one present, or out of order)
+    // Log warning and append new auto section at the end
+    console.warn("[routeScanner] Malformed auto-generated section markers detected. Appending new section.");
+    return existingContent.trimEnd() + "\n\n---\n\n" + autoSection;
   } else {
-    // Append auto section at the end
+    // No existing auto section - append at the end
     return existingContent.trimEnd() + "\n\n---\n\n" + autoSection;
   }
 }
