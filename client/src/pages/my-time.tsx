@@ -328,7 +328,11 @@ export default function MyTimePage() {
       <div className="p-6">
         <Card className="border-destructive">
           <CardContent className="pt-6">
-            <p className="text-destructive">Failed to load time statistics. Please try again.</p>
+            <p className="text-destructive" data-testid="text-error-message">Failed to load time statistics. Please try again.</p>
+            <p className="text-sm text-muted-foreground mt-2" data-testid="text-error-detail">{error.message}</p>
+            <Button variant="outline" className="mt-4" onClick={() => queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] })} data-testid="button-retry-stats">
+              Retry
+            </Button>
           </CardContent>
         </Card>
       </div>

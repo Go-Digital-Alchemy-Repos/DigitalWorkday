@@ -4664,9 +4664,11 @@ export async function registerRoutes(
         },
         lastEntryId: lastEntry?.id || null,
       });
-    } catch (error) {
+    } catch (error: any) {
       console.error("Error fetching personal time stats:", error);
-      res.status(500).json({ error: "Internal server error" });
+      const pgCode = error?.code;
+      const detail = pgCode === "42703" ? `Column not found: ${error.message}` : error?.message || "Internal server error";
+      res.status(500).json({ error: detail });
     }
   });
 
