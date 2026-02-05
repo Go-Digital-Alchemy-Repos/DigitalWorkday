@@ -103,7 +103,7 @@ export type ProjectActivityItem = {
   entityTitle: string;
   metadata?: Record<string, unknown>;
 };
-import { eq, and, desc, asc, inArray, notInArray, gte, lte, gt, isNull, sql, ilike, or } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, notInArray, gte, lte, gt, isNull, isNotNull, sql, ilike, or } from "drizzle-orm";
 import { encryptValue, decryptValue } from "./lib/encryption";
 
 export interface IStorage {
