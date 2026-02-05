@@ -298,7 +298,7 @@ export class ProjectsRepository {
       ? await db.select().from(taskAssignees).where(inArray(taskAssignees.taskId, taskIds))
       : [];
 
-    const userIds = [...new Set(assignees.map(a => a.userId))];
+    const userIds = Array.from(new Set(assignees.map(a => a.userId)));
     const usersData = userIds.length > 0
       ? await db.select().from(users).where(inArray(users.id, userIds))
       : [];
