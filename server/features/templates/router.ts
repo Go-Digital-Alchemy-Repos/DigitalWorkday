@@ -36,6 +36,10 @@ const updateTemplateSchema = createTemplateSchema.partial();
 
 router.get("/", async (req, res) => {
   try {
+    if (!isAdmin(req)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
     const tenantId = getEffectiveTenantId(req);
     
     if (!tenantId) {
@@ -56,6 +60,10 @@ router.get("/", async (req, res) => {
 
 router.get("/:id", async (req, res) => {
   try {
+    if (!isAdmin(req)) {
+      return res.status(403).json({ error: "Admin access required" });
+    }
+
     const tenantId = getEffectiveTenantId(req);
     
     if (!tenantId) {

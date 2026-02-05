@@ -118,7 +118,7 @@ function TemplateEditor({
     for (const line of lines) {
       const trimmed = line.trim();
       if (trimmed.startsWith("##")) {
-        if (currentSection) {
+        if (currentSection && currentSection.tasks.length > 0) {
           newSections.push(currentSection);
         }
         currentSection = { name: trimmed.replace(/^##\s*/, ""), tasks: [] };
