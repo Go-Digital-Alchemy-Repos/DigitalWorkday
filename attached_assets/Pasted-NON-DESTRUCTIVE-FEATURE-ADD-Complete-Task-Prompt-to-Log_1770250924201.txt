@@ -1,0 +1,141 @@
+NON-DESTRUCTIVE FEATURE ADD: “Complete Task → Prompt to Log Time” (Tasks + Subtasks)
+
+GOAL
+When a user marks a Task or Subtask as Complete, the app must prompt: “Do you need to log time for this work?”
+- If user selects “No”: complete the item normally.
+- If user selects “Yes”: open a lightweight time entry form.
+  - The time entry MUST auto-assign to the Task/Subtask being completed.
+  - After saving time, the Task/Subtask completion finalizes (or if already finalized, keep it completed).
+Time logged must be available for profitability/reporting later (admins) via existing reporting/data model.
+
+NON-DESTRUCTIVE RULES
+1) Do NOT remove or break any existing features, routes, or UI flows.
+2) Do NOT change existing endpoint URLs or response shapes unless absolutely required; prefer additive changes only.
+3) Keep current styling (Inter font, existing design system / shadcn/tailwind patterns).
+4) Do not refactor unrelated code. Keep the diff limited to the completion flow + time entry creation + minimal schema changes (only if needed).
+
+STEP 1 — DISCOVERY (READ-ONLY)
+A) Identify all UI locations where a Task or Subtask can be marked complete:
+   - list row checkbox
+   - detail drawer actions
+   - subtask list items
+   - bulk actions (if present)
+B) Identify the current API endpoints used to:
+   - mark task complete
+   - mark subtask complete
+   - create time entries
+C) Identify the existing DB schema/tables for time tracking and whether time entries can reference:
+   - taskId
+   - subtaskId
+   - projectId
+   - tenantId
+   - userId
+If “taskId/subtaskId link” does not exist, propose the smallest additive schema change.
+
+STEP 2 — DATA MODEL (MINIMAL, ADDITIVE ONLY)
+If time entries already support linking to tasks/subtasks:
+- Reuse those fields.
+
+If they do NOT:
+1) Add nullable foreign keys to time entries:
+   - taskId (nullable)
+   - subtaskId (nullable)
+2) Add indexes for reporting:
+   - (tenantId, taskId)
+   - (tenantId, subtaskId)
+3) Add drizzle migration(s) only; do not touch existing data.
+4) Update shared types accordingly.
+
+Do NOT remove any old columns. Do NOT rename existing columns. Only add what is missing.
+
+STEP 3 — BACKEND (ADDITIVE SUPPORT)
+A) Ensure there is a server-side way to create a time entry that is associated to a Task/Subtask.
+- Preferred: reuse existing “create time entry” endpoint by accepting optional taskId/subtaskId in the request.
+- If validation exists, update it to allow these optional fields.
+- Enforce tenant scoping and user permissions exactly as existing time entry creation does.
+
+B) Add a small helper: “deriveTimeEntryContextFromTask”
+- If task/subtask has projectId, include it
+- Always include tenantId and userId
+- Validate that the referenced task/subtask exists and belongs to the tenant
+Return a normal response.
+
+C) Do NOT change any completion endpoints behavior yet.
+
+STEP 4 — FRONTEND UX FLOW (PRIMARY CHANGE)
+Implement a consistent UI flow for “Complete → Optional time log”:
+
+A) Create a reusable component/modal/drawer:
+Component name suggestion:
+- LogTimeOnCompleteDialog
+
+Behavior:
+1) Triggered only when user marks a task/subtask complete.
+2) Shows:
+   - Title: “Log time before completing?”
+   - Body: “Do you want to add time for {TaskName}?”
+   - Buttons: “No, mark complete” (secondary), “Yes, log time” (primary)
+3) If “No”:
+   - proceed with the existing completion API call exactly as before.
+4) If “Yes”:
+   - show an inline form (either in the same dialog step or open a small slide-over) with:
+     - Duration input (hours/minutes)
+     - Date (default today)
+     - Optional note/description
+     - Optional billable toggle ONLY if already exists in app (do not invent unless you already have it)
+     - Save button: “Save time & complete”
+     - Cancel returns to the prompt (does not complete)
+   - Auto-assign linkage:
+     - If completing Task: include taskId
+     - If completing Subtask: include subtaskId (and also taskId if your model supports both, but do not require both)
+   - On Save:
+     - call create time entry endpoint
+     - after success, call the existing completion endpoint (or if you already completed first, ensure it remains complete)
+   - Show toast on success.
+
+Important UX rules:
+- Preserve the user’s current list filters/scroll position and drawer state.
+- Avoid double submissions (disable buttons while saving).
+- Handle errors with consistent error UI; include requestId if available.
+
+B) Add an escape hatch setting:
+Add a user preference (optional if easy) “Always prompt to log time on completion” default ON.
+If preferences system exists, store it there; otherwise skip preferences and keep always-on for now.
+
+STEP 5 — ORDER OF OPERATIONS (SAFETY)
+Choose ONE of these and implement consistently:
+Option 1 (recommended):
+- Prompt first → if No: complete → done
+- If Yes: create time entry → then complete → done
+This avoids “completed without time entry” edge cases.
+
+STEP 6 — REPORTING READINESS (NO REPORTS UI YET)
+A) Confirm that time entries linked by taskId/subtaskId can be queried later by admins.
+B) Add a short note in Super Admin > App Docs:
+- “Time Logging on Completion” feature description
+- Data fields used (taskId/subtaskId)
+- How to query for profitability later
+Also update the API Registry docs for any request schema changes (optional fields added).
+
+STEP 7 — TESTS (MINIMAL)
+Add or update tests (lowest effort, highest value):
+1) Backend:
+- creating time entry with taskId succeeds if task belongs to tenant
+- rejects if taskId from another tenant
+2) Frontend (if test infra exists):
+- when user clicks complete → prompt appears
+- “No” calls completion only
+- “Yes” calls time entry then completion
+
+DELIVERABLES
+- Working prompt-to-log-time flow for both tasks and subtasks wherever completion occurs
+- Time entry reliably linked to the entity being completed
+- Docs updated in Super Admin > App Docs and API Registry
+- No breaking changes to existing routes or UI behavior outside completion interactions
+
+AFTER IMPLEMENTATION
+Return:
+1) Files changed list
+2) Endpoints touched and request fields added (if any)
+3) DB migrations added (if any)
+4) Notes on any edge cases handled (subtasks, bulk complete, offline errors)
