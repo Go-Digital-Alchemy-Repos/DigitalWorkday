@@ -293,28 +293,62 @@ function setPhase(phase: typeof startupPhase) {
 }
 
 // Enhanced /ready endpoint with phase tracking and schema status
-app.get("/ready", (_req, res) => {
+// Returns 200 only if app is fully ready (DB reachable + migrations ok)
+// Returns 503 if not ready - use /health for basic liveness check
+app.get("/ready", async (_req, res) => {
   const now = Date.now();
   const totalDuration = now - serverStartTime;
   const phaseDuration = now - startupPhaseStart;
   const uptime = process.uptime();
   
+  // Check database health if app is supposedly ready
+  let dbHealthy = false;
+  let dbError: string | undefined;
+  if (appReady) {
+    try {
+      const { checkDbHealth } = await import("./db");
+      const dbStatus = await checkDbHealth();
+      dbHealthy = dbStatus.connected;
+      if (!dbStatus.connected) {
+        dbError = dbStatus.error;
+      }
+    } catch (err: any) {
+      dbError = err?.message || String(err);
+    }
+  }
+  
+  // App is truly ready only if:
+  // 1. Startup completed successfully
+  // 2. No startup errors
+  // 3. Database is reachable
+  const schemaCheck = getLastSchemaCheck();
+  const schemaReady = schemaCheck?.isReady ?? false;
+  const isFullyReady = appReady && !startupError && dbHealthy && schemaReady;
+  
   const response: Record<string, any> = {
-    status: startupError ? "error" : appReady ? "ready" : "starting",
+    status: startupError ? "error" : isFullyReady ? "ready" : appReady ? "degraded" : "starting",
     phase: startupPhase,
     uptime: Math.round(uptime),
     startupDuration: appReady ? totalDuration : null,
     phaseDurationMs: phaseDuration,
     totalDurationMs: totalDuration,
     phaseTimings,
+    checks: {
+      startup: appReady,
+      database: dbHealthy,
+      schema: schemaReady,
+    },
   };
   
   if (startupError) {
     response.lastError = startupError.message;
   }
   
+  if (dbError) {
+    response.dbError = dbError;
+  }
+  
   // Include schema status if available (after schema phase completes)
-  const schemaCheck = getLastSchemaCheck();
   if (schemaCheck) {
     const missingTables = schemaCheck.tablesCheck.filter(t => !t.exists).map(t => t.table);
     const presentTables = schemaCheck.tablesCheck.filter(t => t.exists).map(t => t.table);
@@ -333,8 +367,9 @@ app.get("/ready", (_req, res) => {
     response.schemaReady = schemaCheck.isReady;
   }
   
-  // Always return 200 to pass health checks, status in body indicates readiness
-  res.status(200).json(response);
+  // Return 200 only if fully ready, 503 otherwise
+  // This allows Railway/Replit to use /ready as readiness probe
+  res.status(isFullyReady ? 200 : 503).json(response);
 });
 
 // Start the server IMMEDIATELY so health checks pass
