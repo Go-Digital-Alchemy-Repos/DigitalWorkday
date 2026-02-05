@@ -1,6 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, ApiError } from "@/lib/queryClient";
+import { useChatUrlState } from "@/features/chat";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { getSocket, joinChatRoom, leaveChatRoom, onConnectionChange, isSocketConnected } from "@/lib/realtime/socket";
@@ -210,6 +211,9 @@ export default function ChatPage() {
   
   // Track pending messages by tempId for reliable reconciliation
   const pendingMessagesRef = useRef<Map<string, { body: string; timestamp: number }>>(new Map());
+
+  // URL-based conversation state management (shared hook for consistency)
+  const { searchString, getConversationFromUrl, updateUrl: updateUrlForConversation } = useChatUrlState();
 
   interface TeamUser {
     id: string;
@@ -727,6 +731,51 @@ export default function ChatPage() {
     }
   }, [selectedChannel?.id, selectedDm?.id]);
 
+  // Bi-directional URL sync - react to URL changes (back/forward nav) and restore from URL
+  // Derive selection keys for proper dependency tracking
+  const selectedChannelId = selectedChannel?.id ?? null;
+  const selectedDmId = selectedDm?.id ?? null;
+  
+  useEffect(() => {
+    const urlConversation = getConversationFromUrl();
+    const currentUrlKey = urlConversation ? `${urlConversation.type}:${urlConversation.id}` : null;
+    
+    // Build current selection key
+    const currentSelectionKey = selectedChannelId 
+      ? `channel:${selectedChannelId}` 
+      : selectedDmId 
+        ? `dm:${selectedDmId}` 
+        : null;
+    
+    // If URL is empty but we have a selection, clear selection
+    if (!urlConversation) {
+      if (selectedChannelId || selectedDmId) {
+        setSelectedChannel(null);
+        setSelectedDm(null);
+      }
+      return;
+    }
+    
+    // If selection matches URL, nothing to do
+    if (currentSelectionKey === currentUrlKey) return;
+    
+    // URL-driven sync - restore selection from URL when data is available
+    if (urlConversation.type === "channel" && channels.length > 0) {
+      const channel = channels.find(c => c.id === urlConversation.id);
+      if (channel) {
+        setSelectedChannel(channel);
+        setSelectedDm(null);
+        joinChannelMutation.mutate(channel.id);
+      }
+    } else if (urlConversation.type === "dm" && dmThreads.length > 0) {
+      const dm = dmThreads.find(d => d.id === urlConversation.id);
+      if (dm) {
+        setSelectedDm(dm);
+        setSelectedChannel(null);
+      }
+    }
+  }, [channels, dmThreads, searchString, getConversationFromUrl, selectedChannelId, selectedDmId]);
+
   // Reset DM seen indicator when switching conversations
   useEffect(() => {
     setDmSeenBy(null);
@@ -1187,11 +1236,13 @@ export default function ChatPage() {
     setSelectedChannel(channel);
     setSelectedDm(null);
     joinChannelMutation.mutate(channel.id);
+    updateUrlForConversation("channel", channel.id);
   };
 
   const handleSelectDm = (dm: ChatDmThread) => {
     setSelectedDm(dm);
     setSelectedChannel(null);
+    updateUrlForConversation("dm", dm.id);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
