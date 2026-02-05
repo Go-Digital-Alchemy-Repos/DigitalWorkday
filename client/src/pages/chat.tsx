@@ -1420,12 +1420,20 @@ export default function ChatPage() {
   };
 
   // Message action handlers
-  const handleCopyMessage = (body: string) => {
-    navigator.clipboard.writeText(body);
-    toast({
-      title: "Copied to clipboard",
-      description: "Message text copied successfully.",
-    });
+  const handleCopyMessage = async (body: string) => {
+    try {
+      await navigator.clipboard.writeText(body);
+      toast({
+        title: "Copied to clipboard",
+        description: "Message text copied successfully.",
+      });
+    } catch {
+      toast({
+        title: "Copy failed",
+        description: "Could not copy text. Try selecting and copying manually.",
+        variant: "destructive",
+      });
+    }
   };
 
   const handleQuoteReply = (authorName: string, body: string) => {
@@ -1925,7 +1933,10 @@ export default function ChatPage() {
       </Dialog>
 
       {/* Create Task from Message Modal */}
-      <Dialog open={createTaskModalOpen} onOpenChange={setCreateTaskModalOpen}>
+      <Dialog open={createTaskModalOpen} onOpenChange={(open) => {
+        setCreateTaskModalOpen(open);
+        if (!open) setCreateTaskMessage(null);
+      }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Task from Message</DialogTitle>

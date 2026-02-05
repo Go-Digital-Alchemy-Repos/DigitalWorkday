@@ -1,0 +1,125 @@
+NON-DESTRUCTIVE CHAT FEATURE: Threaded Replies (Slack-Style Threads)
+
+SCOPE
+Add “threaded replies” to chat messages for both Channels and DMs.
+This should feel like Slack:
+- A message can have a thread
+- Clicking “Reply in thread” opens a right-side thread panel
+- Thread replies are scoped to the parent message
+- Main timeline shows a subtle “X replies” indicator and last reply time
+
+NON-DESTRUCTIVE RULES
+1) Do NOT change or remove existing message send/list endpoints in a breaking way.
+2) Prefer additive DB changes only if absolutely required.
+3) Preserve tenant scoping and membership checks.
+4) Keep existing chat working even if threads are not used.
+5) UI must stay consistent with existing design (Inter, shadcn/tailwind).
+
+────────────────────────────────────────────────────────
+PART A — DATA MODEL (MINIMAL, ADDITIVE)
+Goal: represent a thread as “messages with a parentMessageId”.
+
+1) Determine if messages already support threading:
+   - Check existing chat messages table/schema for parentId/threadId fields.
+2) If not present, add additive nullable column:
+   - parentMessageId (same type as messages.id), nullable, indexed
+   - (optional) rootMessageId if you prefer nesting safety, but keep it simple: one-level threads only
+3) Indexes (if missing):
+   - (tenantId, conversationId, parentMessageId, createdAt)
+   - (tenantId, conversationId, createdAt)
+
+Thread constraints:
+- Only one level deep:
+  - A thread reply cannot itself be a parent of another reply (enforce server-side).
+- Replies must be in the same conversationId and tenantId as the parent.
+
+────────────────────────────────────────────────────────
+PART B — BACKEND (ADDITIVE ENDPOINTS + SAFE EXTENSIONS)
+1) Message creation:
+   - Reuse existing “send message” endpoint if possible by allowing optional parentMessageId in request.
+   - If reusing would be risky, add additive endpoint:
+     POST /api/chat/conversations/:id/messages/thread
+     Body: { parentMessageId, content, attachments? }
+   - Validate:
+     • membership + tenant
+     • parent message exists in this conversation
+     • parentMessageId itself is not a reply (one-level rule)
+
+2) Fetch thread replies:
+   - Add endpoint:
+     GET /api/chat/messages/:messageId/thread
+     Returns:
+       - parent message DTO
+       - replies[] ordered by createdAt asc
+       - replyCount
+       - lastReplyAt
+
+3) Main timeline enhancements (additive fields)
+Option A (preferred): Add a light aggregation endpoint:
+   GET /api/chat/conversations/:id/thread-summaries?messageIds=...
+   Returns: [{ messageId, replyCount, lastReplyAt, lastReplyAuthorName? }]
+Option B: Extend message list endpoint response to include optional threadSummary:
+   threadSummary: { replyCount, lastReplyAt }
+Additive only; do not break consumers.
+
+4) Realtime
+- When a thread reply is created, emit:
+  "chat:thread:reply:created" { conversationId, parentMessageId, replyMessage }
+- Also emit normal "chat:message:created" only if your current system expects it; otherwise avoid duplicating in main timeline.
+- Ensure dedupe by messageId on client.
+
+────────────────────────────────────────────────────────
+PART C — CLIENT UI (SLACK-LIKE THREAD PANEL)
+1) Add “Reply in thread” action on each message.
+2) Implement a ThreadPanel in the right context panel area:
+   - Shows parent message at top
+   - Shows replies timeline (grouping + timestamps)
+   - Composer at bottom to send reply (parentMessageId set automatically)
+   - Shows reply count
+   - Supports deep-link:
+     /chat?c=<conversationId>&thread=<parentMessageId>
+3) In the main timeline:
+   - If replyCount > 0, show “X replies” + “Last reply <time>”
+   - Clicking opens the thread panel
+
+4) Ensure behavior:
+   - Thread panel updates in realtime when new replies arrive
+   - Switching conversations closes thread panel unless thread param still valid
+   - No scroll-jank: main timeline state preserved while thread panel open
+
+────────────────────────────────────────────────────────
+PART D — PERMISSIONS + SAFETY
+- Only conversation members can read thread replies.
+- Tenant isolation must be enforced for:
+  - thread fetch
+  - thread reply create
+- Prevent thread reply to a parent from another conversation/tenant.
+
+────────────────────────────────────────────────────────
+PART E — DOCS + TESTS (REQUIRED)
+Docs:
+- Update App Docs: “Chat: Threaded Replies”
+- Update API Registry for any new endpoints or new optional fields
+- Update socket events list
+
+Tests (minimum):
+1) Server:
+   - cannot create thread reply without membership
+   - cannot reply across tenant/conversation
+   - cannot create nested thread reply (reply to a reply)
+2) Client (if feasible):
+   - opening thread panel works and loads replies
+   - sending reply inserts immediately and updates reply count
+
+DELIVERABLES / ACCEPTANCE
+1) Users can reply in a thread from any message in Channels and DMs.
+2) Thread panel shows parent + replies and supports sending.
+3) Main timeline shows reply count and opens thread on click.
+4) No breaking changes to existing chat; threads are additive.
+5) Realtime updates do not duplicate messages.
+
+OUTPUT REQUIRED
+- files changed
+- endpoints added/extended (and confirmation they’re additive)
+- migrations added (if any)
+- known limitations (e.g., one-level threads only)
