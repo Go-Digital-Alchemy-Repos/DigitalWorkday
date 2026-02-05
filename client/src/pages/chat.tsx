@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, ApiError } from "@/lib/queryClient";
-import { useChatUrlState, ConversationListPanel, ChatMessageTimeline } from "@/features/chat";
+import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanel, ChatContextPanelToggle } from "@/features/chat";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { getSocket, joinChatRoom, leaveChatRoom, onConnectionChange, isSocketConnected } from "@/lib/realtime/socket";
@@ -203,6 +203,14 @@ export default function ChatPage() {
   const [membersDrawerOpen, setMembersDrawerOpen] = useState(false);
   const [addMemberSearchQuery, setAddMemberSearchQuery] = useState("");
   const [removeMemberConfirmUserId, setRemoveMemberConfirmUserId] = useState<string | null>(null);
+
+  // Context panel state - default open on desktop (>768px), closed on mobile
+  const [contextPanelOpen, setContextPanelOpen] = useState(() => {
+    if (typeof window !== "undefined") {
+      return window.innerWidth >= 768;
+    }
+    return true;
+  });
 
   // Start New Chat drawer state
   const [startChatDrawerOpen, setStartChatDrawerOpen] = useState(false);
@@ -1681,6 +1689,10 @@ export default function ChatPage() {
                 >
                   <Search className="h-4 w-4" />
                 </Button>
+                <ChatContextPanelToggle
+                  onClick={() => setContextPanelOpen(true)}
+                  isOpen={contextPanelOpen}
+                />
               </div>
             </div>
 
@@ -1885,6 +1897,18 @@ export default function ChatPage() {
           </div>
         )}
       </div>
+
+      {/* Context Panel - Right Side */}
+      {(selectedChannel || selectedDm) && (
+        <ChatContextPanel
+          selectedChannel={selectedChannel}
+          selectedDm={selectedDm}
+          currentUserId={user?.id}
+          channelMembers={channelMembersQuery.data || []}
+          isOpen={contextPanelOpen}
+          onToggle={() => setContextPanelOpen(false)}
+        />
+      )}
 
       <Dialog open={createChannelOpen} onOpenChange={setCreateChannelOpen}>
         <DialogContent>
