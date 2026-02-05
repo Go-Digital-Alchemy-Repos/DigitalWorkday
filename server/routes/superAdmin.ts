@@ -8177,6 +8177,7 @@ const CATEGORY_CONFIG: Record<string, { displayName: string; icon: string; order
   "15-REFERENCE": { displayName: "Reference", icon: "book", order: 15 },
   "16-CHANGELOG": { displayName: "Changelog", icon: "clock", order: 16 },
   "17-API-REGISTRY": { displayName: "API Registry", icon: "code", order: 17 },
+  "18-FUNCTIONAL-DOCS": { displayName: "Functional Docs", icon: "book-open", order: 18 },
   "00-AUDIT": { displayName: "Audit Reports", icon: "check-circle", order: 0 },
   "01-REFACTOR": { displayName: "Refactor Workflows", icon: "git-branch", order: 0.5 },
   "admin": { displayName: "Admin", icon: "settings", order: 20 },
@@ -8400,6 +8401,137 @@ router.post("/docs/sync", requireSuperUser, async (req, res) => {
   } catch (error) {
     console.error("[docs/sync] Failed to sync API docs:", error);
     res.status(500).json({ error: "Failed to sync API docs" });
+  }
+});
+
+// GET /api/v1/super/docs/coverage - Get documentation coverage dashboard data
+router.get("/docs/coverage", requireSuperUser, async (req, res) => {
+  try {
+    const API_REGISTRY_DIR = path.join(DOCS_DIR, "17-API-REGISTRY");
+    const FUNCTIONAL_DOCS_DIR = path.join(DOCS_DIR, "18-FUNCTIONAL-DOCS");
+    
+    // Scan all routes to get domains
+    const domains = await scanAllRoutes();
+    
+    // Check which domains have docs
+    const apiCoverage: Array<{
+      domain: string;
+      displayName: string;
+      endpointCount: number;
+      hasDoc: boolean;
+      docFile: string | null;
+      hasAuthNotes: boolean;
+      hasExamples: boolean;
+    }> = [];
+    
+    for (const [domainKey, domainRoutes] of domains) {
+      if (domainRoutes.routes.length === 0) continue;
+      
+      const filename = `${domainRoutes.displayName.replace(/\s+/g, "-").toUpperCase()}.md`;
+      const filepath = path.join(API_REGISTRY_DIR, filename);
+      
+      let hasDoc = false;
+      let hasAuthNotes = false;
+      let hasExamples = false;
+      
+      try {
+        const content = await fs.readFile(filepath, "utf-8");
+        hasDoc = true;
+        hasAuthNotes = content.includes("Auth Required") && !content.includes("TBD");
+        hasExamples = content.includes("```json") || content.includes("```typescript");
+      } catch (err: any) {
+        if (err.code !== "ENOENT") throw err;
+      }
+      
+      apiCoverage.push({
+        domain: domainKey,
+        displayName: domainRoutes.displayName,
+        endpointCount: domainRoutes.routes.length,
+        hasDoc,
+        docFile: hasDoc ? filename : null,
+        hasAuthNotes,
+        hasExamples,
+      });
+    }
+    
+    // Check functional docs coverage
+    const requiredFunctionalDocs = [
+      { id: "01-TENANCY-MODEL", name: "Tenancy Model" },
+      { id: "02-AUTH-AND-ROLES", name: "Auth & Roles" },
+      { id: "03-BILLING-AND-SUBSCRIPTIONS", name: "Billing & Subscriptions" },
+      { id: "04-TIME-TRACKING", name: "Time Tracking" },
+      { id: "05-PROJECTS-AND-TASKS", name: "Projects & Tasks" },
+      { id: "06-NOTIFICATIONS", name: "Notifications" },
+      { id: "07-UPLOADS-AND-FILES", name: "Uploads & Files" },
+      { id: "08-AUDIT-LOGGING", name: "Audit Logging" },
+    ];
+    
+    const functionalCoverage: Array<{
+      id: string;
+      name: string;
+      exists: boolean;
+      isEmpty: boolean;
+      wordCount: number;
+    }> = [];
+    
+    for (const doc of requiredFunctionalDocs) {
+      const filepath = path.join(FUNCTIONAL_DOCS_DIR, `${doc.id}.md`);
+      let exists = false;
+      let isEmpty = true;
+      let wordCount = 0;
+      
+      try {
+        const content = await fs.readFile(filepath, "utf-8");
+        exists = true;
+        wordCount = content.split(/\s+/).length;
+        isEmpty = wordCount < 100; // Less than 100 words = essentially empty
+      } catch (err: any) {
+        if (err.code !== "ENOENT") throw err;
+      }
+      
+      functionalCoverage.push({
+        id: doc.id,
+        name: doc.name,
+        exists,
+        isEmpty,
+        wordCount,
+      });
+    }
+    
+    // Calculate summary stats
+    const apiDocsTotal = apiCoverage.length;
+    const apiDocsWithDocs = apiCoverage.filter(d => d.hasDoc).length;
+    const apiDocsWithAuth = apiCoverage.filter(d => d.hasAuthNotes).length;
+    const apiDocsWithExamples = apiCoverage.filter(d => d.hasExamples).length;
+    const totalEndpoints = apiCoverage.reduce((sum, d) => sum + d.endpointCount, 0);
+    
+    const funcDocsTotal = functionalCoverage.length;
+    const funcDocsExists = functionalCoverage.filter(d => d.exists).length;
+    const funcDocsComplete = functionalCoverage.filter(d => d.exists && !d.isEmpty).length;
+    
+    res.json({
+      api: {
+        total: apiDocsTotal,
+        withDocs: apiDocsWithDocs,
+        withAuth: apiDocsWithAuth,
+        withExamples: apiDocsWithExamples,
+        totalEndpoints,
+        coverage: apiCoverage,
+      },
+      functional: {
+        total: funcDocsTotal,
+        exists: funcDocsExists,
+        complete: funcDocsComplete,
+        coverage: functionalCoverage,
+      },
+      summary: {
+        apiCoveragePercent: apiDocsTotal > 0 ? Math.round((apiDocsWithDocs / apiDocsTotal) * 100) : 0,
+        functionalCoveragePercent: funcDocsTotal > 0 ? Math.round((funcDocsComplete / funcDocsTotal) * 100) : 0,
+      },
+    });
+  } catch (error) {
+    console.error("[docs/coverage] Failed to get coverage:", error);
+    res.status(500).json({ error: "Failed to get documentation coverage" });
   }
 });
 
