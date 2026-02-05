@@ -1,0 +1,158 @@
+NON-DESTRUCTIVE UI STANDARDIZATION: Rich Text Editor Everywhere + Global @Mentions (Tasks, Subtasks, Comments, Chat, Notes)
+
+GOAL
+Standardize text input UX across the entire app:
+1) Any multi-line “Description / Notes / Comment / Message” field uses ONE consistent Rich Text Editor (RTE)
+2) RTE must support:
+   - Bold, Italic
+   - Bulleted list, Numbered list
+   - Alignment (left/center/right)
+   - Paragraph formatting
+   - “Code block / Paste code” (monospace, preserves whitespace; no auto-format)
+3) @mentions must work consistently in all supported RTE fields:
+   - typing “@” shows tenant users
+   - typing “@mike” filters to matching users
+   - selecting inserts a mention token
+   - mentioned users are correctly persisted and (where applicable) notified
+4) Fix current mention failures specifically:
+   - In task/subtask comment fields, typing “@mike” does not load suggestions or tag the user
+   - This must be corrected as part of global mention standardization
+
+STRICT NON-DESTRUCTIVE RULES
+1) Do NOT break existing forms or remove data.
+2) Do NOT change existing endpoint URLs or response shapes in a breaking way; additive only.
+3) Do NOT change database schema unless additive and required for mention persistence.
+4) Maintain tenant scoping and RBAC (mention search must never cross tenants).
+5) Preserve existing styling (Inter, existing Tailwind/shadcn patterns).
+6) Convert fields incrementally and safely with feature flags if needed.
+
+────────────────────────────────────────────────────────
+PHASE 0 — INVENTORY (DOC FIRST, NO UI CHANGES YET)
+1) Locate all multi-line text fields across the app, including:
+   - Task description
+   - Subtask description
+   - Task/Subtask comments
+   - Project notes/description
+   - Client notes/description
+   - Chat composer and message display (if rich text desired)
+   - Any admin “notes” or documentation editors
+
+2) Create /docs/UX/RTE_STANDARDIZATION_PLAN.md with:
+   - list of fields + file paths + current component used (textarea, custom editor, etc.)
+   - whether field requires:
+     a) rich formatting only
+     b) rich formatting + @mentions
+     c) code block support
+   - migration approach and order (start with comments + chat + task descriptions)
+
+Do not implement changes until this plan doc exists.
+
+────────────────────────────────────────────────────────
+PHASE 1 — CHOOSE AND IMPLEMENT ONE RICH TEXT EDITOR (CORE COMPONENT)
+1) Standardize on a single editor library:
+   - Use TipTap (recommended) with extensions:
+     StarterKit, Bold, Italic, BulletList, OrderedList, ListItem,
+     Paragraph, TextAlign, History/Undo, CodeBlock (or CodeBlockLowlight),
+     Placeholder
+   - Do not introduce multiple competing editors.
+
+2) Build a reusable component:
+   components/rich-text/RichTextEditor.tsx
+   Props:
+   - value (stored format)
+   - onChange
+   - placeholder
+   - enableMentions (boolean)
+   - enableCodeBlock (boolean)
+   - readOnly (boolean)
+   - minHeight / className
+
+3) Toolbar requirements:
+   - Bold / Italic
+   - Bullet list / Numbered list
+   - Alignment controls (left/center/right)
+   - Code block / “Paste code” button:
+     - Inserts a code block node and focuses it
+     - Pastes plain text without converting to bullets/quotes
+   - (Optional) Clear formatting
+
+4) Storage format:
+   - Use a consistent format across app (choose ONE):
+     A) HTML (simple, common)
+     B) JSON (TipTap doc JSON)
+   - Do NOT wipe existing plain-text data:
+     - If field already stored as plain text, display it safely in editor and save in new format going forward.
+     - Implement backward-compatible rendering:
+       if stored value looks like plain text, treat as plain paragraph; if HTML/JSON, render accordingly.
+
+────────────────────────────────────────────────────────
+PHASE 2 — GLOBAL @MENTIONS SYSTEM (REUSABLE + CONSISTENT)
+1) Server: Ensure a single tenant-scoped mention search endpoint exists:
+   GET /api/mentions/users?query=
+   - returns: [{ id, name, email?, avatarUrl? }]
+   - limited to tenant and visible users per RBAC
+   - returns default list when query empty after "@"
+
+2) Client: Implement reusable mention support for the RichTextEditor:
+   - TipTap Mention extension (preferred):
+     - trigger: "@"
+     - dropdown list UI
+     - filter by query string
+     - select inserts mention node with userId + label
+   - If TipTap mention extension is not feasible, implement an equivalent approach:
+     - still must provide dropdown + filtering + insertion + metadata persistence
+
+3) Fix mention bug explicitly:
+   - Ensure task/subtask comment editor uses the standardized RichTextEditor with enableMentions=true
+   - Confirm “@mike” triggers suggestions and selecting a user inserts a mention token.
+
+4) Mention persistence:
+   - Comments and chat messages must retain mention metadata so they render correctly later.
+   - If you already store mentions in metadata or a mention table, reuse it.
+   - If not, add additive support:
+     - store mention nodes inside editor value (preferred), and/or
+     - store extracted mentions array alongside message/comment (additive field) for notifications
+
+5) Notifications (where applicable):
+   - For comments (tasks/subtasks) and chat:
+     - on save, extract mentioned userIds and create mention notifications (existing notifications system)
+     - optional email preference support if already implemented; if not, leave email as TODO (do not expand scope)
+
+────────────────────────────────────────────────────────
+PHASE 3 — INCREMENTAL REPLACEMENT (SAFE ROLLOUT ORDER)
+Replace multi-line textareas with RichTextEditor in this order:
+1) Task/Subtask Comments (most urgent, fixes @mike issue)
+2) Chat composer (enableMentions=true, enableCodeBlock=true)
+3) Task Description + Subtask Description (enableMentions=true, enableCodeBlock=true)
+4) Project/Client notes/description fields
+5) Any admin notes areas where multi-line text exists
+
+Rules per replacement:
+- preserve existing labels, validation, and submit flows
+- ensure form submission still works and the backend receives a compatible payload
+- if backend expects plain text today:
+  - send both:
+    a) richContent (html/json) additive field OR same field if safe
+    b) plainText (derived) for backward compatibility/search
+  - do not break old endpoints
+
+────────────────────────────────────────────────────────
+PHASE 4 — DISPLAY RENDERING STANDARDIZATION
+1) Create a single renderer for read-only views:
+   components/rich-text/RichTextRenderer.tsx
+   - safely renders stored HTML/JSON
+   - supports mention styling and code block formatting
+   - prevents XSS (sanitize HTML if using HTML storage)
+
+2) Update comment/message display to use RichTextRenderer for consistent formatting.
+
+────────────────────────────────────────────────────────
+PHASE 5 — QA + TESTS (MINIMUM)
+1) Manual verification checklist (must complete):
+   - In task comments: type “@mike” → dropdown appears → select user → mention inserted → save → renders mention
+   - Same for subtask comments
+   - Bold/italic/lists/alignment work
+   - Code block works and preserves whitespace
+   - Existing plain text content still displays correctly and can be edited
+
+2) Automat
