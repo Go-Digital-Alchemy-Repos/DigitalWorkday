@@ -125,6 +125,123 @@ router.get("/crm/clients/:clientId/summary", requireAuth, async (req: Request, r
   }
 });
 
+router.get("/crm/clients/:clientId/metrics", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+    if (!isAdminOrSuper(req)) return sendError(res, AppError.forbidden("Admin access required"), req);
+
+    const { clientId } = req.params;
+    const client = await verifyClientTenancy(clientId, tenantId);
+    if (!client) return sendError(res, AppError.notFound("Client"), req);
+
+    const { from, to } = req.query;
+    const dateConditions = [];
+    if (from) {
+      const d = new Date(from as string);
+      if (!isNaN(d.getTime())) dateConditions.push(gte(timeEntries.startTime, d));
+    }
+    if (to) {
+      const d = new Date(to as string);
+      if (!isNaN(d.getTime())) dateConditions.push(lte(timeEntries.startTime, d));
+    }
+
+    const clientEntriesFilter = sql`(
+      ${timeEntries.projectId} IN (SELECT id FROM projects WHERE client_id = ${clientId} AND tenant_id = ${tenantId})
+      OR ${timeEntries.clientId} = ${clientId}
+    )`;
+    const baseConditions = [
+      eq(timeEntries.tenantId, tenantId),
+      clientEntriesFilter,
+      ...dateConditions,
+    ];
+
+    const [totals] = await db.select({
+      totalHours: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}) / 3600.0, 0)`,
+      billableHours: sql<number>`COALESCE(SUM(CASE WHEN ${timeEntries.scope} = 'in_scope' THEN ${timeEntries.durationSeconds} ELSE 0 END) / 3600.0, 0)`,
+      totalTimeEntries: count(),
+    })
+      .from(timeEntries)
+      .where(and(...baseConditions));
+
+    const hoursByProject = await db.select({
+      projectId: projects.id,
+      projectName: projects.name,
+      totalHours: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}) / 3600.0, 0)`,
+      billableHours: sql<number>`COALESCE(SUM(CASE WHEN ${timeEntries.scope} = 'in_scope' THEN ${timeEntries.durationSeconds} ELSE 0 END) / 3600.0, 0)`,
+      entryCount: count(),
+    })
+      .from(timeEntries)
+      .innerJoin(projects, eq(timeEntries.projectId, projects.id))
+      .where(and(...baseConditions))
+      .groupBy(projects.id, projects.name)
+      .orderBy(sql`SUM(${timeEntries.durationSeconds}) DESC`);
+
+    const hoursByEmployee = await db.select({
+      userId: users.id,
+      userName: sql<string>`COALESCE(${users.name}, ${users.email})`,
+      totalHours: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}) / 3600.0, 0)`,
+      billableHours: sql<number>`COALESCE(SUM(CASE WHEN ${timeEntries.scope} = 'in_scope' THEN ${timeEntries.durationSeconds} ELSE 0 END) / 3600.0, 0)`,
+      entryCount: count(),
+    })
+      .from(timeEntries)
+      .innerJoin(users, eq(timeEntries.userId, users.id))
+      .where(and(...baseConditions))
+      .groupBy(users.id, users.name, users.email)
+      .orderBy(sql`SUM(${timeEntries.durationSeconds}) DESC`);
+
+    const recentEntries = await db.select({
+      id: timeEntries.id,
+      title: timeEntries.title,
+      scope: timeEntries.scope,
+      startTime: timeEntries.startTime,
+      endTime: timeEntries.endTime,
+      durationSeconds: timeEntries.durationSeconds,
+      projectName: projects.name,
+      userName: sql<string>`COALESCE(${users.name}, ${users.email})`,
+    })
+      .from(timeEntries)
+      .leftJoin(projects, eq(timeEntries.projectId, projects.id))
+      .leftJoin(users, eq(timeEntries.userId, users.id))
+      .where(and(...baseConditions))
+      .orderBy(desc(timeEntries.startTime))
+      .limit(100);
+
+    res.json({
+      totalHours: Number(totals?.totalHours ?? 0),
+      billableHours: Number(totals?.billableHours ?? 0),
+      totalTimeEntries: Number(totals?.totalTimeEntries ?? 0),
+      revenueEstimate: null,
+      hoursByProject: hoursByProject.map(r => ({
+        projectId: r.projectId,
+        projectName: r.projectName,
+        totalHours: Number(r.totalHours),
+        billableHours: Number(r.billableHours),
+        entryCount: Number(r.entryCount),
+      })),
+      hoursByEmployee: hoursByEmployee.map(r => ({
+        userId: r.userId,
+        userName: r.userName,
+        totalHours: Number(r.totalHours),
+        billableHours: Number(r.billableHours),
+        entryCount: Number(r.entryCount),
+      })),
+      recentEntries: recentEntries.map(r => ({
+        id: r.id,
+        title: r.title,
+        scope: r.scope,
+        startTime: r.startTime,
+        endTime: r.endTime,
+        durationSeconds: r.durationSeconds,
+        projectName: r.projectName,
+        userName: r.userName,
+      })),
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/clients/:clientId/metrics", req);
+  }
+});
+
 router.get("/crm/clients/:clientId/contacts", requireAuth, async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);

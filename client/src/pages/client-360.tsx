@@ -86,6 +86,7 @@ import {
 import { RichTextEditor, RichTextViewer } from "@/components/ui/rich-text-editor";
 import { RequestApprovalDialog } from "@/components/request-approval-dialog";
 import { ClipboardCheck } from "lucide-react";
+import { ClientReportsTab } from "@/components/client-reports-tab";
 
 interface CrmSummary {
   client: {
@@ -1709,11 +1710,7 @@ export default function Client360Page() {
             </TabsContent>
 
             <TabsContent value="reports" className="p-6">
-              <PlaceholderTab
-                icon={<BarChart3 className="h-10 w-10" />}
-                title="Reports"
-                description="View analytics and reports for this client. Coming soon."
-              />
+              <ClientReportsTab clientId={clientId || ""} />
             </TabsContent>
 
             {crmFlags.approvals && (
