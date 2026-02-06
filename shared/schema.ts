@@ -2919,3 +2919,46 @@ export type UpdateClientFile = z.infer<typeof updateClientFileSchema>;
 // User Client Access Types
 export type UserClientAccess = typeof userClientAccess.$inferSelect;
 export type InsertUserClientAccess = z.infer<typeof insertUserClientAccessSchema>;
+
+// ============================================================
+// Approval Requests
+// ============================================================
+export const approvalRequests = pgTable("approval_requests", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  projectId: varchar("project_id").references(() => projects.id),
+  taskId: varchar("task_id").references(() => tasks.id),
+  requestedByUserId: varchar("requested_by_user_id").references(() => users.id).notNull(),
+  title: text("title").notNull(),
+  instructions: text("instructions"),
+  status: text("status").notNull().default("pending"),
+  responseComment: text("response_comment"),
+  respondedByName: text("responded_by_name"),
+  respondedAt: timestamp("responded_at"),
+  dueAt: timestamp("due_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("approval_requests_tenant_idx").on(table.tenantId),
+  index("approval_requests_client_idx").on(table.clientId),
+  index("approval_requests_status_idx").on(table.status),
+]);
+
+export const insertApprovalRequestSchema = createInsertSchema(approvalRequests).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  responseComment: true,
+  respondedByName: true,
+  respondedAt: true,
+});
+
+export const updateApprovalStatusSchema = z.object({
+  status: z.enum(["approved", "changes_requested"]),
+  responseComment: z.string().optional(),
+});
+
+export type ApprovalRequest = typeof approvalRequests.$inferSelect;
+export type InsertApprovalRequest = z.infer<typeof insertApprovalRequestSchema>;
+export type UpdateApprovalStatus = z.infer<typeof updateApprovalStatusSchema>;

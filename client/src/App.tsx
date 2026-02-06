@@ -57,6 +57,7 @@ import ClientPortalDashboard from "@/pages/client-portal-dashboard";
 import ClientPortalProjects from "@/pages/client-portal-projects";
 import ClientPortalTasks from "@/pages/client-portal-tasks";
 import ClientPortalProjectDetail from "@/pages/client-portal-project-detail";
+import ClientPortalApprovals from "@/pages/client-portal-approvals";
 import { ClientPortalSidebar } from "@/components/client-portal-sidebar";
 import { ClientPortalMobileNav } from "@/components/client-portal-mobile-nav";
 import { Loader2, MessageCircle, MoreVertical, Moon, Sun } from "lucide-react";
@@ -211,6 +212,9 @@ function ClientPortalRouter() {
       </Route>
       <Route path="/portal/tasks">
         {() => <ClientPortalRouteGuard component={ClientPortalTasks} />}
+      </Route>
+      <Route path="/portal/approvals">
+        {() => <ClientPortalRouteGuard component={ClientPortalApprovals} />}
       </Route>
       <Route path="/portal/chat">
         {() => <ClientPortalRouteGuard component={ChatPage} />}

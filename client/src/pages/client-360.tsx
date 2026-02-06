@@ -84,6 +84,8 @@ import {
   Briefcase,
 } from "lucide-react";
 import { RichTextEditor, RichTextViewer } from "@/components/ui/rich-text-editor";
+import { RequestApprovalDialog } from "@/components/request-approval-dialog";
+import { ClipboardCheck } from "lucide-react";
 
 interface CrmSummary {
   client: {
@@ -160,6 +162,7 @@ const CRM_STATUS_MAP: Record<string, { label: string; variant: "default" | "seco
 
 function OverviewTab({ clientId, summary, isLoading, onNavigateTab }: { clientId: string; summary?: CrmSummary; isLoading: boolean; onNavigateTab: (tab: string) => void }) {
   const crmFlags = useCrmFlags();
+  const [showApprovalDialog, setShowApprovalDialog] = useState(false);
 
   if (isLoading) {
     return (
@@ -292,9 +295,23 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab }: { clientId
                 Upload File
               </Button>
             )}
+            {crmFlags.approvals && (
+              <Button variant="outline" size="sm" onClick={() => setShowApprovalDialog(true)} data-testid="button-quick-request-approval">
+                <ClipboardCheck className="h-4 w-4 mr-2" />
+                Request Approval
+              </Button>
+            )}
           </div>
         </CardContent>
       </Card>
+
+      {showApprovalDialog && (
+        <RequestApprovalDialog
+          open={showApprovalDialog}
+          onOpenChange={setShowApprovalDialog}
+          clientId={clientId}
+        />
+      )}
 
       {summary.crm?.followUpNotes && (
         <Card>
@@ -1183,6 +1200,103 @@ function FilesTab({ clientId }: { clientId: string }) {
   );
 }
 
+interface ApprovalItem {
+  id: string;
+  title: string;
+  instructions: string | null;
+  status: string;
+  responseComment: string | null;
+  respondedByName: string | null;
+  respondedAt: string | null;
+  dueAt: string | null;
+  createdAt: string;
+  requesterName: string;
+}
+
+function ApprovalsTab({ clientId }: { clientId: string }) {
+  const [showApprovalDialog, setShowApprovalDialog] = useState(false);
+  const { data: approvals = [], isLoading } = useQuery<ApprovalItem[]>({
+    queryKey: ["/api/crm/clients", clientId, "approvals"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/crm/clients/${clientId}/approvals`);
+      return res.json();
+    },
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[1, 2, 3].map((i) => <Skeleton key={i} className="h-20" />)}
+      </div>
+    );
+  }
+
+  const statusIcon = (status: string) => {
+    switch (status) {
+      case "approved": return <CheckCircle2 className="h-4 w-4 text-green-500" />;
+      case "changes_requested": return <AlertCircle className="h-4 w-4 text-destructive" />;
+      default: return <Clock className="h-4 w-4 text-muted-foreground" />;
+    }
+  };
+
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <h3 className="font-medium text-sm text-muted-foreground">{approvals.length} approval request{approvals.length !== 1 ? "s" : ""}</h3>
+        <Button size="sm" onClick={() => setShowApprovalDialog(true)} data-testid="button-new-approval">
+          <Plus className="h-4 w-4 mr-1" />
+          New Request
+        </Button>
+      </div>
+
+      {approvals.length === 0 ? (
+        <EmptyState
+          icon={<ClipboardCheck className="h-10 w-10" />}
+          title="No Approval Requests"
+          description="Send approval requests to this client for review."
+          size="md"
+        />
+      ) : (
+        <div className="space-y-2">
+          {approvals.map((a) => (
+            <Card key={a.id} data-testid={`approval-item-${a.id}`}>
+              <CardContent className="p-4">
+                <div className="flex items-start gap-3">
+                  <div className="mt-0.5">{statusIcon(a.status)}</div>
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center gap-2 flex-wrap mb-1">
+                      <span className="font-medium text-sm">{a.title}</span>
+                      <Badge variant={a.status === "approved" ? "default" : a.status === "changes_requested" ? "destructive" : "outline"} className="text-xs">
+                        {a.status === "changes_requested" ? "Changes Requested" : a.status.charAt(0).toUpperCase() + a.status.slice(1)}
+                      </Badge>
+                    </div>
+                    <div className="flex items-center gap-3 text-xs text-muted-foreground flex-wrap">
+                      <span>By {a.requesterName}</span>
+                      <span>{formatDistanceToNow(new Date(a.createdAt), { addSuffix: true })}</span>
+                      {a.dueAt && <span>Due {format(new Date(a.dueAt), "MMM d")}</span>}
+                    </div>
+                    {a.responseComment && (
+                      <p className="text-xs text-muted-foreground mt-2 border-l-2 border-border pl-2">
+                        {a.responseComment}
+                      </p>
+                    )}
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      <RequestApprovalDialog
+        open={showApprovalDialog}
+        onOpenChange={setShowApprovalDialog}
+        clientId={clientId}
+      />
+    </div>
+  );
+}
+
 function PlaceholderTab({ icon, title, description }: { icon: React.ReactNode; title: string; description: string }) {
   return (
     <EmptyState
@@ -1313,6 +1427,12 @@ export default function Client360Page() {
                   <BarChart3 className="h-4 w-4 mr-1.5" />
                   Reports
                 </TabsTrigger>
+                {crmFlags.approvals && (
+                  <TabsTrigger value="approvals" data-testid="tab-360-approvals">
+                    <ClipboardCheck className="h-4 w-4 mr-1.5" />
+                    Approvals
+                  </TabsTrigger>
+                )}
               </TabsList>
             </div>
 
@@ -1351,6 +1471,12 @@ export default function Client360Page() {
                 description="View analytics and reports for this client. Coming soon."
               />
             </TabsContent>
+
+            {crmFlags.approvals && (
+              <TabsContent value="approvals" className="p-6">
+                <ApprovalsTab clientId={clientId || ""} />
+              </TabsContent>
+            )}
           </Tabs>
         </div>
       </div>

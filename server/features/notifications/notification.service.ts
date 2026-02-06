@@ -14,7 +14,8 @@ type NotificationType =
   | "project_update"
   | "project_member_added"
   | "task_status_changed"
-  | "crm_followup_due";
+  | "crm_followup_due"
+  | "approval_response";
 
 interface NotificationContext {
   tenantId: string | null;
@@ -56,6 +57,7 @@ async function shouldNotifyUser(userId: string, type: NotificationType): Promise
       project_member_added: "projectMemberAdded",
       task_status_changed: "taskStatusChanged",
       crm_followup_due: null,
+      approval_response: null,
     };
     const field = typeToField[type];
     if (!field) return true;
@@ -396,6 +398,25 @@ export async function checkFollowUpsDue(): Promise<void> {
 }
 
 let followUpCheckerInterval: NodeJS.Timeout | null = null;
+
+export async function notifyApprovalResponse(
+  requestedByUserId: string,
+  approvalId: string,
+  approvalTitle: string,
+  status: string,
+  respondedByName: string,
+  context: NotificationContext
+): Promise<void> {
+  const statusLabel = status === "approved" ? "Approved" : "Changes Requested";
+  await createAndEmitNotification(
+    requestedByUserId,
+    "approval_response",
+    `Approval ${statusLabel}: ${approvalTitle}`,
+    `${respondedByName} ${status === "approved" ? "approved" : "requested changes on"} "${approvalTitle}"`,
+    { approvalId, status },
+    context
+  );
+}
 
 export function startFollowUpChecker(): void {
   if (followUpCheckerInterval) {

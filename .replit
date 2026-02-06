@@ -62,3 +62,6 @@ AUTO_MIGRATE = "true"
 APP_ENCRYPTION_KEY = "7daNCify1MZK5HwLNw+ajASnFnSStKbgOgVmkJIWRFY="
 SKIP_PARITY_CHECK = "true"
 NODE_ENV = "production"
+
+[userenv.shared]
+CRM_APPROVALS_ENABLED = "true"
