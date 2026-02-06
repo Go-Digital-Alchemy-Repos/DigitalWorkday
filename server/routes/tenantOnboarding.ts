@@ -16,13 +16,15 @@
  * - POST /api/v1/tenant/integrations/:provider/test - Test integration
  */
 
-import { Router } from "express";
+import { Router, Request, Response, NextFunction } from "express";
 import crypto from "crypto";
 import { storage } from "../storage";
 import { z } from "zod";
 import { db } from "../db";
 import { tenants, TenantStatus, UserRole } from "@shared/schema";
 import { eq } from "drizzle-orm";
+import { requireAuth } from "../auth";
+import { getEffectiveTenantId } from "../middleware/tenantContext";
 import { tenantIntegrationService, IntegrationProvider } from "../services/tenantIntegrations";
 import multer from "multer";
 import { validateBrandAsset, generateBrandAssetKey, uploadToS3, isS3Configured, getMimeType } from "../s3";
@@ -34,32 +36,6 @@ const upload = multer({
 });
 
 const router = Router();
-
-// Middleware to ensure user is authenticated
-function requireAuth(req: any, res: any, next: any) {
-  if (!req.isAuthenticated() || !req.user) {
-    const requestId = req.requestId || "unknown";
-    return res.status(401).json({ 
-      error: {
-        code: "UNAUTHORIZED",
-        message: "Authentication required",
-        status: 401,
-        requestId,
-      },
-      message: "Authentication required",
-      code: "UNAUTHORIZED",
-    });
-  }
-  next();
-}
-
-// Helper to get effective tenant ID - uses central tenant context from middleware
-// The tenantContextMiddleware in server/middleware/tenantContext.ts validates X-Tenant-Id
-// for super users, ensuring tenant existence before setting req.tenant.effectiveTenantId
-function getEffectiveTenantId(req: any): string | null {
-  // Use the validated tenant context from middleware (set by tenantContextMiddleware)
-  return req.tenant?.effectiveTenantId || null;
-}
 
 // Middleware to ensure user is tenant admin (supports super_user with X-Tenant-Id)
 function requireTenantAdmin(req: any, res: any, next: any) {

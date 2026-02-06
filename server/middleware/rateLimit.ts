@@ -234,6 +234,72 @@ export const uploadRateLimiter = rateLimit({
   },
 });
 
+const RATE_LIMIT_INVITE_CREATE_WINDOW_MS = parseInt(process.env.RATE_LIMIT_INVITE_CREATE_WINDOW_MS || "60000", 10);
+const RATE_LIMIT_INVITE_CREATE_MAX_IP = parseInt(process.env.RATE_LIMIT_INVITE_CREATE_MAX_IP || "20", 10);
+
+export const inviteCreateRateLimiter = rateLimit({
+  windowMs: RATE_LIMIT_INVITE_CREATE_WINDOW_MS,
+  max: RATE_LIMIT_INVITE_CREATE_MAX_IP,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: shouldSkipRateLimit,
+  handler: (_req, res) => {
+    const requestId = generateRequestId();
+    res.status(429).json({
+      ok: false,
+      error: {
+        code: "RATE_LIMITED",
+        message: "Too many invite requests. Please try again later.",
+        requestId,
+      },
+    });
+  },
+});
+
+const RATE_LIMIT_USER_CREATE_WINDOW_MS = parseInt(process.env.RATE_LIMIT_USER_CREATE_WINDOW_MS || "60000", 10);
+const RATE_LIMIT_USER_CREATE_MAX_IP = parseInt(process.env.RATE_LIMIT_USER_CREATE_MAX_IP || "10", 10);
+
+export const userCreateRateLimiter = rateLimit({
+  windowMs: RATE_LIMIT_USER_CREATE_WINDOW_MS,
+  max: RATE_LIMIT_USER_CREATE_MAX_IP,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: shouldSkipRateLimit,
+  handler: (_req, res) => {
+    const requestId = generateRequestId();
+    res.status(429).json({
+      ok: false,
+      error: {
+        code: "RATE_LIMITED",
+        message: "Too many user creation requests. Please try again later.",
+        requestId,
+      },
+    });
+  },
+});
+
+const RATE_LIMIT_CHAT_SEND_WINDOW_MS = parseInt(process.env.RATE_LIMIT_CHAT_SEND_WINDOW_MS || "10000", 10);
+const RATE_LIMIT_CHAT_SEND_MAX_IP = parseInt(process.env.RATE_LIMIT_CHAT_SEND_MAX_IP || "30", 10);
+
+export const chatSendRateLimiter = rateLimit({
+  windowMs: RATE_LIMIT_CHAT_SEND_WINDOW_MS,
+  max: RATE_LIMIT_CHAT_SEND_MAX_IP,
+  standardHeaders: true,
+  legacyHeaders: false,
+  skip: shouldSkipRateLimit,
+  handler: (_req, res) => {
+    const requestId = generateRequestId();
+    res.status(429).json({
+      ok: false,
+      error: {
+        code: "RATE_LIMITED",
+        message: "Too many messages. Please slow down.",
+        requestId,
+      },
+    });
+  },
+});
+
 export function resetRateLimitStores(): void {
   emailStore.clear();
 }

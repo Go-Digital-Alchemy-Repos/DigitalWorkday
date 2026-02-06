@@ -9,6 +9,7 @@ import { getEffectiveTenantId } from "../middleware/tenantContext";
 import { asyncHandler } from "../middleware/asyncHandler";
 import { validateBody } from "../middleware/validate";
 import { AppError } from "../lib/errors";
+import { chatSendRateLimiter } from "../middleware/rateLimit";
 import { emitToTenant, emitToChatChannel, emitToChatDm } from "../realtime/socket";
 import { CHAT_EVENTS } from "@shared/events";
 import { getStorageProvider, createS3ClientFromConfig, StorageNotConfiguredError } from "../storage/getStorageProvider";
@@ -364,6 +365,7 @@ router.get(
 
 router.post(
   "/channels/:channelId/messages",
+  chatSendRateLimiter,
   validateBody(sendMessageSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const tenantId = getCurrentTenantId(req);
@@ -709,6 +711,7 @@ router.get(
 
 router.post(
   "/dm/:dmId/messages",
+  chatSendRateLimiter,
   validateBody(sendMessageSchema),
   asyncHandler(async (req: Request, res: Response) => {
     const tenantId = getCurrentTenantId(req);

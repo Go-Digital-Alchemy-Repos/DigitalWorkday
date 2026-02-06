@@ -1,6 +1,7 @@
 import { Router, Request, Response, NextFunction } from "express";
 import { z } from "zod";
 import { getCurrentUserId } from "../middleware/authContext";
+import { requireAuth } from "../auth";
 import { 
   isAIEnabled,
   getAIConfigStatus,
@@ -10,15 +11,6 @@ import {
 } from "../services/ai/aiService";
 
 const router = Router();
-
-function requireAuth(req: Request, res: Response, next: NextFunction) {
-  try {
-    getCurrentUserId(req);
-    next();
-  } catch (error) {
-    res.status(401).json({ error: "Authentication required" });
-  }
-}
 
 router.get("/status", requireAuth, async (req, res) => {
   try {

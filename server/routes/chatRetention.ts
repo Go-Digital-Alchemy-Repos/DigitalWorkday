@@ -10,19 +10,13 @@ import {
   tenants
 } from "@shared/schema";
 import { eq, and, lt, isNull, sql } from "drizzle-orm";
+import { requireAuth } from "../auth";
 import { requireSuperUser, requireTenantContext } from "../middleware/tenantContext";
 import { getStorageProvider, createS3ClientFromConfig, StorageNotConfiguredError } from "../storage/getStorageProvider";
 import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const router = Router();
-
-const requireAuth = (req: Request, res: Response, next: NextFunction) => {
-  if (!req.user) {
-    return res.status(401).json({ error: "Authentication required" });
-  }
-  next();
-};
 
 const requireTenantAdmin = (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) {

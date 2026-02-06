@@ -1,15 +1,18 @@
 # Security Rate Limiting
 
-This document describes the rate limiting implementation for brute-force protection on authentication endpoints.
+This document describes the rate limiting implementation for brute-force protection and abuse prevention.
 
 ## Overview
 
-Rate limiting protects authentication endpoints from:
+Rate limiting protects endpoints from:
 - **Brute-force attacks**: Prevents automated password guessing
 - **Credential stuffing**: Limits attempts using stolen credential lists
 - **Resource exhaustion**: Protects server resources from abuse
+- **Spam/abuse**: Prevents bulk invite/user creation and chat flooding
 
 ## Protected Endpoints
+
+### Authentication Endpoints
 
 | Endpoint | Description | IP Limit | Email Limit |
 |----------|-------------|----------|-------------|
@@ -17,6 +20,21 @@ Rate limiting protects authentication endpoints from:
 | `POST /api/v1/auth/bootstrap-register` | First user registration | 5/min | N/A |
 | `POST /api/v1/auth/platform-invite/accept` | Platform invite acceptance | 10/min | N/A |
 | `POST /api/v1/auth/forgot-password` | Password reset request (when implemented) | 5/min | 3/min |
+
+### Administrative Endpoints
+
+| Endpoint | Description | IP Limit |
+|----------|-------------|----------|
+| `POST /api/invitations` | Invite creation | 20/min |
+| `POST /api/users` | User creation | 10/min |
+
+### Application Endpoints
+
+| Endpoint | Description | IP Limit |
+|----------|-------------|----------|
+| `POST /api/v1/chat/channels/:id/messages` | Channel message send | 30/10s |
+| `POST /api/v1/chat/dm/:id/messages` | DM message send | 30/10s |
+| `POST /api/v1/uploads/*` | File uploads | 30/min |
 
 ## Configuration
 
@@ -66,6 +84,27 @@ RATE_LIMIT_FORGOT_PASSWORD_MAX_IP=5
 
 # Maximum requests per email address within the window (default: 3)
 RATE_LIMIT_FORGOT_PASSWORD_MAX_EMAIL=3
+```
+
+### Invite Creation Rate Limits
+
+```bash
+RATE_LIMIT_INVITE_CREATE_WINDOW_MS=60000
+RATE_LIMIT_INVITE_CREATE_MAX_IP=20
+```
+
+### User Creation Rate Limits
+
+```bash
+RATE_LIMIT_USER_CREATE_WINDOW_MS=60000
+RATE_LIMIT_USER_CREATE_MAX_IP=10
+```
+
+### Chat Message Send Rate Limits
+
+```bash
+RATE_LIMIT_CHAT_SEND_WINDOW_MS=10000
+RATE_LIMIT_CHAT_SEND_MAX_IP=30
 ```
 
 ### Debug Logging

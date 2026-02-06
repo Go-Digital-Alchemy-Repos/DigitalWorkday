@@ -28,6 +28,7 @@ import { storage } from "./storage";
 import { z } from "zod";
 import { captureError } from "./middleware/errorLogging";
 import { AppError, handleRouteError, sendError, validateBody } from "./lib/errors";
+import { inviteCreateRateLimiter, userCreateRateLimiter } from "./middleware/rateLimit";
 import subRoutes from "./routes/index";
 import webhookRoutes from "./routes/webhooks";
 import { extractMentionsFromTipTapJson, getPlainTextFromTipTapJson } from "./utils/mentionUtils";
@@ -5211,7 +5212,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/users", requireAdmin, async (req, res) => {
+  app.post("/api/users", userCreateRateLimiter, requireAdmin, async (req, res) => {
     try {
       const { firstName, lastName, email, role, teamIds, clientIds } = req.body;
 
@@ -5634,7 +5635,7 @@ export async function registerRoutes(
     }
   });
 
-  app.post("/api/invitations", requireAdmin, async (req, res) => {
+  app.post("/api/invitations", inviteCreateRateLimiter, requireAdmin, async (req, res) => {
     try {
       const { email, role, expiresInDays } = req.body;
       const token = crypto.randomBytes(32).toString("hex");

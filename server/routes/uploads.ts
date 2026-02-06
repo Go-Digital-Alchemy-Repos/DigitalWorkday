@@ -20,6 +20,7 @@ import multer from "multer";
 import { db } from "../db";
 import { users, tasks, projects, UserRole } from "@shared/schema";
 import { eq, and } from "drizzle-orm";
+import { requireAuth } from "../auth";
 import {
   validateCategory,
   validateFile,
@@ -57,23 +58,6 @@ const presignRequestSchema = z.object({
     assetType: z.enum(["logo", "icon", "favicon"]).optional(),
   }).optional(),
 });
-
-function requireAuth(req: Request, res: Response, next: () => void) {
-  if (!req.isAuthenticated || !req.isAuthenticated() || !req.user) {
-    const requestId = req.requestId || "unknown";
-    return res.status(401).json({
-      error: { 
-        code: "UNAUTHORIZED", 
-        message: "Authentication required",
-        status: 401,
-        requestId,
-      },
-      code: "UNAUTHORIZED",
-      message: "Authentication required",
-    });
-  }
-  next();
-}
 
 async function validateTaskAccess(
   tenantId: string,

@@ -14,6 +14,13 @@ import type { Request, Response, NextFunction } from "express";
 import { storage } from "../storage";
 import type { InsertErrorLog } from "@shared/schema";
 
+function getErrorLogTenantId(req: Request): string | null {
+  return req.tenant?.effectiveTenantId 
+    || req.tenant?.tenantId 
+    || req.user?.tenantId 
+    || null;
+}
+
 // Secret patterns to redact from logs
 const SECRET_PATTERNS = [
   /password["\s]*[:=]["\s]*[^\s,}"]*/gi,
@@ -80,16 +87,6 @@ function getEnvironment(): string {
 }
 
 /**
- * Get effective tenant ID from request
- */
-function getEffectiveTenantId(req: Request): string | null {
-  return req.tenant?.effectiveTenantId 
-    || req.tenant?.tenantId 
-    || req.user?.tenantId 
-    || null;
-}
-
-/**
  * Get user ID from request
  */
 function getUserId(req: Request): string | null {
@@ -114,7 +111,7 @@ export async function captureError(
     
     const errorLog: InsertErrorLog = {
       requestId,
-      tenantId: getEffectiveTenantId(req),
+      tenantId: getErrorLogTenantId(req),
       userId: getUserId(req),
       method: req.method,
       path: req.path,
