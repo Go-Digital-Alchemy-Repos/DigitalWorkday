@@ -1,6 +1,9 @@
 import { storage } from "../../storage";
 import { emitNotificationNew } from "../../realtime/events";
 import type { NotificationPayload } from "@shared/events";
+import { db } from "../../db";
+import { clientCrm, clients } from "@shared/schema";
+import { eq, and, lte, isNotNull } from "drizzle-orm";
 
 type NotificationType = 
   | "task_deadline"
@@ -10,7 +13,8 @@ type NotificationType =
   | "comment_mention"
   | "project_update"
   | "project_member_added"
-  | "task_status_changed";
+  | "task_status_changed"
+  | "crm_followup_due";
 
 interface NotificationContext {
   tenantId: string | null;
@@ -42,7 +46,7 @@ async function shouldNotifyUser(userId: string, type: NotificationType): Promise
       return true;
     }
     
-    const typeToField: Record<NotificationType, keyof typeof prefs> = {
+    const typeToField: Record<NotificationType, keyof typeof prefs | null> = {
       task_deadline: "taskDeadline",
       task_assigned: "taskAssigned",
       task_completed: "taskCompleted",
@@ -51,8 +55,10 @@ async function shouldNotifyUser(userId: string, type: NotificationType): Promise
       project_update: "projectUpdate",
       project_member_added: "projectMemberAdded",
       task_status_changed: "taskStatusChanged",
+      crm_followup_due: null,
     };
     const field = typeToField[type];
+    if (!field) return true;
     // Default to true if preference is not explicitly set to false
     return prefs[field] !== false;
   } catch {
@@ -258,6 +264,24 @@ export async function notifyTaskDeadlineApproaching(
   );
 }
 
+export async function notifyFollowUpDue(
+  userId: string,
+  clientId: string,
+  clientName: string,
+  followUpDate: Date,
+  context: NotificationContext
+): Promise<void> {
+  const dueDateStr = followUpDate.toLocaleDateString();
+  await createAndEmitNotification(
+    userId,
+    "crm_followup_due",
+    `Follow-up due: ${clientName}`,
+    `Client follow-up is due on ${dueDateStr}`,
+    { clientId, followUpDate: followUpDate.toISOString() },
+    context
+  );
+}
+
 // Check for upcoming task deadlines and send notifications
 // This should be called periodically (e.g., daily) by a scheduler
 export async function checkUpcomingDeadlines(): Promise<void> {
@@ -321,5 +345,78 @@ export function stopDeadlineChecker(): void {
   if (deadlineCheckerInterval) {
     clearInterval(deadlineCheckerInterval);
     deadlineCheckerInterval = null;
+  }
+}
+
+export async function checkFollowUpsDue(): Promise<void> {
+  try {
+    const now = new Date();
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
+
+    const dueFollowUps = await db
+      .select({
+        clientId: clientCrm.clientId,
+        tenantId: clientCrm.tenantId,
+        ownerUserId: clientCrm.ownerUserId,
+        nextFollowUpAt: clientCrm.nextFollowUpAt,
+        companyName: clients.companyName,
+        displayName: clients.displayName,
+      })
+      .from(clientCrm)
+      .innerJoin(clients, eq(clients.id, clientCrm.clientId))
+      .where(
+        and(
+          isNotNull(clientCrm.nextFollowUpAt),
+          lte(clientCrm.nextFollowUpAt, endOfToday),
+          isNotNull(clientCrm.ownerUserId)
+        )
+      );
+
+    let notifiedCount = 0;
+    for (const row of dueFollowUps) {
+      if (!row.ownerUserId || !row.nextFollowUpAt) continue;
+
+      const clientName = row.displayName || row.companyName || "Unknown Client";
+      const context = { tenantId: row.tenantId };
+
+      await notifyFollowUpDue(
+        row.ownerUserId,
+        row.clientId,
+        clientName,
+        new Date(row.nextFollowUpAt),
+        context
+      );
+      notifiedCount++;
+    }
+
+    console.log(`[followup-checker] Checked ${dueFollowUps.length} follow-ups, notified ${notifiedCount} owners`);
+  } catch (error) {
+    console.error("[followup-checker] Error checking follow-ups:", error);
+  }
+}
+
+let followUpCheckerInterval: NodeJS.Timeout | null = null;
+
+export function startFollowUpChecker(): void {
+  if (followUpCheckerInterval) {
+    clearInterval(followUpCheckerInterval);
+  }
+
+  setTimeout(() => {
+    checkFollowUpsDue().catch(console.error);
+  }, 15000);
+
+  const SIX_HOURS = 6 * 60 * 60 * 1000;
+  followUpCheckerInterval = setInterval(() => {
+    checkFollowUpsDue().catch(console.error);
+  }, SIX_HOURS);
+
+  console.log("[followup-checker] Started follow-up notification checker");
+}
+
+export function stopFollowUpChecker(): void {
+  if (followUpCheckerInterval) {
+    clearInterval(followUpCheckerInterval);
+    followUpCheckerInterval = null;
   }
 }

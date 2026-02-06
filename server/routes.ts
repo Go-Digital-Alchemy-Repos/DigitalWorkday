@@ -140,6 +140,7 @@ import {
   notifyProjectMemberAdded,
   notifyProjectUpdate,
   startDeadlineChecker,
+  startFollowUpChecker,
 } from "./features/notifications/notification.service";
 
 export async function registerRoutes(
@@ -1052,6 +1053,7 @@ export async function registerRoutes(
 
   // Start the deadline notification checker (runs periodically)
   startDeadlineChecker();
+  startFollowUpChecker();
 
   return httpServer;
 }

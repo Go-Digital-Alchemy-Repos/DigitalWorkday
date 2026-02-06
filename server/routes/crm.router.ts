@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "../db";
-import { eq, and, desc, sql, count } from "drizzle-orm";
+import { eq, and, desc, sql, count, ilike, lte, gte, inArray, isNotNull } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../lib/errors";
 import { getEffectiveTenantId } from "../middleware/tenantContext";
 import { requireAuth, requireAdmin } from "../auth";
@@ -18,6 +18,7 @@ import {
   updateClientCrmSchema,
   updateClientContactSchema,
   UserRole,
+  CrmClientStatus,
 } from "@shared/schema";
 import { getCurrentUserId } from "./helpers";
 
@@ -354,6 +355,175 @@ router.delete("/crm/notes/:id", requireAuth, async (req: Request, res: Response)
     res.json({ success: true });
   } catch (error) {
     return handleRouteError(res, error, "DELETE /api/crm/notes/:id", req);
+  }
+});
+
+router.get("/crm/pipeline", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const { owner, tag, search, followUpBefore, followUpAfter } = req.query;
+
+    const conditions: any[] = [eq(clients.tenantId, tenantId)];
+
+    if (owner && typeof owner === "string") {
+      conditions.push(eq(clientCrm.ownerUserId, owner));
+    }
+    if (tag && typeof tag === "string") {
+      conditions.push(sql`${tag} = ANY(${clientCrm.tags})`);
+    }
+    if (search && typeof search === "string") {
+      conditions.push(
+        sql`(${ilike(clients.companyName, `%${search}%`)} OR ${ilike(clients.displayName, `%${search}%`)})`
+      );
+    }
+    if (followUpBefore && typeof followUpBefore === "string") {
+      conditions.push(lte(clientCrm.nextFollowUpAt, new Date(followUpBefore)));
+    }
+    if (followUpAfter && typeof followUpAfter === "string") {
+      conditions.push(gte(clientCrm.nextFollowUpAt, new Date(followUpAfter)));
+    }
+
+    const rows = await db
+      .select({
+        clientId: clients.id,
+        companyName: clients.companyName,
+        displayName: clients.displayName,
+        email: clients.email,
+        industry: clients.industry,
+        crmStatus: clientCrm.status,
+        ownerUserId: clientCrm.ownerUserId,
+        ownerName: users.name,
+        tags: clientCrm.tags,
+        lastContactAt: clientCrm.lastContactAt,
+        nextFollowUpAt: clientCrm.nextFollowUpAt,
+        followUpNotes: clientCrm.followUpNotes,
+        crmUpdatedAt: clientCrm.updatedAt,
+      })
+      .from(clients)
+      .leftJoin(clientCrm, and(eq(clientCrm.clientId, clients.id), eq(clientCrm.tenantId, tenantId)))
+      .leftJoin(users, eq(users.id, clientCrm.ownerUserId))
+      .where(and(...conditions))
+      .orderBy(clients.companyName);
+
+    res.json(rows);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/pipeline", req);
+  }
+});
+
+router.get("/crm/followups", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const now = new Date();
+    const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const endOfToday = new Date(startOfToday.getTime() + 24 * 60 * 60 * 1000 - 1);
+    const next7Days = new Date(startOfToday.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+    const rows = await db
+      .select({
+        clientId: clients.id,
+        companyName: clients.companyName,
+        displayName: clients.displayName,
+        email: clients.email,
+        crmStatus: clientCrm.status,
+        ownerUserId: clientCrm.ownerUserId,
+        ownerName: users.name,
+        tags: clientCrm.tags,
+        nextFollowUpAt: clientCrm.nextFollowUpAt,
+        followUpNotes: clientCrm.followUpNotes,
+        lastContactAt: clientCrm.lastContactAt,
+      })
+      .from(clients)
+      .innerJoin(clientCrm, and(eq(clientCrm.clientId, clients.id), eq(clientCrm.tenantId, tenantId)))
+      .leftJoin(users, eq(users.id, clientCrm.ownerUserId))
+      .where(
+        and(
+          eq(clients.tenantId, tenantId),
+          isNotNull(clientCrm.nextFollowUpAt),
+          lte(clientCrm.nextFollowUpAt, next7Days)
+        )
+      )
+      .orderBy(clientCrm.nextFollowUpAt);
+
+    const overdue: typeof rows = [];
+    const dueToday: typeof rows = [];
+    const next7: typeof rows = [];
+
+    for (const row of rows) {
+      if (!row.nextFollowUpAt) continue;
+      const followUp = new Date(row.nextFollowUpAt);
+      if (followUp < startOfToday) {
+        overdue.push(row);
+      } else if (followUp <= endOfToday) {
+        dueToday.push(row);
+      } else {
+        next7.push(row);
+      }
+    }
+
+    res.json({ overdue, dueToday, next7Days: next7 });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/followups", req);
+  }
+});
+
+const bulkUpdateSchema = z.object({
+  clientIds: z.array(z.string().uuid()).min(1),
+  ownerUserId: z.string().uuid().nullable().optional(),
+  nextFollowUpAt: z.string().datetime().nullable().optional(),
+});
+
+router.post("/crm/bulk-update", requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const data = validateBody(req.body, bulkUpdateSchema, res);
+    if (!data) return;
+
+    const tenantClients = await db.select({ id: clients.id })
+      .from(clients)
+      .where(and(eq(clients.tenantId, tenantId), inArray(clients.id, data.clientIds)));
+
+    const validClientIds = tenantClients.map(c => c.id);
+    if (validClientIds.length === 0) {
+      return sendError(res, AppError.notFound("No valid clients found"), req);
+    }
+
+    const updateValues: Record<string, unknown> = { updatedAt: new Date() };
+    if (data.ownerUserId !== undefined) updateValues.ownerUserId = data.ownerUserId;
+    if (data.nextFollowUpAt !== undefined) {
+      updateValues.nextFollowUpAt = data.nextFollowUpAt ? new Date(data.nextFollowUpAt) : null;
+    }
+
+    let updatedCount = 0;
+    for (const clientId of validClientIds) {
+      const [existingCrm] = await db.select()
+        .from(clientCrm)
+        .where(and(eq(clientCrm.clientId, clientId), eq(clientCrm.tenantId, tenantId)))
+        .limit(1);
+
+      if (existingCrm) {
+        await db.update(clientCrm)
+          .set(updateValues)
+          .where(and(eq(clientCrm.clientId, clientId), eq(clientCrm.tenantId, tenantId)));
+      } else {
+        await db.insert(clientCrm).values({
+          clientId,
+          tenantId,
+          ...updateValues,
+        });
+      }
+      updatedCount++;
+    }
+
+    res.json({ success: true, updatedCount });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/crm/bulk-update", req);
   }
 });
 
