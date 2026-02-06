@@ -556,6 +556,7 @@ export const clients = pgTable("clients", {
  */
 export const clientContacts = pgTable("client_contacts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
   clientId: varchar("client_id").references(() => clients.id).notNull(),
   workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
   firstName: text("first_name"),
@@ -569,6 +570,36 @@ export const clientContacts = pgTable("client_contacts", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   index("client_contacts_client_idx").on(table.clientId),
+  index("client_contacts_tenant_client_idx").on(table.tenantId, table.clientId),
+  index("client_contacts_tenant_email_idx").on(table.tenantId, table.email),
+]);
+
+// =============================================================================
+// CRM PIPELINE TABLE
+// =============================================================================
+
+export const CrmClientStatus = {
+  LEAD: "lead",
+  PROSPECT: "prospect",
+  ACTIVE: "active",
+  PAST: "past",
+  ON_HOLD: "on_hold",
+} as const;
+
+export const clientCrm = pgTable("client_crm", {
+  clientId: varchar("client_id").primaryKey().references(() => clients.id, { onDelete: "cascade" }),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  status: text("status").default(CrmClientStatus.ACTIVE),
+  ownerUserId: varchar("owner_user_id").references(() => users.id),
+  tags: text("tags").array(),
+  lastContactAt: timestamp("last_contact_at"),
+  nextFollowUpAt: timestamp("next_follow_up_at"),
+  followUpNotes: text("follow_up_notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("client_crm_tenant_status_idx").on(table.tenantId, table.status),
+  index("client_crm_tenant_followup_idx").on(table.tenantId, table.nextFollowUpAt),
 ]);
 
 /**
@@ -2205,6 +2236,20 @@ export const insertClientContactSchema = createInsertSchema(clientContacts).omit
   updatedAt: true,
 });
 
+export const insertClientCrmSchema = createInsertSchema(clientCrm).omit({
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const updateClientCrmSchema = z.object({
+  status: z.enum(["lead", "prospect", "active", "past", "on_hold"]).optional(),
+  ownerUserId: z.string().uuid().nullable().optional(),
+  tags: z.array(z.string()).nullable().optional(),
+  lastContactAt: z.string().datetime().nullable().optional(),
+  nextFollowUpAt: z.string().datetime().nullable().optional(),
+  followUpNotes: z.string().nullable().optional(),
+});
+
 export const insertClientInviteSchema = createInsertSchema(clientInvites).omit({
   id: true,
   createdAt: true,
@@ -2490,6 +2535,10 @@ export type InsertClient = z.infer<typeof insertClientSchema>;
 
 export type ClientContact = typeof clientContacts.$inferSelect;
 export type InsertClientContact = z.infer<typeof insertClientContactSchema>;
+
+export type ClientCrm = typeof clientCrm.$inferSelect;
+export type InsertClientCrm = z.infer<typeof insertClientCrmSchema>;
+export type UpdateClientCrm = z.infer<typeof updateClientCrmSchema>;
 
 export type ClientInvite = typeof clientInvites.$inferSelect;
 export type InsertClientInvite = z.infer<typeof insertClientInviteSchema>;

@@ -291,6 +291,20 @@ async function cleanupByTenant(tenantId: string) {
     )
   );
 
+  // Level 8.5: CRM data (before clients due to FK)
+  await db.execute(sql`DELETE FROM client_crm WHERE tenant_id = ${tenantId}`);
+  await db.execute(sql`DELETE FROM client_note_attachments WHERE tenant_id = ${tenantId}`);
+  await db.execute(sql`DELETE FROM client_note_versions WHERE tenant_id = ${tenantId}`);
+  await db.execute(sql`DELETE FROM client_notes WHERE tenant_id = ${tenantId}`);
+  await db.execute(sql`DELETE FROM client_contacts WHERE client_id IN (SELECT id FROM clients WHERE tenant_id = ${tenantId})`);
+  await db.execute(sql`DELETE FROM client_invites WHERE client_id IN (SELECT id FROM clients WHERE tenant_id = ${tenantId})`);
+  await db.execute(sql`DELETE FROM client_user_access WHERE client_id IN (SELECT id FROM clients WHERE tenant_id = ${tenantId})`);
+  await db.execute(sql`DELETE FROM client_documents WHERE tenant_id = ${tenantId}`);
+  await db.execute(sql`DELETE FROM client_document_categories WHERE tenant_id = ${tenantId}`);
+  await db.execute(sql`DELETE FROM client_note_categories WHERE tenant_id = ${tenantId}`);
+  await db.execute(sql`DELETE FROM division_members WHERE tenant_id = ${tenantId}`);
+  await db.execute(sql`DELETE FROM client_divisions WHERE tenant_id = ${tenantId}`);
+
   // Level 9: Teams, clients
   await db.delete(teams).where(eq(teams.tenantId, tenantId));
   await db.delete(clients).where(eq(clients.tenantId, tenantId));

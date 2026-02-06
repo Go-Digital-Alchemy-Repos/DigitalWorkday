@@ -27,10 +27,12 @@ import timeTrackingRouter from "./timeTracking.router";
 import clientsRouter from "./clients.router";
 import projectsRouter from "./projects.router";
 import usersRouter from "./users.router";
+import crmRouter from "./crm.router";
 
 const router = Router();
 
 router.use(usersRouter);
+router.use(crmRouter);
 router.use(projectsRouter);
 router.use(clientsRouter);
 router.use(timeTrackingRouter);
