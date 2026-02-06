@@ -11,8 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { S3Dropzone } from "@/components/common/S3Dropzone";
-import { User, Mail, Shield, Users, Save, Loader2, ArrowLeft, Key, Eye, EyeOff } from "lucide-react";
+import { User, Mail, Shield, Users, Save, Loader2, ArrowLeft, Key, Eye, EyeOff, Sun, Moon, Monitor, Palette, Check } from "lucide-react";
 import { useLocation } from "wouter";
+import { useTheme, type ThemeMode, type AccentColor } from "@/lib/theme-provider";
+import { cn } from "@/lib/utils";
 
 function getRoleLabel(role: string) {
   switch (role) {
@@ -371,8 +373,98 @@ export default function UserProfilePage() {
               </CardContent>
             </Card>
           </form>
+
+          <AppearanceCard />
         </div>
       </div>
     </ScrollArea>
+  );
+}
+
+const MODE_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
+  { value: "light", label: "Light", icon: Sun },
+  { value: "dark", label: "Dark", icon: Moon },
+  { value: "system", label: "System", icon: Monitor },
+];
+
+const ACCENT_SWATCHES: { value: AccentColor; label: string; color: string }[] = [
+  { value: "blue", label: "Blue", color: "bg-blue-500" },
+  { value: "indigo", label: "Indigo", color: "bg-indigo-500" },
+  { value: "teal", label: "Teal", color: "bg-teal-500" },
+  { value: "green", label: "Green", color: "bg-green-500" },
+  { value: "orange", label: "Orange", color: "bg-orange-500" },
+  { value: "slate", label: "Slate", color: "bg-slate-500" },
+];
+
+function AppearanceCard() {
+  const { mode, setMode, accent, setAccent } = useTheme();
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <Palette className="h-5 w-5" />
+          Appearance
+        </CardTitle>
+        <CardDescription>
+          Customize how the application looks for you
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-6">
+        <div className="space-y-3">
+          <Label>Theme Mode</Label>
+          <div className="flex gap-2 flex-wrap">
+            {MODE_OPTIONS.map((opt) => {
+              const Icon = opt.icon;
+              const isActive = mode === opt.value;
+              return (
+                <Button
+                  key={opt.value}
+                  variant={isActive ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setMode(opt.value)}
+                  data-testid={`button-theme-mode-${opt.value}`}
+                >
+                  <Icon className="h-4 w-4 mr-2" />
+                  {opt.label}
+                </Button>
+              );
+            })}
+          </div>
+        </div>
+
+        <div className="space-y-3">
+          <Label>Accent Color</Label>
+          <div className="flex gap-3 flex-wrap">
+            {ACCENT_SWATCHES.map((swatch) => {
+              const isActive = accent === swatch.value;
+              return (
+                <button
+                  key={swatch.value}
+                  type="button"
+                  onClick={() => setAccent(swatch.value)}
+                  className={cn(
+                    "relative h-9 w-9 rounded-full transition-all",
+                    swatch.color,
+                    isActive
+                      ? "ring-2 ring-offset-2 ring-offset-background ring-foreground"
+                      : "ring-1 ring-transparent hover:ring-muted-foreground/40"
+                  )}
+                  title={swatch.label}
+                  data-testid={`button-accent-${swatch.value}`}
+                >
+                  {isActive && (
+                    <Check className="absolute inset-0 m-auto h-4 w-4 text-white" />
+                  )}
+                </button>
+              );
+            })}
+          </div>
+          <p className="text-xs text-muted-foreground">
+            Changes are saved automatically
+          </p>
+        </div>
+      </CardContent>
+    </Card>
   );
 }

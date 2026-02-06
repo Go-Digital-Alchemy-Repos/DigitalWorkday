@@ -64,6 +64,20 @@
       "when": 1770271144170,
       "tag": "0008_fine_leech",
       "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "7",
+      "when": 1770335436166,
+      "tag": "0009_fair_pestilence",
+      "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "7",
+      "when": 1770335841958,
+      "tag": "0010_known_hydra",
+      "breakpoints": true
     }
   ]
 }

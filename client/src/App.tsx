@@ -379,7 +379,7 @@ function ChatToggleButton() {
 
 function MobileHeaderMenu() {
   const { toggleDrawer } = useChatDrawer();
-  const { theme, setTheme } = useTheme();
+  const { mode, setMode, resolvedTheme } = useTheme();
   
   return (
     <DropdownMenu>
@@ -394,10 +394,16 @@ function MobileHeaderMenu() {
           Chat
         </DropdownMenuItem>
         <DropdownMenuItem 
-          onClick={() => setTheme(theme === "dark" ? "light" : "dark")}
+          onClick={() => {
+            if (mode === "system") {
+              setMode(resolvedTheme === "dark" ? "light" : "dark");
+            } else {
+              setMode(mode === "dark" ? "light" : "dark");
+            }
+          }}
           data-testid="menu-item-theme"
         >
-          {theme === "dark" ? (
+          {resolvedTheme === "dark" ? (
             <>
               <Sun className="h-4 w-4 mr-2" />
               Light mode

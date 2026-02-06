@@ -5419,6 +5419,46 @@ export async function registerRoutes(
     }
   });
 
+  app.get("/api/users/me/ui-preferences", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const prefs = await storage.getUserUiPreferences(user.id);
+      res.json({
+        themeMode: prefs?.themeMode ?? null,
+        themeAccent: prefs?.themeAccent ?? null,
+      });
+    } catch (error) {
+      console.error("Error fetching UI preferences:", error);
+      res.status(500).json({ error: "Failed to fetch UI preferences" });
+    }
+  });
+
+  const uiPreferencesSchema = z.object({
+    themeMode: z.enum(["light", "dark", "system"]).nullable().optional(),
+    themeAccent: z.enum(["blue", "indigo", "teal", "green", "orange", "slate"]).nullable().optional(),
+  });
+
+  app.patch("/api/users/me/ui-preferences", requireAuth, async (req, res) => {
+    try {
+      const user = req.user as any;
+      const tenantId = req.tenant?.effectiveTenantId || user?.tenantId || null;
+
+      const parseResult = uiPreferencesSchema.safeParse(req.body);
+      if (!parseResult.success) {
+        return res.status(400).json({ error: "Validation error", details: parseResult.error.issues });
+      }
+
+      const prefs = await storage.upsertUserUiPreferences(user.id, tenantId, parseResult.data);
+      res.json({
+        themeMode: prefs.themeMode,
+        themeAccent: prefs.themeAccent,
+      });
+    } catch (error) {
+      console.error("Error updating UI preferences:", error);
+      res.status(500).json({ error: "Failed to update UI preferences" });
+    }
+  });
+
   app.patch("/api/users/:id", requireAdmin, async (req, res) => {
     try {
       const { id } = req.params;

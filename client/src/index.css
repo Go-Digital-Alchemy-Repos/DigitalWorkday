@@ -30,15 +30,15 @@
   --destructive: 0 84% 60%;
   --destructive-foreground: 0 0% 98%;
   --input: 0 0% 80%;
-  --primary: 86 52% 46.3%;
-  --primary-foreground: 0 0% 100%;
-  --accent: 86 15% 95%;
-  --accent-foreground: 0 0% 9%;
-  --ring: 86 52% 48%;
-  --sidebar-primary: 86 52% 46.3%;
-  --sidebar-primary-foreground: 0 0% 100%;
-  --sidebar-ring: 86 52% 46.3%;
-  --chart-1: 86 52% 45%;
+  --primary: 221 83% 53%;
+  --primary-foreground: 210 40% 98%;
+  --accent: 221 30% 94%;
+  --accent-foreground: 221 47% 11%;
+  --ring: 217 91% 60%;
+  --sidebar-primary: 221 83% 53%;
+  --sidebar-primary-foreground: 210 40% 98%;
+  --sidebar-ring: 221 83% 53%;
+  --chart-1: 221 83% 53%;
   --chart-2: 173 58% 39%;
   --chart-3: 197 37% 24%;
   --chart-4: 43 74% 49%;
@@ -135,11 +135,10 @@
 /* ==========================================================================
    ACCENT COLOR PRESETS
    Applied via class on <html> element. Overrides primary, accent, ring,
-   and sidebar-primary tokens. Default accent is "green" (matches original).
+   and sidebar-primary tokens. Default accent is "blue".
    ========================================================================== */
 
-.accent-green,
-:root {
+.accent-green {
   --primary: 86 52% 46.3%;
   --primary-foreground: 0 0% 100%;
   --accent: 86 15% 95%;
@@ -149,13 +148,13 @@
   --sidebar-primary-foreground: 0 0% 100%;
   --sidebar-ring: 86 52% 46.3%;
 }
-.dark.accent-green,
-.dark {
+.dark.accent-green {
   --accent: 86 15% 15%;
   --accent-foreground: 0 0% 98%;
 }
 
-.accent-blue {
+.accent-blue,
+:root {
   --primary: 221 83% 53%;
   --primary-foreground: 210 40% 98%;
   --accent: 221 30% 94%;
@@ -165,7 +164,8 @@
   --sidebar-primary-foreground: 210 40% 98%;
   --sidebar-ring: 221 83% 53%;
 }
-.dark.accent-blue {
+.dark.accent-blue,
+.dark {
   --accent: 221 30% 15%;
   --accent-foreground: 210 40% 98%;
 }

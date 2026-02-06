@@ -63,6 +63,7 @@ import {
   type DivisionMember, type InsertDivisionMember,
   type Notification, type InsertNotification,
   type NotificationPreferences, type InsertNotificationPreferences,
+  type UserUiPreferences,
   users, workspaces, workspaceMembers, teams, teamMembers,
   projects, projectMembers, hiddenProjects, sections, tasks, taskAssignees, taskWatchers,
   subtasks, subtaskAssignees, subtaskTags, tags, taskTags, comments, commentMentions, activityLog, taskAttachments,
@@ -72,6 +73,7 @@ import {
   invitations, appSettings, tenants, tenantSettings, personalTaskSections,
   chatChannels, chatChannelMembers, chatDmThreads, chatDmMembers, chatMessages, chatAttachments, chatReads, chatExportJobs, errorLogs,
   notifications, notificationPreferences,
+  userUiPreferences,
   UserRole,
   type CommentMention, type InsertCommentMention,
 } from "@shared/schema";
@@ -512,6 +514,10 @@ export interface IStorage {
 
   // Session management
   invalidateUserSessions(userId: string, exceptSessionId?: string): Promise<void>;
+
+  // User UI Preferences
+  getUserUiPreferences(userId: string): Promise<UserUiPreferences | undefined>;
+  upsertUserUiPreferences(userId: string, tenantId: string | null, prefs: { themeMode?: string | null; themeAccent?: string | null }): Promise<UserUiPreferences>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4358,6 +4364,35 @@ export class DatabaseStorage implements IStorage {
       // Session invalidation is non-critical, log but don't throw
       console.warn(`[storage] Failed to invalidate sessions for user ${userId}:`, error);
     }
+  }
+
+  async getUserUiPreferences(userId: string): Promise<UserUiPreferences | undefined> {
+    const [prefs] = await db.select().from(userUiPreferences).where(eq(userUiPreferences.userId, userId));
+    return prefs || undefined;
+  }
+
+  async upsertUserUiPreferences(userId: string, tenantId: string | null, prefs: { themeMode?: string | null; themeAccent?: string | null }): Promise<UserUiPreferences> {
+    const now = new Date();
+    const [result] = await db
+      .insert(userUiPreferences)
+      .values({
+        userId,
+        tenantId,
+        themeMode: prefs.themeMode ?? null,
+        themeAccent: prefs.themeAccent ?? null,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoUpdate({
+        target: userUiPreferences.userId,
+        set: {
+          ...(prefs.themeMode !== undefined ? { themeMode: prefs.themeMode } : {}),
+          ...(prefs.themeAccent !== undefined ? { themeAccent: prefs.themeAccent } : {}),
+          updatedAt: now,
+        },
+      })
+      .returning();
+    return result;
   }
 }
 

@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
+import { useThemeSync } from "@/hooks/use-theme-sync";
 
 interface TenantSettings {
   displayName?: string;
@@ -10,6 +11,7 @@ interface TenantSettings {
   primaryColor?: string | null;
   secondaryColor?: string | null;
   accentColor?: string | null;
+  defaultThemeAccent?: string | null;
   loginMessage?: string | null;
   supportEmail?: string | null;
   whiteLabelEnabled?: boolean;
@@ -156,5 +158,6 @@ export function useTenantTheme() {
 
 export function TenantThemeProvider({ children }: { children: React.ReactNode }) {
   useTenantTheme();
+  useThemeSync();
   return <>{children}</>;
 }

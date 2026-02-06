@@ -163,6 +163,8 @@ export const tenantSettings = pgTable("tenant_settings", {
   // White label toggles
   whiteLabelEnabled: boolean("white_label_enabled").notNull().default(false),
   hideVendorBranding: boolean("hide_vendor_branding").notNull().default(false),
+  // Theme defaults (preset name, null = use system default "blue")
+  defaultThemeAccent: text("default_theme_accent"),
   // Chat retention settings (tenant-specific override, null = use system default)
   chatRetentionDays: integer("chat_retention_days"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -2746,6 +2748,27 @@ export const movePersonalTaskSchema = z.object({
   personalSectionId: z.string().uuid().nullable().optional(),
   newIndex: z.number().int().min(0).optional(),
 });
+
+export const userUiPreferences = pgTable("user_ui_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  themeMode: text("theme_mode"),
+  themeAccent: text("theme_accent"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("user_ui_preferences_user_idx").on(table.userId),
+]);
+
+export const insertUserUiPreferencesSchema = createInsertSchema(userUiPreferences).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type UserUiPreferences = typeof userUiPreferences.$inferSelect;
+export type InsertUserUiPreferences = z.infer<typeof insertUserUiPreferencesSchema>;
 
 // Client assignment schema
 export const assignClientSchema = z.object({

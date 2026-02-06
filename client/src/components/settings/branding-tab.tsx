@@ -8,10 +8,12 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Palette, ImageIcon, Type, Save, Loader2 } from "lucide-react";
+import { Palette, ImageIcon, Type, Save, Loader2, Check } from "lucide-react";
 import { S3Dropzone } from "@/components/common/S3Dropzone";
 import { useAuth } from "@/lib/auth";
 import { ColorPicker } from "@/components/ui/color-picker";
+import { cn } from "@/lib/utils";
+import type { AccentColor } from "@/lib/theme-provider";
 
 interface SystemSettings {
   id: number;
@@ -30,11 +32,21 @@ interface TenantSettings {
   primaryColor?: string | null;
   secondaryColor?: string | null;
   accentColor?: string | null;
+  defaultThemeAccent?: string | null;
   loginMessage?: string | null;
   supportEmail?: string | null;
   whiteLabelEnabled?: boolean;
   hideVendorBranding?: boolean;
 }
+
+const ACCENT_PRESETS: { value: AccentColor; label: string; color: string }[] = [
+  { value: "blue", label: "Blue", color: "bg-blue-500" },
+  { value: "indigo", label: "Indigo", color: "bg-indigo-500" },
+  { value: "teal", label: "Teal", color: "bg-teal-500" },
+  { value: "green", label: "Green", color: "bg-green-500" },
+  { value: "orange", label: "Orange", color: "bg-orange-500" },
+  { value: "slate", label: "Slate", color: "bg-slate-500" },
+];
 
 export function BrandingTab() {
   const [formData, setFormData] = useState<TenantSettings>({});
@@ -246,6 +258,38 @@ export function BrandingTab() {
               onChange={(value) => handleChange("accentColor", value)}
               data-testid="input-accent-color"
             />
+          </div>
+
+          <div className="space-y-3 pt-2">
+            <Label>Default Theme Accent</Label>
+            <p className="text-xs text-muted-foreground">
+              Set the default accent color for new users in your organization. Users can override this in their personal settings.
+            </p>
+            <div className="flex gap-3 flex-wrap">
+              {ACCENT_PRESETS.map((preset) => {
+                const isActive = (formData.defaultThemeAccent || "blue") === preset.value;
+                return (
+                  <button
+                    key={preset.value}
+                    type="button"
+                    onClick={() => handleChange("defaultThemeAccent", preset.value)}
+                    className={cn(
+                      "relative h-9 w-9 rounded-full transition-all",
+                      preset.color,
+                      isActive
+                        ? "ring-2 ring-offset-2 ring-offset-background ring-foreground"
+                        : "ring-1 ring-transparent hover:ring-muted-foreground/40"
+                    )}
+                    title={preset.label}
+                    data-testid={`button-tenant-accent-${preset.value}`}
+                  >
+                    {isActive && (
+                      <Check className="absolute inset-0 m-auto h-4 w-4 text-white" />
+                    )}
+                  </button>
+                );
+              })}
+            </div>
           </div>
         </CardContent>
       </Card>
