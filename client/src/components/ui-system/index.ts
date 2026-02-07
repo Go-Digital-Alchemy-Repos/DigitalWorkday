@@ -1,3 +1,4 @@
+export { AppShell } from "./AppShell";
 export { PageHeader } from "./PageHeader";
 export { SectionHeader } from "./SectionHeader";
 export { 
@@ -48,7 +49,10 @@ export {
   type PresenceStatus,
 } from "./AvatarWithStatus";
 export { PageTitle, SectionTitle, BodyText, MutedText, LabelText } from "./Typography";
-export { spacing, radius, shadows } from "./tokens";
+export { ErrorState } from "@/components/layout/error-state";
+export { LoadingState } from "@/components/layout/loading-state";
+export { ConfirmDialog, useConfirmDialog } from "@/components/layout/confirm-dialog";
+export { spacing, radius, shadows, sectionSpacing, motion, zIndex } from "./tokens";
 export {
   Motion,
   AnimatePresence,

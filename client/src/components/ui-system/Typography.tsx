@@ -8,7 +8,7 @@ interface TypographyProps {
 
 export function PageTitle({ children, className, as: Component = "h1" }: TypographyProps) {
   return (
-    <Component className={cn("text-2xl font-semibold tracking-tight", className)}>
+    <Component className={cn("text-h2", className)}>
       {children}
     </Component>
   );
@@ -16,7 +16,7 @@ export function PageTitle({ children, className, as: Component = "h1" }: Typogra
 
 export function SectionTitle({ children, className, as: Component = "h2" }: TypographyProps) {
   return (
-    <Component className={cn("text-lg font-semibold tracking-tight", className)}>
+    <Component className={cn("text-h3", className)}>
       {children}
     </Component>
   );
@@ -24,7 +24,7 @@ export function SectionTitle({ children, className, as: Component = "h2" }: Typo
 
 export function BodyText({ children, className, as: Component = "p" }: TypographyProps) {
   return (
-    <Component className={cn("text-sm leading-relaxed", className)}>
+    <Component className={cn("text-body leading-relaxed", className)}>
       {children}
     </Component>
   );
@@ -32,7 +32,7 @@ export function BodyText({ children, className, as: Component = "p" }: Typograph
 
 export function MutedText({ children, className, as: Component = "p" }: TypographyProps) {
   return (
-    <Component className={cn("text-sm text-muted-foreground", className)}>
+    <Component className={cn("text-body text-muted-foreground", className)}>
       {children}
     </Component>
   );
@@ -40,7 +40,7 @@ export function MutedText({ children, className, as: Component = "p" }: Typograp
 
 export function LabelText({ children, className, as: Component = "span" }: TypographyProps) {
   return (
-    <Component className={cn("text-xs font-medium uppercase tracking-wide text-muted-foreground", className)}>
+    <Component className={cn("text-overline text-muted-foreground", className)}>
       {children}
     </Component>
   );

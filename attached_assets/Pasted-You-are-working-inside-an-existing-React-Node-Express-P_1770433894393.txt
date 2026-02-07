@@ -1,0 +1,51 @@
+You are working inside an existing React + Node/Express + Postgres app repo (MyWorkDay). NON-DESTRUCTIVE UPDATE ONLY: do not remove existing features, routes, or pages. Prefer additive refactors with compatibility wrappers.
+
+PHASE A — Create a premium, owned design system
+1) Create a Design Tokens system using CSS variables:
+   - colors: bg, surface, surfaceElevated, border, text, textMuted, brand, brandHover, danger, success, warning
+   - radii: sm, md, lg
+   - shadows: sm, md, lg
+   - spacing scale + typography ramp
+   - motion tokens: duration-1/2/3 and easing standard
+   - Put tokens in a single source (e.g. styles/tokens.css or src/styles/tokens.css) and wire it to the app root.
+
+2) Create a shared UI component library folder:
+   - src/components/ui (or equivalent)
+   - Use Radix UI primitives if already installed; if not installed, add Radix packages minimally (Dialog, DropdownMenu, Tabs, Tooltip, Toast, ScrollArea) and keep styling owned.
+   - Use class-variance-authority (CVA) if available; otherwise implement simple variant patterns.
+
+3) Build the minimum “premium UI kit” components (owned styles, consistent spacing, accessible):
+   - Button, IconButton
+   - Input, Textarea
+   - Select/Combobox (basic)
+   - Checkbox, Switch
+   - Tabs
+   - Badge/Tag
+   - Tooltip
+   - Toast (global)
+   - Dialog/Modal
+   - Drawer/Sheet (for CRM panels)
+   - DropdownMenu
+   - Skeleton
+   - EmptyState
+   Each component must support variants (primary/secondary/ghost/destructive) and sizes (sm/md/lg).
+
+4) Create layout primitives:
+   - AppShell, PageHeader, SectionHeader, Card (surface vs elevated)
+   - Standardize page padding, max widths, and responsive breakpoints.
+
+PHASE B — Apply UI consistency across the app
+5) Identify the most visible surfaces (Nav, top bars, buttons, forms, tables) and refactor them to use the new UI components.
+   - Do this incrementally and keep old styling working until each area is migrated.
+   - Add a “UI Consistency Checklist” doc in the Docs Library or /docs that explains usage rules (no raw <button>, no raw <input> in app screens, use Skeleton/EmptyState patterns, etc.)
+
+PHASE C — Quality gates
+6) Add lint rules or simple conventions to discourage raw HTML controls in feature pages (do not break the build).
+7) Ensure Inter (or your chosen app font) is consistently applied across admin + frontend, and all new pages match the existing admin look.
+
+Deliverables:
+- tokens.css + wiring
+- ui/ component library
+- layout primitives
+- refactor a handful of key screens to prove the system
+- docs describing patterns and how to use them

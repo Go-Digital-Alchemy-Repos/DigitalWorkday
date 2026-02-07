@@ -1,18 +1,18 @@
 export const spacing = {
-  xs: "0.25rem",   // 4px
-  sm: "0.5rem",    // 8px
-  md: "1rem",      // 16px
-  lg: "1.5rem",    // 24px
-  xl: "2rem",      // 32px
-  "2xl": "3rem",   // 48px
+  xs: "var(--space-1)",      // 4px
+  sm: "var(--space-2)",      // 8px
+  md: "var(--space-4)",      // 16px
+  lg: "var(--space-6)",      // 24px
+  xl: "var(--space-8)",      // 32px
+  "2xl": "var(--space-12)",  // 48px
 } as const;
 
 export const radius = {
-  sm: "0.375rem",  // 6px - buttons, badges
-  md: "0.5rem",    // 8px - inputs, small cards
-  lg: "1rem",      // 16px - cards, modals
-  xl: "1.25rem",   // 20px - large cards, drawers
-  full: "9999px",  // pills, avatars
+  sm: "var(--radius-sm)",    // 3px  - badges
+  md: "var(--radius-md)",    // 6px  - inputs, buttons
+  lg: "var(--radius-lg)",    // 9px  - cards
+  xl: "var(--radius-xl)",    // 16px - modals, drawers
+  full: "var(--radius-full)",
 } as const;
 
 export const shadows = {
@@ -23,8 +23,37 @@ export const shadows = {
 } as const;
 
 export const sectionSpacing = {
-  betweenSections: "1.5rem",  // 24px between major sections
-  withinSection: "1rem",       // 16px within sections
-  cardPadding: "1.25rem",      // 20px inside cards
-  pagePadding: "1.5rem",       // 24px page margins
+  betweenSections: "var(--space-section)",
+  withinSection: "var(--space-4)",
+  cardPadding: "var(--space-card)",
+  pagePadding: "var(--space-page)",
+} as const;
+
+export const motion = {
+  duration: {
+    instant: "var(--duration-instant)",
+    fast: "var(--duration-fast)",
+    normal: "var(--duration-normal)",
+    slow: "var(--duration-slow)",
+    slower: "var(--duration-slower)",
+  },
+  easing: {
+    standard: "var(--ease-standard)",
+    in: "var(--ease-in)",
+    out: "var(--ease-out)",
+    bounce: "var(--ease-bounce)",
+    spring: "var(--ease-spring)",
+  },
+} as const;
+
+export const zIndex = {
+  base: "var(--z-base)",
+  dropdown: "var(--z-dropdown)",
+  sticky: "var(--z-sticky)",
+  overlay: "var(--z-overlay)",
+  modal: "var(--z-modal)",
+  popover: "var(--z-popover)",
+  toast: "var(--z-toast)",
+  tooltip: "var(--z-tooltip)",
+  max: "var(--z-max)",
 } as const;

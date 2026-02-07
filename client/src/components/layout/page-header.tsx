@@ -19,7 +19,7 @@ export function PageHeader({
   icon,
 }: PageHeaderProps) {
   return (
-    <div className={cn("mb-6", className)}>
+    <div className={cn("mb-section", className)}>
       {breadcrumbs && (
         <div className="mb-2" data-testid="page-header-breadcrumbs">
           {breadcrumbs}
@@ -33,7 +33,7 @@ export function PageHeader({
             </div>
           )}
           <div>
-            <h1 className="text-2xl font-bold tracking-tight" data-testid="page-header-title">
+            <h1 className="text-h2" data-testid="page-header-title">
               {title}
             </h1>
             {subtitle && (

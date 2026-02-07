@@ -1,0 +1,52 @@
+NON-DESTRUCTIVE UPDATE ONLY. Upgrade the existing messaging/chat feature to feel premium and modern while keeping our current backend and data model.
+
+A) Message list “instant feel”
+1) Replace the current message list rendering with React Virtuoso:
+   - Support large histories with virtualization
+   - Support loading older messages (prepend) without scroll-jumps
+   - Maintain “stick to bottom” behavior when user is at bottom
+   - When user scrolls up, new incoming messages should not yank scroll position; show a “New messages” pill that scrolls to bottom.
+
+2) Implement message grouping:
+   - Group consecutive messages from same sender within a short time window
+   - Show avatar/name only at group start
+   - Add day separators and time stamps on hover or subtle display
+
+3) Message states:
+   - pending (optimistic send), sent, delivered (if available), failed
+   - Add retry for failed sends
+
+B) Composer upgrade
+4) Replace textarea composer with a premium composer:
+   - Use Tiptap if possible; otherwise implement a structured composer with:
+     - @mentions (at least user mentions)
+     - emoji picker button
+     - file attachment button (drag/drop optional)
+     - keyboard shortcuts: Enter send, Shift+Enter newline
+   - Ensure composer is accessible and supports paste (links, text)
+
+C) Real-time UX polish
+5) Add typing indicator + presence (if feasible given backend):
+   - Typing events throttled/debounced
+   - Presence indicator subtle in header (online/offline/away)
+   - If backend lacks it, implement minimal events with socket layer while keeping it optional.
+
+D) Visual polish
+6) Use the new UI kit components:
+   - Chat header uses PageHeader/SectionHeader patterns
+   - Messages use owned Card/Surface styles
+   - Add subtle shadows/depth and consistent spacing
+   - Add skeleton for loading messages and empty state (start conversation CTA)
+
+E) Documentation + tests
+7) Update Docs Library with:
+   - Chat architecture overview
+   - Events and message states
+   - Component map (MessageList, MessageItem, Composer, TypingIndicator)
+
+Deliverables:
+- Virtuoso-based message list with correct scroll behavior
+- Grouping + separators + states + retry
+- Upgraded composer
+- Consistent premium styling using the new UI kit
+- Docs updates

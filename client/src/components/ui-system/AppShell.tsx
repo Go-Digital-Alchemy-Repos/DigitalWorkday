@@ -1,14 +1,16 @@
-import { ReactNode } from "react";
 import { cn } from "@/lib/utils";
 
-interface PageShellProps {
-  children: ReactNode;
+type MaxWidth = "sm" | "md" | "lg" | "xl" | "2xl" | "full";
+
+interface AppShellProps {
+  children: React.ReactNode;
   className?: string;
-  maxWidth?: "sm" | "md" | "lg" | "xl" | "2xl" | "full";
+  maxWidth?: MaxWidth;
   noPadding?: boolean;
+  "data-testid"?: string;
 }
 
-const maxWidthClasses = {
+const maxWidthMap: Record<MaxWidth, string> = {
   sm: "max-w-screen-sm",
   md: "max-w-screen-md",
   lg: "max-w-screen-lg",
@@ -17,21 +19,22 @@ const maxWidthClasses = {
   full: "max-w-full",
 };
 
-export function PageShell({ 
-  children, 
+export function AppShell({
+  children,
   className,
   maxWidth = "full",
   noPadding = false,
-}: PageShellProps) {
+  "data-testid": testId = "app-shell",
+}: AppShellProps) {
   return (
-    <div 
+    <div
       className={cn(
         "w-full h-full overflow-auto",
         !noPadding && "p-page",
-        maxWidthClasses[maxWidth],
+        maxWidthMap[maxWidth],
         className
       )}
-      data-testid="page-shell"
+      data-testid={testId}
     >
       {children}
     </div>
