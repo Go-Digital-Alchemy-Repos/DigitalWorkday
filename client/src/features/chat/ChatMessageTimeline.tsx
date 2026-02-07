@@ -1,9 +1,8 @@
-import { useRef, useEffect, useState, useCallback, useMemo, memo } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo } from "react";
+import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
-import { ScrollArea } from "@/components/ui/scroll-area";
-import { Badge } from "@/components/ui/badge";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +37,7 @@ export interface ChatMessage {
   id: string;
   body: string;
   authorUserId: string;
+  tenantId?: string;
   channelId?: string | null;
   dmThreadId?: string | null;
   parentMessageId?: string | null;
@@ -58,7 +58,7 @@ export interface ChatMessage {
     sizeBytes: number;
   }>;
   _tempId?: string;
-  _status?: "pending" | "failed";
+  _status?: "pending" | "sent" | "failed";
 }
 
 export interface ThreadSummary {
@@ -166,9 +166,11 @@ interface MessageGroup {
   author: ChatMessage["author"];
   messages: ChatMessage[];
   dateSeparator?: string;
+  hasUnreadDivider?: boolean;
+  unreadDividerBeforeIndex?: number;
 }
 
-function groupMessages(messages: ChatMessage[]): MessageGroup[] {
+function groupMessages(messages: ChatMessage[], firstUnreadMessageId?: string | null): MessageGroup[] {
   const groups: MessageGroup[] = [];
   let currentGroup: MessageGroup | null = null;
   let lastDate: string | null = null;
@@ -184,7 +186,9 @@ function groupMessages(messages: ChatMessage[]): MessageGroup[] {
       lastDate = messageDate;
     }
 
-    if (shouldGroup && currentGroup) {
+    const isFirstUnread = message.id === firstUnreadMessageId || message._tempId === firstUnreadMessageId;
+
+    if (shouldGroup && currentGroup && !isFirstUnread) {
       currentGroup.messages.push(message);
     } else {
       currentGroup = {
@@ -193,6 +197,7 @@ function groupMessages(messages: ChatMessage[]): MessageGroup[] {
         author: message.author,
         messages: [message],
         dateSeparator: needsDateSeparator ? formatDateSeparator(message.createdAt) : undefined,
+        hasUnreadDivider: isFirstUnread,
       };
       groups.push(currentGroup);
     }
@@ -200,6 +205,8 @@ function groupMessages(messages: ChatMessage[]): MessageGroup[] {
 
   return groups;
 }
+
+const FIRST_ITEM_INDEX = 100000;
 
 export function ChatMessageTimeline({
   messages,
@@ -226,96 +233,29 @@ export function ChatMessageTimeline({
   isDm = false,
   className,
 }: ChatMessageTimelineProps) {
-  const scrollRef = useRef<HTMLDivElement>(null);
-  const bottomRef = useRef<HTMLDivElement>(null);
-  const unreadDividerRef = useRef<HTMLDivElement>(null);
+  const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasNewMessages, setHasNewMessages] = useState(false);
   const [showJumpToUnread, setShowJumpToUnread] = useState(!!firstUnreadMessageId);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const lastMessageCountRef = useRef(messages.length);
-  const scrollPositionRef = useRef<{ scrollHeight: number; scrollTop: number } | null>(null);
+  const hasMarkedAsReadRef = useRef(false);
 
-  const messageGroups = useMemo(() => groupMessages(messages), [messages]);
+  const messageGroups = useMemo(
+    () => groupMessages(messages, firstUnreadMessageId),
+    [messages, firstUnreadMessageId]
+  );
 
-  const checkIfAtBottom = useCallback(() => {
-    const scrollContainer = scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]");
-    if (!scrollContainer) return true;
+  const firstItemIndex = useMemo(
+    () => FIRST_ITEM_INDEX - messageGroups.length,
+    [messageGroups.length]
+  );
 
-    const threshold = 100;
-    const { scrollTop, scrollHeight, clientHeight } = scrollContainer;
-    return scrollHeight - scrollTop - clientHeight < threshold;
-  }, []);
-
-  const scrollToBottom = useCallback((smooth = true) => {
-    bottomRef.current?.scrollIntoView({ behavior: smooth ? "smooth" : "auto" });
-    setHasNewMessages(false);
-    setIsAtBottom(true);
-  }, []);
-
-  const scrollToUnread = useCallback(() => {
-    if (unreadDividerRef.current) {
-      unreadDividerRef.current.scrollIntoView({ behavior: "smooth", block: "center" });
-      setShowJumpToUnread(false);
-    }
-  }, []);
-
-  // Update showJumpToUnread when firstUnreadMessageId changes
   useEffect(() => {
     setShowJumpToUnread(!!firstUnreadMessageId);
-  }, [firstUnreadMessageId]);
-
-  useEffect(() => {
-    const scrollContainer = scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]");
-    if (!scrollContainer) return;
-
-    const handleScroll = () => {
-      const atBottom = checkIfAtBottom();
-      setIsAtBottom(atBottom);
-      if (atBottom) {
-        setHasNewMessages(false);
-      }
-    };
-
-    scrollContainer.addEventListener("scroll", handleScroll);
-    return () => scrollContainer.removeEventListener("scroll", handleScroll);
-  }, [checkIfAtBottom]);
-
-  // Track if we've already marked as read to prevent duplicate calls
-  const hasMarkedAsReadRef = useRef(false);
-  
-  // Reset the flag when firstUnreadMessageId changes (new conversation or new unreads)
-  useEffect(() => {
     hasMarkedAsReadRef.current = false;
   }, [firstUnreadMessageId]);
-
-  // Use IntersectionObserver to detect when unread divider is scrolled past (not just visible)
-  useEffect(() => {
-    if (!firstUnreadMessageId || !onMarkAsRead || !unreadDividerRef.current) return;
-
-    // Don't set up observer if already marked as read
-    if (hasMarkedAsReadRef.current) return;
-
-    const observer = new IntersectionObserver(
-      (entries) => {
-        const entry = entries[0];
-        // Only mark as read when the divider has been scrolled past (top is above viewport)
-        // and not on initial visibility
-        if (!entry.isIntersecting && entry.boundingClientRect.top < 0) {
-          if (!hasMarkedAsReadRef.current) {
-            hasMarkedAsReadRef.current = true;
-            onMarkAsRead();
-            setShowJumpToUnread(false);
-          }
-        }
-      },
-      { threshold: 0 }
-    );
-
-    observer.observe(unreadDividerRef.current);
-    return () => observer.disconnect();
-  }, [firstUnreadMessageId, onMarkAsRead]);
 
   useEffect(() => {
     if (messages.length > lastMessageCountRef.current) {
@@ -323,37 +263,67 @@ export function ChatMessageTimeline({
       const lastNewMessages = messages.slice(-newMessagesCount);
       const isOwnMessage = lastNewMessages.some((m) => m.authorUserId === currentUserId);
 
-      if (isAtBottom || isOwnMessage) {
-        setTimeout(() => scrollToBottom(), 50);
-      } else {
+      if (!isAtBottom && !isOwnMessage) {
         setHasNewMessages(true);
       }
     }
     lastMessageCountRef.current = messages.length;
-  }, [messages.length, isAtBottom, currentUserId, scrollToBottom]);
+  }, [messages.length, isAtBottom, currentUserId]);
 
-  useEffect(() => {
-    if (scrollPositionRef.current) {
-      const scrollContainer = scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]");
-      if (scrollContainer) {
-        const { scrollHeight: oldHeight, scrollTop: oldScrollTop } = scrollPositionRef.current;
-        const newScrollTop = scrollContainer.scrollHeight - oldHeight + oldScrollTop;
-        scrollContainer.scrollTop = newScrollTop;
-        scrollPositionRef.current = null;
-      }
+  const handleAtBottomStateChange = useCallback((atBottom: boolean) => {
+    setIsAtBottom(atBottom);
+    if (atBottom) {
+      setHasNewMessages(false);
     }
-  }, [messages]);
+  }, []);
 
-  const handleLoadMore = useCallback(() => {
-    const scrollContainer = scrollRef.current?.querySelector("[data-radix-scroll-area-viewport]");
-    if (scrollContainer && onLoadMore) {
-      scrollPositionRef.current = {
-        scrollHeight: scrollContainer.scrollHeight,
-        scrollTop: scrollContainer.scrollTop,
-      };
+  const unreadGroupIndex = useMemo(
+    () => messageGroups.findIndex((g) => g.hasUnreadDivider),
+    [messageGroups]
+  );
+
+  const handleRangeChanged = useCallback(
+    (range: { startIndex: number; endIndex: number }) => {
+      if (
+        unreadGroupIndex >= 0 &&
+        !hasMarkedAsReadRef.current &&
+        onMarkAsRead &&
+        range.startIndex > firstItemIndex + unreadGroupIndex
+      ) {
+        hasMarkedAsReadRef.current = true;
+        onMarkAsRead();
+        setShowJumpToUnread(false);
+      }
+    },
+    [unreadGroupIndex, firstItemIndex, onMarkAsRead]
+  );
+
+  const scrollToBottom = useCallback(() => {
+    virtuosoRef.current?.scrollToIndex({
+      index: messageGroups.length - 1,
+      behavior: "smooth",
+      align: "end",
+    });
+    setHasNewMessages(false);
+  }, [messageGroups.length]);
+
+  const scrollToUnread = useCallback(() => {
+    const unreadIdx = messageGroups.findIndex((g) => g.hasUnreadDivider);
+    if (unreadIdx >= 0) {
+      virtuosoRef.current?.scrollToIndex({
+        index: unreadIdx,
+        behavior: "smooth",
+        align: "center",
+      });
+      setShowJumpToUnread(false);
+    }
+  }, [messageGroups]);
+
+  const handleStartReached = useCallback(() => {
+    if (hasMoreMessages && !isLoadingMore && onLoadMore) {
       onLoadMore();
     }
-  }, [onLoadMore]);
+  }, [hasMoreMessages, isLoadingMore, onLoadMore]);
 
   const handleEditSave = useCallback(
     (messageId: string) => {
@@ -373,399 +343,445 @@ export function ChatMessageTimeline({
 
   const isTenantAdmin = currentUserRole === "admin";
 
-  return (
-    <div className={`relative flex flex-col h-full ${className || ""}`}>
-      <ScrollArea className="flex-1" ref={scrollRef}>
-        <div className="p-4 space-y-1">
-          {hasMoreMessages && (
-            <div className="flex justify-center pb-4">
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleLoadMore}
-                disabled={isLoadingMore}
-                data-testid="button-load-more"
-              >
-                {isLoadingMore ? (
-                  <Loader2 className="h-4 w-4 animate-spin mr-2" />
-                ) : (
-                  <Clock className="h-4 w-4 mr-2" />
-                )}
-                Load older messages
-              </Button>
-            </div>
-          )}
-
-          {isLoading && messages.length === 0 && (
-            <div className="space-y-4" data-testid="messages-loading">
-              {[1, 2, 3].map((i) => (
-                <div key={i} className="flex gap-3 animate-pulse">
-                  <div className="h-8 w-8 rounded-full bg-muted" />
-                  <div className="flex-1 space-y-2">
-                    <div className="h-4 bg-muted rounded w-24" />
-                    <div className="h-4 bg-muted rounded w-3/4" />
-                  </div>
-                </div>
-              ))}
-            </div>
-          )}
-
-          {messages.length === 0 && !isLoading && (
+  const renderGroup = useCallback(
+    (index: number, group: MessageGroup) => {
+      return (
+        <div className="px-4" data-testid={`message-group-${group.id}`}>
+          {group.hasUnreadDivider && (
             <div
-              className="flex flex-col items-center justify-center h-40 text-muted-foreground"
-              data-testid="empty-messages"
+              className="flex items-center gap-4 py-3"
+              data-testid="unread-divider"
             >
-              <div className="flex items-center justify-center h-16 w-16 rounded-full bg-primary/10 mb-4">
-                <MessageCircle className="h-8 w-8 text-primary" />
-              </div>
-              <p className="text-base font-medium text-foreground mb-1">Say hello!</p>
-              <p className="text-sm text-center max-w-[200px]">
-                Start the conversation by sending your first message.
-              </p>
+              <div className="flex-1 h-px bg-destructive" />
+              <span className="text-xs font-medium text-destructive px-2">New messages</span>
+              <div className="flex-1 h-px bg-destructive" />
             </div>
           )}
 
-          {messageGroups.map((group) => {
-            return (
-            <div key={group.id} data-testid={`message-group-${group.id}`}>
-              {group.dateSeparator && (
-                <div className="flex items-center gap-4 py-4" data-testid="date-separator">
-                  <div className="flex-1 h-px bg-border" />
-                  <span className="text-xs font-medium text-muted-foreground px-2">
-                    {group.dateSeparator}
-                  </span>
-                  <div className="flex-1 h-px bg-border" />
-                </div>
-              )}
+          {group.dateSeparator && (
+            <div className="flex items-center gap-4 py-4" data-testid="date-separator">
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs font-medium text-muted-foreground px-2">
+                {group.dateSeparator}
+              </span>
+              <div className="flex-1 h-px bg-border" />
+            </div>
+          )}
 
-
-              <div className="flex gap-3 py-1 group/message-group">
-                <div className="w-8 flex-shrink-0">
-                  {!isDm || group.messages.length === 1 ? (
-                    <Avatar className="h-8 w-8">
-                      {group.author?.avatarUrl && (
-                        <AvatarImage src={group.author.avatarUrl} />
-                      )}
-                      <AvatarFallback>
-                        {getInitials(group.author?.name || group.author?.email || "?")}
-                      </AvatarFallback>
-                    </Avatar>
-                  ) : (
-                    <div className="h-8" />
+          <div className="flex gap-3 py-1 group/message-group">
+            <div className="w-8 flex-shrink-0">
+              {!isDm || group.messages.length === 1 ? (
+                <Avatar className="h-8 w-8">
+                  {group.author?.avatarUrl && (
+                    <AvatarImage src={group.author.avatarUrl} />
                   )}
-                </div>
+                  <AvatarFallback>
+                    {getInitials(group.author?.name || group.author?.email || "?")}
+                  </AvatarFallback>
+                </Avatar>
+              ) : (
+                <div className="h-8" />
+              )}
+            </div>
 
-                <div className="flex-1 min-w-0 space-y-0.5">
-                  <div className="flex items-baseline gap-2">
-                    <span className="font-semibold text-sm">
-                      {group.author?.name || group.author?.email || "Unknown"}
+            <div className="flex-1 min-w-0 space-y-0.5">
+              <div className="flex items-baseline gap-2">
+                <span className="font-semibold text-sm">
+                  {group.author?.name || group.author?.email || "Unknown"}
+                </span>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="text-xs text-muted-foreground cursor-default">
+                      {formatTime(group.messages[0].createdAt)}
                     </span>
-                    <Tooltip>
-                      <TooltipTrigger asChild>
-                        <span className="text-xs text-muted-foreground cursor-default">
-                          {formatTime(group.messages[0].createdAt)}
-                        </span>
-                      </TooltipTrigger>
-                      <TooltipContent>
-                        {formatFullDateTime(group.messages[0].createdAt)}
-                      </TooltipContent>
-                    </Tooltip>
-                  </div>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    {formatFullDateTime(group.messages[0].createdAt)}
+                  </TooltipContent>
+                </Tooltip>
+              </div>
 
-                  {group.messages.map((message, idx) => {
-                    const isDeleted = !!message.deletedAt;
-                    const isOwnMessage = message.authorUserId === currentUserId;
-                    const isEditing = editingMessageId === message.id;
-                    const canEdit = isOwnMessage && !isDeleted && !message._status;
-                    const canDelete = (isOwnMessage || isTenantAdmin) && !isDeleted && !message._status;
-                    const isPending = message._status === "pending";
-                    const isFailed = message._status === "failed";
-                    const showTimestamp = idx > 0;
-                    const isFirstUnread = message.id === firstUnreadMessageId || message._tempId === firstUnreadMessageId;
+              {group.messages.map((message, idx) => {
+                const isDeleted = !!message.deletedAt;
+                const isOwnMessage = message.authorUserId === currentUserId;
+                const isEditing = editingMessageId === message.id;
+                const canEdit = isOwnMessage && !isDeleted && !message._status;
+                const canDelete = (isOwnMessage || isTenantAdmin) && !isDeleted && !message._status;
+                const isPending = message._status === "pending";
+                const isFailed = message._status === "failed";
+                const showTimestamp = idx > 0;
 
-                    return (
-                      <div key={message._tempId || message.id}>
-                        {/* Unread divider shown before the first unread message */}
-                        {isFirstUnread && (
-                          <div
-                            ref={unreadDividerRef}
-                            className="flex items-center gap-4 py-3 -mx-4 px-4"
-                            data-testid="unread-divider"
-                          >
-                            <div className="flex-1 h-px bg-destructive" />
-                            <span className="text-xs font-medium text-destructive px-2">New messages</span>
-                            <div className="flex-1 h-px bg-destructive" />
-                          </div>
-                        )}
-                        <div
-                          className={`group relative py-0.5 ${isPending ? "opacity-60" : ""} ${
-                            isFailed ? "bg-destructive/10 px-2 -mx-2 rounded" : ""
-                          }`}
-                          data-testid={`message-${message._tempId || message.id}`}
-                        >
-                        {showTimestamp && (
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span className="absolute -left-12 top-1 text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity cursor-default">
-                                {formatTime(message.createdAt)}
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {formatFullDateTime(message.createdAt)}
-                            </TooltipContent>
-                          </Tooltip>
-                        )}
+                return (
+                  <div key={message._tempId || message.id}>
+                    <div
+                      className={`group relative py-0.5 ${isPending ? "opacity-60" : ""} ${
+                        isFailed ? "bg-destructive/10 px-2 -mx-2 rounded-md" : ""
+                      }`}
+                      data-testid={`message-${message._tempId || message.id}`}
+                    >
+                      {showTimestamp && (
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span className="absolute -left-12 top-1 text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity cursor-default">
+                              {formatTime(message.createdAt)}
+                            </span>
+                          </TooltipTrigger>
+                          <TooltipContent>
+                            {formatFullDateTime(message.createdAt)}
+                          </TooltipContent>
+                        </Tooltip>
+                      )}
 
-                        <div className="flex items-start gap-2">
-                          <div className="flex-1 min-w-0">
-                            {isEditing ? (
+                      <div className="flex items-start gap-2">
+                        <div className="flex-1 min-w-0">
+                          {isEditing ? (
+                            <div className="flex items-center gap-2">
+                              <Input
+                                value={editingBody}
+                                onChange={(e) => setEditingBody(e.target.value)}
+                                className="flex-1 text-sm"
+                                autoFocus
+                                onKeyDown={(e) => {
+                                  if (e.key === "Enter" && !e.shiftKey) {
+                                    e.preventDefault();
+                                    handleEditSave(message.id);
+                                  }
+                                  if (e.key === "Escape") {
+                                    handleEditCancel();
+                                  }
+                                }}
+                                data-testid={`message-edit-input-${message.id}`}
+                              />
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={() => handleEditSave(message.id)}
+                                disabled={!editingBody.trim()}
+                                data-testid={`message-edit-save-${message.id}`}
+                              >
+                                <Check className="h-4 w-4" />
+                              </Button>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                onClick={handleEditCancel}
+                                data-testid={`message-edit-cancel-${message.id}`}
+                              >
+                                <X className="h-4 w-4" />
+                              </Button>
+                            </div>
+                          ) : (
+                            <>
                               <div className="flex items-center gap-2">
-                                <Input
-                                  value={editingBody}
-                                  onChange={(e) => setEditingBody(e.target.value)}
-                                  className="flex-1 text-sm"
-                                  autoFocus
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" && !e.shiftKey) {
-                                      e.preventDefault();
-                                      handleEditSave(message.id);
-                                    }
-                                    if (e.key === "Escape") {
-                                      handleEditCancel();
-                                    }
-                                  }}
-                                  data-testid={`message-edit-input-${message.id}`}
-                                />
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => handleEditSave(message.id)}
-                                  disabled={!editingBody.trim()}
-                                  data-testid={`message-edit-save-${message.id}`}
+                                <p
+                                  className={`text-sm break-words ${
+                                    isDeleted ? "text-muted-foreground italic" : ""
+                                  }`}
                                 >
-                                  <Check className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={handleEditCancel}
-                                  data-testid={`message-edit-cancel-${message.id}`}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <>
-                                <div className="flex items-center gap-2">
-                                  <p
-                                    className={`text-sm break-words ${
-                                      isDeleted ? "text-muted-foreground italic" : ""
-                                    }`}
-                                  >
-                                    {isDeleted
-                                      ? message.body
-                                      : renderMessageBody
-                                      ? renderMessageBody(message.body)
-                                      : message.body}
-                                  </p>
-                                  {isPending && (
-                                    <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    </span>
-                                  )}
-                                  {isFailed && (
-                                    <span className="text-xs text-destructive flex items-center gap-1">
-                                      <AlertCircle className="h-3 w-3" />
-                                      Failed
-                                    </span>
-                                  )}
-                                  {message.editedAt && !isDeleted && (
-                                    <span className="text-xs text-muted-foreground">(edited)</span>
-                                  )}
-                                </div>
-
-                                {isFailed && message._tempId && (
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => onRetryMessage?.(message)}
-                                      data-testid={`message-retry-${message._tempId}`}
-                                    >
-                                      <RefreshCw className="h-3 w-3 mr-1" />
-                                      Retry
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => onRemoveFailedMessage?.(message._tempId!)}
-                                      data-testid={`message-remove-${message._tempId}`}
-                                    >
-                                      <X className="h-3 w-3 mr-1" />
-                                      Remove
-                                    </Button>
-                                  </div>
+                                  {isDeleted
+                                    ? message.body
+                                    : renderMessageBody
+                                    ? renderMessageBody(message.body)
+                                    : message.body}
+                                </p>
+                                {isPending && (
+                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  </span>
                                 )}
-                              </>
-                            )}
+                                {isFailed && (
+                                  <span className="text-xs text-destructive flex items-center gap-1">
+                                    <AlertCircle className="h-3 w-3" />
+                                    Failed
+                                  </span>
+                                )}
+                                {message.editedAt && !isDeleted && (
+                                  <span className="text-xs text-muted-foreground">(edited)</span>
+                                )}
+                              </div>
 
-                            {message.attachments &&
-                              message.attachments.length > 0 &&
-                              !isDeleted && (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {message.attachments.map((attachment) => {
-                                    const FileIcon = getFileIcon?.(attachment.mimeType);
-                                    const isImage = attachment.mimeType.startsWith("image/");
-                                    return (
-                                      <a
-                                        key={attachment.id}
-                                        href={attachment.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 p-2 rounded-md bg-muted hover-elevate"
-                                        data-testid={`attachment-${attachment.id}`}
-                                      >
-                                        {isImage ? (
-                                          <img
-                                            src={attachment.url}
-                                            alt={attachment.fileName}
-                                            className="h-16 w-16 object-cover rounded"
-                                          />
-                                        ) : (
-                                          <>
-                                            {FileIcon && (
-                                              <FileIcon className="h-4 w-4 text-muted-foreground" />
-                                            )}
-                                            <span className="text-xs truncate max-w-[150px]">
-                                              {attachment.fileName}
-                                            </span>
-                                            {formatFileSize && (
-                                              <span className="text-xs text-muted-foreground">
-                                                ({formatFileSize(attachment.sizeBytes)})
-                                              </span>
-                                            )}
-                                          </>
-                                        )}
-                                      </a>
-                                    );
-                                  })}
+                              {isFailed && message._tempId && (
+                                <div className="flex items-center gap-2 mt-1">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => onRetryMessage?.(message)}
+                                    data-testid={`message-retry-${message._tempId}`}
+                                  >
+                                    <RefreshCw className="h-3 w-3 mr-1" />
+                                    Retry
+                                  </Button>
+                                  <Button
+                                    size="sm"
+                                    variant="ghost"
+                                    onClick={() => onRemoveFailedMessage?.(message._tempId!)}
+                                    data-testid={`message-remove-${message._tempId}`}
+                                  >
+                                    <X className="h-3 w-3 mr-1" />
+                                    Remove
+                                  </Button>
                                 </div>
                               )}
+                            </>
+                          )}
 
-                            {/* Thread reply count indicator */}
-                            {!message.parentMessageId && threadSummaries?.get(message.id) && (
-                              <button
-                                type="button"
-                                onClick={() => onOpenThread?.(message.id)}
-                                className="mt-1 flex items-center gap-1.5 text-xs text-primary hover:underline cursor-pointer"
-                                data-testid={`thread-replies-${message.id}`}
-                              >
-                                <MessagesSquare className="h-3.5 w-3.5" />
-                                <span>
-                                  {threadSummaries.get(message.id)!.replyCount} {threadSummaries.get(message.id)!.replyCount === 1 ? 'reply' : 'replies'}
-                                </span>
-                              </button>
+                          {message.attachments &&
+                            message.attachments.length > 0 &&
+                            !isDeleted && (
+                              <div className="mt-2 flex flex-wrap gap-2">
+                                {message.attachments.map((attachment) => {
+                                  const FileIcon = getFileIcon?.(attachment.mimeType);
+                                  const isImage = attachment.mimeType.startsWith("image/");
+                                  return (
+                                    <a
+                                      key={attachment.id}
+                                      href={attachment.url}
+                                      target="_blank"
+                                      rel="noopener noreferrer"
+                                      className="flex items-center gap-2 p-2 rounded-md bg-muted hover-elevate"
+                                      data-testid={`attachment-${attachment.id}`}
+                                    >
+                                      {isImage ? (
+                                        <img
+                                          src={attachment.url}
+                                          alt={attachment.fileName}
+                                          className="h-16 w-16 object-cover rounded"
+                                        />
+                                      ) : (
+                                        <>
+                                          {FileIcon && (
+                                            <FileIcon className="h-4 w-4 text-muted-foreground" />
+                                          )}
+                                          <span className="text-xs truncate max-w-[150px]">
+                                            {attachment.fileName}
+                                          </span>
+                                          {formatFileSize && (
+                                            <span className="text-xs text-muted-foreground">
+                                              ({formatFileSize(attachment.sizeBytes)})
+                                            </span>
+                                          )}
+                                        </>
+                                      )}
+                                    </a>
+                                  );
+                                })}
+                              </div>
                             )}
-                          </div>
 
-                          {!isDeleted && !isEditing && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                                  data-testid={`message-menu-${message.id}`}
-                                >
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    if (onCopyMessage) {
-                                      onCopyMessage(message.body);
-                                    } else {
-                                      navigator.clipboard.writeText(message.body);
-                                    }
-                                  }}
-                                  data-testid={`message-copy-${message.id}`}
-                                >
-                                  <Copy className="h-4 w-4 mr-2" />
-                                  Copy text
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    const authorName = message.author?.name || message.author?.email || "Unknown";
-                                    onQuoteReply?.(authorName, message.body);
-                                  }}
-                                  data-testid={`message-quote-${message.id}`}
-                                >
-                                  <Quote className="h-4 w-4 mr-2" />
-                                  Quote reply
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => onCreateTaskFromMessage?.(message)}
-                                  data-testid={`message-create-task-${message.id}`}
-                                >
-                                  <ListTodo className="h-4 w-4 mr-2" />
-                                  Create task
-                                </DropdownMenuItem>
-                                {onOpenThread && !message.parentMessageId && (
-                                  <DropdownMenuItem
-                                    onClick={() => onOpenThread(message.id)}
-                                    data-testid={`message-thread-${message.id}`}
-                                  >
-                                    <MessagesSquare className="h-4 w-4 mr-2" />
-                                    Reply in thread
-                                  </DropdownMenuItem>
-                                )}
-                                {canEdit && (
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      setEditingMessageId(message.id);
-                                      setEditingBody(message.body);
-                                    }}
-                                    data-testid={`message-edit-${message.id}`}
-                                  >
-                                    <Pencil className="h-4 w-4 mr-2" />
-                                    Edit
-                                  </DropdownMenuItem>
-                                )}
-                                {canDelete && (
-                                  <DropdownMenuItem
-                                    onClick={() => onDeleteMessage?.(message.id)}
-                                    className="text-destructive focus:text-destructive"
-                                    data-testid={`message-delete-${message.id}`}
-                                  >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Delete
-                                  </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                          {!message.parentMessageId && threadSummaries?.get(message.id) && (
+                            <button
+                              type="button"
+                              onClick={() => onOpenThread?.(message.id)}
+                              className="mt-1 flex items-center gap-1.5 text-xs text-primary hover:underline cursor-pointer"
+                              data-testid={`thread-replies-${message.id}`}
+                            >
+                              <MessagesSquare className="h-3.5 w-3.5" />
+                              <span>
+                                {threadSummaries.get(message.id)!.replyCount}{" "}
+                                {threadSummaries.get(message.id)!.replyCount === 1 ? "reply" : "replies"}
+                              </span>
+                            </button>
                           )}
                         </div>
-                        </div>
+
+                        {!isDeleted && !isEditing && (
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                data-testid={`message-menu-${message.id}`}
+                              >
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  if (onCopyMessage) {
+                                    onCopyMessage(message.body);
+                                  } else {
+                                    navigator.clipboard.writeText(message.body);
+                                  }
+                                }}
+                                data-testid={`message-copy-${message.id}`}
+                              >
+                                <Copy className="h-4 w-4 mr-2" />
+                                Copy text
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => {
+                                  const authorName = message.author?.name || message.author?.email || "Unknown";
+                                  onQuoteReply?.(authorName, message.body);
+                                }}
+                                data-testid={`message-quote-${message.id}`}
+                              >
+                                <Quote className="h-4 w-4 mr-2" />
+                                Quote reply
+                              </DropdownMenuItem>
+                              <DropdownMenuItem
+                                onClick={() => onCreateTaskFromMessage?.(message)}
+                                data-testid={`message-create-task-${message.id}`}
+                              >
+                                <ListTodo className="h-4 w-4 mr-2" />
+                                Create task
+                              </DropdownMenuItem>
+                              {onOpenThread && !message.parentMessageId && (
+                                <DropdownMenuItem
+                                  onClick={() => onOpenThread(message.id)}
+                                  data-testid={`message-thread-${message.id}`}
+                                >
+                                  <MessagesSquare className="h-4 w-4 mr-2" />
+                                  Reply in thread
+                                </DropdownMenuItem>
+                              )}
+                              {canEdit && (
+                                <DropdownMenuItem
+                                  onClick={() => {
+                                    setEditingMessageId(message.id);
+                                    setEditingBody(message.body);
+                                  }}
+                                  data-testid={`message-edit-${message.id}`}
+                                >
+                                  <Pencil className="h-4 w-4 mr-2" />
+                                  Edit
+                                </DropdownMenuItem>
+                              )}
+                              {canDelete && (
+                                <DropdownMenuItem
+                                  onClick={() => onDeleteMessage?.(message.id)}
+                                  className="text-destructive focus:text-destructive"
+                                  data-testid={`message-delete-${message.id}`}
+                                >
+                                  <Trash2 className="h-4 w-4 mr-2" />
+                                  Delete
+                                </DropdownMenuItem>
+                              )}
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        )}
                       </div>
-                    );
-                  })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </div>
+      );
+    },
+    [
+      currentUserId,
+      editingMessageId,
+      editingBody,
+      isTenantAdmin,
+      isDm,
+      handleEditSave,
+      handleEditCancel,
+      onRetryMessage,
+      onRemoveFailedMessage,
+      onCopyMessage,
+      onQuoteReply,
+      onCreateTaskFromMessage,
+      onOpenThread,
+      onDeleteMessage,
+      onEditMessage,
+      threadSummaries,
+      renderMessageBody,
+      getFileIcon,
+      formatFileSize,
+    ]
+  );
+
+  if (isLoading && messages.length === 0) {
+    return (
+      <div className={`relative flex flex-col h-full ${className || ""}`}>
+        <div className="flex-1 p-4 space-y-6" data-testid="messages-loading">
+          {[1, 2, 3, 4, 5].map((i) => (
+            <div key={i} className="flex gap-3 animate-pulse">
+              <div className="h-8 w-8 rounded-full bg-muted flex-shrink-0" />
+              <div className="flex-1 space-y-2">
+                <div className="flex items-center gap-2">
+                  <div className="h-3.5 bg-muted rounded w-24" />
+                  <div className="h-3 bg-muted rounded w-12" />
                 </div>
+                <div className="h-4 bg-muted rounded w-3/4" />
+                {i % 2 === 0 && <div className="h-4 bg-muted rounded w-1/2" />}
               </div>
             </div>
-            );
-          })}
-
-          <div ref={bottomRef} />
+          ))}
         </div>
-      </ScrollArea>
+      </div>
+    );
+  }
 
-      {hasNewMessages && (
+  if (messages.length === 0 && !isLoading) {
+    return (
+      <div className={`relative flex flex-col h-full ${className || ""}`}>
+        <div
+          className="flex-1 flex flex-col items-center justify-center text-muted-foreground"
+          data-testid="empty-messages"
+        >
+          <div className="flex items-center justify-center h-16 w-16 rounded-full bg-primary/10 mb-4">
+            <MessageCircle className="h-8 w-8 text-primary" />
+          </div>
+          <p className="text-base font-medium text-foreground mb-1">Say hello!</p>
+          <p className="text-sm text-center max-w-[200px]">
+            Start the conversation by sending your first message.
+          </p>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className={`relative flex flex-col h-full ${className || ""}`}>
+      <Virtuoso
+        ref={virtuosoRef}
+        data={messageGroups as MessageGroup[]}
+        firstItemIndex={firstItemIndex}
+        initialTopMostItemIndex={messageGroups.length - 1}
+        itemContent={(index, group) => renderGroup(index, group)}
+        followOutput={(isAtBottom) => (isAtBottom ? "smooth" : false)}
+        atBottomStateChange={handleAtBottomStateChange}
+        atBottomThreshold={60}
+        startReached={handleStartReached}
+        rangeChanged={handleRangeChanged}
+        increaseViewportBy={{ top: 400, bottom: 200 }}
+        overscan={300}
+        style={{ flex: 1 }}
+        className="scrollbar-thin"
+        components={{
+          Header: hasMoreMessages
+            ? () => (
+                <div className="flex justify-center py-4 px-4">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={onLoadMore}
+                    disabled={isLoadingMore}
+                    data-testid="button-load-more"
+                  >
+                    {isLoadingMore ? (
+                      <Loader2 className="h-4 w-4 animate-spin mr-2" />
+                    ) : (
+                      <Clock className="h-4 w-4 mr-2" />
+                    )}
+                    Load older messages
+                  </Button>
+                </div>
+              )
+            : undefined,
+        }}
+      />
+
+      {hasNewMessages && !isAtBottom && (
         <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
           <Button
             variant="secondary"
             size="sm"
-            onClick={() => scrollToBottom()}
+            onClick={scrollToBottom}
             className="shadow-lg gap-2"
             data-testid="button-new-messages"
           >

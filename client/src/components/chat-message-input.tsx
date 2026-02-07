@@ -45,19 +45,29 @@ export const ChatMessageInput = forwardRef<HTMLTextAreaElement, ChatMessageInput
     };
 
     return (
-      <div className="flex flex-col border rounded-md bg-background overflow-hidden">
-        <div className="flex items-center gap-1 px-2 py-1.5 border-b bg-muted/30">
+      <div className="flex flex-col border rounded-md bg-background focus-within:ring-1 focus-within:ring-ring transition-shadow">
+        <Textarea
+          ref={textareaRef}
+          value={value}
+          onChange={(e) => onChange(e.target.value)}
+          onKeyDown={onKeyDown}
+          placeholder={placeholder}
+          disabled={disabled}
+          className={`resize-none min-h-[68px] max-h-[180px] border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-b-none text-sm ${className || ""}`}
+          data-testid={dataTestId}
+        />
+        <div className="flex items-center gap-0.5 px-1.5 py-1 border-t border-border/50">
           <Popover open={emojiOpen} onOpenChange={setEmojiOpen}>
             <PopoverTrigger asChild>
               <Button
                 type="button"
-                size="sm"
+                size="icon"
                 variant="ghost"
                 disabled={disabled}
                 aria-label="Insert emoji"
                 data-testid="button-emoji-chat"
               >
-                <Smile className="h-4 w-4" />
+                <Smile className="h-4 w-4 text-muted-foreground" />
               </Button>
             </PopoverTrigger>
             <PopoverContent 
@@ -76,17 +86,11 @@ export const ChatMessageInput = forwardRef<HTMLTextAreaElement, ChatMessageInput
               />
             </PopoverContent>
           </Popover>
+          <span className="flex-1" />
+          <span className="text-[10px] text-muted-foreground mr-1 select-none">
+            Enter to send
+          </span>
         </div>
-        <Textarea
-          ref={textareaRef}
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-          onKeyDown={onKeyDown}
-          placeholder={placeholder}
-          disabled={disabled}
-          className={`resize-none min-h-[80px] max-h-[200px] border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-none ${className || ""}`}
-          data-testid={dataTestId}
-        />
       </div>
     );
   }

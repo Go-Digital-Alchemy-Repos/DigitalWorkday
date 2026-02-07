@@ -49,7 +49,7 @@ MyWorkDay is an Asana-inspired project management application aimed at streamlin
 - **Modular Architecture**: Modular API routes are organized by domain, including dedicated Super Admin sub-routers, with standardized error handling.
 - **DB Performance Indexes**: Composite and single-column indexes are strategically applied for performance.
 - **React Query Performance**: Tuned defaults, per-data-type stale times, optimistic updates with rollback, and array-based query keys for efficient cache management.
-- **List Virtualization**: `VirtualizedList` component for efficient rendering of large lists.
+- **List Virtualization**: `VirtualizedList` component and React Virtuoso for efficient rendering of large lists. Chat timeline uses Virtuoso directly with `firstItemIndex` prepend pattern, `followOutput` for stick-to-bottom, and `atBottomStateChange` for new-messages pill.
 - **Error Boundaries**: Comprehensive error boundaries for React render errors with recovery UI.
 - **Motion System**: Framer Motion-based animation primitives for enhanced user experience.
 

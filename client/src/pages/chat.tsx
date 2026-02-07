@@ -201,6 +201,7 @@ export default function ChatPage() {
   const [mentionOpen, setMentionOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionCursorPos, setMentionCursorPos] = useState(0);
+  const [mentionIndex, setMentionIndex] = useState(0);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
 
   // Team panel state
@@ -644,9 +645,11 @@ export default function ChatPage() {
       setMentionOpen(true);
       setMentionQuery(mentionMatch[1]);
       setMentionCursorPos(cursorPos);
+      setMentionIndex(0);
     } else {
       setMentionOpen(false);
       setMentionQuery("");
+      setMentionIndex(0);
     }
   };
 
@@ -1331,8 +1334,7 @@ export default function ChatPage() {
       setMessages((prev) =>
         prev.map((msg) => (msg.id === data.id ? { ...msg, body: data.body, editedAt: data.editedAt } : msg))
       );
-      setEditingMessageId(null);
-      setEditingBody("");
+      // Editing state is managed inside ChatMessageTimeline
     },
     onError: (error: Error) => {
       const requestId = error instanceof ApiError ? error.requestId : null;
@@ -1502,13 +1504,36 @@ export default function ChatPage() {
     });
   };
 
-  // Handle keyboard shortcuts for message input (Enter to send, Shift+Enter for newline)
   const handleMessageKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === 'Enter' && !e.shiftKey) {
+    const mentionUsers = mentionableUsersQuery.data;
+    if (mentionOpen && mentionUsers && mentionUsers.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setMentionIndex((prev) => (prev + 1) % mentionUsers.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setMentionIndex((prev) => (prev - 1 + mentionUsers.length) % mentionUsers.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        insertMention(mentionUsers[mentionIndex]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setMentionOpen(false);
+        setMentionQuery("");
+        setMentionIndex(0);
+        return;
+      }
+    }
+    if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
       handleSendMessage();
     }
-    // Shift+Enter allows default behavior (newline in textarea)
   };
 
   // Message action handlers
@@ -1842,27 +1867,24 @@ export default function ChatPage() {
               isDm={!!selectedDm}
               className="flex-1"
             />
-            {/* DM "Seen" indicator - shows when other user has read the last message */}
             {selectedDm && dmSeenBy && messages.length > 0 && dmSeenBy.messageId === messages[messages.length - 1]?.id && (
-              <div className="flex justify-end pr-4 pb-2 border-t" data-testid="dm-seen-indicator">
-                <span className="text-xs text-muted-foreground flex items-center gap-1 pt-1">
+              <div className="flex justify-end px-4 py-1" data-testid="dm-seen-indicator">
+                <span className="text-xs text-muted-foreground flex items-center gap-1">
                   <CheckCheck className="h-3 w-3" />
                   Seen
                 </span>
               </div>
             )}
 
-            {/* Typing indicator - shows when other users are typing */}
             {typingUsers.length > 0 && (
-              <div className="px-4 py-2 text-sm text-muted-foreground flex items-center gap-2" data-testid="typing-indicator">
-                <span className="flex gap-0.5">
-                  <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "0ms" }} />
-                  <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "150ms" }} />
-                  <span className="w-1.5 h-1.5 bg-muted-foreground rounded-full animate-bounce" style={{ animationDelay: "300ms" }} />
+              <div className="h-6 px-4 text-xs text-muted-foreground flex items-center gap-2" data-testid="typing-indicator">
+                <span className="flex gap-0.5 items-center">
+                  <span className="w-1 h-1 bg-muted-foreground/70 rounded-full animate-bounce" style={{ animationDelay: "0ms", animationDuration: "1s" }} />
+                  <span className="w-1 h-1 bg-muted-foreground/70 rounded-full animate-bounce" style={{ animationDelay: "150ms", animationDuration: "1s" }} />
+                  <span className="w-1 h-1 bg-muted-foreground/70 rounded-full animate-bounce" style={{ animationDelay: "300ms", animationDuration: "1s" }} />
                 </span>
                 <span>
                   {(() => {
-                    // Get user names from teamUsers
                     const names = typingUsers.map(userId => {
                       const teamUser = teamUsers.find(u => u.id === userId);
                       return teamUser?.displayName || teamUser?.email?.split("@")[0] || "Someone";
@@ -1884,7 +1906,7 @@ export default function ChatPage() {
 
             <form 
               onSubmit={handleSendMessage} 
-              className={`p-4 border-t transition-colors ${isDragOver ? "bg-accent/20 border-primary border-2 border-dashed" : ""}`}
+              className={`px-4 py-3 border-t transition-colors ${isDragOver ? "bg-accent/20 border-primary border-2 border-dashed" : ""}`}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}
@@ -1897,9 +1919,8 @@ export default function ChatPage() {
                   Drop files here to upload
                 </div>
               )}
-              {/* Quote reply indicator */}
               {quoteReply && (
-                <div className="mb-2 flex items-start gap-2 p-2 rounded-md bg-muted border-l-2 border-primary" data-testid="quote-reply-indicator">
+                <div className="mb-2 flex items-start gap-2 p-2 rounded-md bg-muted/60 border-l-2 border-primary" data-testid="quote-reply-indicator">
                   <div className="flex-1 min-w-0">
                     <div className="text-xs font-medium text-muted-foreground mb-0.5">
                       Replying to {quoteReply.authorName}
@@ -1912,7 +1933,6 @@ export default function ChatPage() {
                     type="button"
                     size="icon"
                     variant="ghost"
-                    className="h-6 w-6"
                     onClick={() => setQuoteReply(null)}
                     data-testid="button-cancel-quote"
                   >
@@ -1929,7 +1949,7 @@ export default function ChatPage() {
                     type="button"
                     size="sm"
                     variant="ghost"
-                    className="h-6 px-2 text-destructive"
+                    className="text-destructive"
                     onClick={() => setSendError(null)}
                     data-testid="button-dismiss-error"
                   >
@@ -2001,14 +2021,22 @@ export default function ChatPage() {
                     data-testid="input-message"
                   />
                   {mentionOpen && mentionableUsersQuery.data && mentionableUsersQuery.data.length > 0 && (
-                    <div className="absolute bottom-full left-0 w-64 mb-1 bg-popover border rounded-md shadow-lg z-50 max-h-48 overflow-y-auto">
-                      {mentionableUsersQuery.data.map((u) => (
+                    <div className="absolute bottom-full left-0 w-72 mb-1 bg-popover border rounded-md shadow-lg z-50 max-h-52 overflow-y-auto py-1" data-testid="mention-popup">
+                      <div className="px-3 py-1.5 text-xs font-medium text-muted-foreground">
+                        People
+                      </div>
+                      {mentionableUsersQuery.data.map((u, idx) => (
                         <button
                           key={u.id}
                           type="button"
                           onClick={() => insertMention(u)}
-                          className="w-full px-3 py-2 text-left text-sm hover-elevate flex items-center gap-2"
+                          className={`w-full px-3 py-1.5 text-left text-sm flex items-center gap-2.5 transition-colors ${
+                            idx === mentionIndex
+                              ? "bg-accent text-accent-foreground"
+                              : "hover-elevate"
+                          }`}
                           data-testid={`mention-user-${u.id}`}
+                          onMouseEnter={() => setMentionIndex(idx)}
                         >
                           <div className="relative">
                             <Avatar className="h-6 w-6">
@@ -2019,9 +2047,9 @@ export default function ChatPage() {
                             <AvatarPresenceIndicator userId={u.id} avatarSize={24} size="sm" />
                           </div>
                           <div className="min-w-0 flex-1">
-                            <div className="font-medium truncate">{u.displayName}</div>
-                            <div className="text-xs text-muted-foreground truncate">{u.email}</div>
+                            <div className="font-medium truncate text-sm">{u.displayName}</div>
                           </div>
+                          <div className="text-xs text-muted-foreground truncate max-w-[100px]">{u.email}</div>
                         </button>
                       ))}
                     </div>

@@ -233,6 +233,29 @@ if (await isChannelMember(channelId, userId)) {
 
 ---
 
+## Frontend Performance
+
+### Virtualized Message Timeline
+The `ChatMessageTimeline` component uses **React Virtuoso** for efficient rendering of long message histories:
+
+- **Stick-to-bottom**: `followOutput` keeps the view pinned when new messages arrive
+- **Prepend without jump**: `firstItemIndex` pattern (base index `100000 - groupCount`) enables loading older messages without scroll displacement
+- **New messages pill**: `atBottomStateChange` tracks scroll position; a pill appears when new messages arrive while scrolled up
+- **Message grouping**: Messages from the same author within 5 minutes are grouped; date separators and unread dividers are rendered as part of the virtual item list
+- **Overscan**: 300px overscan with `increaseViewportBy: { top: 400, bottom: 200 }` for smooth scrolling
+
+### Composer
+- Textarea with emoji picker (emoji-picker-react) and file attachment support
+- `@mention` popup with keyboard navigation (ArrowUp/Down, Enter/Tab to select, Escape to dismiss)
+- Enter sends, Shift+Enter for newline
+
+### Conventions
+- Avoid `<Component<Type>>` JSX generics with Vite; use `data={items as Type[]}` casting instead
+- Message types in `ChatMessageTimeline.tsx` include `tenantId?` and `_status: "pending" | "sent" | "failed"` for compatibility with the parent page's optimistic update model
+- All interactive elements require `data-testid` attributes
+
+---
+
 ## Related Documentation
 
 - [Membership Rules](./MEMBERSHIP_RULES.md) - Channel/DM membership
