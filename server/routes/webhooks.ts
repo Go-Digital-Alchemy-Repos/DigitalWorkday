@@ -1,38 +1,70 @@
 import { Router, raw } from "express";
-import { db } from "../db";
-import { systemSettings } from "../../shared/schema";
-import { decryptValue, isEncryptionAvailable } from "../lib/encryption";
+import {
+  getStripeWebhookSecret,
+  getStripeSecretKey,
+  StripeConfigError,
+} from "../config/stripe";
 
 const router = Router();
 
-// POST /api/v1/webhooks/stripe - Stripe webhook handler
+function errorEnvelope(
+  code: string,
+  message: string,
+  status: number,
+  requestId: string
+) {
+  return {
+    ok: false,
+    requestId,
+    error: { code, message, status, requestId },
+    message,
+    code,
+  };
+}
+
 router.post("/stripe", raw({ type: "application/json" }), async (req, res) => {
-  const requestId = (req as any).requestId || `wh-${Date.now()}`;
+  const requestId = req.requestId || `wh-${Date.now()}`;
   const signature = req.headers["stripe-signature"];
 
   if (!signature) {
     console.warn(`[stripe-webhook] [${requestId}] Missing stripe-signature header`);
-    return res.status(400).json({ error: "Missing stripe-signature header" });
+    return res.status(400).json(
+      errorEnvelope("VALIDATION_ERROR", "Missing stripe-signature header", 400, requestId)
+    );
+  }
+
+  let webhookSecret: string;
+  try {
+    const result = await getStripeWebhookSecret();
+    webhookSecret = result.secret;
+  } catch (err) {
+    if (err instanceof StripeConfigError) {
+      console.error(`[stripe-webhook] [${requestId}] Configuration error: ${err.message}`);
+    } else {
+      console.error(`[stripe-webhook] [${requestId}] Unexpected error retrieving webhook secret`);
+    }
+    return res.status(500).json(
+      errorEnvelope("INTERNAL_ERROR", "Stripe webhook secret misconfigured", 500, requestId)
+    );
+  }
+
+  let stripeSecretKey: string;
+  try {
+    stripeSecretKey = await getStripeSecretKey();
+  } catch (err) {
+    if (err instanceof StripeConfigError) {
+      console.error(`[stripe-webhook] [${requestId}] Stripe API key misconfigured: ${err.message}`);
+    } else {
+      console.error(`[stripe-webhook] [${requestId}] Unexpected error retrieving Stripe API key`);
+    }
+    return res.status(500).json(
+      errorEnvelope("INTERNAL_ERROR", "Stripe API key misconfigured", 500, requestId)
+    );
   }
 
   try {
-    const [settings] = await db.select().from(systemSettings).limit(1);
-    
-    if (!settings?.stripeWebhookSecretEncrypted) {
-      console.warn(`[stripe-webhook] [${requestId}] Webhook secret not configured`);
-      return res.status(400).json({ error: "Webhook secret not configured" });
-    }
-
-    if (!isEncryptionAvailable()) {
-      console.error(`[stripe-webhook] [${requestId}] Encryption not available`);
-      return res.status(500).json({ error: "Server configuration error" });
-    }
-
-    const webhookSecret = decryptValue(settings.stripeWebhookSecretEncrypted);
-    
-    // Import Stripe dynamically
     const Stripe = (await import("stripe")).default;
-    const stripe = new Stripe(process.env.STRIPE_SECRET_KEY || "sk_test_placeholder", {
+    const stripe = new Stripe(stripeSecretKey, {
       apiVersion: "2025-12-15.clover",
     });
 
@@ -44,14 +76,14 @@ router.post("/stripe", raw({ type: "application/json" }), async (req, res) => {
         webhookSecret
       );
     } catch (err: any) {
-      console.error(`[stripe-webhook] [${requestId}] Signature verification failed: ${err.message}`);
-      return res.status(400).json({ error: "Invalid signature" });
+      console.error(`[stripe-webhook] [${requestId}] Signature verification failed`);
+      return res.status(400).json(
+        errorEnvelope("VALIDATION_ERROR", "Invalid signature", 400, requestId)
+      );
     }
 
-    // Log the event type (no payload dumps for security)
     console.log(`[stripe-webhook] [${requestId}] Received event: ${event.type}`);
 
-    // Supported event types (scaffolding - to be implemented later)
     const supportedEventTypes = [
       "checkout.session.completed",
       "customer.subscription.created",
@@ -65,16 +97,16 @@ router.post("/stripe", raw({ type: "application/json" }), async (req, res) => {
 
     if (supportedEventTypes.includes(event.type)) {
       console.log(`[stripe-webhook] [${requestId}] Processing supported event: ${event.type}`);
-      // TODO: Implement event handlers for each type when subscription packages are added
     } else {
       console.log(`[stripe-webhook] [${requestId}] Ignoring unsupported event: ${event.type}`);
     }
 
-    // Always acknowledge receipt with 200 for valid signed events
     res.status(200).json({ received: true, eventType: event.type });
   } catch (error: any) {
-    console.error(`[stripe-webhook] [${requestId}] Error processing webhook:`, error.message);
-    res.status(500).json({ error: "Webhook processing failed" });
+    console.error(`[stripe-webhook] [${requestId}] Error processing webhook`);
+    return res.status(500).json(
+      errorEnvelope("INTERNAL_ERROR", "Webhook processing failed", 500, requestId)
+    );
   }
 });
 

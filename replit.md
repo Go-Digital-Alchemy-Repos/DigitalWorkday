@@ -69,6 +69,7 @@ MyWorkDay is an Asana-inspired project management application aimed at streamlin
 - **Canonical requireTenantContext**: Primary implementation in `server/middleware/tenantContext.ts`. Duplicate in `tenancyEnforcement.ts` is deprecated (factory pattern, unused by routes).
 - **Rate Limiting**: Applied to auth endpoints (login, bootstrap, invite, forgot-password), file uploads, internal chat sends, and CRM client messaging. Configurable via environment variables. Uses pluggable `RateLimitStore` interface (in-memory default, extensible for Redis) with tenant-scoped keying and email-based/IP-based limits. Middleware: `server/middleware/rateLimit.ts`.
 - **CSRF Protection**: Origin/referer validation middleware (`server/middleware/csrf.ts`) blocks cross-origin state-changing requests. Exempts safe methods (GET/HEAD/OPTIONS), webhooks, and health endpoints. Development mode allows localhost origins; configurable via `CSRF_ENABLED` env var.
+- **Stripe Webhook Hardening**: Centralized Stripe config module (`server/config/stripe.ts`) with `getStripeWebhookSecret()` and `getStripeSecretKey()` helpers. Rejects placeholder/fake secrets, safely decrypts DB-stored secrets, and fails fast in production. Secret precedence: env var overrides database. Webhook handler (`server/routes/webhooks.ts`) fails closed (500) when misconfigured and uses standardized error envelopes.
 - **Secret Redaction**: All error logs automatically redact passwords, API keys, tokens, and database URLs before storage.
 
 ## External Dependencies

@@ -1,0 +1,128 @@
+NON-DESTRUCTIVE SECURITY + RELIABILITY UPDATE — STRIPE WEBHOOKS: REQUIRE REAL SECRETS + SAFE DECRYPT + FAIL FAST
+(DigitalWorkDay / MyWorkDay)
+
+You are working in an existing production codebase. Do NOT remove endpoints. Do NOT change Stripe event business logic. Do NOT change success response shapes returned by non-webhook APIs. This task is specifically to harden Stripe webhook handling so it refuses placeholder/missing secrets, decrypts secrets safely, and surfaces config errors early.
+
+PRIMARY GOAL
+Tighten Stripe webhook handling to:
+1) Require configured Stripe webhook secret(s) (no placeholders).
+2) Decrypt secrets safely before constructing Stripe events.
+3) Fail fast and clearly when configuration is missing/invalid (especially in production).
+4) Prevent webhook processing from silently “working” with placeholder keys or misconfigured secrets.
+
+PHASE 0 — DISCOVERY (DO FIRST)
+1) Locate Stripe webhook implementation:
+   - Find the webhook route (e.g., /api/webhooks/stripe or /stripe/webhook).
+   - Identify where Stripe SDK is initialized and where `stripe.webhooks.constructEvent(...)` is called.
+   - Identify how webhook secrets are stored and loaded:
+     - env vars (STRIPE_WEBHOOK_SECRET / STRIPE_WEBHOOK_SECRET_LIVE/TEST)
+     - database-stored encrypted secrets
+     - secrets manager wrapper
+2) Identify current weaknesses:
+   - Placeholder keys used (e.g., “whsec_...” dummy string, “TODO”, “changeme”, empty string, or default fallback)
+   - Secrets being read without validation
+   - Decryption errors swallowed or replaced with empty values
+   - Missing raw body handling (Stripe requires raw payload + signature)
+
+DO NOT change behavior yet—just inventory.
+
+PHASE 1 — CONFIG CONTRACT + FAIL-FAST STARTUP CHECK
+3) Add strict configuration checks at startup (minimal, consistent with existing patterns)
+   - Create/extend a centralized config module (match repo conventions, ESM):
+     - server/config/stripe.ts (or similar)
+   - Validate required values on boot:
+     - Stripe API key (if used by server) AND Stripe webhook secret(s) used for constructEvent
+   - Behavior:
+     - If NODE_ENV=production AND Stripe webhooks are enabled:
+       - Throw and exit if webhook secret is missing OR looks like a placeholder OR cannot be decrypted
+     - In dev/test:
+       - Allow missing secrets only if the webhook route is disabled or explicitly set to “dev mode”
+       - Otherwise, still warn loudly and return safe 500 on webhook calls
+
+4) Define supported secret sources (use what exists already)
+   - If secrets are env-based:
+     - STRIPE_WEBHOOK_SECRET (single)
+     - optionally STRIPE_WEBHOOK_SECRET_TEST and STRIPE_WEBHOOK_SECRET_LIVE
+   - If secrets are stored encrypted in DB/config table:
+     - Use the existing encryption/decryption utility; do not invent a new scheme.
+   - If both exist, prefer a clear precedence rule and document it:
+     - e.g., “DB-configured secret overrides env secret” OR “env overrides DB” (choose the pattern already used in repo).
+
+PHASE 2 — SAFE DECRYPTION + EARLY ERROR SURFACING
+5) Implement safe secret retrieval function (single source of truth)
+   Create a helper like:
+   - getStripeWebhookSecret({ mode }): returns decrypted secret string
+   Requirements:
+   - Must return a NON-empty string
+   - Must reject placeholders (examples):
+     - contains “changeme”, “placeholder”, “TODO”
+     - equals “whsec_...” but too short/obviously fake
+     - equals “whsec_xxx” / “whsec_test”
+   - If encrypted:
+     - decrypt using existing decrypt utility
+     - if decrypt fails, throw a typed config error (AppError/config error) with a clear message
+   - Never log the secret or decrypted value
+
+6) Ensure decryption happens BEFORE constructing events
+   - In the webhook handler, retrieve and decrypt the secret first.
+   - If retrieval fails:
+     - In production: log a configuration error (no secret) and respond with 500 (do not 2xx)
+     - In dev: log error and respond 500
+   - Do not proceed to constructEvent with an empty/placeholder secret.
+
+PHASE 3 — WEBHOOK HANDLER HARDENING (RAW BODY + SIGNATURE)
+7) Confirm raw body handling is correct (Stripe requirement)
+   - Ensure webhook route uses raw body middleware:
+     - express.raw({ type: 'application/json' })
+   - Do NOT apply JSON parser before raw middleware on the same route.
+   - Confirm signature header used:
+     - `stripe-signature` from request headers
+   - If the repo already has a pattern for raw body routes, follow it.
+
+8) Construct event safely
+   - Use: stripe.webhooks.constructEvent(rawBody, signature, webhookSecret)
+   - Error handling:
+     - If constructEvent throws due to signature mismatch:
+       - Respond 400 with standardized error shape (AppError)
+       - Log a concise message (no payload, no secrets)
+     - If config error:
+       - Respond 500 and clearly log “Stripe webhook secret misconfigured”
+
+9) Avoid accepting webhooks when config is wrong
+   - Do not return 200/204 for requests if secrets are missing/placeholder or decryption fails.
+   - Ensure the handler fails closed.
+
+PHASE 4 — MULTI-SECRET SUPPORT (IF NEEDED)
+10) If the app supports both test and live webhooks:
+   - Determine mode:
+     - by environment (NODE_ENV) + STRIPE_MODE, or
+     - by verifying signature with multiple secrets (advanced but safe)
+   Preferred minimal approach:
+   - If both secrets are configured, attempt constructEvent with the “primary” secret and if signature verification fails, attempt the secondary secret (without masking real auth errors).
+   - Keep logs minimal and do not leak which secret matched unless it’s a harmless “mode=test/live” tag.
+
+PHASE 5 — TESTS + DOCS (REQUIRED)
+11) Add minimal tests (use repo’s existing test stack)
+   - Test: missing secret in production => startup check fails OR webhook returns 500 config error
+   - Test: placeholder secret => rejected
+   - Test: invalid signature => 400
+   - Test: valid signature (can mock Stripe constructEvent) => handler proceeds
+
+12) Update Docs Library / docs
+   - Document:
+     - required env vars / where secrets live
+     - encryption/decryption behavior (high-level; no sensitive detail)
+     - failure modes (what happens when misconfigured)
+     - webhook raw body requirement
+
+DELIVERABLES
+- Centralized Stripe webhook secret retrieval with safe validation + decryption
+- Webhook handler updated to fail closed when misconfigured
+- Startup/boot checks to surface configuration issues early in production
+- Tests and docs updated
+- Provide a summary of files changed and new env vars added (no secrets)
+
+DO NOT
+- Do not introduce placeholder secrets or default fallbacks.
+- Do not log decrypted secrets, raw payloads, or Stripe signature.
+- Do not refactor Stripe business logic or event processing beyond what’s necessary to harden config/constructEvent flow.

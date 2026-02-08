@@ -263,3 +263,17 @@ if (isProduction) {
     process.exit(1);
   }
 }
+
+// Validate Stripe env vars (placeholder rejection, startup warnings)
+try {
+  const { validateStripeEnvAtStartup } = require("./config/stripe");
+  validateStripeEnvAtStartup();
+} catch (err: any) {
+  if (err?.code === "STRIPE_CONFIG_ERROR" && isProduction) {
+    console.error(`[config] ${err.message}`);
+    process.exit(1);
+  }
+  if (err?.code === "STRIPE_CONFIG_ERROR") {
+    console.warn(`[config] ${err.message}`);
+  }
+}
