@@ -170,7 +170,7 @@ tenantProjectsRouter.post("/tenants/:tenantId/projects/bulk", requireSuperUser, 
       }
     }
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "projects_bulk_imported",
@@ -277,7 +277,7 @@ tenantProjectsRouter.post("/tenants/:tenantId/projects", requireSuperUser, async
       budgetMinutes: data.budgetMinutes || null,
     }).returning();
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "project_created",
@@ -354,7 +354,7 @@ tenantProjectsRouter.delete("/tenants/:tenantId/projects/:projectId", requireSup
 
     await db.delete(projects).where(eq(projects.id, projectId));
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "project_deleted",

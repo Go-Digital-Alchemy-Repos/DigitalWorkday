@@ -217,7 +217,7 @@ exportImportRouter.post("/tenants/:tenantId/import/clients", requireSuperUser, a
       }
     }
     
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "clients_imported",
@@ -330,7 +330,7 @@ exportImportRouter.post("/tenants/:tenantId/import/time-entries", requireSuperUs
       }
     }
     
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "time_entries_imported",
@@ -561,7 +561,7 @@ exportImportRouter.post("/tenants/:tenantId/import/user-client-summary", require
       }
     }
     
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "user_client_summary_imported",

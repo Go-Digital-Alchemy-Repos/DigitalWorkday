@@ -87,7 +87,7 @@ tenantNotesRouter.post("/tenants/:tenantId/notes", requireSuperUser, async (req,
       return res.status(404).json({ error: "Tenant not found" });
     }
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     if (!superUser?.id) {
       return res.status(401).json({ error: "User not authenticated" });
     }

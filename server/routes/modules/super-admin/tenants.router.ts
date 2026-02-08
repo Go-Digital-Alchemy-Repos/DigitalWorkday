@@ -93,7 +93,7 @@ const createTenantSchema = insertTenantSchema.extend({
 
 tenantsRouter.post("/tenants", requireSuperUser, async (req, res) => {
   const requestId = req.requestId || "unknown";
-  const superUser = req.user as any;
+  const superUser = req.user!;
   const debugEnabled = process.env.SUPER_TENANT_CREATE_DEBUG === "true";
   
   try {
@@ -249,7 +249,7 @@ tenantsRouter.post("/tenants/:tenantId/activate", requireSuperUser, async (req, 
 
     console.log(`[SuperAdmin] Tenant ${tenantId} activated by super user`);
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "tenant_status_changed",
@@ -292,7 +292,7 @@ tenantsRouter.post("/tenants/:tenantId/suspend", requireSuperUser, async (req, r
 
     console.log(`[SuperAdmin] Tenant ${tenantId} suspended by super user`);
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "tenant_status_changed",
@@ -335,7 +335,7 @@ tenantsRouter.post("/tenants/:tenantId/deactivate", requireSuperUser, async (req
 
     console.log(`[SuperAdmin] Tenant ${tenantId} deactivated by super user`);
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "tenant_status_changed",
@@ -371,7 +371,7 @@ tenantsRouter.delete("/tenants/:tenantId", requireSuperUser, async (req, res) =>
       });
     }
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     console.log(`[SuperAdmin] Deleting tenant ${tenantId} (${tenant.name}) by super user ${superUser?.email}`);
 
     await db.transaction(async (tx) => {
@@ -517,7 +517,7 @@ tenantsRouter.post("/tenants/:tenantId/invite-admin", requireSuperUser, async (r
       workspaceId = newWorkspace.id;
     }
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     if (!superUser?.id) {
       return res.status(401).json({ error: "User not authenticated" });
     }

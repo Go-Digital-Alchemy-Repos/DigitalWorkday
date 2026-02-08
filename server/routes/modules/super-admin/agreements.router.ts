@@ -175,7 +175,7 @@ agreementsRouter.post("/agreements", requireSuperUser, async (req, res) => {
     }
     
     const { tenantId, title, body } = validation.data;
-    const user = req.user as any;
+    const user = req.user!;
     
     const effectiveTenantId = tenantId || null;
     

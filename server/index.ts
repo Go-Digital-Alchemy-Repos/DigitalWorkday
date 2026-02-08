@@ -16,6 +16,7 @@ import { errorHandler } from "./middleware/errorHandler";
 import { errorLoggingMiddleware } from "./middleware/errorLogging";
 import { apiJsonResponseGuard, apiNotFoundHandler } from "./middleware/apiJsonGuard";
 import { requestLogger } from "./middleware/requestLogger";
+import { csrfProtection } from "./middleware/csrf";
 import { logMigrationStatus } from "./scripts/migration-status";
 import { ensureSchemaReady, getLastSchemaCheck } from "./startup/schemaReadiness";
 import { logAppInfo } from "./startup/appInfo";
@@ -168,6 +169,9 @@ app.use(requestLogger);
 
 // Setup agreement enforcement (must be after tenant context)
 app.use(agreementEnforcementGuard);
+
+// CSRF protection (after auth, before API routes)
+app.use(csrfProtection);
 
 // API JSON response guard - ensures all /api routes return JSON, never HTML
 app.use(apiJsonResponseGuard);

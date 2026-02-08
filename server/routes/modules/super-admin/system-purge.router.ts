@@ -62,7 +62,7 @@ systemPurgeRouter.post("/system/purge-app-data", requireSuperUser, async (req, r
     }
 
     console.log("[purge] Starting application data purge via API...");
-    console.log(`[purge] Requested by user: ${(req.user as any)?.email}`);
+    console.log(`[purge] Requested by user: ${(req.user!)?.email}`);
 
     const results: Array<{ table: string; rowsDeleted: number; status: string }> = [];
     let totalRowsDeleted = 0;

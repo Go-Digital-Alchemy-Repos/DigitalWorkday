@@ -7,14 +7,99 @@
  * - Rate limiting is enabled by default in production
  * - Rate limiting is disabled by default in development for convenience
  * - All limits are configurable via environment variables
+ * - Tenant-scoped keying ensures fair limits per tenant in multi-tenant mode
+ * 
+ * Architecture:
+ * - RateLimitStore interface enables pluggable backends (in-memory default, Redis future)
+ * - InMemoryRateLimitStore handles cleanup via periodic sweep
+ * - Tenant ID is extracted from req.user when available for scoped rate limits
  * 
  * Sharp Edges:
  * - Uses in-memory store; limits reset on server restart
  * - Set RATE_LIMIT_DEV_ENABLED=true to test rate limiting in development
+ * - To use a custom store, call setRateLimitStore() before server starts
  */
 
 import rateLimit from "express-rate-limit";
 import { Request, Response, NextFunction } from "express";
+
+// ============================================================================
+// Pluggable Rate Limit Store Interface
+// ============================================================================
+
+export interface RateLimitEntry {
+  count: number;
+  resetAt: number;
+}
+
+export interface RateLimitStore {
+  get(key: string): RateLimitEntry | undefined;
+  set(key: string, entry: RateLimitEntry): void;
+  delete(key: string): void;
+  clear(): void;
+  cleanup(): void;
+}
+
+export class InMemoryRateLimitStore implements RateLimitStore {
+  private store = new Map<string, RateLimitEntry>();
+  private cleanupInterval: ReturnType<typeof setInterval>;
+
+  constructor(cleanupIntervalMs = 60000) {
+    this.cleanupInterval = setInterval(() => this.cleanup(), cleanupIntervalMs);
+    if (this.cleanupInterval.unref) {
+      this.cleanupInterval.unref();
+    }
+  }
+
+  get(key: string): RateLimitEntry | undefined {
+    return this.store.get(key);
+  }
+
+  set(key: string, entry: RateLimitEntry): void {
+    this.store.set(key, entry);
+  }
+
+  delete(key: string): void {
+    this.store.delete(key);
+  }
+
+  clear(): void {
+    this.store.clear();
+  }
+
+  cleanup(): void {
+    const now = Date.now();
+    this.store.forEach((entry, key) => {
+      if (entry.resetAt <= now) {
+        this.store.delete(key);
+      }
+    });
+  }
+
+  get size(): number {
+    return this.store.size;
+  }
+
+  destroy(): void {
+    clearInterval(this.cleanupInterval);
+    this.store.clear();
+  }
+}
+
+let activeStore: RateLimitStore = new InMemoryRateLimitStore();
+
+export function setRateLimitStore(store: RateLimitStore): void {
+  activeStore.clear();
+  activeStore = store;
+}
+
+export function getRateLimitStore(): RateLimitStore {
+  return activeStore;
+}
+
+// ============================================================================
+// Configuration
+// ============================================================================
 
 const RATE_LIMIT_LOGIN_WINDOW_MS = parseInt(process.env.RATE_LIMIT_LOGIN_WINDOW_MS || "60000", 10);
 const RATE_LIMIT_LOGIN_MAX_IP = parseInt(process.env.RATE_LIMIT_LOGIN_MAX_IP || "10", 10);
@@ -47,10 +132,24 @@ function generateRequestId(): string {
   return `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
 }
 
-interface RateLimitEntry {
-  count: number;
-  resetAt: number;
+// ============================================================================
+// Tenant-Scoped Key Generation
+// ============================================================================
+
+function getTenantScope(req: Request): string {
+  const user = req.user as any;
+  if (user?.tenantId) return `t:${user.tenantId}`;
+  return "global";
 }
+
+function buildScopedKey(prefix: string, identifier: string, req?: Request): string {
+  const scope = req ? getTenantScope(req) : "global";
+  return `${scope}:${prefix}:${identifier}`;
+}
+
+// ============================================================================
+// Email Rate Limiting (uses pluggable store)
+// ============================================================================
 
 const emailStore = new Map<string, RateLimitEntry>();
 
@@ -69,15 +168,18 @@ function checkEmailRateLimit(
   email: string,
   maxRequests: number,
   windowMs: number,
-  keyPrefix: string
+  keyPrefix: string,
+  req?: Request
 ): { allowed: boolean; remaining: number; resetAt: number } {
   const now = Date.now();
-  const key = `${keyPrefix}:${email}`;
-  const entry = emailStore.get(key);
+  const key = buildScopedKey(keyPrefix, email, req);
+  const entry = activeStore.get(key) || emailStore.get(`${keyPrefix}:${email}`);
 
   if (!entry || entry.resetAt <= now) {
     const resetAt = now + windowMs;
-    emailStore.set(key, { count: 1, resetAt });
+    const newEntry = { count: 1, resetAt };
+    activeStore.set(key, newEntry);
+    emailStore.set(`${keyPrefix}:${email}`, newEntry);
     return { allowed: true, remaining: maxRequests - 1, resetAt };
   }
 
@@ -101,7 +203,7 @@ function createEmailRateLimiter(
     const email = req.body?.email?.toLowerCase?.();
     if (!email) return next();
 
-    const emailCheck = checkEmailRateLimit(email, maxRequestsPerEmail, windowMs, keyPrefix);
+    const emailCheck = checkEmailRateLimit(email, maxRequestsPerEmail, windowMs, keyPrefix, req);
     
     if (!emailCheck.allowed) {
       const requestId = generateRequestId();
@@ -324,6 +426,7 @@ export const clientMessageRateLimiter = rateLimit({
 
 export function resetRateLimitStores(): void {
   emailStore.clear();
+  activeStore.clear();
 }
 
 export { emailStore };

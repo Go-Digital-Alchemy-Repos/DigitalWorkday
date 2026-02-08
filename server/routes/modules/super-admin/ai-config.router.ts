@@ -78,7 +78,7 @@ aiConfigRouter.put("/ai/config", requireSuperUser, async (req, res) => {
       });
     }
     
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       null,
       "ai_config_updated",
@@ -124,7 +124,7 @@ aiConfigRouter.delete("/ai/api-key", requireSuperUser, async (req, res) => {
       })
       .where(eq(systemSettings.id, 1));
     
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       null,
       "ai_api_key_removed",

@@ -50,7 +50,7 @@ tenantWorkspacesRouter.post("/tenants/:tenantId/workspaces", requireSuperUser, a
       tenantId,
     }).returning();
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "workspace_created",
@@ -125,7 +125,7 @@ tenantWorkspacesRouter.delete("/tenants/:tenantId/workspaces/:workspaceId", requ
 
     await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "workspace_deleted",

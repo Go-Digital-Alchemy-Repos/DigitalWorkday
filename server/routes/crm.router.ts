@@ -5,18 +5,11 @@ import { eq, and, desc, sql, count, ilike, lte, gte, inArray, isNotNull } from "
 import { AppError, handleRouteError, sendError, validateBody } from "../lib/errors";
 import { getEffectiveTenantId } from "../middleware/tenantContext";
 import { requireAuth, requireAdmin } from "../auth";
-import { clientMessageRateLimiter } from "../middleware/rateLimit";
 import {
   clients,
-  clientContacts,
   clientCrm,
-  clientNotes,
-  clientNoteVersions,
   clientFiles,
   userClientAccess,
-  approvalRequests,
-  clientConversations,
-  clientMessages,
   users,
   projects,
   tasks,
@@ -24,44 +17,21 @@ import {
   activityLog,
   comments,
   updateClientCrmSchema,
-  updateClientContactSchema,
-  updateClientFileSchema,
-  updateApprovalStatusSchema,
   UserRole,
   CrmClientStatus,
-  ClientFileVisibility,
 } from "@shared/schema";
 import { getCurrentUserId } from "./helpers";
+import { verifyClientTenancy, isAdminOrSuper } from "./modules/crm/crm.helpers";
+
+import crmSubModules from "./modules/crm";
 
 const router = Router();
 
-function isAdminOrSuper(req: Request): boolean {
-  return req.user?.role === UserRole.ADMIN || req.user?.role === UserRole.SUPER_USER;
-}
+router.use(crmSubModules);
 
-async function verifyClientTenancy(clientId: string, tenantId: string): Promise<typeof clients.$inferSelect | null> {
-  const [client] = await db.select()
-    .from(clients)
-    .where(and(eq(clients.id, clientId), eq(clients.tenantId, tenantId)))
-    .limit(1);
-  return client || null;
-}
-
-const crmContactCreateSchema = z.object({
-  firstName: z.string().min(1).optional(),
-  lastName: z.string().min(1).optional(),
-  title: z.string().optional(),
-  email: z.string().email().optional().nullable(),
-  phone: z.string().optional().nullable(),
-  isPrimary: z.boolean().optional(),
-  notes: z.string().optional().nullable(),
-});
-
-const crmNoteCreateSchema = z.object({
-  body: z.unknown(),
-  category: z.string().optional(),
-  categoryId: z.string().uuid().optional().nullable(),
-});
+// =============================================================================
+// CLIENT SUMMARY & METRICS
+// =============================================================================
 
 router.get("/crm/clients/:clientId/summary", requireAuth, async (req: Request, res: Response) => {
   try {
@@ -72,53 +42,37 @@ router.get("/crm/clients/:clientId/summary", requireAuth, async (req: Request, r
     const client = await verifyClientTenancy(clientId, tenantId);
     if (!client) return sendError(res, AppError.notFound("Client"), req);
 
-    const [crmRow] = await db.select()
-      .from(clientCrm)
+    const [crmData] = await db.select().from(clientCrm)
       .where(and(eq(clientCrm.clientId, clientId), eq(clientCrm.tenantId, tenantId)))
       .limit(1);
 
-    const [projectCount] = await db.select({ value: count() })
-      .from(projects)
+    const [projectCount] = await db.select({ value: count() }).from(projects)
       .where(and(eq(projects.clientId, clientId), eq(projects.tenantId, tenantId)));
 
-    const [openTaskCount] = await db.select({ value: count() })
-      .from(tasks)
-      .where(
-        and(
-          eq(tasks.tenantId, tenantId),
-          sql`${tasks.projectId} IN (SELECT id FROM projects WHERE client_id = ${clientId} AND tenant_id = ${tenantId})`,
-          sql`${tasks.status} NOT IN ('completed', 'archived')`
-        )
-      );
+    const clientProjectIds = db.select({ id: projects.id }).from(projects)
+      .where(and(eq(projects.clientId, clientId), eq(projects.tenantId, tenantId)));
 
-    const [hoursSums] = await db.select({
-      totalHours: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}) / 3600.0, 0)`,
-      billableHours: sql<number>`COALESCE(SUM(CASE WHEN ${timeEntries.scope} = 'in_scope' THEN ${timeEntries.durationSeconds} ELSE 0 END) / 3600.0, 0)`,
-    })
-      .from(timeEntries)
-      .where(
-        and(
-          eq(timeEntries.tenantId, tenantId),
-          sql`${timeEntries.projectId} IN (SELECT id FROM projects WHERE client_id = ${clientId} AND tenant_id = ${tenantId})`
-        )
-      );
+    const [taskCount] = await db.select({ value: count() }).from(tasks)
+      .where(and(eq(tasks.tenantId, tenantId), sql`${tasks.projectId} IN (${clientProjectIds})`));
+
+    const [completedTaskCount] = await db.select({ value: count() }).from(tasks)
+      .where(and(eq(tasks.tenantId, tenantId), eq(tasks.status, "completed"), sql`${tasks.projectId} IN (${clientProjectIds})`));
+
+    let ownerName = null;
+    if (crmData?.ownerUserId) {
+      const [owner] = await db.select({ name: users.name }).from(users)
+        .where(eq(users.id, crmData.ownerUserId)).limit(1);
+      ownerName = owner?.name || null;
+    }
 
     res.json({
-      client: {
-        id: client.id,
-        companyName: client.companyName,
-        displayName: client.displayName,
-        email: client.email,
-        phone: client.phone,
-        status: client.status,
-        industry: client.industry,
-      },
-      crm: crmRow || null,
-      counts: {
-        projects: projectCount?.value ?? 0,
-        openTasks: openTaskCount?.value ?? 0,
-        totalHours: Number(hoursSums?.totalHours ?? 0),
-        billableHours: Number(hoursSums?.billableHours ?? 0),
+      client,
+      crm: crmData || null,
+      ownerName,
+      stats: {
+        projectCount: projectCount?.value || 0,
+        taskCount: taskCount?.value || 0,
+        completedTaskCount: completedTaskCount?.value || 0,
       },
     });
   } catch (error) {
@@ -130,217 +84,106 @@ router.get("/crm/clients/:clientId/metrics", requireAuth, async (req: Request, r
   try {
     const tenantId = getEffectiveTenantId(req);
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-    if (!isAdminOrSuper(req)) return sendError(res, AppError.forbidden("Admin access required"), req);
 
     const { clientId } = req.params;
     const client = await verifyClientTenancy(clientId, tenantId);
     if (!client) return sendError(res, AppError.notFound("Client"), req);
 
-    const { from, to } = req.query;
-    const dateConditions = [];
-    if (from) {
-      const d = new Date(from as string);
-      if (!isNaN(d.getTime())) dateConditions.push(gte(timeEntries.startTime, d));
-    }
-    if (to) {
-      const d = new Date(to as string);
-      if (!isNaN(d.getTime())) dateConditions.push(lte(timeEntries.startTime, d));
-    }
+    const clientProjectIds = db.select({ id: projects.id }).from(projects)
+      .where(and(eq(projects.clientId, clientId), eq(projects.tenantId, tenantId)));
 
-    const clientEntriesFilter = sql`(
-      ${timeEntries.projectId} IN (SELECT id FROM projects WHERE client_id = ${clientId} AND tenant_id = ${tenantId})
-      OR ${timeEntries.clientId} = ${clientId}
-    )`;
-    const baseConditions = [
-      eq(timeEntries.tenantId, tenantId),
-      clientEntriesFilter,
-      ...dateConditions,
-    ];
+    const [totalTasks] = await db.select({ value: count() }).from(tasks)
+      .where(and(eq(tasks.tenantId, tenantId), sql`${tasks.projectId} IN (${clientProjectIds})`));
 
-    const [totals] = await db.select({
-      totalHours: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}) / 3600.0, 0)`,
-      billableHours: sql<number>`COALESCE(SUM(CASE WHEN ${timeEntries.scope} = 'in_scope' THEN ${timeEntries.durationSeconds} ELSE 0 END) / 3600.0, 0)`,
-      totalTimeEntries: count(),
+    const [completedTasks] = await db.select({ value: count() }).from(tasks)
+      .where(and(eq(tasks.tenantId, tenantId), eq(tasks.status, "completed"), sql`${tasks.projectId} IN (${clientProjectIds})`));
+
+    const [overdueTasks] = await db.select({ value: count() }).from(tasks)
+      .where(and(
+        eq(tasks.tenantId, tenantId),
+        sql`${tasks.projectId} IN (${clientProjectIds})`,
+        sql`${tasks.dueDate} < NOW()`,
+        sql`${tasks.status} != 'completed'`
+      ));
+
+    const totalHoursResult = await db.select({
+      totalSeconds: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}), 0)`,
     })
       .from(timeEntries)
-      .where(and(...baseConditions));
+      .where(and(eq(timeEntries.tenantId, tenantId), sql`${timeEntries.projectId} IN (${clientProjectIds})`));
 
-    const hoursByProject = await db.select({
-      projectId: projects.id,
-      projectName: projects.name,
-      totalHours: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}) / 3600.0, 0)`,
-      billableHours: sql<number>`COALESCE(SUM(CASE WHEN ${timeEntries.scope} = 'in_scope' THEN ${timeEntries.durationSeconds} ELSE 0 END) / 3600.0, 0)`,
-      entryCount: count(),
+    const totalSeconds = totalHoursResult[0]?.totalSeconds || 0;
+    const totalHours = Math.round((Number(totalSeconds) / 3600) * 10) / 10;
+
+    const billableHoursResult = await db.select({
+      totalSeconds: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}), 0)`,
     })
       .from(timeEntries)
-      .innerJoin(projects, eq(timeEntries.projectId, projects.id))
-      .where(and(...baseConditions))
-      .groupBy(projects.id, projects.name)
-      .orderBy(sql`SUM(${timeEntries.durationSeconds}) DESC`);
+      .where(and(
+        eq(timeEntries.tenantId, tenantId),
+        sql`is_billable = true`,
+        sql`${timeEntries.projectId} IN (${clientProjectIds})`
+      ));
 
-    const hoursByEmployee = await db.select({
-      userId: users.id,
-      userName: sql<string>`COALESCE(${users.name}, ${users.email})`,
-      totalHours: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}) / 3600.0, 0)`,
-      billableHours: sql<number>`COALESCE(SUM(CASE WHEN ${timeEntries.scope} = 'in_scope' THEN ${timeEntries.durationSeconds} ELSE 0 END) / 3600.0, 0)`,
-      entryCount: count(),
-    })
-      .from(timeEntries)
-      .innerJoin(users, eq(timeEntries.userId, users.id))
-      .where(and(...baseConditions))
-      .groupBy(users.id, users.name, users.email)
-      .orderBy(sql`SUM(${timeEntries.durationSeconds}) DESC`);
+    const billableSeconds = billableHoursResult[0]?.totalSeconds || 0;
+    const billableHours = Math.round((Number(billableSeconds) / 3600) * 10) / 10;
 
-    const recentEntries = await db.select({
-      id: timeEntries.id,
-      title: timeEntries.title,
-      scope: timeEntries.scope,
-      startTime: timeEntries.startTime,
-      endTime: timeEntries.endTime,
-      durationSeconds: timeEntries.durationSeconds,
-      projectName: projects.name,
-      userName: sql<string>`COALESCE(${users.name}, ${users.email})`,
+    const projectStats = await db.select({
+      id: projects.id,
+      name: projects.name,
+      status: projects.status,
     })
-      .from(timeEntries)
-      .leftJoin(projects, eq(timeEntries.projectId, projects.id))
-      .leftJoin(users, eq(timeEntries.userId, users.id))
-      .where(and(...baseConditions))
-      .orderBy(desc(timeEntries.startTime))
-      .limit(100);
+      .from(projects)
+      .where(and(eq(projects.clientId, clientId), eq(projects.tenantId, tenantId)));
+
+    const activeProjects = projectStats.filter(p => p.status === "active").length;
+    const completedProjects = projectStats.filter(p => p.status === "completed").length;
+
+    const recentActivity = await db.select({
+      id: activityLog.id,
+      action: activityLog.action,
+      entityType: activityLog.entityType,
+      entityId: activityLog.entityId,
+      description: sql<string>`description`,
+      actorUserId: activityLog.actorUserId,
+      createdAt: activityLog.createdAt,
+    })
+      .from(activityLog)
+      .where(
+        and(
+          sql`${activityLog.workspaceId} IN (SELECT id FROM workspaces WHERE tenant_id = ${tenantId})`,
+          sql`${activityLog.entityId} IN (${clientProjectIds}) OR ${activityLog.entityId} IN (SELECT id FROM tasks WHERE tenant_id = ${tenantId} AND project_id IN (${clientProjectIds}))`
+        )
+      )
+      .orderBy(desc(activityLog.createdAt))
+      .limit(10);
 
     res.json({
-      totalHours: Number(totals?.totalHours ?? 0),
-      billableHours: Number(totals?.billableHours ?? 0),
-      totalTimeEntries: Number(totals?.totalTimeEntries ?? 0),
-      revenueEstimate: null,
-      hoursByProject: hoursByProject.map(r => ({
-        projectId: r.projectId,
-        projectName: r.projectName,
-        totalHours: Number(r.totalHours),
-        billableHours: Number(r.billableHours),
-        entryCount: Number(r.entryCount),
-      })),
-      hoursByEmployee: hoursByEmployee.map(r => ({
-        userId: r.userId,
-        userName: r.userName,
-        totalHours: Number(r.totalHours),
-        billableHours: Number(r.billableHours),
-        entryCount: Number(r.entryCount),
-      })),
-      recentEntries: recentEntries.map(r => ({
-        id: r.id,
-        title: r.title,
-        scope: r.scope,
-        startTime: r.startTime,
-        endTime: r.endTime,
-        durationSeconds: r.durationSeconds,
-        projectName: r.projectName,
-        userName: r.userName,
-      })),
+      tasks: {
+        total: totalTasks?.value || 0,
+        completed: completedTasks?.value || 0,
+        overdue: overdueTasks?.value || 0,
+        completionRate: totalTasks?.value ? Math.round(((completedTasks?.value || 0) / (totalTasks?.value || 1)) * 100) : 0,
+      },
+      hours: {
+        total: totalHours,
+        billable: billableHours,
+      },
+      projects: {
+        total: projectStats.length,
+        active: activeProjects,
+        completed: completedProjects,
+      },
+      recentActivity,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/crm/clients/:clientId/metrics", req);
   }
 });
 
-router.get("/crm/clients/:clientId/contacts", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const { clientId } = req.params;
-    const client = await verifyClientTenancy(clientId, tenantId);
-    if (!client) return sendError(res, AppError.notFound("Client"), req);
-
-    const contacts = await db.select()
-      .from(clientContacts)
-      .where(and(eq(clientContacts.clientId, clientId), eq(clientContacts.workspaceId, client.workspaceId)))
-      .orderBy(desc(clientContacts.isPrimary), clientContacts.createdAt);
-
-    res.json(contacts);
-  } catch (error) {
-    return handleRouteError(res, error, "GET /api/crm/clients/:clientId/contacts", req);
-  }
-});
-
-router.post("/crm/clients/:clientId/contacts", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const { clientId } = req.params;
-    const client = await verifyClientTenancy(clientId, tenantId);
-    if (!client) return sendError(res, AppError.notFound("Client"), req);
-
-    const data = validateBody(req.body, crmContactCreateSchema, res);
-    if (!data) return;
-
-    const [contact] = await db.insert(clientContacts).values({
-      clientId,
-      tenantId,
-      workspaceId: client.workspaceId,
-      firstName: data.firstName,
-      lastName: data.lastName,
-      title: data.title,
-      email: data.email ?? null,
-      phone: data.phone ?? null,
-      isPrimary: data.isPrimary ?? false,
-      notes: data.notes ?? null,
-    }).returning();
-
-    res.status(201).json(contact);
-  } catch (error) {
-    return handleRouteError(res, error, "POST /api/crm/clients/:clientId/contacts", req);
-  }
-});
-
-router.patch("/crm/contacts/:id", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const { id } = req.params;
-
-    const [existing] = await db.select()
-      .from(clientContacts)
-      .where(and(eq(clientContacts.id, id), eq(clientContacts.tenantId, tenantId)))
-      .limit(1);
-    if (!existing) return sendError(res, AppError.notFound("Contact"), req);
-
-    const data = validateBody(req.body, updateClientContactSchema, res);
-    if (!data) return;
-
-    const [updated] = await db.update(clientContacts)
-      .set({ ...data, updatedAt: new Date() })
-      .where(and(eq(clientContacts.id, id), eq(clientContacts.tenantId, tenantId)))
-      .returning();
-
-    res.json(updated);
-  } catch (error) {
-    return handleRouteError(res, error, "PATCH /api/crm/contacts/:id", req);
-  }
-});
-
-router.delete("/crm/contacts/:id", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const { id } = req.params;
-
-    const [existing] = await db.select()
-      .from(clientContacts)
-      .where(and(eq(clientContacts.id, id), eq(clientContacts.tenantId, tenantId)))
-      .limit(1);
-    if (!existing) return sendError(res, AppError.notFound("Contact"), req);
-
-    await db.delete(clientContacts).where(and(eq(clientContacts.id, id), eq(clientContacts.tenantId, tenantId)));
-
-    res.json({ success: true });
-  } catch (error) {
-    return handleRouteError(res, error, "DELETE /api/crm/contacts/:id", req);
-  }
-});
+// =============================================================================
+// CRM STATUS UPDATE
+// =============================================================================
 
 router.patch("/crm/clients/:clientId/crm", requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -391,94 +234,9 @@ router.patch("/crm/clients/:clientId/crm", requireAdmin, async (req: Request, re
   }
 });
 
-router.get("/crm/clients/:clientId/notes", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const { clientId } = req.params;
-    const client = await verifyClientTenancy(clientId, tenantId);
-    if (!client) return sendError(res, AppError.notFound("Client"), req);
-
-    const notes = await db.select({
-      id: clientNotes.id,
-      tenantId: clientNotes.tenantId,
-      clientId: clientNotes.clientId,
-      authorUserId: clientNotes.authorUserId,
-      body: clientNotes.body,
-      category: clientNotes.category,
-      categoryId: clientNotes.categoryId,
-      createdAt: clientNotes.createdAt,
-      updatedAt: clientNotes.updatedAt,
-      authorName: users.name,
-      authorEmail: users.email,
-    })
-      .from(clientNotes)
-      .leftJoin(users, eq(clientNotes.authorUserId, users.id))
-      .where(and(eq(clientNotes.clientId, clientId), eq(clientNotes.tenantId, tenantId)))
-      .orderBy(desc(clientNotes.createdAt));
-
-    res.json(notes);
-  } catch (error) {
-    return handleRouteError(res, error, "GET /api/crm/clients/:clientId/notes", req);
-  }
-});
-
-router.post("/crm/clients/:clientId/notes", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const { clientId } = req.params;
-    const client = await verifyClientTenancy(clientId, tenantId);
-    if (!client) return sendError(res, AppError.notFound("Client"), req);
-
-    const data = validateBody(req.body, crmNoteCreateSchema, res);
-    if (!data) return;
-
-    const userId = getCurrentUserId(req);
-
-    const [note] = await db.insert(clientNotes).values({
-      clientId,
-      tenantId,
-      authorUserId: userId,
-      body: data.body,
-      category: data.category ?? "general",
-      categoryId: data.categoryId ?? null,
-    }).returning();
-
-    res.status(201).json(note);
-  } catch (error) {
-    return handleRouteError(res, error, "POST /api/crm/clients/:clientId/notes", req);
-  }
-});
-
-router.delete("/crm/notes/:id", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const { id } = req.params;
-
-    const [existing] = await db.select()
-      .from(clientNotes)
-      .where(and(eq(clientNotes.id, id), eq(clientNotes.tenantId, tenantId)))
-      .limit(1);
-    if (!existing) return sendError(res, AppError.notFound("Note"), req);
-
-    const userId = getCurrentUserId(req);
-    if (existing.authorUserId !== userId && !isAdminOrSuper(req)) {
-      return sendError(res, AppError.forbidden("Only the author or an admin can delete this note"), req);
-    }
-
-    await db.delete(clientNoteVersions).where(and(eq(clientNoteVersions.noteId, id), eq(clientNoteVersions.tenantId, tenantId)));
-    await db.delete(clientNotes).where(and(eq(clientNotes.id, id), eq(clientNotes.tenantId, tenantId)));
-
-    res.json({ success: true });
-  } catch (error) {
-    return handleRouteError(res, error, "DELETE /api/crm/notes/:id", req);
-  }
-});
+// =============================================================================
+// PIPELINE & FOLLOW-UPS
+// =============================================================================
 
 router.get("/crm/pipeline", requireAdmin, async (req: Request, res: Response) => {
   try {
@@ -792,7 +550,7 @@ router.get("/crm/clients/:clientId/activity", requireAuth, async (req: Request, 
         .leftJoin(users, eq(users.id, comments.userId))
         .where(
           and(
-            eq(comments.tenantId, tenantId),
+            sql`tenant_id = ${tenantId}`,
             sql`${comments.taskId} IN (SELECT id FROM tasks WHERE tenant_id = ${tenantId} AND project_id IN (${clientProjectIds}))`
           )
         )
@@ -817,6 +575,7 @@ router.get("/crm/clients/:clientId/activity", requireAuth, async (req: Request, 
     }
 
     if (!typeFilter || typeFilter === "file") {
+      const { clientFiles } = await import("@shared/schema");
       const fileEvents = await db
         .select({
           id: clientFiles.id,
@@ -854,165 +613,6 @@ router.get("/crm/clients/:clientId/activity", requireAuth, async (req: Request, 
 });
 
 // =============================================================================
-// CLIENT FILES
-// =============================================================================
-
-router.get("/crm/clients/:clientId/files", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const { clientId } = req.params;
-    const client = await verifyClientTenancy(clientId, tenantId);
-    if (!client) return sendError(res, AppError.notFound("Client"), req);
-
-    const isClient = req.user?.role === UserRole.CLIENT;
-    const visibilityConditions = isClient
-      ? and(eq(clientFiles.clientId, clientId), eq(clientFiles.tenantId, tenantId), eq(clientFiles.visibility, ClientFileVisibility.CLIENT))
-      : and(eq(clientFiles.clientId, clientId), eq(clientFiles.tenantId, tenantId));
-
-    const typeFilter = req.query.type as string | undefined;
-    const visibilityFilter = req.query.visibility as string | undefined;
-
-    let conditions = visibilityConditions;
-    if (typeFilter) {
-      conditions = and(conditions, eq(clientFiles.mimeType, typeFilter))!;
-    }
-    if (visibilityFilter && !isClient) {
-      conditions = and(conditions, eq(clientFiles.visibility, visibilityFilter))!;
-    }
-
-    const files = await db
-      .select({
-        id: clientFiles.id,
-        filename: clientFiles.filename,
-        mimeType: clientFiles.mimeType,
-        size: clientFiles.size,
-        url: clientFiles.url,
-        visibility: clientFiles.visibility,
-        linkedEntityType: clientFiles.linkedEntityType,
-        linkedEntityId: clientFiles.linkedEntityId,
-        uploadedByUserId: clientFiles.uploadedByUserId,
-        uploaderName: users.name,
-        createdAt: clientFiles.createdAt,
-      })
-      .from(clientFiles)
-      .leftJoin(users, eq(users.id, clientFiles.uploadedByUserId))
-      .where(conditions)
-      .orderBy(desc(clientFiles.createdAt));
-
-    res.json(files);
-  } catch (error) {
-    return handleRouteError(res, error, "GET /api/crm/clients/:clientId/files", req);
-  }
-});
-
-router.post("/crm/clients/:clientId/files", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    if (req.user?.role === UserRole.CLIENT) {
-      return sendError(res, AppError.forbidden("Client users cannot upload files"), req);
-    }
-
-    const { clientId } = req.params;
-    const client = await verifyClientTenancy(clientId, tenantId);
-    if (!client) return sendError(res, AppError.notFound("Client"), req);
-
-    const userId = getCurrentUserId(req);
-
-    const fileSchema = z.object({
-      filename: z.string().min(1),
-      mimeType: z.string().optional(),
-      size: z.number().optional(),
-      storageKey: z.string().min(1),
-      url: z.string().optional(),
-      visibility: z.enum(["internal", "client"]).optional(),
-      linkedEntityType: z.string().optional(),
-      linkedEntityId: z.string().optional(),
-    });
-
-    const data = validateBody(req.body, fileSchema, res);
-    if (!data) return;
-
-    const [file] = await db.insert(clientFiles).values({
-      tenantId,
-      clientId,
-      uploadedByUserId: userId,
-      filename: data.filename,
-      mimeType: data.mimeType ?? null,
-      size: data.size ?? null,
-      storageKey: data.storageKey,
-      url: data.url ?? null,
-      visibility: data.visibility ?? ClientFileVisibility.INTERNAL,
-      linkedEntityType: data.linkedEntityType ?? null,
-      linkedEntityId: data.linkedEntityId ?? null,
-    }).returning();
-
-    res.status(201).json(file);
-  } catch (error) {
-    return handleRouteError(res, error, "POST /api/crm/clients/:clientId/files", req);
-  }
-});
-
-router.patch("/crm/files/:id", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    if (req.user?.role === UserRole.CLIENT) {
-      return sendError(res, AppError.forbidden("Client users cannot modify files"), req);
-    }
-
-    const { id } = req.params;
-
-    const [existing] = await db.select()
-      .from(clientFiles)
-      .where(and(eq(clientFiles.id, id), eq(clientFiles.tenantId, tenantId)))
-      .limit(1);
-    if (!existing) return sendError(res, AppError.notFound("File"), req);
-
-    const data = validateBody(req.body, updateClientFileSchema, res);
-    if (!data) return;
-
-    const [updated] = await db.update(clientFiles)
-      .set(data)
-      .where(and(eq(clientFiles.id, id), eq(clientFiles.tenantId, tenantId)))
-      .returning();
-
-    res.json(updated);
-  } catch (error) {
-    return handleRouteError(res, error, "PATCH /api/crm/files/:id", req);
-  }
-});
-
-router.delete("/crm/files/:id", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    if (req.user?.role === UserRole.CLIENT) {
-      return sendError(res, AppError.forbidden("Client users cannot delete files"), req);
-    }
-
-    const { id } = req.params;
-
-    const [existing] = await db.select()
-      .from(clientFiles)
-      .where(and(eq(clientFiles.id, id), eq(clientFiles.tenantId, tenantId)))
-      .limit(1);
-    if (!existing) return sendError(res, AppError.notFound("File"), req);
-
-    await db.delete(clientFiles).where(and(eq(clientFiles.id, id), eq(clientFiles.tenantId, tenantId)));
-
-    res.json({ success: true });
-  } catch (error) {
-    return handleRouteError(res, error, "DELETE /api/crm/files/:id", req);
-  }
-});
-
-// =============================================================================
 // CLIENT PORTAL / USER CLIENT ACCESS
 // =============================================================================
 
@@ -1029,13 +629,15 @@ router.get("/crm/clients/:clientId/access", requireAdmin, async (req: Request, r
       .select({
         id: userClientAccess.id,
         userId: userClientAccess.userId,
+        clientId: userClientAccess.clientId,
+        workspaceId: sql<string>`${userClientAccess}.workspace_id`,
+        accessLevel: sql<string>`${userClientAccess}.access_level`,
+        createdAt: userClientAccess.createdAt,
         userName: users.name,
         userEmail: users.email,
-        permissions: userClientAccess.permissions,
-        createdAt: userClientAccess.createdAt,
       })
       .from(userClientAccess)
-      .leftJoin(users, eq(users.id, userClientAccess.userId))
+      .leftJoin(users, eq(userClientAccess.userId, users.id))
       .where(and(eq(userClientAccess.clientId, clientId), eq(userClientAccess.tenantId, tenantId)));
 
     res.json(accessList);
@@ -1055,13 +657,13 @@ router.post("/crm/clients/:clientId/access", requireAdmin, async (req: Request, 
 
     const accessSchema = z.object({
       userId: z.string().uuid(),
-      permissions: z.record(z.unknown()).optional(),
+      accessLevel: z.enum(["view", "comment", "edit"]).optional(),
     });
 
     const data = validateBody(req.body, accessSchema, res);
     if (!data) return;
 
-    const [existingAccess] = await db.select()
+    const [existing] = await db.select()
       .from(userClientAccess)
       .where(and(
         eq(userClientAccess.userId, data.userId),
@@ -1070,16 +672,16 @@ router.post("/crm/clients/:clientId/access", requireAdmin, async (req: Request, 
       ))
       .limit(1);
 
-    if (existingAccess) {
-      return sendError(res, AppError.conflict("User already has access to this client"), req);
+    if (existing) {
+      return sendError(res, AppError.badRequest("User already has access to this client"), req);
     }
 
-    const [access] = await db.insert(userClientAccess).values({
-      tenantId,
-      userId: data.userId,
-      clientId,
-      permissions: data.permissions ?? null,
-    }).returning();
+    const result = await db.execute(sql`
+      INSERT INTO user_client_access (tenant_id, user_id, client_id, workspace_id, access_level)
+      VALUES (${tenantId}, ${data.userId}, ${clientId}, ${client.workspaceId}, ${data.accessLevel || "view"})
+      RETURNING *
+    `);
+    const access = result.rows?.[0] ?? result[0];
 
     res.status(201).json(access);
   } catch (error) {
@@ -1108,549 +710,90 @@ router.delete("/crm/access/:id", requireAdmin, async (req: Request, res: Respons
   }
 });
 
+// =============================================================================
+// CLIENT PORTAL DASHBOARD
+// =============================================================================
+
 router.get("/crm/portal/dashboard", requireAuth, async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
-    const userId = getCurrentUserId(req);
-
-    const accessRecords = await db.select({ clientId: userClientAccess.clientId })
-      .from(userClientAccess)
-      .where(and(eq(userClientAccess.userId, userId), eq(userClientAccess.tenantId, tenantId)));
-
-    const clientIds = accessRecords.map(a => a.clientId);
-
-    if (clientIds.length === 0) {
-      return res.json({ clients: [], projects: [], files: [], activity: [] });
+    const user = req.user!;
+    if (user.role !== UserRole.CLIENT) {
+      return sendError(res, AppError.forbidden("Portal access only"), req);
     }
 
-    const myClients = await db.select({
-      id: clients.id,
-      companyName: clients.companyName,
-      displayName: clients.displayName,
-    })
+    const { getClientUserAccessibleClients } = await import("../middleware/clientAccess");
+    const clientIds = await getClientUserAccessibleClients(user.id);
+
+    if (clientIds.length === 0) {
+      return res.json({
+        clients: [],
+        projects: [],
+        recentTasks: [],
+        stats: { totalProjects: 0, activeTasks: 0, completedTasks: 0 },
+      });
+    }
+
+    const accessibleClients = await db.select()
       .from(clients)
       .where(and(eq(clients.tenantId, tenantId), inArray(clients.id, clientIds)));
 
-    const myProjects = await db.select({
-      id: projects.id,
-      name: projects.name,
-      status: projects.status,
-      clientId: projects.clientId,
-    })
+    const clientProjects = await db.select()
       .from(projects)
-      .where(and(eq(projects.tenantId, tenantId), inArray(projects.clientId, clientIds)))
-      .orderBy(desc(projects.createdAt))
-      .limit(20);
+      .where(and(eq(projects.tenantId, tenantId), inArray(projects.clientId, clientIds)));
 
-    const sharedFiles = await db.select({
-      id: clientFiles.id,
-      filename: clientFiles.filename,
-      mimeType: clientFiles.mimeType,
-      size: clientFiles.size,
-      url: clientFiles.url,
-      clientId: clientFiles.clientId,
-      createdAt: clientFiles.createdAt,
-    })
-      .from(clientFiles)
-      .where(
-        and(
-          eq(clientFiles.tenantId, tenantId),
-          inArray(clientFiles.clientId, clientIds),
-          eq(clientFiles.visibility, ClientFileVisibility.CLIENT)
-        )
-      )
-      .orderBy(desc(clientFiles.createdAt))
-      .limit(20);
+    const projectIds = clientProjects.map(p => p.id);
+
+    let recentTasks: any[] = [];
+    let activeTasks = 0;
+    let completedTasks = 0;
+
+    if (projectIds.length > 0) {
+      recentTasks = await db.select({
+        id: tasks.id,
+        title: tasks.title,
+        status: tasks.status,
+        priority: tasks.priority,
+        dueDate: tasks.dueDate,
+        projectId: tasks.projectId,
+        createdAt: tasks.createdAt,
+      })
+        .from(tasks)
+        .where(and(eq(tasks.tenantId, tenantId), inArray(tasks.projectId, projectIds)))
+        .orderBy(desc(tasks.createdAt))
+        .limit(20);
+
+      const [activeCount] = await db.select({ value: count() }).from(tasks)
+        .where(and(
+          eq(tasks.tenantId, tenantId),
+          inArray(tasks.projectId, projectIds),
+          sql`${tasks.status} != 'completed'`
+        ));
+      activeTasks = activeCount?.value || 0;
+
+      const [completedCount] = await db.select({ value: count() }).from(tasks)
+        .where(and(
+          eq(tasks.tenantId, tenantId),
+          inArray(tasks.projectId, projectIds),
+          eq(tasks.status, "completed")
+        ));
+      completedTasks = completedCount?.value || 0;
+    }
 
     res.json({
-      clients: myClients,
-      projects: myProjects,
-      files: sharedFiles,
+      clients: accessibleClients,
+      projects: clientProjects,
+      recentTasks,
+      stats: {
+        totalProjects: clientProjects.length,
+        activeTasks,
+        completedTasks,
+      },
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/crm/portal/dashboard", req);
-  }
-});
-
-// ============================================================
-// Approval Requests
-// ============================================================
-
-const approvalCreateSchema = z.object({
-  clientId: z.string().uuid(),
-  projectId: z.string().uuid().optional().nullable(),
-  taskId: z.string().uuid().optional().nullable(),
-  title: z.string().min(1).max(500),
-  instructions: z.string().optional().nullable(),
-  dueAt: z.string().optional().nullable(),
-});
-
-router.post("/crm/clients/:clientId/approvals", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    if (!isAdminOrSuper(req)) {
-      return sendError(res, AppError.forbidden("Admin access required"), req);
-    }
-
-    const { clientId } = req.params;
-    const client = await verifyClientTenancy(clientId, tenantId);
-    if (!client) return sendError(res, AppError.notFound("Client"), req);
-
-    const body = approvalCreateSchema.parse(req.body);
-    const userId = getCurrentUserId(req);
-
-    const [approval] = await db.insert(approvalRequests).values({
-      tenantId,
-      clientId,
-      projectId: body.projectId || null,
-      taskId: body.taskId || null,
-      requestedByUserId: userId,
-      title: body.title,
-      instructions: body.instructions || null,
-      dueAt: body.dueAt ? new Date(body.dueAt) : null,
-      status: "pending",
-    }).returning();
-
-    res.status(201).json(approval);
-  } catch (error) {
-    return handleRouteError(res, error, "POST /api/crm/clients/:clientId/approvals", req);
-  }
-});
-
-router.get("/crm/clients/:clientId/approvals", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const { clientId } = req.params;
-
-    const user = req.user!;
-    if (user.role === UserRole.CLIENT) {
-      const { getClientUserAccessibleClients } = await import("../middleware/clientAccess");
-      const accessibleClients = await getClientUserAccessibleClients(user.id);
-      if (!accessibleClients.includes(clientId)) {
-        return sendError(res, AppError.forbidden("Access denied"), req);
-      }
-    } else {
-      const client = await verifyClientTenancy(clientId, tenantId);
-      if (!client) return sendError(res, AppError.notFound("Client"), req);
-    }
-
-    const { status } = req.query;
-
-    let query = db.select({
-      approval: approvalRequests,
-      requesterName: users.name,
-    })
-      .from(approvalRequests)
-      .leftJoin(users, eq(approvalRequests.requestedByUserId, users.id))
-      .where(
-        and(
-          eq(approvalRequests.tenantId, tenantId),
-          eq(approvalRequests.clientId, clientId),
-          ...(status ? [eq(approvalRequests.status, status as string)] : [])
-        )
-      )
-      .orderBy(desc(approvalRequests.createdAt))
-      .$dynamic();
-
-    const results = await query;
-
-    const approvals = results.map((r) => ({
-      ...r.approval,
-      requesterName: r.requesterName || "Unknown",
-    }));
-
-    res.json(approvals);
-  } catch (error) {
-    return handleRouteError(res, error, "GET /api/crm/clients/:clientId/approvals", req);
-  }
-});
-
-router.patch("/crm/approvals/:id", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const { id } = req.params;
-
-    const [existing] = await db.select()
-      .from(approvalRequests)
-      .where(and(eq(approvalRequests.id, id), eq(approvalRequests.tenantId, tenantId)))
-      .limit(1);
-
-    if (!existing) return sendError(res, AppError.notFound("Approval request"), req);
-
-    const user = req.user!;
-
-    if (user.role === UserRole.CLIENT) {
-      const { getClientUserAccessibleClients } = await import("../middleware/clientAccess");
-      const accessibleClients = await getClientUserAccessibleClients(user.id);
-      if (!accessibleClients.includes(existing.clientId)) {
-        return sendError(res, AppError.forbidden("Access denied"), req);
-      }
-    } else {
-      return sendError(res, AppError.forbidden("Only clients can respond to approval requests"), req);
-    }
-
-    if (existing.status !== "pending") {
-      return sendError(res, AppError.badRequest("This approval request has already been responded to"), req);
-    }
-
-    const body = updateApprovalStatusSchema.parse(req.body);
-
-    const respondedByName = user.name || user.email || "Client";
-
-    const [updated] = await db.update(approvalRequests)
-      .set({
-        status: body.status,
-        responseComment: body.responseComment || null,
-        respondedByName,
-        respondedAt: new Date(),
-        updatedAt: new Date(),
-      })
-      .where(and(eq(approvalRequests.id, id), eq(approvalRequests.tenantId, tenantId)))
-      .returning();
-
-    try {
-      const { notifyApprovalResponse } = await import("../features/notifications/notification.service");
-      await notifyApprovalResponse(
-        existing.requestedByUserId,
-        updated.id,
-        updated.title,
-        body.status,
-        respondedByName,
-        { tenantId, excludeUserId: user.id }
-      );
-    } catch (notifErr) {
-      console.error("[approvals] Failed to send notification:", notifErr);
-    }
-
-    res.json(updated);
-  } catch (error) {
-    return handleRouteError(res, error, "PATCH /api/crm/approvals/:id", req);
-  }
-});
-
-// Portal-specific: get all pending approvals across accessible clients
-router.get("/crm/portal/approvals", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const user = req.user!;
-    if (user.role !== UserRole.CLIENT) {
-      return sendError(res, AppError.forbidden("Portal access only"), req);
-    }
-
-    const { getClientUserAccessibleClients } = await import("../middleware/clientAccess");
-    const clientIds = await getClientUserAccessibleClients(user.id);
-
-    if (clientIds.length === 0) {
-      return res.json([]);
-    }
-
-    const results = await db.select({
-      approval: approvalRequests,
-      requesterName: users.name,
-      clientName: clients.companyName,
-    })
-      .from(approvalRequests)
-      .leftJoin(users, eq(approvalRequests.requestedByUserId, users.id))
-      .leftJoin(clients, eq(approvalRequests.clientId, clients.id))
-      .where(
-        and(
-          eq(approvalRequests.tenantId, tenantId),
-          inArray(approvalRequests.clientId, clientIds)
-        )
-      )
-      .orderBy(desc(approvalRequests.createdAt));
-
-    const approvals = results.map((r) => ({
-      ...r.approval,
-      requesterName: r.requesterName || "Unknown",
-      clientName: r.clientName || "Unknown",
-    }));
-
-    res.json(approvals);
-  } catch (error) {
-    return handleRouteError(res, error, "GET /api/crm/portal/approvals", req);
-  }
-});
-
-// =============================================================================
-// CLIENT MESSAGING - Conversations
-// =============================================================================
-
-// GET conversations for a client (internal users: admin/employee)
-router.get("/crm/clients/:clientId/conversations", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const { clientId } = req.params;
-    const client = await verifyClientTenancy(clientId, tenantId);
-    if (!client) return sendError(res, AppError.notFound("Client"), req);
-
-    const results = await db.select({
-      conversation: clientConversations,
-      creatorName: users.name,
-    })
-      .from(clientConversations)
-      .leftJoin(users, eq(clientConversations.createdByUserId, users.id))
-      .where(and(eq(clientConversations.clientId, clientId), eq(clientConversations.tenantId, tenantId)))
-      .orderBy(desc(clientConversations.updatedAt));
-
-    const convosWithMeta = await Promise.all(results.map(async (r) => {
-      const [msgCount] = await db.select({ value: count() })
-        .from(clientMessages)
-        .where(eq(clientMessages.conversationId, r.conversation.id));
-
-      const [lastMsg] = await db.select({
-        bodyText: clientMessages.bodyText,
-        createdAt: clientMessages.createdAt,
-        authorName: users.name,
-      })
-        .from(clientMessages)
-        .leftJoin(users, eq(clientMessages.authorUserId, users.id))
-        .where(eq(clientMessages.conversationId, r.conversation.id))
-        .orderBy(desc(clientMessages.createdAt))
-        .limit(1);
-
-      return {
-        ...r.conversation,
-        creatorName: r.creatorName || "Unknown",
-        messageCount: msgCount?.value || 0,
-        lastMessage: lastMsg || null,
-      };
-    }));
-
-    res.json(convosWithMeta);
-  } catch (error) {
-    return handleRouteError(res, error, "GET /api/crm/clients/:clientId/conversations", req);
-  }
-});
-
-// POST create a new conversation (admin/employee only)
-router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRateLimiter, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const user = req.user!;
-    if (user.role === UserRole.CLIENT) {
-      return sendError(res, AppError.forbidden("Clients cannot start conversations — use the reply endpoint instead"), req);
-    }
-
-    const { clientId } = req.params;
-    const client = await verifyClientTenancy(clientId, tenantId);
-    if (!client) return sendError(res, AppError.notFound("Client"), req);
-
-    const schema = z.object({
-      subject: z.string().min(1).max(200),
-      projectId: z.string().optional(),
-      initialMessage: z.string().min(1),
-    });
-
-    const data = validateBody(req.body, schema, res);
-    if (!data) return;
-
-    const userId = getCurrentUserId(req);
-
-    const [conversation] = await db.insert(clientConversations).values({
-      tenantId,
-      clientId,
-      projectId: data.projectId || null,
-      subject: data.subject,
-      createdByUserId: userId,
-    }).returning();
-
-    await db.insert(clientMessages).values({
-      tenantId,
-      conversationId: conversation.id,
-      authorUserId: userId,
-      bodyText: data.initialMessage,
-    });
-
-    res.status(201).json(conversation);
-  } catch (error) {
-    return handleRouteError(res, error, "POST /api/crm/clients/:clientId/conversations", req);
-  }
-});
-
-// =============================================================================
-// CLIENT MESSAGING - Messages within a conversation
-// =============================================================================
-
-// GET messages for a conversation
-router.get("/crm/conversations/:conversationId/messages", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const { conversationId } = req.params;
-
-    const [conversation] = await db.select()
-      .from(clientConversations)
-      .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)))
-      .limit(1);
-
-    if (!conversation) return sendError(res, AppError.notFound("Conversation"), req);
-
-    const user = req.user!;
-    if (user.role === UserRole.CLIENT) {
-      const { getClientUserAccessibleClients } = await import("../middleware/clientAccess");
-      const accessibleClients = await getClientUserAccessibleClients(user.id);
-      if (!accessibleClients.includes(conversation.clientId)) {
-        return sendError(res, AppError.forbidden("Access denied"), req);
-      }
-    }
-
-    const messages = await db.select({
-      id: clientMessages.id,
-      conversationId: clientMessages.conversationId,
-      authorUserId: clientMessages.authorUserId,
-      bodyText: clientMessages.bodyText,
-      bodyRich: clientMessages.bodyRich,
-      createdAt: clientMessages.createdAt,
-      authorName: users.name,
-      authorRole: users.role,
-    })
-      .from(clientMessages)
-      .leftJoin(users, eq(clientMessages.authorUserId, users.id))
-      .where(eq(clientMessages.conversationId, conversationId))
-      .orderBy(clientMessages.createdAt);
-
-    res.json({ conversation, messages });
-  } catch (error) {
-    return handleRouteError(res, error, "GET /api/crm/conversations/:conversationId/messages", req);
-  }
-});
-
-// POST a message to a conversation (both internal users and clients)
-router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMessageRateLimiter, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const { conversationId } = req.params;
-
-    const [conversation] = await db.select()
-      .from(clientConversations)
-      .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)))
-      .limit(1);
-
-    if (!conversation) return sendError(res, AppError.notFound("Conversation"), req);
-
-    if (conversation.closedAt) {
-      return sendError(res, AppError.badRequest("This conversation is closed"), req);
-    }
-
-    const user = req.user!;
-    if (user.role === UserRole.CLIENT) {
-      const { getClientUserAccessibleClients } = await import("../middleware/clientAccess");
-      const accessibleClients = await getClientUserAccessibleClients(user.id);
-      if (!accessibleClients.includes(conversation.clientId)) {
-        return sendError(res, AppError.forbidden("Access denied"), req);
-      }
-    }
-
-    const schema = z.object({
-      bodyText: z.string().min(1),
-      bodyRich: z.string().optional(),
-    });
-
-    const data = validateBody(req.body, schema, res);
-    if (!data) return;
-
-    const userId = getCurrentUserId(req);
-
-    const [message] = await db.insert(clientMessages).values({
-      tenantId,
-      conversationId,
-      authorUserId: userId,
-      bodyText: data.bodyText,
-      bodyRich: data.bodyRich || null,
-    }).returning();
-
-    await db.update(clientConversations)
-      .set({ updatedAt: new Date() })
-      .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)));
-
-    res.status(201).json(message);
-  } catch (error) {
-    return handleRouteError(res, error, "POST /api/crm/conversations/:conversationId/messages", req);
-  }
-});
-
-// =============================================================================
-// CLIENT MESSAGING - Portal endpoints
-// =============================================================================
-
-// GET all conversations for client portal user
-router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
-
-    const user = req.user!;
-    if (user.role !== UserRole.CLIENT) {
-      return sendError(res, AppError.forbidden("Portal access only"), req);
-    }
-
-    const { getClientUserAccessibleClients } = await import("../middleware/clientAccess");
-    const clientIds = await getClientUserAccessibleClients(user.id);
-
-    if (clientIds.length === 0) return res.json([]);
-
-    const results = await db.select({
-      conversation: clientConversations,
-      creatorName: users.name,
-      clientName: clients.companyName,
-    })
-      .from(clientConversations)
-      .leftJoin(users, eq(clientConversations.createdByUserId, users.id))
-      .leftJoin(clients, eq(clientConversations.clientId, clients.id))
-      .where(
-        and(
-          eq(clientConversations.tenantId, tenantId),
-          inArray(clientConversations.clientId, clientIds)
-        )
-      )
-      .orderBy(desc(clientConversations.updatedAt));
-
-    const convosWithMeta = await Promise.all(results.map(async (r) => {
-      const [msgCount] = await db.select({ value: count() })
-        .from(clientMessages)
-        .where(eq(clientMessages.conversationId, r.conversation.id));
-
-      const [lastMsg] = await db.select({
-        bodyText: clientMessages.bodyText,
-        createdAt: clientMessages.createdAt,
-        authorName: users.name,
-      })
-        .from(clientMessages)
-        .leftJoin(users, eq(clientMessages.authorUserId, users.id))
-        .where(eq(clientMessages.conversationId, r.conversation.id))
-        .orderBy(desc(clientMessages.createdAt))
-        .limit(1);
-
-      return {
-        ...r.conversation,
-        creatorName: r.creatorName || "Unknown",
-        clientName: r.clientName || "Unknown",
-        messageCount: msgCount?.value || 0,
-        lastMessage: lastMsg || null,
-      };
-    }));
-
-    res.json(convosWithMeta);
-  } catch (error) {
-    return handleRouteError(res, error, "GET /api/crm/portal/conversations", req);
   }
 });
 

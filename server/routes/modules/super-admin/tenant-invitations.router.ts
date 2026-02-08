@@ -45,7 +45,7 @@ tenantInvitationsRouter.post("/tenants/:tenantId/invitations/:invitationId/activ
   try {
     const { tenantId, invitationId } = req.params;
     const { password } = req.body;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -175,7 +175,7 @@ tenantInvitationsRouter.post("/tenants/:tenantId/invitations/:invitationId/activ
 tenantInvitationsRouter.post("/tenants/:tenantId/invitations/activate-all", requireSuperUser, async (req, res) => {
   try {
     const { tenantId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -300,7 +300,7 @@ tenantInvitationsRouter.post("/tenants/:tenantId/invitations/activate-all", requ
 tenantInvitationsRouter.post("/tenants/:tenantId/invitations/:invitationId/revoke", requireSuperUser, async (req, res) => {
   try {
     const { tenantId, invitationId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -335,7 +335,7 @@ tenantInvitationsRouter.post("/tenants/:tenantId/invitations/:invitationId/revok
 tenantInvitationsRouter.post("/tenants/:tenantId/invitations/:invitationId/resend", requireSuperUser, async (req, res) => {
   try {
     const { tenantId, invitationId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -401,7 +401,7 @@ tenantInvitationsRouter.post("/tenants/:tenantId/invitations/:invitationId/resen
 tenantInvitationsRouter.post("/tenants/:tenantId/invitations/:invitationId/regenerate", requireSuperUser, async (req, res) => {
   try {
     const { tenantId, invitationId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -454,7 +454,7 @@ tenantInvitationsRouter.post("/tenants/:tenantId/invitations/:invitationId/regen
 tenantInvitationsRouter.delete("/tenants/:tenantId/invitations/:invitationId", requireSuperUser, async (req, res) => {
   try {
     const { tenantId, invitationId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {

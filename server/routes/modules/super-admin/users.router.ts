@@ -349,7 +349,7 @@ superUsersRouter.patch("/users/:userId", requireSuperUser, async (req, res) => {
       role: z.enum(["admin", "employee"]).optional(),
       isActive: z.boolean().optional(),
     }).parse(req.body);
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const existingUser = await storage.getUser(userId);
     if (!existingUser) {
@@ -444,7 +444,7 @@ superUsersRouter.post("/users/:userId/generate-reset-link", requireSuperUser, as
     const { sendEmail } = z.object({
       sendEmail: z.boolean().optional().default(false),
     }).parse(req.body);
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const existingUser = await storage.getUser(userId);
     if (!existingUser) {
@@ -527,7 +527,7 @@ superUsersRouter.post("/users/:userId/generate-reset-link", requireSuperUser, as
 superUsersRouter.delete("/users/:userId", requireSuperUser, async (req, res) => {
   try {
     const { userId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const existingUser = await storage.getUser(userId);
     if (!existingUser) {

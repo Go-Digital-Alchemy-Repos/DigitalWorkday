@@ -131,7 +131,7 @@ tenantClientsRouter.post("/tenants/:tenantId/clients/bulk", requireSuperUser, as
       }
     }
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "clients_bulk_imported",
@@ -219,7 +219,7 @@ tenantClientsRouter.post("/tenants/:tenantId/clients", requireSuperUser, async (
       workspaceId,
     }).returning();
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "client_created",
@@ -319,7 +319,7 @@ tenantClientsRouter.post("/tenants/:tenantId/clients/fix-tenant-ids", requireSup
       }
     }
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     if (fixedClients.length > 0) {
       await recordTenantAuditEvent(
         tenantId,
@@ -470,7 +470,7 @@ tenantClientsRouter.delete("/tenants/:tenantId/clients/:clientId", requireSuperU
       await tx.delete(clients).where(eq(clients.id, clientId));
     });
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     await recordTenantAuditEvent(
       tenantId,
       "client_deleted",

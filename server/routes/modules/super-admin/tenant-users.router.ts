@@ -81,7 +81,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users", requireSuperUser, async (req,
   try {
     const { tenantId } = req.params;
     const data = createUserSchema.parse(req.body);
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -167,7 +167,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users/provision", requireSuperUser, a
   try {
     const { tenantId } = req.params;
     const data = provisionUserSchema.parse(req.body);
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     if (debug) {
       console.log(`[provision-debug] requestId=${requestId} tenantId=${tenantId} email=${data.email} method=${data.method}`);
@@ -405,7 +405,7 @@ async function sendProvisionResetEmail(tenantId: string, email: string, resetUrl
 tenantUsersRouter.post("/tenants/:tenantId/users/fix-tenant-ids", requireSuperUser, async (req, res) => {
   try {
     const { tenantId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -513,7 +513,7 @@ tenantUsersRouter.patch("/tenants/:tenantId/users/:userId", requireSuperUser, as
   try {
     const { tenantId, userId } = req.params;
     const data = updateUserSchema.parse(req.body);
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -569,7 +569,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users/:userId/activate", requireSuper
   try {
     const { tenantId, userId } = req.params;
     const { isActive } = z.object({ isActive: z.boolean() }).parse(req.body);
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -610,7 +610,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users/:userId/activate", requireSuper
 tenantUsersRouter.delete("/tenants/:tenantId/users/:userId", requireSuperUser, async (req, res) => {
   try {
     const { tenantId, userId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -678,7 +678,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users/:userId/set-password", requireS
   try {
     const { tenantId, userId } = req.params;
     const { password } = setPasswordSchema.parse(req.body);
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -720,7 +720,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users/:userId/set-password", requireS
 tenantUsersRouter.post("/tenants/:tenantId/users/:userId/impersonate-login", requireSuperUser, async (req, res) => {
   try {
     const { tenantId, userId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -825,7 +825,7 @@ tenantUsersRouter.get("/tenants/:tenantId/users/:userId/invitation", requireSupe
 tenantUsersRouter.post("/tenants/:tenantId/users/:userId/regenerate-invite", requireSuperUser, async (req, res) => {
   try {
     const { tenantId, userId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -874,7 +874,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users/:userId/regenerate-invite", req
 tenantUsersRouter.post("/tenants/:tenantId/users/:userId/send-invite", requireSuperUser, async (req, res) => {
   try {
     const { tenantId, userId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -951,7 +951,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users/:userId/reset-password", requir
   try {
     const { tenantId, userId } = req.params;
     const { password, mustChangeOnNextLogin } = resetPasswordSchema.parse(req.body);
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -1014,7 +1014,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users/:userId/reset-password", requir
 tenantUsersRouter.post("/tenants/:tenantId/users/:userId/generate-reset-link", requireSuperUser, async (req, res) => {
   try {
     const { tenantId, userId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const tenant = await storage.getTenant(tenantId);
     if (!tenant) {
@@ -1128,7 +1128,7 @@ tenantUsersRouter.post("/tenants/:tenantId/import-users", requireSuperUser, asyn
       workspaceId = newWorkspace.id;
     }
 
-    const superUser = req.user as any;
+    const superUser = req.user!;
     if (!superUser?.id) {
       return res.status(401).json({ error: "User not authenticated" });
     }

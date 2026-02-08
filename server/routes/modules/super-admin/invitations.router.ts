@@ -13,7 +13,7 @@ export const superInvitationsRouter = Router();
 superInvitationsRouter.post("/invitations/:invitationId/resend", requireSuperUser, async (req, res) => {
   try {
     const { invitationId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const [invitation] = await db.select()
       .from(invitations)
@@ -52,7 +52,7 @@ superInvitationsRouter.post("/invitations/:invitationId/resend", requireSuperUse
 superInvitationsRouter.delete("/invitations/:invitationId", requireSuperUser, async (req, res) => {
   try {
     const { invitationId } = req.params;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     const [invitation] = await db.select()
       .from(invitations)
@@ -126,7 +126,7 @@ superInvitationsRouter.post("/invitations/:invitationId/activate", requireSuperU
       .set({ status: "used", usedAt: new Date() })
       .where(eq(invitations.id, invitationId));
     
-    const superUser = req.user as any;
+    const superUser = req.user!;
     console.log(`[super/invitations/:id/activate] User ${newUser.email} (tenant: ${invitation.tenantId}) activated from invitation by super admin ${superUser?.email}`);
     
     res.json({ 

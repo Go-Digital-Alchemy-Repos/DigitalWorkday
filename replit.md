@@ -47,7 +47,7 @@ MyWorkDay is an Asana-inspired project management application aimed at streamlin
 - **Design Token System**: Formal CSS design tokens for spacing, typography, motion, radii, z-index, and semantic surface aliases ensure UI consistency.
 - **SaaS Agreement System**: Manages tenant SaaS agreements with lifecycle, versioning, and user acceptance tracking.
 - **Cloudflare R2 Storage**: Exclusive file storage with automatic image compression.
-- **Modular Architecture**: Modular API routes are organized by domain, including dedicated Super Admin sub-routers, with standardized error handling.
+- **Modular Architecture**: Modular API routes are organized by domain, including dedicated Super Admin sub-routers, with standardized error handling. CRM routes split into 5 domain sub-modules under `server/routes/modules/crm/` (contacts, notes, files, approvals, conversations) with shared `crm.helpers.ts`. SuperDebug routes split into 3 sub-modules under `server/routes/modules/superDebug/` (quarantine, backfill, diagnostics) with shared `superDebug.helpers.ts`.
 - **DB Performance Indexes**: Composite and single-column indexes are strategically applied for performance.
 - **React Query Performance**: Tuned defaults, per-data-type stale times, optimistic updates with rollback, and array-based query keys for efficient cache management.
 - **List Virtualization**: `VirtualizedList` component and React Virtuoso for efficient rendering of large lists. Chat timeline uses Virtuoso directly with `firstItemIndex` prepend pattern, `followOutput` for stick-to-bottom, and `atBottomStateChange` for new-messages pill.
@@ -67,7 +67,8 @@ MyWorkDay is an Asana-inspired project management application aimed at streamlin
 - **Defense-in-Depth Tenant Scoping**: All mutating queries (UPDATE/DELETE) include `tenantId` in WHERE clauses alongside record IDs, even when preceded by a tenant-scoped SELECT. Applied across CRM routes (contacts, notes, files, access, approvals), client documents/notes, and templates.
 - **Standardized Error Envelope**: All API errors use `AppError` class producing `StandardErrorEnvelope` format: `{ ok, requestId, error: { code, message, status, requestId, details }, message, code }`. Tenant guard middleware (`requireTenantContext`, `requireSuperUser`) uses `next(AppError.xxx())` pattern for consistent error handling.
 - **Canonical requireTenantContext**: Primary implementation in `server/middleware/tenantContext.ts`. Duplicate in `tenancyEnforcement.ts` is deprecated (factory pattern, unused by routes).
-- **Rate Limiting**: Applied to auth endpoints (login, bootstrap, invite, forgot-password), file uploads, internal chat sends, and CRM client messaging. Configurable via environment variables. Uses in-memory store with email-based and IP-based limits. Middleware: `server/middleware/rateLimit.ts`.
+- **Rate Limiting**: Applied to auth endpoints (login, bootstrap, invite, forgot-password), file uploads, internal chat sends, and CRM client messaging. Configurable via environment variables. Uses pluggable `RateLimitStore` interface (in-memory default, extensible for Redis) with tenant-scoped keying and email-based/IP-based limits. Middleware: `server/middleware/rateLimit.ts`.
+- **CSRF Protection**: Origin/referer validation middleware (`server/middleware/csrf.ts`) blocks cross-origin state-changing requests. Exempts safe methods (GET/HEAD/OPTIONS), webhooks, and health endpoints. Development mode allows localhost origins; configurable via `CSRF_ENABLED` env var.
 - **Secret Redaction**: All error logs automatically redact passwords, API keys, tokens, and database URLs before storage.
 
 ## External Dependencies

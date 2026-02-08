@@ -18,7 +18,7 @@ impersonationRouter.post("/impersonation/exit", requireSuperUser, async (req, re
     
     const impersonatedEmail = session.impersonatedUserEmail;
     const tenantId = session.impersonatedTenantId;
-    const superUser = req.user as any;
+    const superUser = req.user!;
     
     if (tenantId) {
       await recordTenantAuditEvent(
@@ -107,7 +107,7 @@ impersonationRouter.post("/impersonate/start", requireSuperUser, async (req, res
     }
     
     const { tenantId } = parseResult.data;
-    const user = req.user as any;
+    const user = req.user!;
     
     const [tenant] = await db.select()
       .from(tenants)
@@ -150,7 +150,7 @@ impersonationRouter.post("/impersonate/start", requireSuperUser, async (req, res
 
 impersonationRouter.post("/impersonate/stop", requireSuperUser, async (req, res) => {
   try {
-    const user = req.user as any;
+    const user = req.user!;
     const tenantId = req.headers["x-tenant-id"] as string | undefined;
     
     if (tenantId) {

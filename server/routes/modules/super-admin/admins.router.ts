@@ -173,7 +173,7 @@ const createPlatformAdminSchema = z.object({
 
 adminsRouter.post("/admins", requireSuperUser, async (req, res) => {
   try {
-    const actor = req.user as any;
+    const actor = req.user!;
     const body = createPlatformAdminSchema.parse(req.body);
     
     const [existing] = await db.select({ id: users.id })
@@ -230,7 +230,7 @@ const updatePlatformAdminSchema = z.object({
 
 adminsRouter.patch("/admins/:id", requireSuperUser, async (req, res) => {
   try {
-    const actor = req.user as any;
+    const actor = req.user!;
     const { id } = req.params;
     const body = updatePlatformAdminSchema.parse(req.body);
     
@@ -314,7 +314,7 @@ adminsRouter.patch("/admins/:id", requireSuperUser, async (req, res) => {
 
 adminsRouter.delete("/admins/:id", requireSuperUser, async (req, res) => {
   try {
-    const actor = req.user as any;
+    const actor = req.user!;
     const { id } = req.params;
     
     const [adminToDelete] = await db.select()
@@ -442,7 +442,7 @@ const generateInviteSchema = z.object({
 
 adminsRouter.post("/admins/:id/invite", requireSuperUser, async (req, res) => {
   try {
-    const actor = req.user as any;
+    const actor = req.user!;
     const { id } = req.params;
     const body = generateInviteSchema.parse(req.body || {});
     
@@ -578,7 +578,7 @@ adminsRouter.post("/admins/:id/provision", requireSuperUser, async (req, res) =>
   try {
     const { id } = req.params;
     const data = provisionPlatformAdminSchema.parse(req.body);
-    const actor = req.user as any;
+    const actor = req.user!;
     
     if (debug) {
       console.log(`[platform-admin-provision] requestId=${requestId} adminId=${id} method=${data.method}`);
