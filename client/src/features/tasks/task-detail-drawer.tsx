@@ -1104,27 +1104,6 @@ export function TaskDetailDrawer({
             </div>
           </div>
 
-          <div className="mt-4">
-            {task.projectId ? (
-              <AttachmentUploader 
-                taskId={task.id} 
-                projectId={task.projectId}
-                onUploadSuccess={invalidateTaskQueries}
-                onDeleteSuccess={invalidateTaskQueries}
-              />
-            ) : (
-              <div className="rounded-md p-3 sm:p-4 bg-muted/30">
-                <div className="flex items-center gap-2 mb-2">
-                  <Paperclip className="h-4 w-4 text-muted-foreground" />
-                  <span className="font-medium text-[16px] text-[#171717]">Attachments</span>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Attachments are available for project tasks only
-                </p>
-              </div>
-            )}
-          </div>
-
           <Separator />
 
           <div className="rounded-md p-3 sm:p-4 bg-[#dedede4d]">
