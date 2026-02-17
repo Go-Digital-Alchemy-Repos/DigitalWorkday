@@ -33,11 +33,11 @@ export default function SettingsPage() {
 
   return (
     <div className="h-full overflow-auto">
-      <div className="container max-w-6xl mx-auto p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <SettingsIcon className="h-8 w-8 text-primary" />
+      <div className="max-w-6xl mx-auto px-3 sm:px-4 lg:px-6 py-4 md:py-6">
+        <div className="flex items-center gap-3 mb-4 md:mb-6">
+          <SettingsIcon className="h-7 w-7 md:h-8 md:w-8 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold">System Settings</h1>
+            <h1 className="text-xl md:text-2xl font-bold">System Settings</h1>
             <p className="text-muted-foreground text-sm">
               Manage integrations and system configuration
             </p>
@@ -45,7 +45,7 @@ export default function SettingsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 h-auto p-1">
+          <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4 h-auto p-1 gap-1">
             {SETTINGS_TABS.map((tab) => (
               <TabsTrigger
                 key={tab.id}

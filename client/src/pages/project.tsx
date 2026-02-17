@@ -599,7 +599,7 @@ export default function ProjectPage() {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="border-b border-border bg-background sticky top-0 z-10">
         {/* Breadcrumbs: Client > Project (or just Project if no client) */}
-        <div className="px-4 md:px-6 pt-3 hidden md:block">
+        <div className="px-3 sm:px-4 lg:px-6 pt-3 hidden md:block">
           <Breadcrumb>
             <BreadcrumbList>
               {client ? (
@@ -635,7 +635,7 @@ export default function ProjectPage() {
             </BreadcrumbList>
           </Breadcrumb>
         </div>
-        <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4">
+        <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-3 md:py-4">
           <div className="flex items-center gap-2 md:gap-3 min-w-0">
             <div
               className="h-7 w-7 md:h-8 md:w-8 rounded-md flex items-center justify-center text-white text-sm font-medium shrink-0"
@@ -655,7 +655,7 @@ export default function ProjectPage() {
           </div>
         </div>
 
-        <div className="flex items-center justify-between px-4 md:px-6 pb-3">
+        <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 pb-3">
           <div className="flex items-center gap-2 md:gap-4">
             <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
               <TabsList className="h-8 md:h-9">
@@ -765,7 +765,7 @@ export default function ProjectPage() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex gap-3 md:gap-4 p-4 md:p-6 h-full overflow-x-auto">
+            <div className="flex gap-3 md:gap-4 px-3 sm:px-4 lg:px-6 py-4 md:py-6 h-full overflow-x-auto">
               {displaySections?.map((section) => (
                 <SectionColumn
                   key={section.id}
@@ -808,7 +808,7 @@ export default function ProjectPage() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="p-4 md:p-6 h-full overflow-y-auto">
+            <div className="px-3 sm:px-4 lg:px-6 py-4 md:py-6 h-full overflow-y-auto">
               {displaySections?.map((section) => (
                 <ListSectionDroppable
                   key={section.id}

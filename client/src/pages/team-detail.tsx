@@ -207,6 +207,7 @@ export default function TeamDetailPage() {
             ) : teamMembers.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">No members in this team yet</p>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -260,6 +261,7 @@ export default function TeamDetailPage() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

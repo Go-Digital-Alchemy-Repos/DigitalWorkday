@@ -869,7 +869,7 @@ export default function MyTasks() {
         <AccessInfoBanner variant="tasks" className="mx-4 md:mx-6 mt-4" />
       )}
       <div className="border-b border-border bg-background sticky top-0 z-10">
-        <div className="flex flex-col gap-3 px-4 md:px-6 py-3 md:py-4">
+        <div className="flex flex-col gap-3 px-3 sm:px-4 lg:px-6 py-3 md:py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center gap-2 md:gap-3">
               <CheckSquare className="h-5 w-5 md:h-6 md:w-6 text-primary" />
@@ -922,7 +922,7 @@ export default function MyTasks() {
         </div>
 
         {taskStats.total > 0 && (
-          <div className="px-4 md:px-6 pb-4">
+          <div className="px-3 sm:px-4 lg:px-6 pb-4">
             <TaskProgressBar stats={taskStats} showMilestones />
           </div>
         )}
@@ -930,7 +930,7 @@ export default function MyTasks() {
       </div>
 
       <div className="flex-1 overflow-auto">
-        <div className="p-4 md:p-6 space-y-6">
+        <div className="px-3 sm:px-4 lg:px-6 py-4 md:py-6 space-y-6">
           <DashboardSummary 
             stats={dashboardStats} 
             onTaskSelect={handleTaskSelect} 

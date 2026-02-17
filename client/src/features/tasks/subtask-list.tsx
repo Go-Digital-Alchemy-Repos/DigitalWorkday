@@ -240,7 +240,7 @@ export function SubtaskList({
   return (
     <div className="space-y-2" data-testid="subtask-list">
       <div className="flex items-center justify-between">
-        <h4 className="text-sm font-medium">
+        <h4 className="font-medium text-[18px]">
           Subtasks
           {subtasks.length > 0 && (
             <span className="ml-2 text-xs text-muted-foreground">
@@ -278,7 +278,6 @@ export function SubtaskList({
           )}
         </div>
       </div>
-
       {aiSuggestions.length > 0 && (
         <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg space-y-2">
           <div className="flex items-center justify-between">
@@ -320,7 +319,6 @@ export function SubtaskList({
           </div>
         </div>
       )}
-
       {subtasks.length > 0 && (
         <div className="space-y-1">
           {subtasks.map((subtask) => {
@@ -491,7 +489,6 @@ export function SubtaskList({
           })}
         </div>
       )}
-
       {isAdding && (
         <div className="flex items-center gap-2">
           <Input
@@ -525,13 +522,11 @@ export function SubtaskList({
           </Button>
         </div>
       )}
-
       {subtasks.length === 0 && !isAdding && (
         <p className="text-xs text-muted-foreground py-2">
           No subtasks yet. Click "Add" to create one.
         </p>
       )}
-
       {pendingCompleteSubtask && (
         <LogTimeOnCompleteDialog
           open={showLogTimeDialog}

@@ -492,7 +492,7 @@ export default function ProjectsDashboard() {
             </div>
 
             {/* Desktop table view */}
-            <div className="hidden md:block border rounded-lg overflow-hidden">
+            <div className="hidden md:block border rounded-lg overflow-x-auto">
               <Table>
               <TableHeader>
                 <TableRow>

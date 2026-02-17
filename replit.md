@@ -54,6 +54,7 @@ MyWorkDay is an Asana-inspired project management application aimed at streamlin
 - **List Virtualization**: `VirtualizedList` component and React Virtuoso for efficient rendering of large lists. Chat timeline uses Virtuoso directly with `firstItemIndex` prepend pattern, `followOutput` for stick-to-bottom, and `atBottomStateChange` for new-messages pill.
 - **Error Boundaries**: Comprehensive error boundaries for React render errors with recovery UI. Frontend errors (uncaught exceptions, unhandled promise rejections, React render errors) are automatically reported to `POST /api/v1/system/errors/frontend` and stored in the `error_logs` table for backend correlation.
 - **Motion System**: Framer Motion-based animation primitives for enhanced user experience.
+- **Mobile-First UX**: Responsive padding scale `px-3 sm:px-4 lg:px-6` normalized across all pages. Mobile tap targets 40px+ (`min-h-10 md:min-h-9` for Button, `h-10 md:h-9` for Input/Select). `PageContainer` component (`client/src/components/layout/page-container.tsx`) provides responsive wrapper. `PageShell` and `AppShell` use consistent responsive padding. MobileNavBar (`z-50`, fixed bottom `h-16`) with `pb-16` on main content area. Tables wrapped in `overflow-x-auto` for mobile horizontal scroll. Mobile audit documented in `docs/mobile-audit.md`.
 - **Graceful Shutdown**: SIGTERM/SIGINT handlers close HTTP server, Socket.IO, and database pool in order with a 10-second timeout before forced exit. Ensures clean resource release during deployments and restarts.
 
 ### Observability & Operations

@@ -856,7 +856,7 @@ export default function Home() {
   return (
     <div className="flex flex-col h-full overflow-auto">
       <div className="border-b border-border bg-background sticky top-0 z-10">
-        <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4">
+        <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-3 md:py-4">
           <div>
             <h1 className="text-xl md:text-2xl font-semibold">
               {greeting}{user?.firstName ? `, ${user.firstName}` : ""}
@@ -870,7 +870,7 @@ export default function Home() {
         </div>
       </div>
 
-      <div className="flex-1 p-4 md:p-6 space-y-4 md:space-y-6">
+      <div className="flex-1 px-3 sm:px-4 lg:px-6 py-4 md:py-6 space-y-4 md:space-y-6">
         {taskStats.total > 0 && (
           <Card>
             <CardHeader className="pb-2">

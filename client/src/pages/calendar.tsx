@@ -306,7 +306,7 @@ export default function CalendarPage() {
 
   return (
     <div className="flex flex-col h-full">
-      <div className="flex flex-col md:flex-row md:items-center md:justify-between px-4 md:px-6 py-3 md:py-4 border-b border-border bg-muted/30 gap-2">
+      <div className="flex flex-col md:flex-row md:items-center md:justify-between px-3 sm:px-4 lg:px-6 py-3 md:py-4 border-b border-border bg-muted/30 gap-2">
         <div className="flex items-center justify-between md:justify-start gap-2 md:gap-3">
           <div className="flex items-center gap-2">
             <CalendarDays className="h-5 w-5 text-muted-foreground" />

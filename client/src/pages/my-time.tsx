@@ -341,7 +341,7 @@ export default function MyTimePage() {
   
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-border shrink-0">
+      <div className="flex items-center justify-between px-3 sm:px-4 lg:px-6 py-3 md:py-4 border-b border-border shrink-0">
         <div>
           <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="page-title">
             <Clock className="h-6 w-6" />
@@ -355,7 +355,7 @@ export default function MyTimePage() {
         </Button>
       </div>
       
-      <div className="flex-1 overflow-auto p-4 md:p-6">
+      <div className="flex-1 overflow-auto px-3 sm:px-4 lg:px-6 py-4 md:py-6">
         <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full flex flex-col">
           <TabsList className="mb-4">
             <TabsTrigger value="dashboard" data-testid="tab-dashboard">

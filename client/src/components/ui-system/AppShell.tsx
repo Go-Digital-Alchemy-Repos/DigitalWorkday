@@ -30,7 +30,7 @@ export function AppShell({
     <div
       className={cn(
         "w-full h-full overflow-auto",
-        !noPadding && "p-page",
+        !noPadding && "px-3 sm:px-4 lg:px-6 py-4 md:py-6",
         maxWidthMap[maxWidth],
         className
       )}
