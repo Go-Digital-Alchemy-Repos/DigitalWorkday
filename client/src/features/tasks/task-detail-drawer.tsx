@@ -961,7 +961,7 @@ export function TaskDetailDrawer({
             />
           </div>
 
-          <div className="rounded-md p-3 sm:p-4 bg-muted/30">
+          <div className="rounded-md p-3 sm:p-4 bg-[#d1f6ff4d]">
             <div className="space-y-2">
               <label className="flex items-center gap-2 font-medium text-[#171717] text-[16px]">
                 <Tag className="h-3.5 w-3.5" />
