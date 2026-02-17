@@ -39,7 +39,8 @@ import teamsRouter from "./teams.router";
 // import commentsRouter from "./comments.router";
 // activityRouter: migrated to new router factory (server/http/domains/activity.router.ts)
 // import activityRouter from "./activity.router";
-import attachmentsRouter from "./attachments.router";
+// attachmentsRouter: migrated to new router factory (server/http/domains/attachments.router.ts) — Prompt #6
+// import attachmentsRouter from "./attachments.router";
 
 const router = Router();
 
@@ -51,7 +52,8 @@ router.use(teamsRouter);
 // router.use(commentsRouter);
 // activityRouter: migrated to server/http/domains/activity.router.ts
 // router.use(activityRouter);
-router.use(attachmentsRouter);
+// attachmentsRouter: migrated to server/http/domains/attachments.router.ts (Prompt #6)
+// router.use(attachmentsRouter);
 router.use(usersRouter);
 router.use(crmRouter);
 router.use(projectsRouter);

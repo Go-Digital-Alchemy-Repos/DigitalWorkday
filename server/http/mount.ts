@@ -9,6 +9,7 @@ import activityRouter from "./domains/activity.router";
 import commentsRouter from "./domains/comments.router";
 import presenceRouter from "./domains/presence.router";
 import aiRouter from "./domains/ai.router";
+import attachmentsRouter from "./domains/attachments.router";
 
 interface DomainEntry {
   path: string;
@@ -60,6 +61,13 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "ai",
     description: "AI integration routes (OpenAI). Migrated from legacy routes/ai.ts (Prompt #5).",
+  },
+  {
+    path: "/api",
+    router: attachmentsRouter,
+    policy: "authTenant",
+    domain: "attachments",
+    description: "Attachment CRUD, presign, upload complete, download. Includes CRM flags endpoint. Migrated from legacy routes/attachments.router.ts (Prompt #6).",
   },
 ];
 

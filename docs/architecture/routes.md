@@ -142,6 +142,7 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
 | comments | `/api` | `authTenant` | `server/http/domains/comments.router.ts` | #4 | Feb 2026 |
 | presence | `/api` | `authTenant` | `server/http/domains/presence.router.ts` | #5 | Feb 2026 |
 | ai | `/api` | `authTenant` | `server/http/domains/ai.router.ts` | #5 | Feb 2026 |
+| attachments | `/api` | `authTenant` | `server/http/domains/attachments.router.ts` | #6 | Feb 2026 |
 
 ### Presence Domain Migration Notes (Prompt #5)
 - **1 endpoint** migrated: GET `/v1/presence` (query all or specific user presence)
@@ -155,6 +156,14 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
 - **Policy: authTenant** — AI features are tenant-scoped. Legacy used `requireAuth` per-handler; factory policy now applies at router scope.
 - **Validation preserved**: Zod schemas for request body validation retained verbatim.
 - **Integration tests**: 8 smoke tests in `server/tests/integration/aiRoutes.test.ts`.
+
+### Attachments Domain Migration Notes (Prompt #6)
+- **7 endpoints** migrated: GET `/attachments/config`, GET `/crm/flags`, GET `/projects/:pid/tasks/:tid/attachments`, POST `/projects/:pid/tasks/:tid/attachments/presign`, POST `/projects/:pid/tasks/:tid/attachments/:aid/complete`, GET `/projects/:pid/tasks/:tid/attachments/:aid/download`, DELETE `/projects/:pid/tasks/:tid/attachments/:aid`
+- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
+- **Upload guard middleware introduced**: `server/http/middleware/uploadGuards.ts` provides `validateUploadRequest()` (filename sanitization, size/type logging), `sanitizeFilename()`, and `isFilenameUnsafe()`. Applied to the presign endpoint in warn/log-only mode — does not block existing flows.
+- **Storage side-effects preserved**: S3/R2 presigned URL generation, object existence checks, and deletion all retained verbatim.
+- **CRM flags co-located**: GET `/crm/flags` was in the legacy attachments router; migrated as-is to avoid breaking the endpoint.
+- **Integration tests**: 11 smoke tests in `server/tests/integration/attachmentsRoutes.test.ts` covering auth, tenant enforcement, route matching, validation, metadata, and upload guards.
 
 ### Registry-Only Mounting (Prompt #5)
 - **mount.ts refactored**: Domain routers are now declared in `MIGRATED_DOMAINS` array and registered via `registerRoute()`. All non-legacy routes are mounted by iterating `getRouteRegistry()` — no direct `app.use(path, router)` calls for individual domains.
@@ -200,9 +209,9 @@ To migrate the next domain (Prompt #3):
 4. `/api` comments — comment CRUD (DONE - Prompt #4)
 5. `/api/v1/presence` — presence tracking (DONE - Prompt #5)
 6. `/api/v1/ai` — AI routes (DONE - Prompt #5)
-7. `/api` attachments — attachment upload/download (medium)
-8. `/api/v1/chat` — chat system (medium, has Socket.IO deps)
-9. `/api/v1/uploads` — file uploads (medium, has rate limiting)
+7. `/api` attachments — attachment upload/download (DONE - Prompt #6)
+8. `/api/v1/uploads` — file uploads (medium, has rate limiting)
+9. `/api/v1/chat` — chat system (medium, has Socket.IO deps)
 10. `/api/v1/super` — super admin (large, many sub-routers)
 11. `/api` — remaining main domain routes (largest, final migration)
 
