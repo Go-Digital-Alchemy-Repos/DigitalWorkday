@@ -14,9 +14,10 @@ import type { User } from "@shared/schema";
 interface MultiSelectAssigneesProps {
   taskId: string;
   assignees: Partial<User>[];
-  workspaceId?: string; // Optional now since we use tenant users
+  workspaceId?: string;
   disabled?: boolean;
   onAssigneeChange?: () => void;
+  apiPrefix?: string;
 }
 
 function getInitials(name: string): string {
@@ -33,23 +34,26 @@ export function MultiSelectAssignees({
   assignees, 
   workspaceId,
   disabled = false,
-  onAssigneeChange
+  onAssigneeChange,
+  apiPrefix,
 }: MultiSelectAssigneesProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
-  // Use tenant users endpoint for comprehensive user list
+  const prefix = apiPrefix || `/api/tasks/${taskId}`;
+  const cacheKey = apiPrefix ? [apiPrefix] : ["/api/tasks", taskId];
+
   const { data: tenantUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/tenant/users"],
-    enabled: open, // Only fetch when popover is open
+    enabled: open,
   });
 
   const addAssigneeMutation = useMutation({
     mutationFn: async (userId: string) => {
-      await apiRequest("POST", `/api/tasks/${taskId}/assignees`, { userId });
+      await apiRequest("POST", `${prefix}/assignees`, { userId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] });
+      queryClient.invalidateQueries({ queryKey: cacheKey });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
       onAssigneeChange?.();
     },
@@ -57,10 +61,10 @@ export function MultiSelectAssignees({
 
   const removeAssigneeMutation = useMutation({
     mutationFn: async (userId: string) => {
-      await apiRequest("DELETE", `/api/tasks/${taskId}/assignees/${userId}`);
+      await apiRequest("DELETE", `${prefix}/assignees/${userId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] });
+      queryClient.invalidateQueries({ queryKey: cacheKey });
       queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
       onAssigneeChange?.();
     },
