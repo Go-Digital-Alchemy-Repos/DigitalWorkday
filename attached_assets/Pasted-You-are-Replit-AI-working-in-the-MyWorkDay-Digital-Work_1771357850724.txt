@@ -1,0 +1,97 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Implement a consistent mobile navigation architecture that makes the app feel natural on phones while preserving the existing desktop sidebar layout.
+
+This phase introduces:
+- bottom navigation standardization
+- sidebar collapse strategy
+- mobile workspace switcher
+- drawer patterns for navigation and editing
+without changing business logic or API behavior.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change routes.
+- Do NOT change API calls.
+- Do NOT remove desktop sidebar navigation.
+- Preserve existing page components.
+- Navigation changes should be structural UI improvements only.
+
+DELIVERABLES:
+1) Standardized MobileNavBar component behavior.
+2) Sidebar collapse model for mobile.
+3) Workspace switcher usable on mobile.
+4) Drawer-based navigation pattern.
+5) No desktop regressions.
+
+IMPLEMENTATION:
+
+A) Bottom Navigation Standardization
+Ensure MobileNavBar:
+- uses fixed bottom positioning
+- has safe-area padding support
+- supports 4–5 core destinations:
+  - Home/Dashboard
+  - Tasks
+  - Chat
+  - Time
+  - Projects (if space allows)
+Use icons from lucide-react.
+
+Ensure active route highlighting is clear.
+
+B) Sidebar Collapse Strategy
+On mobile:
+- Sidebar should not render persistently.
+- Sidebar becomes a drawer accessible from header menu button.
+- Desktop behavior remains unchanged.
+
+Implement:
+MobileSidebarDrawer
+that reuses the existing sidebar content.
+
+C) Workspace Switcher (Mobile)
+If workspace switching currently exists only in sidebar:
+- Add workspace switcher to mobile header.
+- Use dropdown or sheet pattern.
+- Ensure it is thumb-reachable.
+
+D) Drawer Pattern Standardization
+Create a reusable:
+AppDrawer
+component built with Radix Dialog/Sheet.
+
+Use it for:
+- mobile sidebar
+- workspace switcher (if needed)
+- future edit panels
+
+Ensure:
+- smooth animation
+- scroll lock
+- correct z-index stacking
+
+E) Header Improvements
+Ensure mobile header:
+- has consistent height
+- includes:
+  - menu button
+  - workspace indicator
+  - page title
+- does not overflow on small screens.
+
+F) Verification
+Verify on mobile viewport:
+- Can navigate entire app using bottom nav + drawer.
+- Sidebar accessible via drawer.
+- Workspace switching works.
+- Chat reachable in <= 2 taps.
+- Tasks reachable in <= 2 taps.
+- Time tracking reachable in <= 2 taps.
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+- files changed
+- new navigation components added
+- mobile navigation flow description
+- any UI risks discovered
