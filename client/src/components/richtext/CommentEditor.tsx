@@ -3,7 +3,7 @@ import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import Mention from "@tiptap/extension-mention";
-import { useState, useEffect, useCallback, forwardRef, useImperativeHandle } from "react";
+import { useState, useEffect, useCallback, forwardRef, useImperativeHandle, useRef } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -41,92 +41,98 @@ export interface CommentEditorRef {
   focus: () => void;
 }
 
+export interface MentionListHandle {
+  onKeyDown: (event: KeyboardEvent) => boolean;
+}
+
 interface MentionSuggestionProps {
   query: string;
   users: User[];
   command: (props: { id: string; label: string }) => void;
 }
 
-function MentionList({ query, users, command }: MentionSuggestionProps) {
-  const [selectedIndex, setSelectedIndex] = useState(0);
+const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
+  function MentionList({ query, users, command }, ref) {
+    const [selectedIndex, setSelectedIndex] = useState(0);
 
-  const filteredUsers = users.filter((user) => {
-    const searchText = query.toLowerCase();
-    const name = (user.displayName || user.name || "").toLowerCase();
-    const email = user.email?.toLowerCase() || "";
-    const firstName = user.firstName?.toLowerCase() || "";
-    const lastName = user.lastName?.toLowerCase() || "";
-    return (
-      name.includes(searchText) ||
-      email.includes(searchText) ||
-      firstName.includes(searchText) ||
-      lastName.includes(searchText)
+    const filteredUsers = users.filter((user) => {
+      const searchText = query.toLowerCase();
+      const name = (user.displayName || user.name || "").toLowerCase();
+      const email = user.email?.toLowerCase() || "";
+      const firstName = user.firstName?.toLowerCase() || "";
+      const lastName = user.lastName?.toLowerCase() || "";
+      return (
+        name.includes(searchText) ||
+        email.includes(searchText) ||
+        firstName.includes(searchText) ||
+        lastName.includes(searchText)
+      );
+    }).slice(0, 5);
+
+    useEffect(() => {
+      setSelectedIndex(0);
+    }, [query]);
+
+    const selectUser = useCallback(
+      (index: number) => {
+        const user = filteredUsers[index];
+        if (user) {
+          command({
+            id: user.id,
+            label: user.displayName || user.name || user.email,
+          });
+        }
+      },
+      [filteredUsers, command]
     );
-  }).slice(0, 5);
 
-  useEffect(() => {
-    setSelectedIndex(0);
-  }, [query]);
+    useImperativeHandle(ref, () => ({
+      onKeyDown: (event: KeyboardEvent) => {
+        if (event.key === "ArrowDown") {
+          setSelectedIndex((prev) => (prev + 1) % Math.max(filteredUsers.length, 1));
+          return true;
+        }
+        if (event.key === "ArrowUp") {
+          setSelectedIndex((prev) => (prev - 1 + filteredUsers.length) % Math.max(filteredUsers.length, 1));
+          return true;
+        }
+        if (event.key === "Enter") {
+          selectUser(selectedIndex);
+          return true;
+        }
+        return false;
+      },
+    }), [filteredUsers.length, selectedIndex, selectUser]);
 
-  const selectUser = useCallback(
-    (index: number) => {
-      const user = filteredUsers[index];
-      if (user) {
-        command({
-          id: user.id,
-          label: user.displayName || user.name || user.email,
-        });
-      }
-    },
-    [filteredUsers, command]
-  );
+    if (filteredUsers.length === 0) {
+      return (
+        <div className="bg-popover border rounded-md shadow-md p-2 text-sm text-muted-foreground">
+          No users found
+        </div>
+      );
+    }
 
-  useEffect(() => {
-    const handleKeyDown = (e: KeyboardEvent) => {
-      if (e.key === "ArrowDown") {
-        e.preventDefault();
-        setSelectedIndex((prev) => (prev + 1) % filteredUsers.length);
-      } else if (e.key === "ArrowUp") {
-        e.preventDefault();
-        setSelectedIndex((prev) => (prev - 1 + filteredUsers.length) % filteredUsers.length);
-      } else if (e.key === "Enter") {
-        e.preventDefault();
-        selectUser(selectedIndex);
-      }
-    };
-
-    document.addEventListener("keydown", handleKeyDown);
-    return () => document.removeEventListener("keydown", handleKeyDown);
-  }, [filteredUsers.length, selectedIndex, selectUser]);
-
-  if (filteredUsers.length === 0) {
     return (
-      <div className="bg-popover border rounded-md shadow-md p-2 text-sm text-muted-foreground">
-        No users found
+      <div className="bg-popover border rounded-md shadow-md overflow-hidden">
+        {filteredUsers.map((user, index) => (
+          <button
+            key={user.id}
+            type="button"
+            className={cn(
+              "w-full px-3 py-2 text-left text-sm flex flex-col",
+              index === selectedIndex && "bg-accent"
+            )}
+            onClick={() => selectUser(index)}
+            data-testid={`mention-option-${user.id}`}
+          >
+            <span className="font-medium">{user.displayName || user.name || "Unknown"}</span>
+            <span className="text-xs text-muted-foreground">{user.email}</span>
+          </button>
+        ))}
       </div>
     );
   }
-
-  return (
-    <div className="bg-popover border rounded-md shadow-md overflow-hidden">
-      {filteredUsers.map((user, index) => (
-        <button
-          key={user.id}
-          type="button"
-          className={cn(
-            "w-full px-3 py-2 text-left text-sm flex flex-col",
-            index === selectedIndex && "bg-accent"
-          )}
-          onClick={() => selectUser(index)}
-          data-testid={`mention-option-${user.id}`}
-        >
-          <span className="font-medium">{user.displayName || user.name || "Unknown"}</span>
-          <span className="text-xs text-muted-foreground">{user.email}</span>
-        </button>
-      ))}
-    </div>
-  );
-}
+);
 
 interface CommentMenuBarProps {
   editor: Editor | null;
@@ -282,6 +288,11 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
     const [linkDialogOpen, setLinkDialogOpen] = useState(false);
     const [linkDefaultValue, setLinkDefaultValue] = useState("");
 
+    const usersRef = useRef<User[]>(users);
+    useEffect(() => { usersRef.current = users; }, [users]);
+
+    const mentionListRef = useRef<MentionListHandle>(null);
+
     const editor = useEditor({
       extensions: [
         StarterKit.configure({
@@ -306,7 +317,7 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
           suggestion: {
             char: "@",
             items: ({ query }: { query: string }) => {
-              return users.filter((user) => {
+              return usersRef.current.filter((user) => {
                 const searchText = query.toLowerCase();
                 const name = (user.displayName || user.name || "").toLowerCase();
                 const email = user.email?.toLowerCase() || "";
@@ -327,6 +338,9 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
                   if (props.event.key === "Escape") {
                     setMentionPopupOpen(false);
                     return true;
+                  }
+                  if (mentionListRef.current) {
+                    return mentionListRef.current.onKeyDown(props.event);
                   }
                   return false;
                 },
@@ -438,6 +452,7 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
         {mentionPopupOpen && mentionCommand && (
           <div className="absolute bottom-full left-0 mb-1 z-50">
             <MentionList
+              ref={mentionListRef}
               query={mentionQuery}
               users={users}
               command={mentionCommand}

@@ -310,11 +310,15 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
     const comment = await storage.createComment(data);
     const commenter = await storage.getUser(currentUserId);
 
+    const requestId = (req as any).requestId || "unknown";
     const mentionedUserIds = extractMentionsFromTipTapJson(data.body);
     const plainTextBody = getPlainTextFromTipTapJson(data.body);
     const notifiedUserIds = new Set<string>();
 
+    console.log(`[mentions] requestId=${requestId} subtaskComment commentId=${comment.id} authorId=${currentUserId} tenantId=${tenantId} mentionCount=${mentionedUserIds.length}`);
+
     for (const mentionedUserId of mentionedUserIds) {
+      if (mentionedUserId === currentUserId) continue;
       const mentionedUser = await storage.getUser(mentionedUserId);
       if (!mentionedUser || (tenantId && mentionedUser.tenantId !== tenantId)) {
         continue;
@@ -333,7 +337,9 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
         commenter?.name || commenter?.email || "Someone",
         plainTextBody,
         { tenantId, excludeUserId: currentUserId }
-      ).catch(() => {});
+      ).catch((err) => {
+        console.error(`[mentions] requestId=${requestId} notification failed userId=${mentionedUserId}`, err);
+      });
 
       if (mentionedUser.email && tenantId) {
         try {
@@ -353,7 +359,7 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
             },
           });
         } catch (emailError) {
-          console.error("Error sending mention notification:", emailError);
+          console.error(`[mentions] requestId=${requestId} email failed userId=${mentionedUserId}`, emailError);
         }
       }
     }

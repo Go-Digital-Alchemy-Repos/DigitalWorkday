@@ -26,6 +26,7 @@ router.get("/tasks/:taskId/comments", async (req, res) => {
 router.post("/tasks/:taskId/comments", async (req, res) => {
   try {
     const currentUserId = getCurrentUserId(req);
+    const requestId = (req as any).requestId || "unknown";
     const data = insertCommentSchema.parse({
       ...req.body,
       taskId: req.params.taskId,
@@ -40,16 +41,25 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
     const commenter = await storage.getUser(currentUserId);
     const tenantId = task?.tenantId || null;
 
+    console.log(`[mentions] requestId=${requestId} commentId=${comment.id} authorId=${currentUserId} tenantId=${tenantId} mentionCount=${mentionedUserIds.length}`);
+
+    const mentionRecordIds: string[] = [];
     for (const mentionedUserId of mentionedUserIds) {
+      if (mentionedUserId === currentUserId) {
+        console.log(`[mentions] requestId=${requestId} skipping self-mention userId=${mentionedUserId}`);
+        continue;
+      }
       const mentionedUser = await storage.getUser(mentionedUserId);
       if (!mentionedUser || (tenantId && mentionedUser.tenantId !== tenantId)) {
+        console.log(`[mentions] requestId=${requestId} skipping mention userId=${mentionedUserId} reason=${!mentionedUser ? "user_not_found" : "tenant_mismatch"}`);
         continue;
       }
 
-      await storage.createCommentMention({
+      const mentionRecord = await storage.createCommentMention({
         commentId: comment.id,
         mentionedUserId: mentionedUserId,
       });
+      mentionRecordIds.push(mentionRecord.id);
 
       notifyCommentMention(
         mentionedUserId,
@@ -58,7 +68,9 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
         commenter?.name || commenter?.email || "Someone",
         plainTextBody,
         { tenantId, excludeUserId: currentUserId }
-      ).catch(() => {});
+      ).catch((err) => {
+        console.error(`[mentions] requestId=${requestId} notification failed userId=${mentionedUserId}`, err);
+      });
 
       if (mentionedUser.email && tenantId) {
         try {
@@ -78,9 +90,13 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
             },
           });
         } catch (emailError) {
-          console.error("Error sending mention notification:", emailError);
+          console.error(`[mentions] requestId=${requestId} email failed userId=${mentionedUserId}`, emailError);
         }
       }
+    }
+
+    if (mentionRecordIds.length > 0) {
+      console.log(`[mentions] requestId=${requestId} persisted mentionRecordIds=[${mentionRecordIds.join(",")}]`);
     }
 
     if (task) {
