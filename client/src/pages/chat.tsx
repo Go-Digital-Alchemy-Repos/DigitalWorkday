@@ -1946,33 +1946,32 @@ export default function ChatPage() {
               </div>
             )}
 
-            {typingUsers.length > 0 && (
-              <div className="h-6 px-4 text-xs text-muted-foreground flex items-center gap-2" data-testid="typing-indicator">
-                <span className="flex gap-0.5 items-center">
-                  <span className="w-1 h-1 bg-muted-foreground/70 rounded-full animate-bounce" style={{ animationDelay: "0ms", animationDuration: "1s" }} />
-                  <span className="w-1 h-1 bg-muted-foreground/70 rounded-full animate-bounce" style={{ animationDelay: "150ms", animationDuration: "1s" }} />
-                  <span className="w-1 h-1 bg-muted-foreground/70 rounded-full animate-bounce" style={{ animationDelay: "300ms", animationDuration: "1s" }} />
-                </span>
-                <span>
-                  {(() => {
-                    const names = typingUsers.map(userId => {
-                      const teamUser = teamUsers.find(u => u.id === userId);
-                      return teamUser?.displayName || teamUser?.email?.split("@")[0] || "Someone";
-                    });
-                    
-                    if (names.length === 1) {
-                      return `${names[0]} is typing...`;
-                    } else if (names.length === 2) {
-                      return `${names[0]} and ${names[1]} are typing...`;
-                    } else if (names.length === 3) {
-                      return `${names[0]}, ${names[1]}, and ${names[2]} are typing...`;
-                    } else {
-                      return `${names[0]}, ${names[1]}, and ${names.length - 2} others are typing...`;
-                    }
-                  })()}
-                </span>
-              </div>
-            )}
+            <div className="h-6 px-4 text-xs text-muted-foreground flex items-center gap-2" data-testid="typing-indicator">
+              {typingUsers.length > 0 && (
+                <>
+                  <span className="flex gap-0.5 items-center">
+                    <span className="w-1 h-1 bg-muted-foreground/70 rounded-full animate-bounce" style={{ animationDelay: "0ms", animationDuration: "1s" }} />
+                    <span className="w-1 h-1 bg-muted-foreground/70 rounded-full animate-bounce" style={{ animationDelay: "150ms", animationDuration: "1s" }} />
+                    <span className="w-1 h-1 bg-muted-foreground/70 rounded-full animate-bounce" style={{ animationDelay: "300ms", animationDuration: "1s" }} />
+                  </span>
+                  <span>
+                    {(() => {
+                      const names = typingUsers.map(userId => {
+                        const teamUser = teamUsers.find(u => u.id === userId);
+                        return teamUser?.displayName || teamUser?.email?.split("@")[0] || "Someone";
+                      });
+                      if (names.length === 1) {
+                        return `${names[0]} is typing...`;
+                      } else if (names.length === 2) {
+                        return `${names[0]} and ${names[1]} are typing...`;
+                      } else {
+                        return "Several people are typing...";
+                      }
+                    })()}
+                  </span>
+                </>
+              )}
+            </div>
 
             <form 
               ref={composerRef}

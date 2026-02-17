@@ -321,3 +321,40 @@ Recommendation: Migrate remaining pages to PageContainer in next sprint
 - `pb-16` applied in App.tsx main content area
 - Consistent across tenant layout
 - Super admin and client portal layouts should be verified
+
+---
+
+## Chat Premium C1 — Typing Awareness
+
+### Summary
+End-to-end typing indicator system for chat channels and DMs.
+
+### Architecture
+- **Backend state**: `server/realtime/typing.ts` — in-memory Map keyed by `conversationId` → Map(`userId` → `TypingEntry` with TTL)
+- **Socket events**: `TYPING_EVENTS.START` / `TYPING_EVENTS.STOP` (client→server), `CHAT_EVENTS.TYPING_UPDATE` (server→client broadcast)
+- **Policy**: All handlers wrapped with `withSocketPolicy({ requireAuth, requireTenant, requireChatMembership })`
+- **TTL**: 5-second expiry with 1-second cleanup interval; also cleans up on socket disconnect
+- **Frontend hook**: `client/src/hooks/use-typing.tsx` — `TypingProvider` context with throttled start (1s), auto-stop (1.2s inactivity)
+- **UI**: Fixed-height `h-6` indicator bar above composer (no layout jump); animated dots + name resolution
+
+### Mobile-Friendly Design
+- Indicator bar always reserves `h-6` space — prevents layout jump when typing state changes
+- Text truncates gracefully: 1 user → name, 2 users → both names, 3+ → "Several people are typing..."
+- No additional padding or spacing changes needed
+
+### Tests
+- `server/tests/typing.test.ts` — 11 tests covering:
+  - State tracking (start, stop, duplicate, multi-user merge)
+  - TTL expiration clears state
+  - Socket disconnect cleanup
+  - ConversationId parsing
+  - Policy enforcement (unauth denied, wrong tenant denied, non-member denied, member allowed)
+
+### Verification Checklist
+- [ ] Open two browser tabs logged in as different users in same tenant
+- [ ] Both join the same channel
+- [ ] User A starts typing → User B sees "{Name} is typing..." above composer
+- [ ] User A stops typing (or waits 5s) → indicator disappears for User B
+- [ ] User A sends message → indicator clears immediately
+- [ ] Indicator bar does not cause layout jump (always `h-6`)
+- [ ] Mobile: indicator text readable, no overflow issues
