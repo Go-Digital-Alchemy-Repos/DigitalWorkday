@@ -411,3 +411,48 @@ Conversation-level read receipts using existing `chat_reads` table. No schema ch
 - [ ] Read receipt persists on page reload (fetched from GET endpoint)
 - [ ] Unread badges update correctly when conversation is marked as read
 - [ ] Mobile: indicators are compact, no overflow or layout issues
+
+---
+
+## Chat Premium C3 — Mobile Polish
+
+### Date: 2026-02-17
+
+### Changes
+
+#### ConversationListPanel (ConversationListPanel.tsx)
+- **44px+ tap targets**: `min-h-[44px]` on all ChannelRow / DmRow buttons for comfortable mobile tapping
+- **Unread dot indicator**: Replaced Badge unread count with a compact 2px primary dot aligned right of timestamp for cleaner list UI
+- **Avatar size increase**: 32px → 36px avatars for DM rows, 36px channel icons
+- **Last message preview**: Unread messages render in `text-foreground/70` (bolder), read messages in `text-muted-foreground`; "No messages yet" placeholder for channels without history
+- **Timestamp alignment**: Moved to right side of header row alongside unread dot for consistent layout
+- **Vertical centering**: Changed `items-start` → `items-center` for better row alignment with single-line content
+
+#### ChatMessageTimeline (ChatMessageTimeline.tsx)
+- **Inbound/outbound bubble contrast**: Own messages use `bg-primary/10 dark:bg-primary/15`, others use `bg-muted/60`; deleted messages use `bg-muted/40`
+- **Bubble shape**: Progressive rounding per group position (first/middle/last) — 2xl on outer corners, md on inner corners, creating WhatsApp/iMessage-style grouping
+- **Own messages right-aligned**: `flex-row-reverse` for own-user groups, avatars hidden for own messages
+- **Max width constraint**: `max-width: min(85%, 560px)` prevents messages from stretching full width on desktop
+- **Word break**: `word-break: break-word` + `whitespace-pre-wrap` for proper long text/URL handling
+- **URL auto-linking**: `renderLinkedText()` detects `https?://` URLs and renders as styled `<a>` tags with `break-all`
+- **Scroll-to-bottom FAB**: Persistent round button (bottom-right) visible whenever user scrolls up; separate pill for "New messages"
+- **Mobile long-press action sheet**: 500ms touch-hold triggers full-screen action sheet with Copy, Quote, Edit, Delete, Cancel — replacing desktop-only hover dropdown menu
+- **Desktop hover menu**: Preserved for non-mobile via `useIsMobile()` hook gating
+
+### Tests
+- Visual/interaction changes only — no new backend tests needed
+- Existing 21 tests (11 typing + 10 read receipts) still passing
+
+### Verification Checklist
+- [ ] Open chat on mobile viewport — conversation rows have comfortable tap targets
+- [ ] Unread conversations show a small dot next to timestamp
+- [ ] Own messages appear right-aligned with primary-tinted bubbles
+- [ ] Other users' messages appear left-aligned with muted bubbles
+- [ ] Consecutive messages from same user share grouped bubble shapes (rounded corners merge)
+- [ ] Long URLs in messages wrap properly and are clickable
+- [ ] Scroll up in chat → round scroll-to-bottom button appears at bottom-right
+- [ ] New messages arrive while scrolled up → "New messages" pill appears
+- [ ] Mobile: long-press a message → action sheet slides up from bottom
+- [ ] Action sheet has Copy, Quote, Edit (own only), Delete (own/admin) options
+- [ ] Tapping backdrop or Cancel dismisses action sheet
+- [ ] Desktop: hover over message → three-dot menu still works as before

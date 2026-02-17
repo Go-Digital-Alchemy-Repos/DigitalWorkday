@@ -32,6 +32,7 @@ import {
   MessagesSquare,
   ArrowDown,
 } from "lucide-react";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 export interface ChatMessage {
   id: string;
@@ -206,6 +207,30 @@ function groupMessages(messages: ChatMessage[], firstUnreadMessageId?: string | 
   return groups;
 }
 
+function renderLinkedText(text: string): React.ReactNode {
+  const urlRegex = /(https?:\/\/[^\s<]+)/g;
+  const parts = text.split(urlRegex);
+  if (parts.length <= 1) return text;
+  return parts.map((part, i) => {
+    if (urlRegex.test(part)) {
+      urlRegex.lastIndex = 0;
+      return (
+        <a
+          key={i}
+          href={part}
+          target="_blank"
+          rel="noopener noreferrer"
+          className="text-primary underline underline-offset-2 break-all"
+          onClick={(e) => e.stopPropagation()}
+        >
+          {part}
+        </a>
+      );
+    }
+    return part;
+  });
+}
+
 const FIRST_ITEM_INDEX = 100000;
 
 export function ChatMessageTimeline({
@@ -239,8 +264,20 @@ export function ChatMessageTimeline({
   const [showJumpToUnread, setShowJumpToUnread] = useState(!!firstUnreadMessageId);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
+  const [longPressMessageId, setLongPressMessageId] = useState<string | null>(null);
+  const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastMessageCountRef = useRef(messages.length);
+
+  useEffect(() => {
+    return () => {
+      if (longPressTimerRef.current) {
+        clearTimeout(longPressTimerRef.current);
+        longPressTimerRef.current = null;
+      }
+    };
+  }, []);
   const hasMarkedAsReadRef = useRef(false);
+  const isMobile = useIsMobile();
 
   const messageGroups = useMemo(
     () => groupMessages(messages, firstUnreadMessageId),
@@ -341,12 +378,28 @@ export function ChatMessageTimeline({
     setEditingBody("");
   }, []);
 
+  const handleLongPressStart = useCallback((messageId: string) => {
+    if (!isMobile) return;
+    longPressTimerRef.current = setTimeout(() => {
+      setLongPressMessageId(messageId);
+    }, 500);
+  }, [isMobile]);
+
+  const handleLongPressEnd = useCallback(() => {
+    if (longPressTimerRef.current) {
+      clearTimeout(longPressTimerRef.current);
+      longPressTimerRef.current = null;
+    }
+  }, []);
+
   const isTenantAdmin = currentUserRole === "admin";
 
   const renderGroup = useCallback(
     (index: number, group: MessageGroup) => {
+      const isOwnGroup = group.authorUserId === currentUserId;
+
       return (
-        <div className="px-4" data-testid={`message-group-${group.id}`}>
+        <div className="px-3 sm:px-4" data-testid={`message-group-${group.id}`}>
           {group.hasUnreadDivider && (
             <div
               className="flex items-center gap-4 py-3"
@@ -368,38 +421,53 @@ export function ChatMessageTimeline({
             </div>
           )}
 
-          <div className="flex gap-3 py-1 group/message-group">
+          <div className={`flex gap-2.5 py-1.5 group/message-group ${isOwnGroup ? "flex-row-reverse" : ""}`}>
             <div className="w-8 flex-shrink-0">
-              {!isDm || group.messages.length === 1 ? (
+              {!isOwnGroup && (
                 <Avatar className="h-8 w-8">
                   {group.author?.avatarUrl && (
                     <AvatarImage src={group.author.avatarUrl} />
                   )}
-                  <AvatarFallback>
+                  <AvatarFallback className="text-[11px]">
                     {getInitials(group.author?.name || group.author?.email || "?")}
                   </AvatarFallback>
                 </Avatar>
-              ) : (
-                <div className="h-8" />
               )}
             </div>
 
-            <div className="flex-1 min-w-0 space-y-0.5">
-              <div className="flex items-baseline gap-2">
-                <span className="font-semibold text-sm">
-                  {group.author?.name || group.author?.email || "Unknown"}
-                </span>
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <span className="text-xs text-muted-foreground cursor-default">
-                      {formatTime(group.messages[0].createdAt)}
-                    </span>
-                  </TooltipTrigger>
-                  <TooltipContent>
-                    {formatFullDateTime(group.messages[0].createdAt)}
-                  </TooltipContent>
-                </Tooltip>
-              </div>
+            <div className={`flex-1 min-w-0 space-y-0.5 ${isOwnGroup ? "items-end" : ""}`} style={{ maxWidth: "min(85%, 560px)" }}>
+              {!isOwnGroup && (
+                <div className="flex items-baseline gap-2 mb-0.5">
+                  <span className="font-semibold text-sm">
+                    {group.author?.name || group.author?.email || "Unknown"}
+                  </span>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-xs text-muted-foreground cursor-default">
+                        {formatTime(group.messages[0].createdAt)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {formatFullDateTime(group.messages[0].createdAt)}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
+
+              {isOwnGroup && group.messages.length === 1 && (
+                <div className="flex justify-end mb-0.5">
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span className="text-xs text-muted-foreground cursor-default">
+                        {formatTime(group.messages[0].createdAt)}
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      {formatFullDateTime(group.messages[0].createdAt)}
+                    </TooltipContent>
+                  </Tooltip>
+                </div>
+              )}
 
               {group.messages.map((message, idx) => {
                 const isDeleted = !!message.deletedAt;
@@ -409,20 +477,23 @@ export function ChatMessageTimeline({
                 const canDelete = (isOwnMessage || isTenantAdmin) && !isDeleted && !message._status;
                 const isPending = message._status === "pending";
                 const isFailed = message._status === "failed";
-                const showTimestamp = idx > 0;
+                const showInGroupTimestamp = idx > 0 && isOwnGroup;
+                const isLongPressed = longPressMessageId === message.id;
+
+                const isFirstInGroup = idx === 0;
+                const isLastInGroup = idx === group.messages.length - 1;
+
+                const bubbleRounding = isOwnMessage
+                  ? `${isFirstInGroup ? "rounded-t-2xl" : "rounded-t-md"} ${isLastInGroup ? "rounded-bl-2xl rounded-br-md" : "rounded-b-md"} rounded-l-2xl`
+                  : `${isFirstInGroup ? "rounded-t-2xl" : "rounded-t-md"} ${isLastInGroup ? "rounded-br-2xl rounded-bl-md" : "rounded-b-md"} rounded-r-2xl`;
 
                 return (
                   <div key={message._tempId || message.id}>
-                    <div
-                      className={`group relative py-0.5 ${isPending ? "opacity-60" : ""} ${
-                        isFailed ? "bg-destructive/10 px-2 -mx-2 rounded-md" : ""
-                      }`}
-                      data-testid={`message-${message._tempId || message.id}`}
-                    >
-                      {showTimestamp && (
+                    {showInGroupTimestamp && (
+                      <div className="flex justify-end mb-0.5">
                         <Tooltip>
                           <TooltipTrigger asChild>
-                            <span className="absolute -left-12 top-1 text-[10px] text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity cursor-default">
+                            <span className="text-[10px] text-muted-foreground cursor-default">
                               {formatTime(message.createdAt)}
                             </span>
                           </TooltipTrigger>
@@ -430,241 +501,336 @@ export function ChatMessageTimeline({
                             {formatFullDateTime(message.createdAt)}
                           </TooltipContent>
                         </Tooltip>
-                      )}
-
-                      <div className="flex items-start gap-2">
-                        <div className="flex-1 min-w-0">
-                          {isEditing ? (
-                            <div className="flex items-center gap-2">
-                              <Input
-                                value={editingBody}
-                                onChange={(e) => setEditingBody(e.target.value)}
-                                className="flex-1 text-sm"
-                                autoFocus
-                                onKeyDown={(e) => {
-                                  if (e.key === "Enter" && !e.shiftKey) {
-                                    e.preventDefault();
-                                    handleEditSave(message.id);
-                                  }
-                                  if (e.key === "Escape") {
-                                    handleEditCancel();
-                                  }
-                                }}
-                                data-testid={`message-edit-input-${message.id}`}
-                              />
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={() => handleEditSave(message.id)}
-                                disabled={!editingBody.trim()}
-                                aria-label="Save edit"
-                                data-testid={`message-edit-save-${message.id}`}
-                              >
-                                <Check className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                size="icon"
-                                variant="ghost"
-                                onClick={handleEditCancel}
-                                aria-label="Cancel edit"
-                                data-testid={`message-edit-cancel-${message.id}`}
-                              >
-                                <X className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          ) : (
-                            <>
+                      </div>
+                    )}
+                    <div
+                      className={`group relative ${isOwnMessage ? "flex justify-end" : ""}`}
+                      data-testid={`message-${message._tempId || message.id}`}
+                      onTouchStart={() => handleLongPressStart(message.id)}
+                      onTouchEnd={handleLongPressEnd}
+                      onTouchCancel={handleLongPressEnd}
+                    >
+                      <div
+                        className={`relative inline-block px-3 py-1.5 ${bubbleRounding} ${
+                          isPending ? "opacity-60" : ""
+                        } ${
+                          isFailed ? "bg-destructive/10 border border-destructive/30" : ""
+                        } ${
+                          isDeleted
+                            ? "bg-muted/40"
+                            : isOwnMessage
+                              ? "bg-primary/10 dark:bg-primary/15"
+                              : "bg-muted/60"
+                        }`}
+                        style={{ maxWidth: "100%", wordBreak: "break-word" }}
+                      >
+                        <div className="flex items-start gap-2">
+                          <div className="flex-1 min-w-0">
+                            {isEditing ? (
                               <div className="flex items-center gap-2">
-                                <p
-                                  className={`text-sm break-words ${
-                                    isDeleted ? "text-muted-foreground italic" : ""
-                                  }`}
+                                <Input
+                                  value={editingBody}
+                                  onChange={(e) => setEditingBody(e.target.value)}
+                                  className="flex-1 text-sm"
+                                  autoFocus
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter" && !e.shiftKey) {
+                                      e.preventDefault();
+                                      handleEditSave(message.id);
+                                    }
+                                    if (e.key === "Escape") {
+                                      handleEditCancel();
+                                    }
+                                  }}
+                                  data-testid={`message-edit-input-${message.id}`}
+                                />
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => handleEditSave(message.id)}
+                                  disabled={!editingBody.trim()}
+                                  aria-label="Save edit"
+                                  data-testid={`message-edit-save-${message.id}`}
                                 >
-                                  {isDeleted
-                                    ? message.body
-                                    : renderMessageBody
-                                    ? renderMessageBody(message.body)
-                                    : message.body}
-                                </p>
-                                {isPending && (
-                                  <span className="text-xs text-muted-foreground flex items-center gap-1">
-                                    <Loader2 className="h-3 w-3 animate-spin" />
-                                  </span>
-                                )}
-                                {isFailed && (
-                                  <span className="text-xs text-destructive flex items-center gap-1">
-                                    <AlertCircle className="h-3 w-3" />
-                                    Failed
-                                  </span>
-                                )}
-                                {message.editedAt && !isDeleted && (
-                                  <span className="text-xs text-muted-foreground">(edited)</span>
-                                )}
+                                  <Check className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={handleEditCancel}
+                                  aria-label="Cancel edit"
+                                  data-testid={`message-edit-cancel-${message.id}`}
+                                >
+                                  <X className="h-4 w-4" />
+                                </Button>
                               </div>
-
-                              {isFailed && message._tempId && (
-                                <div className="flex items-center gap-2 mt-1">
-                                  <Button
-                                    size="sm"
-                                    variant="outline"
-                                    onClick={() => onRetryMessage?.(message)}
-                                    data-testid={`message-retry-${message._tempId}`}
+                            ) : (
+                              <>
+                                <div className="flex items-center gap-2">
+                                  <p
+                                    className={`text-sm whitespace-pre-wrap break-words ${
+                                      isDeleted ? "text-muted-foreground italic" : ""
+                                    }`}
                                   >
-                                    <RefreshCw className="h-3 w-3 mr-1" />
-                                    Retry
-                                  </Button>
-                                  <Button
-                                    size="sm"
-                                    variant="ghost"
-                                    onClick={() => onRemoveFailedMessage?.(message._tempId!)}
-                                    data-testid={`message-remove-${message._tempId}`}
-                                  >
-                                    <X className="h-3 w-3 mr-1" />
-                                    Remove
-                                  </Button>
+                                    {isDeleted
+                                      ? message.body
+                                      : renderMessageBody
+                                      ? renderMessageBody(message.body)
+                                      : renderLinkedText(message.body)}
+                                  </p>
+                                  {isPending && (
+                                    <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0">
+                                      <Loader2 className="h-3 w-3 animate-spin" />
+                                    </span>
+                                  )}
+                                  {isFailed && (
+                                    <span className="text-xs text-destructive flex items-center gap-1 flex-shrink-0">
+                                      <AlertCircle className="h-3 w-3" />
+                                      Failed
+                                    </span>
+                                  )}
+                                  {message.editedAt && !isDeleted && (
+                                    <span className="text-xs text-muted-foreground flex-shrink-0">(edited)</span>
+                                  )}
                                 </div>
-                              )}
-                            </>
-                          )}
 
-                          {message.attachments &&
-                            message.attachments.length > 0 &&
-                            !isDeleted && (
-                              <div className="mt-2 flex flex-wrap gap-2">
-                                {message.attachments.map((attachment) => {
-                                  const FileIcon = getFileIcon?.(attachment.mimeType);
-                                  const isImage = attachment.mimeType.startsWith("image/");
-                                  return (
-                                    <a
-                                      key={attachment.id}
-                                      href={attachment.url}
-                                      target="_blank"
-                                      rel="noopener noreferrer"
-                                      className="flex items-center gap-2 p-2 rounded-md bg-muted hover-elevate"
-                                      data-testid={`attachment-${attachment.id}`}
+                                {isFailed && message._tempId && (
+                                  <div className="flex items-center gap-2 mt-1">
+                                    <Button
+                                      size="sm"
+                                      variant="outline"
+                                      onClick={() => onRetryMessage?.(message)}
+                                      data-testid={`message-retry-${message._tempId}`}
                                     >
-                                      {isImage ? (
-                                        <img
-                                          src={attachment.url}
-                                          alt={attachment.fileName}
-                                          className="h-16 w-16 object-cover rounded"
-                                        />
-                                      ) : (
-                                        <>
-                                          {FileIcon && (
-                                            <FileIcon className="h-4 w-4 text-muted-foreground" />
-                                          )}
-                                          <span className="text-xs truncate max-w-[150px]">
-                                            {attachment.fileName}
-                                          </span>
-                                          {formatFileSize && (
-                                            <span className="text-xs text-muted-foreground">
-                                              ({formatFileSize(attachment.sizeBytes)})
-                                            </span>
-                                          )}
-                                        </>
-                                      )}
-                                    </a>
-                                  );
-                                })}
-                              </div>
+                                      <RefreshCw className="h-3 w-3 mr-1" />
+                                      Retry
+                                    </Button>
+                                    <Button
+                                      size="sm"
+                                      variant="ghost"
+                                      onClick={() => onRemoveFailedMessage?.(message._tempId!)}
+                                      data-testid={`message-remove-${message._tempId}`}
+                                    >
+                                      <X className="h-3 w-3 mr-1" />
+                                      Remove
+                                    </Button>
+                                  </div>
+                                )}
+                              </>
                             )}
 
-                          {!message.parentMessageId && threadSummaries?.get(message.id) && (
-                            <button
-                              type="button"
-                              onClick={() => onOpenThread?.(message.id)}
-                              className="mt-1 flex items-center gap-1.5 text-xs text-primary hover:underline cursor-pointer"
-                              data-testid={`thread-replies-${message.id}`}
-                            >
-                              <MessagesSquare className="h-3.5 w-3.5" />
-                              <span>
-                                {threadSummaries.get(message.id)!.replyCount}{" "}
-                                {threadSummaries.get(message.id)!.replyCount === 1 ? "reply" : "replies"}
-                              </span>
-                            </button>
-                          )}
-                        </div>
-
-                        {!isDeleted && !isEditing && (
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                                aria-label="Message actions"
-                                data-testid={`message-menu-${message.id}`}
-                              >
-                                <MoreHorizontal className="h-4 w-4" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  if (onCopyMessage) {
-                                    onCopyMessage(message.body);
-                                  } else {
-                                    navigator.clipboard.writeText(message.body);
-                                  }
-                                }}
-                                data-testid={`message-copy-${message.id}`}
-                              >
-                                <Copy className="h-4 w-4 mr-2" />
-                                Copy text
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => {
-                                  const authorName = message.author?.name || message.author?.email || "Unknown";
-                                  onQuoteReply?.(authorName, message.body);
-                                }}
-                                data-testid={`message-quote-${message.id}`}
-                              >
-                                <Quote className="h-4 w-4 mr-2" />
-                                Quote reply
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => onCreateTaskFromMessage?.(message)}
-                                data-testid={`message-create-task-${message.id}`}
-                              >
-                                <ListTodo className="h-4 w-4 mr-2" />
-                                Create task
-                              </DropdownMenuItem>
-                              {onOpenThread && !message.parentMessageId && (
-                                <DropdownMenuItem
-                                  onClick={() => onOpenThread(message.id)}
-                                  data-testid={`message-thread-${message.id}`}
-                                >
-                                  <MessagesSquare className="h-4 w-4 mr-2" />
-                                  Reply in thread
-                                </DropdownMenuItem>
+                            {message.attachments &&
+                              message.attachments.length > 0 &&
+                              !isDeleted && (
+                                <div className="mt-2 flex flex-wrap gap-2">
+                                  {message.attachments.map((attachment) => {
+                                    const FileIcon = getFileIcon?.(attachment.mimeType);
+                                    const isImage = attachment.mimeType.startsWith("image/");
+                                    return (
+                                      <a
+                                        key={attachment.id}
+                                        href={attachment.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        className="flex items-center gap-2 p-2 rounded-md bg-background/60 hover-elevate"
+                                        data-testid={`attachment-${attachment.id}`}
+                                      >
+                                        {isImage ? (
+                                          <img
+                                            src={attachment.url}
+                                            alt={attachment.fileName}
+                                            className="h-16 w-16 object-cover rounded"
+                                          />
+                                        ) : (
+                                          <>
+                                            {FileIcon && (
+                                              <FileIcon className="h-4 w-4 text-muted-foreground" />
+                                            )}
+                                            <span className="text-xs truncate max-w-[150px]">
+                                              {attachment.fileName}
+                                            </span>
+                                            {formatFileSize && (
+                                              <span className="text-xs text-muted-foreground">
+                                                ({formatFileSize(attachment.sizeBytes)})
+                                              </span>
+                                            )}
+                                          </>
+                                        )}
+                                      </a>
+                                    );
+                                  })}
+                                </div>
                               )}
-                              {canEdit && (
+
+                            {!message.parentMessageId && threadSummaries?.get(message.id) && (
+                              <button
+                                type="button"
+                                onClick={() => onOpenThread?.(message.id)}
+                                className="mt-1 flex items-center gap-1.5 text-xs text-primary hover:underline cursor-pointer"
+                                data-testid={`thread-replies-${message.id}`}
+                              >
+                                <MessagesSquare className="h-3.5 w-3.5" />
+                                <span>
+                                  {threadSummaries.get(message.id)!.replyCount}{" "}
+                                  {threadSummaries.get(message.id)!.replyCount === 1 ? "reply" : "replies"}
+                                </span>
+                              </button>
+                            )}
+                          </div>
+
+                          {!isDeleted && !isEditing && !isMobile && (
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild>
+                                <Button
+                                  variant="ghost"
+                                  size="icon"
+                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                  aria-label="Message actions"
+                                  data-testid={`message-menu-${message.id}`}
+                                >
+                                  <MoreHorizontal className="h-4 w-4" />
+                                </Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
                                 <DropdownMenuItem
                                   onClick={() => {
-                                    setEditingMessageId(message.id);
-                                    setEditingBody(message.body);
+                                    if (onCopyMessage) {
+                                      onCopyMessage(message.body);
+                                    } else {
+                                      navigator.clipboard.writeText(message.body);
+                                    }
                                   }}
-                                  data-testid={`message-edit-${message.id}`}
+                                  data-testid={`message-copy-${message.id}`}
                                 >
-                                  <Pencil className="h-4 w-4 mr-2" />
-                                  Edit
+                                  <Copy className="h-4 w-4 mr-2" />
+                                  Copy text
                                 </DropdownMenuItem>
-                              )}
-                              {canDelete && (
                                 <DropdownMenuItem
-                                  onClick={() => onDeleteMessage?.(message.id)}
-                                  className="text-destructive focus:text-destructive"
-                                  data-testid={`message-delete-${message.id}`}
+                                  onClick={() => {
+                                    const authorName = message.author?.name || message.author?.email || "Unknown";
+                                    onQuoteReply?.(authorName, message.body);
+                                  }}
+                                  data-testid={`message-quote-${message.id}`}
                                 >
-                                  <Trash2 className="h-4 w-4 mr-2" />
-                                  Delete
+                                  <Quote className="h-4 w-4 mr-2" />
+                                  Quote reply
                                 </DropdownMenuItem>
-                              )}
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        )}
+                                <DropdownMenuItem
+                                  onClick={() => onCreateTaskFromMessage?.(message)}
+                                  data-testid={`message-create-task-${message.id}`}
+                                >
+                                  <ListTodo className="h-4 w-4 mr-2" />
+                                  Create task
+                                </DropdownMenuItem>
+                                {onOpenThread && !message.parentMessageId && (
+                                  <DropdownMenuItem
+                                    onClick={() => onOpenThread(message.id)}
+                                    data-testid={`message-thread-${message.id}`}
+                                  >
+                                    <MessagesSquare className="h-4 w-4 mr-2" />
+                                    Reply in thread
+                                  </DropdownMenuItem>
+                                )}
+                                {canEdit && (
+                                  <DropdownMenuItem
+                                    onClick={() => {
+                                      setEditingMessageId(message.id);
+                                      setEditingBody(message.body);
+                                    }}
+                                    data-testid={`message-edit-${message.id}`}
+                                  >
+                                    <Pencil className="h-4 w-4 mr-2" />
+                                    Edit
+                                  </DropdownMenuItem>
+                                )}
+                                {canDelete && (
+                                  <DropdownMenuItem
+                                    onClick={() => onDeleteMessage?.(message.id)}
+                                    className="text-destructive focus:text-destructive"
+                                    data-testid={`message-delete-${message.id}`}
+                                  >
+                                    <Trash2 className="h-4 w-4 mr-2" />
+                                    Delete
+                                  </DropdownMenuItem>
+                                )}
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          )}
+                        </div>
                       </div>
+
+                      {isLongPressed && isMobile && !isDeleted && !isEditing && (
+                        <div
+                          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+                          onClick={() => setLongPressMessageId(null)}
+                          data-testid={`message-action-sheet-${message.id}`}
+                        >
+                          <div
+                            className="w-full max-w-sm bg-background rounded-t-xl p-2 pb-6 space-y-1 animate-in slide-in-from-bottom-4 duration-200"
+                            onClick={(e) => e.stopPropagation()}
+                          >
+                            <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-3" />
+                            <button
+                              className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
+                              onClick={() => {
+                                if (onCopyMessage) onCopyMessage(message.body);
+                                else navigator.clipboard.writeText(message.body);
+                                setLongPressMessageId(null);
+                              }}
+                              data-testid={`action-sheet-copy-${message.id}`}
+                            >
+                              <Copy className="h-5 w-5 text-muted-foreground" />
+                              <span className="text-sm font-medium">Copy text</span>
+                            </button>
+                            <button
+                              className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
+                              onClick={() => {
+                                const authorName = message.author?.name || message.author?.email || "Unknown";
+                                onQuoteReply?.(authorName, message.body);
+                                setLongPressMessageId(null);
+                              }}
+                              data-testid={`action-sheet-quote-${message.id}`}
+                            >
+                              <Quote className="h-5 w-5 text-muted-foreground" />
+                              <span className="text-sm font-medium">Quote reply</span>
+                            </button>
+                            {canEdit && (
+                              <button
+                                className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
+                                onClick={() => {
+                                  setEditingMessageId(message.id);
+                                  setEditingBody(message.body);
+                                  setLongPressMessageId(null);
+                                }}
+                                data-testid={`action-sheet-edit-${message.id}`}
+                              >
+                                <Pencil className="h-5 w-5 text-muted-foreground" />
+                                <span className="text-sm font-medium">Edit</span>
+                              </button>
+                            )}
+                            {canDelete && (
+                              <button
+                                className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
+                                onClick={() => {
+                                  onDeleteMessage?.(message.id);
+                                  setLongPressMessageId(null);
+                                }}
+                                data-testid={`action-sheet-delete-${message.id}`}
+                              >
+                                <Trash2 className="h-5 w-5 text-destructive" />
+                                <span className="text-sm font-medium text-destructive">Delete</span>
+                              </button>
+                            )}
+                            <button
+                              className="flex items-center justify-center w-full px-4 min-h-11 mt-2 rounded-md bg-muted text-sm font-medium"
+                              onClick={() => setLongPressMessageId(null)}
+                              data-testid={`action-sheet-cancel-${message.id}`}
+                            >
+                              Cancel
+                            </button>
+                          </div>
+                        </div>
+                      )}
                     </div>
                   </div>
                 );
@@ -680,8 +846,12 @@ export function ChatMessageTimeline({
       editingBody,
       isTenantAdmin,
       isDm,
+      isMobile,
+      longPressMessageId,
       handleEditSave,
       handleEditCancel,
+      handleLongPressStart,
+      handleLongPressEnd,
       onRetryMessage,
       onRemoveFailedMessage,
       onCopyMessage,
@@ -779,16 +949,30 @@ export function ChatMessageTimeline({
         }}
       />
 
-      {hasNewMessages && !isAtBottom && (
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 z-10">
+      {!isAtBottom && (
+        <div className="absolute bottom-3 right-3 z-10">
           <Button
             variant="secondary"
+            size="icon"
+            onClick={scrollToBottom}
+            className="shadow-lg rounded-full h-10 w-10"
+            data-testid="button-scroll-to-bottom"
+          >
+            <ChevronDown className="h-5 w-5" />
+          </Button>
+        </div>
+      )}
+
+      {hasNewMessages && !isAtBottom && (
+        <div className="absolute bottom-16 right-3 z-10">
+          <Button
+            variant="default"
             size="sm"
             onClick={scrollToBottom}
-            className="shadow-lg gap-2"
+            className="shadow-lg gap-1.5 rounded-full"
             data-testid="button-new-messages"
           >
-            <ChevronDown className="h-4 w-4" />
+            <ArrowDown className="h-3.5 w-3.5" />
             New messages
           </Button>
         </div>

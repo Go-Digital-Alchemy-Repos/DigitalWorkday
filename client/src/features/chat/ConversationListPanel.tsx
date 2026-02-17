@@ -143,7 +143,7 @@ export function ConversationListPanel({
             placeholder="Search conversations..."
             value={searchQuery}
             onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9 h-9"
+            className="pl-9"
             data-testid="input-conversation-search"
           />
         </div>
@@ -315,20 +315,20 @@ function ChannelRow({ channel, isSelected, onClick }: ChannelRowProps) {
     <button
       onClick={onClick}
       className={cn(
-        "flex items-start gap-2.5 w-full p-2 rounded-md text-left transition-colors",
+        "flex items-center gap-2.5 w-full min-h-[44px] px-2 py-2.5 rounded-md text-left transition-colors",
         isSelected
           ? "bg-accent text-accent-foreground"
           : "hover-elevate"
       )}
       data-testid={`channel-row-${channel.id}`}
     >
-      <div className="flex-shrink-0 mt-0.5">
+      <div className="flex-shrink-0">
         {channel.isPrivate ? (
-          <div className="w-8 h-8 rounded-md bg-muted flex items-center justify-center">
+          <div className="w-9 h-9 rounded-md bg-muted flex items-center justify-center">
             <Lock className="h-4 w-4 text-muted-foreground" />
           </div>
         ) : (
-          <div className="w-8 h-8 rounded-md bg-primary/10 flex items-center justify-center">
+          <div className="w-9 h-9 rounded-md bg-primary/10 flex items-center justify-center">
             <Hash className="h-4 w-4 text-primary" />
           </div>
         )}
@@ -343,31 +343,33 @@ function ChannelRow({ channel, isSelected, onClick }: ChannelRowProps) {
           >
             {channel.name}
           </span>
-          {lastActivityTime && (
-            <span className="text-[10px] text-muted-foreground flex-shrink-0">
-              {lastActivityTime}
-            </span>
-          )}
-        </div>
-        {channel.lastMessage && (
-          <p className="text-xs text-muted-foreground truncate mt-0.5">
-            {channel.lastMessage.authorName && (
-              <span className="font-medium">{channel.lastMessage.authorName}: </span>
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {lastActivityTime && (
+              <span className="text-[11px] text-muted-foreground">
+                {lastActivityTime}
+              </span>
             )}
-            {cleanMessagePreview(channel.lastMessage.body)}
-          </p>
-        )}
-        <div className="flex items-center gap-2 mt-1">
+            {hasUnread && (
+              <span className="flex-shrink-0 w-2 h-2 rounded-full bg-primary" data-testid={`channel-unread-dot-${channel.id}`} />
+            )}
+          </div>
+        </div>
+        <div className="flex items-center justify-between gap-2 mt-0.5">
+          {channel.lastMessage ? (
+            <p className="text-xs text-muted-foreground truncate">
+              {channel.lastMessage.authorName && (
+                <span className={cn(hasUnread ? "font-medium text-foreground/70" : "font-medium")}>{channel.lastMessage.authorName}: </span>
+              )}
+              {cleanMessagePreview(channel.lastMessage.body)}
+            </p>
+          ) : (
+            <span className="text-xs text-muted-foreground/60">No messages yet</span>
+          )}
           {channel.memberCount !== undefined && (
-            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+            <span className="text-[10px] text-muted-foreground flex items-center gap-0.5 flex-shrink-0">
               <Users className="h-3 w-3" />
               {channel.memberCount}
             </span>
-          )}
-          {hasUnread && (
-            <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4 ml-auto">
-              {channel.unreadCount}
-            </Badge>
           )}
         </div>
       </div>
@@ -397,30 +399,30 @@ function DmRow({ dm, currentUserId, isSelected, onClick }: DmRowProps) {
     <button
       onClick={onClick}
       className={cn(
-        "flex items-start gap-2.5 w-full p-2 rounded-md text-left transition-colors",
+        "flex items-center gap-2.5 w-full min-h-[44px] px-2 py-2.5 rounded-md text-left transition-colors",
         isSelected
           ? "bg-accent text-accent-foreground"
           : "hover-elevate"
       )}
       data-testid={`dm-row-${dm.id}`}
     >
-      <div className="flex-shrink-0 mt-0.5">
+      <div className="flex-shrink-0">
         {isGroup ? (
-          <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center">
+          <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center">
             <Users className="h-4 w-4 text-muted-foreground" />
           </div>
         ) : firstMember ? (
           <div className="relative">
-            <Avatar className="h-8 w-8">
+            <Avatar className="h-9 w-9">
               <AvatarImage src={firstMember.user.avatarUrl || undefined} />
               <AvatarFallback className="text-xs">
                 {getInitials(firstMember.user.name || firstMember.user.email)}
               </AvatarFallback>
             </Avatar>
-            <AvatarPresenceIndicator userId={firstMember.userId} avatarSize={32} />
+            <AvatarPresenceIndicator userId={firstMember.userId} avatarSize={36} />
           </div>
         ) : (
-          <Avatar className="h-8 w-8">
+          <Avatar className="h-9 w-9">
             <AvatarFallback className="text-xs">?</AvatarFallback>
           </Avatar>
         )}
@@ -435,21 +437,24 @@ function DmRow({ dm, currentUserId, isSelected, onClick }: DmRowProps) {
           >
             {displayName}
           </span>
-          {lastActivityTime && (
-            <span className="text-[10px] text-muted-foreground flex-shrink-0">
-              {lastActivityTime}
-            </span>
-          )}
+          <div className="flex items-center gap-1.5 flex-shrink-0">
+            {lastActivityTime && (
+              <span className="text-[11px] text-muted-foreground">
+                {lastActivityTime}
+              </span>
+            )}
+            {hasUnread && (
+              <span className="flex-shrink-0 w-2 h-2 rounded-full bg-primary" data-testid={`dm-unread-dot-${dm.id}`} />
+            )}
+          </div>
         </div>
         {dm.lastMessage && (
-          <p className="text-xs text-muted-foreground truncate mt-0.5">
+          <p className={cn(
+            "text-xs truncate mt-0.5",
+            hasUnread ? "text-foreground/70" : "text-muted-foreground"
+          )}>
             {cleanMessagePreview(dm.lastMessage.body)}
           </p>
-        )}
-        {hasUnread && (
-          <Badge variant="destructive" className="text-[10px] px-1.5 py-0 h-4 mt-1">
-            {dm.unreadCount}
-          </Badge>
         )}
       </div>
     </button>
