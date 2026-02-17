@@ -134,15 +134,29 @@ export default function ProjectsDashboard() {
   const updateProjectMutation = useMutation({
     mutationFn: async ({ projectId, data }: { projectId: string; data: any }) => {
       const { memberIds, ...projectData } = data;
-      await apiRequest("PATCH", `/api/projects/${projectId}`, projectData);
+      const res = await apiRequest("PATCH", `/api/projects/${projectId}`, projectData);
+      const updatedProject = await res.json();
       if (memberIds !== undefined) {
         await apiRequest("PUT", `/api/projects/${projectId}/members`, { memberIds });
       }
+      return { projectId, updatedProject };
     },
-    onSuccess: (_data, variables) => {
+    onSuccess: ({ projectId, updatedProject }) => {
+      queryClient.setQueryData<any[]>(["/api/projects"], (old) => {
+        if (!old) return old;
+        return old.map((p) =>
+          p.id === projectId ? { ...p, ...updatedProject } : p,
+        );
+      });
+      queryClient.setQueryData<any[]>(["/api/v1/projects", { includeCounts: true }], (old) => {
+        if (!old) return old;
+        return old.map((p: any) =>
+          p.id === projectId ? { ...p, ...updatedProject } : p,
+        );
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", variables.projectId, "members"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "members"] });
       setEditProjectOpen(false);
       setEditingProject(null);
       toast({ title: "Project updated successfully" });

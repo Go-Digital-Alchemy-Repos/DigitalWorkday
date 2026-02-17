@@ -125,15 +125,25 @@ export function ProjectSettingsSheet({
 
   const updateProjectMutation = useMutation({
     mutationFn: async (data: EditProjectFormData) => {
-      return apiRequest("PATCH", `/api/projects/${project.id}`, {
+      const res = await apiRequest("PATCH", `/api/projects/${project.id}`, {
         name: data.name,
         description: data.description || null,
         teamId: data.teamId || null,
         color: data.color,
         visibility: data.visibility,
       });
+      return await res.json();
     },
-    onSuccess: () => {
+    onSuccess: (updatedProject) => {
+      queryClient.setQueryData<Project[]>(["/api/projects"], (old) => {
+        if (!old) return old;
+        return old.map((p) =>
+          p.id === project.id ? { ...p, ...updatedProject } : p,
+        );
+      });
+      queryClient.setQueryData<Project>(["/api/projects", project.id], (old) =>
+        old ? { ...old, ...updatedProject } : old,
+      );
       queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       toast({
@@ -174,9 +184,16 @@ export function ProjectSettingsSheet({
 
   const archiveProjectMutation = useMutation({
     mutationFn: async (status: "active" | "archived") => {
-      return apiRequest("PATCH", `/api/projects/${project.id}`, { status });
+      const res = await apiRequest("PATCH", `/api/projects/${project.id}`, { status });
+      return await res.json();
     },
-    onSuccess: (_, status) => {
+    onSuccess: (updatedProject, status) => {
+      queryClient.setQueryData<Project[]>(["/api/projects"], (old) => {
+        if (!old) return old;
+        return old.map((p) =>
+          p.id === project.id ? { ...p, ...updatedProject } : p,
+        );
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       toast({

@@ -4,6 +4,7 @@ import { registerRoute, clearRouteRegistry } from "./routeRegistry";
 import { registerRoutes as legacyRegisterRoutes } from "../routes";
 import systemRouter from "./domains/system.router";
 import tagsRouter from "./domains/tags.router";
+import activityRouter from "./domains/activity.router";
 
 export async function mountAllRoutes(
   httpServer: Server,
@@ -101,10 +102,20 @@ export async function mountAllRoutes(
     legacy: false,
   });
 
+  registerRoute({
+    path: "/api",
+    router: activityRouter,
+    policy: "authTenant",
+    domain: "activity",
+    description: "Activity log CRUD. Migrated from legacy routes/activity.router.ts.",
+    legacy: false,
+  });
+
   await legacyRegisterRoutes(httpServer, app);
 
   app.use("/api/v1/system", systemRouter);
   app.use("/api", tagsRouter);
+  app.use("/api", activityRouter);
 
   return httpServer;
 }
