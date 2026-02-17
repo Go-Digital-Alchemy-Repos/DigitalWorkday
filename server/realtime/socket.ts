@@ -53,7 +53,7 @@ import {
   onTypingExpired
 } from './typing';
 import { storage } from '../storage';
-import { withSocketPolicy } from './socketPolicy';
+import { withSocketPolicy, cleanupSocketMembershipCache, invalidateMembershipCache } from './socketPolicy';
 
 // Extended socket interface with authenticated user data
 interface AuthenticatedSocket extends Socket<ClientToServerEvents, ServerToClientEvents> {

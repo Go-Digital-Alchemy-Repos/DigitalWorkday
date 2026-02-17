@@ -1,0 +1,120 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL (Prompt #9):
+Complete the Socket.IO policy governance for Chat by wrapping the remaining realtime event families using withSocketPolicy():
+- message send
+- message read receipts
+- conversation membership changes (join/leave/add/remove)
+- message edits/deletes (if supported realtime)
+- optional: mentions notification emit events (if emitted via sockets)
+Preserve event names and payload shapes.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change Socket.IO event names.
+- Do NOT change payload shapes (unless it’s a bug fix and tests cover it).
+- Do NOT change DB schema.
+- Do NOT weaken auth/tenant/membership checks.
+- Avoid large refactors; wrap existing handlers.
+
+DELIVERABLES:
+1) Socket event registrations updated so ALL chat realtime events go through withSocketPolicy().
+2) requireChatMembership() extended to support:
+   - channel conversations
+   - DM conversations
+   - any “thread” concept if it exists
+3) Add a lightweight membership caching strategy (optional but recommended):
+   - prevent DB membership lookup on every typing/read event
+   - safe cache invalidation on join/leave or reconnect
+4) Tests:
+   - >= 12 socket tests total after this prompt
+   - include cases for send/read/join/leave across channel + DM
+   - include a test that ensures event registration list is fully wrapped (no raw socket.on for chat namespace)
+
+IMPLEMENTATION PLAN:
+
+A) Inventory chat socket events
+1) Locate where chat socket events are registered (socket.on(...) calls).
+2) List all chat event constants (you already have TYPING_EVENTS).
+   Examples (use actual names):
+   - MESSAGE_EVENTS.SEND
+   - MESSAGE_EVENTS.EDIT
+   - MESSAGE_EVENTS.DELETE
+   - READ_EVENTS.MARK_READ
+   - CONVO_EVENTS.JOIN / LEAVE / ADD_MEMBER / REMOVE_MEMBER
+3) Identify which handlers require membership checks:
+   - Any event that references conversationId/channelId/dmId MUST requireChatMembership.
+
+B) Wrap message send + edits/deletes
+1) Apply withSocketPolicy({ policy: "authTenant", membership: "chat" }, handler) to:
+   - message send
+   - message edit/delete if they exist as socket events
+2) Ensure the handler signature remains (socket, payload, ack?) consistent.
+3) Ensure room emission targets do not change:
+   - tenant rooms
+   - conversation rooms
+   - user rooms (if DMs)
+4) Add request-id propagation:
+   - include requestId in logs
+   - if ack responses include metadata, keep shape stable
+
+C) Wrap read receipts
+1) Wrap the read receipt event(s).
+2) Ensure requireChatMembership is enforced before writes.
+3) Confirm read receipt side-effects remain:
+   - DB reads table updates
+   - emit updates to other members as before
+
+D) Wrap conversation membership events (join/leave/add/remove)
+1) Wrap these events with requireAuth + requireTenant.
+2) Membership checks:
+   - For “join” to an existing conversation, require membership or explicit invite rules.
+   - For “add/remove member,” require appropriate role/permission (reuse existing checks).
+3) If membership caching is implemented:
+   - On join/leave/add/remove, invalidate/update cache for affected socket/user.
+
+E) Membership caching (optional but recommended)
+1) Implement a simple in-memory per-socket cache:
+   - key: conversationId -> boolean member
+   - TTL: short (e.g., 30-120s) OR cleared on disconnect
+2) Cache must never allow false positives:
+   - only cache “true membership” results
+   - do NOT cache “not member” for long (to avoid stale denial after add)
+3) Use the cache inside requireChatMembership.
+
+F) Tests (expand socket tests)
+Add tests to server/tests/realtime/socketPolicy.test.ts (or the existing file) covering:
+1) Send denied if unauth
+2) Send denied if wrong tenant
+3) Send denied if not member (channel and DM variants)
+4) Send allowed if member (channel and DM variants)
+5) Read receipt denied if not member
+6) Read receipt allowed if member
+7) Join/leave event behavior respects policy
+8) “All chat events are wrapped” test:
+   - Assert that chat event registration uses a helper (e.g., registerChatHandlers(socket)) where every handler passes through withSocketPolicy
+   - Or expose an array/list of registered events + whether they use policy wrapper, and test it
+
+If you lack an end-to-end socket harness:
+- Keep tests at unit level by invoking wrapped handlers with fake sockets and verifying:
+  - requireAuth/requireTenant/requireChatMembership called
+  - handler not invoked on denial
+  - handler invoked on allowed
+
+G) Documentation
+Update docs/architecture/routes.md (or docs/architecture/realtime.md if you add it):
+- Socket policy wrapper is now required for all chat events
+- Template snippet for adding a new chat event
+- Notes about membership caching and invalidation
+
+VERIFICATION CHECKLIST:
+- ✅ Existing typing events still work
+- ✅ Message send/read events still work
+- ✅ No raw chat socket handlers bypass withSocketPolicy
+- ✅ All tests pass
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+1) Which socket events were wrapped (list)
+2) Whether membership caching was added (and strategy)
+3) Tests added/updated (count and what they cover)
+4) Any behavior differences found and how you preserved compatibility
