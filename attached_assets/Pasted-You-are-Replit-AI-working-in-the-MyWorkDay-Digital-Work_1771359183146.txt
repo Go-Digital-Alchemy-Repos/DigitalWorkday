@@ -1,0 +1,250 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+MISSION:
+Upgrade the Subtask Drawer so it has FULL FEATURE PARITY with the Task Drawer.
+
+Subtasks must support the same capabilities, UI sections, and interactions as tasks,
+with the only structural difference being that a subtask has a parentTaskId.
+
+This is a NON-DESTRUCTIVE parity refactor + bugfix pass.
+
+IMPORTANT:
+Subtasks should reuse the same components and logic as tasks wherever possible.
+Avoid duplicating UI logic between TaskDrawer and SubtaskDrawer.
+
+The long-term architecture should be:
+
+TaskDrawer
+  └── TaskEditor (shared)
+        └── SubtaskDrawer uses TaskEditor with subtask mode
+
+Do NOT change backend APIs unless absolutely necessary.
+Do NOT change DB schema.
+Preserve tenant and permission behavior.
+
+--------------------------------------------------
+REQUIRED PARITY FEATURES (Subtasks must support ALL)
+--------------------------------------------------
+
+Subtasks must support everything Tasks support:
+
+• Description editing
+• Due date
+• Priority
+• Status / Complete / Uncomplete
+• Assignee
+• Watchers
+• Tags
+• Attachments (Cloudflare R2)
+• Comments with attachments
+• Mentions in description
+• Mentions in comments
+• CreatedBy + CreatedAt display
+• Start timer (if tasks support timer)
+• Activity logging
+• Immediate cache updates
+• Drawer action bar behavior
+
+--------------------------------------------------
+PART 1 — COMPONENT ARCHITECTURE
+--------------------------------------------------
+
+Refactor drawers so both use shared editor logic.
+
+Create (or confirm existence of):
+
+components/tasks/TaskEditor.tsx
+
+This component should contain:
+- description editor
+- metadata controls
+- tags selector
+- watchers selector
+- attachments section
+- comments section
+- action bar
+- created-by display
+
+TaskDrawer:
+- wraps TaskEditor with task entity
+
+SubtaskDrawer:
+- wraps TaskEditor with subtask entity
+
+Avoid duplicate logic between drawers.
+
+--------------------------------------------------
+PART 2 — DATA + CACHE CONSISTENCY
+--------------------------------------------------
+
+Ensure parity in React Query behavior.
+
+Subtasks must:
+- update immediately after create
+- update immediately after edit
+- update immediately after attachments
+- update immediately after tags
+- update immediately after watchers
+- update immediately after due date change
+
+Use:
+queryClient.setQueryData
+queryClient.invalidateQueries
+
+Ensure subtasks query keys mirror task query patterns.
+
+--------------------------------------------------
+PART 3 — ATTACHMENTS (R2)
+--------------------------------------------------
+
+Subtasks must use the SAME attachment upload pipeline as tasks:
+
+Flow:
+presign → upload → complete → update cache
+
+Reuse attachments domain APIs.
+
+Ensure these file types work:
+PDF, AI, EPS, DOC, DOCX, PAGES, CSV, XLS, XLSX, PPT, PPTX,
+TXT, PNG, JPG, JPEG, WEBP, SVG
+
+Subtask attachments must render immediately after upload.
+
+--------------------------------------------------
+PART 4 — COMMENTS WITH ATTACHMENTS
+--------------------------------------------------
+
+Subtasks must support:
+- comment creation
+- comment attachments
+- mentions
+- notification side effects
+
+Reuse the existing comments infrastructure used by tasks.
+
+Do NOT create a second comment system.
+
+--------------------------------------------------
+PART 5 — MENTIONS PARITY
+--------------------------------------------------
+
+Mentions must work in:
+
+• task descriptions
+• subtask descriptions
+• task comments
+• subtask comments
+
+Reuse the same mention extraction helper used in comments.
+
+Do not duplicate mention logic.
+
+--------------------------------------------------
+PART 6 — CREATED BY DISPLAY
+--------------------------------------------------
+
+Both tasks and subtasks must display:
+
+Created by <UserName> • <timestamp>
+
+Use existing createdAt and createdBy fields.
+Do NOT modify schema.
+
+--------------------------------------------------
+PART 7 — ACTION BAR PARITY
+--------------------------------------------------
+
+Both drawers must have identical action bar structure:
+
+[Start Timer] (orange)
+[Save] (blue)
+[Mark Complete] (green)
+
+Rules:
+- Save sits immediately left of Mark Complete
+- Remove bottom Start Timer button
+- Keep top Start Timer
+
+--------------------------------------------------
+PART 8 — WATCHERS SEARCH FIX
+--------------------------------------------------
+
+Ensure watcher selector works identically for tasks and subtasks:
+
+- dynamic search
+- debounced query
+- tenant-scoped user list
+- immediate persistence + cache update
+
+--------------------------------------------------
+PART 9 — TAG APPLICATION PARITY
+--------------------------------------------------
+
+Tags must behave identically on subtasks and tasks:
+
+If new entity:
+- create entity
+- attach tags immediately
+
+If existing:
+- attach/detach instantly
+
+Ensure cache updates.
+
+--------------------------------------------------
+PART 10 — UI CONSISTENCY
+--------------------------------------------------
+
+Apply parity styling:
+
+Comments section:
+light grey background
+
+Attachments section:
+immediately under description
+
+Spacing and section ordering identical between drawers.
+
+--------------------------------------------------
+PART 11 — TESTING
+--------------------------------------------------
+
+Add tests (if backend tests exist):
+
+1) Subtask attachments upload works
+2) Subtask comments with attachments work
+3) Mentions in subtask description create notifications
+4) Watchers add/remove works
+5) Tags apply to subtask
+6) Due date persists on subtask
+7) Subtask cache updates immediately after create
+
+If frontend tests are unavailable,
+add manual verification checklist to docs/mobile-audit.md.
+
+--------------------------------------------------
+PART 12 — DOCUMENTATION UPDATE
+--------------------------------------------------
+
+Update docs/mobile-audit.md with section:
+
+"Task/Subtask Drawer Parity"
+
+Include:
+- summary of parity refactor
+- shared TaskEditor component
+- attachment + comment behavior
+- mention parity
+- cache update strategy
+
+--------------------------------------------------
+OUTPUT REQUIREMENTS
+--------------------------------------------------
+
+When complete, output:
+
+1) Shared components created
+2) Files modified
+3) Subtask features now matching tasks
+4) Tests added
+5) Any remaining limitations

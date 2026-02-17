@@ -1,0 +1,271 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+MISSION:
+Implement a comprehensive, NON-DESTRUCTIVE fixes + UX improvements pass for the Task Drawer and Subtask Drawer.
+
+This work MUST:
+- Preserve existing routes, APIs, and database schema.
+- Preserve tenant isolation + RBAC semantics.
+- Reuse existing infrastructure (Cloudflare R2 uploads, attachments domain, comments domain, mentions infra, upload guards, React Query caching).
+- Add tests where possible and include a short documentation update at the end.
+
+SCOPE (Fix all items below):
+1) Subtasks created do not immediately appear in list (requires refresh).
+2) Show “Created by <User> • <date/time>” on tasks and subtasks (createdAt + createdBy).
+3) Add comments with file attachment on both tasks and subtasks.
+4) In task/subtask drawer action bar: Save to left of Mark Complete. Mark Complete green. Save blue. Start Timer orange.
+5) Watcher user search/select does not populate users dynamically.
+6) Attachment file upload on tasks/subtasks does not work; must support major business file types; must use Cloudflare R2.
+7) Due date selection does not save/apply.
+8) Tag selection on new task/subtask does not save/apply.
+9) @mentions do not work in task/subtask descriptions and should work in “open text composing” fields system-wide.
+10) Remove Start Timer button at bottom; keep only top Start Timer.
+11) Comments section background should be light grey.
+12) Move Attachments section to just under main description in both drawers.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change DB schema (no migrations) unless absolutely unavoidable; prefer using existing columns/tables.
+- Do NOT change existing API URLs.
+- Do NOT break desktop UX while improving mobile.
+- Prefer additive changes, compatibility wrappers, and cache updates (React Query).
+- Keep response shapes stable (some domains use skipEnvelope: true).
+
+PHASE 0 — DISCOVERY (must do first)
+A) Identify the components/files for:
+- TaskDrawer (or equivalent)
+- SubtaskDrawer (or equivalent)
+- Task form state + save mutation
+- Subtask create mutation + list query
+- Watchers selector component
+- Attachments UI component within drawer
+- Comments UI component within drawer
+- Mentions/autocomplete component used elsewhere (task comments mentions were recently fixed)
+
+B) Identify the APIs currently used by the drawers:
+- Tasks create/update
+- Subtasks create/list/update
+- Tags attach/detach/list for task/subtask
+- Attachments presign/complete/download/delete for tasks/subtasks (should exist via attachments/uploads domains)
+- Comments create/list for tasks/subtasks (comments domain migrated)
+- Mentions extraction pipeline (now fixed for task comments)
+- Watchers add/remove endpoints or watchers field updates
+
+Document this in a short internal dev note comment at top of each touched drawer file and in docs/mobile-audit.md under “Tasks/Subtasks Drawer Fixes (Phase 3A follow-up)”.
+
+PHASE 1 — FIX DATA FRESHNESS + CACHE (Items 1, 7, 8)
+1) Subtask list not updating after create (Item 1)
+- Find the React Query query key used to list subtasks for a task (e.g., ["subtasks", taskId] or nested keys).
+- When creating a subtask:
+  - Immediately update cache via queryClient.setQueryData to append the new subtask.
+  - Also invalidate the subtasks list query to re-fetch (queryClient.invalidateQueries).
+- Ensure tenant/workspace/project scoping is included in query keys to avoid collisions.
+- Verify the subtask appears instantly without page refresh.
+
+2) Due date not saving (Item 7)
+- Identify whether due date is stored on task/subtask model as dueDate, dueAt, or similar.
+- Confirm the form state binds correctly and includes the due date in the save mutation payload.
+- Confirm backend accepts and persists it:
+  - If the backend expects ISO string vs Date, normalize consistently in one helper.
+- After save:
+  - setQueryData for task detail query and for any task list queries so UI updates instantly.
+  - invalidateQueries for /api/projects tasks list (or relevant list) as a follow-up.
+
+3) Tag selection not applying on new task/subtask (Item 8)
+- Determine current tag UX:
+  - are tags attached via separate endpoint after create?
+  - or included in create payload?
+- Implement a robust flow:
+  A) If new task/subtask hasn’t been saved yet:
+     - Ensure Save triggers create first.
+     - After create returns id, immediately call attach-tags endpoint(s) for selected tags.
+     - Ensure these calls are awaited or handled with optimistic UI.
+  B) If already saved:
+     - attach/detach tags immediately on selection, and update cache.
+- After tag change:
+  - setQueryData task/subtask detail to include updated tags.
+  - invalidate list queries where tags are displayed.
+
+PHASE 2 — CREATED BY + CREATED AT DISPLAY (Item 2)
+Goal: show “Created by <User> • <timestamp>” for both tasks and subtasks.
+
+1) Confirm data availability:
+- Check task/subtask DTOs:
+  - do they already include createdAt and createdByUser (or createdById)?
+- If only createdById exists:
+  - join/expand server-side if an existing endpoint already returns user map
+  - OR fetch minimal user display name client-side using existing users/team list cache (preferred).
+- Do NOT add DB columns; use existing fields.
+
+2) UI placement:
+- Add a small line in TaskDrawer and SubtaskDrawer near metadata section:
+  - “Created by {userName} • {formattedDateTime}”
+- Use the same date formatting helper across app.
+- Ensure it displays on mobile without crowding.
+
+PHASE 3 — COMMENTS WITH ATTACHMENTS (Items 3, 11, 12, 6)
+We already have:
+- Comments domain migrated (with mention side effects preserved).
+- Attachments/Uploads domains migrated, with R2 and warn-only uploadGuards.
+We must wire them cleanly for tasks/subtasks.
+
+A) Move Attachments section position (Item 12)
+- In both drawers, place Attachments immediately under the main description area.
+- Reuse existing Attachments component if present; otherwise implement one consistent component used by both drawers.
+
+B) Comments section background (Item 11)
+- Wrap the comments section in a light grey background container:
+  - use a subtle neutral, consistent with theme (e.g., muted background token / tailwind class).
+- Ensure padding and rounded corners match design system.
+
+C) Comments with attachment capability (Item 3)
+Implement “Comment Composer” that supports:
+- text body
+- attach 1+ files to the comment
+Flow:
+1) User selects files
+2) For each file:
+   - request presigned upload URL from attachments/uploads endpoint (R2)
+   - upload to R2
+   - call complete endpoint if required
+3) Submit comment create request including:
+   - entityType = "task" or "subtask" (or whatever your backend expects)
+   - entityId
+   - body
+   - attachments metadata references (attachmentIds / file keys)
+Important:
+- Preserve existing comment create response shape and side effects (mentions, notifications).
+
+D) Fix broken attachment uploads for tasks/subtasks (Item 6)
+1) Identify current failure:
+- Presign request failing? (wrong endpoint/path)
+- Upload failing to R2? (bad headers/content-type)
+- Complete failing? (missing fields)
+- UI not calling upload at all?
+2) Fix by reusing the same working upload flow used elsewhere (attachments domain or uploads domain).
+3) File type support:
+- Ensure client does NOT block common business types.
+- Ensure server-side uploadGuards remain warn-only unless explicitly blocking.
+- Ensure content-type handling:
+  - send correct Content-Type header on PUT to presigned URL
+  - include filename and mime in presign request if required
+4) Extensions list (accept at least):
+  .pdf, .ai, .eps, .doc, .docx, .pages, .csv, .xls, .xlsx, .ppt, .pptx, .txt,
+  plus common images (.png, .jpg, .jpeg, .gif, .webp, .svg)
+Note: .dox is likely a typo; treat as .doc/.docx.
+
+E) Ensure attachments list refreshes immediately after upload
+- After upload + complete, update attachments query cache and invalidate list queries.
+
+PHASE 4 — ACTION BAR UX (Items 4, 10)
+A) Remove bottom Start Timer (Item 10)
+- Locate the bottom action section and remove/hide Start Timer button there.
+- Confirm only the top Start Timer remains.
+
+B) Action bar button order + colors (Item 4)
+In both TaskDrawer and SubtaskDrawer:
+- Place buttons in this order:
+  [Start Timer (orange)] [Save (blue)] [Mark Complete (green)]
+But user asked: “Save just to the left of Mark Complete” and “Start Timer orange”.
+Interpretation:
+- Start Timer can remain separate/top if that’s the design; in the main action row:
+  - Save immediately left of Mark Complete.
+Implementation:
+- Ensure consistent sizing, spacing, and tap targets.
+- Use design system button variants:
+  - Save: primary (blue)
+  - Mark Complete: success (green) (create if missing)
+  - Start Timer: warning/orange (create if missing)
+- Ensure disabled/loading states remain correct.
+
+PHASE 5 — WATCHERS USER SEARCH POPULATION (Item 5)
+Problem: watcher selector search shows no users.
+
+Fix plan:
+1) Identify watchers selector component:
+- Determine data source:
+  - does it query /users? /team-members? /workspace/users?
+  - does it rely on React Query cache that isn’t seeded?
+2) Ensure it fetches dynamically:
+- On open:
+  - fetch initial list of team members for workspace/tenant
+- On search input:
+  - debounce (150–250ms)
+  - call search endpoint or filter cached list
+3) Ensure tenant/workspace scoping in query key.
+4) Update UI:
+- loading state
+- “No results” state
+- error state
+5) After selection:
+- ensure watchers update persists and cache updates reflect immediately.
+
+PHASE 6 — @MENTIONS IN DESCRIPTIONS (Item 9)
+Goal: mentions should work in task/subtask descriptions and broadly across open-text fields.
+
+Implement a unified approach:
+A) Frontend editor/textarea mention UX:
+- Reuse the working mention dropdown behavior from comments.
+- Ensure Enter/Arrow navigation works (already fixed in comments).
+- Ensure selected mention inserts a stable token that backend can reliably parse:
+  Prefer a tokenized format, e.g. @[display](userId) or data-mention-id spans.
+
+B) Backend mention extraction for “description-like fields”:
+- Identify the existing mention extraction helper used for comments.
+- Extend it to support:
+  - tasks.description
+  - subtasks.description
+  - (optionally) other long-text fields where appropriate
+- On task/subtask create/update:
+  - extract mentioned userIds from description
+  - enqueue mention notifications similar to comments mentions (but avoid duplicate spam if same mention repeats)
+
+IMPORTANT:
+- Do NOT enable mentions everywhere blindly. Implement it for:
+  - task description
+  - subtask description
+And add an internal helper so other fields can opt-in later.
+
+C) Prevent self-mention (already implemented; reuse it).
+D) Tenant/workspace membership enforcement:
+- only notify mentioned users within same tenant/workspace rules.
+
+TESTING REQUIREMENTS (must add)
+Backend tests:
+1) Mentions in task description create mention notifications
+2) Mentions in task description update triggers notifications (or updates mention records) according to current policy
+3) Mentions in subtask description behave similarly
+4) Cross-tenant mention does not notify
+5) Dedupe mentions in same description
+
+Frontend tests (if available) OR manual verification checklist:
+- Mention dropdown shows users
+- Selecting a user inserts token and saves correctly
+- Mentioned user receives notification
+
+PHASE 7 — QUICK DOC UPDATE
+Update docs/mobile-audit.md (or docs/architecture/routes.md if more appropriate):
+- Add a brief “Task/Subtask Drawer Fixes” section:
+  - what was fixed
+  - how caching now updates immediately
+  - how comment attachments work and which endpoints are used
+  - how mentions in descriptions work (token format + backend extraction)
+Keep it short (bullet list).
+
+VERIFICATION CHECKLIST (must run)
+- Create task, add subtask -> subtask appears immediately (no refresh)
+- Due date set on task/subtask -> persists and re-renders after close/reopen
+- Tag apply on new task/subtask -> persists and appears immediately
+- Watchers dropdown shows users and search works
+- Upload attachment to task/subtask -> uploads to R2 and appears in attachments list
+- Add comment with attachment -> both text + attachment persist, attachment visible, download works
+- Mentions in task/subtask description -> mention dropdown works; mentioned user receives notification
+- Action bar: Save left of Mark Complete, Mark Complete green, Start Timer orange, only top Start Timer present
+- Comments section has light grey background
+- Attachments section is under description
+
+OUTPUT REQUIREMENTS:
+When complete, output:
+1) Files changed/added
+2) Which APIs were used for attachments and comment attachments (paths)
+3) Tests added (and counts)
+4) Any known limitations or follow-ups

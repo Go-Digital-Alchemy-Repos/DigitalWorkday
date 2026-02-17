@@ -2,6 +2,7 @@ import { useState, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus } from "lucide-react";
 import { useAuth } from "@/lib/auth";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { TaskDrawerSkeleton } from "@/components/skeletons";
 import { Button } from "@/components/ui/button";
@@ -99,6 +100,7 @@ export function TaskDetailDrawer({
   isError = false,
 }: TaskDetailDrawerProps) {
   const { user: currentUser } = useAuth();
+  const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
   const [description, setDescription] = useState(task?.description || "");
@@ -602,14 +604,20 @@ export function TaskDetailDrawer({
     }
   }, [task?.id, task?.description, task?.title, task?.estimateMinutes]);
 
+  const drawerContentClass = isMobile 
+    ? "w-full overflow-y-auto p-0" 
+    : "w-full sm:max-w-2xl overflow-y-auto p-0";
+  const drawerPadding = isMobile ? "px-4 py-3" : "px-6 py-4";
+  const drawerBodyPadding = isMobile ? "px-4 py-4" : "px-6 py-6";
+
   if (isError) {
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent 
-          className="w-full sm:max-w-2xl overflow-y-auto p-0"
+          className={drawerContentClass}
           data-testid="task-detail-drawer-error"
         >
-          <SheetHeader className="sticky top-0 z-10 bg-background border-b border-border px-6 py-4">
+          <SheetHeader className={cn("sticky top-0 z-10 bg-background border-b border-border", drawerPadding)}>
             <SheetDescription className="sr-only">Error loading task</SheetDescription>
             <div className="flex items-center justify-between">
               <SheetTitle className="text-destructive">Error</SheetTitle>
@@ -638,10 +646,10 @@ export function TaskDetailDrawer({
     return (
       <Sheet open={open} onOpenChange={onOpenChange}>
         <SheetContent 
-          className="w-full sm:max-w-2xl overflow-y-auto p-0"
+          className={drawerContentClass}
           data-testid="task-detail-drawer-loading"
         >
-          <SheetHeader className="sticky top-0 z-10 bg-background border-b border-border px-6 py-4">
+          <SheetHeader className={cn("sticky top-0 z-10 bg-background border-b border-border", drawerPadding)}>
             <SheetDescription className="sr-only">Loading task details</SheetDescription>
             <div className="flex items-center justify-between">
               <SheetTitle className="sr-only">Loading Task</SheetTitle>
@@ -705,10 +713,10 @@ export function TaskDetailDrawer({
       <UnsavedChangesDialog />
       <Sheet open={open} onOpenChange={handleDrawerClose}>
         <SheetContent
-        className="w-full sm:max-w-2xl overflow-y-auto p-0"
+        className={drawerContentClass}
         data-testid="task-detail-drawer"
       >
-        <SheetHeader className="sticky top-0 z-10 bg-background border-b border-border px-6 py-4">
+        <SheetHeader className={cn("sticky top-0 z-10 bg-background border-b border-border", drawerPadding)}>
           <SheetDescription className="sr-only">Edit task details, add subtasks, and manage comments</SheetDescription>
           <div className="flex items-center justify-between gap-2 flex-wrap">
             <div className="flex items-center gap-2">
@@ -746,7 +754,7 @@ export function TaskDetailDrawer({
           </div>
         </SheetHeader>
 
-        <div className="flex-1 flex flex-col min-h-0 overflow-y-auto px-6 py-6 space-y-6">
+        <div className={cn("flex-1 flex flex-col min-h-0 overflow-y-auto space-y-6", drawerBodyPadding)}>
           <div className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap" data-testid="task-breadcrumbs">
             {task.projectId && projectContextLoading ? (
               <div className="flex items-center gap-2">
@@ -924,7 +932,7 @@ export function TaskDetailDrawer({
               </h2>
             )}
 
-            <div className="grid grid-cols-2 gap-4">
+            <div className={cn("grid gap-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
               <FormFieldWrapper
                 label="Assignees"
                 labelIcon={<Users className="h-3.5 w-3.5" />}
@@ -944,7 +952,7 @@ export function TaskDetailDrawer({
                 <DatePickerWithChips
                   value={task.dueDate ? new Date(task.dueDate) : null}
                   onChange={(date) => onUpdate?.(task.id, { dueDate: date as any })}
-                  className="w-[180px] h-8"
+                  className={cn(isMobile ? "w-full h-10" : "w-[180px] h-8")}
                   data-testid="button-due-date"
                 />
               </FormFieldWrapper>
@@ -956,7 +964,7 @@ export function TaskDetailDrawer({
                 <PrioritySelector
                   value={task.priority as PriorityLevel}
                   onChange={(value) => onUpdate?.(task.id, { priority: value })}
-                  className="w-[140px] h-8"
+                  className={cn(isMobile ? "w-full h-10" : "w-[140px] h-8")}
                   data-testid="select-priority"
                 />
               </FormFieldWrapper>
@@ -968,7 +976,7 @@ export function TaskDetailDrawer({
                 <StatusSelector
                   value={task.status as TaskStatus}
                   onChange={handleStatusChange}
-                  className="w-[140px] h-8"
+                  className={cn(isMobile ? "w-full h-10" : "w-[140px] h-8")}
                   data-testid="select-status"
                 />
               </FormFieldWrapper>
@@ -991,7 +999,7 @@ export function TaskDetailDrawer({
                     }
                   }}
                   placeholder="0"
-                  className="w-[140px] h-8"
+                  className={cn(isMobile ? "w-full h-10" : "w-[140px] h-8")}
                   data-testid="input-estimate-minutes"
                 />
               </FormFieldWrapper>
@@ -1076,7 +1084,7 @@ export function TaskDetailDrawer({
                         value={newTagName}
                         onChange={(e) => setNewTagName(e.target.value)}
                         placeholder="Tag name..."
-                        className="h-8 text-sm"
+                        className={cn(isMobile ? "h-10" : "h-8", "text-sm")}
                         autoFocus
                         onKeyDown={(e) => {
                           if (e.key === "Enter") handleCreateTag();

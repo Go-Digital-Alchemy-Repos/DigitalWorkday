@@ -1,0 +1,83 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Mobile Workflow UX Phase 3A — Make Tasks feel premium and effortless on mobile for both employees and admins.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change backend APIs.
+- Do NOT change routes.
+- Reuse existing components where possible.
+- Keep desktop UI unchanged (or improved, but not broken).
+
+DELIVERABLES:
+1) Mobile-friendly Tasks List experience:
+   - card/list hybrid layout on <sm screens
+   - clear status, due date, assignee, priority visibility
+   - tap-friendly row interactions
+2) Filters/Search Sheet:
+   - move filters into a “Filter” drawer/sheet on mobile
+   - include common filters: status, assignee, due range, project/workspace
+3) Task Details Mobile Layout:
+   - header shows title + key metadata
+   - sticky bottom action bar on mobile (Complete, Comment, Assign)
+4) Mobile editing patterns:
+   - Assign user, set due date, change status uses AppDrawer patterns
+5) Verification checklist included in docs/mobile-audit.md Phase 3A section
+
+IMPLEMENTATION:
+
+A) Tasks List (mobile)
+- On mobile, render tasks in a compact card row:
+  - left: status indicator + title (2 lines max)
+  - right: due date + priority chip
+  - below: assignee + project/workspace label
+- Ensure row is clickable with min-h >= 44px (if acceptable)
+- Ensure long titles wrap gracefully.
+
+B) Filters & Search
+- Add a top “Search” input (mobile full width).
+- Add a “Filters” button that opens AppDrawer with:
+  - Status multi-select
+  - Assignee select
+  - Project select (if applicable)
+  - Due date range
+  - Clear filters + Apply
+- Ensure filters state persists and reflects active filters.
+
+C) Task Detail view (mobile)
+- Ensure task detail page:
+  - uses PageContainer
+  - has readable spacing
+  - comments section is not cramped
+- Add a sticky bottom action bar on mobile:
+  - Complete/Uncomplete
+  - Add Comment
+  - Quick Assign
+- These actions open drawers (not small modals).
+
+D) Assignment and quick edits
+- Use AppDrawer for:
+  - Assign user
+  - Update status
+  - Update due date
+  - Update priority
+- Ensure keyboard-safe layout in drawers.
+
+E) Testing / Verification
+- If UI tests exist, add at least 2 tests for:
+  - Filters drawer opens and applies state
+  - Sticky action bar visible on mobile width
+- If no tests, add manual verification steps in docs/mobile-audit.md:
+  - tasks list browsing
+  - filtering
+  - opening task
+  - completing task
+  - assigning user
+  - adding comment
+
+OUTPUT REQUIREMENTS:
+Return:
+- files changed
+- what mobile breakpoints were used
+- what drawers were added
+- how to verify quickly

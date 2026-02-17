@@ -922,7 +922,7 @@ export default function MyTasks() {
         </div>
 
         {taskStats.total > 0 && (
-          <div className="px-3 sm:px-4 lg:px-6 pb-4">
+          <div className="hidden md:block px-3 sm:px-4 lg:px-6 pb-4">
             <TaskProgressBar stats={taskStats} showMilestones />
           </div>
         )}
@@ -931,11 +931,13 @@ export default function MyTasks() {
 
       <div className="flex-1 overflow-auto">
         <div className="px-3 sm:px-4 lg:px-6 py-4 md:py-6 space-y-6">
-          <DashboardSummary 
-            stats={dashboardStats} 
-            onTaskSelect={handleTaskSelect} 
-            isLoading={isLoading} 
-          />
+          <div className="hidden md:block">
+            <DashboardSummary 
+              stats={dashboardStats} 
+              onTaskSelect={handleTaskSelect} 
+              isLoading={isLoading} 
+            />
+          </div>
           
           {isLoading ? (
             <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">

@@ -1,0 +1,240 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Mobile Workflow UX Phase 3B — Make Chat feel premium and stable on mobile devices.
+
+Focus on:
+- navigation between chat list and conversation
+- keyboard-safe composer
+- scroll behavior improvements
+- message readability
+- mobile interaction polish
+
+Do NOT change:
+- Socket.IO event names
+- backend APIs
+- database schema
+- message payload shapes
+- authentication behavior
+
+This is a UI/UX refinement pass only.
+
+--------------------------------------------------
+DELIVERABLES
+--------------------------------------------------
+
+1) Mobile chat navigation flow (list → conversation → back)
+2) Keyboard-safe conversation layout
+3) Auto-scroll + "Jump to latest" behavior
+4) Mobile-friendly composer improvements
+5) Message readability polish
+6) Manual verification checklist added to docs/mobile-audit.md
+
+--------------------------------------------------
+PHASE 1 — CHAT COMPONENT DISCOVERY
+--------------------------------------------------
+
+Locate the following components:
+
+- Chat page entry route
+- Chat list (DMs / channels list)
+- Conversation view
+- Message list component
+- Message bubble component
+- Composer component
+- Typing indicator component
+
+Confirm which layout wrapper chat uses:
+- PageShell
+- PageContainer
+- custom chat shell
+
+Add a short comment at top of the conversation component:
+"Mobile UX Phase 3B improvements applied here"
+
+--------------------------------------------------
+PHASE 2 — MOBILE NAVIGATION BEHAVIOR
+--------------------------------------------------
+
+On small screens:
+
+Default view:
+Chat list
+
+Tapping conversation:
+Navigate to conversation view
+
+Conversation view:
+Shows a back button returning to chat list
+
+Use existing routing if available:
+Examples:
+- /chat
+- /chat/:conversationId
+
+Do not redesign routing.
+Only improve navigation ergonomics.
+
+Ensure:
+Back navigation works consistently.
+Bottom nav “Chat” returns to list view.
+
+--------------------------------------------------
+PHASE 3 — KEYBOARD-SAFE LAYOUT (CRITICAL)
+--------------------------------------------------
+
+Goal:
+Composer must never overlap messages.
+
+Implement:
+
+1) Single scroll container for messages.
+
+2) Safe viewport handling using visualViewport when available:
+- listen for visualViewport resize
+- compute keyboard offset
+- apply bottom padding to message list
+
+3) Measure composer height:
+Use ResizeObserver or useMeasure hook.
+
+Set:
+message list padding-bottom =
+composerHeight + safeAreaInset
+
+4) Add:
+padding-bottom: env(safe-area-inset-bottom)
+
+Ensure layout works on:
+- iOS Safari
+- Android Chrome
+
+--------------------------------------------------
+PHASE 4 — SCROLL BEHAVIOR
+--------------------------------------------------
+
+Implement sentinel-based scroll tracking.
+
+Add:
+bottomSentinel element at end of messages.
+
+Track:
+isNearBottom (within ~100px).
+
+Behavior:
+
+Incoming message:
+IF near bottom → auto-scroll
+ELSE → show “Jump to latest”
+
+Outgoing message:
+Always scroll to bottom.
+
+Add floating button:
+"Jump to latest"
+Positioned above composer.
+
+Click:
+scrollIntoView(bottomSentinel)
+
+Ensure smooth scrolling.
+
+--------------------------------------------------
+PHASE 5 — MESSAGE READABILITY
+--------------------------------------------------
+
+Improve message display on mobile:
+
+1) Message bubbles:
+- break-words
+- max width constraint
+- consistent spacing
+
+2) Message grouping:
+If same sender consecutively:
+- reduce vertical spacing
+- hide duplicate avatar/name
+
+3) Timestamp display:
+Subtle styling under bubble or between groups.
+
+4) Empty states:
+- no conversations
+- empty conversation
+- loading
+- error with retry
+
+--------------------------------------------------
+PHASE 6 — COMPOSER IMPROVEMENTS
+--------------------------------------------------
+
+Improve composer ergonomics:
+
+Input:
+min height >= 44px
+
+Buttons:
+send button always visible
+attachment button sized properly
+
+Multi-line typing:
+Enter inserts newline (mobile)
+Do not break send behavior.
+
+Ensure:
+typing indicators remain visible and stable.
+
+If mentions exist in chat:
+Ensure dropdown remains viewport-safe.
+
+--------------------------------------------------
+PHASE 7 — DOCUMENTATION
+--------------------------------------------------
+
+Update:
+docs/mobile-audit.md
+
+Add section:
+"Phase 3B — Chat Mobile UX"
+
+Include:
+- keyboard-safe layout approach
+- scroll behavior description
+- jump-to-latest behavior
+- quick verification checklist
+
+Checklist must include:
+- open chat list
+- open conversation
+- send message
+- scroll up and receive message
+- jump to latest
+- open keyboard
+- rotate screen
+- typing indicators visible
+
+--------------------------------------------------
+VERIFICATION REQUIREMENTS
+--------------------------------------------------
+
+Confirm:
+
+Chat list opens correctly on mobile width.
+Conversation view is readable.
+Composer never overlaps messages.
+Auto-scroll works.
+Jump-to-latest appears correctly.
+Keyboard does not break layout.
+Desktop chat still works.
+
+--------------------------------------------------
+OUTPUT REQUIREMENTS
+--------------------------------------------------
+
+When finished, output:
+
+1) Files modified
+2) Keyboard-safe layout strategy used
+3) Jump-to-latest detection method
+4) Any limitations discovered
+5) Quick verification checklist

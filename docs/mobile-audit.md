@@ -167,3 +167,53 @@ Add `overflow-x-auto` wrapper around all `<Table>` components to prevent horizon
 6. Audit keyboard overlap for chat message input
 7. Consider reducing card grid columns on very small screens
 8. Improve settings tab navigation density on mobile
+
+---
+
+# Phase 3A — Tasks Mobile UX Optimization
+
+**Date:** 2026-02-17  
+**Scope:** Task management workflow for sub-768px viewports
+
+## Changes Made
+
+### 1. Mobile Task Card (task-card.tsx)
+- **New mobile layout**: On `isMobile`, list-view cards switch from CSS grid to flex layout
+- **Title + assignee row**: Title takes full width with assignee avatars right-aligned
+- **Metadata row**: Priority badge, due date, personal badge, subtask count, project name shown inline below title
+- **Tags row**: Shows up to 2 tags with overflow count
+- **Tap targets**: Checkbox enlarged to `min-h-5 min-w-5` for touch
+- **Drag handle**: Always visible on mobile (no hover-only opacity)
+- **Quick actions**: Removed on mobile (available in task detail drawer instead)
+- **Desktop layout**: Unchanged — grid-based with hover quick actions
+
+### 2. DataToolbar Mobile Layout (data-toolbar.tsx)
+- **Search**: Full-width on mobile (stacks above filter controls)
+- **Layout**: Switches from single-row flex to stacked layout (`flex-col` on mobile, `flex-row` on desktop)
+- **Filter button**: Uses `size="sm"` on mobile for compact appearance
+- **Sort dropdown**: Narrower width on mobile (`w-[140px]` vs `w-[180px]`)
+
+### 3. Task Detail Drawer (task-detail-drawer.tsx)
+- **Full-width on mobile**: Removes `sm:max-w-2xl` constraint, fills entire viewport
+- **Reduced padding**: `px-4 py-3` header / `px-4 py-4` body on mobile vs `px-6 py-4` / `px-6 py-6` desktop
+- **Single-column metadata**: Grid switches from `grid-cols-2` to `grid-cols-1` on mobile
+- **Full-width form controls**: DatePicker, PrioritySelector, StatusSelector, Input all use `w-full h-10` on mobile
+- **Touch-friendly controls**: Form inputs use `h-10` (40px) on mobile for better tap targets
+
+### 4. My Tasks Page (my-tasks.tsx)
+- **Dashboard summary**: Hidden on mobile (`hidden md:block`) to maximize task list space
+- **Task list**: Already responsive with `grid-cols-1 lg:grid-cols-2`
+
+## Verification Checklist
+
+- [ ] Task cards render with stacked layout on mobile (< 768px)
+- [ ] Checkbox tap target is at least 40px
+- [ ] Priority, due date, project name visible in card metadata row
+- [ ] Search bar full-width on mobile
+- [ ] Filters popover accessible on mobile
+- [ ] Task detail drawer fills full width on mobile
+- [ ] Metadata grid single-column on mobile
+- [ ] Form controls full-width and touch-friendly (40px height)
+- [ ] Dashboard summary hidden on mobile
+- [ ] No horizontal overflow on task cards
+- [ ] Drag-and-drop handle visible (not hidden behind hover)

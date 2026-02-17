@@ -1,0 +1,219 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Mobile Workflow UX Phase 3C — Make Time Tracking feel premium and frictionless on mobile for both employees and admins.
+
+Focus on:
+- “Start/Stop timer” as a primary, obvious action
+- Active timer always visible and controllable
+- Fast task/project selection on mobile
+- Keyboard-safe + thumb-friendly UX
+- Mobile-first layouts for time entries lists and timer controls
+
+Do NOT change:
+- backend APIs/routes
+- database schema
+- timer business rules (single active timer, overlaps, rounding) — preserve current behavior
+- desktop behavior (no regressions)
+
+This phase is UI/UX refinement only.
+
+--------------------------------------------------
+DELIVERABLES
+--------------------------------------------------
+
+1) Mobile “Active Timer” persistent component:
+- always visible on mobile when running
+- shows elapsed time, task/project, and Stop/Pause (whatever exists)
+- one-tap access to timer details
+
+2) Mobile “Start Timer” flow:
+- fast, 2 taps max from Time screen
+- uses AppDrawer/Sheet for selection
+- supports selecting:
+  - project
+  - task (optional but preferred)
+  - notes/description (optional)
+  - billable toggle (if exists)
+
+3) Mobile Time Entries list UX:
+- card/list hybrid layout on <sm screens
+- readable metadata (date, duration, project/task, notes)
+- tap-friendly row actions
+
+4) “Quick Switch” timer behavior:
+- if user selects a different task while a timer is running:
+  - preserve CURRENT backend rule (either stop previous + start new OR reject)
+  - reflect behavior clearly in UI
+- if backend stops previous automatically, show subtle toast/notice
+
+5) Manual verification checklist in docs/mobile-audit.md under “Phase 3C — Time Tracking”
+
+--------------------------------------------------
+PHASE 1 — COMPONENT DISCOVERY
+--------------------------------------------------
+
+Locate the components for:
+- Time page entry route (My Time)
+- Active timer UI (if any)
+- Start timer button (if any)
+- Timer start/stop mutations
+- Time entries list/table
+- Time entry detail/edit drawer (if exists)
+
+Confirm which query keys are used (React Query):
+- active timer query
+- time entries list query
+- any “my time summary” query
+
+Add a short comment:
+"Mobile UX Phase 3C improvements applied here"
+at the top of the main Time page component.
+
+--------------------------------------------------
+PHASE 2 — ACTIVE TIMER PERSISTENT UI
+--------------------------------------------------
+
+Implement a persistent MobileActiveTimerBar:
+
+Behavior:
+- Only visible on mobile widths (e.g., <md)
+- Only visible when there is an active timer
+- Sits above the MobileNavBar (respect pb-16 + safe areas)
+- Shows:
+  - elapsed time (updates every second)
+  - task/project label (truncate nicely)
+  - Stop button (and Pause if feature exists)
+  - Tap anywhere opens timer details drawer
+
+Implementation:
+- Use existing timer data from active timer query
+- Avoid re-fetching every second:
+  - keep elapsed timer purely client-side based on start time
+  - refetch at a reasonable interval (e.g., 30–60s) or on focus
+
+Ensure:
+- does not overlap content
+- safe-area padding applied
+
+--------------------------------------------------
+PHASE 3 — START TIMER UX (MOBILE-FIRST)
+--------------------------------------------------
+
+From the Time page:
+- Primary CTA: “Start Timer” (large, thumb-friendly)
+- If timer active: CTA becomes “Stop Timer” + “Switch Task” (or equivalent)
+
+Start flow:
+1) Tap Start Timer
+2) Open AppDrawer:
+   - Project select (searchable)
+   - Task select (dependent on project; searchable)
+   - Notes (optional)
+   - Billable toggle (if exists)
+3) Confirm -> call start timer mutation
+4) On success:
+   - update active timer cache immediately (setQueryData)
+   - invalidate relevant queries (active timer + time entries list)
+   - show subtle toast confirmation
+
+Selection UX:
+- use a searchable list inside drawer
+- debounce search (150–250ms)
+- show loading/empty states
+
+Preserve current timer business rules:
+- do NOT change server behavior
+- only reflect behavior clearly in UI
+
+--------------------------------------------------
+PHASE 4 — TIME ENTRIES LIST (MOBILE CARDS)
+--------------------------------------------------
+
+On mobile:
+- Replace dense table presentation with a card/list hybrid:
+  - date
+  - duration
+  - project/task name
+  - notes (truncate)
+  - status/billable chips (if exists)
+
+Rules:
+- Maintain desktop table view unchanged
+- On mobile, wrap list with PageContainer and consistent spacing
+- Make each entry tappable:
+  - opens entry detail drawer (if exists)
+  - if no drawer exists, keep current detail pattern but make it mobile-friendly
+
+Add quick filters (mobile):
+- Today
+- This Week
+- Billable (if exists)
+- Project filter (optional)
+Implement filters as a drawer if existing toolbar is too dense.
+
+--------------------------------------------------
+PHASE 5 — QUICK SWITCH / TIMER INVARIANTS
+--------------------------------------------------
+
+If user starts a new timer while one is active:
+- Detect current backend behavior:
+  A) stops old and starts new
+  B) rejects
+Reflect it:
+- If A: show toast “Switched timer from X to Y”
+- If B: show dialog offering to stop current timer first
+
+Do NOT change server logic.
+
+--------------------------------------------------
+PHASE 6 — POLISH: TAP TARGETS + KEYBOARD SAFETY
+--------------------------------------------------
+
+- Ensure all primary buttons are >= 44px tall on mobile.
+- Ensure drawers are keyboard-safe (notes field doesn’t get covered).
+- Ensure selects/search results are easy to tap.
+
+--------------------------------------------------
+PHASE 7 — DOCUMENTATION + VERIFICATION
+--------------------------------------------------
+
+Update docs/mobile-audit.md:
+Add “Phase 3C — Time Tracking” section with:
+- what changed
+- active timer bar behavior
+- start timer drawer behavior
+- quick switch behavior
+- verification checklist
+
+Checklist must include:
+- start timer from Time page
+- active timer bar appears
+- stop timer
+- switch task while timer running
+- time entry appears in list
+- open entry detail (if exists)
+- rotate screen / resize
+- confirm no overlap with MobileNavBar
+
+--------------------------------------------------
+OPTIONAL TESTS (only if frontend test infra exists)
+--------------------------------------------------
+
+Add 1–2 lightweight tests:
+- ActiveTimerBar renders only when active timer exists
+- StartTimerDrawer opens and triggers mutation call
+
+If tests are heavy, skip and rely on docs checklist.
+
+--------------------------------------------------
+OUTPUT REQUIREMENTS
+--------------------------------------------------
+
+When finished, output:
+1) Files changed
+2) Active timer bar approach (client tick strategy)
+3) Start timer flow (drawer fields + selection UX)
+4) How cache updates are handled (setQueryData + invalidations)
+5) Any limitations discovered
+6) Quick verification checklist

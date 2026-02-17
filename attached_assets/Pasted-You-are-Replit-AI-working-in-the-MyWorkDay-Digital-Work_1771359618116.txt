@@ -1,0 +1,98 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Phase 3 Hardening — Regression + Cache Correctness Pass.
+
+Ensure all major mobile workflows update immediately without refresh and that drawers, comments, attachments, and timers remain stable.
+
+DO NOT change APIs, routes, or DB schema.
+
+--------------------------------------------------
+TARGET AREAS
+--------------------------------------------------
+
+Tasks + Subtasks:
+- create
+- edit
+- due date
+- watchers
+- tags
+- attachments
+- comments
+- mentions
+
+Chat:
+- send message
+- receive message
+- jump-to-latest
+- typing indicator stability
+
+Time:
+- start timer
+- stop timer
+- switch timer
+- entries list update
+- active timer bar
+
+--------------------------------------------------
+CACHE HARDENING RULES
+--------------------------------------------------
+
+For each mutation:
+- use queryClient.setQueryData for immediate UI update
+- use queryClient.invalidateQueries afterward
+
+Ensure consistency across:
+- list queries
+- detail queries
+- nested resource queries
+
+Eliminate any flows requiring manual refresh.
+
+--------------------------------------------------
+SCROLL + KEYBOARD REGRESSION CHECK
+--------------------------------------------------
+
+Verify:
+- drawers scroll correctly
+- composer never overlaps content
+- message list does not jump
+- active timer bar does not overlap content
+- bottom nav safe spacing preserved
+
+--------------------------------------------------
+TESTING
+--------------------------------------------------
+
+Add lightweight tests ONLY where helpful:
+
+Examples:
+- task create updates task list cache
+- subtask create updates subtask list cache
+- active timer bar renders when timer active
+
+If frontend tests are heavy, add manual checklist instead.
+
+--------------------------------------------------
+DOC UPDATE
+--------------------------------------------------
+
+Update docs/mobile-audit.md with:
+
+"Phase 3 Hardening — Regression Pass"
+
+Include:
+- what was fixed
+- cache update patterns
+- scroll/keyboard stability notes
+
+--------------------------------------------------
+OUTPUT
+--------------------------------------------------
+
+Return:
+- files modified
+- regressions fixed
+- cache patterns standardized
+- tests added (if any)
+- verification checklist

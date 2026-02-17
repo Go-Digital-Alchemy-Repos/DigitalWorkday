@@ -29,6 +29,7 @@ import {
 import type { TaskWithRelations, User, Tag } from "@shared/schema";
 import { getPreviewText } from "@/components/richtext/richTextUtils";
 import { usePrefetchTask } from "@/hooks/use-prefetch";
+import { useIsMobile } from "@/hooks/use-mobile";
 
 interface TaskCardProps {
   task: TaskWithRelations;
@@ -49,6 +50,7 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
   const isCompleted = task.status === "done";
   const { prefetch: prefetchTask, cancel: cancelPrefetch } = usePrefetchTask();
+  const isMobile = useIsMobile();
   const [justCompleted, setJustCompleted] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const assigneeUsers: Partial<User>[] = task.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [];
@@ -153,6 +155,90 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
           {subtaskCount > 0 && (
             <div className="flex items-center gap-1 pl-6 text-xs text-muted-foreground">
               <span>{completedSubtasks}/{subtaskCount} subtasks</span>
+            </div>
+          )}
+        </div>
+      </div>
+    );
+  }
+
+  if (isMobile) {
+    return (
+      <div
+        ref={ref}
+        className={cn(
+          "group relative flex items-start gap-3 px-3 py-3 min-h-[56px] border-b border-border hover-elevate cursor-pointer transition-all duration-150",
+          isCompleted && "opacity-60",
+          isDragging && "opacity-50 shadow-lg bg-card",
+          justCompleted && "task-complete-pulse"
+        )}
+        onClick={onSelect}
+        data-testid={`task-card-${task.id}`}
+      >
+        {dragHandleProps && (
+          <div
+            {...dragHandleProps}
+            className="cursor-grab touch-none mt-0.5 min-h-10 min-w-6 flex items-center justify-center"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <GripVertical className="h-4 w-4 text-muted-foreground" />
+          </div>
+        )}
+        <div
+          className="min-h-10 min-w-10 flex items-center justify-center mt-0"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <Checkbox
+            checked={isCompleted}
+            onCheckedChange={(checked) => handleStatusChange(checked as boolean)}
+            className="min-h-5 min-w-5"
+            data-testid={`checkbox-task-${task.id}`}
+          />
+        </div>
+        <div className="flex flex-col gap-1.5 min-w-0 flex-1">
+          <div className="flex items-start justify-between gap-2">
+            <span
+              className={cn(
+                "text-sm font-medium leading-snug",
+                isCompleted && "line-through text-muted-foreground"
+              )}
+            >
+              {task.title}
+            </span>
+            {assigneeUsers.length > 0 && (
+              <div className="shrink-0">
+                <AvatarGroup users={assigneeUsers} max={2} size="sm" />
+              </div>
+            )}
+          </div>
+          <div className="flex items-center gap-2 flex-wrap">
+            <PriorityBadge priority={task.priority as any} showLabel={false} size="sm" />
+            {task.dueDate && <DueDateBadge date={task.dueDate} size="sm" />}
+            {task.isPersonal && (
+              <Badge variant="outline" className="text-xs gap-1 px-1.5 py-0">
+                <UserIcon className="h-3 w-3" />
+                Personal
+              </Badge>
+            )}
+            {subtaskCount > 0 && (
+              <span className="text-xs text-muted-foreground">
+                {completedSubtasks}/{subtaskCount}
+              </span>
+            )}
+            {task.project?.name && (
+              <span className="text-xs text-muted-foreground truncate max-w-[120px]">
+                {task.project.name}
+              </span>
+            )}
+          </div>
+          {taskTags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {taskTags.slice(0, 2).map((tag) => (
+                <TagBadge key={tag.id} name={tag.name} color={tag.color} size="sm" />
+              ))}
+              {taskTags.length > 2 && (
+                <span className="text-[10px] text-muted-foreground">+{taskTags.length - 2}</span>
+              )}
             </div>
           )}
         </div>
