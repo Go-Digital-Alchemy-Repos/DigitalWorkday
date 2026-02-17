@@ -228,13 +228,7 @@ export function TenantSidebar() {
                                 className="h-3 w-3 rounded-sm shrink-0"
                                 style={{ backgroundColor: project.color || "#3B82F6" }}
                               />
-                              <Link
-                                href={`/projects/${project.id}`}
-                                className="truncate flex-1 hover:underline cursor-pointer"
-                                data-testid={`link-project-name-${project.id}`}
-                              >
-                                {project.name}
-                              </Link>
+                              <span className="truncate flex-1">{project.name}</span>
                               {(clientName || divisionName) && (
                                 <div className="flex items-center gap-1 shrink-0">
                                   {clientName && (
