@@ -1,0 +1,168 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+BUG:
+When a subtask is added inside a Task Drawer, it does NOT instantly appear in the Subtasks list.
+User must refresh/reopen the task drawer to see newly created subtasks.
+
+GOAL:
+Fix the subtask creation + list rendering flow so subtasks appear immediately after creation (no refresh), and ensure the cache state stays correct across:
+- task drawer view
+- project/task lists
+- mobile + desktop
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change API URLs or DB schema.
+- Preserve tenant isolation and existing permissions.
+- Prefer React Query cache updates + invalidation.
+- Do NOT introduce polling.
+
+DELIVERABLES:
+1) Root cause analysis: why cache/UI does not update immediately.
+2) Fix:
+   - optimistic UI (preferred) OR immediate cache insert (setQueryData) after create success
+   - correct query invalidation so server remains source of truth
+3) Tests:
+   - add at least 1 integration or component-level test if feasible
+   - otherwise add a manual verification checklist to docs/mobile-audit.md
+4) Documentation: short note in docs/mobile-audit.md describing the query keys and update strategy.
+
+------------------------------------------------------------
+PHASE 0 — DISCOVERY (MUST DO FIRST)
+------------------------------------------------------------
+
+A) Locate the components:
+- TaskDrawer component
+- Subtasks section component
+- Subtask create form/composer
+- Subtasks list renderer
+
+B) Identify the API calls:
+- subtask create mutation endpoint
+- subtasks list query endpoint
+- task detail query endpoint (if subtasks are embedded there)
+
+C) Identify React Query keys:
+- key(s) used for subtasks list
+- key(s) used for task detail
+- any "tasks list" keys that should reflect subtask counts
+
+D) Determine the failure mode:
+Common causes:
+1) The create mutation only invalidates the wrong query key (e.g., invalidates /api/tasks but list uses /api/v1/tasks).
+2) The subtasks list query is keyed without taskId/workspaceId, causing cache collisions.
+3) The list is derived from task detail query, but task detail cache is not updated.
+4) Stale caching due to previous 304/no-store behavior, or query is disabled (enabled:false) until reopen.
+
+Write findings in a short note in:
+docs/review/subtasks-live-update.md
+
+------------------------------------------------------------
+PHASE 1 — IMPLEMENT IMMEDIATE UI UPDATE
+------------------------------------------------------------
+
+Preferred approach: optimistic insert + reconciliation.
+
+1) In the subtask create mutation:
+- onMutate:
+  - cancelQueries for subtasks list key
+  - snapshot previous subtasks list data
+  - create an optimistic subtask object:
+    - temp id (e.g., "temp-"+Date.now())
+    - title/body from form
+    - status defaults
+    - createdAt = now
+    - createdBy = current user
+    - parentTaskId = current task id
+  - setQueryData(subtasksKey, (old) => [optimisticSubtask, ...old])
+- onError:
+  - rollback setQueryData to previous snapshot
+- onSuccess:
+  - replace optimistic subtask with server-returned subtask (match by temp id if carried, or by content heuristic)
+  - OR simply invalidate subtasksKey and also ensure list stays responsive (keep optimistic until refetch completes)
+- onSettled:
+  - invalidateQueries(subtasksKey)
+  - also invalidate task detail key (if it embeds subtasks or subtaskCount)
+
+2) Also update task detail cache (if applicable):
+If TaskDrawer renders subtasks from task detail query:
+- setQueryData(taskDetailKey, update embedded subtasks list and/or subtaskCount)
+- invalidate taskDetailKey on settle
+
+3) Ensure the subtasks list query is enabled and not blocked:
+- verify it doesn’t require drawer reopen to re-enable
+- ensure it refetches on window focus only if desired, but not required to see new subtask
+
+------------------------------------------------------------
+PHASE 2 — ENSURE QUERY KEY CONSISTENCY
+------------------------------------------------------------
+
+Create/centralize query keys if not already:
+
+client/src/lib/queryKeys/subtasks.ts (or similar)
+
+Define:
+subtasks.list({ tenantId, workspaceId, taskId })
+subtasks.detail({ ... })
+
+Update both query and mutation invalidation to use the exact same builder.
+
+Ensure keys include taskId AND tenant/workspace scoping.
+
+------------------------------------------------------------
+PHASE 3 — EDGE CASES
+------------------------------------------------------------
+
+Handle:
+- multiple subtasks added rapidly (throttle not required, but ensure optimistic inserts don’t overwrite)
+- network slow: optimistic still shows immediately
+- create fails: rollback and show toast
+- ensure no duplicates after refetch (dedupe by id)
+
+If the subtasks list is paginated/infinite:
+- update the first page only and invalidate.
+
+------------------------------------------------------------
+PHASE 4 — TESTS / VERIFICATION
+------------------------------------------------------------
+
+If component tests exist:
+- Add a test that:
+  - renders TaskDrawer subtasks section
+  - triggers create subtask mutation (mocked)
+  - asserts subtask appears immediately without refetch
+
+If tests are not feasible:
+- Add manual verification checklist to docs/mobile-audit.md:
+  - open task drawer
+  - add subtask
+  - verify it appears instantly
+  - close/reopen still shows it
+  - verify no duplicates
+
+------------------------------------------------------------
+PHASE 5 — DOC UPDATE
+------------------------------------------------------------
+
+Update:
+docs/mobile-audit.md
+
+Add:
+"Subtasks live update fix"
+- which query key is used
+- optimistic update approach
+- which queries are invalidated (subtasks list + task detail)
+
+Also update:
+docs/review/subtasks-live-update.md with root cause + fix.
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+When finished, output:
+1) Root cause summary
+2) Files changed
+3) Exact query key(s) used for subtasks list
+4) Cache update strategy (optimistic vs setQueryData on success)
+5) Verification steps
+6) Tests added/passing (or checklist added)

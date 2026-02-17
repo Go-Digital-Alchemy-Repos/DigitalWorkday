@@ -931,7 +931,7 @@ export function TaskDetailDrawer({
 
           {task.projectId && (
             <div 
-              className="p-3 sm:p-4 dark:bg-[#2d2a4a] border border-[#d6d2ff] dark:border-[#3d3870] bg-[#1e1e1e]"
+              className="p-3 sm:p-4 bg-[#edebff4d] dark:bg-[#1e1e1e] border border-[#d6d2ff] dark:border-[#3d3870]"
               style={{ borderRadius: "10px" }}
             >
               <AttachmentUploader taskId={task.id} projectId={task.projectId} />
@@ -979,7 +979,7 @@ export function TaskDetailDrawer({
           </div>
 
           <div 
-            className="p-3 sm:p-4 dark:bg-[#1a2e35] border border-[#ade8f5] dark:border-[#2a4a54] bg-[#1e1e1e]"
+            className="p-3 sm:p-4 bg-[#d1f6ff4d] dark:bg-[#1e1e1e] border border-[#ade8f5] dark:border-[#2a4a54]"
             style={{ borderRadius: "10px" }}
           >
             <div className="space-y-2">
@@ -1127,7 +1127,7 @@ export function TaskDetailDrawer({
           <Separator />
 
           <div 
-            className="p-3 sm:p-4 dark:bg-[#1a2540] border border-[#adc6e6] dark:border-[#2a3d5e] bg-[#1e1e1e]"
+            className="p-3 sm:p-4 bg-[#c2dfff4d] dark:bg-[#1e1e1e] border border-[#adc6e6] dark:border-[#2a3d5e]"
             style={{ borderRadius: "10px" }}
           >
             <CommentThread
@@ -1146,7 +1146,7 @@ export function TaskDetailDrawer({
           <Separator />
 
           <div 
-            className="p-3 sm:p-4 bg-[#ffbb734d] dark:bg-[#3a2a14] border border-[#f5ac5b] dark:border-[#5a4020]"
+            className="p-3 sm:p-4 bg-[#ffbb734d] dark:bg-[#1e1e1e] border border-[#f5ac5b] dark:border-[#5a4020]"
             style={{ borderRadius: "10px" }}
           >
             <div className="space-y-3">
