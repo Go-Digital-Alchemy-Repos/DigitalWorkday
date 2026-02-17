@@ -931,7 +931,7 @@ export function TaskDetailDrawer({
 
           {task.projectId && (
             <div 
-              className="p-3 sm:p-4 bg-[#edebff4d] border border-[#d6d2ff]"
+              className="p-3 sm:p-4 bg-[#edebff4d] dark:bg-[#2d2a4a] border border-[#d6d2ff] dark:border-[#3d3870]"
               style={{ borderRadius: "10px" }}
             >
               <AttachmentUploader taskId={task.id} projectId={task.projectId} />
@@ -946,11 +946,11 @@ export function TaskDetailDrawer({
           <Separator />
 
           <div 
-            className="p-3 sm:p-4 bg-[#e3e3e34d] border border-[#cfcfcf]"
+            className="p-3 sm:p-4 bg-[#e3e3e34d] dark:bg-[#1e1e1e] border border-[#cfcfcf] dark:border-[#333333]"
             style={{ borderRadius: "10px" }}
           >
             <div className="flex items-center justify-between mb-3">
-              <label className="flex items-center gap-2 font-medium text-[#171717] text-[16px]">
+              <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
                 <Layers className="h-3.5 w-3.5" />
                 Subtasks
               </label>
@@ -979,11 +979,11 @@ export function TaskDetailDrawer({
           </div>
 
           <div 
-            className="p-3 sm:p-4 bg-[#d1f6ff4d] border border-[#ade8f5]"
+            className="p-3 sm:p-4 bg-[#d1f6ff4d] dark:bg-[#1a2e35] border border-[#ade8f5] dark:border-[#2a4a54]"
             style={{ borderRadius: "10px" }}
           >
             <div className="space-y-2">
-              <label className="flex items-center gap-2 font-medium text-[#171717] text-[16px]">
+              <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
                 <Tag className="h-3.5 w-3.5" />
                 Tags
               </label>
@@ -1127,7 +1127,7 @@ export function TaskDetailDrawer({
           <Separator />
 
           <div 
-            className="p-3 sm:p-4 bg-[#c2dfff4d] border border-[#adc6e6]"
+            className="p-3 sm:p-4 bg-[#c2dfff4d] dark:bg-[#1a2540] border border-[#adc6e6] dark:border-[#2a3d5e]"
             style={{ borderRadius: "10px" }}
           >
             <CommentThread
@@ -1146,12 +1146,12 @@ export function TaskDetailDrawer({
           <Separator />
 
           <div 
-            className="p-3 sm:p-4 bg-[#ffbb734d] border border-[#f5ac5b]"
+            className="p-3 sm:p-4 bg-[#ffbb734d] dark:bg-[#3a2a14] border border-[#f5ac5b] dark:border-[#5a4020]"
             style={{ borderRadius: "10px" }}
           >
             <div className="space-y-3">
               <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 font-medium text-[#171717] text-[16px]">
+                <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
                   <Timer className="h-3.5 w-3.5" />
                   Time Entries
                 </label>
