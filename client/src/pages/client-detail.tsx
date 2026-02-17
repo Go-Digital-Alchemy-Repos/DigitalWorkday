@@ -2,6 +2,7 @@ import { useState } from "react";
 import { useRoute, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { stripHtml } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
@@ -1472,7 +1473,7 @@ export default function ClientDetailPage() {
                       <CardContent>
                         {project.description && (
                           <p className="text-sm text-muted-foreground line-clamp-2">
-                            {project.description}
+                            {stripHtml(project.description)}
                           </p>
                         )}
                       </CardContent>
@@ -1765,7 +1766,7 @@ export default function ClientDetailPage() {
                             <p className="font-medium text-sm">{project.name}</p>
                             {project.description && (
                               <p className="text-xs text-muted-foreground line-clamp-1">
-                                {project.description}
+                                {stripHtml(project.description)}
                               </p>
                             )}
                           </div>

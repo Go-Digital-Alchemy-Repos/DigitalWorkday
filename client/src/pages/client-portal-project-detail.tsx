@@ -172,7 +172,10 @@ export default function ClientPortalProjectDetail() {
               {project.name}
             </h1>
             {project.description && (
-              <p className="text-muted-foreground mt-1">{project.description}</p>
+              <div
+                className="text-muted-foreground mt-1 prose prose-sm dark:prose-invert max-w-none [&>*]:m-0"
+                dangerouslySetInnerHTML={{ __html: project.description }}
+              />
             )}
           </div>
           <Badge variant="outline" className={getStatusColor(project.status)}>

@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { stripHtml } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -351,7 +352,7 @@ export default function ClientPortalDashboard() {
                         <div className="font-medium truncate">{project.name}</div>
                         {project.description && (
                           <div className="text-sm text-muted-foreground truncate">
-                            {project.description}
+                            {stripHtml(project.description)}
                           </div>
                         )}
                       </div>

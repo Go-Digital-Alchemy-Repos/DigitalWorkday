@@ -16,7 +16,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { ActivityFeed } from "@/components/activity-feed";
-import { cn } from "@/lib/utils";
+import { cn, stripHtml } from "@/lib/utils";
 
 import {
   Building2,
@@ -315,7 +315,7 @@ function ProjectsTab({ client }: { client: ClientWithContacts }) {
                   <p className="font-medium text-sm truncate">{project.name}</p>
                   {project.description && (
                     <p className="text-xs text-muted-foreground line-clamp-1">
-                      {project.description}
+                      {stripHtml(project.description)}
                     </p>
                   )}
                 </div>

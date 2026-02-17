@@ -646,7 +646,10 @@ export default function ProjectPage() {
             <div className="min-w-0 flex-1">
               <h1 className="text-base md:text-xl font-semibold truncate">{project.name}</h1>
               {project.description && (
-                <p className="text-muted-foreground hidden md:block text-[13px] mt-1 leading-relaxed whitespace-pre-wrap">{project.description}</p>
+                <div
+                  className="text-muted-foreground hidden md:block text-[13px] mt-1 leading-relaxed prose prose-sm dark:prose-invert max-w-none [&>*]:m-0"
+                  dangerouslySetInnerHTML={{ __html: project.description }}
+                />
               )}
             </div>
           </div>

@@ -3,6 +3,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { stripHtml } from "@/lib/utils";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { FullScreenDrawer, FullScreenDrawerFooter } from "@/components/ui/full-screen-drawer";
 import {
@@ -474,7 +475,7 @@ export function DivisionDrawer({
                         <div className="flex-1 min-w-0">
                           <p className="font-medium truncate">{project.name}</p>
                           {project.description && (
-                            <p className="text-sm text-muted-foreground truncate">{project.description}</p>
+                            <p className="text-sm text-muted-foreground truncate">{stripHtml(project.description)}</p>
                           )}
                         </div>
                         <Badge variant="outline">{project.status || "active"}</Badge>

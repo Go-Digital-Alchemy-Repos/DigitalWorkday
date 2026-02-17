@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { stripHtml } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -454,7 +455,7 @@ export default function ProjectsDashboard() {
                             </Badge>
                           </div>
                           {project.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-1 mb-2">{project.description}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-1 mb-2">{stripHtml(project.description)}</p>
                           )}
                           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                             {getClientName(project.clientId) !== "-" && (
@@ -550,7 +551,7 @@ export default function ProjectsDashboard() {
                           <div className="font-medium truncate">{project.name}</div>
                           {project.description && (
                             <div className="text-xs text-muted-foreground truncate max-w-[250px]">
-                              {project.description}
+                              {stripHtml(project.description)}
                             </div>
                           )}
                         </div>

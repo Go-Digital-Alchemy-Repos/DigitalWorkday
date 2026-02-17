@@ -1,0 +1,123 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL (Prompt #6):
+Migrate the Attachments domain (≈7 endpoints) from legacy routing to standardized route architecture:
+- createApiRouter() + authTenant policy
+- routeRegistry-only mounting (no direct mounts)
+- preserve existing URLs and behavior
+- preserve storage side-effects (S3/R2/local, signed URLs, metadata writes)
+Additionally, standardize upload guards (limits + validation) without changing external behavior.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change endpoint URLs.
+- Do NOT change DB schema.
+- Do NOT change auth/session semantics.
+- Preserve existing storage provider behavior and configuration (S3/R2/etc).
+- Prefer reusing existing attachment handlers/services.
+- Any new validation must match existing expectations; if uncertain, add it as logging-only first.
+
+DELIVERABLES:
+1) New router:
+   server/http/domains/attachments.router.ts using createApiRouter({ policy: "authTenant" })
+2) Registered in server/http/routeRegistry.ts and mounted via mount.ts (registry-only remains enforced).
+3) Legacy mount disabled.
+4) Tests:
+   - policy drift test: attachments uses authTenant
+   - integration test suite: >= 9 tests
+5) Upload guard utilities:
+   - shared upload validation middleware (size/type limits, filename sanitization, content-type checks)
+   - used by attachments routes (and ready for future uploads migration)
+6) Docs updated: migrated domains table + attachment notes + next steps (uploads then chat).
+
+IMPLEMENTATION PLAN:
+
+A) Locate legacy attachments endpoints
+1) Search for:
+   - "attachments"
+   - "upload"
+   - "signed url"
+   - "presign"
+   - "download"
+   - "r2" / "s3"
+2) Inventory endpoints (method + path + purpose), e.g. patterns like:
+   - POST /api/v1/attachments (create metadata / upload init)
+   - POST /api/v1/attachments/presign
+   - GET /api/v1/attachments/:id
+   - GET /api/v1/attachments/:id/download
+   - DELETE /api/v1/attachments/:id
+   - PATCH /api/v1/attachments/:id
+   (Use the real existing paths.)
+
+B) Create the new standardized router
+1) Add server/http/domains/attachments.router.ts:
+   - const router = createApiRouter({ domain: "attachments", policy: "authTenant" })
+2) Port routes:
+   - Preserve exact paths and behavior.
+   - Reuse existing controller/service functions.
+   - Ensure tenant enforcement is not duplicated:
+     - avoid applying auth/tenant middleware inside handlers if policy already provides it.
+
+C) Standardize upload validation (shared middleware)
+1) Create server/http/middleware/uploadGuards.ts (or similar) with:
+   - validateContentType(allowedTypes)
+   - validateFileSize(maxBytes)
+   - sanitizeFilename()
+   - optional: validateExtensionAgainstMime()
+2) Apply these guards to attachment upload/init endpoints ONLY.
+3) If existing behavior allowed broad types, do NOT suddenly restrict:
+   - start with “warn/log-only mode” if unsure:
+     - log when content type is unexpected, but do not block
+   - block only clearly unsafe values (e.g., missing filename, absurd size)
+4) Ensure responses stay compatible.
+
+D) Register in routeRegistry and disable legacy mount
+1) Add attachments router entry in server/http/routeRegistry.ts with proper mount path.
+2) Remove/disable the legacy attachments mount from server/routes/index.ts (or its legacy aggregator).
+3) Confirm there is no duplicate mount.
+
+E) Ensure request-id is included in storage side-effects
+If the attachment service writes audit logs / jobs / webhook events:
+- ensure request-id is passed through (res.locals.requestId or equivalent)
+- add it to structured logs for upload init / download / delete
+
+F) Tests
+1) Policy drift test:
+   - assert attachments router is registered with authTenant and metadata exists
+2) Integration tests: server/tests/integration/attachmentsRoutes.test.ts (>=9 tests)
+Cover:
+- unauth access rejected (GET + POST)
+- authenticated happy path:
+  - create/init upload returns expected response shape
+  - fetch metadata returns expected shape
+- tenant enforcement:
+  - cannot access attachment from another tenant
+- routing:
+  - nested attachment routes (if any) match correctly
+- validation:
+  - missing required fields -> 400 with expected error shape
+  - oversized file scenario:
+    - if guards are log-only, assert request succeeds but logs warning (if log capture exists)
+    - if guards block, assert 413/400 consistent with existing patterns
+- metadata/registry test: confirm routeRegistry lists attachments
+
+G) Documentation
+Update docs/architecture/routes.md:
+- add Attachments as migrated (step 6 / 7 depending on numbering)
+- note storage provider behavior preserved
+- note upload guard middleware introduced (and whether it’s enforce vs warn-only)
+- update next migration: Uploads domain then Chat
+
+VERIFICATION CHECKLIST:
+- ✅ All tests pass
+- ✅ Existing attachment flows still work end-to-end
+- ✅ No duplicate mounts
+- ✅ upload guards do not break known flows
+- ✅ request-id shows up in logs for upload init/delete/download
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+1) Attachments endpoints migrated (list + count)
+2) Whether any endpoints required skipEnvelope and why (prefer none)
+3) Upload guard middleware added and where applied
+4) Tests added and what they cover
+5) Next migration recommendation: Uploads or Chat (and why)

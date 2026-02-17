@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { stripHtml } from "@/lib/utils";
 import {
   FolderKanban,
   CheckSquare,
@@ -988,7 +989,7 @@ export default function Home() {
                           <p className="text-sm font-medium truncate">{project.name}</p>
                           {project.description && (
                             <p className="text-xs text-muted-foreground truncate">
-                              {project.description}
+                              {stripHtml(project.description)}
                             </p>
                           )}
                         </div>

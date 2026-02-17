@@ -1,4 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
+import { stripHtml } from "@/lib/utils";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -154,7 +155,7 @@ export default function ClientPortalProjects() {
                 <CardContent>
                   {project.description ? (
                     <p className="text-sm text-muted-foreground line-clamp-2">
-                      {project.description}
+                      {stripHtml(project.description)}
                     </p>
                   ) : (
                     <p className="text-sm text-muted-foreground italic">
