@@ -189,14 +189,14 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
 - **File upload**: POST `/uploads` uses multer in-memory buffer + S3/R2 upload via `getStorageProvider()`.
 - **Policy tests**: 11 HTTP policy drift tests in `server/tests/chat-router-policy.test.ts`.
 
-### Socket.IO Policy Wrapper (Prompt #8)
+### Socket.IO Policy Wrapper (Prompt #8/9)
 - **New file**: `server/realtime/socketPolicy.ts` — reusable `withSocketPolicy()` decorator for Socket.IO event handlers.
-- **Options**: `requireAuth`, `requireTenant`, `requireChatMembership` — composable policy checks.
+- **Options**: `requireAuth`, `requireTenant`, `requireChatMembership`, `requireChatRoomAccess` — composable policy checks.
 - **AuthorizedContext**: Handler receives `{ userId, tenantId, socketId }` after policy checks pass.
-- **Membership validation**: When `requireChatMembership: true`, validates user is a member of the channel/DM specified by `conversationId` in the event payload.
-- **Pilot events**: `TYPING_EVENTS.START` and `TYPING_EVENTS.STOP` in `server/realtime/socket.ts` now use `withSocketPolicy()` instead of inline auth/tenant/membership checks.
-- **Unit tests**: 7 tests in `server/tests/chat-socket-policy.test.ts` covering auth denial, tenant denial, membership validation, and successful handler invocation.
-- **Future**: All chat Socket.IO event handlers (room join/leave, presence) can be migrated to use `withSocketPolicy()` for consistent governance.
+- **Membership validation**: When `requireChatMembership: true`, validates user is a member of the channel/DM specified by `conversationId`.
+- **Room Access validation**: When `requireChatRoomAccess: true`, validates user has access to the room specified by `targetType` and `targetId`.
+- **Caching**: Includes a lightweight membership cache to reduce database load on high-frequency events; automatically cleaned up on socket disconnection.
+- **Coverage**: `TYPING_EVENTS.START`, `TYPING_EVENTS.STOP`, `CHAT_ROOM_EVENTS.JOIN`, `CHAT_ROOM_EVENTS.LEAVE`, `PRESENCE_EVENTS.PING`, and `PRESENCE_EVENTS.IDLE` all use `withSocketPolicy()`.
 
 ### Flags Domain Migration Notes (Prompt #7)
 - **1 endpoint**: GET `/crm/flags` — CRM feature flags.
