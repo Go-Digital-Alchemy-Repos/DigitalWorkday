@@ -1221,7 +1221,7 @@ export function TaskDetailDrawer({
 
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <label className="flex items-center gap-2 font-medium text-muted-foreground text-[16px]">
                 <Timer className="h-3.5 w-3.5" />
                 Time Entries
               </label>
