@@ -1,0 +1,122 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL (Prompt #12):
+Migrate the “Tasks (core)” HTTP endpoints to the standardized route architecture using createApiRouter() with authTenant policy, preserving URLs/behavior. This is Slice 2 following Projects core.
+
+SCOPE (Slice 2 = Tasks Core):
+Migrate ONLY the tasks core endpoints, which typically include:
+- list tasks (scoped to project, workspace, or filters)
+- get task by id
+- create task
+- update task (title/description/dates/priority)
+- assign/unassign (or update assigneeId)
+- complete/uncomplete (or update status)
+- delete/archive task (if present)
+Do NOT migrate subtasks or tags in this prompt.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change endpoint URLs.
+- Do NOT change DB schema.
+- Do NOT change auth/session semantics.
+- Preserve response formats exactly.
+- Reuse existing handlers/services; no rewrites.
+- Keep mixed-prefix URLs (/api and /api/v1) if they exist today.
+
+DELIVERABLES:
+1) New router: server/http/domains/tasks.router.ts using createApiRouter({ domain: "tasks", policy: "authTenant" })
+2) Registered via routeRegistry; legacy mounts disabled ONLY for migrated task endpoints.
+3) Tests:
+   - policy drift tests confirm tasks router uses authTenant and metadata present
+   - integration tests: >= 18 tests for tasks core
+4) Docs updated: migrated domains table + “Tasks slice migrated” notes + next slice plan (Subtasks + task-tag linkage).
+
+IMPLEMENTATION PLAN:
+
+A) Inventory existing Tasks endpoints
+1) Locate legacy task mounts by searching for:
+   - "/tasks"
+   - "tasks" router modules
+   - "assign", "assignee", "complete", "status"
+2) Identify ALL task core endpoints (method + path) and note where they are mounted:
+   - nested routes like /projects/:pid/tasks
+   - direct routes like /tasks/:id
+   - any “bulk update” endpoints (exclude bulk in this slice unless it is already core)
+3) Confirm tenancy expectations:
+   - all task endpoints should be authTenant
+
+B) Create the standardized Tasks router
+1) Add server/http/domains/tasks.router.ts:
+   - const router = createApiRouter({ domain: "tasks", policy: "authTenant" })
+2) Implement only task core endpoints from inventory.
+3) Reuse existing handlers/services:
+   - If legacy router has inline handlers, extract to controller module with minimal movement:
+     server/features/tasks/tasks.controller.ts (or existing structure)
+4) Envelope compatibility:
+   - Try with default envelope.
+   - If existing handlers rely on raw res.json() shapes, use skipEnvelope: true and document why.
+   - Do NOT change response bodies.
+
+C) Register via routeRegistry + disable legacy mounts safely
+1) Register tasks router in server/http/routeRegistry.ts under the exact same mount path(s).
+2) Disable legacy mounts ONLY for those endpoints.
+   - If tasks endpoints are mixed with subtasks/tags in the same legacy router:
+     - leave subtasks/tags legacy for now
+     - ensure no missing routes.
+3) Ensure registry-only enforcement tests remain passing.
+
+D) Integration tests (>=18) — server/tests/integration/tasksRoutes.test.ts
+Cover:
+
+Auth:
+- unauth list -> 401
+- unauth create -> 401
+- unauth update -> 401
+
+Tenant enforcement:
+- cannot read/update a task in another tenant (403/404)
+
+Core flows:
+- create task returns expected shape
+- list includes created task
+- get by id works
+- update title/description works and returns updated shape
+
+Assignment:
+- assign user works (or patch assigneeId)
+- unassign works
+
+Completion/status:
+- complete task works (or patch status)
+- uncomplete works
+
+Validation:
+- missing required fields -> 400
+- invalid ids -> expected 400/404 behavior
+
+Routing:
+- nested route /projects/:pid/tasks works (if exists)
+- direct /tasks/:id works (if exists)
+
+Registry/metadata:
+- routeRegistry reports tasks domain with authTenant
+
+E) Docs
+Update docs/architecture/routes.md:
+- Add Tasks (Slice 2) as migrated
+- List endpoints moved
+- Note skipEnvelope usage
+- Define Slice 3 plan: Subtasks + task-tag linkage + any task activity hooks.
+
+VERIFICATION CHECKLIST:
+- ✅ All tests pass
+- ✅ Existing task create/edit/assign/complete flows work end-to-end
+- ✅ No URL/response changes
+- ✅ No rogue mounts; registry-only enforcement stays green
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+1) Task endpoints migrated (list + count)
+2) Whether skipEnvelope was needed
+3) Files changed/added
+4) Tests added and what they cover
+5) Slice 3 endpoint inventory (subtasks + tags routes) for Prompt #13

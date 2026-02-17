@@ -14,6 +14,7 @@ import flagsRouter from "./domains/flags.router";
 import uploadsRouter from "./domains/uploads.router";
 import chatRouter from "./domains/chat.router";
 import timeRouter from "./domains/time.router";
+import projectsRouter from "./domains/projects.router";
 
 interface DomainEntry {
   path: string;
@@ -100,6 +101,13 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "time",
     description: "Time tracking: active timers, time entries CRUD, calendar views, reporting, CSV export. Migrated from legacy routes/timeTracking.router.ts + routes/timeTracking.ts (Prompt #10).",
+  },
+  {
+    path: "/api",
+    router: projectsRouter,
+    policy: "authTenant",
+    domain: "projects",
+    description: "Projects core: CRUD, members, visibility (hide/unhide), sections, task reorder. Migrated from legacy routes/projects.router.ts (Prompt #11).",
   },
 ];
 

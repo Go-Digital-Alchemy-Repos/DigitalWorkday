@@ -31,7 +31,8 @@ import tasksRouter from "./tasks.router";
 // timeTrackingRouter: migrated to server/http/domains/time.router.ts (Prompt #10)
 // import timeTrackingRouter from "./timeTracking.router";
 import clientsRouter from "./clients.router";
-import projectsRouter from "./projects.router";
+// projectsRouter: migrated to server/http/domains/projects.router.ts (Prompt #11)
+// import projectsRouter from "./projects.router";
 import usersRouter from "./users.router";
 import crmRouter from "./crm.router";
 import workspacesRouter from "./workspaces.router";
@@ -59,7 +60,8 @@ router.use(teamsRouter);
 // router.use(attachmentsRouter);
 router.use(usersRouter);
 router.use(crmRouter);
-router.use(projectsRouter);
+// projectsRouter: migrated to server/http/domains/projects.router.ts (Prompt #11)
+// router.use(projectsRouter);
 router.use(clientsRouter);
 // timeTrackingRouter: migrated to server/http/domains/time.router.ts (Prompt #10)
 // router.use(timeTrackingRouter);

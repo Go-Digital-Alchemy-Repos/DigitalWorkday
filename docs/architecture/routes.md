@@ -198,6 +198,37 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
 - **Caching**: Includes a lightweight membership cache to reduce database load on high-frequency events; automatically cleaned up on socket disconnection.
 - **Coverage**: `TYPING_EVENTS.START`, `TYPING_EVENTS.STOP`, `CHAT_ROOM_EVENTS.JOIN`, `CHAT_ROOM_EVENTS.LEAVE`, `PRESENCE_EVENTS.PING`, and `PRESENCE_EVENTS.IDLE` all use `withSocketPolicy()`.
 
+### Projects Domain Migration Notes (Prompt #11 — Slice 1: Projects Core)
+- **18 endpoints** migrated from `server/routes/projects.router.ts`:
+  - **Project CRUD** (6): GET `/projects`, `/projects/unassigned`, `/projects/hidden`, `/projects/:id`, POST `/projects`, PATCH `/projects/:id`
+  - **Project Members** (4): GET `/projects/:projectId/members`, POST `/projects/:projectId/members`, DELETE `/projects/:projectId/members/:userId`, PUT `/projects/:projectId/members`
+  - **Project Visibility** (3): POST `/projects/:projectId/hide`, DELETE `/projects/:projectId/hide`, GET `/projects/:projectId/hidden`
+  - **Sections** (4): GET `/projects/:projectId/sections`, POST `/sections`, PATCH `/sections/:id`, DELETE `/sections/:id`
+  - **Task Reorder** (1): PATCH `/projects/:projectId/tasks/reorder`
+- **skipEnvelope: true** — All handlers use `res.json()` directly with established response shapes.
+- **Tenancy-aware**: Uses `getEffectiveTenantId()` with super-user fallback for project CRUD, client/division validation on create/update, cross-tenant member validation.
+- **Key behaviors preserved**:
+  - POST `/projects` requires `clientId` when tenant context is present (400 if missing).
+  - Client/division cross-validation on create and update (validates ownership, division-to-client association).
+  - Project member notifications on update (via `notifyProjectUpdate` / `notifyProjectMemberAdded`).
+  - Real-time events: `emitProjectCreated`, `emitProjectUpdated`, `emitSectionCreated/Updated/Deleted`, `emitTaskReordered`.
+- **Dashboard endpoints NOT migrated** (separate concern at `/api/v1`):
+  - GET `/v1/projects` (dashboard list with counts/filters), `/v1/projects/analytics/summary`, `/v1/projects/:projectId/analytics`, `/v1/projects/:projectId/forecast`, `/v1/projects/forecast/summary`
+  - Remain in `server/routes/projectsDashboard.ts` mounted via `router.use("/v1", projectsDashboardRoutes)` — candidate for Slice 1b.
+- **Policy drift tests**: 19 tests in `server/tests/projects-router-policy.test.ts` (18 auth rejection + 1 factory metadata).
+- **Integration tests**: 30 tests in `server/tests/integration/projectsRoutes.test.ts` covering auth rejection (live + mini app), tenant enforcement (4 tests: no-tenant → 400/403), behavior assertions (4 tests: not-found → 404, missing clientId → 400), route matching (members + visibility + sections + reorder), and registry metadata.
+- **Next**: Slice 2 = Tasks core (CRUD, assignees, status transitions). See endpoint inventory below.
+
+#### Slice 2 Plan: Tasks Core (Prompt #12)
+Candidate endpoints from `server/routes/tasks.router.ts`:
+- GET `/tasks`, `/tasks/my`, `/tasks/:id`
+- POST `/tasks`
+- PATCH `/tasks/:id`
+- DELETE `/tasks/:id`
+- Subtask CRUD: GET/POST/PATCH/DELETE `/tasks/:id/subtasks`
+- Task assignees: POST/DELETE `/tasks/:id/assignees`
+- Personal tasks: GET/POST `/tasks/personal`
+
 ### Time Domain Migration Notes (Prompt #10)
 - **18 endpoints** migrated from two legacy files:
   - `server/routes/timeTracking.router.ts` (18 endpoints, tenancy-aware)
@@ -279,9 +310,11 @@ To migrate the next domain (Prompt #3):
    - Also: `/api` flags — CRM feature flags (DONE - Prompt #7, extracted from attachments)
 9. `/api/v1/chat` — chat system (DONE - Prompt #8, 29 endpoints + socket policy pilot)
 10. `/api` time — time tracking, timers, calendar, reporting (DONE - Prompt #10, 18 endpoints)
-11. `/api` projects/tasks — project CRUD, task CRUD (NEXT — recommended sub-slice: projects first, then tasks)
-12. `/api/v1/super` — super admin (large, many sub-routers)
-13. `/api` — remaining main domain routes (largest, final migration)
+11. `/api` projects — project CRUD, members, visibility, sections, reorder (DONE - Prompt #11, 18 endpoints)
+    - Dashboard endpoints (`/api/v1/projects/*` analytics/forecast) remain legacy — candidate Slice 1b
+12. `/api` tasks — task CRUD, subtasks, assignees, personal tasks (NEXT — Prompt #12)
+13. `/api/v1/super` — super admin (large, many sub-routers)
+14. `/api` — remaining main domain routes (largest, final migration)
 
 ### Known Risks
 

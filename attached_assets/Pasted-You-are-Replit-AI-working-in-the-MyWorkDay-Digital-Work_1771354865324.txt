@@ -1,0 +1,133 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL (Prompt #13):
+Migrate the remaining task-adjacent endpoints that are still legacy:
+- Subtasks endpoints (CRUD + reorder if present)
+- Task ↔ Tags linkage endpoints (attach/detach/list task tags) if any remain legacy
+- Task activity hooks endpoints (if any are HTTP) that write to the activity log (preserve behavior)
+
+NOTE:
+- Tags domain was already migrated earlier and attachments are migrated.
+- This prompt focuses on any remaining legacy routes that relate to tasks/subtasks/tag linkage.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change endpoint URLs.
+- Do NOT change DB schema.
+- Do NOT change auth/session semantics.
+- Preserve response formats exactly.
+- Reuse existing handlers/services; do not rewrite task logic.
+
+DELIVERABLES:
+1) New router(s) as needed using createApiRouter({ policy: "authTenant" }):
+   - server/http/domains/subtasks.router.ts (required if subtasks exist)
+   - server/http/domains/taskTags.router.ts (ONLY if task-tag routes exist and are not already covered)
+2) Register in routeRegistry; disable legacy mounts for those endpoints.
+3) Tests:
+   - policy drift tests for new router(s)
+   - integration tests:
+     - subtasks: >= 12 tests
+     - taskTags (if created): >= 8 tests
+4) Docs updated: migrated domains table + “Tasks Slice 3 completed” notes.
+
+IMPLEMENTATION PLAN:
+
+A) Inventory what’s still legacy
+1) Search legacy routes for:
+   - "/subtasks"
+   - "subtask"
+   - "/tasks/:id/tags"
+   - "/tasks/:id/tags/:tagId"
+   - "taskTags"
+   - "reorder subtasks"
+2) Identify endpoints and which router/file they live in.
+3) Determine if any of these endpoints were already migrated indirectly by Tags router:
+   - If /tasks/:id/tags is already served by the Tags router, do NOT duplicate it.
+   - Only migrate what remains legacy.
+
+B) Subtasks migration
+1) Create server/http/domains/subtasks.router.ts:
+   - const router = createApiRouter({ domain: "subtasks", policy: "authTenant" })
+2) Implement subtasks endpoints preserving exact paths:
+   Typical patterns (use actual):
+   - GET /projects/:pid/tasks/:tid/subtasks
+   - POST /projects/:pid/tasks/:tid/subtasks
+   - PATCH /projects/:pid/tasks/:tid/subtasks/:sid
+   - DELETE /projects/:pid/tasks/:tid/subtasks/:sid
+   - POST /projects/:pid/tasks/:tid/subtasks/reorder (if exists)
+3) Reuse existing handlers/services.
+4) Envelope compatibility:
+   - Avoid changing response shapes; use skipEnvelope: true only if required and document.
+
+C) Task ↔ Tags linkage migration (ONLY if still legacy)
+1) Determine which endpoints are still legacy:
+   - list tags for a task
+   - add tag to task
+   - remove tag from task
+2) If still legacy, create server/http/domains/taskTags.router.ts:
+   - createApiRouter({ domain: "taskTags", policy: "authTenant" })
+3) IMPORTANT: Avoid duplication with the existing Tags router:
+   - If Tags router already owns these paths, do not create new ones.
+   - Instead, move any remaining legacy variants to be aliases that call into the Tags router handler or service (no URL changes).
+
+D) RouteRegistry registration + legacy disable
+1) Register new router(s) via server/http/routeRegistry.ts at the exact same mount paths.
+2) Disable legacy mounts for those endpoints only.
+3) Ensure registry-only enforcement tests remain passing.
+
+E) Tests
+
+Subtasks integration tests (>=12) — server/tests/integration/subtasksRoutes.test.ts:
+Auth:
+- unauth list/create -> 401
+Tenant enforcement:
+- cross-tenant access blocked
+CRUD:
+- create subtask returns expected shape
+- list includes created subtask
+- update works
+- delete works
+Reorder (if exists):
+- reorder endpoint behaves as current behavior (assert the current ordering rule)
+Validation:
+- missing fields -> 400
+Routing:
+- nested paths match correctly
+Metadata:
+- routeRegistry lists subtasks domain with authTenant
+
+TaskTags integration tests (>=8) — ONLY if taskTags router created:
+Auth:
+- unauth add/remove -> 401
+Tenant enforcement:
+- cross-tenant access blocked
+Linking:
+- attach tag to task works
+- list task tags includes attached tag
+- detach works
+Routing:
+- nested paths match
+Metadata:
+- routeRegistry lists taskTags with authTenant
+
+F) Docs
+Update docs/architecture/routes.md:
+- Add Subtasks migrated
+- Add TaskTags migrated ONLY if created
+- Note any alias behavior for legacy variants
+- Mark Projects/Tasks migration as complete through Slice 3
+- Next recommended migration after this: any remaining “workspaces/teams/users” domain cleanup, or shift to Track B/C/D if routing is largely converged.
+
+VERIFICATION CHECKLIST:
+- ✅ All tests pass
+- ✅ Subtasks UI flows work end-to-end
+- ✅ Tags linking still works and no duplicate route ownership exists
+- ✅ No URL/response shape changes
+- ✅ Registry-only enforcement stays green
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+1) Subtasks endpoints migrated (list + count)
+2) TaskTags endpoints migrated or confirmed already covered (explicitly state which)
+3) Files changed/added
+4) Tests added and what they cover
+5) Remaining legacy domains (list) and next recommended step (Track A completion vs Track B/C/D)
