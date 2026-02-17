@@ -542,6 +542,18 @@ export function ClientProfileDrawer({
                 </p>
               )}
             </div>
+            <div className="flex items-center gap-2 shrink-0">
+              <Link href={`/clients/${clientId}`}>
+                <Button variant="outline" size="sm" data-testid="button-quick-full-page">
+                  <ExternalLink className="h-3.5 w-3.5 mr-1.5" />
+                  Open Full Client Profile
+                </Button>
+              </Link>
+              <Button variant="outline" size="sm" onClick={() => setShowQuickNote(!showQuickNote)} data-testid="button-quick-log-note">
+                <StickyNote className="h-3.5 w-3.5 mr-1.5" />
+                Log Note
+              </Button>
+            </div>
           </div>
 
           {showQuickNote && (
@@ -577,10 +589,6 @@ export function ClientProfileDrawer({
             </div>
           </Tabs>
 
-          <QuickActionsBar
-            clientId={clientId}
-            onLogNote={() => setShowQuickNote(!showQuickNote)}
-          />
         </div>
       ) : (
         <div className="flex flex-col items-center justify-center py-12 text-center">
