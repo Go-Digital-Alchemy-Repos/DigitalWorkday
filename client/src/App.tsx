@@ -62,8 +62,6 @@ import ClientPortalApprovals from "@/pages/client-portal-approvals";
 import ClientPortalMessages from "@/pages/client-portal-messages";
 import { ClientPortalSidebar } from "@/components/client-portal-sidebar";
 import { ClientPortalMobileNav } from "@/components/client-portal-mobile-nav";
-import { Loader2, MessageCircle, MoreVertical, Moon, Sun } from "lucide-react";
-import { useEffect } from "react";
 import { GlobalActiveTimer } from "@/features/timer";
 import { ChatDrawerProvider, useChatDrawer } from "@/contexts/chat-drawer-context";
 import { GlobalChatDrawer } from "@/components/global-chat-drawer";
@@ -83,6 +81,10 @@ import { useTheme } from "@/lib/theme-provider";
 import { NotificationCenter } from "@/components/notification-center";
 import { MobileNavBar } from "@/components/mobile-nav-bar";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { Loader2, MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check } from "lucide-react";
+import { useEffect } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { type Workspace } from "@shared/schema";
 
 function ProtectedRoute({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading } = useAuth();
@@ -124,17 +126,6 @@ function SuperRouteGuard({ component: Component }: { component: React.ComponentT
   return <Component />;
 }
 
-/**
- * TenantRouteGuard
- * 
- * Guards tenant routes and handles:
- * 1. Authentication check
- * 2. Super user in super mode - stores last attempted URL, shows toast, redirects to tenant selector
- * 3. Otherwise renders the component
- * 
- * Note: Does NOT wrap with TenantContextGate - that's done at layout level
- * Note: Redirects to /super-admin which is the tenant selector equivalent in this app
- */
 function TenantRouteGuard({ component: Component }: { component: React.ComponentType }) {
   const { isAuthenticated, isLoading, user } = useAuth();
   const { appMode } = useAppMode();
@@ -143,7 +134,6 @@ function TenantRouteGuard({ component: Component }: { component: React.Component
 
   useEffect(() => {
     if (!isLoading && isAuthenticated && user?.role === "super_user" && appMode === "super") {
-      // Store the attempted tenant URL before redirecting
       if (isTenantRoute(location)) {
         setLastAttemptedTenantUrl(location);
       }
@@ -168,7 +158,6 @@ function TenantRouteGuard({ component: Component }: { component: React.Component
   }
 
   if (user?.role === "super_user" && appMode === "super") {
-    // Store URL before redirecting (fallback if effect didn't run)
     if (isTenantRoute(location)) {
       setLastAttemptedTenantUrl(location);
     }
@@ -234,18 +223,15 @@ function ClientPortalRouter() {
 function SuperAdminRouter() {
   return (
     <Switch>
-      {/* Dashboard is the default landing page for super admins */}
       <Route path="/super-admin/dashboard">
         {() => <SuperRouteGuard component={SuperAdminDashboardPage} />}
       </Route>
       <Route path="/super-admin/profile">
         {() => <SuperRouteGuard component={UserProfilePage} />}
       </Route>
-      {/* Tenants management page */}
       <Route path="/super-admin/tenants">
         {() => <SuperRouteGuard component={SuperAdminPage} />}
       </Route>
-      {/* Legacy route: redirect old reports URL to dashboard */}
       <Route path="/super-admin/reports">
         {() => <Redirect to="/super-admin/dashboard" />}
       </Route>
@@ -267,7 +253,6 @@ function SuperAdminRouter() {
       <Route path="/super-admin/users">
         {() => <SuperRouteGuard component={SuperAdminUsersPage} />}
       </Route>
-      {/* Default: redirect /super-admin to dashboard */}
       <Route path="/super-admin">
         {() => <Redirect to="/super-admin/dashboard" />}
       </Route>
@@ -400,6 +385,77 @@ function ChatToggleButton() {
   );
 }
 
+function MobileHeaderMenu() {
+  const { toggleDrawer } = useChatDrawer();
+  const { mode, setMode, resolvedTheme } = useTheme();
+  const { data: workspace } = useQuery<Workspace>({
+    queryKey: ["/api/workspaces/current"],
+  });
+  
+  return (
+    <div className="flex items-center gap-1">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-9 gap-2 px-2" data-testid="button-workspace-switcher">
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs font-medium max-w-[80px] truncate">
+              {workspace?.name || "Workspace"}
+            </span>
+            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-[200px]">
+          <DropdownMenuItem className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              <span className="truncate">{workspace?.name || "Default Workspace"}</span>
+            </div>
+            <Check className="h-4 w-4 text-primary" />
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={toggleDrawer} data-testid="menu-item-chat">
+            <MessageCircle className="h-4 w-4 mr-2" />
+            Chat
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            onClick={() => {
+              if (mode === "system") {
+                setMode(resolvedTheme === "dark" ? "light" : "dark");
+              } else {
+                setMode(mode === "dark" ? "light" : "dark");
+              }
+            }}
+            data-testid="menu-item-theme"
+          >
+            {resolvedTheme === "dark" ? (
+              <>
+                <Sun className="h-4 w-4 mr-2" />
+                Light mode
+              </>
+            ) : (
+              <>
+                <Moon className="h-4 w-4 mr-2" />
+                Dark mode
+              </>
+            )}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+function TenantLayout() {
+  const { isImpersonating } = useAppMode();
   const [, setLocation] = useLocation();
   const isMobile = useIsMobile();
   
@@ -419,7 +475,6 @@ function ChatToggleButton() {
             onStartTimer={() => setLocation("/my-time")}
           />
           <div className={`flex flex-col h-screen w-full ${isImpersonating ? "ring-2 ring-amber-500 ring-inset" : ""}`}>
-            {/* Tenant impersonation banner (Act as Tenant mode) */}
             <ImpersonationBanner />
             <div className="flex flex-1 overflow-hidden">
               <TenantSidebar />
@@ -537,7 +592,6 @@ function AppLayout() {
   const isSuperRoute = location.startsWith("/super-admin");
   const isPortalRoute = location.startsWith("/portal");
 
-  // Client users go to client portal
   if (isClientUser) {
     if (!isPortalRoute) {
       return <Redirect to="/portal" />;
@@ -545,7 +599,6 @@ function AppLayout() {
     return <ClientPortalLayout />;
   }
 
-  // Non-client users shouldn't access portal
   if (isPortalRoute && !isClientUser) {
     return <Redirect to="/" />;
   }
