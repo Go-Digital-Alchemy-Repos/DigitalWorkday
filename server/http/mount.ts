@@ -5,6 +5,7 @@ import { registerRoutes as legacyRegisterRoutes } from "../routes";
 import systemRouter from "./domains/system.router";
 import tagsRouter from "./domains/tags.router";
 import activityRouter from "./domains/activity.router";
+import commentsRouter from "./domains/comments.router";
 
 export async function mountAllRoutes(
   httpServer: Server,
@@ -111,11 +112,21 @@ export async function mountAllRoutes(
     legacy: false,
   });
 
+  registerRoute({
+    path: "/api",
+    router: commentsRouter,
+    policy: "authTenant",
+    domain: "comments",
+    description: "Comment CRUD, resolve/unresolve. Migrated from legacy routes/comments.router.ts (Prompt #4).",
+    legacy: false,
+  });
+
   await legacyRegisterRoutes(httpServer, app);
 
   app.use("/api/v1/system", systemRouter);
   app.use("/api", tagsRouter);
   app.use("/api", activityRouter);
+  app.use("/api", commentsRouter);
 
   return httpServer;
 }

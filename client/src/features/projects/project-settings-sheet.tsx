@@ -144,8 +144,15 @@ export function ProjectSettingsSheet({
       queryClient.setQueryData<Project>(["/api/projects", project.id], (old) =>
         old ? { ...old, ...updatedProject } : old,
       );
+      queryClient.setQueryData<any[]>(["/api/v1/projects", { includeCounts: true }], (old) => {
+        if (!old) return old;
+        return old.map((p: any) =>
+          p.id === project.id ? { ...p, ...updatedProject } : p,
+        );
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
       toast({
         title: "Project updated",
         description: "Project details have been saved.",
@@ -194,8 +201,15 @@ export function ProjectSettingsSheet({
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
+      queryClient.setQueryData<any[]>(["/api/v1/projects", { includeCounts: true }], (old) => {
+        if (!old) return old;
+        return old.map((p: any) =>
+          p.id === project.id ? { ...p, ...updatedProject } : p,
+        );
+      });
       queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
       toast({
         title: status === "archived" ? "Project archived" : "Project restored",
         description: status === "archived" 

@@ -1,0 +1,98 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL (Prompt #4):
+A) Continue route convergence by migrating the Comments domain (preferred) OR Mentions/Notifications (fallback) into the standardized route architecture using createApiRouter + routeRegistry.
+B) Hardening pass on the “project rename/sidebar update” flow to ensure we never regress into stale 304-driven UI after mutations.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change external URLs.
+- Do NOT change DB schema.
+- Do NOT change auth/session semantics.
+- Reuse existing handlers/controllers/services wherever possible.
+- Keep refactors incremental.
+
+PART A — Comments Domain Migration
+
+DELIVERABLES:
+1) New router file:
+   - server/http/domains/comments.router.ts
+   (If comments are already partly migrated, migrate the next remaining comment endpoints.)
+2) Register in server/http/routeRegistry.ts with authTenant policy.
+3) Remove/disable legacy comments mount to avoid double-mounting.
+4) Add tests:
+   - policy drift test: comments uses authTenant
+   - integration smoke tests (min 7):
+     - 2 auth rejection cases
+     - 2 tenant enforcement cases
+     - 2 route matching (nested + global)
+     - 1 metadata registry case
+5) Update docs/architecture/routes.md migrated domains table + notes.
+
+IMPLEMENTATION STEPS:
+1) Locate existing legacy comment endpoints:
+   - Search for "comments" in server/routes, server/features, and older routers.
+   - Identify all comment paths (examples might include):
+     - POST /api/comments
+     - GET /api/comments/:entityType/:entityId
+     - POST /api/tasks/:id/comments
+     - DELETE /api/comments/:id
+     - PATCH /api/comments/:id
+     (Use the actual existing routes.)
+2) Create server/http/domains/comments.router.ts:
+   - const router = createApiRouter({ domain: "comments", policy: "authTenant" })
+   - Define routes matching the exact legacy paths.
+   - Reuse existing handlers. If handlers are embedded inside a legacy router file, extract to a controller module with minimal movement.
+3) Mount via routeRegistry at the exact same mount points (/api or /api/v1 as required).
+4) Disable legacy mount(s) cleanly:
+   - Prefer removing the mount registration line rather than commenting large blocks.
+   - Ensure no other legacy domains are affected.
+5) Tests:
+   - Mirror the structure used for tags and activity integration tests.
+   - Ensure cross-tenant access is blocked for reads/writes of comments.
+
+PART B — Project rename cache hardening (304/stale prevention)
+
+DELIVERABLES:
+1) Ensure project mutation updates ALL relevant cached queries (not just one) deterministically.
+2) Ensure background refetch after save uses invalidation and does not depend on server returning updated content when 304 happens.
+3) Add one frontend test (or at least a deterministic dev-only reproduction note) to prevent regressions.
+
+IMPLEMENTATION STEPS:
+1) Identify the mutation used in project-settings-sheet.tsx that saves project changes.
+2) Confirm the query keys:
+   - project details query key
+   - projects list/dashboard query key
+   - sidebar/workspace projects query key
+   They MUST include tenant/workspace scoping to avoid cache collisions.
+3) After a successful mutation:
+   - Keep the existing setQueryData updates.
+   - ALSO call queryClient.invalidateQueries for:
+     - the single project details query
+     - the list queries where the project appears
+   so refetch still happens eventually, but UI is already correct immediately.
+4) Ensure the fetcher/request layer does not cache API JSON responses incorrectly:
+   - For API requests that should never be cached by the browser, ensure request headers include:
+     - Cache-Control: no-store (or no-cache) on responses server-side for authenticated JSON endpoints
+     - and/or client fetch uses cache: "no-store" where appropriate
+   Use the smallest change: prefer server-side headers for /api authenticated routes if not already present.
+5) Add a short regression check:
+   - If you have frontend test infra, add a test that:
+     - loads projects list
+     - performs rename mutation
+     - asserts sidebar updates immediately
+   - If tests aren’t practical, add a documented “manual verification script” and keep it in docs/dev/verification.md.
+
+VERIFICATION CHECKLIST:
+- ✅ All existing tests pass
+- ✅ New integration tests pass
+- ✅ Comments endpoints behave identically and are tenant-enforced
+- ✅ Project rename updates sidebar instantly AND still refetches safely without stale 304 issues
+- ✅ No duplicate mounts and no policy drift test failures
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+1) Comments endpoints migrated (count + list of paths)
+2) Files changed/added with purpose notes
+3) Tests added (names + what each covers)
+4) Cache hardening changes (which query keys updated, which invalidations added, any headers changed)
+5) Next migration recommendation (time or projects/tasks)

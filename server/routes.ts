@@ -30,6 +30,7 @@ import type { Express } from "express";
 import type { Server } from "http";
 import { requireAuth } from "./auth";
 import { requireTenantContext } from "./middleware/tenantContext";
+import { apiNoCacheMiddleware } from "./middleware/apiCacheControl";
 import subRoutes from "./routes/index";
 import webhookRoutes from "./routes/webhooks";
 import {
@@ -41,6 +42,8 @@ export async function registerRoutes(
   httpServer: Server,
   app: Express,
 ): Promise<Server> {
+  app.use("/api", apiNoCacheMiddleware);
+
   // Protect all /api routes except /api/auth/*, /api/v1/auth/*, /api/v1/super/bootstrap, /api/health, and /api/v1/webhooks/*
   app.use("/api", (req, res, next) => {
     if (req.path.startsWith("/auth") || 

@@ -106,6 +106,20 @@ describe("Route Policy Drift Tests", () => {
       expect(tags!.policy).toBe("authTenant");
       expect(tags!.legacy).toBe(false);
     });
+
+    it("activity domain must use authTenant policy", () => {
+      const activity = registry.find((r) => r.domain === "activity");
+      expect(activity).toBeDefined();
+      expect(activity!.policy).toBe("authTenant");
+      expect(activity!.legacy).toBe(false);
+    });
+
+    it("comments domain must use authTenant policy", () => {
+      const comments = registry.find((r) => r.domain === "comments");
+      expect(comments).toBeDefined();
+      expect(comments!.policy).toBe("authTenant");
+      expect(comments!.legacy).toBe(false);
+    });
   });
 
   describe("Factory Router Meta", () => {
@@ -129,6 +143,30 @@ describe("Route Policy Drift Tests", () => {
       expect(tags!.router).not.toBeNull();
 
       const meta = getRouterMeta(tags!.router);
+      expect(meta).toBeDefined();
+      expect(meta!.policy).toBe("authTenant");
+    });
+
+    it("activity domain router should have factory metadata with authTenant policy", () => {
+      const activity = registry.find(
+        (r) => r.domain === "activity" && !r.legacy
+      );
+      expect(activity).toBeDefined();
+      expect(activity!.router).not.toBeNull();
+
+      const meta = getRouterMeta(activity!.router);
+      expect(meta).toBeDefined();
+      expect(meta!.policy).toBe("authTenant");
+    });
+
+    it("comments domain router should have factory metadata with authTenant policy", () => {
+      const comments = registry.find(
+        (r) => r.domain === "comments" && !r.legacy
+      );
+      expect(comments).toBeDefined();
+      expect(comments!.router).not.toBeNull();
+
+      const meta = getRouterMeta(comments!.router);
       expect(meta).toBeDefined();
       expect(meta!.policy).toBe("authTenant");
     });

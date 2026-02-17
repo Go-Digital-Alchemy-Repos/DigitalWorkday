@@ -33,7 +33,8 @@ import workspacesRouter from "./workspaces.router";
 import teamsRouter from "./teams.router";
 // tagsRouter: migrated to new router factory (server/http/domains/tags.router.ts) — Prompt #2
 // import tagsRouter from "./tags.router";
-import commentsRouter from "./comments.router";
+// commentsRouter: migrated to new router factory (server/http/domains/comments.router.ts) — Prompt #4
+// import commentsRouter from "./comments.router";
 // activityRouter: migrated to new router factory (server/http/domains/activity.router.ts)
 // import activityRouter from "./activity.router";
 import attachmentsRouter from "./attachments.router";
@@ -44,7 +45,8 @@ router.use(workspacesRouter);
 router.use(teamsRouter);
 // TODO: tagsRouter migrated to server/http/domains/tags.router.ts (Prompt #2)
 // router.use(tagsRouter);
-router.use(commentsRouter);
+// commentsRouter: migrated to server/http/domains/comments.router.ts (Prompt #4)
+// router.use(commentsRouter);
 // activityRouter: migrated to server/http/domains/activity.router.ts
 // router.use(activityRouter);
 router.use(attachmentsRouter);

@@ -138,6 +138,20 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
 |--------|-----------|--------|-------------|--------|------|
 | system-integrations | `/api/v1/system` | `superUser` | `server/http/domains/system.router.ts` | #1 (pilot) | Feb 2026 |
 | tags | `/api` | `authTenant` | `server/http/domains/tags.router.ts` | #2 | Feb 2026 |
+| activity | `/api` | `authTenant` | `server/http/domains/activity.router.ts` | #3 | Feb 2026 |
+| comments | `/api` | `authTenant` | `server/http/domains/comments.router.ts` | #4 | Feb 2026 |
+
+### Comments Domain Migration Notes (Prompt #4)
+- **6 endpoints** migrated: GET/POST `/tasks/:taskId/comments`, PATCH/DELETE `/comments/:id`, POST `/comments/:id/resolve`, POST `/comments/:id/unresolve`
+- **Mixed URL prefixes**: Routes span `/tasks/:taskId/comments` and `/comments/:id`. Mounted at `/api` to preserve all paths.
+- **skipEnvelope: true** — Legacy handlers use `res.json()` directly. Envelope helpers available but not adopted to maintain response compatibility.
+- **Notification side-effects preserved**: POST comment handler includes @mention notifications, email outbox, and assignee notifications — all retained verbatim.
+- **Integration tests**: 9 smoke tests in `server/tests/integration/commentsRoutes.test.ts` covering auth rejection, tenant enforcement, route matching, and metadata.
+
+### Activity Domain Migration Notes (Prompt #3)
+- **2 endpoints** migrated: POST `/activity-log`, GET `/activity-log/:entityType/:entityId`
+- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
+- **Smallest migration**: Only 2 endpoints, no side-effects.
 
 ### Tags Domain Migration Notes (Prompt #2)
 - **6 endpoints** migrated: tag CRUD (GET, POST, PATCH, DELETE) + task-tag associations (POST, DELETE)
@@ -163,8 +177,8 @@ To migrate the next domain (Prompt #3):
 ### Recommended migration order (low to high risk):
 1. `/api/v1/system` — system integrations (DONE - Prompt #1 pilot)
 2. `/api` tags — tag CRUD + task-tag associations (DONE - Prompt #2)
-3. `/api` activity — activity log (2 endpoints, very small)
-4. `/api` comments — comment CRUD (small, self-contained)
+3. `/api` activity — activity log (DONE - Prompt #3)
+4. `/api` comments — comment CRUD (DONE - Prompt #4)
 5. `/api/v1/presence` — presence tracking (1 endpoint, self-contained)
 6. `/api/v1/ai` — AI routes (small, self-contained)
 7. `/api` attachments — attachment upload/download (medium)
