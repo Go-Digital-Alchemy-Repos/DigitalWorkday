@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare } from "lucide-react";
+import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare, Save, Check } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -494,15 +494,44 @@ export function SubtaskDetailDrawer({
               <SheetTitle className="sr-only">Subtask Details</SheetTitle>
               <StatusBadge status={subtask.status as any} />
             </div>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              aria-label="Close drawer"
-              data-testid="button-close-subtask-drawer"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-2">
+              {hasUnsavedChanges && (
+                <Button
+                  size="sm"
+                  onClick={handleSaveAll}
+                  className="h-8 bg-[#2563eb] text-white hover:bg-[#1d4ed8]"
+                  data-testid="button-header-save-subtask"
+                >
+                  <Save className="h-3.5 w-3.5 mr-1.5" />
+                  Save Subtask
+                </Button>
+              )}
+              {isActualSubtask && (
+                <Button
+                  size="sm"
+                  onClick={handleMarkComplete}
+                  disabled={toggleCompleteMutation.isPending}
+                  className="h-8 border border-[#7fb314] text-white bg-[#94c91a] hover:bg-[#8bbd18]"
+                  data-testid="button-header-mark-complete-subtask"
+                >
+                  {toggleCompleteMutation.isPending ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  {(subtask as Subtask).completed ? "Reopen" : "Mark Complete"}
+                </Button>
+              )}
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => onOpenChange(false)}
+                aria-label="Close drawer"
+                data-testid="button-close-subtask-drawer"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2 flex-wrap" data-testid="subtask-breadcrumbs">
             <button
@@ -990,16 +1019,6 @@ export function SubtaskDetailDrawer({
             </div>
           </ScrollArea>
 
-          <DrawerActionBar
-            showTimer={false}
-            showSave={hasUnsavedChanges}
-            onSave={handleSaveAll}
-            saveLabel="Save Subtask"
-            showComplete={isActualSubtask}
-            onMarkComplete={handleMarkComplete}
-            isCompleting={toggleCompleteMutation.isPending}
-            completeLabel={(subtask as Subtask).completed ? "Reopen" : "Mark Complete"}
-          />
         </div>
       </SheetContent>
     </Sheet>

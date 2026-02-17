@@ -738,6 +738,41 @@ export function TaskDetailDrawer({
               <StatusBadge status={task.status as any} />
             </div>
             <div className="flex items-center gap-2">
+              {isDirty && (
+                <Button
+                  size="sm"
+                  onClick={() => {
+                    if (title.trim() && title !== task.title) {
+                      onUpdate?.(task.id, { title: title.trim() });
+                    }
+                    if (description !== (task.description || "")) {
+                      onUpdate?.(task.id, { description });
+                    }
+                    markClean();
+                  }}
+                  className="h-8 bg-[#2563eb] text-white hover:bg-[#1d4ed8]"
+                  data-testid="button-header-save"
+                >
+                  <Save className="h-3.5 w-3.5 mr-1.5" />
+                  Save Task
+                </Button>
+              )}
+              {task.status !== "done" && (
+                <Button
+                  size="sm"
+                  onClick={handleMarkAsComplete}
+                  disabled={timeEntriesLoading || isCompletingTask}
+                  className="h-8 border border-[#7fb314] text-white bg-[#94c91a] hover:bg-[#8bbd18]"
+                  data-testid="button-header-mark-complete"
+                >
+                  {isCompletingTask ? (
+                    <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                  ) : (
+                    <Check className="h-3.5 w-3.5 mr-1.5" />
+                  )}
+                  {isCompletingTask ? "Completing..." : "Mark Complete"}
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -1251,29 +1286,13 @@ export function TaskDetailDrawer({
             </div>
           </div>
         </div>
-        <DrawerActionBar
-          showSave={isDirty}
-          onSave={() => {
-            if (title.trim() && title !== task.title) {
-              onUpdate?.(task.id, { title: title.trim() });
-            }
-            if (description !== (task.description || "")) {
-              onUpdate?.(task.id, { description });
-            }
-            markClean();
-          }}
-          showComplete={task.status !== "done"}
-          onMarkComplete={handleMarkAsComplete}
-          completeDisabled={timeEntriesLoading || isCompletingTask}
-          isCompleting={isCompletingTask}
-          extraActions={
-            activeTimer && !isTimerOnThisTask ? (
-              <Badge variant="secondary" className="text-xs">
-                Timer running on another task
-              </Badge>
-            ) : undefined
-          }
-        />
+        {activeTimer && !isTimerOnThisTask && (
+          <div className="px-3 sm:px-6 py-2 border-t bg-background shrink-0">
+            <Badge variant="secondary" className="text-xs">
+              Timer running on another task
+            </Badge>
+          </div>
+        )}
         </div>
       </SheetContent>
 
