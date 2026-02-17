@@ -1,0 +1,146 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+BUG:
+@mentions are not working in task comments (users type @name, submit comment, but mentioned users do not get notified / mention is not recorded / highlight doesn't appear). This must be investigated and fixed end-to-end.
+
+PRIORITIES:
+1) Preserve existing comment behavior and response shapes (comments router may use skipEnvelope: true).
+2) Fix mentions detection + persistence + notifications + realtime emits.
+3) Add tests + logging so this doesn’t regress.
+4) Do NOT change database schema unless absolutely necessary (prefer using existing mentions tables/fields already in schema).
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change comment endpoint URLs.
+- Do NOT change auth/session/tenant semantics.
+- Do NOT break existing notifications side-effects (email, assignee alerts).
+- Prefer reuse of existing services (mentions, notifications, chat, activity).
+
+DELIVERABLES:
+A) Root-cause analysis: identify why mentions are failing (frontend payload, backend parsing, handler not called, tenant scoping, response mismatch, etc.)
+B) Fix implemented with minimal surface area.
+C) Tests:
+   - at least 5 backend integration tests around mentions in comments
+   - at least 2 frontend/unit tests (if test infra exists) OR a documented manual verification script.
+D) Instrumentation:
+   - add request-id aware structured logs when mentions are parsed and notifications are queued/emitted
+E) Docs note in docs/architecture/routes.md or a bugfix note: “Task comment mentions fixed”.
+
+INVESTIGATION PLAN (must follow in order):
+
+1) Reproduce the bug quickly
+- Find the task comment composer UI component and confirm the expected mention syntax:
+  - is it plain "@username"?
+  - "@First Last"?
+  - does it insert a special token like @[display](userId) or <span data-mention-id="..."> ?
+- Identify how the comment content is sent:
+  - JSON fields: body/content/html/text? mentions array?
+- Add a TEMP dev-only console/log to capture the outgoing payload when submitting a comment.
+
+2) Determine where mentions SHOULD be detected
+Search the repo for:
+- "mention" "mentions" "parseMentions"
+- "extractMentions"
+- "MENTION"
+- "notifyMentions"
+- any DB table usage for mentions (e.g., comment_mentions, mentions, notification_mentions)
+Identify the existing canonical mentions pipeline:
+- Which service extracts mentioned userIds?
+- Where is it called? (comments create handler? notification worker? chat service?)
+- How does it notify?
+  - inserts notification rows?
+  - emits socket events?
+  - emails?
+
+3) Trace the current comment-create path
+- Locate the migrated comments router handlers (server/http/domains/comments.router.ts or controllers it calls).
+- Find the create comment handler and verify:
+  - It calls a service that creates the comment in DB
+  - It triggers side-effects for mentions (or should)
+- Confirm tenant scoping and membership checks:
+  - mentioned user must be in same tenant/workspace/project to notify (whatever current rules are)
+
+4) Identify the failure point (choose one or more)
+Common causes to check explicitly:
+A) Frontend now sends HTML/structured tokens but backend expects plain text (or vice versa)
+B) Backend mention parser only runs for chat messages, not comments, due to refactor/regression
+C) Comments create handler no longer calls the mention notifier after migration
+D) Mentions are parsed but filtered out due to:
+   - tenant mismatch
+   - inactive users
+   - missing workspace membership join
+E) Notifications are created but not delivered:
+   - socket emit room mismatch
+   - notification type not handled in frontend
+   - email not triggered due to missing template/type
+
+FIX PLAN (implement smallest correct fix):
+
+5) Standardize what we parse
+- Decide the canonical source text for parsing:
+  - Prefer a "plainText" field if your editor provides it.
+  - If only HTML exists, implement a safe HTML-to-text extraction before parsing mentions (strip tags).
+- If the editor emits explicit mention metadata (e.g., list of mentioned userIds), trust it and skip brittle parsing.
+
+6) Fix backend to reliably extract mentioned userIds during comment creation
+- In the comments create handler/service:
+  - Extract mentioned userIds using one unified helper, e.g.:
+    server/services/mentions/extractMentionUserIds.ts
+  - If helper exists already, reuse it; otherwise implement it.
+- Ensure extraction supports the actual frontend format:
+  - Case 1: explicit mentions array in payload -> use it
+  - Case 2: markdown-like "@username" -> map usernames to userIds (tenant-scoped)
+  - Case 3: HTML tokens -> parse data-mention-id/userId or convert to text then match
+
+7) Persist and notify (re-use existing infra)
+- If there is an existing mentions table or join table for comments:
+  - Insert mention records (commentId, mentionedUserId, tenantId, createdAt)
+- Trigger notifications:
+  - Create notification rows for mentioned users
+  - Emit socket notification event to user room (ensure tenant scoping)
+  - If email notifications exist for mentions, enqueue them as currently designed
+IMPORTANT: preserve existing "assignee alerts" and other comment side effects.
+
+8) Ensure response shape compatibility
+- Keep skipEnvelope behavior unchanged for the comments router.
+- Do not change the comment create response payload except to include mention metadata IF it already existed historically.
+- If mention metadata was previously present but missing now, restore it.
+
+TESTING REQUIREMENTS:
+
+9) Backend integration tests (>=5)
+Create/extend: server/tests/integration/commentsMentions.test.ts
+Scenarios:
+1) Creating a task comment with a mention produces a mention record (or at least a mention notification) for the mentioned user.
+2) Mention does NOT notify users in a different tenant.
+3) Mention of a non-existent username does not crash and does not notify.
+4) Mention list de-duplicates same user mentioned twice.
+5) Mention notifications are not created for the author themselves (unless current behavior says otherwise).
+
+If socket notifications are part of the flow and test harness supports it:
+- add a test that a socket emit is triggered (mock emitter or spy).
+
+10) Frontend tests (optional depending on infra)
+If you have Vitest/Jest for frontend:
+- Add a unit test for the mention serializer (the function that builds the payload).
+Otherwise:
+- Add a short manual verification checklist to docs/dev/verification.md:
+  - create comment with @mention
+  - confirm notification appears for mentioned user
+  - confirm highlight/rendering if supported
+
+INSTRUMENTATION:
+
+11) Add request-id aware logs
+- In comment create flow, log:
+  - requestId, tenantId, authorId, commentId
+  - extracted mention userIds (count, not full PII)
+  - notification ids created
+Use existing logger; do not spam logs at info level in production (use debug level if available).
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+- root cause found (exact failure point)
+- files changed
+- tests added and their coverage
+- how to verify manually
+- any migration debt noted (e.g., editor format inconsistency)

@@ -1,0 +1,106 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Begin a Mobile-First UX sprint by auditing and improving the responsive layout foundation across the frontend without changing business logic or API behavior.
+
+This phase focuses on:
+- layout consistency
+- spacing scale
+- container widths
+- scroll behavior
+- tap targets
+- safe mobile defaults
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change API calls.
+- Do NOT change routes.
+- Do NOT change component behavior logic.
+- Do NOT remove desktop functionality.
+- Changes should be CSS/layout/system-level improvements.
+
+DELIVERABLES:
+1) Mobile layout audit findings (in code comments + docs/mobile-audit.md).
+2) Updated responsive container system.
+3) Consistent mobile spacing scale.
+4) Safe scroll behavior for headers/content.
+5) Improved tap target sizing for interactive elements.
+6) No visual regressions on desktop.
+
+PHASE 1 IMPLEMENTATION:
+
+A) Layout Audit
+Audit:
+- App shell layout
+- Sidebar behavior
+- Header height consistency
+- Scroll containers
+- Forms
+- Tables
+- Chat layout
+- Time tracking UI
+- CRM screens
+- Admin pages
+
+Create:
+docs/mobile-audit.md
+with sections:
+- Layout issues
+- Interaction issues
+- Component density issues
+- Scroll issues
+- Keyboard overlap risks
+
+B) Responsive Container System
+Standardize page containers:
+- Add a shared PageContainer component if missing.
+- Ensure:
+  max-w-screen-xl
+  px-4 sm:px-6 lg:px-8
+  mx-auto
+
+Ensure every page uses the same container pattern.
+
+C) Spacing Scale Improvements
+Audit Tailwind spacing usage and normalize:
+- Buttons: min-h-[44px]
+- Inputs: min-h-[44px]
+- List items: comfortable vertical spacing
+- Cards: consistent padding (p-4 mobile, p-6 desktop)
+
+Avoid tiny tap targets.
+
+D) Header + Scroll Safety
+Ensure:
+- Header does not overlap content on mobile
+- Main content scroll container is correct
+- Avoid nested scroll containers unless necessary
+- Chat view respects viewport height
+
+E) Tables → Mobile-safe behavior
+Without redesigning tables:
+- ensure overflow-x-auto wrappers exist
+- ensure table cells wrap safely on mobile
+- avoid layout breaking on small screens
+
+F) Form usability improvements
+Ensure:
+- labels always visible
+- inputs full width on mobile
+- spacing between inputs comfortable
+- submit buttons easy to tap
+
+G) Verification
+Verify:
+- Dashboard loads correctly on mobile viewport
+- Tasks page usable at 375px width
+- Chat usable on mobile viewport
+- Time tracking usable on mobile viewport
+- CRM pages usable on mobile viewport
+- Admin pages usable on mobile viewport
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+- list of layout files updated
+- summary of audit findings
+- components standardized
+- any mobile risks discovered
