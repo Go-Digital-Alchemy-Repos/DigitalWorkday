@@ -140,6 +140,19 @@ function formatDateSeparator(date: Date | string): string {
   });
 }
 
+function formatTimeGapSeparator(date: Date | string): string {
+  const d = new Date(date);
+  return d.toLocaleDateString([], {
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+  }) + " at " + d.toLocaleTimeString([], {
+    hour: "numeric",
+    minute: "2-digit",
+  });
+}
+
 function isSameDay(d1: Date | string, d2: Date | string): boolean {
   return new Date(d1).toDateString() === new Date(d2).toDateString();
 }
@@ -167,11 +180,12 @@ interface MessageGroup {
   author: ChatMessage["author"];
   messages: ChatMessage[];
   dateSeparator?: string;
-  hasUnreadDivider?: boolean;
-  unreadDividerBeforeIndex?: number;
+  timeGapSeparator?: string;
 }
 
-function groupMessages(messages: ChatMessage[], firstUnreadMessageId?: string | null): MessageGroup[] {
+const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+
+function groupMessages(messages: ChatMessage[], _firstUnreadMessageId?: string | null): MessageGroup[] {
   const groups: MessageGroup[] = [];
   let currentGroup: MessageGroup | null = null;
   let lastDate: string | null = null;
@@ -187,9 +201,17 @@ function groupMessages(messages: ChatMessage[], firstUnreadMessageId?: string | 
       lastDate = messageDate;
     }
 
-    const isFirstUnread = message.id === firstUnreadMessageId || message._tempId === firstUnreadMessageId;
+    let timeGapSeparator: string | undefined;
+    if (!needsDateSeparator && previousMessage) {
+      const gap = new Date(message.createdAt).getTime() - new Date(previousMessage.createdAt).getTime();
+      if (gap >= TWO_HOURS_MS) {
+        timeGapSeparator = formatTimeGapSeparator(message.createdAt);
+      }
+    }
 
-    if (shouldGroup && currentGroup && !isFirstUnread) {
+    const needsNewGroup = timeGapSeparator != null;
+
+    if (shouldGroup && currentGroup && !needsNewGroup) {
       currentGroup.messages.push(message);
     } else {
       currentGroup = {
@@ -198,7 +220,7 @@ function groupMessages(messages: ChatMessage[], firstUnreadMessageId?: string | 
         author: message.author,
         messages: [message],
         dateSeparator: needsDateSeparator ? formatDateSeparator(message.createdAt) : undefined,
-        hasUnreadDivider: isFirstUnread,
+        timeGapSeparator,
       };
       groups.push(currentGroup);
     }
@@ -261,7 +283,6 @@ export function ChatMessageTimeline({
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const [isAtBottom, setIsAtBottom] = useState(true);
   const [hasNewMessages, setHasNewMessages] = useState(false);
-  const [showJumpToUnread, setShowJumpToUnread] = useState(!!firstUnreadMessageId);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const [longPressMessageId, setLongPressMessageId] = useState<string | null>(null);
@@ -290,7 +311,6 @@ export function ChatMessageTimeline({
   );
 
   useEffect(() => {
-    setShowJumpToUnread(!!firstUnreadMessageId);
     hasMarkedAsReadRef.current = false;
   }, [firstUnreadMessageId]);
 
@@ -314,25 +334,14 @@ export function ChatMessageTimeline({
     }
   }, []);
 
-  const unreadGroupIndex = useMemo(
-    () => messageGroups.findIndex((g) => g.hasUnreadDivider),
-    [messageGroups]
-  );
-
   const handleRangeChanged = useCallback(
-    (range: { startIndex: number; endIndex: number }) => {
-      if (
-        unreadGroupIndex >= 0 &&
-        !hasMarkedAsReadRef.current &&
-        onMarkAsRead &&
-        range.startIndex > firstItemIndex + unreadGroupIndex
-      ) {
+    (_range: { startIndex: number; endIndex: number }) => {
+      if (!hasMarkedAsReadRef.current && onMarkAsRead) {
         hasMarkedAsReadRef.current = true;
         onMarkAsRead();
-        setShowJumpToUnread(false);
       }
     },
-    [unreadGroupIndex, firstItemIndex, onMarkAsRead]
+    [onMarkAsRead]
   );
 
   const scrollToBottom = useCallback(() => {
@@ -343,18 +352,6 @@ export function ChatMessageTimeline({
     });
     setHasNewMessages(false);
   }, [messageGroups.length]);
-
-  const scrollToUnread = useCallback(() => {
-    const unreadIdx = messageGroups.findIndex((g) => g.hasUnreadDivider);
-    if (unreadIdx >= 0) {
-      virtuosoRef.current?.scrollToIndex({
-        index: unreadIdx,
-        behavior: "smooth",
-        align: "center",
-      });
-      setShowJumpToUnread(false);
-    }
-  }, [messageGroups]);
 
   const handleStartReached = useCallback(() => {
     if (hasMoreMessages && !isLoadingMore && onLoadMore) {
@@ -400,14 +397,16 @@ export function ChatMessageTimeline({
 
       return (
         <div className="px-3 sm:px-4" data-testid={`message-group-${group.id}`}>
-          {group.hasUnreadDivider && (
+          {group.timeGapSeparator && (
             <div
               className="flex items-center gap-4 py-3"
-              data-testid="unread-divider"
+              data-testid="time-gap-separator"
             >
-              <div className="flex-1 h-px bg-destructive" />
-              <span className="text-xs font-medium text-destructive px-2">New messages</span>
-              <div className="flex-1 h-px bg-destructive" />
+              <div className="flex-1 h-px bg-border" />
+              <span className="text-xs font-medium text-muted-foreground px-2 whitespace-nowrap">
+                {group.timeGapSeparator}
+              </span>
+              <div className="flex-1 h-px bg-border" />
             </div>
           )}
 
@@ -978,20 +977,6 @@ export function ChatMessageTimeline({
         </div>
       )}
 
-      {showJumpToUnread && firstUnreadMessageId && !hasNewMessages && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 z-10">
-          <Button
-            variant="secondary"
-            size="sm"
-            onClick={scrollToUnread}
-            className="shadow-lg gap-2"
-            data-testid="button-jump-to-unread"
-          >
-            <ArrowDown className="h-4 w-4" />
-            Jump to unread
-          </Button>
-        </div>
-      )}
     </div>
   );
 }

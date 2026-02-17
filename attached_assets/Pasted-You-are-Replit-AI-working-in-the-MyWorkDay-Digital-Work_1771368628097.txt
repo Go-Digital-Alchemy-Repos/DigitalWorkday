@@ -1,0 +1,99 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Add a lightweight, Apple-like / Slack-like sound layer for:
+- Chat message received (primary)
+- App notification received (secondary)
+- Message sent (micro feedback)
+
+Must be performant, non-intrusive, and safe with browser autoplay rules.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change backend APIs or socket event names.
+- Do NOT change DB schema.
+- Do NOT add lots of new sounds. Keep the system minimal.
+- Avoid heavy deps; prefer native Audio or WebAudio.
+- Must fail silently if audio playback is blocked.
+
+DELIVERABLES:
+1) A SoundManager (single shared module) with preload + play methods + throttling
+2) Sound assets placed in public (or equivalent static) path
+3) Integrations:
+   - play on incoming chat message (not from self)
+   - play on incoming notifications (not duplicates)
+   - play on message sent (on successful send or optimistic add)
+4) A simple user preference toggle:
+   - "Sounds: On/Off" (default Off until user enables OR default On if you already have a settings framework)
+   - optional volume slider (0–100)
+5) Documentation update (short): docs/mobile-audit.md and/or in-app Docs Library entry
+
+IMPLEMENTATION DETAILS:
+
+A) Add sound assets
+- Create: client/public/sounds/
+- Add 3 files:
+  - chat-received.mp3
+  - notification.mp3
+  - message-sent.mp3
+Use small (<30KB) short sounds.
+NOTE: Do not use Apple proprietary system sounds; use CC0/royalty-free “Apple-like” alternatives.
+
+B) Implement SoundManager
+Create: client/src/lib/sound/soundManager.ts
+
+Features:
+- preload() to create and cache Audio instances
+- play(name) method with:
+  - throttle (per sound and global, e.g. 250–400ms)
+  - volume control
+  - respects user setting: enabled/disabled
+  - respects document visibility (optional): if tab hidden, allow; if visible and user active, optional rule
+- handle autoplay restrictions:
+  - expose SoundManager.unlock() called once after first user interaction (click/tap)
+  - if play() fails, catch and no-op
+
+C) Store user preference
+If there is a settings store already:
+- add `soundEnabled` + `soundVolume`
+Else:
+- store in localStorage with a tiny hook `useSoundSettings()`
+
+Add a simple toggle location:
+- Settings page if present
+- otherwise add it to user menu / profile dropdown
+- default soundEnabled = false (safer) unless product preference is to enable by default
+
+D) Integrate with Chat
+Locate the socket message receive handler.
+On new message event:
+- if senderId !== currentUserId
+- if conversation is not muted (if mute exists) OR no mute concept, ignore
+- call SoundManager.play("chat-received")
+
+On message send success (or optimistic append):
+- call SoundManager.play("message-sent") with extra-throttle so rapid sends don't machine-gun.
+
+E) Integrate with Notifications
+Locate notification real-time handler / polling handler.
+On new notification received:
+- de-dupe by notification id
+- call SoundManager.play("notification")
+
+F) QA / Verification
+- Ensure no console errors when audio blocked
+- Ensure sounds play after enabling toggle and clicking once in app (unlock)
+- Ensure throttling works
+- Ensure no sound for self-sent incoming echo
+- Ensure no duplicate notification dings for same id
+
+G) Docs update
+Update docs/mobile-audit.md with "Sound layer" section:
+- which sounds exist
+- when they play
+- how to enable/disable
+
+OUTPUT REQUIREMENTS:
+- files changed
+- where settings toggle lives
+- integration points (chat receive, notification receive, message send)
+- any limitations (autoplay restrictions)
