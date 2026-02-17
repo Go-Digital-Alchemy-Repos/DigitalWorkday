@@ -49,7 +49,6 @@ integrations = ["javascript_database:1.0.0"]
 [userenv]
 
 [userenv.development]
-APP_ENCRYPTION_KEY = "7daNCify1MZK5HwLNw+ajASnFnSStKbgOgVmkJIWRFY="
 CRM_CLIENT_360_ENABLED = "true"
 CRM_PORTAL_ENABLED = "true"
 CRM_FILES_ENABLED = "true"
@@ -59,7 +58,6 @@ CRM_TIMELINE_ENABLED = "true"
 [userenv.production]
 FAST_STARTUP="true"
 AUTO_MIGRATE = "true"
-APP_ENCRYPTION_KEY = "7daNCify1MZK5HwLNw+ajASnFnSStKbgOgVmkJIWRFY="
 SKIP_PARITY_CHECK = "true"
 NODE_ENV = "production"
 
