@@ -19,7 +19,9 @@ import type { TaskAttachmentWithUser } from "@shared/schema";
 
 interface AttachmentUploaderProps {
   taskId: string;
-  projectId: string;
+  projectId: string | null;
+  onUploadSuccess?: () => void;
+  onDeleteSuccess?: () => void;
 }
 
 interface UploadingFile {
@@ -134,7 +136,7 @@ async function compressImageIfNeeded(file: File): Promise<{ file: File; mimeType
   });
 }
 
-export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProps) {
+export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDeleteSuccess }: AttachmentUploaderProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
@@ -198,6 +200,8 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
       queryClient.invalidateQueries({ 
         queryKey: ["/api/projects", projectId, "tasks", taskId, "attachments"] 
       });
+
+      onUploadSuccess?.();
 
       toast({
         title: "File uploaded",
@@ -313,6 +317,7 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
       queryClient.invalidateQueries({ 
         queryKey: ["/api/projects", projectId, "tasks", taskId, "attachments"] 
       });
+      onDeleteSuccess?.();
       toast({
         title: "Attachment deleted",
         description: "The attachment has been removed.",
@@ -332,14 +337,7 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
   }, []);
 
   if (!config?.configured) {
-    return (
-      <div className="mt-4 p-3 border rounded-md bg-muted/50">
-        <div className="flex items-center gap-2 text-muted-foreground text-sm">
-          <AlertCircle className="h-4 w-4" />
-          <span>File attachments are not configured.</span>
-        </div>
-      </div>
-    );
+    return null;
   }
 
   const completedAttachments = attachments.filter(a => a.uploadStatus === "complete");
@@ -474,6 +472,5 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
         )}
       </div>
     </div>
-  );
   );
 }
