@@ -237,9 +237,12 @@ export default function ChatPage() {
   // Delete channel confirmation dialog state
   const [deleteChannelDialogOpen, setDeleteChannelDialogOpen] = useState(false);
 
+  // URL-based conversation state management (shared hook for consistency)
+  const { searchString, getConversationFromUrl, updateUrl: updateUrlForConversation } = useChatUrlState();
+
   // Mobile keyboard-safe viewport offset
   const [keyboardOffset, setKeyboardOffset] = useState(0);
-  const composerRef = useRef<HTMLDivElement>(null);
+  const composerRef = useRef<HTMLFormElement>(null);
 
   useEffect(() => {
     if (!isMobile) return;
@@ -271,9 +274,6 @@ export default function ChatPage() {
   
   // Track pending messages by tempId for reliable reconciliation
   const pendingMessagesRef = useRef<Map<string, { body: string; timestamp: number }>>(new Map());
-
-  // URL-based conversation state management (shared hook for consistency)
-  const { searchString, getConversationFromUrl, updateUrl: updateUrlForConversation } = useChatUrlState();
 
   interface TeamUser {
     id: string;
@@ -1768,11 +1768,21 @@ export default function ChatPage() {
         </Tabs>
       </div>
 
-      <div className="flex-1 flex flex-col">
+      <div className={`flex-1 flex flex-col ${isMobile && !hasConversation ? "hidden" : ""}`}>
         {selectedChannel || selectedDm ? (
           <>
-            <div className="h-14 border-b flex items-center px-4 gap-2 justify-between">
-              <div className="flex items-center gap-2">
+            <div className="h-14 border-b flex items-center px-2 sm:px-4 gap-2 justify-between">
+              <div className="flex items-center gap-2 min-w-0">
+                {isMobile && (
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={handleMobileBack}
+                    data-testid="button-chat-back"
+                  >
+                    <ArrowLeft className="h-5 w-5" />
+                  </Button>
+                )}
                 {selectedChannel && (
                   <>
                     {selectedChannel.isPrivate ? (
@@ -1939,8 +1949,10 @@ export default function ChatPage() {
             )}
 
             <form 
+              ref={composerRef}
               onSubmit={handleSendMessage} 
-              className={`px-4 py-3 border-t transition-colors ${isDragOver ? "bg-accent/20 border-primary border-2 border-dashed" : ""}`}
+              className={`px-2 sm:px-4 py-2 sm:py-3 border-t transition-colors ${isDragOver ? "bg-accent/20 border-primary border-2 border-dashed" : ""}`}
+              style={isMobile && keyboardOffset > 0 ? { paddingBottom: `calc(${keyboardOffset}px + env(safe-area-inset-bottom, 0px))` } : undefined}
               onDragOver={handleDragOver}
               onDragLeave={handleDragLeave}
               onDrop={handleDrop}

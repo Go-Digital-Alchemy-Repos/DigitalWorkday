@@ -213,6 +213,28 @@ Add `overflow-x-auto` wrapper around all `<Table>` components to prevent horizon
 - **Dashboard summary**: Hidden on mobile (`hidden md:block`) to maximize task list space
 - **Task list**: Already responsive with `grid-cols-1 lg:grid-cols-2`
 
+### 6. Chat Mobile Navigation (Phase 3B — chat.tsx)
+- **Sidebar/conversation toggle**: On mobile, channel list and conversation area are mutually exclusive (`showMobileList` / `showMobileConversation`)
+- **Back button**: ArrowLeft button in conversation header navigates back to channel list, clears selected channel/DM
+- **Keyboard-safe composer**: `visualViewport` API tracks virtual keyboard height, applies dynamic `paddingBottom` to composer form via `keyboardOffset` state
+- **Responsive padding**: Conversation header `px-2 sm:px-4`, composer `px-2 sm:px-4 py-2 sm:py-3`
+- **Safe area insets**: Composer padding includes `env(safe-area-inset-bottom)` for notched devices
+
+### 7. Time Tracking Mobile (Phase 3C — time-tracking.tsx, my-time.tsx)
+- **MobileActiveTimerBar**: Persistent fixed bar at `bottom-16` (above MobileNavBar), shows running timer with pause/resume/stop controls, label truncation, `z-40`
+- **Dynamic content padding**: Main content uses `pb-28` when timer bar is active (vs `pb-16` without)
+- **ActiveTimerPanel responsive**: Timer icon `h-12 w-12 sm:h-16 sm:w-16`, text `text-3xl sm:text-4xl`, buttons stack vertically on small screens with `flex-col sm:flex-row`
+- **No-timer CTA**: Full-width Start Timer button on mobile (`w-full sm:w-auto`)
+- **Time entries list**: Card header stacks on mobile (`flex-col sm:flex-row`), entry rows wrap on mobile (`flex-col sm:flex-row`), duration/actions align left on mobile
+- **Add button**: Icon-only on mobile, "Add Manual Entry" text on desktop (`hidden sm:inline`)
+
+### 8. Cache Hardening (H1 — use-active-timer.ts, time-tracking.tsx)
+- **Optimistic updates**: pause, resume, stop, and delete mutations all use `onMutate` to optimistically update timer cache before server response
+- **Rollback on error**: All mutations restore previous timer state from `context.previousTimer` on failure
+- **Stats cache invalidation**: All timer and time-entry mutations (start, stop, create, update, delete) invalidate both `/api/time-entries` and `/api/time-entries/my/stats` query keys
+- **Cross-tab sync**: BroadcastChannel and localStorage fallback also invalidate stats cache
+- **Stop mutation**: Optimistically clears timer to `null` immediately, rolls back on error
+
 ## Verification Checklist
 
 - [ ] Task cards render with stacked layout on mobile (< 768px)
@@ -230,3 +252,12 @@ Add `overflow-x-auto` wrapper around all `<Table>` components to prevent horizon
 - [ ] Subtask drawer comments section renders and accepts input
 - [ ] Subtask drawer assignee picker uses MultiSelectAssignees component
 - [ ] Subtask drawer attachments section visible when project exists
+- [ ] Chat: mobile back button returns to channel list
+- [ ] Chat: only one panel visible at a time on mobile (list OR conversation)
+- [ ] Chat: composer adjusts for virtual keyboard on mobile
+- [ ] Timer bar appears above MobileNavBar when timer is active
+- [ ] Timer bar shows running time, label, pause/resume/stop
+- [ ] ActiveTimerPanel stacks vertically on small screens
+- [ ] Time entries list wraps to card layout on mobile
+- [ ] Stop timer immediately clears UI (optimistic update)
+- [ ] Stats dashboard updates after timer stop/time entry changes

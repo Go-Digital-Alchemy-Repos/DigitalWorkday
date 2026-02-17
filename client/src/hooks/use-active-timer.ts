@@ -289,20 +289,28 @@ export function useActiveTimer() {
       }
       return response.json();
     },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: [TIMER_QUERY_KEY] });
+      const previousTimer = queryClient.getQueryData<ActiveTimer | null>([TIMER_QUERY_KEY]);
+      queryClient.setQueryData<ActiveTimer | null>([TIMER_QUERY_KEY], null);
+      return { previousTimer };
+    },
     onSuccess: () => {
       invalidateTimer();
       broadcastTimerUpdate();
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
     },
-    onError: (error: Error) => {
-      // Do NOT clear timer on failure - keep it recoverable
+    onError: (error: Error, _, context) => {
+      if (context?.previousTimer) {
+        queryClient.setQueryData([TIMER_QUERY_KEY], context.previousTimer);
+      }
       toast({
         title: "Failed to save time entry",
         description: error.message || "Please try again. Your timer is still active.",
         variant: "destructive",
-        duration: 10000, // Keep error visible longer
+        duration: 10000,
       });
-      // Refetch to ensure UI stays in sync
       invalidateTimer();
     },
   });
@@ -319,11 +327,20 @@ export function useActiveTimer() {
       }
       return response.json();
     },
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: [TIMER_QUERY_KEY] });
+      const previousTimer = queryClient.getQueryData<ActiveTimer | null>([TIMER_QUERY_KEY]);
+      queryClient.setQueryData<ActiveTimer | null>([TIMER_QUERY_KEY], null);
+      return { previousTimer };
+    },
     onSuccess: () => {
       invalidateTimer();
       broadcastTimerUpdate();
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _, context) => {
+      if (context?.previousTimer) {
+        queryClient.setQueryData([TIMER_QUERY_KEY], context.previousTimer);
+      }
       toast({
         title: "Failed to discard timer",
         description: error.message || "Please try again",

@@ -181,9 +181,16 @@ function ActiveTimerPanel() {
   const stopMutation = useMutation({
     mutationFn: (data: { discard?: boolean; scope?: string; description?: string; taskId?: string | null; clientId?: string | null }) =>
       apiRequest("POST", "/api/timer/stop", data),
+    onMutate: async () => {
+      await queryClient.cancelQueries({ queryKey: ["/api/timer/current"] });
+      const previousTimer = queryClient.getQueryData(["/api/timer/current"]);
+      queryClient.setQueryData(["/api/timer/current"], null);
+      return { previousTimer };
+    },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
       if (variables.discard) {
         toast({ title: "Timer discarded" });
       } else {
@@ -196,7 +203,10 @@ function ActiveTimerPanel() {
       setStopClientId(null);
       setStopScope("in_scope");
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _, context: any) => {
+      if (context?.previousTimer) {
+        queryClient.setQueryData(["/api/timer/current"], context.previousTimer);
+      }
       toast({ title: "Failed to save entry", description: error.message, variant: "destructive" });
     },
   });
@@ -271,24 +281,24 @@ function ActiveTimerPanel() {
 
   if (!timer) {
     return (
-      <Card className="mb-6">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-4">
-              <div className="flex items-center justify-center h-16 w-16 rounded-full bg-muted">
-                <Timer className="h-8 w-8 text-muted-foreground" />
+      <Card className="mb-4 sm:mb-6">
+        <CardContent className="p-3 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className="flex items-center justify-center h-12 w-12 sm:h-16 sm:w-16 rounded-full bg-muted shrink-0">
+                <Timer className="h-6 w-6 sm:h-8 sm:w-8 text-muted-foreground" />
               </div>
               <div>
-                <p className="text-3xl tabular-nums font-bold text-foreground" data-testid="text-timer-display">
+                <p className="text-2xl sm:text-3xl tabular-nums font-bold text-foreground" data-testid="text-timer-display">
                   00:00:00
                 </p>
                 <p className="text-sm text-muted-foreground">No active timer</p>
               </div>
             </div>
             <Button
-              size="lg"
               onClick={handleStartTimer}
               disabled={startMutation.isPending}
+              className="w-full sm:w-auto"
               data-testid="button-start-timer"
             >
               <Play className="h-5 w-5 mr-2" />
@@ -302,17 +312,17 @@ function ActiveTimerPanel() {
 
   return (
     <>
-      <Card className="mb-6 border-primary/50">
-        <CardContent className="p-6">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center gap-4">
-              <div className={`flex items-center justify-center h-16 w-16 rounded-full ${
+      <Card className="mb-4 sm:mb-6 border-primary/50">
+        <CardContent className="p-3 sm:p-6">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4">
+            <div className="flex items-center gap-3 sm:gap-4">
+              <div className={`flex items-center justify-center h-12 w-12 sm:h-16 sm:w-16 rounded-full shrink-0 ${
                 timer.status === "running" ? "bg-primary/20 animate-pulse" : "bg-muted"
               }`}>
-                <Timer className={`h-8 w-8 ${timer.status === "running" ? "text-primary" : "text-muted-foreground"}`} />
+                <Timer className={`h-6 w-6 sm:h-8 sm:w-8 ${timer.status === "running" ? "text-primary" : "text-muted-foreground"}`} />
               </div>
               <div>
-                <p className="text-4xl tabular-nums font-bold text-foreground" data-testid="text-timer-display">
+                <p className="text-3xl sm:text-4xl tabular-nums font-bold text-foreground" data-testid="text-timer-display">
                   {formatDuration(displaySeconds)}
                 </p>
                 <Badge variant={timer.status === "running" ? "default" : "secondary"}>
@@ -324,9 +334,9 @@ function ActiveTimerPanel() {
               {timer.status === "running" ? (
                 <Button
                   variant="outline"
-                  size="lg"
                   onClick={() => pauseMutation.mutate()}
                   disabled={pauseMutation.isPending}
+                  className="flex-1 sm:flex-none"
                   data-testid="button-pause-timer"
                 >
                   <Pause className="h-5 w-5 mr-2" />
@@ -335,9 +345,9 @@ function ActiveTimerPanel() {
               ) : (
                 <Button
                   variant="outline"
-                  size="lg"
                   onClick={() => resumeMutation.mutate()}
                   disabled={resumeMutation.isPending}
+                  className="flex-1 sm:flex-none"
                   data-testid="button-resume-timer"
                 >
                   <Play className="h-5 w-5 mr-2" />
@@ -345,8 +355,8 @@ function ActiveTimerPanel() {
                 </Button>
               )}
               <Button
-                size="lg"
                 onClick={() => setStopDialogOpen(true)}
+                className="flex-1 sm:flex-none"
                 data-testid="button-stop-timer"
               >
                 <Square className="h-5 w-5 mr-2" />
@@ -634,6 +644,7 @@ function ManualEntryDialog({
     }) => apiRequest("POST", "/api/time-entries", data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
       toast({ title: "Time entry created" });
       onOpenChange(false);
       setTitle("");
@@ -1011,6 +1022,7 @@ function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerP
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
       toast({ title: "Time entry updated" });
       setHasChanges(false);
       onOpenChange(false);
@@ -1024,6 +1036,7 @@ function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerP
     mutationFn: () => apiRequest("DELETE", `/api/time-entries/${entry?.id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
       toast({ title: "Time entry deleted" });
       setDeleteDialogOpen(false);
       onOpenChange(false);
@@ -1454,6 +1467,7 @@ function TimeEntriesList() {
     mutationFn: (id: string) => apiRequest("DELETE", `/api/time-entries/${id}`),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
     },
   });
 
@@ -1469,11 +1483,11 @@ function TimeEntriesList() {
   return (
     <>
       <Card>
-        <CardHeader className="flex flex-row items-center justify-between">
+        <CardHeader className="flex flex-col sm:flex-row sm:items-center justify-between gap-2">
           <CardTitle className="text-lg font-medium">Time Entries</CardTitle>
           <div className="flex items-center gap-2">
             <Select value={dateFilter} onValueChange={(v) => setDateFilter(v as any)}>
-              <SelectTrigger className="w-32" data-testid="select-date-filter">
+              <SelectTrigger className="w-28 sm:w-32" data-testid="select-date-filter">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1484,8 +1498,8 @@ function TimeEntriesList() {
               </SelectContent>
             </Select>
             <Button onClick={() => setManualEntryOpen(true)} data-testid="button-add-manual-entry">
-              <Plus className="h-4 w-4 mr-2" />
-              Add Manual Entry
+              <Plus className="h-4 w-4 sm:mr-2" />
+              <span className="hidden sm:inline">Add Manual Entry</span>
             </Button>
           </div>
         </CardHeader>
@@ -1519,11 +1533,11 @@ function TimeEntriesList() {
                       {dayEntries.map((entry) => (
                         <div
                           key={entry.id}
-                          className="flex items-center justify-between p-3 rounded-lg bg-muted/50 hover-elevate"
+                          className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-muted/50 hover-elevate gap-2"
                           data-testid={`time-entry-${entry.id}`}
                         >
                           <div className="flex-1 min-w-0">
-                            <div className="flex items-center gap-2 mb-1">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
                               <p className="text-sm font-medium truncate">
                                 {entry.title || entry.description || "No title"}
                               </p>
@@ -1537,7 +1551,7 @@ function TimeEntriesList() {
                                 <Badge variant="outline" className="text-xs">Manual</Badge>
                               )}
                             </div>
-                            <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
                               {entry.client && (
                                 <span>{entry.client.displayName || entry.client.companyName}</span>
                               )}
@@ -1551,8 +1565,8 @@ function TimeEntriesList() {
                               )}
                             </div>
                           </div>
-                          <div className="flex items-center gap-3">
-                            <div className="text-right">
+                          <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+                            <div className="text-left sm:text-right">
                               <p className="text-sm tabular-nums font-medium">
                                 {formatDurationShort(entry.durationSeconds)}
                               </p>
@@ -1756,6 +1770,7 @@ export function TimeTrackingContent() {
         if (event.data?.type === "timer-updated") {
           refetchTimer();
           queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
         }
       };
     } catch {
@@ -1767,6 +1782,7 @@ export function TimeTrackingContent() {
       if (event.key === "timer-sync") {
         refetchTimer();
         queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+        queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
       }
     };
     window.addEventListener("storage", handleStorageEvent);

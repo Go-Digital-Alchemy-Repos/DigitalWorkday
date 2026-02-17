@@ -62,7 +62,7 @@ import ClientPortalApprovals from "@/pages/client-portal-approvals";
 import ClientPortalMessages from "@/pages/client-portal-messages";
 import { ClientPortalSidebar } from "@/components/client-portal-sidebar";
 import { ClientPortalMobileNav } from "@/components/client-portal-mobile-nav";
-import { GlobalActiveTimer } from "@/features/timer";
+import { GlobalActiveTimer, MobileActiveTimerBar } from "@/features/timer";
 import { ChatDrawerProvider, useChatDrawer } from "@/contexts/chat-drawer-context";
 import { GlobalChatDrawer } from "@/components/global-chat-drawer";
 import { TaskDrawerProvider } from "@/lib/task-drawer-context";
@@ -458,6 +458,12 @@ function TenantLayout() {
   const { isImpersonating } = useAppMode();
   const [, setLocation] = useLocation();
   const isMobile = useIsMobile();
+  const { data: activeTimerData } = useQuery<{ id: string } | null>({
+    queryKey: ["/api/timer/current"],
+    enabled: isMobile,
+    staleTime: 30000,
+  });
+  const hasActiveTimer = isMobile && !!activeTimerData;
   
   const style = {
     "--sidebar-width": "16rem",
@@ -501,7 +507,7 @@ function TenantLayout() {
                     <UserMenu />
                   </div>
                 </header>
-                <main className={`flex-1 overflow-hidden ${isMobile ? "pb-16" : ""}`}>
+                <main className={`flex-1 overflow-hidden ${hasActiveTimer ? "pb-28" : isMobile ? "pb-16" : ""}`}>
                   <ErrorBoundary>
                     <TenantRouter />
                   </ErrorBoundary>
@@ -509,6 +515,7 @@ function TenantLayout() {
               </div>
             </div>
           </div>
+          {isMobile && <MobileActiveTimerBar />}
           {isMobile && <MobileNavBar />}
           <GlobalChatDrawer />
           </TenantContextGate>
