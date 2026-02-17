@@ -979,7 +979,7 @@ export function TaskDetailDrawer({
           </div>
 
           <div 
-            className="p-3 sm:p-4 bg-[#d1f6ff4d] dark:bg-[#1a2e35] border border-[#ade8f5] dark:border-[#2a4a54]"
+            className="p-3 sm:p-4 dark:bg-[#1a2e35] border border-[#ade8f5] dark:border-[#2a4a54] bg-[#1e1e1e]"
             style={{ borderRadius: "10px" }}
           >
             <div className="space-y-2">
