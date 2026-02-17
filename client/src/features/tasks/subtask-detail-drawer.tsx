@@ -643,15 +643,20 @@ export function SubtaskDetailDrawer({
               <Separator />
 
               {projectId && (
-                <>
+                <div 
+                  className="p-3 sm:p-4 bg-[#edebff4d] border border-[#d6d2ff]"
+                  style={{ borderRadius: "10px" }}
+                >
                   <AttachmentUploader taskId={subtask.id} projectId={projectId} />
-                  <Separator />
-                </>
+                </div>
               )}
 
-              <div className="space-y-2">
+              <div 
+                className="p-3 sm:p-4 bg-[#d1f6ff4d] border border-[#ade8f5]"
+                style={{ borderRadius: "10px" }}
+              >
                 <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+                  <label className="flex items-center gap-2 font-medium text-[#171717] text-[16px]">
                     <Tag className="h-3.5 w-3.5" />
                     Tags
                   </label>
@@ -769,7 +774,7 @@ export function SubtaskDetailDrawer({
                     </Popover>
                   )}
                 </div>
-                <div className="flex flex-wrap gap-1">
+                <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center">
                   {(isActualSubtask && loadingTags) ? (
                     <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
                   ) : (
@@ -810,7 +815,11 @@ export function SubtaskDetailDrawer({
               <Separator />
 
               {isActualSubtask && (
-                <div className="rounded-md bg-muted/30 p-3 sm:p-4" data-testid="subtask-comments-section">
+                <div 
+                  className="p-3 sm:p-4 bg-[#c2dfff4d] border border-[#adc6e6]"
+                  style={{ borderRadius: "10px" }}
+                  data-testid="subtask-comments-section"
+                >
                   <CommentThread
                     comments={subtaskComments}
                     taskId={subtask.id}
@@ -821,8 +830,6 @@ export function SubtaskDetailDrawer({
                     onResolve={(id) => resolveCommentMutation.mutate(id)}
                     onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
                     users={availableUsers}
-                    title="Comments"
-                    placeholder="Write a comment..."
                   />
                 </div>
               )}

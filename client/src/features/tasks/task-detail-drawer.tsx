@@ -921,7 +921,12 @@ export function TaskDetailDrawer({
           <Separator />
 
           {task.projectId && (
-            <AttachmentUploader taskId={task.id} projectId={task.projectId} />
+            <div 
+              className="p-3 sm:p-4 bg-[#edebff4d] border border-[#d6d2ff]"
+              style={{ borderRadius: "10px" }}
+            >
+              <AttachmentUploader taskId={task.id} projectId={task.projectId} />
+            </div>
           )}
           {!task.projectId && (
             <div className="text-sm text-muted-foreground">
