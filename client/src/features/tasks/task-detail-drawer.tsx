@@ -515,6 +515,7 @@ export function TaskDetailDrawer({
       await updateTaskStatusMutation.mutateAsync("done");
       toast({ title: "Task completed", description: `"${task?.title}" marked as done` });
       resetCompletionState();
+      onOpenChange(false);
     } catch (error) {
       toast({ title: "Failed to complete task", variant: "destructive" });
     } finally {
@@ -567,6 +568,7 @@ export function TaskDetailDrawer({
         description: `Logged ${completionTimeHours}h ${completionTimeMinutes}m for "${task?.title}"` 
       });
       resetCompletionState();
+      onOpenChange(false);
     } catch (error) {
       toast({ title: "Failed to complete task", variant: "destructive" });
     } finally {
@@ -955,7 +957,7 @@ export function TaskDetailDrawer({
 
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <label className="flex items-center gap-2 font-medium text-muted-foreground text-[16px]">
                 <Tag className="h-3.5 w-3.5" />
                 Tags
               </label>
