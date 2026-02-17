@@ -240,7 +240,7 @@ export function SubtaskList({
   return (
     <div className="space-y-2" data-testid="subtask-list">
       <div className="flex items-center justify-between">
-        <h4 className="font-medium text-[18px]">
+        <h4 className="font-medium text-[16px]">
           Subtasks
           {subtasks.length > 0 && (
             <span className="ml-2 text-xs text-muted-foreground">
