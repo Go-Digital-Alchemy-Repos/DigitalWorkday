@@ -1,0 +1,116 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL (Track A / Prompt #2):
+Migrate ONE additional legacy API domain to the new standardized route convention using:
+- server/http/routerFactory.ts policies
+- server/http/routeRegistry.ts as the only mount source
+- server/http/mount.ts as the only app-level mounting entry point
+While preserving all existing URLs and behavior.
+
+This prompt should migrate a real legacy domain (recommended order):
+1) Projects/Tasks (preferred), OR
+2) CRM (clients/contacts/divisions/notes), OR
+3) Time entries / timers
+
+Pick the domain that:
+- has the smallest legacy router footprint (fewest endpoints/files)
+- is not chat/webhooks/auth
+If unsure, choose CRM first.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change URLs.
+- Do NOT change database schema.
+- Do NOT change auth/session behavior.
+- Do NOT delete legacy routes yet.
+- The only acceptable behavior changes are: improved envelope helpers available and standardized policy metadata (but responses must remain compatible).
+
+DELIVERABLES:
+1) New domain router file(s) implemented via routerFactory, mounted through routeRegistry.
+2) Legacy router for that domain is no longer mounted directly (or is mounted only as a fallback/compat route) WITHOUT changing URLs.
+3) Tests updated/added:
+   - Policy drift coverage includes the new domain’s mount
+   - At least 3 “smoke” integration tests for the migrated domain endpoints using supertest (or your existing test harness)
+4) Docs updated with:
+   - “Migrated domains” list
+   - Next migration candidate
+   - Any gotchas encountered
+
+STEP-BY-STEP:
+
+A) Locate the legacy domain
+1) Find where the domain is currently mounted:
+   - Search in server/routes/index.ts and any legacy router aggregator for mounts like:
+     /api/v1/projects, /api/projects, /api/v1/crm, /api/v1/clients, etc.
+2) Identify the legacy router module(s) that implement it.
+3) Inventory endpoints for the chosen domain:
+   - method + path
+   - auth required?
+   - tenant required?
+   - super-admin only?
+   - any public endpoints? (should be rare here)
+
+B) Create the new domain router using routerFactory
+1) Create a new router file following the pilot pattern, e.g.:
+   - server/features/projects/router.ts   (if Projects chosen)
+   - server/features/crm/router.ts        (if CRM chosen)
+   - server/features/time/router.ts       (if Time chosen)
+
+2) Use routerFactory to construct the router with the correct policy:
+   - Most of these should use authTenant (or whatever your routerFactory calls it: authTenant / authAndTenant).
+   - Do NOT apply auth/tenant middleware inside individual routes unless absolutely required; prefer policy at router boundary.
+
+3) Port endpoints from the legacy router:
+   - Preserve handlers where possible by importing and reusing existing controller/service functions.
+   - If legacy router is tightly coupled, you may wrap it:
+     - Create a compatibility adapter that mounts the legacy router INSIDE a factory router that applies policy + metadata,
+       while you incrementally extract endpoints later.
+     - But the preference is: move endpoints file-by-file into the new router.
+
+C) Register the new router in routeRegistry as canonical for that domain
+1) In server/http/routeRegistry.ts:
+   - Add the new router mount with the same mount path as the legacy one.
+   - Ensure policy metadata is correct.
+2) Remove or disable the legacy direct mount for that path.
+   - If you need a temporary fallback, mount legacy under a hidden/internal path only (NOT publicly documented),
+     but prefer no fallback unless necessary.
+
+D) Avoid double-guards
+Confirm the migrated domain does NOT apply auth/tenant twice:
+- If legacy handlers assume tenant context exists, that’s fine.
+- If the legacy router itself already applies tenant middleware internally:
+  - Remove those internal middleware calls if safe, OR
+  - Use a routerFactory policy variant that omits tenant middleware for that router and rely on legacy internal enforcement.
+  - Document the choice as a “migration debt” note in docs/architecture/routes.md.
+
+E) Tests
+1) Extend existing policy drift tests if needed:
+   - Ensure the new domain mount declares an allowed policy.
+   - Ensure the allowlist did not change unexpectedly.
+2) Add a new integration test file (Vitest + Supertest):
+   Example:
+   - server/test/integration/projectsRoutes.test.ts
+   OR server/test/integration/crmRoutes.test.ts
+
+Minimum smoke tests (3):
+- One “list” endpoint returns 401/403 appropriately when unauthenticated
+- One authenticated request in a tenant context returns 200 (or expected shape)
+- One cross-tenant attempt is blocked (if your test harness can create two tenants)
+
+If setting up true auth sessions is heavy in tests:
+- Use existing test utilities (login helper / seeded session)
+- Or add a minimal test-only session injection helper if the repo already supports it
+Do NOT weaken production auth to make tests easier.
+
+F) Docs updates
+Update docs/architecture/routes.md:
+- Add the new migrated domain + mount path + policy
+- Add a “migration checklist” section capturing anything learned (double middleware, versioning oddities, etc.)
+- Update recommended order for remaining domains
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+1) Files changed/added with purpose notes
+2) What domain was migrated and how many endpoints moved
+3) Any middleware duplication issues discovered and how you handled them
+4) What the next domain migration should be (Prompt #3 recommendation)
+5) Any test setup adjustments made (login helper, tenant seeding, etc.)
