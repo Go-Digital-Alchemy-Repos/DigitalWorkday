@@ -29,7 +29,8 @@ import superChatExportRouter from "./super/chatExport.router";
 import { searchRouter } from "./modules/search/search.router";
 // tasksRouter (task-core): migrated to server/http/domains/tasks.router.ts (Prompt #12)
 // import tasksRouter from "./tasks.router";
-import subtasksRouter from "./subtasks.router";
+// subtasksRouter: migrated to server/http/domains/subtasks.router.ts (Prompt #13)
+// import subtasksRouter from "./subtasks.router";
 // timeTrackingRouter: migrated to server/http/domains/time.router.ts (Prompt #10)
 // import timeTrackingRouter from "./timeTracking.router";
 import clientsRouter from "./clients.router";
@@ -69,7 +70,8 @@ router.use(clientsRouter);
 // router.use(timeTrackingRouter);
 // tasksRouter (task-core): migrated to server/http/domains/tasks.router.ts (Prompt #12)
 // router.use(tasksRouter);
-router.use(subtasksRouter);
+// subtasksRouter: migrated to server/http/domains/subtasks.router.ts (Prompt #13)
+// router.use(subtasksRouter);
 router.use(searchRouter);
 router.use(featuresRoutes);
 // timerRoutes: migrated to server/http/domains/time.router.ts (Prompt #10)

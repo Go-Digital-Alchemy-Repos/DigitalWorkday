@@ -233,20 +233,31 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
   - POST `/tasks/:taskId/childtasks` inherits parent's projectId/sectionId. Max 2-level depth enforced.
   - PATCH `/tasks/:id` sends notifications on status changes (completed, other status transitions).
   - Real-time events: `emitTaskCreated/Updated/Deleted/Moved`, `emitMyTaskCreated/Updated/Deleted`.
-- **Legacy split**: Subtask endpoints (14) remain in `server/routes/subtasks.router.ts` (extracted from tasks.router.ts) — mounted via legacy routes/index.ts. Task-core mount disabled.
+- **Legacy split**: Subtask endpoints (14) migrated in Slice 3 (Prompt #13) — see below.
 - **Policy drift tests**: 23 tests in `server/tests/tasks-router-policy.test.ts` (22 auth rejection + 1 factory metadata).
 - **Integration tests**: 31 tests in `server/tests/integration/tasksRoutes.test.ts` covering auth rejection (live + mini app), tenant enforcement (4 tests), behavior assertions (6 tests: not-found → 404), route matching (8 tests), and registry metadata.
-- **Next**: Slice 3 = Subtasks + subtask-tag linkage. See endpoint inventory below.
 
-#### Slice 3 Plan: Subtasks (Prompt #13)
-Endpoints from `server/routes/subtasks.router.ts` (14 endpoints):
-- GET/POST `/tasks/:taskId/subtasks`
-- PATCH/DELETE `/subtasks/:id`
-- POST `/subtasks/:id/move`
-- GET `/subtasks/:id/full`
-- GET/POST/DELETE `/subtasks/:id/assignees`
-- GET/POST/DELETE `/subtasks/:id/tags`
-- GET/POST `/subtasks/:subtaskId/comments`
+### Subtasks Domain Migration Notes (Prompt #13 — Slice 3: Subtasks)
+- **14 endpoints** migrated from `server/routes/subtasks.router.ts`:
+  - **Subtask CRUD** (4): GET/POST `/tasks/:taskId/subtasks`, PATCH/DELETE `/subtasks/:id`
+  - **Subtask Reorder** (1): POST `/subtasks/:id/move`
+  - **Subtask Detail** (1): GET `/subtasks/:id/full`
+  - **Subtask Assignees** (3): GET/POST `/subtasks/:id/assignees`, DELETE `/subtasks/:subtaskId/assignees/:userId`
+  - **Subtask Tags** (3): GET/POST `/subtasks/:id/tags`, DELETE `/subtasks/:subtaskId/tags/:tagId`
+  - **Subtask Comments** (2): GET/POST `/subtasks/:subtaskId/comments`
+- **skipEnvelope: true** — All handlers use `res.json()` directly.
+- **Tenancy-aware**: Uses `getEffectiveTenantId()` with super-user fallback for subtask CRUD/delete, comment listing/creation. Parent task tenant validation on create/update/delete.
+- **Key behaviors preserved**:
+  - POST `/tasks/:taskId/subtasks` validates parent task tenant ownership, emits `emitSubtaskCreated`.
+  - PATCH `/subtasks/:id` validates parent task ownership, date coercion for dueDate, emits `emitSubtaskUpdated`.
+  - DELETE `/subtasks/:id` validates parent task ownership, emits `emitSubtaskDeleted`.
+  - POST `/subtasks/:subtaskId/comments` handles @mentions (createCommentMention, notifyCommentMention), assignee notifications (notifyCommentAdded), email outbox for mention emails.
+  - Duplicate assignee/tag detection via PostgreSQL unique constraint (error code 23505 → 409 Conflict).
+- **Task-Tag linkage**: Already migrated in Tags router (Prompt #2) — POST/DELETE `/tasks/:taskId/tags` in `server/http/domains/tags.router.ts`. No separate taskTags router needed.
+- **Policy drift tests**: 15 tests in `server/tests/subtasks-router-policy.test.ts` (14 auth rejection + 1 factory metadata).
+- **Integration tests**: 32 tests in `server/tests/integration/subtasksRoutes.test.ts` covering auth rejection (live 8 + mini app 6), tenant enforcement (4 tests), behavior assertions (7 tests: not-found → 404, validation → 400), route matching (6 tests), and registry metadata.
+- **Tasks/Subtasks migration complete**: All 36 original endpoints from legacy `tasks.router.ts` now migrated (22 tasks + 14 subtasks).
+- **Next**: Remaining legacy domains — workspaces, teams, users, clients, CRM, search, super-admin, or shift to Track B/C/D.
 
 ### Time Domain Migration Notes (Prompt #10)
 - **18 endpoints** migrated from two legacy files:
@@ -332,10 +343,10 @@ To migrate the next domain (Prompt #3):
 11. `/api` projects — project CRUD, members, visibility, sections, reorder (DONE - Prompt #11, 18 endpoints)
     - Dashboard endpoints (`/api/v1/projects/*` analytics/forecast) remain legacy — candidate Slice 1b
 12. `/api` tasks — task CRUD, assignees, watchers, personal tasks/sections, move, child tasks (DONE - Prompt #12, 22 endpoints)
-    - Subtask endpoints (14) remain in `server/routes/subtasks.router.ts` — Slice 3
-13. `/api` subtasks — subtask CRUD, assignees, tags, comments (NEXT — Prompt #13, 14 endpoints)
-14. `/api/v1/super` — super admin (large, many sub-routers)
-15. `/api` — remaining main domain routes (largest, final migration)
+13. `/api` subtasks — subtask CRUD, move, assignees, tags, comments (DONE - Prompt #13, 14 endpoints)
+    - Task-tag linkage (POST/DELETE `/tasks/:taskId/tags`) already in tags.router.ts — no separate taskTags router needed
+14. `/api` — remaining legacy domains: workspaces, teams, users, clients, CRM, search (NEXT)
+15. `/api/v1/super` — super admin (large, many sub-routers)
 
 ### Known Risks
 
