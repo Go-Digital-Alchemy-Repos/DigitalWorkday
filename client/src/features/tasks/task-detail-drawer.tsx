@@ -931,7 +931,7 @@ export function TaskDetailDrawer({
 
           <Separator />
 
-          <div className="rounded-md p-3 sm:p-4 bg-[#fff9eb4d]">
+          <div className="rounded-md p-3 sm:p-4 bg-[#e3e3e34d]">
             <div className="flex items-center justify-between mb-3">
               <label className="flex items-center gap-2 font-medium text-[#171717] text-[16px]">
                 <Layers className="h-3.5 w-3.5" />
