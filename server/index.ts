@@ -2,7 +2,7 @@ import "dotenv/config";
 // Import config early to validate env vars before anything else runs
 import { config, logConfigStatus } from "./config";
 import express, { type Request, Response, NextFunction } from "express";
-import { registerRoutes } from "./routes";
+import { mountAllRoutes } from "./http/mount";
 import { serveStatic } from "./static";
 import { createServer } from "http";
 import { initializeSocketIO } from "./realtime/socket";
@@ -498,7 +498,7 @@ httpServer.listen(port, host, () => {
   // Phase 3: Register routes (CRITICAL - must complete before ready)
   try {
     await runPhase("routes", "3/4", async () => {
-      await registerRoutes(httpServer, app);
+      await mountAllRoutes(httpServer, app);
       
       // API 404 handler - BEFORE error handlers to catch unmatched /api routes first
       app.use(apiNotFoundHandler);

@@ -1,0 +1,152 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL (Track A / Prompt #1):
+Begin route architecture convergence by introducing a single, standardized route registration convention for the Express API while keeping existing legacy routing intact. Add guard composition utilities and “policy enforcement tests” so we can safely migrate domains one-by-one without bypass risk.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT delete legacy route modules or change existing URLs in this prompt.
+- Do NOT change authentication behavior.
+- Do NOT change database schema.
+- Prefer additive refactors: new files + compatibility adapters.
+- Any moved code must preserve behavior and be covered by tests.
+
+DELIVERABLES:
+1) A single “API Router Factory” that standardizes guard/middleware composition.
+2) A single “Route Registry” where all route mounts are declared in one place (even if initially it only re-mounts existing routers).
+3) A small, automated “policy drift” test suite that fails if a new router is mounted without the required guards (tenant/auth/req-id/envelope), except explicit allowlist routes.
+4) Migrate ONE pilot domain to the new convention (choose a low-risk domain like /api/system or /api/v1/system or /api/v1/health diagnostics — whichever already exists).
+5) Documentation updates describing the new convention and how to migrate the next domain.
+
+CONTEXT:
+- Backend uses Express, multi-tenant enforcement middleware (off|soft|strict), session auth with Passport, and Socket.IO.
+- Routing is currently hybrid: legacy route modules + v1/super/system/chat/etc in server/routes/index.ts plus feature modules mounted via server/features/index.ts.
+- We want to reduce bypass risk and cognitive load by converging onto ONE route registration convention.
+
+STEP-BY-STEP PLAN:
+
+A) Inventory and classify existing route mounts
+1. Locate existing route registration code:
+   - server/routes/index.ts
+   - server/features/index.ts
+   - any other server bootstrap file that calls app.use("/api", ...), app.use("/api/v1", ...), etc.
+2. Build an internal list (in code comments + docs) of:
+   - mount path (e.g. /api, /api/v1, /api/super, etc.)
+   - router/module name
+   - guard assumptions (auth required? tenant required? exemptions? webhooks?)
+   - response envelope style (if inconsistent, note it)
+
+B) Add a standardized middleware/guard composition layer (NEW)
+Create new files (names are suggestions; follow existing folder conventions if they exist):
+
+1) server/http/policy/requiredMiddleware.ts (or similar):
+   Export a single function that returns the standard middleware chain in the correct order, using the existing middleware implementations:
+   - request id middleware
+   - auth/session hydration middleware
+   - tenant context middleware (with explicit allowlist support)
+   - request logging
+   - agreement enforcement (if applicable)
+   - CSRF (if applicable)
+   - JSON guard / content-type guard (if applicable)
+   - standardized response envelope middleware (see below)
+
+This should be composable so different “policies” can be made:
+- apiStrict() = auth + tenant required
+- apiAuthOnly() = auth required, tenant optional
+- apiPublic() = neither required, but still has request-id + logging + JSON guard, etc.
+
+2) server/http/policy/responseEnvelope.ts:
+Unify response shape WITHOUT breaking existing routes:
+- Implement an “envelope adapter” middleware that:
+  - attaches res.locals.requestId (or similar) consistently
+  - provides helper methods res.ok(data), res.fail(error) as NON-BREAKING additions
+  - does NOT force all routes to use the helper yet
+- Add minimal safe behavior: if a route throws AppError / known error type, format response consistently; otherwise defer to existing error handler.
+
+3) server/http/routerFactory.ts:
+Export createApiRouter({ policy, allowlist }) that returns an Express.Router:
+- Applies the policy middleware chain for everything in that router by default
+- Supports allowlist route paths (e.g., /auth/*, /webhooks/*) where tenant/auth can be bypassed intentionally
+- Ensures the middleware order is consistent across all routers created via this factory
+
+C) Add a single consolidated Route Registry (NEW)
+1) Create server/http/routeRegistry.ts:
+- This becomes the SINGLE place we declare mountpoints.
+- For now, it should mount:
+  - a “legacy router adapter” that imports existing router modules and mounts them unchanged
+  - the new “pilot domain router” created using routerFactory
+
+2) Create server/http/mount.ts (or update the server bootstrap file):
+- Replace scattered app.use mounts with a single call:
+  mountAllRoutes(app)
+- mountAllRoutes() reads from routeRegistry and mounts in a consistent order:
+  - health/bootstrap/public
+  - auth/onboarding/webhooks (explicit allowlist)
+  - /api and/or /api/v1 main API routers
+  - super-admin routers (if separate)
+
+IMPORTANT:
+- Do not change external URLs yet.
+- If /api and /api/v1 both exist today, keep both, but document which is “preferred going forward.”
+- Add TODO markers for future consolidation (next prompts).
+
+D) Migrate ONE pilot domain to new convention
+Pick a low-risk domain that already exists (example: system/diagnostics endpoints).
+1) Create server/features/system/router.ts (or align to your structure) using createApiRouter().
+2) Ensure it uses the standardized policies (likely auth+tenant required unless it’s truly public).
+3) Mount it via routeRegistry.
+4) Keep the old version mounted too if needed, but ensure the new one is reachable and tested.
+
+E) Add “policy drift” tests (Vitest)
+Goal: fail the build if someone mounts a router without required middleware/guards.
+
+1) Create tests in server/test/policy/routePolicy.test.ts (path flexible):
+- Build an Express app instance using the same mountAllRoutes() function.
+- Introspect app._router stack (Express internals) carefully:
+  - Assert that all mounts under /api (and /api/v1 if applicable) include:
+    - request-id middleware present
+    - auth/session middleware present (unless allowlisted)
+    - tenant context middleware present (unless allowlisted)
+- Allowlist exemptions:
+  - /api/auth/*
+  - /api/onboarding/*
+  - /api/webhooks/*
+  - /health, /ready, /api/health, /healthz
+(Use the actual known exemptions from the codebase.)
+
+2) Add an assertion that routeRegistry is the only mountpoint:
+- E.g., ensure no other files call app.use("/api"...)
+- If full detection is too hard, enforce via a grep-based test that fails if it finds app.use("/api" outside mount.ts / routeRegistry.ts (lightweight, non-brittle). Prefer AST if you already have tooling, otherwise keep it simple.
+
+F) Documentation updates
+1) Add / update a doc:
+- docs/architecture/routes.md (or existing docs location)
+Include:
+- The new rule: “All new routes must be created via createApiRouter() and registered in routeRegistry.ts”
+- How to create a new domain router (template snippet)
+- The allowlist mechanism and when it’s permitted
+- The migration playbook for legacy routes (move one domain per prompt; keep URLs stable; add tests)
+
+2) If the app has an in-app Docs Library, update the relevant section:
+- “Backend > Routing Convention”
+- “Security > Tenancy Guard Composition”
+- “DevOps > Request-ID Propagation”
+
+VERIFICATION CHECKLIST (must complete):
+- ✅ app starts successfully in dev
+- ✅ existing routes still work (no URL changes)
+- ✅ pilot domain works via the new router path
+- ✅ tests pass, including new policy drift tests
+- ✅ no duplicate guard stack causes double auth/tenant middleware runs (avoid applying policies twice)
+
+EDGE CASES / SAFETY:
+- Be careful not to apply tenant/auth middleware twice if legacy routers already apply them internally. The factory policy should be applied at mount boundaries, not inside routers that already hardcode the same middleware. If duplication is detected:
+  - adjust by wrapping legacy mounts in a “legacyPolicyAdapter” that only applies request-id/logging but not auth/tenant (document why).
+- Ensure error handler ordering stays correct (Express error middleware must be last).
+- Preserve existing exemptions exactly.
+
+OUTPUT REQUIREMENTS:
+When you finish, provide:
+1) A list of files added/changed with short purpose notes
+2) A short explanation of the pilot migration you chose and why
+3) How to migrate the next domain in Prompt #2 (just the plan, no code yet)
+4) Any risks you found (duplicate middleware, inconsistent versions, etc.)

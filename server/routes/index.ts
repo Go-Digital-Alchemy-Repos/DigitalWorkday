@@ -12,7 +12,8 @@ import workloadReportsRoutes from "./workloadReports";
 import uploadRoutes from "./uploads";
 import emailOutboxRoutes from "./emailOutbox";
 import systemStatusRoutes from "./systemStatus";
-import systemIntegrationsRoutes from "./systemIntegrations";
+// systemIntegrations: migrated to new router factory (server/http/domains/system.router.ts)
+// import systemIntegrationsRoutes from "./systemIntegrations";
 import chatRoutes from "./chat";
 import chatRetentionRoutes from "./chatRetention";
 import presenceRoutes from "./presence";
@@ -60,7 +61,7 @@ router.use("/v1/super/debug", superDebugRoutes);
 router.use("/v1/super/debug/chat", chatDebugRoutes);
 router.use("/v1/super/chat", superChatRoutes);
 router.use("/v1/super/status", systemStatusRoutes);
-router.use("/v1/system", systemIntegrationsRoutes);
+// TODO: systemIntegrations migrated to server/http/domains/system.router.ts (Prompt #1 pilot)
 router.use("/v1/tenant", tenantOnboardingRoutes);
 router.use("/v1/tenant", tenantBillingRoutes);
 router.use("/v1", projectsDashboardRoutes);
