@@ -937,11 +937,6 @@ export function TaskDetailDrawer({
                 <Layers className="h-3.5 w-3.5" />
                 Subtasks
               </label>
-              {task.subtasks && task.subtasks.length > 0 && (
-                <span className="text-xs text-muted-foreground">
-                  {task.subtasks.filter(s => s.completed).length}/{task.subtasks.length} Complete
-                </span>
-              )}
             </div>
             <SubtaskList
               subtasks={task.subtasks || []}

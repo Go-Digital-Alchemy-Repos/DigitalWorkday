@@ -58,7 +58,7 @@ export function DrawerActionBar({
             <Button
               size="default"
               onClick={onStartTimer}
-              className="bg-orange-600 text-white min-h-[44px]"
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover-elevate active-elevate-2 border border-primary-border md:min-h-9 px-4 py-2 text-white min-h-[44px] bg-[#f7902f]"
               data-testid="button-action-start-timer"
             >
               <Play className="h-4 w-4 mr-1.5" />
@@ -70,7 +70,7 @@ export function DrawerActionBar({
             <Button
               size="default"
               disabled
-              className="bg-orange-600 text-white min-h-[44px]"
+              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover-elevate active-elevate-2 border border-primary-border md:min-h-9 px-4 py-2 text-white min-h-[44px] bg-[#f7902f]"
               data-testid="button-action-start-timer"
             >
               <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
@@ -146,7 +146,7 @@ export function DrawerActionBar({
             size="default"
             onClick={onSave}
             disabled={saveDisabled || isSaving}
-            className="bg-blue-600 text-white min-h-[44px]"
+            className="bg-[#2563eb] text-white min-h-[44px] hover:bg-[#1d4ed8]"
             data-testid="button-action-save"
           >
             {isSaving ? (
@@ -163,7 +163,7 @@ export function DrawerActionBar({
             size="default"
             onClick={onMarkComplete}
             disabled={completeDisabled || isCompleting}
-            className="bg-green-600 text-white min-h-[44px]"
+            className="bg-[#16a34a] text-white min-h-[44px] hover:bg-[#15803d]"
             data-testid="button-action-mark-complete"
           >
             {isCompleting ? (
