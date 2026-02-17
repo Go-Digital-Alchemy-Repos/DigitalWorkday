@@ -739,7 +739,7 @@ export function TaskDetailDrawer({
             </div>
             <div className="flex items-center gap-2">
               <Button
-                variant="ghost"
+                variant="secondary"
                 size="icon"
                 onClick={() => onOpenChange(false)}
                 aria-label="Close drawer"

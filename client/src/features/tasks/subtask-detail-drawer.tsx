@@ -495,7 +495,7 @@ export function SubtaskDetailDrawer({
               <StatusBadge status={subtask.status as any} />
             </div>
             <Button
-              variant="ghost"
+              variant="secondary"
               size="icon"
               onClick={() => onOpenChange(false)}
               aria-label="Close drawer"
