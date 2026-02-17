@@ -243,46 +243,70 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
     ));
 
     // Handle joining a project room
-    socket.on(ROOM_EVENTS.JOIN_PROJECT, ({ projectId }) => {
-      const roomName = `project:${projectId}`;
-      socket.join(roomName);
-      log(`Client ${socket.id} joined room: ${roomName}`, 'socket.io');
-    });
+    socket.on(ROOM_EVENTS.JOIN_PROJECT, withSocketPolicy(
+      authSocket,
+      { requireAuth: true, requireTenant: true },
+      (ctx, { projectId }) => {
+        const roomName = `project:${projectId}`;
+        socket.join(roomName);
+        log(`User ${ctx.userId} joined project room: ${roomName}`, 'socket.io');
+      }
+    ));
 
     // Handle leaving a project room
-    socket.on(ROOM_EVENTS.LEAVE_PROJECT, ({ projectId }) => {
-      const roomName = `project:${projectId}`;
-      socket.leave(roomName);
-      log(`Client ${socket.id} left room: ${roomName}`, 'socket.io');
-    });
+    socket.on(ROOM_EVENTS.LEAVE_PROJECT, withSocketPolicy(
+      authSocket,
+      { requireAuth: true, requireTenant: true },
+      (ctx, { projectId }) => {
+        const roomName = `project:${projectId}`;
+        socket.leave(roomName);
+        log(`User ${ctx.userId} left project room: ${roomName}`, 'socket.io');
+      }
+    ));
 
     // Handle joining a client room (for CRM features)
-    socket.on(ROOM_EVENTS.JOIN_CLIENT, ({ clientId }) => {
-      const roomName = `client:${clientId}`;
-      socket.join(roomName);
-      log(`Client ${socket.id} joined room: ${roomName}`, 'socket.io');
-    });
+    socket.on(ROOM_EVENTS.JOIN_CLIENT, withSocketPolicy(
+      authSocket,
+      { requireAuth: true, requireTenant: true },
+      (ctx, { clientId }) => {
+        const roomName = `client:${clientId}`;
+        socket.join(roomName);
+        log(`User ${ctx.userId} joined client room: ${roomName}`, 'socket.io');
+      }
+    ));
 
     // Handle leaving a client room
-    socket.on(ROOM_EVENTS.LEAVE_CLIENT, ({ clientId }) => {
-      const roomName = `client:${clientId}`;
-      socket.leave(roomName);
-      log(`Client ${socket.id} left room: ${roomName}`, 'socket.io');
-    });
+    socket.on(ROOM_EVENTS.LEAVE_CLIENT, withSocketPolicy(
+      authSocket,
+      { requireAuth: true, requireTenant: true },
+      (ctx, { clientId }) => {
+        const roomName = `client:${clientId}`;
+        socket.leave(roomName);
+        log(`User ${ctx.userId} left client room: ${roomName}`, 'socket.io');
+      }
+    ));
 
     // Handle joining a workspace room (for workspace-wide updates)
-    socket.on(ROOM_EVENTS.JOIN_WORKSPACE, ({ workspaceId }) => {
-      const roomName = `workspace:${workspaceId}`;
-      socket.join(roomName);
-      log(`Client ${socket.id} joined room: ${roomName}`, 'socket.io');
-    });
+    socket.on(ROOM_EVENTS.JOIN_WORKSPACE, withSocketPolicy(
+      authSocket,
+      { requireAuth: true, requireTenant: true },
+      (ctx, { workspaceId }) => {
+        const roomName = `workspace:${workspaceId}`;
+        socket.join(roomName);
+        log(`User ${ctx.userId} joined workspace room: ${roomName}`, 'socket.io');
+      }
+    ));
 
     // Handle leaving a workspace room
-    socket.on(ROOM_EVENTS.LEAVE_WORKSPACE, ({ workspaceId }) => {
-      const roomName = `workspace:${workspaceId}`;
-      socket.leave(roomName);
-      log(`Client ${socket.id} left room: ${roomName}`, 'socket.io');
-    });
+    socket.on(ROOM_EVENTS.LEAVE_WORKSPACE, withSocketPolicy(
+      authSocket,
+      { requireAuth: true, requireTenant: true },
+      (ctx, { workspaceId }) => {
+        const roomName = `workspace:${workspaceId}`;
+        socket.leave(roomName);
+        log(`User ${ctx.userId} left workspace room: ${roomName}`, 'socket.io');
+      }
+    ));
 
     // Handle joining/leaving chat rooms (channels and DMs)
     // Authorization: Uses server-derived userId/tenantId from authenticated session (ignores client-supplied IDs)

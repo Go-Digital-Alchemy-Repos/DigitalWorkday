@@ -1,6 +1,7 @@
 import { Router } from "express";
-// timerRoutes: migrated to server/http/domains/time.router.ts (Prompt #10)
-// import timerRoutes from "./timeTracking";
+// Migrated to server/http/domains/ factory routers:
+// tags, comments, activity, attachments, projects, tasks, subtasks, time, uploads, chat, presence, ai, systemIntegrations
+
 import superAdminRoutes from "./superAdmin";
 import superDebugRoutes from "./superDebug";
 import superChatRoutes from "./superChat";
@@ -10,72 +11,29 @@ import tenantBillingRoutes from "./tenantBilling";
 import tenancyHealthRoutes from "./tenancyHealth";
 import projectsDashboardRoutes from "./projectsDashboard";
 import workloadReportsRoutes from "./workloadReports";
-// uploadRoutes: migrated to new router factory (server/http/domains/uploads.router.ts) — Prompt #7
-// import uploadRoutes from "./uploads";
 import emailOutboxRoutes from "./emailOutbox";
 import systemStatusRoutes from "./systemStatus";
-// systemIntegrations: migrated to new router factory (server/http/domains/system.router.ts)
-// import systemIntegrationsRoutes from "./systemIntegrations";
-import chatRoutes from "./chat";
 import chatRetentionRoutes from "./chatRetention";
-// presenceRoutes: migrated to new router factory (server/http/domains/presence.router.ts) — Prompt #5
-// import presenceRoutes from "./presence";
-// aiRoutes: migrated to new router factory (server/http/domains/ai.router.ts) — Prompt #5
-// import aiRoutes from "./ai";
 import featuresRoutes from "../features";
 import superSystemStatusRouter from "./super/systemStatus.router";
 import superIntegrationsRouter from "./super/integrations.router";
 import superChatExportRouter from "./super/chatExport.router";
 import { searchRouter } from "./modules/search/search.router";
-// tasksRouter (task-core): migrated to server/http/domains/tasks.router.ts (Prompt #12)
-// import tasksRouter from "./tasks.router";
-// subtasksRouter: migrated to server/http/domains/subtasks.router.ts (Prompt #13)
-// import subtasksRouter from "./subtasks.router";
-// timeTrackingRouter: migrated to server/http/domains/time.router.ts (Prompt #10)
-// import timeTrackingRouter from "./timeTracking.router";
 import clientsRouter from "./clients.router";
-// projectsRouter: migrated to server/http/domains/projects.router.ts (Prompt #11)
-// import projectsRouter from "./projects.router";
 import usersRouter from "./users.router";
 import crmRouter from "./crm.router";
 import workspacesRouter from "./workspaces.router";
 import teamsRouter from "./teams.router";
-// tagsRouter: migrated to new router factory (server/http/domains/tags.router.ts) — Prompt #2
-// import tagsRouter from "./tags.router";
-// commentsRouter: migrated to new router factory (server/http/domains/comments.router.ts) — Prompt #4
-// import commentsRouter from "./comments.router";
-// activityRouter: migrated to new router factory (server/http/domains/activity.router.ts)
-// import activityRouter from "./activity.router";
-// attachmentsRouter: migrated to new router factory (server/http/domains/attachments.router.ts) — Prompt #6
-// import attachmentsRouter from "./attachments.router";
 
 const router = Router();
 
 router.use(workspacesRouter);
 router.use(teamsRouter);
-// TODO: tagsRouter migrated to server/http/domains/tags.router.ts (Prompt #2)
-// router.use(tagsRouter);
-// commentsRouter: migrated to server/http/domains/comments.router.ts (Prompt #4)
-// router.use(commentsRouter);
-// activityRouter: migrated to server/http/domains/activity.router.ts
-// router.use(activityRouter);
-// attachmentsRouter: migrated to server/http/domains/attachments.router.ts (Prompt #6)
-// router.use(attachmentsRouter);
 router.use(usersRouter);
 router.use(crmRouter);
-// projectsRouter: migrated to server/http/domains/projects.router.ts (Prompt #11)
-// router.use(projectsRouter);
 router.use(clientsRouter);
-// timeTrackingRouter: migrated to server/http/domains/time.router.ts (Prompt #10)
-// router.use(timeTrackingRouter);
-// tasksRouter (task-core): migrated to server/http/domains/tasks.router.ts (Prompt #12)
-// router.use(tasksRouter);
-// subtasksRouter: migrated to server/http/domains/subtasks.router.ts (Prompt #13)
-// router.use(subtasksRouter);
 router.use(searchRouter);
 router.use(featuresRoutes);
-// timerRoutes: migrated to server/http/domains/time.router.ts (Prompt #10)
-// router.use("/timer", timerRoutes);
 router.use("/v1/super", superAdminRoutes);
 router.use("/v1/super", superSystemStatusRouter);
 router.use("/v1/super", superIntegrationsRouter);
@@ -84,21 +42,12 @@ router.use("/v1/super/debug", superDebugRoutes);
 router.use("/v1/super/debug/chat", chatDebugRoutes);
 router.use("/v1/super/chat", superChatRoutes);
 router.use("/v1/super/status", systemStatusRoutes);
-// TODO: systemIntegrations migrated to server/http/domains/system.router.ts (Prompt #1 pilot)
 router.use("/v1/tenant", tenantOnboardingRoutes);
 router.use("/v1/tenant", tenantBillingRoutes);
 router.use("/v1", projectsDashboardRoutes);
 router.use("/v1", workloadReportsRoutes);
-// uploadRoutes: migrated to server/http/domains/uploads.router.ts (Prompt #7)
-// router.use("/v1/uploads", uploadRoutes);
 router.use("/v1", emailOutboxRoutes);
-// chatRoutes: migrated to server/http/domains/chat.router.ts (Prompt #8)
-// router.use("/v1/chat", chatRoutes);
 router.use("/v1", chatRetentionRoutes);
-// presenceRoutes: migrated to server/http/domains/presence.router.ts (Prompt #5)
-// router.use("/v1/presence", presenceRoutes);
-// aiRoutes: migrated to server/http/domains/ai.router.ts (Prompt #5)
-// router.use("/v1/ai", aiRoutes);
 router.use(tenancyHealthRoutes);
 
 export default router;

@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from "react";
+import { useState, useEffect, useCallback, memo, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { 
@@ -128,7 +128,7 @@ function formatDurationShort(seconds: number): string {
   return `${minutes}m`;
 }
 
-function ActiveTimerPanel() {
+const ActiveTimerPanel = memo(function ActiveTimerPanel() {
   const { toast } = useToast();
   const [displaySeconds, setDisplaySeconds] = useState(0);
   const [stopDialogOpen, setStopDialogOpen] = useState(false);
@@ -537,7 +537,7 @@ function ActiveTimerPanel() {
       </Dialog>
     </>
   );
-}
+});
 
 /**
  * ManualEntryDialog - Full-screen drawer for creating manual time entries
@@ -552,7 +552,7 @@ function ActiveTimerPanel() {
  * 
  * Final task assignment: finalTaskId = subtaskId || taskId
  */
-function ManualEntryDialog({ 
+const ManualEntryDialog = memo(function ManualEntryDialog({ 
   open, 
   onOpenChange 
 }: { 
@@ -890,7 +890,7 @@ function ManualEntryDialog({
       </div>
     </FullScreenDrawer>
   );
-}
+});
 
 /**
  * EditTimeEntryDrawer - Full-screen drawer for editing time entries
@@ -911,7 +911,7 @@ interface EditTimeEntryDrawerProps {
   onOpenChange: (open: boolean) => void;
 }
 
-function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerProps) {
+const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerProps) {
   const { toast } = useToast();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -1431,14 +1431,14 @@ function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerP
       </AlertDialog>
     </>
   );
-}
+});
 
-function TimeEntriesList() {
+const TimeEntriesList = memo(function TimeEntriesList() {
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<TimeEntry | null>(null);
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("week");
 
-  const getDateRange = () => {
+  const { startDate, endDate } = useMemo(() => {
     const now = new Date();
     switch (dateFilter) {
       case "today":
@@ -1450,9 +1450,7 @@ function TimeEntriesList() {
       default:
         return {};
     }
-  };
-
-  const { startDate, endDate } = getDateRange();
+  }, [dateFilter]);
   const queryParams = new URLSearchParams();
   if (startDate) queryParams.set("startDate", startDate);
   if (endDate) queryParams.set("endDate", endDate);
@@ -1471,14 +1469,18 @@ function TimeEntriesList() {
     },
   });
 
-  const groupedEntries = entries.reduce((acc, entry) => {
-    const date = format(parseISO(entry.startTime), "yyyy-MM-dd");
-    if (!acc[date]) acc[date] = [];
-    acc[date].push(entry);
-    return acc;
-  }, {} as Record<string, TimeEntry[]>);
+  const { groupedEntries, sortedDates } = useMemo(() => {
+    const grouped = entries.reduce((acc, entry) => {
+      const date = format(parseISO(entry.startTime), "yyyy-MM-dd");
+      if (!acc[date]) acc[date] = [];
+      acc[date].push(entry);
+      return acc;
+    }, {} as Record<string, TimeEntry[]>);
 
-  const sortedDates = Object.keys(groupedEntries).sort((a, b) => b.localeCompare(a));
+    const sorted = Object.keys(grouped).sort((a, b) => b.localeCompare(a));
+
+    return { groupedEntries: grouped, sortedDates: sorted };
+  }, [entries]);
 
   return (
     <>
@@ -1620,7 +1622,7 @@ function TimeEntriesList() {
       />
     </>
   );
-}
+});
 
 function ReportsSummary() {
   const [dateRange, setDateRange] = useState<"week" | "month" | "all">("month");

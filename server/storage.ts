@@ -463,6 +463,9 @@ export interface IStorage {
   getChatReadForDm(userId: string, dmThreadId: string): Promise<{ lastReadMessageId: string | null } | undefined>;
   getUnreadCountForChannel(userId: string, channelId: string): Promise<number>;
   getUnreadCountForDm(userId: string, dmThreadId: string): Promise<number>;
+  getUsersByIds(userIds: string[]): Promise<User[]>;
+  getUnreadCountsForChannels(userId: string, channelIds: string[]): Promise<Map<string, number>>;
+  getUnreadCountsForDmThreads(userId: string, threadIds: string[]): Promise<Map<string, number>>;
 
   // Chat - Diagnostics (Super Admin)
   getChatDiagnostics(): Promise<{
@@ -3883,6 +3886,161 @@ export class DatabaseStorage implements IStorage {
         gt(chatMessages.createdAt, lastReadMsg.createdAt)
       ));
     return result?.count ?? 0;
+  }
+
+  async getUsersByIds(userIds: string[]): Promise<User[]> {
+    if (userIds.length === 0) return [];
+    return db.select().from(users).where(inArray(users.id, userIds));
+  }
+
+  async getUnreadCountsForChannels(userId: string, channelIds: string[]): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+    if (channelIds.length === 0) return result;
+
+    const readRecords = await db.select({
+      channelId: chatReads.channelId,
+      lastReadMessageId: chatReads.lastReadMessageId,
+    })
+      .from(chatReads)
+      .where(and(eq(chatReads.userId, userId), inArray(chatReads.channelId, channelIds)));
+
+    const readMap = new Map<string, string | null>();
+    for (const r of readRecords) {
+      if (r.channelId) readMap.set(r.channelId, r.lastReadMessageId);
+    }
+
+    const channelsWithNoRead = channelIds.filter(id => !readMap.has(id));
+    const channelsWithRead = channelIds.filter(id => readMap.has(id) && readMap.get(id));
+
+    if (channelsWithNoRead.length > 0) {
+      const counts = await db.select({
+        channelId: chatMessages.channelId,
+        count: sql<number>`count(*)::int`,
+      })
+        .from(chatMessages)
+        .where(and(
+          inArray(chatMessages.channelId, channelsWithNoRead),
+          isNull(chatMessages.deletedAt)
+        ))
+        .groupBy(chatMessages.channelId);
+
+      for (const c of counts) {
+        if (c.channelId) result.set(c.channelId, c.count);
+      }
+    }
+
+    if (channelsWithRead.length > 0) {
+      const lastReadMsgIds = channelsWithRead.map(id => readMap.get(id)!);
+      const lastReadMsgs = await db.select({
+        id: chatMessages.id,
+        createdAt: chatMessages.createdAt,
+      })
+        .from(chatMessages)
+        .where(inArray(chatMessages.id, lastReadMsgIds));
+
+      const msgTimestamps = new Map<string, Date>();
+      for (const m of lastReadMsgs) {
+        msgTimestamps.set(m.id, m.createdAt);
+      }
+
+      for (const channelId of channelsWithRead) {
+        const lastReadMsgId = readMap.get(channelId)!;
+        const lastReadAt = msgTimestamps.get(lastReadMsgId);
+        if (!lastReadAt) {
+          result.set(channelId, 0);
+          continue;
+        }
+        const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
+          .from(chatMessages)
+          .where(and(
+            eq(chatMessages.channelId, channelId),
+            isNull(chatMessages.deletedAt),
+            gt(chatMessages.createdAt, lastReadAt)
+          ));
+        result.set(channelId, countResult?.count ?? 0);
+      }
+    }
+
+    for (const id of channelIds) {
+      if (!result.has(id)) result.set(id, 0);
+    }
+
+    return result;
+  }
+
+  async getUnreadCountsForDmThreads(userId: string, threadIds: string[]): Promise<Map<string, number>> {
+    const result = new Map<string, number>();
+    if (threadIds.length === 0) return result;
+
+    const readRecords = await db.select({
+      dmThreadId: chatReads.dmThreadId,
+      lastReadMessageId: chatReads.lastReadMessageId,
+    })
+      .from(chatReads)
+      .where(and(eq(chatReads.userId, userId), inArray(chatReads.dmThreadId, threadIds)));
+
+    const readMap = new Map<string, string | null>();
+    for (const r of readRecords) {
+      if (r.dmThreadId) readMap.set(r.dmThreadId, r.lastReadMessageId);
+    }
+
+    const threadsWithNoRead = threadIds.filter(id => !readMap.has(id));
+    const threadsWithRead = threadIds.filter(id => readMap.has(id) && readMap.get(id));
+
+    if (threadsWithNoRead.length > 0) {
+      const counts = await db.select({
+        dmThreadId: chatMessages.dmThreadId,
+        count: sql<number>`count(*)::int`,
+      })
+        .from(chatMessages)
+        .where(and(
+          inArray(chatMessages.dmThreadId, threadsWithNoRead),
+          isNull(chatMessages.deletedAt)
+        ))
+        .groupBy(chatMessages.dmThreadId);
+
+      for (const c of counts) {
+        if (c.dmThreadId) result.set(c.dmThreadId, c.count);
+      }
+    }
+
+    if (threadsWithRead.length > 0) {
+      const lastReadMsgIds = threadsWithRead.map(id => readMap.get(id)!);
+      const lastReadMsgs = await db.select({
+        id: chatMessages.id,
+        createdAt: chatMessages.createdAt,
+      })
+        .from(chatMessages)
+        .where(inArray(chatMessages.id, lastReadMsgIds));
+
+      const msgTimestamps = new Map<string, Date>();
+      for (const m of lastReadMsgs) {
+        msgTimestamps.set(m.id, m.createdAt);
+      }
+
+      for (const threadId of threadsWithRead) {
+        const lastReadMsgId = readMap.get(threadId)!;
+        const lastReadAt = msgTimestamps.get(lastReadMsgId);
+        if (!lastReadAt) {
+          result.set(threadId, 0);
+          continue;
+        }
+        const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
+          .from(chatMessages)
+          .where(and(
+            eq(chatMessages.dmThreadId, threadId),
+            isNull(chatMessages.deletedAt),
+            gt(chatMessages.createdAt, lastReadAt)
+          ));
+        result.set(threadId, countResult?.count ?? 0);
+      }
+    }
+
+    for (const id of threadIds) {
+      if (!result.has(id)) result.set(id, 0);
+    }
+
+    return result;
   }
 
   // =============================================================================

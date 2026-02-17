@@ -1,5 +1,5 @@
 // Mobile UX Phase 3B improvements applied here
-import { useState, useRef, useEffect, useCallback } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, ApiError } from "@/lib/queryClient";
 import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanel, ChatContextPanelToggle } from "@/features/chat";
@@ -163,6 +163,54 @@ interface ChatDmThread {
     };
   }>;
 }
+
+// Utility functions (moved outside component)
+const getInitials = (name: string) => {
+  return name
+    .split(" ")
+    .map((n) => n[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+};
+
+const getFileIcon = (mimeType: string) => {
+  if (mimeType.startsWith("image/")) return Image;
+  if (mimeType === "application/pdf") return FileText;
+  return File;
+};
+
+const formatFileSize = (bytes: number) => {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+};
+
+const formatTime = (date: Date) => {
+  return new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+};
+
+const formatRelativeTime = (date: Date) => {
+  const now = new Date();
+  const msgDate = new Date(date);
+  const diffMs = now.getTime() - msgDate.getTime();
+  const diffMins = Math.floor(diffMs / 60000);
+  const diffHours = Math.floor(diffMs / 3600000);
+  const diffDays = Math.floor(diffMs / 86400000);
+  
+  if (diffMins < 1) return "now";
+  if (diffMins < 60) return `${diffMins}m`;
+  if (diffHours < 24) return `${diffHours}h`;
+  if (diffDays < 7) return `${diffDays}d`;
+  return msgDate.toLocaleDateString([], { month: "short", day: "numeric" });
+};
+
+const truncateMessage = (body: string, maxLength: number = 30) => {
+  if (!body) return "";
+  const cleaned = body.replace(/\n/g, " ").trim();
+  if (cleaned.length <= maxLength) return cleaned;
+  return cleaned.substring(0, maxLength) + "...";
+};
 
 export default function ChatPage() {
   const { user } = useAuth();
@@ -523,7 +571,7 @@ export default function ChatPage() {
   };
 
   // Toggle user selection in team panel
-  const toggleUserSelection = (userId: string) => {
+  const toggleUserSelection = useCallback((userId: string) => {
     setSelectedTeamUsers(prev => {
       const newSet = new Set(prev);
       if (newSet.has(userId)) {
@@ -533,29 +581,49 @@ export default function ChatPage() {
       }
       return newSet;
     });
-  };
+  }, []);
 
   // Filter team users excluding self
-  const filteredTeamUsers = teamUsers.filter(u => u.id !== user?.id);
+  const filteredTeamUsers = useMemo(
+    () => teamUsers.filter(u => u.id !== user?.id),
+    [teamUsers, user?.id]
+  );
 
   // Get users not in current channel for add member dropdown
-  const channelMemberIds = new Set(channelMembers.map(m => m.userId));
-  const usersNotInChannel = teamUsers.filter(u => !channelMemberIds.has(u.id) && u.id !== user?.id);
-  const filteredUsersNotInChannel = addMemberSearchQuery
-    ? usersNotInChannel.filter(u =>
-        u.displayName.toLowerCase().includes(addMemberSearchQuery.toLowerCase()) ||
-        u.email.toLowerCase().includes(addMemberSearchQuery.toLowerCase())
-      )
-    : usersNotInChannel;
+  const channelMemberIds = useMemo(
+    () => new Set(channelMembers.map(m => m.userId)),
+    [channelMembers]
+  );
+
+  const usersNotInChannel = useMemo(
+    () => teamUsers.filter(u => !channelMemberIds.has(u.id) && u.id !== user?.id),
+    [teamUsers, channelMemberIds, user?.id]
+  );
+
+  const filteredUsersNotInChannel = useMemo(
+    () => addMemberSearchQuery
+      ? usersNotInChannel.filter(u =>
+          u.displayName.toLowerCase().includes(addMemberSearchQuery.toLowerCase()) ||
+          u.email.toLowerCase().includes(addMemberSearchQuery.toLowerCase())
+        )
+      : usersNotInChannel,
+    [usersNotInChannel, addMemberSearchQuery]
+  );
 
   // Start Chat drawer: filter users by search and exclude self (uses dedicated query)
-  const startChatFilteredUsers = startChatUsers.filter(u => u.id !== user?.id);
+  const startChatFilteredUsers = useMemo(
+    () => startChatUsers.filter(u => u.id !== user?.id),
+    [startChatUsers, user?.id]
+  );
 
   // Get selected users for display in chips (uses dedicated query)
-  const startChatSelectedUsersList = startChatUsers.filter(u => startChatSelectedUsers.has(u.id));
+  const startChatSelectedUsersList = useMemo(
+    () => startChatUsers.filter(u => startChatSelectedUsers.has(u.id)),
+    [startChatUsers, startChatSelectedUsers]
+  );
 
   // Toggle user selection in Start Chat drawer
-  const toggleStartChatUserSelection = (userId: string) => {
+  const toggleStartChatUserSelection = useCallback((userId: string) => {
     setStartChatSelectedUsers(prev => {
       const newSet = new Set(prev);
       if (newSet.has(userId)) {
@@ -565,7 +633,7 @@ export default function ChatPage() {
       }
       return newSet;
     });
-  };
+  }, []);
 
   // Mutation for starting a new chat from drawer
   const startNewChatMutation = useMutation({
@@ -1429,11 +1497,14 @@ export default function ChatPage() {
   };
 
   // Derived selected conversation for ConversationListPanel
-  const selectedConversation = selectedChannel
-    ? { type: "channel" as const, id: selectedChannel.id }
-    : selectedDm
-      ? { type: "dm" as const, id: selectedDm.id }
-      : null;
+  const selectedConversation = useMemo(() => 
+    selectedChannel
+      ? { type: "channel" as const, id: selectedChannel.id }
+      : selectedDm
+        ? { type: "dm" as const, id: selectedDm.id }
+        : null,
+    [selectedChannel, selectedDm]
+  );
 
   // Handler for ConversationListPanel selection
   const handleConversationSelect = (type: "channel" | "dm", id: string) => {
@@ -1604,53 +1675,6 @@ export default function ChatPage() {
       conversationId,
     });
     setCreateTaskModalOpen(true);
-  };
-
-  const getInitials = (name: string) => {
-    return name
-      .split(" ")
-      .map((n) => n[0])
-      .join("")
-      .toUpperCase()
-      .slice(0, 2);
-  };
-
-  const getFileIcon = (mimeType: string) => {
-    if (mimeType.startsWith("image/")) return Image;
-    if (mimeType === "application/pdf") return FileText;
-    return File;
-  };
-
-  const formatFileSize = (bytes: number) => {
-    if (bytes < 1024) return `${bytes} B`;
-    if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
-    return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
-  };
-
-  const formatTime = (date: Date) => {
-    return new Date(date).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  };
-
-  const formatRelativeTime = (date: Date) => {
-    const now = new Date();
-    const msgDate = new Date(date);
-    const diffMs = now.getTime() - msgDate.getTime();
-    const diffMins = Math.floor(diffMs / 60000);
-    const diffHours = Math.floor(diffMs / 3600000);
-    const diffDays = Math.floor(diffMs / 86400000);
-    
-    if (diffMins < 1) return "now";
-    if (diffMins < 60) return `${diffMins}m`;
-    if (diffHours < 24) return `${diffHours}h`;
-    if (diffDays < 7) return `${diffDays}d`;
-    return msgDate.toLocaleDateString([], { month: "short", day: "numeric" });
-  };
-
-  const truncateMessage = (body: string, maxLength: number = 30) => {
-    if (!body) return "";
-    const cleaned = body.replace(/\n/g, " ").trim();
-    if (cleaned.length <= maxLength) return cleaned;
-    return cleaned.substring(0, maxLength) + "...";
   };
 
   const getDmDisplayName = (dm: ChatDmThread) => {

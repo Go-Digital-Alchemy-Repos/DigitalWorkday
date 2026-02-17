@@ -1,3 +1,7 @@
+/**
+ * @deprecated DEAD CODE - Chat routes migrated to server/http/domains/chat.router.ts.
+ * Not imported or mounted anywhere. Safe to delete in next sprint.
+ */
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import multer from "multer";

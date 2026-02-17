@@ -115,14 +115,15 @@ router.get(
       ch => !ch.isPrivate || myChannelIds.has(ch.id)
     );
 
-    const channelsWithUnread = await Promise.all(
-      visibleChannels.map(async (ch) => {
-        const unreadCount = myChannelIds.has(ch.id)
-          ? await storage.getUnreadCountForChannel(userId, ch.id)
-          : 0;
-        return { ...ch, unreadCount };
-      })
-    );
+    const memberChannelIds = visibleChannels
+      .filter(ch => myChannelIds.has(ch.id))
+      .map(ch => ch.id);
+    const unreadCounts = await storage.getUnreadCountsForChannels(userId, memberChannelIds);
+
+    const channelsWithUnread = visibleChannels.map(ch => ({
+      ...ch,
+      unreadCount: myChannelIds.has(ch.id) ? (unreadCounts.get(ch.id) ?? 0) : 0,
+    }));
 
     res.json(channelsWithUnread);
   })
@@ -299,9 +300,13 @@ router.get(
     .orderBy(desc(chatMessages.createdAt))
     .limit(10);
 
-    const enrichedMessages = await Promise.all(messages.map(async (msg) => {
-      const author = await storage.getUser(msg.authorId);
-      return { ...msg, author };
+    const authorIds = [...new Set(messages.map(msg => msg.authorId))];
+    const authors = await storage.getUsersByIds(authorIds);
+    const authorMap = new Map(authors.map(a => [a.id, a]));
+
+    const enrichedMessages = messages.map(msg => ({
+      ...msg,
+      author: authorMap.get(msg.authorId) ?? undefined,
     }));
 
     res.json(enrichedMessages);
@@ -583,12 +588,13 @@ router.get(
 
     const threads = await storage.getUserChatDmThreads(tenantId, userId);
     
-    const threadsWithUnread = await Promise.all(
-      threads.map(async (thread) => {
-        const unreadCount = await storage.getUnreadCountForDm(userId, thread.id);
-        return { ...thread, unreadCount };
-      })
-    );
+    const threadIds = threads.map(t => t.id);
+    const unreadCounts = await storage.getUnreadCountsForDmThreads(userId, threadIds);
+
+    const threadsWithUnread = threads.map(thread => ({
+      ...thread,
+      unreadCount: unreadCounts.get(thread.id) ?? 0,
+    }));
 
     res.json(threadsWithUnread);
   })
@@ -1072,8 +1078,8 @@ router.get(
       
       if (channel.isPrivate) {
         const members = await storage.getChatChannelMembers(channelId);
-        users = await Promise.all(members.map(m => storage.getUser(m.userId)));
-        users = users.filter(Boolean);
+        const memberUserIds = members.map(m => m.userId);
+        users = await storage.getUsersByIds(memberUserIds);
       } else {
         users = await storage.getUsersByTenant(tenantId);
       }
@@ -1084,8 +1090,8 @@ router.get(
       }
       
       const participants = await storage.getChatDmParticipants(dmThreadId);
-      users = await Promise.all(participants.map(p => storage.getUser(p.userId)));
-      users = users.filter(Boolean);
+      const participantUserIds = participants.map(p => p.userId);
+      users = await storage.getUsersByIds(participantUserIds);
     } else {
       users = await storage.getUsersByTenant(tenantId);
     }
