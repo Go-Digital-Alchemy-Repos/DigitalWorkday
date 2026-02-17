@@ -1,0 +1,185 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Implement a lightweight sound feedback system that makes chat and notifications feel alive without adding complexity.
+
+We are adding exactly three sounds:
+
+1) chat-received.mp3
+2) notification.mp3
+3) message-sent.mp3
+
+These must be subtle, performant, and optional.
+
+DO NOT:
+- Add additional sounds
+- Change APIs
+- Change DB schema
+- Add heavy dependencies
+
+--------------------------------------------------
+PHASE 1 — SOUND ASSETS
+--------------------------------------------------
+
+Create directory:
+
+client/public/sounds/
+
+Ensure these files exist:
+
+chat-received.mp3
+notification.mp3
+message-sent.mp3
+
+If missing, create placeholder audio files.
+
+--------------------------------------------------
+PHASE 2 — SOUND MANAGER
+--------------------------------------------------
+
+Create:
+
+client/src/lib/sound/soundManager.ts
+
+Responsibilities:
+- preload audio
+- play sounds safely
+- throttle rapid playback
+- respect user preference
+- handle autoplay restrictions
+
+Implementation requirements:
+
+Maintain internal map:
+{
+  "chat-received": Audio,
+  "notification": Audio,
+  "message-sent": Audio
+}
+
+Export:
+
+SoundManager.preload()
+SoundManager.unlock()
+SoundManager.playChatReceived()
+SoundManager.playNotification()
+SoundManager.playMessageSent()
+
+Behavior rules:
+
+Chat received:
+volume = 0.45
+
+Notification:
+volume = 0.35
+
+Message sent:
+volume = 0.25
+
+Throttle:
+Prevent playing the same sound more than once every 300ms.
+
+Autoplay handling:
+- catch play() errors
+- expose unlock() to be called after first user interaction
+
+--------------------------------------------------
+PHASE 3 — SOUND SETTINGS
+--------------------------------------------------
+
+Create small hook:
+
+client/src/lib/sound/useSoundSettings.ts
+
+Store:
+soundEnabled (boolean)
+soundVolume (0–1)
+
+Persist in localStorage.
+
+Default:
+soundEnabled = false
+
+Add simple toggle in settings UI OR user menu:
+"Enable sounds"
+
+When enabled:
+call SoundManager.unlock()
+
+--------------------------------------------------
+PHASE 4 — CHAT INTEGRATION
+--------------------------------------------------
+
+Locate socket message receive handler.
+
+When a message arrives:
+IF senderId !== currentUserId
+AND sounds enabled
+THEN:
+SoundManager.playChatReceived()
+
+On message send success:
+SoundManager.playMessageSent()
+
+Ensure:
+no duplicate playback on optimistic + socket echo.
+
+--------------------------------------------------
+PHASE 5 — NOTIFICATION INTEGRATION
+--------------------------------------------------
+
+Locate notification realtime handler.
+
+On new notification:
+- dedupe by notification id
+- play notification sound once
+
+SoundManager.playNotification()
+
+--------------------------------------------------
+PHASE 6 — INITIALIZATION
+--------------------------------------------------
+
+Ensure SoundManager.preload() runs once:
+- App.tsx
+- or root provider
+
+Ensure unlock() is called after first click/tap anywhere in app.
+
+--------------------------------------------------
+PHASE 7 — SAFETY
+--------------------------------------------------
+
+Ensure:
+- no crashes if audio blocked
+- no console errors
+- desktop and mobile both safe
+- performance unaffected
+
+--------------------------------------------------
+PHASE 8 — DOCUMENTATION
+--------------------------------------------------
+
+Update:
+
+docs/mobile-audit.md
+
+Add section:
+"Sound Feedback System"
+
+Include:
+- which sounds exist
+- when they play
+- how to enable/disable
+- autoplay limitations
+
+--------------------------------------------------
+OUTPUT
+--------------------------------------------------
+
+Return:
+- soundManager implementation summary
+- integration points
+- settings toggle location
+- files created/modified
+- verification steps
