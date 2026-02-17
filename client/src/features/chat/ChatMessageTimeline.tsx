@@ -915,7 +915,8 @@ export function ChatMessageTimeline({
         firstItemIndex={firstItemIndex}
         initialTopMostItemIndex={messageGroups.length - 1}
         itemContent={(index, group) => renderGroup(index, group)}
-        followOutput={(isAtBottom) => (isAtBottom ? "smooth" : false)}
+        followOutput="smooth"
+        alignToBottom
         atBottomStateChange={handleAtBottomStateChange}
         atBottomThreshold={60}
         startReached={handleStartReached}
