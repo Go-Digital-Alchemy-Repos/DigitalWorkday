@@ -1,0 +1,130 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL (Track A / Prompt #3):
+Migrate the Activity domain (preferred) OR Comments domain (fallback) to the new route architecture:
+- Implement router via createApiRouter (authTenant policy by default)
+- Register ONLY through server/http/routeRegistry.ts
+- Mount through server/http/mount.ts
+- Preserve all existing URLs and behavior
+- Maintain test stability and expand policy drift + smoke coverage
+
+DOMAIN SELECTION RULE:
+- Prefer Activity if it has <= ~12 endpoints and is not deeply entangled with multiple legacy routers.
+- If Activity is scattered/entangled, migrate Comments instead.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change URLs.
+- Do NOT change DB schema.
+- Do NOT change auth/session semantics.
+- Do NOT delete old handler logic; reuse existing controllers/services where possible.
+- Avoid sweeping refactors. This is a migration, not a rewrite.
+
+DELIVERABLES:
+1) New domain router:
+   - server/http/domains/activity.router.ts (preferred)
+   OR server/http/domains/comments.router.ts (fallback)
+   using createApiRouter with authTenant policy.
+2) Mounted through routeRegistry at the same paths as legacy.
+3) Legacy mount for that domain disabled/removed from routes/index.ts (or wherever it is currently mounted),
+   without breaking any other legacy routes.
+4) Add/extend tests:
+   - policy drift test confirms domain uses authTenant
+   - at least 7 smoke integration tests:
+     - 2 auth rejection (401) cases
+     - 2 tenant enforcement cases
+     - 2 route matching cases (path param permutations)
+     - 1 metadata/policy registry case (routerFactory metadata tracked)
+5) Documentation updated:
+   - migrated domains table updated
+   - migration notes updated (especially any skipEnvelope usage)
+
+IMPLEMENTATION PLAN:
+
+A) Locate and inventory legacy endpoints
+1) Search for legacy routes:
+   - "activity" / "activities" / "timeline" / "events"
+   - or "comments" / "comment"
+2) Identify:
+   - mount base path(s) (under /api and/or /api/v1)
+   - routes that are nested under projects/tasks
+   - any routes that are “global feed” style
+3) Produce a quick inventory list in code comments in the new router file.
+
+B) Create the new router file
+1) Create:
+   - server/http/domains/activity.router.ts
+   OR server/http/domains/comments.router.ts
+
+2) Use:
+   const router = createApiRouter({
+     policy: "authTenant",
+     domain: "activity" (or "comments"),
+     // default envelope behavior ON unless it breaks compatibility
+   });
+
+3) Port endpoints:
+   - Prefer reusing existing handler functions:
+     import { listActivity, createActivity, ... } from existing modules
+   - If legacy router is a single Express.Router with handlers inlined:
+     - extract handlers to a controller module (minimal movement)
+     - keep logic identical
+   - Keep request validation, body parsing, and error behavior identical.
+
+C) Response envelope compatibility
+- Try to keep envelope enabled by default.
+- Only use skipEnvelope: true if:
+  - existing handlers return raw arrays/strings and frontend depends on exact raw shape
+  - and adjusting the handler is risky in this migration
+- If you use skipEnvelope:
+  - Add a prominent TODO with the exact response incompatibility
+  - Add a doc note in routes.md: “This domain still bypasses envelope for compatibility”
+
+D) Register and mount via the registry
+1) Update server/http/routeRegistry.ts:
+   - Add entry for the new domain router
+   - Ensure the mount path matches the legacy paths exactly
+   - Confirm policy metadata is correct (authTenant)
+2) Disable legacy mount:
+   - Remove/disable only the mount for this domain from server/routes/index.ts (or equivalent)
+   - Do NOT remove any imported modules that other routes still rely on
+
+E) Tests
+1) Update/extend policy drift tests:
+   - Ensure domain declared and policy is authTenant
+   - Ensure no rogue mounts introduced
+2) Add integration tests (Vitest + supertest) similar to the tags suite:
+   Create:
+   - server/test/integration/activityRoutes.test.ts
+   OR server/test/integration/commentsRoutes.test.ts
+
+Test requirements:
+- Auth rejection:
+  - GET list endpoint -> 401 unauth
+  - POST create endpoint -> 401 unauth
+- Tenant enforcement:
+  - create two tenants + users, verify cross-tenant access blocked (403/404 depending on convention)
+  - verify the tenant context is required (missing tenant -> denied, if that is expected in strict/soft modes)
+- Route matching:
+  - test nested route: /tasks/:id/comments or /projects/:id/activity (whatever exists)
+  - test global route: /activity or /comments endpoint if present
+- Metadata/registry:
+  - confirm routeRegistry entry exists and reports policy authTenant for the domain
+
+NOTE:
+- Reuse existing test harness utilities used by the tags integration tests.
+- Do NOT add test-only auth bypasses unless there is already a standard pattern for test login.
+
+F) Docs updates
+Update docs/architecture/routes.md:
+- Add new migrated domain + endpoints count
+- Note whether envelope is enabled or skipped
+- Note any route path gotchas (mixed-prefix, nesting, etc.)
+- Update next candidate recommendation (after this, suggest “projects/tasks” or “time” depending on complexity)
+
+OUTPUT REQUIREMENTS:
+When complete, output:
+1) Domain migrated and endpoint count
+2) Exact mount paths preserved
+3) Whether skipEnvelope was needed (and why)
+4) Tests added + what they cover
+5) Any issues found (duplicate middleware, inconsistent tenant scoping, etc.)
