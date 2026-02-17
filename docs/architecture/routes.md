@@ -118,39 +118,68 @@ Tests in `server/tests/policy/routePolicy.test.ts` verify:
 1. All registered routes have valid policies
 2. Webhooks use `public` policy
 3. Super admin routes use `superUser` policy
-4. Non-legacy routes have actual router instances
-5. No rogue `app.use('/api'...)` mounts exist outside allowed files
-6. Guard allowlists match the actual exemptions in `routes.ts`
+4. Tags domain uses `authTenant` policy
+5. Non-legacy routes have actual router instances with factory metadata
+6. No rogue `app.use('/api'...)` mounts exist outside allowed files
+7. Guard allowlists match the actual exemptions in `routes.ts`
 
-Run: `npx vitest run server/tests/policy/routePolicy.test.ts`
+Integration tests in `server/tests/integration/tagsRoutes.test.ts` verify:
+1. Unauthenticated requests blocked by factory authTenant policy (401)
+2. Authenticated requests reach handlers successfully
+3. Missing tenant context blocked (400/403)
+4. All tag CRUD routes match correctly (no express-level 404s)
+5. Factory metadata present with correct policy
+
+Run: `npx vitest run server/tests/policy/ server/tests/integration/`
+
+## Migrated Domains
+
+| Domain | Mount Path | Policy | Router File | Prompt | Date |
+|--------|-----------|--------|-------------|--------|------|
+| system-integrations | `/api/v1/system` | `superUser` | `server/http/domains/system.router.ts` | #1 (pilot) | Feb 2026 |
+| tags | `/api` | `authTenant` | `server/http/domains/tags.router.ts` | #2 | Feb 2026 |
+
+### Tags Domain Migration Notes (Prompt #2)
+- **6 endpoints** migrated: tag CRUD (GET, POST, PATCH, DELETE) + task-tag associations (POST, DELETE)
+- **Mixed URL prefixes**: Routes span `/workspaces/:id/tags`, `/tags/:id`, and `/tasks/:id/tags`. Mounted at `/api` to preserve all paths.
+- **skipEnvelope: true** — Legacy handlers use `res.json()` directly. Envelope helpers available but not adopted to maintain response compatibility.
+- **Double-guard**: Global auth+tenant from `routes.ts` runs first (idempotent), then factory's `authTenant` policy runs. Safe but redundant.
+- **No internal auth guards** — All auth/tenant enforcement came from global middleware, now handled by factory policy.
 
 ## Migration Playbook (Next Domain)
 
-To migrate the next domain (Prompt #2):
+To migrate the next domain (Prompt #3):
 
 1. **Pick a domain** from the registry (look for `legacy: true` entries)
 2. **Create** `server/http/domains/<domain>.router.ts` using `createApiRouter()`
-3. **Move** the router import from `server/routes/index.ts` to the new domain file
+3. **Move** the route handlers from the legacy router to the new domain file
 4. **Comment out** the legacy mount in `routes/index.ts` (add TODO marker)
 5. **Register** in `mount.ts` with `registerRoute()` + `app.use()`
-6. **Update** the registry entry from `legacy: true` to `legacy: false`
-7. **Test** — all policy drift tests must pass
-8. **Verify** — URLs unchanged, existing behavior preserved
+6. **Add smoke tests** — at least: 401 unauth, 200 auth+tenant, route matching
+7. **Update policy drift tests** — verify the new domain's policy is declared
+8. **Test** — all tests must pass
+9. **Verify** — URLs unchanged, existing behavior preserved
 
 ### Recommended migration order (low to high risk):
-1. `/api/v1/system` — system integrations (DONE - pilot)
-2. `/api/v1/presence` — presence tracking (small, self-contained)
-3. `/api/v1/ai` — AI routes (small, self-contained)
-4. `/api/v1/chat` — chat system (medium, has Socket.IO deps)
-5. `/api/v1/uploads` — file uploads (medium, has rate limiting)
-6. `/api/v1/super` — super admin (large, many sub-routers)
-7. `/api` — main domain routes (largest, final migration)
+1. `/api/v1/system` — system integrations (DONE - Prompt #1 pilot)
+2. `/api` tags — tag CRUD + task-tag associations (DONE - Prompt #2)
+3. `/api` activity — activity log (2 endpoints, very small)
+4. `/api` comments — comment CRUD (small, self-contained)
+5. `/api/v1/presence` — presence tracking (1 endpoint, self-contained)
+6. `/api/v1/ai` — AI routes (small, self-contained)
+7. `/api` attachments — attachment upload/download (medium)
+8. `/api/v1/chat` — chat system (medium, has Socket.IO deps)
+9. `/api/v1/uploads` — file uploads (medium, has rate limiting)
+10. `/api/v1/super` — super admin (large, many sub-routers)
+11. `/api` — remaining main domain routes (largest, final migration)
 
 ### Known Risks
 
 - **Double middleware**: Legacy global auth/tenant guards in `routes.ts` apply to ALL `/api/*` paths. New factory-mounted routers under `/api/*` will get both the global guards AND their factory policy guards. Auth checks are idempotent, so this is safe but redundant. Once ALL domains are migrated, remove global guards from `routes.ts`.
 - **URL stability**: Never change external URLs during migration. Mount new routers at the exact same paths.
+- **Mixed-prefix domains**: Some legacy domains (tags, comments, activity) use routes under multiple URL prefixes (e.g., `/workspaces/:id/tags` AND `/tags/:id`). These must be mounted at `/api` level, not a more specific prefix.
 - **Error handler ordering**: Express error middleware must remain LAST. New routers are mounted before error handlers via `mountAllRoutes()`.
+- **skipEnvelope for compatibility**: Use `skipEnvelope: true` when migrating handlers that use `res.json()` directly. This preserves response format compatibility. Envelope helpers can be adopted incrementally later.
 
 ## Preferred API Version
 

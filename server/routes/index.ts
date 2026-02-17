@@ -31,7 +31,8 @@ import usersRouter from "./users.router";
 import crmRouter from "./crm.router";
 import workspacesRouter from "./workspaces.router";
 import teamsRouter from "./teams.router";
-import tagsRouter from "./tags.router";
+// tagsRouter: migrated to new router factory (server/http/domains/tags.router.ts) — Prompt #2
+// import tagsRouter from "./tags.router";
 import commentsRouter from "./comments.router";
 import activityRouter from "./activity.router";
 import attachmentsRouter from "./attachments.router";
@@ -40,7 +41,8 @@ const router = Router();
 
 router.use(workspacesRouter);
 router.use(teamsRouter);
-router.use(tagsRouter);
+// TODO: tagsRouter migrated to server/http/domains/tags.router.ts (Prompt #2)
+// router.use(tagsRouter);
 router.use(commentsRouter);
 router.use(activityRouter);
 router.use(attachmentsRouter);

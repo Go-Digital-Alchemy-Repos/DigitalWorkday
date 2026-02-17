@@ -99,6 +99,13 @@ describe("Route Policy Drift Tests", () => {
       expect(system).toBeDefined();
       expect(system!.policy).toBe("superUser");
     });
+
+    it("tags domain must use authTenant policy", () => {
+      const tags = registry.find((r) => r.domain === "tags");
+      expect(tags).toBeDefined();
+      expect(tags!.policy).toBe("authTenant");
+      expect(tags!.legacy).toBe(false);
+    });
   });
 
   describe("Factory Router Meta", () => {
@@ -112,6 +119,18 @@ describe("Route Policy Drift Tests", () => {
       const meta = getRouterMeta(system!.router);
       expect(meta).toBeDefined();
       expect(meta!.policy).toBe("superUser");
+    });
+
+    it("tags domain router should have factory metadata with authTenant policy", () => {
+      const tags = registry.find(
+        (r) => r.domain === "tags" && !r.legacy
+      );
+      expect(tags).toBeDefined();
+      expect(tags!.router).not.toBeNull();
+
+      const meta = getRouterMeta(tags!.router);
+      expect(meta).toBeDefined();
+      expect(meta!.policy).toBe("authTenant");
     });
   });
 

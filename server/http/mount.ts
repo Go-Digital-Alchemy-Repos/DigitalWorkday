@@ -3,6 +3,7 @@ import type { Server } from "http";
 import { registerRoute, clearRouteRegistry } from "./routeRegistry";
 import { registerRoutes as legacyRegisterRoutes } from "../routes";
 import systemRouter from "./domains/system.router";
+import tagsRouter from "./domains/tags.router";
 
 export async function mountAllRoutes(
   httpServer: Server,
@@ -91,9 +92,19 @@ export async function mountAllRoutes(
     legacy: true,
   });
 
+  registerRoute({
+    path: "/api",
+    router: tagsRouter,
+    policy: "authTenant",
+    domain: "tags",
+    description: "Tag CRUD and task-tag associations. Migrated from legacy routes/tags.router.ts (Prompt #2).",
+    legacy: false,
+  });
+
   await legacyRegisterRoutes(httpServer, app);
 
   app.use("/api/v1/system", systemRouter);
+  app.use("/api", tagsRouter);
 
   return httpServer;
 }
