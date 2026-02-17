@@ -1127,7 +1127,7 @@ export function TaskDetailDrawer({
           <Separator />
 
           <div 
-            className="p-3 sm:p-4 bg-[#c2dfff4d] dark:bg-[#1a2540] border border-[#adc6e6] dark:border-[#2a3d5e]"
+            className="p-3 sm:p-4 dark:bg-[#1a2540] border border-[#adc6e6] dark:border-[#2a3d5e] bg-[#1e1e1e]"
             style={{ borderRadius: "10px" }}
           >
             <CommentThread
