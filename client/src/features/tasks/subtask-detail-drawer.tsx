@@ -30,6 +30,7 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import type { Subtask, User, Tag as TagType, Comment, TaskWithRelations } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { ColorPicker } from "@/components/ui/color-picker";
+import { DrawerActionBar } from "@/components/layout/drawer-action-bar";
 
 import {
   AlertDialog,
@@ -425,35 +426,14 @@ export function SubtaskDetailDrawer({
               <SheetTitle className="sr-only">Subtask Details</SheetTitle>
               <StatusBadge status={subtask.status as any} />
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {isActualSubtask && (
-                <Button
-                  variant={(subtask as Subtask).completed ? "outline" : "default"}
-                  size="sm"
-                  onClick={handleMarkComplete}
-                  disabled={toggleCompleteMutation.isPending}
-                  className="gap-1.5"
-                  data-testid="button-toggle-complete-subtask"
-                >
-                  {toggleCompleteMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (subtask as Subtask).completed ? (
-                    <Circle className="h-4 w-4" />
-                  ) : (
-                    <CheckCircle2 className="h-4 w-4" />
-                  )}
-                  {(subtask as Subtask).completed ? "Reopen" : "Complete"}
-                </Button>
-              )}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => onOpenChange(false)}
-                data-testid="button-close-subtask-drawer"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => onOpenChange(false)}
+              data-testid="button-close-subtask-drawer"
+            >
+              <X className="h-4 w-4" />
+            </Button>
           </div>
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2 flex-wrap" data-testid="subtask-breadcrumbs">
             <button
@@ -474,7 +454,7 @@ export function SubtaskDetailDrawer({
 
         <div className="flex flex-col h-[calc(100vh-120px)]">
           <ScrollArea className="flex-1">
-            <div className="px-3 sm:px-6 py-4 sm:py-6 space-y-5">
+            <div className="px-3 sm:px-6 py-4 sm:py-6 space-y-6">
               <div className="space-y-4">
                 {editingTitle ? (
                   <Input
@@ -647,6 +627,26 @@ export function SubtaskDetailDrawer({
               <Separator />
 
               <div className="space-y-2">
+                <label className="text-xs font-medium text-muted-foreground">Description</label>
+                <RichTextEditor
+                  value={description}
+                  onChange={handleDescriptionChange}
+                  placeholder="Add a description..."
+                  minHeight="100px"
+                  data-testid="textarea-subtask-description"
+                />
+              </div>
+
+              <Separator />
+
+              {projectId && (
+                <>
+                  <AttachmentUploader taskId={subtask.id} projectId={projectId} />
+                  <Separator />
+                </>
+              )}
+
+              <div className="space-y-2">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
                     <Tag className="h-3.5 w-3.5" />
@@ -806,26 +806,6 @@ export function SubtaskDetailDrawer({
 
               <Separator />
 
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">Description</label>
-                <RichTextEditor
-                  value={description}
-                  onChange={handleDescriptionChange}
-                  placeholder="Add a description..."
-                  minHeight="100px"
-                  data-testid="textarea-subtask-description"
-                />
-              </div>
-
-              <Separator />
-
-              {projectId && (
-                <>
-                  <AttachmentUploader taskId={subtask.id} projectId={projectId} />
-                  <Separator />
-                </>
-              )}
-
               {isActualSubtask && (
                 <div className="rounded-md bg-muted/30 p-3 sm:p-4" data-testid="subtask-comments-section">
                   <CommentThread
@@ -846,16 +826,16 @@ export function SubtaskDetailDrawer({
             </div>
           </ScrollArea>
 
-          <div className="p-3 sm:p-4 border-t bg-background mt-auto">
-            <Button 
-              className="w-full" 
-              onClick={handleSaveAll}
-              disabled={!hasUnsavedChanges}
-              data-testid="button-save-subtask"
-            >
-              {hasUnsavedChanges ? "Save Subtask" : "No Changes"}
-            </Button>
-          </div>
+          <DrawerActionBar
+            showTimer={false}
+            showSave={hasUnsavedChanges}
+            onSave={handleSaveAll}
+            saveLabel="Save Subtask"
+            showComplete={isActualSubtask}
+            onMarkComplete={handleMarkComplete}
+            isCompleting={toggleCompleteMutation.isPending}
+            completeLabel={(subtask as Subtask).completed ? "Reopen" : "Mark Complete"}
+          />
         </div>
       </SheetContent>
     </Sheet>

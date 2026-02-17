@@ -261,3 +261,44 @@ Add `overflow-x-auto` wrapper around all `<Table>` components to prevent horizon
 - [ ] Time entries list wraps to card layout on mobile
 - [ ] Stop timer immediately clears UI (optimistic update)
 - [ ] Stats dashboard updates after timer stop/time entry changes
+
+---
+
+## Phase 3 Hardening — UI Consistency Pass
+
+**Date:** 2026-02-17
+
+### DrawerActionBar Component
+- Shared `DrawerActionBar` component at `client/src/components/layout/drawer-action-bar.tsx`
+- Standardized footer action bar with consistent button ordering:
+  - **Start Timer** (orange, `bg-orange-600`) — left side
+  - **Save** (blue, `bg-blue-600`) — right side, before complete
+  - **Mark Complete** (green, `bg-green-600`) — rightmost
+- All action bar buttons have `min-h-[44px]` for mobile tap targets
+- Timer state machine: idle, running, paused, loading, hidden
+- Supports extra actions slot (e.g., "Timer running on another task" badge)
+
+### TaskDetailDrawer Changes
+- Action bar moved from header area to sticky footer using `DrawerActionBar`
+- "Save Changes" button removed from header — Save now in footer
+- Duplicate "Start Timer" removed from Time Entries section header
+- Section order standardized: Description → Attachments → Subtasks → Tags → Comments → Time Entries
+- Comments section wrapped in `bg-muted/30` background
+- Body uses `space-y-6` for consistent section spacing
+
+### SubtaskDetailDrawer Changes
+- Old full-width "Save Subtask" footer replaced with `DrawerActionBar`
+- Complete/Reopen button moved from header to footer action bar
+- Section order standardized: Title → Metadata → Description → Attachments → Tags → Comments
+- Comments section already had `bg-muted/30` wrapping
+- Body spacing normalized from `space-y-5` to `space-y-6`
+
+### Consistency Checklist
+- [x] DrawerActionBar used in TaskDetailDrawer
+- [x] DrawerActionBar used in SubtaskDetailDrawer
+- [x] Action bar button ordering consistent (Timer | Save | Complete)
+- [x] Comments wrapped in bg-muted/30 in both drawers
+- [x] Section order normalized across drawers
+- [x] Body spacing normalized to space-y-6
+- [x] Action bar buttons meet 44px tap target
+- [x] EmptyState, LoadingState, ErrorState components available via layout barrel

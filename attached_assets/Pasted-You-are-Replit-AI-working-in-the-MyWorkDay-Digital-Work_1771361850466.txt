@@ -1,0 +1,237 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Run a full “System Review + Performance + Organization + Tech Debt + Documentation” sprint across the entire app.
+
+This sprint must:
+- identify missing features/incomplete workflows (prioritized)
+- improve performance hot spots (measured, not speculative)
+- optimize file organization and layering (routes → controllers → services → repositories)
+- reduce bloat and remove dead/deprecated code safely
+- update documentation to match reality
+
+NON-DESTRUCTIVE & SAFE RULES:
+- Do NOT change API URLs or externally visible behavior intentionally (except fixing clear bugs).
+- Do NOT change DB schema in this sprint.
+- Do NOT change auth/session/tenant semantics.
+- Do NOT introduce sweeping architecture rewrites.
+- No risky deletions: only remove code with proof (unreferenced + passes tests/build).
+- Maintain routeRegistry as the single source of truth (registry-only mounting stays enforced).
+
+------------------------------------------------------------
+DELIVERABLES
+------------------------------------------------------------
+
+1) System Review Report:
+- docs/review/system-review-YYYY-MM-DD.md
+Include:
+- Health summary (lint/typecheck/tests/build)
+- Missing features / incomplete workflows (prioritized P0/P1/P2)
+- Performance findings (measured)
+- Organization/refactor recommendations
+- Dead code candidates + proof
+- Quick wins vs medium vs large items
+- Next sprint plan (5–10 items)
+
+2) Organization Improvements (low-risk, incremental):
+- Ensure consistent layering:
+  routes/router -> controller -> service -> repository -> db
+- Reduce “routes doing business logic”
+- Standardize file placement and naming conventions
+- Split any oversized route/controller files into feature modules where it reduces support burden
+
+3) Performance Improvements (measured + targeted):
+- Frontend: reduce re-render hotspots (chat/messages, task lists, time entries)
+- Backend: reduce slow queries (common list endpoints) and improve indexes ONLY if already present (NO schema changes)
+- Logging/observability: ensure requestId propagation is consistent for async/realtime (no behavior changes)
+
+4) Safe Cleanup:
+- remove unused imports/files with proof
+- remove truly deprecated elements
+- tighten duplication (helpers/constants)
+
+5) Documentation Update:
+- docs/architecture/routes.md accurate
+- docs/mobile-audit.md updated
+- add docs/architecture/organization.md describing the new conventions
+- If in-app Admin “Docs Library” exists, add concise entries about changes
+
+6) Verification:
+- all tests passing
+- no build regressions
+- provide manual QA checklist at end of report
+
+------------------------------------------------------------
+PHASE 0 — BASELINE (NO CODE CHANGES YET)
+------------------------------------------------------------
+
+A) Run and record in report:
+- Typecheck
+- Lint
+- Test suite (unit + integration)
+- Frontend build + backend build
+Record timings if available.
+
+B) Inventory system surface:
+- routeRegistry domains (authoritative)
+- realtime event families (chat/presence) and policy wrapper coverage
+- uploads/attachments entry points
+- key UI routes/pages
+
+------------------------------------------------------------
+PHASE 1 — PERFORMANCE DIAGNOSTICS (MEASURE FIRST)
+------------------------------------------------------------
+
+Backend:
+1) Identify slow endpoints:
+- Add temporary timing logs (guarded by env, e.g. PERF_LOG=1) around:
+  - tasks list
+  - chat history fetch
+  - time entries list
+  - projects list
+- Use existing logger; include requestId and endpoint name.
+- Run a small local script or manual calls to capture timings.
+- Remove or leave behind behind PERF_LOG guard with minimal noise.
+
+DB/query:
+2) Look for N+1 query patterns in:
+- tasks lists (assignees, tags, watchers)
+- chat history (users, reads, mentions)
+- time entries (project/task joins)
+If found:
+- fix by batching/joins in repository layer without schema changes.
+
+Frontend:
+3) Identify re-render hotspots:
+- use React DevTools profiling guidance (if available in repo) OR implement lightweight “why did you render” style dev-only logging for key components:
+  - ChatMessageList
+  - TaskList rows
+  - TimeEntry rows
+Guard behind DEV flag.
+
+Fix hotspots with:
+- memoization (React.memo) for row components
+- stable callbacks via useCallback
+- stable derived data via useMemo
+- avoid passing new object literals where not needed
+
+------------------------------------------------------------
+PHASE 2 — ROUTE/FILE ORGANIZATION OPTIMIZATION
+------------------------------------------------------------
+
+A) Route architecture:
+You already have routeRegistry + factory routers.
+Do NOT undo it.
+
+B) Split oversized modules:
+1) Scan for large route/controller files (e.g., >300–500 LOC):
+- If any remain, split by subdomain:
+  - tasks.router.ts -> tasks.core.ts, tasks.watchers.ts, tasks.tags.ts, tasks.subtasks.ts (or similar)
+  - chat.router.ts -> chat.messages.ts, chat.conversations.ts, chat.reads.ts, chat.users.ts
+  - time.router.ts -> time.entries.ts, time.timers.ts
+Keep registry mount the same; internally import and compose.
+
+C) Enforce layering:
+For each domain:
+- Router file should only define routes and call controllers.
+- Controller validates input and calls service.
+- Service orchestrates business logic.
+- Repository handles DB queries.
+If currently mixed, refactor incrementally:
+- extract DB calls into repositories
+- extract side effects into services
+- keep public functions stable.
+
+D) Standardize structure:
+Create or enforce this pattern:
+server/
+  http/
+    domains/
+      <domain>.router.ts
+      <domain>/
+        <domain>.controller.ts
+        <domain>.service.ts
+        <domain>.repo.ts
+        index.ts (optional)
+Document the convention in docs/architecture/organization.md.
+
+E) Consolidate shared utilities:
+- queryKeys per domain on frontend
+- shared formatting helpers
+- shared drawer primitives
+Avoid duplicate helpers.
+
+------------------------------------------------------------
+PHASE 3 — SAFE CLEANUP (DEAD CODE + DEPRECATED)
+------------------------------------------------------------
+
+Rules for deletion:
+- must be unreferenced (no imports)
+- no dynamic import usage
+- tests/build pass after removal
+- list removed items in report
+
+Otherwise:
+- mark deprecated with comment + create follow-up ticket in report
+
+Remove:
+- unused imports
+- duplicate constants
+- duplicate route handlers proven dead (like earlier chat duplicates)
+
+------------------------------------------------------------
+PHASE 4 — CONSISTENCY + GUARDRAILS
+------------------------------------------------------------
+
+Backend:
+- registry-only mounts enforced
+- route policies correct (authTenant, etc.)
+- skipEnvelope explicitly documented where used
+
+Frontend:
+- PageContainer/PageShell used consistently
+- mobile nav padding safe (pb-16) consistent
+- tap targets >= 44px for primary actions
+
+Realtime:
+- ensure all chat events wrapped by withSocketPolicy
+- list any remaining unwrapped events in report
+
+------------------------------------------------------------
+PHASE 5 — DOCUMENTATION UPDATES
+------------------------------------------------------------
+
+Update:
+- docs/review/system-review-YYYY-MM-DD.md (main report)
+- docs/architecture/routes.md (accuracy)
+- docs/architecture/organization.md (new conventions + examples)
+- docs/mobile-audit.md (reflect latest)
+
+If Admin “Docs Library” exists:
+- add concise entries covering:
+  - organization conventions
+  - performance improvements
+  - key mobile UX patterns
+
+------------------------------------------------------------
+PHASE 6 — FINAL QA
+------------------------------------------------------------
+
+At end of report, include manual QA checklist for:
+- tasks/subtasks drawers
+- chat send/scroll/keyboard/jump-to-latest
+- time start/stop/switch/active bar
+- uploads/attachments
+- projects + crm basics
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+When finished, output:
+1) Paths to new/updated docs
+2) Top 5 performance wins (with measured evidence when possible)
+3) Route/file splits performed (list)
+4) Cleanup performed (list of deletions with proof notes)
+5) Next sprint plan (5–10 items)
+6) Confirmation tests/build passed

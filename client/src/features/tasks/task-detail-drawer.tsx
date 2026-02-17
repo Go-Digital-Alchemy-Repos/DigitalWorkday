@@ -37,6 +37,7 @@ import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
 import { StartTimerDrawer } from "@/features/timer";
 import { useToast } from "@/hooks/use-toast";
+import { DrawerActionBar } from "@/components/layout/drawer-action-bar";
 import { FormFieldWrapper, DatePickerWithChips, PrioritySelector, StatusSelector, type PriorityLevel, type TaskStatus } from "@/components/forms";
 import type { TaskWithRelations, User, Tag as TagType, Comment, Project, Client } from "@shared/schema";
 
@@ -724,24 +725,6 @@ export function TaskDetailDrawer({
               <StatusBadge status={task.status as any} />
             </div>
             <div className="flex items-center gap-2">
-              {isDirty && (
-                <Button
-                  size="sm"
-                  onClick={() => {
-                    if (title.trim() && title !== task.title) {
-                      onUpdate?.(task.id, { title: title.trim() });
-                    }
-                    if (description !== (task.description || "")) {
-                      onUpdate?.(task.id, { description });
-                    }
-                    markClean();
-                  }}
-                  data-testid="button-save-task"
-                >
-                  <Save className="h-4 w-4 mr-1" />
-                  Save Changes
-                </Button>
-              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -754,7 +737,8 @@ export function TaskDetailDrawer({
           </div>
         </SheetHeader>
 
-        <div className={cn("flex-1 flex flex-col min-h-0 overflow-y-auto space-y-6", drawerBodyPadding)}>
+        <div className="flex flex-col flex-1 min-h-0">
+        <div className={cn("flex-1 overflow-y-auto space-y-6", drawerBodyPadding)}>
           <div className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap" data-testid="task-breadcrumbs">
             {task.projectId && projectContextLoading ? (
               <div className="flex items-center gap-2">
@@ -799,109 +783,6 @@ export function TaskDetailDrawer({
             )}
           </div>
 
-          <div className="flex items-center justify-between gap-2 flex-wrap" data-testid="task-action-bar">
-            <div className="flex items-center gap-2">
-              {!activeTimer && !timerLoading && (
-                <>
-                  {projectContextLoading && task.projectId ? (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      disabled
-                      data-testid="button-quick-start-timer"
-                    >
-                      <Loader2 className="h-3.5 w-3.5 mr-1 animate-spin" />
-                      Loading...
-                    </Button>
-                  ) : canQuickStartTimer && !projectContextError ? (
-                    <Button
-                      variant="default"
-                      size="sm"
-                      onClick={() => startTimerMutation.mutate()}
-                      disabled={startTimerMutation.isPending}
-                      data-testid="button-quick-start-timer"
-                    >
-                      <Play className="h-3.5 w-3.5 mr-1" />
-                      Start Timer
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => setTimerDrawerOpen(true)}
-                      data-testid="button-start-timer-task"
-                    >
-                      <Play className="h-3.5 w-3.5 mr-1" />
-                      Start Timer
-                    </Button>
-                  )}
-                </>
-              )}
-
-              {activeTimer && isTimerOnThisTask && (
-                <div className="flex items-center gap-2">
-                  {isTimerRunning ? (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => pauseTimerMutation.mutate()}
-                      disabled={pauseTimerMutation.isPending}
-                      data-testid="button-pause-timer"
-                    >
-                      <Pause className="h-3.5 w-3.5 mr-1" />
-                      Pause
-                    </Button>
-                  ) : (
-                    <Button
-                      variant="outline"
-                      size="sm"
-                      onClick={() => resumeTimerMutation.mutate()}
-                      disabled={resumeTimerMutation.isPending}
-                      data-testid="button-resume-timer"
-                    >
-                      <Play className="h-3.5 w-3.5 mr-1" />
-                      Resume
-                    </Button>
-                  )}
-                  <Button
-                    variant="destructive"
-                    size="sm"
-                    onClick={() => stopTimerMutation.mutate()}
-                    disabled={stopTimerMutation.isPending}
-                    data-testid="button-stop-timer"
-                  >
-                    <Square className="h-3.5 w-3.5 mr-1" />
-                    Stop
-                  </Button>
-                </div>
-              )}
-
-              {activeTimer && !isTimerOnThisTask && (
-                <Badge variant="secondary" className="text-xs">
-                  Timer running on another task
-                </Badge>
-              )}
-            </div>
-
-            {task.status !== "done" && (
-              <Button
-                size="sm"
-                variant="default"
-                onClick={handleMarkAsComplete}
-                disabled={timeEntriesLoading || isCompletingTask}
-                data-testid="button-mark-complete"
-              >
-                {isCompletingTask ? (
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                ) : (
-                  <Check className="h-4 w-4 mr-1" />
-                )}
-                {isCompletingTask ? "Completing..." : "Mark Complete"}
-              </Button>
-            )}
-          </div>
-
-          <Separator />
           <div className="space-y-4">
             {editingTitle ? (
               <Input
@@ -1030,6 +911,17 @@ export function TaskDetailDrawer({
               data-testid="textarea-description"
             />
           </FormFieldWrapper>
+
+          <Separator />
+
+          {task.projectId && (
+            <AttachmentUploader taskId={task.id} projectId={task.projectId} />
+          )}
+          {!task.projectId && (
+            <div className="text-sm text-muted-foreground">
+              Attachments are available for project tasks only
+            </div>
+          )}
 
           <Separator />
 
@@ -1202,28 +1094,19 @@ export function TaskDetailDrawer({
 
           <Separator />
 
-          {task.projectId && (
-            <AttachmentUploader taskId={task.id} projectId={task.projectId} />
-          )}
-          {!task.projectId && (
-            <div className="text-sm text-muted-foreground">
-              Attachments are available for project tasks only
-            </div>
-          )}
-
-          <Separator />
-
-          <CommentThread
-            comments={taskComments}
-            taskId={task.id}
-            currentUserId={currentUser?.id}
-            onAdd={(body) => addCommentMutation.mutate(body)}
-            onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
-            onDelete={(id) => deleteCommentMutation.mutate(id)}
-            onResolve={(id) => resolveCommentMutation.mutate(id)}
-            onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
-            users={availableUsers}
-          />
+          <div className="rounded-md bg-muted/30 p-3 sm:p-4">
+            <CommentThread
+              comments={taskComments}
+              taskId={task.id}
+              currentUserId={currentUser?.id}
+              onAdd={(body) => addCommentMutation.mutate(body)}
+              onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
+              onDelete={(id) => deleteCommentMutation.mutate(id)}
+              onResolve={(id) => resolveCommentMutation.mutate(id)}
+              onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
+              users={availableUsers}
+            />
+          </div>
 
           <Separator />
 
@@ -1233,22 +1116,11 @@ export function TaskDetailDrawer({
                 <Timer className="h-3.5 w-3.5" />
                 Time Entries
               </label>
-              <div className="flex items-center gap-2">
-                {timeEntries.length > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    Total: {formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}
-                  </span>
-                )}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => setTimerDrawerOpen(true)}
-                  data-testid="button-start-timer-task"
-                >
-                  <Play className="h-3 w-3 mr-1" />
-                  Start Timer
-                </Button>
-              </div>
+              {timeEntries.length > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  Total: {formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}
+                </span>
+              )}
             </div>
             {timeEntriesLoading ? (
               <p className="text-sm text-muted-foreground">Loading time entries...</p>
@@ -1289,6 +1161,50 @@ export function TaskDetailDrawer({
               </div>
             )}
           </div>
+        </div>
+        <DrawerActionBar
+          showTimer={true}
+          timerState={
+            timerLoading ? "loading" :
+            activeTimer && isTimerOnThisTask && isTimerRunning ? "running" :
+            activeTimer && isTimerOnThisTask && !isTimerRunning ? "paused" :
+            activeTimer && !isTimerOnThisTask ? "hidden" :
+            (!activeTimer && !canQuickStartTimer) || projectContextError ? "hidden" :
+            projectContextLoading && task.projectId ? "loading" :
+            "idle"
+          }
+          onStartTimer={() => {
+            if (canQuickStartTimer && !projectContextError) {
+              startTimerMutation.mutate();
+            } else {
+              setTimerDrawerOpen(true);
+            }
+          }}
+          onPauseTimer={() => pauseTimerMutation.mutate()}
+          onResumeTimer={() => resumeTimerMutation.mutate()}
+          onStopTimer={() => stopTimerMutation.mutate()}
+          showSave={isDirty}
+          onSave={() => {
+            if (title.trim() && title !== task.title) {
+              onUpdate?.(task.id, { title: title.trim() });
+            }
+            if (description !== (task.description || "")) {
+              onUpdate?.(task.id, { description });
+            }
+            markClean();
+          }}
+          showComplete={task.status !== "done"}
+          onMarkComplete={handleMarkAsComplete}
+          completeDisabled={timeEntriesLoading || isCompletingTask}
+          isCompleting={isCompletingTask}
+          extraActions={
+            activeTimer && !isTimerOnThisTask ? (
+              <Badge variant="secondary" className="text-xs">
+                Timer running on another task
+              </Badge>
+            ) : undefined
+          }
+        />
         </div>
       </SheetContent>
 

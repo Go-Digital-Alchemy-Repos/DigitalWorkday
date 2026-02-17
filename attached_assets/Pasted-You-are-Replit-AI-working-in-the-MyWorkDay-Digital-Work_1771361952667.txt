@@ -1,0 +1,144 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+BUG:
+@mentions are still not working in:
+1) Task comments
+2) Task descriptions
+
+Goal is to fix both end-to-end:
+- mention dropdown shows correct users
+- selecting a mention inserts a stable token/metadata
+- saving content persists mentions correctly
+- mentioned users receive notification(s)
+- mentions render correctly (optional but ideal)
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change API URLs.
+- Do NOT change DB schema.
+- Do NOT change auth/session/tenant semantics.
+- Preserve existing comment/task response shapes (some endpoints use skipEnvelope).
+- Prefer reuse of existing services/helpers rather than inventing a second mentions system.
+
+DELIVERABLES:
+A) Root cause analysis (exact failure point(s)) written to:
+   docs/review/mentions-root-cause.md
+B) Fix implemented for:
+   - task comment mentions
+   - task description mentions
+C) Tests:
+   - backend integration tests >= 6
+   - socket tests only if mention delivery is socket-driven and harness exists
+D) Instrumentation:
+   - requestId-aware logs for mention extraction + notification fanout (debug-level)
+E) Documentation update:
+   - short entry in docs/mobile-audit.md (and/or Docs Library) describing mention format + surfaces supported
+
+------------------------------------------------------------
+PHASE 0 — FAST REPRO + TRACE (MUST DO FIRST)
+------------------------------------------------------------
+
+1) Identify the exact editor input used in:
+- Task comment composer
+- Task description editor
+(plain textarea? TipTap? Lexical? Quill? custom mentions component?)
+
+2) Add TEMP debug logging (dev-only) to capture outgoing payloads:
+- When submitting a task comment
+- When saving a task description
+Log:
+- the text/html content being sent
+- any mentions metadata array being sent (e.g. mentionedUserIds)
+- the entity id(s), tenantId/workspaceId if available
+
+3) Identify the backend handlers called for each:
+- comment create endpoint used by tasks
+- task update/create endpoint used by description save
+
+Record the request payload shapes and which endpoint receives them in docs/review/mentions-root-cause.md.
+
+------------------------------------------------------------
+PHASE 1 — INVENTORY EXISTING MENTIONS INFRA
+------------------------------------------------------------
+
+Search the repo for:
+- extractMentions
+- parseMentions
+- mentionUserIds
+- MENTION
+- notifyMentions
+- "typing" is irrelevant; focus on mention extraction + notifications
+
+Find/confirm:
+A) One canonical mention extraction helper (or create ONE if missing):
+   server/services/mentions/extractMentionUserIds.ts
+B) One canonical “mention notification” function:
+   server/services/mentions/notifyMentionedUsers.ts
+C) Existing DB tables/fields that support mentions (if any):
+   - comment_mentions
+   - message_mentions
+   - notifications with type=mention
+   - reads/mentions join tables
+
+IMPORTANT:
+Do NOT implement two systems.
+Pick or create one canonical pipeline and route both comments and descriptions through it.
+
+------------------------------------------------------------
+PHASE 2 — DEFINE A STABLE MENTION FORMAT (FRONTEND ↔ BACKEND CONTRACT)
+------------------------------------------------------------
+
+We need a reliable contract. Support these in order of preference:
+
+1) If frontend already produces explicit metadata:
+   payload.mentionedUserIds: string[]
+   => BACKEND uses this and does NOT rely on brittle text parsing.
+
+2) If editor inserts tokenized text:
+   e.g. @[Display Name](userId) OR <span data-mention-id="userId">@Name</span>
+   => BACKEND parses tokens to userIds safely.
+
+3) If only plain "@username" exists:
+   => BACKEND maps username->userId tenant-scoped (least reliable; only keep for backward compatibility).
+
+Decide what is ACTUALLY being sent today (from Phase 0 logs).
+Update both sides so at least (1) or (2) is true for task comments + task descriptions.
+
+Write the chosen contract to docs/review/mentions-root-cause.md.
+
+------------------------------------------------------------
+PHASE 3 — FIX TASK COMMENT MENTIONS
+------------------------------------------------------------
+
+Backend:
+1) Locate the task comment create handler/service.
+2) Ensure the mention pipeline is invoked on comment creation:
+- extract mentioned userIds using canonical helper
+- enforce tenant/workspace membership rules
+- prevent self-mentions
+- dedupe userIds
+3) Persist mention records if existing tables are present (optional but preferred).
+4) Trigger notifications:
+- create notification rows (mention type)
+- emit socket notifications if system does that
+- send email only if that is existing behavior
+
+Frontend:
+5) Ensure comment composer:
+- displays mention dropdown
+- inserts stable token/metadata
+- includes mentionedUserIds (or tokens) in payload on submit
+
+Cache:
+6) Ensure comment list updates without refresh (setQueryData + invalidateQueries).
+
+------------------------------------------------------------
+PHASE 4 — FIX TASK DESCRIPTION MENTIONS
+------------------------------------------------------------
+
+Backend:
+1) Locate task create/update handlers that save description.
+2) Ensure mention extraction runs on description create/update:
+- extract mentions (from payload metadata or token parsing)
+- apply same rules (tenant membership, no self, dedupe)
+3) Trigger mention notifications for newly-added mentions:
+- IMPORTANT: do not

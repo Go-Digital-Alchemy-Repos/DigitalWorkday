@@ -8,4 +8,5 @@ export { ErrorState } from "./error-state";
 export { DataToolbar } from "./data-toolbar";
 export type { FilterOption, FilterConfig, SortOption } from "./data-toolbar";
 export { ConfirmDialog, useConfirmDialog } from "./confirm-dialog";
+export { DrawerActionBar } from "./drawer-action-bar";
 export { AppDrawer };
