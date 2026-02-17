@@ -1,0 +1,158 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+BUG:
+In Super Admin, platform administrators cannot delete other platform admins once those admins are deactivated.
+Requirement: Platform admins MUST be able to delete other admin users who are no longer active (deactivated).
+
+GOAL:
+Fix Super Admin admin-user deletion so deactivated platform admins can be deleted safely, with proper safeguards, audit logging, and no regressions.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change API URLs unless absolutely necessary (prefer fixing existing handlers).
+- Do NOT change DB schema (no migrations).
+- Preserve existing auth/session/tenant semantics.
+- Preserve current “deactivate” behavior; deletion is an additional admin-only capability.
+- Ensure all existing tests pass; add new tests.
+
+DELIVERABLES:
+1) Root cause analysis: why deletion fails only for deactivated admins (backend constraint, query filter, UI disablement, FK constraint, etc.).
+2) Fix implemented end-to-end:
+   - Super Admin UI allows delete for deactivated admins (if permitted)
+   - Backend accepts deletion and performs correct cleanup
+3) Safeguards:
+   - cannot delete self
+   - cannot delete the last remaining active platform admin (or last admin overall, depending on policy)
+   - cannot delete an admin who is still active (unless explicitly allowed; default: require deactivated first)
+4) Audit logging of deletion action (who deleted whom, when, requestId).
+5) Tests:
+   - integration tests covering delete deactivated admin success and guardrails.
+
+------------------------------------------------------------
+PHASE 0 — DISCOVERY (MUST DO FIRST)
+------------------------------------------------------------
+
+A) Locate the Super Admin user management area:
+- UI route/page where platform admins are listed
+- “Deactivate” and “Delete” controls
+
+B) Locate the backend endpoints used:
+- deactivate admin user endpoint
+- delete admin user endpoint (or generic delete user)
+
+C) Identify the failure mode:
+- Is the delete button disabled/hidden for deactivated users?
+- Does UI call delete but backend returns 4xx/5xx?
+- Does backend delete logic filter out inactive users (e.g., WHERE active=true)?
+- Are there FK constraints preventing delete (sessions, audit logs, memberships, notifications, etc.)?
+
+Add findings to a short note:
+docs/review/superadmin-admin-delete.md
+Include:
+- endpoint path(s)
+- observed error response
+- suspected blocking table/constraint or logic branch
+
+------------------------------------------------------------
+PHASE 1 — BACKEND FIX (PRIMARY)
+------------------------------------------------------------
+
+1) Fix query/logic allowing deletion of deactivated admins
+Common bug patterns to check:
+- DELETE handler queries user with `isActive=true` or excludes `deactivatedAt != null`
+- service refuses delete if user is deactivated (wrong gate)
+- controller uses “tenant users” logic and blocks super admin scope
+
+Implement correct policy:
+- Only `superUser` / platform admin role can delete platform admins.
+- Deactivated admins are allowed to be deleted.
+- Active admins:
+  - default behavior: block deletion unless they are deactivated first (safer)
+  - return 400 with clear error code/message ("ADMIN_MUST_BE_DEACTIVATED")
+
+2) Add safety guardrails in the service:
+- Prevent deleting self (userId === targetId)
+- Prevent deleting the “last platform admin”:
+  - Determine how platform admins are defined (role, superAdmin flag, etc.)
+  - Count remaining admins excluding target
+  - If count would drop to 0, block with 400 ("CANNOT_DELETE_LAST_ADMIN")
+
+3) Handle dependent records safely WITHOUT schema changes:
+Before deleting the admin user record, ensure any dependent rows are handled in a way that respects existing constraints.
+Typical cleanup steps (use what exists in schema):
+- revoke sessions / delete user_sessions rows
+- remove oauth links / identities if present
+- remove membership rows that reference the user (teams/workspaces) only if appropriate for platform admins
+- reassign ownership fields if any tables require non-null owner (prefer set to system user if exists)
+- delete notification subscriptions / socket presence rows if persisted
+- Do NOT delete audit logs; keep them but ensure FK constraint doesn’t block delete
+  - If audit logs reference userId via FK, you may need to:
+    - set actorId/targetId nullable if already nullable (no schema change allowed), OR
+    - if already designed, use “soft delete” (set deletedAt) instead of hard delete.
+IMPORTANT: Choose the existing intended model:
+- If the app already uses soft delete for users (deletedAt), use that.
+- If it uses hard delete, implement necessary cleanup in correct order to satisfy constraints.
+
+4) Return consistent response shape:
+- Preserve existing response envelopes.
+- Provide a clear success response and error codes.
+
+------------------------------------------------------------
+PHASE 2 — FRONTEND FIX (SUPER ADMIN UI)
+------------------------------------------------------------
+
+1) Ensure delete control is available for deactivated admins:
+- If the button is disabled due to `!isActive`, invert logic: allow if deactivated.
+- Add confirmation modal:
+  - “Delete platform admin permanently?”
+  - Explain it’s irreversible
+  - Require typing DELETE or clicking confirm (optional, but recommended)
+
+2) Ensure UI updates immediately:
+- On success:
+  - remove the admin from list via React Query setQueryData
+  - invalidate the admins list query
+
+3) Error handling:
+- If backend returns CANNOT_DELETE_LAST_ADMIN, show clear toast.
+- If ADMIN_MUST_BE_DEACTIVATED, prompt user to deactivate first.
+
+------------------------------------------------------------
+PHASE 3 — TESTS
+------------------------------------------------------------
+
+Add backend integration tests (minimum 5):
+
+1) super admin can delete a deactivated platform admin (200)
+2) cannot delete active platform admin (400 ADMIN_MUST_BE_DEACTIVATED) unless policy allows
+3) cannot delete self (400 CANNOT_DELETE_SELF)
+4) cannot delete last remaining platform admin (400 CANNOT_DELETE_LAST_ADMIN)
+5) non-super user cannot delete platform admins (403)
+
+If a frontend test setup exists, add 1 UI test:
+- delete button appears/enabled for deactivated admin and triggers request.
+
+------------------------------------------------------------
+PHASE 4 — DOC UPDATE
+------------------------------------------------------------
+
+Update:
+docs/review/superadmin-admin-delete.md
+Include:
+- final behavior rules
+- endpoints involved
+- guardrails
+- verification steps
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+When finished, output:
+1) Root cause found (exact reason deletion failed for deactivated admins)
+2) Files changed (backend + frontend)
+3) Tests added and passing count
+4) Manual verification steps:
+   - deactivate an admin
+   - delete them
+   - confirm removed from list
+   - confirm cannot delete last admin / self
