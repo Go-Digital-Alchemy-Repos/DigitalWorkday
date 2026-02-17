@@ -1,6 +1,7 @@
 import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useCreatePersonalTask, useCreateSubtask } from "@/hooks/use-create-task";
+import { useDebounce } from "@/hooks/use-debounce";
 
 const MY_TASKS_FILTERS_KEY = "my-tasks-filters";
 const MY_TASKS_ORDERS_KEY = "my-tasks-section-orders";
@@ -448,15 +449,9 @@ export default function MyTasks() {
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
   const [showNewTaskDrawer, setShowNewTaskDrawer] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
-  const [debouncedSearch, setDebouncedSearch] = useState("");
+  const debouncedSearch = useDebounce(searchQuery, 300);
   const [pendingCompleteTask, setPendingCompleteTask] = useState<TaskWithRelations | null>(null);
   const [showLogTimeDialog, setShowLogTimeDialog] = useState(false);
-  
-  // Debounce search input
-  useEffect(() => {
-    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
-    return () => clearTimeout(timer);
-  }, [searchQuery]);
   
   // Handle quick action from mobile nav (opens new task drawer via URL param)
   useEffect(() => {

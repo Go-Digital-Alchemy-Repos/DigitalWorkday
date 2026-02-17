@@ -626,6 +626,7 @@ export function TaskDetailDrawer({
                 variant="ghost"
                 size="icon"
                 onClick={() => onOpenChange(false)}
+                aria-label="Close drawer"
                 data-testid="button-close-drawer"
               >
                 <X className="h-4 w-4" />
@@ -659,6 +660,7 @@ export function TaskDetailDrawer({
                 variant="ghost"
                 size="icon"
                 onClick={() => onOpenChange(false)}
+                aria-label="Close drawer"
                 data-testid="button-close-drawer"
               >
                 <X className="h-4 w-4" />
@@ -729,6 +731,7 @@ export function TaskDetailDrawer({
                 variant="ghost"
                 size="icon"
                 onClick={() => onOpenChange(false)}
+                aria-label="Close drawer"
                 data-testid="button-close-drawer"
               >
                 <X className="h-4 w-4" />

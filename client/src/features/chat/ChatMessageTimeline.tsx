@@ -457,6 +457,7 @@ export function ChatMessageTimeline({
                                 variant="ghost"
                                 onClick={() => handleEditSave(message.id)}
                                 disabled={!editingBody.trim()}
+                                aria-label="Save edit"
                                 data-testid={`message-edit-save-${message.id}`}
                               >
                                 <Check className="h-4 w-4" />
@@ -465,6 +466,7 @@ export function ChatMessageTimeline({
                                 size="icon"
                                 variant="ghost"
                                 onClick={handleEditCancel}
+                                aria-label="Cancel edit"
                                 data-testid={`message-edit-cancel-${message.id}`}
                               >
                                 <X className="h-4 w-4" />
@@ -591,6 +593,7 @@ export function ChatMessageTimeline({
                                 variant="ghost"
                                 size="icon"
                                 className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
+                                aria-label="Message actions"
                                 data-testid={`message-menu-${message.id}`}
                               >
                                 <MoreHorizontal className="h-4 w-4" />

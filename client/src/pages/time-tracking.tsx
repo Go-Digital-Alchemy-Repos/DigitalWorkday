@@ -1577,7 +1577,7 @@ function TimeEntriesList() {
                             </div>
                             <DropdownMenu>
                               <DropdownMenuTrigger asChild>
-                                <Button variant="ghost" size="icon" data-testid={`button-entry-menu-${entry.id}`}>
+                                <Button variant="ghost" size="icon" aria-label="Time entry options" data-testid={`button-entry-menu-${entry.id}`}>
                                   <MoreHorizontal className="h-4 w-4" />
                                 </Button>
                               </DropdownMenuTrigger>

@@ -1,4 +1,4 @@
-import { forwardRef, useState, useRef, useEffect } from "react";
+import { forwardRef, memo, useState, useRef, useEffect } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -43,7 +43,7 @@ interface TaskCardProps {
   showQuickActions?: boolean;
 }
 
-export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskCard(
+export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function TaskCard(
   { task, view = "list", onSelect, onStatusChange, onPriorityChange, onDueDateChange, dragHandleProps, isDragging, showQuickActions = false },
   ref
 ) {
@@ -421,4 +421,4 @@ export const TaskCard = forwardRef<HTMLDivElement, TaskCardProps>(function TaskC
       )}
     </div>
   );
-});
+}));

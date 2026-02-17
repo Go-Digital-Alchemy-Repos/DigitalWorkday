@@ -6,6 +6,7 @@ import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContex
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useDebounce } from "@/hooks/use-debounce";
 import { getSocket, joinChatRoom, leaveChatRoom, onConnectionChange, isSocketConnected } from "@/lib/realtime/socket";
 import { useConversationTyping } from "@/hooks/use-typing";
 import { Button } from "@/components/ui/button";
@@ -333,17 +334,18 @@ export default function ChatPage() {
     enabled: !!selectedDm,
   });
 
+  const debouncedSearchQuery = useDebounce(searchQuery, 250);
   const searchResultsQuery = useQuery<{ messages: SearchResult[]; total: number }>({
-    queryKey: ["/api/v1/chat/search", searchQuery],
+    queryKey: ["/api/v1/chat/search", debouncedSearchQuery],
     queryFn: async () => {
       const params = new URLSearchParams();
-      if (searchQuery) params.set("q", searchQuery);
+      if (debouncedSearchQuery) params.set("q", debouncedSearchQuery);
       const url = `/api/v1/chat/search${params.toString() ? `?${params}` : ""}`;
       const res = await fetch(url, { credentials: "include" });
       if (!res.ok) throw new Error("Failed to search messages");
       return res.json();
     },
-    enabled: searchOpen && searchQuery.length >= 2,
+    enabled: searchOpen && debouncedSearchQuery.length >= 2,
   });
 
   const mentionableUsersQuery = useQuery<MentionableUser[]>({
@@ -2340,7 +2342,7 @@ export default function ChatPage() {
                       </p>
                     </Card>
                   ))}
-                  {searchResultsQuery.data.messages.length === 0 && searchQuery.length >= 2 && (
+                  {searchResultsQuery.data.messages.length === 0 && debouncedSearchQuery.length >= 2 && (
                     <p className="text-sm text-muted-foreground text-center py-4">
                       No messages found matching "{searchQuery}"
                     </p>

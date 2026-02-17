@@ -419,6 +419,7 @@ export function SubtaskDetailDrawer({
                 variant="ghost"
                 size="icon"
                 onClick={onBack}
+                aria-label="Back to parent task"
                 data-testid="button-back-to-parent"
               >
                 <ArrowLeft className="h-4 w-4" />
@@ -430,6 +431,7 @@ export function SubtaskDetailDrawer({
               variant="ghost"
               size="icon"
               onClick={() => onOpenChange(false)}
+              aria-label="Close drawer"
               data-testid="button-close-subtask-drawer"
             >
               <X className="h-4 w-4" />
