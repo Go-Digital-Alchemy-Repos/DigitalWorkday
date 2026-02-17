@@ -1,0 +1,99 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL (Prompt #8):
+A) Migrate Chat HTTP endpoints to standardized route architecture using createApiRouter() with authTenant policy.
+B) Introduce a Socket.IO “event policy layer” that mirrors the HTTP route policy approach:
+   - authTenant enforcement
+   - tenant room membership validation
+   - request-id / trace id propagation into socket event handlers
+C) Preserve behavior: typing, presence, read receipts, mentions, and any notification side-effects must remain intact.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change existing endpoint URLs.
+- Do NOT change Socket.IO event names.
+- Do NOT change DB schema.
+- Do NOT weaken auth/session or tenant validation.
+- Avoid rewrites; wrap/adapter patterns are preferred.
+
+DELIVERABLES:
+1) New HTTP router: server/http/domains/chat.router.ts using createApiRouter({ policy: "authTenant" })
+2) Chat endpoints removed/disabled from legacy mounts, registered via routeRegistry.
+3) New Socket.IO policy utilities:
+   - server/socket/policy/socketPolicy.ts (or similar)
+   - event wrapper like withSocketPolicy(policy, handler)
+   - ensures: session hydrated, tenant context present, membership validated per conversation
+   - propagates request-id into handler context + logs
+4) Convert at least ONE chat socket event group to the new policy wrapper (pilot):
+   - e.g. typing indicators + send message
+5) Tests:
+   - policy drift tests confirm chat HTTP router uses authTenant
+   - integration tests for chat HTTP routes (>=10)
+   - socket tests (>=5) validating auth/tenant/membership enforcement for the pilot events
+6) Docs updated: chat migration notes, socket governance convention, next migrations (time/projects).
+
+PART A — Chat HTTP migration
+
+STEPS:
+1) Inventory legacy chat HTTP endpoints (search: chat_messages, dms, conversations, reads, mentions, export).
+2) Create server/http/domains/chat.router.ts:
+   - Use createApiRouter({ domain: "chat", policy: "authTenant" })
+   - Preserve all existing paths (including /api vs /api/v1).
+   - Reuse existing handlers/services.
+3) Register in routeRegistry, disable legacy mounts for chat endpoints only.
+4) If response format compatibility requires it, use skipEnvelope: true and document the reason.
+
+HTTP TESTS (>=10):
+- 2 unauth rejected (list + send)
+- tenant enforcement (cross-tenant access blocked)
+- route matching (DM vs channel/conversation)
+- validation errors (missing body, invalid ids)
+- read receipt endpoint behavior
+- mentions endpoint behavior
+- metadata/registry test
+
+PART B — Socket.IO policy governance (pilot conversion)
+
+STEPS:
+1) Locate current Socket.IO handler registration (where socket.on(...) lives).
+2) Create server/socket/policy/socketPolicy.ts:
+   Provide utilities:
+   - buildSocketContext(socket): derives user, tenant, requestId, etc.
+   - requireAuth(ctx): throws/acks error if unauthenticated
+   - requireTenant(ctx): ensures tenant resolved
+   - requireConversationMembership(ctx, conversationId): validates membership before allowing message/typing/read events
+   - withSocketPolicy({ policy: "authTenant", membership: "conversation" }, handler)
+     which wraps handlers and enforces checks consistently.
+3) Pilot migrate a small event set (do NOT attempt all chat events at once):
+   - "typing:start" / "typing:stop" (or your actual names)
+   - "message:send" (or your actual name)
+   For each:
+   - wrap the handler with withSocketPolicy
+   - ensure it still emits to the same rooms and preserves payload shape
+
+SOCKET TESTS (>=5):
+- unauth socket cannot send message
+- authenticated but wrong-tenant socket cannot send into other tenant conversation
+- non-member cannot send/typing
+- valid member can send/typing
+- request-id/trace id is present in logs/ack context (assert if test harness supports)
+
+PART C — Docs
+Update docs/architecture/routes.md (and/or docs/architecture/sockets.md if you add it):
+- Chat HTTP router migrated and policy
+- Socket policy wrapper usage (template)
+- Migration plan for remaining socket events (reads, mentions, exports)
+
+VERIFICATION CHECKLIST:
+- ✅ All tests pass
+- ✅ Existing chat UX unchanged (send, receive, typing, reads)
+- ✅ Membership validation enforced consistently in socket pilot events
+- ✅ No rogue mounts; registry-only remains enforced
+- ✅ No performance regression (avoid per-message heavy DB checks; cache membership if already present)
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+1) Chat HTTP endpoints migrated (list + count)
+2) Socket events wrapped (which ones) + policy enforced
+3) Tests added (HTTP + socket)
+4) Any risks found (double membership checks, room naming inconsistencies)
+5) Recommendation for Prompt #9 (finish remaining socket events or migrate time/projects)
