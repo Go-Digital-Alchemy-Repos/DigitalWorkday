@@ -1106,7 +1106,7 @@ export function TaskDetailDrawer({
 
           <Separator />
 
-          <div className="rounded-md p-3 sm:p-4 bg-[#dedede4d]">
+          <div className="rounded-md p-3 sm:p-4 bg-[#c2dfff4d]">
             <CommentThread
               comments={taskComments}
               taskId={task.id}
