@@ -163,7 +163,7 @@ export function DrawerActionBar({
             size="default"
             onClick={onMarkComplete}
             disabled={completeDisabled || isCompleting}
-            className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover-elevate active-elevate-2 border border-[#7fb314] md:min-h-9 px-4 py-2 text-white min-h-[44px] hover:bg-[#15803d] bg-[#94c91a]"
+            className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover-elevate active-elevate-2 border border-[#7fb314] md:min-h-9 px-4 py-2 text-white min-h-[44px] hover:bg-[#8bbd18] bg-[#94c91a]"
             data-testid="button-action-mark-complete"
           >
             {isCompleting ? (

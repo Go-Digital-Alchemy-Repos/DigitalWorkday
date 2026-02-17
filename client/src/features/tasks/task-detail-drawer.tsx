@@ -1106,7 +1106,10 @@ export function TaskDetailDrawer({
 
           <Separator />
 
-          <div className="rounded-md p-3 sm:p-4 bg-[#c2dfff4d]">
+          <div 
+            className="p-3 sm:p-4 bg-[#c2dfff4d] border border-[#adc6e6]"
+            style={{ borderRadius: "10px" }}
+          >
             <CommentThread
               comments={taskComments}
               taskId={task.id}
@@ -1122,7 +1125,10 @@ export function TaskDetailDrawer({
 
           <Separator />
 
-          <div className="rounded-md p-3 sm:p-4 bg-[#ffbb734d]">
+          <div 
+            className="p-3 sm:p-4 bg-[#ffbb734d] border border-[#f5ac5b]"
+            style={{ borderRadius: "10px" }}
+          >
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 font-medium text-[#171717] text-[16px]">
