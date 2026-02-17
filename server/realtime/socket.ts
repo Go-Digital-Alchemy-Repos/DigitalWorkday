@@ -53,6 +53,7 @@ import {
   onTypingExpired
 } from './typing';
 import { storage } from '../storage';
+import { withSocketPolicy } from './socketPolicy';
 
 // Extended socket interface with authenticated user data
 interface AuthenticatedSocket extends Socket<ClientToServerEvents, ServerToClientEvents> {
@@ -193,61 +194,49 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
       registerTypingSocket(socket.id, authSocket.userId, authSocket.tenantId);
     }
 
-    // Handle typing start
-    socket.on(TYPING_EVENTS.START, async ({ conversationId }) => {
-      if (!authSocket.userId || !authSocket.tenantId) return;
-      
-      const parsed = parseConversationId(conversationId);
-      if (!parsed) return;
+    // Handle typing start (policy-wrapped: auth + tenant + chat membership)
+    socket.on(TYPING_EVENTS.START, withSocketPolicy(
+      authSocket,
+      { requireAuth: true, requireTenant: true, requireChatMembership: true },
+      (ctx, { conversationId }) => {
+        const parsed = parseConversationId(conversationId);
+        if (!parsed) return;
 
-      // Validate membership
-      let isMember = false;
-      try {
-        if (parsed.type === 'channel') {
-          isMember = await storage.isUserInChatChannel(authSocket.userId, parsed.id);
-        } else {
-          const userDmThreads = await storage.getUserChatDmThreads(authSocket.tenantId, authSocket.userId);
-          isMember = userDmThreads.some(t => t.id === parsed.id);
+        const { stateChanged } = startTyping(ctx.tenantId, ctx.userId, conversationId, ctx.socketId);
+
+        if (stateChanged) {
+          const roomName = parsed.type === 'channel' ? `chat:channel:${parsed.id}` : `chat:dm:${parsed.id}`;
+          const payload: ChatTypingUpdatePayload = {
+            conversationId,
+            userId: ctx.userId,
+            isTyping: true,
+          };
+          io?.to(roomName).emit(CHAT_EVENTS.TYPING_UPDATE, payload);
         }
-      } catch {
-        return;
       }
+    ));
 
-      if (!isMember) return;
+    // Handle typing stop (policy-wrapped: auth + tenant + chat membership)
+    socket.on(TYPING_EVENTS.STOP, withSocketPolicy(
+      authSocket,
+      { requireAuth: true, requireTenant: true, requireChatMembership: true },
+      (ctx, { conversationId }) => {
+        const parsed = parseConversationId(conversationId);
+        if (!parsed) return;
 
-      const { stateChanged } = startTyping(authSocket.tenantId, authSocket.userId, conversationId, socket.id);
-      
-      if (stateChanged) {
-        // Broadcast typing update to conversation room
-        const roomName = parsed.type === 'channel' ? `chat:channel:${parsed.id}` : `chat:dm:${parsed.id}`;
-        const payload: ChatTypingUpdatePayload = {
-          conversationId,
-          userId: authSocket.userId,
-          isTyping: true,
-        };
-        io?.to(roomName).emit(CHAT_EVENTS.TYPING_UPDATE, payload);
+        const { stateChanged } = stopTyping(ctx.userId, conversationId, ctx.socketId);
+
+        if (stateChanged) {
+          const roomName = parsed.type === 'channel' ? `chat:channel:${parsed.id}` : `chat:dm:${parsed.id}`;
+          const payload: ChatTypingUpdatePayload = {
+            conversationId,
+            userId: ctx.userId,
+            isTyping: false,
+          };
+          io?.to(roomName).emit(CHAT_EVENTS.TYPING_UPDATE, payload);
+        }
       }
-    });
-
-    // Handle typing stop
-    socket.on(TYPING_EVENTS.STOP, ({ conversationId }) => {
-      if (!authSocket.userId) return;
-
-      const parsed = parseConversationId(conversationId);
-      if (!parsed) return;
-
-      const { stateChanged } = stopTyping(authSocket.userId, conversationId, socket.id);
-      
-      if (stateChanged) {
-        const roomName = parsed.type === 'channel' ? `chat:channel:${parsed.id}` : `chat:dm:${parsed.id}`;
-        const payload: ChatTypingUpdatePayload = {
-          conversationId,
-          userId: authSocket.userId,
-          isTyping: false,
-        };
-        io?.to(roomName).emit(CHAT_EVENTS.TYPING_UPDATE, payload);
-      }
-    });
+    ));
 
     // Handle joining a project room
     socket.on(ROOM_EVENTS.JOIN_PROJECT, ({ projectId }) => {

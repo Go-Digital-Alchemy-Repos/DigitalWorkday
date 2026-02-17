@@ -12,6 +12,7 @@ import aiRouter from "./domains/ai.router";
 import attachmentsRouter from "./domains/attachments.router";
 import flagsRouter from "./domains/flags.router";
 import uploadsRouter from "./domains/uploads.router";
+import chatRouter from "./domains/chat.router";
 
 interface DomainEntry {
   path: string;
@@ -85,6 +86,13 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     domain: "uploads",
     description: "Unified file upload: presign, proxy upload, status. Migrated from legacy routes/uploads.ts (Prompt #7).",
   },
+  {
+    path: "/api/v1/chat",
+    router: chatRouter,
+    policy: "authTenant",
+    domain: "chat",
+    description: "Internal chat system: channels, DMs, messages, threads, reads, search, uploads, mentions. Migrated from legacy routes/chat.ts (Prompt #8).",
+  },
 ];
 
 interface LegacyEntry {
@@ -119,12 +127,13 @@ const LEGACY_DOMAINS: LegacyEntry[] = [
     domain: "tenant-onboarding",
     description: "Tenant onboarding and billing. Auth required, tenant context exempt during onboarding.",
   },
-  {
-    path: "/api/v1/chat",
-    policy: "authTenant",
-    domain: "chat",
-    description: "Internal chat system with Socket.IO integration.",
-  },
+  // chat: migrated to server/http/domains/chat.router.ts (Prompt #8)
+  // {
+  //   path: "/api/v1/chat",
+  //   policy: "authTenant",
+  //   domain: "chat",
+  //   description: "Internal chat system with Socket.IO integration.",
+  // },
   // uploads: migrated to server/http/domains/uploads.router.ts (Prompt #7)
   // {
   //   path: "/api/v1/uploads",

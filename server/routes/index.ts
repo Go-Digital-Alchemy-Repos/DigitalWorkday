@@ -80,7 +80,8 @@ router.use("/v1", workloadReportsRoutes);
 // uploadRoutes: migrated to server/http/domains/uploads.router.ts (Prompt #7)
 // router.use("/v1/uploads", uploadRoutes);
 router.use("/v1", emailOutboxRoutes);
-router.use("/v1/chat", chatRoutes);
+// chatRoutes: migrated to server/http/domains/chat.router.ts (Prompt #8)
+// router.use("/v1/chat", chatRoutes);
 router.use("/v1", chatRetentionRoutes);
 // presenceRoutes: migrated to server/http/domains/presence.router.ts (Prompt #5)
 // router.use("/v1/presence", presenceRoutes);

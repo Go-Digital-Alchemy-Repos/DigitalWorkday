@@ -145,6 +145,7 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
 | attachments | `/api` | `authTenant` | `server/http/domains/attachments.router.ts` | #6 | Feb 2026 |
 | flags | `/api` | `authTenant` | `server/http/domains/flags.router.ts` | #7 | Feb 2026 |
 | uploads | `/api/v1/uploads` | `authTenant` | `server/http/domains/uploads.router.ts` | #7 | Feb 2026 |
+| chat | `/api/v1/chat` | `authTenant` | `server/http/domains/chat.router.ts` | #8 | Feb 2026 |
 
 ### Presence Domain Migration Notes (Prompt #5)
 - **1 endpoint** migrated: GET `/v1/presence` (query all or specific user presence)
@@ -175,6 +176,27 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
 - **Legacy `requireAuth` removed**: Factory `authTenant` policy handles auth+tenant enforcement at router scope, replacing per-handler `requireAuth` calls.
 - **Upload guard middleware applied**: `validateUploadRequest()` on `/presign` with field mapping (`filename`/`contentType`/`size` fields).
 - **Integration tests**: 12 smoke tests in `server/tests/integration/uploadsRoutes.test.ts` covering auth, tenant, routing, validation, enforce-mode guard behavior, and metadata.
+
+### Chat Domain Migration Notes (Prompt #8)
+- **29 endpoints** migrated: channels CRUD + join/leave, DMs CRUD, messages send/edit/delete, thread replies, thread summaries, file uploads, read tracking, search, user lists, mentionable users, channel member management.
+- **Mount path**: `/api/v1/chat` — preserves legacy URL structure.
+- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
+- **De-duplication**: Removed 3 dead-code duplicate routes (PATCH/DELETE `/messages/:id` duplicated `/messages/:messageId`, GET `/users` duplicated at line 1230). Only first-registered Express routes were effective.
+- **Rate limiting preserved**: `chatSendRateLimiter` on POST `/channels/:channelId/messages` and POST `/dm/:dmId/messages`.
+- **Socket.IO integration preserved**: All `emitToTenant`, `emitToChatChannel`, `emitToChatDm` real-time broadcast calls retained verbatim.
+- **Chat debug instrumentation preserved**: All `chatDebugStore.logEvent()` calls retained for observability.
+- **Direct DB query**: GET `/messages/recent-since-login` uses direct Drizzle ORM query against `chatMessages` table (read-only). Not refactored to storage interface in this migration.
+- **File upload**: POST `/uploads` uses multer in-memory buffer + S3/R2 upload via `getStorageProvider()`.
+- **Policy tests**: 11 HTTP policy drift tests in `server/tests/chat-router-policy.test.ts`.
+
+### Socket.IO Policy Wrapper (Prompt #8)
+- **New file**: `server/realtime/socketPolicy.ts` — reusable `withSocketPolicy()` decorator for Socket.IO event handlers.
+- **Options**: `requireAuth`, `requireTenant`, `requireChatMembership` — composable policy checks.
+- **AuthorizedContext**: Handler receives `{ userId, tenantId, socketId }` after policy checks pass.
+- **Membership validation**: When `requireChatMembership: true`, validates user is a member of the channel/DM specified by `conversationId` in the event payload.
+- **Pilot events**: `TYPING_EVENTS.START` and `TYPING_EVENTS.STOP` in `server/realtime/socket.ts` now use `withSocketPolicy()` instead of inline auth/tenant/membership checks.
+- **Unit tests**: 7 tests in `server/tests/chat-socket-policy.test.ts` covering auth denial, tenant denial, membership validation, and successful handler invocation.
+- **Future**: All chat Socket.IO event handlers (room join/leave, presence) can be migrated to use `withSocketPolicy()` for consistent governance.
 
 ### Flags Domain Migration Notes (Prompt #7)
 - **1 endpoint**: GET `/crm/flags` — CRM feature flags.
@@ -236,7 +258,7 @@ To migrate the next domain (Prompt #3):
 7. `/api` attachments — attachment upload/download (DONE - Prompt #6)
 8. `/api/v1/uploads` — file uploads (DONE - Prompt #7)
    - Also: `/api` flags — CRM feature flags (DONE - Prompt #7, extracted from attachments)
-9. `/api/v1/chat` — chat system (medium, has Socket.IO deps)
+9. `/api/v1/chat` — chat system (DONE - Prompt #8, 29 endpoints + socket policy pilot)
 10. `/api/v1/super` — super admin (large, many sub-routers)
 11. `/api` — remaining main domain routes (largest, final migration)
 
