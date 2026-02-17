@@ -167,32 +167,36 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
     }
 
     // Handle presence ping (heartbeat)
-    socket.on(PRESENCE_EVENTS.PING, () => {
-      if (authSocket.userId && authSocket.tenantId) {
-        const { info, statusChanged } = recordPing(authSocket.tenantId, authSocket.userId);
-        // Broadcast if status changed (e.g., idle -> online)
+    socket.on(PRESENCE_EVENTS.PING, withSocketPolicy(
+      authSocket,
+      { requireAuth: true, requireTenant: true },
+      (ctx) => {
+        const { info, statusChanged } = recordPing(ctx.tenantId, ctx.userId);
         if (statusChanged) {
-          const tenantRoom = `tenant:${authSocket.tenantId}`;
+          const tenantRoom = `tenant:${ctx.tenantId}`;
           io?.to(tenantRoom).emit(PRESENCE_EVENTS.UPDATE, toPresencePayload(info));
         }
       }
-    });
+    ));
 
     // Handle presence idle toggle
-    socket.on(PRESENCE_EVENTS.IDLE, ({ isIdle }: { isIdle: boolean }) => {
-      if (authSocket.userId && authSocket.tenantId) {
-        const { info, statusChanged } = setIdle(authSocket.tenantId, authSocket.userId, isIdle);
+    socket.on(PRESENCE_EVENTS.IDLE, withSocketPolicy(
+      authSocket,
+      { requireAuth: true, requireTenant: true },
+      (ctx, { isIdle }: { isIdle: boolean }) => {
+        const { info, statusChanged } = setIdle(ctx.tenantId, ctx.userId, isIdle);
         if (statusChanged) {
-          const tenantRoom = `tenant:${authSocket.tenantId}`;
+          const tenantRoom = `tenant:${ctx.tenantId}`;
           io?.to(tenantRoom).emit(PRESENCE_EVENTS.UPDATE, toPresencePayload(info));
         }
       }
-    });
+    ));
 
     // Register socket for typing tracking
     if (authSocket.userId && authSocket.tenantId) {
       registerTypingSocket(socket.id, authSocket.userId, authSocket.tenantId);
     }
+
 
     // Handle typing start (policy-wrapped: auth + tenant + chat membership)
     socket.on(TYPING_EVENTS.START, withSocketPolicy(
@@ -282,100 +286,48 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
 
     // Handle joining/leaving chat rooms (channels and DMs)
     // Authorization: Uses server-derived userId/tenantId from authenticated session (ignores client-supplied IDs)
-    socket.on(CHAT_ROOM_EVENTS.JOIN, async ({ targetType, targetId }) => {
-      const roomName = `chat:${targetType}:${targetId}`;
-      const conversationId = `${targetType}:${targetId}`;
-      
-      // Use authenticated user data from socket, not client-supplied
-      const serverUserId = authSocket.userId;
-      const serverTenantId = authSocket.tenantId;
-      
-      if (!serverUserId) {
-        log(`Client ${socket.id} denied chat room join: not authenticated`, 'socket.io');
-        chatDebugStore.logEvent({
-          eventType: 'room_access_denied',
-          socketId: socket.id,
-          roomName,
-          conversationId,
-          errorCode: 'NOT_AUTHENTICATED',
-        });
-        return;
-      }
-      
-      // Require tenantId for chat room access (super_users without tenant context cannot access chat)
-      if (!serverTenantId) {
-        log(`Client ${socket.id} denied chat room join: no tenant context (user: ${serverUserId})`, 'socket.io');
-        chatDebugStore.logEvent({
-          eventType: 'room_access_denied',
-          socketId: socket.id,
-          userId: serverUserId,
-          roomName,
-          conversationId,
-          errorCode: 'NO_TENANT_CONTEXT',
-        });
-        return;
-      }
-      
-      // Validate chat room access using server-derived identity
-      try {
-        const { storage } = await import('../storage');
-        const hasAccess = await storage.validateChatRoomAccess(
-          targetType, 
-          targetId, 
-          serverUserId, 
-          serverTenantId
-        );
-        
-        if (!hasAccess) {
-          log(`Client ${socket.id} denied access to chat room: ${roomName} (user: ${serverUserId}, tenant: ${serverTenantId})`, 'socket.io');
-          chatDebugStore.logEvent({
-            eventType: 'room_access_denied',
-            socketId: socket.id,
-            userId: serverUserId,
-            tenantId: serverTenantId || undefined,
-            roomName,
-            conversationId,
-            errorCode: 'ACCESS_DENIED',
-          });
-          return;
-        }
-        
+    socket.on(CHAT_ROOM_EVENTS.JOIN, withSocketPolicy(
+      authSocket,
+      { requireAuth: true, requireTenant: true, requireChatRoomAccess: true },
+      async (ctx, { targetType, targetId }) => {
+        const roomName = `chat:${targetType}:${targetId}`;
+        const conversationId = `${targetType}:${targetId}`;
+
         socket.join(roomName);
         log(`Client ${socket.id} joined chat room: ${roomName}`, 'socket.io');
         chatDebugStore.logEvent({
           eventType: 'room_joined',
           socketId: socket.id,
-          userId: serverUserId,
-          tenantId: serverTenantId || undefined,
+          userId: ctx.userId,
+          tenantId: ctx.tenantId,
           roomName,
           conversationId,
         });
-      } catch (error) {
-        log(`Error validating chat room access for ${socket.id}: ${error}`, 'socket.io');
+      }
+    ));
+
+    socket.on(CHAT_ROOM_EVENTS.LEAVE, withSocketPolicy(
+      authSocket,
+      { requireAuth: true, requireTenant: true },
+      (ctx, { targetType, targetId }) => {
+        const roomName = `chat:${targetType}:${targetId}`;
+        const conversationId = `${targetType}:${targetId}`;
+        
+        socket.leave(roomName);
+        invalidateMembershipCache(socket.id, conversationId);
+        
+        log(`Client ${socket.id} left chat room: ${roomName}`, 'socket.io');
         chatDebugStore.logEvent({
-          eventType: 'error',
+          eventType: 'room_left',
           socketId: socket.id,
-          userId: serverUserId,
-          tenantId: serverTenantId || undefined,
+          userId: ctx.userId,
+          tenantId: ctx.tenantId,
           roomName,
-          errorCode: 'VALIDATION_ERROR',
+          conversationId,
         });
       }
-    });
+    ));
 
-    socket.on(CHAT_ROOM_EVENTS.LEAVE, ({ targetType, targetId }) => {
-      const roomName = `chat:${targetType}:${targetId}`;
-      socket.leave(roomName);
-      log(`Client ${socket.id} left chat room: ${roomName}`, 'socket.io');
-      chatDebugStore.logEvent({
-        eventType: 'room_left',
-        socketId: socket.id,
-        userId: authSocket.userId,
-        tenantId: authSocket.tenantId || undefined,
-        roomName,
-        conversationId: `${targetType}:${targetId}`,
-      });
-    });
 
     // Handle client disconnection
     socket.on('disconnect', (reason) => {
@@ -390,6 +342,8 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
 
       // Clean up typing state for this socket
       const typingCleanup = cleanupSocketTyping(socket.id);
+      cleanupSocketMembershipCache(socket.id);
+
       for (const { conversationId, userId } of typingCleanup) {
         const parsed = parseConversationId(conversationId);
         if (parsed) {
