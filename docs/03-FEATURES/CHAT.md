@@ -25,7 +25,7 @@ Tenant-scoped Slack-like messaging with channels and direct messages.
 | Chat Page | `client/src/pages/chat.tsx` | Main chat UI |
 | Socket Client | `client/src/lib/realtime/socket.ts` | WebSocket management |
 | Socket Server | `server/realtime/socket.ts` | Room and event handling |
-| Chat Routes | `server/routes/chat.ts` | REST API endpoints |
+| Chat Routes | `server/http/domains/chat.router.ts` | REST API endpoints (factory-mounted) |
 
 ### Socket Events
 

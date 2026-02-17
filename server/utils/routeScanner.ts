@@ -40,7 +40,6 @@ const DOMAIN_MAP: Record<string, { domain: string; displayName: string }> = {
   "emailOutbox.ts": { domain: "email-outbox", displayName: "Email Outbox" },
   "systemStatus.ts": { domain: "system-status", displayName: "System Status" },
   "systemIntegrations.ts": { domain: "system-integrations", displayName: "System Integrations" },
-  "chat.ts": { domain: "chat", displayName: "Chat" },
   "chatRetention.ts": { domain: "chat-retention", displayName: "Chat Retention" },
   "ai.ts": { domain: "ai", displayName: "AI" },
   "webhooks.ts": { domain: "webhooks", displayName: "Webhooks" },
@@ -73,7 +72,6 @@ const BASE_PATH_MAP: Record<string, string> = {
   "emailOutbox.ts": "/api/v1",              // router.use("/v1", emailOutboxRoutes)
   "systemStatus.ts": "/api/v1/super/status", // router.use("/v1/super/status", systemStatusRoutes)
   "systemIntegrations.ts": "/api/v1/system", // router.use("/v1/system", systemIntegrationsRoutes)
-  "chat.ts": "/api/v1/chat",                // router.use("/v1/chat", chatRoutes)
   "chatRetention.ts": "/api/v1",            // router.use("/v1", chatRetentionRoutes)
   "ai.ts": "/api/v1/ai",                    // router.use("/v1/ai", aiRoutes)
   "tenancyHealth.ts": "/api",               // router.use(tenancyHealthRoutes)

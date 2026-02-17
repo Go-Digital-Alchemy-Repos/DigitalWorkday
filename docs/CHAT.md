@@ -10,7 +10,7 @@ MyWorkDay includes a tenant-scoped Slack-like chat system with channels and dire
 
 - **Client Socket** (`client/src/lib/realtime/socket.ts`): Manages Socket.IO connection with automatic reconnection
 - **Server Socket** (`server/realtime/socket.ts`): Handles room management and event broadcasting
-- **Chat Routes** (`server/routes/chat.ts`): REST API for CRUD operations
+- **Chat Routes** (`server/http/domains/chat.router.ts`): REST API for CRUD operations (factory-mounted)
 - **Chat Page** (`client/src/pages/chat.tsx`): Main chat UI with channels, DMs, and message display
 
 ### Event Types (from `shared/events/index.ts`)

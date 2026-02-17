@@ -1,0 +1,65 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Chat Premium Upgrade (C3) — Make chat feel less boring and easier on mobile.
+
+Constraints:
+- UI-only changes (no backend changes).
+- Preserve desktop behavior.
+- Do not break existing chat scroll/keyboard work from Phase 3B.
+
+DELIVERABLES:
+1) Mobile chat list upgrades
+2) Conversation UI upgrades (bubbles, grouping, timestamps)
+3) Better “at a glance” state (unread, typing, seen)
+4) Quick actions that reduce friction (without adding features that need backend)
+5) Docs update + verification checklist
+
+MOBILE CHAT LIST IMPROVEMENTS
+A) Conversation row readability:
+- larger tap target (>=44px)
+- clearer unread state (dot or badge)
+- show last message preview with truncation
+- show timestamp right-aligned
+- show subtle typing indicator preview in list when active typing exists
+
+B) Search UX:
+- ensure search input is easy to use on mobile
+- debounce search (150–250ms)
+- loading/empty states
+
+CONVERSATION UI IMPROVEMENTS
+C) Message bubble design:
+- clear inbound/outbound contrast (use existing theme tokens)
+- max width for readability
+- break-words
+- link styling
+- emoji sizing doesn’t explode layout
+
+D) Grouping:
+- group consecutive messages by sender
+- reduce repeated avatars/names
+- show timestamp separators intelligently (time gap)
+
+E) Read/typing integration:
+- typing indicator stays stable (reserved area)
+- “Seen” (from C2) displays subtly on mobile for DMs
+
+F) Interaction polish:
+- long-press on message opens actions sheet (copy text, maybe delete if permitted)
+  - If delete/edit already exist, wire them.
+  - If not, only implement Copy Text (safe).
+- Add a small “scroll to bottom” / “jump to latest” button polish:
+  - nicer placement and animation
+  - do not cover composer
+
+DOC
+G) Update docs/mobile-audit.md:
+“Chat Premium C3 — Mobile Polish”
+- what changed
+- verification checklist
+
+OUTPUT REQUIREMENTS
+- files modified
+- what was done to reduce “boring/hard to use”
+- any follow-ups recommended

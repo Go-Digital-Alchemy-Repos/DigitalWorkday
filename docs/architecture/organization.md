@@ -167,3 +167,11 @@ socket.on(EVENT_NAME, withSocketPolicy(socket, {
 - Use `useCallback` for callbacks passed to child components
 - Move pure utility functions outside component bodies
 - Use React Query with appropriate stale times per data type
+
+## Removed Modules
+
+### server/routes/chat.ts (deleted 2026-02-17)
+- **Reason**: 1,492-line legacy chat router fully superseded by `server/http/domains/chat.router.ts` (factory-mounted at `/api/v1/chat`).
+- **Proof**: Zero imports/requires across the entire codebase. File was marked `@deprecated` since 2026-02-17 and confirmed dead via grep.
+- **New location**: `server/http/domains/chat.router.ts` — registered in `server/http/routeRegistry.ts`, mounted via `server/http/mount.ts`.
+- **Anti-regression**: Do NOT recreate `server/routes/chat.ts`. All chat route additions go to `server/http/domains/chat.router.ts`.

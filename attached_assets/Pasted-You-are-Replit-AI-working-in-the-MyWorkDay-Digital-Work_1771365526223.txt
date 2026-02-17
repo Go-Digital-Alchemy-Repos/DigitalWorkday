@@ -1,0 +1,72 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Chat Premium Upgrade (C1) — Implement reliable typing awareness end-to-end.
+
+Requirements:
+- Do NOT change any existing Socket.IO event names or payload shapes.
+- You MAY add NEW events if needed (recommended: a single "typing:update" broadcast).
+- Must enforce auth + tenant + membership using withSocketPolicy and requireChatMembership.
+- Must be robust (TTL expiry if STOP is missed).
+- Must be mobile-friendly (indicator does not jump layout).
+
+DELIVERABLES:
+1) Backend: robust typing state + broadcast
+2) Frontend: typing indicator UI in conversation
+3) Tests: socket tests for typing behavior
+4) Docs: short update in docs/mobile-audit.md
+
+PHASE 0 — DISCOVERY
+- Locate existing typing events/constants (TYPING_EVENTS.START/STOP, etc.)
+- Confirm which rooms are used for conversations (channel + DM)
+- Confirm typing events currently emit to correct room and are guarded by withSocketPolicy()
+
+BACKEND IMPLEMENTATION
+1) Create a typing state tracker (in-memory):
+- Key: tenantId + conversationId
+- Value: map(userId -> lastTypingAt)
+- TTL: expire entries after 6–8 seconds of inactivity
+- Cleanup: run cleanup opportunistically on start/stop events (no intervals required, but allowed)
+
+2) Keep existing START/STOP event handlers:
+- On START:
+  - set typing timestamp
+  - emit NEW event: CHAT_TYPING.UPDATE (or similar) to the conversation room
+- On STOP:
+  - remove user from typing map
+  - emit NEW update event
+
+3) Payload for the NEW update event:
+{ conversationId, typingUserIds: string[], updatedAt: string }
+- Exclude the sender userId from their own indicator client-side (or server-side).
+- Do not include PII beyond IDs.
+
+FRONTEND IMPLEMENTATION
+4) Subscribe to typing update event:
+- Store typing userIds in conversation state keyed by conversationId
+- Render indicator above composer:
+  - 1 user: “{Name} is typing…”
+  - 2 users: “{Name} and {Name} are typing…”
+  - 3+: “Several people are typing…”
+- Use existing user map/cache to resolve names.
+- Must not cause layout jump: reserve a small fixed-height area for the indicator.
+
+TESTS
+5) Add socket unit tests (>=6):
+- unauth typing start denied
+- wrong tenant denied
+- non-member denied
+- member allowed and update emitted to room
+- TTL expiration clears typing state (simulate time)
+- multiple users typing produces merged list
+
+DOC
+6) Update docs/mobile-audit.md:
+Add “Chat Premium C1 — Typing Awareness”
+- summary + verification steps
+
+OUTPUT REQUIREMENTS
+- event names used (existing + new)
+- files changed
+- tests added/passing
+- quick manual verification checklist

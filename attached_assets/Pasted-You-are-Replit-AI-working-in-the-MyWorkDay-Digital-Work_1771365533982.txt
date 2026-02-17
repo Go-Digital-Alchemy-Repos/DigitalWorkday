@@ -1,0 +1,100 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Chat Premium Upgrade (C2) — Implement read receipts in a safe, scalable way.
+
+Constraints:
+- Do NOT change DB schema.
+- Do NOT change existing API URLs.
+- Do NOT change existing Socket.IO event names/payloads.
+- You MAY add NEW events and NEW optional fields in NEW endpoints only.
+- Must enforce auth + tenant + membership checks everywhere (withSocketPolicy + requireChatMembership).
+
+Read Receipt Strategy:
+1) Implement conversation-level “last read” first (most useful and cheapest).
+2) If schema already supports per-message reads, add per-message markers (optional).
+
+DELIVERABLES:
+1) Backend: ability to mark conversation read + broadcast read state
+2) Frontend: show read status clearly in mobile-friendly way
+3) Tests: socket tests + small integration tests
+4) Docs update
+
+PHASE 0 — DISCOVERY (MANDATORY)
+1) Inspect shared/schema.ts for existing structures:
+- conversation_members lastReadAt?
+- chat_reads table?
+- message_reads table?
+- chat_message_reads?
+2) Find existing endpoints or services:
+- mark read, unread counts, reads join
+3) Determine what you can support WITHOUT schema changes:
+- If conversation-level lastReadAt exists, use it.
+- If only message_reads exists, derive lastReadAt or lastReadMessageId.
+
+BACKEND IMPLEMENTATION
+A) Mark-as-read trigger
+4) Implement mark-as-read in ONE of these ways (choose the one that fits existing system best):
+Option 1 (recommended): Socket event
+- New event: CHAT_READ.MARK (or similar)
+- Payload: { conversationId, lastReadMessageId? }
+Option 2: HTTP endpoint (if you already have it)
+- Reuse existing endpoint if present.
+- Or add a new minimal endpoint under chat domain (but keep URLs consistent with existing versioning).
+
+5) When the client opens a conversation and is at/near bottom:
+- emit MARK read event once (debounced)
+- and when new messages arrive and user is near bottom, mark read again (throttled)
+
+B) Persistence
+6) Update the existing read storage:
+- conversation-level: update lastReadAt and/or lastReadMessageId for (conversationId, userId)
+- ensure tenant scoping
+- do not create per-message rows unless schema already does and it’s cheap
+
+C) Broadcast read state
+7) Broadcast a NEW read update event to the conversation room:
+- CHAT_READ.UPDATE payload: { conversationId, userId, lastReadAt?, lastReadMessageId? }
+
+FRONTEND IMPLEMENTATION
+D) Display read receipts
+8) In the conversation:
+- For DMs:
+  - show “Seen” / “Seen {time}” on the most recent message sent by current user when the other user’s lastReadAt / lastReadMessageId covers it
+- For channels:
+  - show a subtle “Read by X” only in a lightweight way (do NOT list many avatars on mobile)
+  - optionally show count of members who have read up to the latest message
+
+9) In the chat list:
+- ensure unread badge remains accurate
+- optionally show “Seen” indicator for the last outbound message in DM (small).
+
+10) UX rules:
+- Never spam server: throttle mark-read calls (e.g., once every 2–5 seconds max per conversation).
+- Only mark read when the conversation is in focus and user is near bottom.
+
+TESTS
+11) Add tests:
+Socket unit tests (>=6):
+- unauth mark read denied
+- wrong tenant denied
+- non-member denied
+- member mark read updates storage
+- read update broadcast emitted to correct room
+- throttling logic prevents spam (if implemented in server helper or client)
+Integration tests (>=2) if feasible:
+- mark read affects unread counts endpoint result (if you have unread counts API)
+
+DOC
+12) Update docs/mobile-audit.md:
+“Chat Premium C2 — Read Receipts”
+- behavior rules (DM vs channel)
+- throttling rules
+- verification checklist
+
+OUTPUT REQUIREMENTS
+- what read storage you used (exact table/fields)
+- events added
+- DM behavior vs channel behavior
+- tests added/passing
+- manual verification steps

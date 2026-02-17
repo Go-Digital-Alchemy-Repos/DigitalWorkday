@@ -9,7 +9,7 @@
 | Field | Value |
 |-------|-------|
 | **Domain** | Chat |
-| **Route File(s)** | `server/routes/chat.ts` |
+| **Route File(s)** | `server/http/domains/chat.router.ts` |
 | **Base Path(s)** | /api/v1/chat |
 
 ---
@@ -40,7 +40,7 @@
 **Last Synced:** 2026-02-05T02:15:12.089Z
 
 **Synced From:**
-- `server/routes/chat.ts`
+- `server/http/domains/chat.router.ts`
 
 ### Endpoints
 
