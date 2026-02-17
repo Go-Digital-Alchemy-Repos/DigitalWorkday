@@ -968,11 +968,33 @@ export function TaskDetailDrawer({
 
           <div className="rounded-md p-3 sm:p-4 bg-muted/30">
             <div className="space-y-2">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 font-medium text-[#171717] text-[16px]">
-                  <Tag className="h-3.5 w-3.5" />
-                  Tags
-                </label>
+              <label className="flex items-center gap-2 font-medium text-[#171717] text-[16px]">
+                <Tag className="h-3.5 w-3.5" />
+                Tags
+              </label>
+              <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center">
+                {taskTags.map((tag) => (
+                  <Badge
+                    key={tag.id}
+                    variant="secondary"
+                    className="gap-1 pr-1"
+                    style={{ backgroundColor: tag.color ? `${tag.color}20` : undefined, borderColor: tag.color || undefined }}
+                    data-testid={`task-tag-${tag.id}`}
+                  >
+                    <span style={{ color: tag.color || undefined }}>{tag.name}</span>
+                    <button
+                      className="ml-1 h-3 w-3 rounded-full hover:bg-destructive/20 flex items-center justify-center"
+                      onClick={() => removeTagFromTaskMutation.mutate(tag.id)}
+                      data-testid={`button-remove-tag-${tag.id}`}
+                    >
+                      <X className="h-2 w-2" />
+                    </button>
+                  </Badge>
+                ))}
+                {taskTags.length === 0 && (
+                  <span className="text-sm text-muted-foreground">No tags</span>
+                )}
+                
                 <Popover open={tagPopoverOpen} onOpenChange={(open) => {
                   setTagPopoverOpen(open);
                   if (!open) {
@@ -981,9 +1003,8 @@ export function TaskDetailDrawer({
                   }
                 }}>
                   <PopoverTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-6 px-2" data-testid="button-add-tag">
-                      <Plus className="h-3.5 w-3.5 mr-1" />
-                      Add
+                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-full hover:bg-muted ml-auto">
+                      <Plus className="h-4 w-4" />
                     </Button>
                   </PopoverTrigger>
                   <PopoverContent className="w-56 p-2" align="end">
@@ -1085,47 +1106,16 @@ export function TaskDetailDrawer({
                   </PopoverContent>
                 </Popover>
               </div>
-              <div className="flex flex-wrap gap-1.5">
-                {taskTags.map((tag) => (
-                  <Badge
-                    key={tag.id}
-                    variant="secondary"
-                    className="gap-1 pr-1"
-                    style={{ backgroundColor: tag.color ? `${tag.color}20` : undefined, borderColor: tag.color || undefined }}
-                    data-testid={`task-tag-${tag.id}`}
-                  >
-                    <span style={{ color: tag.color || undefined }}>{tag.name}</span>
-                    <button
-                      className="ml-1 h-3 w-3 rounded-full hover:bg-destructive/20 flex items-center justify-center"
-                      onClick={() => removeTagFromTaskMutation.mutate(tag.id)}
-                      data-testid={`button-remove-tag-${tag.id}`}
-                    >
-                      <X className="h-2 w-2" />
-                    </button>
-                  </Badge>
-                ))}
-                {taskTags.length === 0 && (
-                  <span className="text-sm text-muted-foreground">No tags</span>
-                )}
-              </div>
             </div>
           </div>
 
-          <div className="rounded-md p-3 sm:p-4 bg-muted/30">
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 font-medium text-[#171717] text-[16px]">
-                <X className="h-3.5 w-3.5" />
-                Attachments
-              </label>
-              {task.projectId && (
-                <AttachmentUploader taskId={task.id} projectId={task.projectId} />
-              )}
-              {!task.projectId && (
-                <div className="text-sm text-muted-foreground">
-                  Attachments are available for project tasks only
-                </div>
-              )}
-            </div>
+          <div className="mt-4">
+            <AttachmentUploader 
+              taskId={task.id} 
+              projectId={task.projectId || null}
+              onUploadSuccess={invalidateTaskQueries}
+              onDeleteSuccess={invalidateTaskQueries}
+            />
           </div>
 
           <Separator />
@@ -1146,7 +1136,7 @@ export function TaskDetailDrawer({
 
           <Separator />
 
-          <div className="rounded-md p-3 sm:p-4 bg-muted/30">
+          <div className="rounded-md p-3 sm:p-4 bg-[#ffbb734d]">
             <div className="space-y-3">
               <div className="flex items-center justify-between">
                 <label className="flex items-center gap-2 font-medium text-[#171717] text-[16px]">

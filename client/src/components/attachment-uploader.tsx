@@ -345,132 +345,135 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
   const completedAttachments = attachments.filter(a => a.uploadStatus === "complete");
 
   return (
-    <div className="mt-4 space-y-3">
-      <div className="flex items-center gap-2">
+    <div className="rounded-md p-3 sm:p-4 bg-muted/30">
+      <div className="flex items-center gap-2 mb-3">
         <Paperclip className="h-4 w-4 text-muted-foreground" />
-        <span className="font-medium text-[16px]">Attachments</span>
+        <span className="font-medium text-[16px] text-[#171717]">Attachments</span>
       </div>
-      <div
-        className={`border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer ${
-          isDragOver 
-            ? "border-primary bg-primary/5" 
-            : "border-muted-foreground/20 hover:border-muted-foreground/40"
-        }`}
-        onDrop={handleDrop}
-        onDragOver={handleDragOver}
-        onDragLeave={handleDragLeave}
-        onDragEnter={handleDragEnter}
-        onClick={() => fileInputRef.current?.click()}
-        data-testid="dropzone-attachments"
-      >
-        <input
-          ref={fileInputRef}
-          type="file"
-          multiple
-          className="hidden"
-          onChange={(e) => handleFileSelect(e.target.files)}
-          data-testid="input-file-attachments"
-        />
-        <div className="flex flex-col items-center justify-center gap-2 text-center pointer-events-none">
-          <Upload className="h-6 w-6 text-muted-foreground" />
-          <div className="text-sm text-muted-foreground">
-            <span>Drop files here or </span>
-            <span className="text-primary hover:underline">browse</span>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Max {formatFileSize(config.maxFileSizeBytes)} per file
-          </p>
-        </div>
-      </div>
-      {uploadingFiles.length > 0 && (
-        <div className="space-y-2">
-          {uploadingFiles.map((file) => (
-            <div
-              key={file.id}
-              className="flex items-center gap-2 p-2 bg-muted/50 rounded-md"
-            >
-              {file.status === "error" ? (
-                <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
-              ) : (
-                <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
-              )}
-              <span className="text-sm truncate flex-1">{file.name}</span>
-              {file.status === "uploading" && (
-                <span className="text-xs text-muted-foreground">Uploading...</span>
-              )}
-              {file.status === "completing" && (
-                <span className="text-xs text-muted-foreground">Completing...</span>
-              )}
-              {file.status === "error" && (
-                <>
-                  <span className="text-xs text-destructive">{file.error}</span>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-6 w-6"
-                    onClick={() => removeUploadingFile(file.id)}
-                  >
-                    <X className="h-3 w-3" />
-                  </Button>
-                </>
-              )}
+      <div className="space-y-3">
+        <div
+          className={`border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer ${
+            isDragOver 
+              ? "border-primary bg-primary/5" 
+              : "border-muted-foreground/20 hover:border-muted-foreground/40"
+          }`}
+          onDrop={handleDrop}
+          onDragOver={handleDragOver}
+          onDragLeave={handleDragLeave}
+          onDragEnter={handleDragEnter}
+          onClick={() => fileInputRef.current?.click()}
+          data-testid="dropzone-attachments"
+        >
+          <input
+            ref={fileInputRef}
+            type="file"
+            multiple
+            className="hidden"
+            onChange={(e) => handleFileSelect(e.target.files)}
+            data-testid="input-file-attachments"
+          />
+          <div className="flex flex-col items-center justify-center gap-2 text-center pointer-events-none">
+            <Upload className="h-6 w-6 text-muted-foreground" />
+            <div className="text-sm text-muted-foreground">
+              <span>Drop files here or </span>
+              <span className="text-primary hover:underline">browse</span>
             </div>
-          ))}
+            <p className="text-xs text-muted-foreground">
+              Max {formatFileSize(config.maxFileSizeBytes)} per file
+            </p>
+          </div>
         </div>
-      )}
-      {isLoading ? (
-        <div className="flex items-center justify-center py-4">
-          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-        </div>
-      ) : completedAttachments.length > 0 ? (
-        <div className="space-y-2">
-          {completedAttachments.map((attachment) => {
-            const FileIcon = getFileIcon(attachment.mimeType);
-            return (
+        {uploadingFiles.length > 0 && (
+          <div className="space-y-2">
+            {uploadingFiles.map((file) => (
               <div
-                key={attachment.id}
-                className="flex items-center gap-2 p-2 bg-muted/30 rounded-md group"
-                data-testid={`attachment-item-${attachment.id}`}
+                key={file.id}
+                className="flex items-center gap-2 p-2 bg-muted/50 rounded-md"
               >
-                <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
-                <div className="flex-1 min-w-0">
-                  <p className="text-sm truncate">{attachment.originalFileName}</p>
-                  <p className="text-xs text-muted-foreground">
-                    {formatFileSize(attachment.fileSizeBytes)}
-                    {attachment.uploadedByUser && ` • ${attachment.uploadedByUser.name}`}
-                  </p>
-                </div>
-                <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7"
-                    onClick={() => downloadMutation.mutate(attachment.id)}
-                    disabled={downloadMutation.isPending}
-                    data-testid={`button-download-${attachment.id}`}
-                  >
-                    <Download className="h-3.5 w-3.5" />
-                  </Button>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-7 w-7 text-destructive hover:text-destructive"
-                    onClick={() => deleteMutation.mutate(attachment.id)}
-                    disabled={deleteMutation.isPending}
-                    data-testid={`button-delete-${attachment.id}`}
-                  >
-                    <Trash2 className="h-3.5 w-3.5" />
-                  </Button>
-                </div>
+                {file.status === "error" ? (
+                  <AlertCircle className="h-4 w-4 text-destructive shrink-0" />
+                ) : (
+                  <Loader2 className="h-4 w-4 animate-spin text-primary shrink-0" />
+                )}
+                <span className="text-sm truncate flex-1">{file.name}</span>
+                {file.status === "uploading" && (
+                  <span className="text-xs text-muted-foreground">Uploading...</span>
+                )}
+                {file.status === "completing" && (
+                  <span className="text-xs text-muted-foreground">Completing...</span>
+                )}
+                {file.status === "error" && (
+                  <>
+                    <span className="text-xs text-destructive">{file.error}</span>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      onClick={() => removeUploadingFile(file.id)}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </>
+                )}
               </div>
-            );
-          })}
-        </div>
-      ) : (
-        <p className="text-sm text-muted-foreground text-center py-2">
-          No attachments yet
-        </p>
-      )}
+            ))}
+          </div>
+        )}
+        {isLoading ? (
+          <div className="flex items-center justify-center py-4">
+            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+          </div>
+        ) : completedAttachments.length > 0 ? (
+          <div className="space-y-2">
+            {completedAttachments.map((attachment) => {
+              const FileIcon = getFileIcon(attachment.mimeType);
+              return (
+                <div
+                  key={attachment.id}
+                  className="flex items-center gap-2 p-2 bg-muted/30 rounded-md group"
+                  data-testid={`attachment-item-${attachment.id}`}
+                >
+                  <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm truncate">{attachment.originalFileName}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {formatFileSize(attachment.fileSizeBytes)}
+                      {attachment.uploadedByUser && ` • ${attachment.uploadedByUser.name}`}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7"
+                      onClick={() => downloadMutation.mutate(attachment.id)}
+                      disabled={downloadMutation.isPending}
+                      data-testid={`button-download-${attachment.id}`}
+                    >
+                      <Download className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={() => deleteMutation.mutate(attachment.id)}
+                      disabled={deleteMutation.isPending}
+                      data-testid={`button-delete-${attachment.id}`}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        ) : (
+          <p className="text-sm text-muted-foreground text-center py-2">
+            No attachments yet
+          </p>
+        )}
+      </div>
     </div>
+  );
   );
 }
