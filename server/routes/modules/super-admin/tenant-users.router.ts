@@ -23,6 +23,7 @@ import {
   passwordResetTokens,
   userUiPreferences,
 } from '@shared/schema';
+import { cleanupUserReferences } from '../../../utils/userDeletion';
 import { tenantIntegrationService } from '../../../services/tenantIntegrations';
 import Mailgun from 'mailgun.js';
 import FormData from 'form-data';
@@ -629,19 +630,15 @@ tenantUsersRouter.delete("/tenants/:tenantId/users/:userId", requireSuperUser, a
       });
     }
     
-    await db.delete(workspaceMembers).where(eq(workspaceMembers.userId, userId));
-    await db.delete(teamMembers).where(eq(teamMembers.userId, userId));
-    await db.delete(projectMembers).where(eq(projectMembers.userId, userId));
-    await db.delete(divisionMembers).where(eq(divisionMembers.userId, userId));
-    await db.delete(taskAssignees).where(eq(taskAssignees.userId, userId));
-    await db.update(projects).set({ createdBy: null }).where(eq(projects.createdBy, userId));
-    await db.delete(timeEntries).where(eq(timeEntries.userId, userId));
-    await db.delete(userUiPreferences).where(eq(userUiPreferences.userId, userId));
-    await db.delete(activityLog).where(eq(activityLog.actorUserId, userId));
-    await db.delete(comments).where(eq(comments.userId, userId));
-    await db.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, userId));
-    await db.delete(invitations).where(eq(invitations.email, existingUser.email));
-    await db.delete(users).where(and(eq(users.id, userId), eq(users.tenantId, tenantId)));
+    const actorId = superUser?.id;
+    if (!actorId) {
+      return res.status(401).json({ error: "Actor identity required for user deletion" });
+    }
+    await db.transaction(async (tx) => {
+      await cleanupUserReferences(tx, userId, actorId);
+      await tx.delete(invitations).where(eq(invitations.email, existingUser.email));
+      await tx.delete(users).where(and(eq(users.id, userId), eq(users.tenantId, tenantId)));
+    });
     
     await recordTenantAuditEvent(
       tenantId,

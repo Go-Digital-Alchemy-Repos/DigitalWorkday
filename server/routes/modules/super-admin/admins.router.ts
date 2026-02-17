@@ -54,6 +54,7 @@ import {
   systemSettings,
 } from '@shared/schema';
 import * as schema from '@shared/schema';
+import { cleanupUserReferences } from '../../../utils/userDeletion';
 import { encryptValue, decryptValue, isEncryptionAvailable } from '../../../lib/encryption';
 import Mailgun from 'mailgun.js';
 import FormData from 'form-data';
@@ -344,66 +345,7 @@ adminsRouter.delete("/admins/:id", requireSuperUser, async (req, res) => {
       return res.status(401).json({ error: "Actor identity required for user deletion" });
     }
     await db.transaction(async (tx) => {
-      await tx.delete(taskAssignees).where(eq(taskAssignees.userId, id));
-      await tx.delete(taskWatchers).where(eq(taskWatchers.userId, id));
-      await tx.delete(workspaceMembers).where(eq(workspaceMembers.userId, id));
-      await tx.delete(teamMembers).where(eq(teamMembers.userId, id));
-      await tx.delete(projectMembers).where(eq(projectMembers.userId, id));
-      await tx.delete(divisionMembers).where(eq(divisionMembers.userId, id));
-      await tx.delete(hiddenProjects).where(eq(hiddenProjects.userId, id));
-      await tx.delete(personalTaskSections).where(eq(personalTaskSections.userId, id));
-      await tx.delete(subtaskAssignees).where(eq(subtaskAssignees.userId, id));
-      await tx.delete(clientUserAccess).where(eq(clientUserAccess.userId, id));
-
-      await tx.delete(notifications).where(eq(notifications.userId, id));
-      await tx.delete(notificationPreferences).where(eq(notificationPreferences.userId, id));
-      await tx.delete(activeTimers).where(eq(activeTimers.userId, id));
-      await tx.delete(passwordResetTokens).where(eq(passwordResetTokens.userId, id));
-      await tx.delete(timeEntries).where(eq(timeEntries.userId, id));
-      await tx.delete(userUiPreferences).where(eq(userUiPreferences.userId, id));
-
-      await tx.delete(chatMentions).where(eq(chatMentions.mentionedUserId, id));
-      await tx.delete(chatReads).where(eq(chatReads.userId, id));
-      await tx.delete(chatChannelMembers).where(eq(chatChannelMembers.userId, id));
-      await tx.delete(chatDmMembers).where(eq(chatDmMembers.userId, id));
-      await tx.delete(chatMessages).where(eq(chatMessages.authorUserId, id));
-      await tx.delete(chatExportJobs).where(eq(chatExportJobs.requestedByUserId, id));
-
-      await tx.update(chatChannels).set({ createdBy: actorId }).where(eq(chatChannels.createdBy, id));
-
-      await tx.delete(commentMentions).where(eq(commentMentions.mentionedUserId, id));
-      await tx.delete(comments).where(eq(comments.userId, id));
-
-      await tx.delete(activityLog).where(eq(activityLog.actorUserId, id));
-
-      await tx.delete(taskAttachments).where(eq(taskAttachments.uploadedByUserId, id));
-      await tx.delete(clientNoteAttachments).where(eq(clientNoteAttachments.uploadedByUserId, id));
-      await tx.delete(clientNoteVersions).where(eq(clientNoteVersions.editorUserId, id));
-      await tx.delete(clientNotes).where(eq(clientNotes.authorUserId, id));
-      await tx.delete(clientDocuments).where(eq(clientDocuments.uploadedByUserId, id));
-
-      await tx.delete(tenantAgreementAcceptances).where(eq(tenantAgreementAcceptances.userId, id));
-
-      await tx.update(platformInvitations).set({ targetUserId: null }).where(eq(platformInvitations.targetUserId, id));
-      await tx.update(platformInvitations).set({ createdByUserId: actorId }).where(eq(platformInvitations.createdByUserId, id));
-
-      await tx.update(tasks).set({ assigneeId: null }).where(eq(tasks.assigneeId, id));
-      await tx.update(tasks).set({ createdBy: null }).where(eq(tasks.createdBy, id));
-      await tx.update(subtasks).set({ assigneeId: null }).where(eq(subtasks.assigneeId, id));
-      await tx.update(projects).set({ createdBy: null }).where(eq(projects.createdBy, id));
-      await tx.update(sections).set({ createdBy: null }).where(eq(sections.createdBy, id));
-      await tx.update(invitations).set({ createdByUserId: null }).where(eq(invitations.createdByUserId, id));
-      await tx.update(appSettings).set({ updatedByUserId: null }).where(eq(appSettings.updatedByUserId, id));
-      await tx.update(comments).set({ resolvedByUserId: null }).where(eq(comments.resolvedByUserId, id));
-      await tx.update(clientNotes).set({ lastEditedByUserId: null }).where(eq(clientNotes.lastEditedByUserId, id));
-      await tx.update(workspaces).set({ createdBy: null }).where(eq(workspaces.createdBy, id));
-      await tx.update(schema.projectTemplates).set({ createdBy: null }).where(eq(schema.projectTemplates.createdBy, id));
-      await tx.update(tenantAgreements).set({ createdByUserId: null }).where(eq(tenantAgreements.createdByUserId, id));
-      await tx.update(errorLogs).set({ userId: null }).where(eq(errorLogs.userId, id));
-      await tx.update(platformAuditEvents).set({ actorUserId: null }).where(eq(platformAuditEvents.actorUserId, id));
-      await tx.update(platformAuditEvents).set({ targetUserId: null }).where(eq(platformAuditEvents.targetUserId, id));
-      await tx.update(passwordResetTokens).set({ createdByUserId: null }).where(eq(passwordResetTokens.createdByUserId, id));
-
+      await cleanupUserReferences(tx, id, actorId);
       await tx.delete(users).where(and(eq(users.id, id), eq(users.role, UserRole.SUPER_USER)));
     });
     
