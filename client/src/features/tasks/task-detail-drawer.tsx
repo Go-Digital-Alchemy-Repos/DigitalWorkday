@@ -386,6 +386,15 @@ export function TaskDetailDrawer({
   const isTimerOnThisTask = activeTimer?.taskId === task?.id;
   const isTimerRunning = activeTimer?.status === "running";
 
+  const timerState = 
+    timerLoading ? "loading" :
+    activeTimer && isTimerOnThisTask && isTimerRunning ? "running" :
+    activeTimer && isTimerOnThisTask && !isTimerRunning ? "paused" :
+    activeTimer && !isTimerOnThisTask ? "other_task" :
+    (!activeTimer && !canQuickStartTimer) || projectContextError ? "hidden" :
+    projectContextLoading && task?.projectId ? "loading" :
+    "idle";
+
   const startTimerMutation = useMutation({
     mutationFn: async () => {
       if (task?.projectId && !projectContext?.clientId) {
