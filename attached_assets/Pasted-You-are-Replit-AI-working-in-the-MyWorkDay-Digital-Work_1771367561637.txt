@@ -1,0 +1,171 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+BUG (PRODUCTION):
+Project descriptions are rendering as raw editor JSON (TipTap/ProseMirror-like) instead of human-readable text.
+
+Example currently displayed:
+{"type":"doc","content":[{"type":"paragraph","attrs":{"textAlign":null},"content":[{"type":"text","text":"This project is to keep track of bugs we come across while piloting the DigitalWorkday App. Assign all glitches, bugs and nice to have features to Mike D. "}]}]}
+
+Expected display:
+This project is to keep track of bugs we come across while piloting the DigitalWorkday App. Assign all glitches, bugs and nice to have features to Mike D.
+
+GOAL:
+Investigate and fix project description rendering across the app so rich-text content is displayed correctly (as formatted rich text where appropriate, or as safe plain text in list/preview contexts), without breaking existing stored data.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change API URLs.
+- Do NOT change DB schema.
+- Do NOT mutate/convert existing DB rows in place (no migration) unless absolutely necessary.
+- Preserve editing behavior (the rich editor can keep storing JSON if that is the design).
+- Security: never render untrusted HTML directly; sanitize or render via a trusted renderer.
+
+DELIVERABLES:
+1) Root cause analysis: where the raw JSON is leaking to the UI (backend vs frontend) and why it only shows in production.
+2) Fix implemented that renders project descriptions correctly in:
+   - project detail page
+   - project list/cards
+   - any sidebar/preview contexts
+3) Tests:
+   - unit tests for the renderer/converter (>=4)
+   - optional integration test if feasible
+4) Documentation update:
+   - short note in docs/review/system-review-YYYY-MM-DD.md or docs/mobile-audit.md describing how rich text is stored vs rendered.
+
+------------------------------------------------------------
+PHASE 0 — DISCOVERY (MUST DO FIRST)
+------------------------------------------------------------
+
+A) Identify the editor/storage format
+1) Locate where project description is created/edited in the UI:
+- Project edit drawer/sheet
+- Projects create form
+2) Confirm what is stored/sent:
+- plain string?
+- HTML string?
+- JSON (ProseMirror/TipTap doc)?
+Log (dev-only):
+- on submit, log the payload field value type (string vs object) and sample.
+
+B) Identify render sites
+Search frontend for where project.description is displayed:
+- project list item component(s)
+- project detail component(s)
+- sidebar project card or tooltip
+Identify every component that renders the description.
+
+C) Identify backend behavior
+Check project API endpoints:
+- do they return description as stored?
+- do they transform description for display?
+Compare dev vs prod configuration differences:
+- feature flags
+- environment variables
+- SSR/minification differences
+- hydration differences
+Document findings.
+
+------------------------------------------------------------
+PHASE 1 — DEFINE A SINGLE “RICH TEXT RENDERING” UTILITY
+------------------------------------------------------------
+
+Create a shared frontend utility with two outputs:
+
+1) renderRichTextToReact(value) for full detail pages
+2) richTextToPlainText(value) for previews/lists/search snippets
+
+Support these inputs:
+- ProseMirror/TipTap JSON doc (object or JSON string)
+- HTML string (legacy)
+- plain text string
+
+Implementation requirements:
+- If value is JSON string that parses to { type: "doc", content: ... }, treat as ProseMirror doc.
+- If value is object with { type: "doc" }, treat as ProseMirror doc.
+- If value is HTML, DO NOT dangerouslySetInnerHTML without sanitizing.
+  Prefer converting HTML to text for previews and/or using a safe sanitizer for full render.
+
+If the project uses TipTap already:
+- Prefer using TipTap’s generated HTML renderer (from extensions) OR a ProseMirror -> HTML converter
+- Then sanitize HTML before rendering.
+If no TipTap renderer exists:
+- Implement a safe plain-text extraction for now:
+  - traverse JSON doc and join text nodes with spaces/newlines
+  - respect paragraph breaks minimally
+
+DO NOT lose the user’s content.
+Detail pages may render formatted content later, but at minimum must not show JSON.
+
+------------------------------------------------------------
+PHASE 2 — APPLY THE UTILITY CONSISTENTLY
+------------------------------------------------------------
+
+A) Replace direct rendering of project.description with:
+- ProjectDescription component
+
+Create:
+client/src/components/richtext/ProjectDescription.tsx
+Props:
+- value: unknown (description)
+- mode: "full" | "preview"
+
+Rules:
+- "preview" uses richTextToPlainText and truncates
+- "full" uses renderRichTextToReact (or sanitized HTML)
+- fall back gracefully if parsing fails
+
+B) Update all project UI locations:
+- project list/cards
+- project detail
+- any admin dashboards
+- any tooltips or sidebars
+
+------------------------------------------------------------
+PHASE 3 — OPTIONAL BACKEND NORMALIZATION (ONLY IF NEEDED)
+------------------------------------------------------------
+
+If the issue is backend returning JSON as a string that differs by environment:
+- Ensure API returns a consistent type:
+  - either always stringified JSON OR always object
+Do NOT break clients:
+- If frontend expects string, keep string but make renderer handle both.
+Prefer to fix on frontend first.
+
+------------------------------------------------------------
+PHASE 4 — TESTS
+------------------------------------------------------------
+
+Add unit tests for the utility and component:
+
+1) JSON string ProseMirror doc -> plain text extraction matches expected
+2) JSON object ProseMirror doc -> plain text extraction matches expected
+3) Plain text string -> returns same
+4) HTML string -> preview returns stripped text safely
+Optional 5) Full render does not throw and does not display raw JSON
+
+If test infra exists for React components, add a snapshot/basic render test.
+
+------------------------------------------------------------
+PHASE 5 — DOC UPDATE + VERIFICATION
+------------------------------------------------------------
+
+Update docs/mobile-audit.md or docs/architecture/organization.md with:
+- "Rich text storage and rendering"
+- which fields store ProseMirror docs (project descriptions, task descriptions, etc.)
+- the shared utility usage and where to use "preview" vs "full"
+
+Manual verification checklist:
+- Open project list: description previews are readable text, not JSON
+- Open project detail: description displays readable content
+- Edit and save description: still saves and displays correctly
+- Test in production build mode (npm run build/start) locally if possible
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+When finished, output:
+1) Root cause summary
+2) Files changed
+3) Tests added and passing
+4) How the renderer handles JSON vs HTML vs plain text
+5) Any follow-up recommendations (e.g., expand rich rendering later)

@@ -1,5 +1,6 @@
 import { useQuery } from "@tanstack/react-query";
 import { useParams, Link } from "wouter";
+import { RichTextRenderer, getPreviewText } from "@/components/richtext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -172,9 +173,10 @@ export default function ClientPortalProjectDetail() {
               {project.name}
             </h1>
             {project.description && (
-              <div
-                className="text-muted-foreground mt-1 prose prose-sm dark:prose-invert max-w-none [&>*]:m-0"
-                dangerouslySetInnerHTML={{ __html: project.description }}
+              <RichTextRenderer
+                value={project.description}
+                className="text-muted-foreground mt-1 [&>*]:m-0"
+                data-testid="text-project-description"
               />
             )}
           </div>
@@ -284,7 +286,7 @@ function TaskList({ tasks, emptyMessage = "No tasks" }: { tasks: TaskInfo[]; emp
                 <div className="font-medium">{task.title}</div>
                 {task.description && (
                   <div className="text-sm text-muted-foreground line-clamp-2 mt-0.5">
-                    {task.description}
+                    {getPreviewText(task.description as string)}
                   </div>
                 )}
                 <div className="flex flex-wrap items-center gap-2 mt-2">

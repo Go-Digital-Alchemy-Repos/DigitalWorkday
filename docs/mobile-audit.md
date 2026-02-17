@@ -456,3 +456,39 @@ Conversation-level read receipts using existing `chat_reads` table. No schema ch
 - [ ] Action sheet has Copy, Quote, Edit (own only), Delete (own/admin) options
 - [ ] Tapping backdrop or Cancel dismisses action sheet
 - [ ] Desktop: hover over message → three-dot menu still works as before
+
+---
+
+## Rich Text Storage and Rendering
+
+**Date:** 2026-02-17
+
+### Storage format
+The following fields store TipTap/ProseMirror JSON documents as serialized strings in `text` columns:
+- `projects.description` — project descriptions
+- `subtasks.description` — subtask descriptions (stored as `jsonb`)
+- Task and client notes may also contain TipTap JSON
+
+The stored format is a JSON string like:
+```json
+{"type":"doc","content":[{"type":"paragraph","content":[{"type":"text","text":"..."}]}]}
+```
+
+### Rendering utilities
+All rich text rendering goes through `client/src/components/richtext/`:
+
+| Utility | Use case |
+|---------|----------|
+| `RichTextRenderer` | Full rich text display (detail pages) — renders via TipTap editor in read-only mode |
+| `RichTextPreview` | Truncated plain text preview component |
+| `getPreviewText(value, maxLength)` | Extract plain text from any format, truncate for list/card previews |
+| `toPlainText(value)` | Extract full plain text (for search filtering) |
+| `getDocForEditor(value)` | Parse stored value into TipTap JSONContent for editor initialization |
+| `parseRichTextValue(value)` | Detect format: TipTap JSON, HTML, or plain text |
+
+### Rules
+1. **Preview/list contexts**: Use `getPreviewText(description)` — never render raw `description` or use `stripHtml()`
+2. **Detail pages**: Use `<RichTextRenderer value={description} />` — never use `dangerouslySetInnerHTML`
+3. **Search filtering**: Use `toPlainText(description)` to extract searchable text
+4. **Form defaults**: Pass raw stored value directly — the editor handles parsing via `getDocForEditor()`
+5. **All utilities gracefully handle**: null, undefined, empty string, plain text, HTML strings, TipTap JSON strings, and TipTap JSON objects

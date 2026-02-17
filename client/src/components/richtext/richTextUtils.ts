@@ -60,7 +60,7 @@ function extractTextFromDoc(node: JSONContent): string {
   if (node.content && Array.isArray(node.content)) {
     return node.content
       .map((child) => extractTextFromDoc(child))
-      .join(node.type === "paragraph" ? "\n" : "");
+      .join(node.type === "paragraph" || node.type === "doc" ? "\n" : "");
   }
 
   return "";

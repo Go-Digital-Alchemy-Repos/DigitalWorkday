@@ -16,7 +16,8 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { ActivityFeed } from "@/components/activity-feed";
-import { cn, stripHtml } from "@/lib/utils";
+import { cn } from "@/lib/utils";
+import { getPreviewText } from "@/components/richtext";
 
 import {
   Building2,
@@ -315,7 +316,7 @@ function ProjectsTab({ client }: { client: ClientWithContacts }) {
                   <p className="font-medium text-sm truncate">{project.name}</p>
                   {project.description && (
                     <p className="text-xs text-muted-foreground line-clamp-1">
-                      {stripHtml(project.description)}
+                      {getPreviewText(project.description)}
                     </p>
                   )}
                 </div>

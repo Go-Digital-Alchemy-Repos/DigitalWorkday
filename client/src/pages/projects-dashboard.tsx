@@ -1,7 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { stripHtml } from "@/lib/utils";
+import { getPreviewText, toPlainText } from "@/components/richtext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -209,7 +209,7 @@ export default function ProjectsDashboard() {
     return projects.filter((project) => {
       const matchesSearch = !searchQuery || 
         project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        project.description?.toLowerCase().includes(searchQuery.toLowerCase());
+        toPlainText(project.description).toLowerCase().includes(searchQuery.toLowerCase());
       
       const isArchived = project.status === "archived";
       const matchesStatus = statusFilter === "all" || 
@@ -455,7 +455,7 @@ export default function ProjectsDashboard() {
                             </Badge>
                           </div>
                           {project.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-1 mb-2">{stripHtml(project.description)}</p>
+                            <p className="text-xs text-muted-foreground line-clamp-1 mb-2">{getPreviewText(project.description)}</p>
                           )}
                           <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                             {getClientName(project.clientId) !== "-" && (
@@ -551,7 +551,7 @@ export default function ProjectsDashboard() {
                           <div className="font-medium truncate">{project.name}</div>
                           {project.description && (
                             <div className="text-xs text-muted-foreground truncate max-w-[250px]">
-                              {stripHtml(project.description)}
+                              {getPreviewText(project.description)}
                             </div>
                           )}
                         </div>

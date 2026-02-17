@@ -1,5 +1,5 @@
 import { useQuery } from "@tanstack/react-query";
-import { stripHtml } from "@/lib/utils";
+import { getPreviewText, toPlainText } from "@/components/richtext";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -66,7 +66,7 @@ export default function ClientPortalProjects() {
     return data.projects.filter(
       (project) =>
         project.name.toLowerCase().includes(query) ||
-        project.description?.toLowerCase().includes(query)
+        toPlainText(project.description).toLowerCase().includes(query)
     );
   }, [data?.projects, searchQuery]);
 
@@ -155,7 +155,7 @@ export default function ClientPortalProjects() {
                 <CardContent>
                   {project.description ? (
                     <p className="text-sm text-muted-foreground line-clamp-2">
-                      {stripHtml(project.description)}
+                      {getPreviewText(project.description)}
                     </p>
                   ) : (
                     <p className="text-sm text-muted-foreground italic">

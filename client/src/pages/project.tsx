@@ -63,6 +63,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
+import { RichTextRenderer } from "@/components/richtext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useProjectSocket } from "@/lib/realtime";
 import type { Project, SectionWithTasks, TaskWithRelations, Section } from "@shared/schema";
@@ -646,10 +647,13 @@ export default function ProjectPage() {
             <div className="min-w-0 flex-1">
               <h1 className="text-base md:text-xl font-semibold truncate">{project.name}</h1>
               {project.description && (
-                <div
-                  className="text-muted-foreground hidden md:block text-[13px] mt-1 leading-relaxed prose prose-sm dark:prose-invert max-w-none [&>*]:m-0"
-                  dangerouslySetInnerHTML={{ __html: project.description }}
-                />
+                <div className="hidden md:block mt-1">
+                  <RichTextRenderer
+                    value={project.description}
+                    className="text-muted-foreground text-[13px] leading-relaxed [&>*]:m-0"
+                    data-testid="text-project-description"
+                  />
+                </div>
               )}
             </div>
           </div>
