@@ -358,3 +358,56 @@ End-to-end typing indicator system for chat channels and DMs.
 - [ ] User A sends message → indicator clears immediately
 - [ ] Indicator bar does not cause layout jump (always `h-6`)
 - [ ] Mobile: indicator text readable, no overflow issues
+
+---
+
+## Chat Premium C2 — Read Receipts
+
+### Summary
+Conversation-level read receipts using existing `chat_reads` table. No schema changes needed.
+
+### Storage
+- **Table**: `chat_reads` (existing)
+- **Fields used**: `userId`, `channelId`/`dmThreadId`, `lastReadMessageId`, `lastReadAt`, `tenantId`
+- **New storage method**: `getConversationReadReceipts(targetType, targetId, tenantId)` — returns all read receipts for a conversation
+
+### API
+- **Existing**: `POST /api/v1/chat/reads` — marks a conversation as read, broadcasts `CHAT_EVENTS.CONVERSATION_READ`
+- **New**: `GET /api/v1/chat/reads/:targetType/:targetId` — fetches all read receipts for a conversation (auth + tenant + membership enforced)
+
+### Socket Events
+- **Existing**: `chat:conversationRead` (server→client broadcast) with payload `{ targetType, targetId, userId, lastReadAt, lastReadMessageId }`
+- No new socket events added
+
+### Frontend Behavior
+
+#### DMs
+- On conversation open, fetches initial read receipts via GET endpoint
+- Shows "Seen" with double-check icon below the last message if:
+  - The last message was sent by the current user AND
+  - The other user's `lastReadMessageId` matches that message
+- Real-time updates via `CONVERSATION_READ` socket event
+
+#### Channels
+- Shows "Read by X" with double-check icon below the last message
+- X = count of other members whose `lastReadMessageId` matches the last message
+- Lightweight count only — no avatar list (mobile-friendly)
+
+#### Throttling
+- Mark-read calls are throttled: only fires when `lastMarkedReadRef` changes (prevents duplicate POST for same message)
+- Read receipts query has 30s stale time
+- Read receipts state resets on conversation switch
+
+### Tests
+- `server/tests/read-receipts.test.ts` — 10 tests covering:
+  - Policy enforcement: unauth denied, wrong tenant denied, non-member channel denied, non-member DM denied, channel member allowed, DM member allowed
+  - Storage operations: upsertChatRead for channel/DM, getConversationReadReceipts returns data, empty result handling
+
+### Verification Checklist
+- [ ] Open a DM, send a message from User A
+- [ ] User B opens the DM → User A sees "Seen" below their last message
+- [ ] Switch to a channel, multiple users send messages
+- [ ] After other members open the channel → "Read by X" appears below the last message
+- [ ] Read receipt persists on page reload (fetched from GET endpoint)
+- [ ] Unread badges update correctly when conversation is marked as read
+- [ ] Mobile: indicators are compact, no overflow or layout issues

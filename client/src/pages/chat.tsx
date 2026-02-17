@@ -117,6 +117,12 @@ interface PendingAttachment extends ChatAttachment {
   uploading?: boolean;
 }
 
+interface ReadReceipt {
+  userId: string;
+  lastReadMessageId: string | null;
+  lastReadAt: string | Date;
+}
+
 // Message status for optimistic updates
 type MessageStatus = 'pending' | 'sent' | 'failed';
 
@@ -237,7 +243,7 @@ export default function ChatPage() {
   const [pendingAttachments, setPendingAttachments] = useState<PendingAttachment[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isDragOver, setIsDragOver] = useState(false);
-  const [dmSeenBy, setDmSeenBy] = useState<{ userId: string; messageId: string } | null>(null);
+  const [readReceipts, setReadReceipts] = useState<Map<string, ReadReceipt>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastMarkedReadRef = useRef<string | null>(null);
   
@@ -996,10 +1002,33 @@ export default function ChatPage() {
     }
   }, [channels, dmThreads, searchString, getConversationFromUrl, selectedChannelId, selectedDmId]);
 
-  // Reset DM seen indicator when switching conversations
+  // Reset read receipts when switching conversations
   useEffect(() => {
-    setDmSeenBy(null);
-  }, [selectedDm?.id]);
+    setReadReceipts(new Map());
+  }, [selectedChannel?.id, selectedDm?.id]);
+
+  // Fetch initial read receipts for the active conversation
+  const activeTargetType = selectedChannel ? "channel" : selectedDm ? "dm" : null;
+  const activeTargetId = selectedChannel?.id ?? selectedDm?.id ?? null;
+  const { data: initialReceipts } = useQuery<ReadReceipt[]>({
+    queryKey: ["/api/v1/chat/reads", activeTargetType, activeTargetId],
+    enabled: !!activeTargetType && !!activeTargetId,
+    staleTime: 30_000,
+  });
+
+  useEffect(() => {
+    if (initialReceipts && initialReceipts.length > 0) {
+      setReadReceipts(prev => {
+        const next = new Map(prev);
+        for (const r of initialReceipts) {
+          if (r.userId !== user?.id) {
+            next.set(r.userId, r);
+          }
+        }
+        return next;
+      });
+    }
+  }, [initialReceipts, user?.id]);
 
   // Track connection status for UI feedback
   useEffect(() => {
@@ -1244,9 +1273,17 @@ export default function ChatPage() {
           });
         }
       } else {
-        // Other user read - update "Seen" indicator for DMs only
-        if (payload.targetType === 'dm' && selectedDm && payload.targetId === selectedDm.id) {
-          setDmSeenBy({ userId: payload.userId, messageId: payload.lastReadMessageId });
+        const currentTargetId = selectedChannel?.id ?? selectedDm?.id;
+        if (payload.targetId === currentTargetId) {
+          setReadReceipts(prev => {
+            const next = new Map(prev);
+            next.set(payload.userId, {
+              userId: payload.userId,
+              lastReadMessageId: payload.lastReadMessageId,
+              lastReadAt: payload.lastReadAt,
+            });
+            return next;
+          });
         }
       }
     };
@@ -1937,14 +1974,38 @@ export default function ChatPage() {
               isDm={!!selectedDm}
               className="flex-1"
             />
-            {selectedDm && dmSeenBy && messages.length > 0 && dmSeenBy.messageId === messages[messages.length - 1]?.id && (
-              <div className="flex justify-end px-4 py-1" data-testid="dm-seen-indicator">
-                <span className="text-xs text-muted-foreground flex items-center gap-1">
-                  <CheckCheck className="h-3 w-3" />
-                  Seen
-                </span>
-              </div>
-            )}
+            {messages.length > 0 && (() => {
+              const lastMsg = messages[messages.length - 1];
+              if (selectedDm && lastMsg.authorId === user?.id) {
+                const otherReceipts = Array.from(readReceipts.values());
+                const seenByOther = otherReceipts.find(r => r.lastReadMessageId === lastMsg.id);
+                if (seenByOther) {
+                  return (
+                    <div className="h-5 flex justify-end px-4" data-testid="dm-seen-indicator">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <CheckCheck className="h-3 w-3" />
+                        Seen
+                      </span>
+                    </div>
+                  );
+                }
+              } else if (selectedChannel) {
+                const readByOthers = Array.from(readReceipts.values()).filter(
+                  r => r.lastReadMessageId === lastMsg.id
+                );
+                if (readByOthers.length > 0) {
+                  return (
+                    <div className="h-5 flex justify-end px-4" data-testid="channel-read-indicator">
+                      <span className="text-xs text-muted-foreground flex items-center gap-1">
+                        <CheckCheck className="h-3 w-3" />
+                        Read by {readByOthers.length}
+                      </span>
+                    </div>
+                  );
+                }
+              }
+              return <div className="h-5" />;
+            })()}
 
             <div className="h-6 px-4 text-xs text-muted-foreground flex items-center gap-2" data-testid="typing-indicator">
               {typingUsers.length > 0 && (

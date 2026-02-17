@@ -466,6 +466,7 @@ export interface IStorage {
   getUsersByIds(userIds: string[]): Promise<User[]>;
   getUnreadCountsForChannels(userId: string, channelIds: string[]): Promise<Map<string, number>>;
   getUnreadCountsForDmThreads(userId: string, threadIds: string[]): Promise<Map<string, number>>;
+  getConversationReadReceipts(targetType: "channel" | "dm", targetId: string, tenantId: string): Promise<Array<{ userId: string; lastReadMessageId: string | null; lastReadAt: Date }>>;
 
   // Chat - Diagnostics (Super Admin)
   getChatDiagnostics(): Promise<{
@@ -4041,6 +4042,18 @@ export class DatabaseStorage implements IStorage {
     }
 
     return result;
+  }
+
+  async getConversationReadReceipts(targetType: "channel" | "dm", targetId: string, tenantId: string): Promise<Array<{ userId: string; lastReadMessageId: string | null; lastReadAt: Date }>> {
+    const col = targetType === "channel" ? chatReads.channelId : chatReads.dmThreadId;
+    const rows = await db.select({
+      userId: chatReads.userId,
+      lastReadMessageId: chatReads.lastReadMessageId,
+      lastReadAt: chatReads.lastReadAt,
+    })
+      .from(chatReads)
+      .where(and(eq(col, targetId), eq(chatReads.tenantId, tenantId)));
+    return rows;
   }
 
   // =============================================================================

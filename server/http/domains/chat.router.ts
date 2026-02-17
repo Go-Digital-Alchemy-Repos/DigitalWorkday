@@ -1032,6 +1032,43 @@ router.post(
 );
 
 router.get(
+  "/reads/:targetType/:targetId",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const { targetType, targetId } = req.params;
+    if (targetType !== "channel" && targetType !== "dm") {
+      throw AppError.badRequest("targetType must be 'channel' or 'dm'");
+    }
+
+    if (targetType === "channel") {
+      const channel = await storage.getChatChannel(targetId);
+      if (!channel || channel.tenantId !== tenantId) {
+        throw AppError.notFound("Channel not found");
+      }
+      const memberships = await storage.getUserChatChannels(tenantId, userId);
+      if (!memberships.some(m => m.channelId === targetId)) {
+        throw AppError.forbidden("Not a member of this channel");
+      }
+    } else {
+      const thread = await storage.getChatDmThread(targetId);
+      if (!thread || thread.tenantId !== tenantId) {
+        throw AppError.notFound("DM thread not found");
+      }
+      const threads = await storage.getUserChatDmThreads(tenantId, userId);
+      if (!threads.some(t => t.id === targetId)) {
+        throw AppError.forbidden("Not a member of this DM thread");
+      }
+    }
+
+    const receipts = await storage.getConversationReadReceipts(targetType, targetId, tenantId);
+    res.json(receipts);
+  })
+);
+
+router.get(
   "/search",
   asyncHandler(async (req: Request, res: Response) => {
     const tenantId = getCurrentTenantId(req);
