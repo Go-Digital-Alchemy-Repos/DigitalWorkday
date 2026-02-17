@@ -13,6 +13,7 @@ import attachmentsRouter from "./domains/attachments.router";
 import flagsRouter from "./domains/flags.router";
 import uploadsRouter from "./domains/uploads.router";
 import chatRouter from "./domains/chat.router";
+import timeRouter from "./domains/time.router";
 
 interface DomainEntry {
   path: string;
@@ -92,6 +93,13 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "chat",
     description: "Internal chat system: channels, DMs, messages, threads, reads, search, uploads, mentions. Migrated from legacy routes/chat.ts (Prompt #8).",
+  },
+  {
+    path: "/api",
+    router: timeRouter,
+    policy: "authTenant",
+    domain: "time",
+    description: "Time tracking: active timers, time entries CRUD, calendar views, reporting, CSV export. Migrated from legacy routes/timeTracking.router.ts + routes/timeTracking.ts (Prompt #10).",
   },
 ];
 

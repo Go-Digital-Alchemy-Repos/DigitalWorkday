@@ -1,0 +1,117 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL (Prompt #11):
+Migrate the “Projects (core)” HTTP endpoints to the standardized route architecture using createApiRouter() with authTenant policy, preserving URLs/behavior and keeping the migration incremental.
+
+SCOPE (Slice 1 = Projects Core):
+Migrate ONLY the core project endpoints:
+- list projects
+- get project by id
+- create project
+- update project
+- archive/unarchive (or delete if that’s current behavior)
+Do NOT migrate tasks/subtasks in this prompt.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change endpoint URLs.
+- Do NOT change DB schema.
+- Do NOT change auth/session semantics.
+- Preserve response formats exactly.
+- Prefer reuse of existing controller/service functions (no rewrites).
+- If any endpoint currently lives under both /api and /api/v1, preserve both.
+
+DELIVERABLES:
+1) New router: server/http/domains/projects.router.ts using createApiRouter({ domain: "projects", policy: "authTenant" })
+2) Registered via routeRegistry (registry-only); legacy project mounts disabled for these endpoints.
+3) Tests:
+   - policy drift tests confirm projects router uses authTenant and metadata is present
+   - integration tests: >= 14 tests for projects core
+4) Docs updated: migrated domains table + project slice migration notes + next slice plan (Tasks core).
+
+IMPLEMENTATION PLAN:
+
+A) Inventory existing Projects endpoints
+1) Locate legacy project mounts by searching for:
+   - "/projects"
+   - "projects-dashboard"
+   - "archive project"
+   - "workspaces/:id/projects" (if nested)
+2) Identify all project core endpoints (method + path). Typical patterns:
+   - GET /api/projects
+   - GET /api/projects/:id
+   - POST /api/projects
+   - PATCH /api/projects/:id
+   - POST /api/projects/:id/archive or PATCH /api/projects/:id (archived=true)
+   - POST /api/projects/:id/unarchive (if exists)
+(Use the actual paths in the repo.)
+
+B) Create the standardized Projects router
+1) Add server/http/domains/projects.router.ts:
+   - const router = createApiRouter({ domain: "projects", policy: "authTenant" })
+2) Implement ONLY the inventoried project core endpoints.
+3) Reuse existing handlers/services:
+   - If legacy router contains inline handlers, extract to a controller file with minimal movement:
+     server/features/projects/projects.controller.ts (or align to existing feature structure)
+4) Envelope compatibility:
+   - Try default envelope behavior first.
+   - If handlers use res.json() with a raw shape relied upon by frontend, set skipEnvelope: true ONLY if required.
+   - Document skipEnvelope reasons inline + in docs.
+
+C) Register via routeRegistry + disable legacy mounts
+1) Add the projects router entry to server/http/routeRegistry.ts with correct mount path(s).
+2) Disable ONLY the legacy mounts for the migrated project core endpoints.
+   - Do not break tasks endpoints if they share the same legacy router file.
+   - If needed, split legacy router so tasks remain legacy while projects core moves.
+
+D) Fix mixed-prefix cache keys (compatibility hygiene)
+Because you’ve already dealt with mixed /api and /api/v1 cache keys on the frontend:
+1) Ensure both prefixes remain supported if they exist today.
+2) If you discover duplicates, do NOT remove unless dead-code is proven and tests cover it.
+3) Add a note in docs for later “API versioning unification” (Track A follow-on).
+
+E) Tests (>=14) — server/tests/integration/projectsRoutes.test.ts
+Cover:
+Auth:
+- unauth GET list -> 401
+- unauth PATCH update -> 401
+
+Tenant enforcement:
+- cannot read/update a project in another tenant (403/404 per convention)
+
+CRUD happy paths:
+- create returns expected shape
+- list includes created project
+- get by id returns correct project
+- update changes name and returns updated shape
+
+Archive/unarchive:
+- archive endpoint works (or archived flag)
+- archived project behavior matches current app rules (e.g., excluded from list unless includeArchived)
+
+Validation:
+- missing required field on create -> 400
+- invalid id -> 400/404 as current behavior
+
+Registry/metadata:
+- routeRegistry entry exists for projects, policy authTenant
+
+F) Docs
+Update docs/architecture/routes.md:
+- Add Projects (Slice 1) as migrated
+- List endpoints moved
+- Note any skipEnvelope usage
+- Define Slice 2 plan: Tasks core endpoints next
+
+VERIFICATION CHECKLIST:
+- ✅ All tests pass
+- ✅ Existing project create/edit/archive flows work end-to-end
+- ✅ Sidebar/dashboard project name updates still behave correctly (no regressions)
+- ✅ No rogue mounts; registry-only enforcement stays green
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+1) Project endpoints migrated (list + count)
+2) Whether skipEnvelope was needed
+3) Files changed/added
+4) Tests added and what they cover
+5) Prompt #12 recommendation (Tasks core slice) with endpoint inventory

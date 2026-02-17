@@ -1,5 +1,6 @@
 import { Router } from "express";
-import timerRoutes from "./timeTracking";
+// timerRoutes: migrated to server/http/domains/time.router.ts (Prompt #10)
+// import timerRoutes from "./timeTracking";
 import superAdminRoutes from "./superAdmin";
 import superDebugRoutes from "./superDebug";
 import superChatRoutes from "./superChat";
@@ -27,7 +28,8 @@ import superIntegrationsRouter from "./super/integrations.router";
 import superChatExportRouter from "./super/chatExport.router";
 import { searchRouter } from "./modules/search/search.router";
 import tasksRouter from "./tasks.router";
-import timeTrackingRouter from "./timeTracking.router";
+// timeTrackingRouter: migrated to server/http/domains/time.router.ts (Prompt #10)
+// import timeTrackingRouter from "./timeTracking.router";
 import clientsRouter from "./clients.router";
 import projectsRouter from "./projects.router";
 import usersRouter from "./users.router";
@@ -59,11 +61,13 @@ router.use(usersRouter);
 router.use(crmRouter);
 router.use(projectsRouter);
 router.use(clientsRouter);
-router.use(timeTrackingRouter);
+// timeTrackingRouter: migrated to server/http/domains/time.router.ts (Prompt #10)
+// router.use(timeTrackingRouter);
 router.use(tasksRouter);
 router.use(searchRouter);
 router.use(featuresRoutes);
-router.use("/timer", timerRoutes);
+// timerRoutes: migrated to server/http/domains/time.router.ts (Prompt #10)
+// router.use("/timer", timerRoutes);
 router.use("/v1/super", superAdminRoutes);
 router.use("/v1/super", superSystemStatusRouter);
 router.use("/v1/super", superIntegrationsRouter);

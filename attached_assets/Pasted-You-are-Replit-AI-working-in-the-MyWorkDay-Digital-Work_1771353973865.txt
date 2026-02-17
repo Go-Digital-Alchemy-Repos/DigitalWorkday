@@ -1,0 +1,102 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL (Prompt #10):
+Migrate the Time domain (time entries + active timers) from legacy routing to standardized route architecture using createApiRouter() with authTenant policy, preserving all URLs and behavior.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change endpoint URLs.
+- Do NOT change DB schema.
+- Do NOT change auth/session semantics.
+- Preserve existing rounding, timezone, and overlap behavior exactly.
+- Reuse existing handlers/services; avoid rewrites.
+
+DELIVERABLES:
+1) New router: server/http/domains/time.router.ts using createApiRouter({ domain: "time", policy: "authTenant" })
+2) Registered via routeRegistry (registry-only), legacy time mounts disabled.
+3) Tests:
+   - policy drift tests confirming time uses authTenant and metadata is present
+   - integration tests: >= 12 tests covering:
+     - auth rejection
+     - tenant enforcement
+     - active timer invariants
+     - overlap rules (if enforced)
+     - route matching for both /time-entries and /timers endpoints (use actual paths)
+4) Docs updated: migrated domains table + time migration notes + next candidate recommendation (Projects/Tasks next).
+
+IMPLEMENTATION PLAN:
+
+A) Locate and inventory legacy time endpoints
+1) Search for:
+   - "time_entries", "time entry", "timer", "active_timers", "start timer", "stop timer"
+2) Identify all legacy paths (use actual):
+   Typical patterns:
+   - GET /api/v1/time-entries
+   - POST /api/v1/time-entries
+   - PATCH /api/v1/time-entries/:id
+   - DELETE /api/v1/time-entries/:id
+   - POST /api/v1/timers/start
+   - POST /api/v1/timers/stop
+   - GET /api/v1/timers/active
+3) Document the inventory in a comment block at the top of the new router for traceability.
+
+B) Create the standardized router
+1) Add server/http/domains/time.router.ts:
+   - const router = createApiRouter({ domain: "time", policy: "authTenant" })
+2) Port endpoints one-by-one:
+   - Preserve request/response shapes.
+   - If existing handlers use res.json() directly and the response format is relied upon, set skipEnvelope: true ONLY if required and document why.
+3) Ensure no duplicate middleware:
+   - policy applies auth+tenant; remove internal duplicate tenant/auth middleware if present OR use a compatibility adapter (document as migration debt).
+
+C) Register via routeRegistry and disable legacy mount
+1) Add time router entry to server/http/routeRegistry.ts.
+2) Remove/disable only the legacy time mount(s) from server/routes/index.ts (or wherever they live).
+3) Confirm registry-only enforcement tests still pass.
+
+D) Integration tests (>=12)
+Create server/tests/integration/timeRoutes.test.ts covering:
+
+Auth:
+- unauth GET list -> 401
+- unauth POST start timer -> 401
+
+Tenant enforcement:
+- create two tenants; ensure cross-tenant access to time entry returns 403/404
+
+Active timer invariants:
+- starting a timer creates/returns an active timer
+- starting a second timer either:
+  - stops the first, OR
+  - is rejected
+  (assert the CURRENT behavior; do not change it)
+- stopping a timer clears active timer and creates a time entry if that is current behavior
+
+Validation:
+- missing required fields -> 400 with expected error shape
+- invalid timestamps -> current expected error
+
+Route matching:
+- test both time entry CRUD paths and timer paths as they exist
+
+Metadata:
+- assert routeRegistry reports time domain with authTenant
+
+E) Docs
+Update docs/architecture/routes.md:
+- Add Time as migrated domain
+- Note skipEnvelope usage if any
+- Note any “current invariants” discovered (single active timer rule, overlap rules)
+
+VERIFICATION CHECKLIST:
+- ✅ All tests pass
+- ✅ Existing time tracking flows function end-to-end
+- ✅ No URL or response shape changes
+- ✅ No rogue mounts; registry-only still enforced
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+1) Time endpoints migrated (list + count)
+2) Whether skipEnvelope was needed and why
+3) Tests added (names + what they cover)
+4) Any invariants confirmed (single active timer, overlap policy)
+5) Next migration recommendation: Projects/Tasks (and which sub-slice to do first)

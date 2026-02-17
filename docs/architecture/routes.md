@@ -198,6 +198,25 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
 - **Caching**: Includes a lightweight membership cache to reduce database load on high-frequency events; automatically cleaned up on socket disconnection.
 - **Coverage**: `TYPING_EVENTS.START`, `TYPING_EVENTS.STOP`, `CHAT_ROOM_EVENTS.JOIN`, `CHAT_ROOM_EVENTS.LEAVE`, `PRESENCE_EVENTS.PING`, and `PRESENCE_EVENTS.IDLE` all use `withSocketPolicy()`.
 
+### Time Domain Migration Notes (Prompt #10)
+- **18 endpoints** migrated from two legacy files:
+  - `server/routes/timeTracking.router.ts` (18 endpoints, tenancy-aware)
+  - `server/routes/timeTracking.ts` (7 overlapping timer endpoints, simpler version)
+- **Timer CRUD** (7): GET/PATCH/DELETE `/timer/current`, POST `/timer/start`, `/timer/pause`, `/timer/resume`, `/timer/stop`
+- **Time Entry CRUD** (7): GET `/time-entries`, `/time-entries/my`, `/time-entries/my/stats`, `/time-entries/:id`, POST `/time-entries`, PATCH `/time-entries/:id`, DELETE `/time-entries/:id`
+- **Reporting** (2): GET `/time-entries/report/summary`, `/time-entries/export/csv`
+- **Calendar** (2): GET `/calendar/events`, `/my-calendar/events`
+- **skipEnvelope: true** — All handlers use `res.json()` directly. Envelope helpers available but not adopted to maintain response compatibility.
+- **Invariants confirmed**:
+  - Single active timer per user: Starting a timer while one exists returns 409 Conflict.
+  - Timer must be running to pause; must be paused to resume.
+  - Stop with `discard: true` deletes timer without creating a time entry.
+  - Stop without discard + zero duration throws 400.
+  - No overlap enforcement on time entries (manual entries can overlap).
+- **Tenancy-aware**: Full strict/soft/legacy mode support preserved. Timer and time entry operations respect `isStrictMode()` / `isSoftMode()` with appropriate warning headers and fallback queries for legacy records.
+- **Policy drift tests**: 19 tests in `server/tests/time-router-policy.test.ts` (18 auth rejection + 1 factory metadata).
+- **Integration tests**: 30 tests in `server/tests/integration/timeRoutes.test.ts` covering auth rejection (live + mini app), tenant enforcement (4 tests: no-tenant → 400/403), timer invariants (4 tests: stop/pause/resume/delete with no active timer → 404), route matching (timer + time entry + reporting + calendar), and registry metadata.
+
 ### Flags Domain Migration Notes (Prompt #7)
 - **1 endpoint**: GET `/crm/flags` — CRM feature flags.
 - **Extracted from attachments router**: Restores domain boundaries; `/crm/flags` was co-located in the legacy attachments router file.
@@ -259,8 +278,10 @@ To migrate the next domain (Prompt #3):
 8. `/api/v1/uploads` — file uploads (DONE - Prompt #7)
    - Also: `/api` flags — CRM feature flags (DONE - Prompt #7, extracted from attachments)
 9. `/api/v1/chat` — chat system (DONE - Prompt #8, 29 endpoints + socket policy pilot)
-10. `/api/v1/super` — super admin (large, many sub-routers)
-11. `/api` — remaining main domain routes (largest, final migration)
+10. `/api` time — time tracking, timers, calendar, reporting (DONE - Prompt #10, 18 endpoints)
+11. `/api` projects/tasks — project CRUD, task CRUD (NEXT — recommended sub-slice: projects first, then tasks)
+12. `/api/v1/super` — super admin (large, many sub-routers)
+13. `/api` — remaining main domain routes (largest, final migration)
 
 ### Known Risks
 
