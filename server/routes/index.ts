@@ -9,7 +9,8 @@ import tenantBillingRoutes from "./tenantBilling";
 import tenancyHealthRoutes from "./tenancyHealth";
 import projectsDashboardRoutes from "./projectsDashboard";
 import workloadReportsRoutes from "./workloadReports";
-import uploadRoutes from "./uploads";
+// uploadRoutes: migrated to new router factory (server/http/domains/uploads.router.ts) — Prompt #7
+// import uploadRoutes from "./uploads";
 import emailOutboxRoutes from "./emailOutbox";
 import systemStatusRoutes from "./systemStatus";
 // systemIntegrations: migrated to new router factory (server/http/domains/system.router.ts)
@@ -76,7 +77,8 @@ router.use("/v1/tenant", tenantOnboardingRoutes);
 router.use("/v1/tenant", tenantBillingRoutes);
 router.use("/v1", projectsDashboardRoutes);
 router.use("/v1", workloadReportsRoutes);
-router.use("/v1/uploads", uploadRoutes);
+// uploadRoutes: migrated to server/http/domains/uploads.router.ts (Prompt #7)
+// router.use("/v1/uploads", uploadRoutes);
 router.use("/v1", emailOutboxRoutes);
 router.use("/v1/chat", chatRoutes);
 router.use("/v1", chatRetentionRoutes);

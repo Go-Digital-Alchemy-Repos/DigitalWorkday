@@ -143,6 +143,8 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
 | presence | `/api` | `authTenant` | `server/http/domains/presence.router.ts` | #5 | Feb 2026 |
 | ai | `/api` | `authTenant` | `server/http/domains/ai.router.ts` | #5 | Feb 2026 |
 | attachments | `/api` | `authTenant` | `server/http/domains/attachments.router.ts` | #6 | Feb 2026 |
+| flags | `/api` | `authTenant` | `server/http/domains/flags.router.ts` | #7 | Feb 2026 |
+| uploads | `/api/v1/uploads` | `authTenant` | `server/http/domains/uploads.router.ts` | #7 | Feb 2026 |
 
 ### Presence Domain Migration Notes (Prompt #5)
 - **1 endpoint** migrated: GET `/v1/presence` (query all or specific user presence)
@@ -162,8 +164,30 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
 - **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
 - **Upload guard middleware introduced**: `server/http/middleware/uploadGuards.ts` provides `validateUploadRequest()` (filename sanitization, size/type logging), `sanitizeFilename()`, and `isFilenameUnsafe()`. Applied to the presign endpoint in warn/log-only mode — does not block existing flows.
 - **Storage side-effects preserved**: S3/R2 presigned URL generation, object existence checks, and deletion all retained verbatim.
-- **CRM flags co-located**: GET `/crm/flags` was in the legacy attachments router; migrated as-is to avoid breaking the endpoint.
-- **Integration tests**: 11 smoke tests in `server/tests/integration/attachmentsRoutes.test.ts` covering auth, tenant enforcement, route matching, validation, metadata, and upload guards.
+- **CRM flags co-located**: GET `/crm/flags` was in the legacy attachments router; migrated as-is to avoid breaking the endpoint. **Moved to its own flags.router.ts in Prompt #7.**
+- **Integration tests**: 10 smoke tests in `server/tests/integration/attachmentsRoutes.test.ts` covering auth, tenant enforcement, route matching, validation, metadata, and upload guards.
+
+### Uploads Domain Migration Notes (Prompt #7)
+- **3 endpoints** migrated: POST `/presign`, GET `/status`, POST `/upload` (multipart proxy)
+- **Mount path**: `/api/v1/uploads` — preserves legacy URL structure.
+- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
+- **Rate limiting preserved**: `uploadRateLimiter` applied to `/presign` and `/upload` endpoints as middleware.
+- **Legacy `requireAuth` removed**: Factory `authTenant` policy handles auth+tenant enforcement at router scope, replacing per-handler `requireAuth` calls.
+- **Upload guard middleware applied**: `validateUploadRequest()` on `/presign` with field mapping (`filename`/`contentType`/`size` fields).
+- **Integration tests**: 12 smoke tests in `server/tests/integration/uploadsRoutes.test.ts` covering auth, tenant, routing, validation, enforce-mode guard behavior, and metadata.
+
+### Flags Domain Migration Notes (Prompt #7)
+- **1 endpoint**: GET `/crm/flags` — CRM feature flags.
+- **Extracted from attachments router**: Restores domain boundaries; `/crm/flags` was co-located in the legacy attachments router file.
+- **skipEnvelope: true** — Returns raw JSON response.
+- **Integration tests**: 4 smoke tests in `server/tests/integration/flagsRoutes.test.ts`.
+
+### Upload Guards: Warn/Enforce Mode (Prompt #7)
+- **`UPLOAD_GUARDS_MODE` env var**: Controls guard behavior. Values: `warn` (default) or `enforce`.
+- **Warn mode** (default): Logs structured warnings for unsafe filenames, oversized files, unexpected MIME types. Does not block requests.
+- **Enforce mode**: Blocks path traversal attempts, dangerous file extensions (.exe/.bat/etc), and absurd file sizes with `400 Bad Request`. Applied only when `UPLOAD_GUARDS_MODE=enforce`.
+- **Field mapping**: `validateUploadRequest()` supports configurable field names (`filenameField`, `mimeTypeField`, `sizeField`) to work with different request schemas (attachments use `fileName`/`mimeType`/`fileSizeBytes`, uploads use `filename`/`contentType`/`size`).
+- **Applied to**: Attachments presign endpoint + Uploads presign endpoint.
 
 ### Registry-Only Mounting (Prompt #5)
 - **mount.ts refactored**: Domain routers are now declared in `MIGRATED_DOMAINS` array and registered via `registerRoute()`. All non-legacy routes are mounted by iterating `getRouteRegistry()` — no direct `app.use(path, router)` calls for individual domains.
@@ -210,7 +234,8 @@ To migrate the next domain (Prompt #3):
 5. `/api/v1/presence` — presence tracking (DONE - Prompt #5)
 6. `/api/v1/ai` — AI routes (DONE - Prompt #5)
 7. `/api` attachments — attachment upload/download (DONE - Prompt #6)
-8. `/api/v1/uploads` — file uploads (medium, has rate limiting)
+8. `/api/v1/uploads` — file uploads (DONE - Prompt #7)
+   - Also: `/api` flags — CRM feature flags (DONE - Prompt #7, extracted from attachments)
 9. `/api/v1/chat` — chat system (medium, has Socket.IO deps)
 10. `/api/v1/super` — super admin (large, many sub-routers)
 11. `/api` — remaining main domain routes (largest, final migration)

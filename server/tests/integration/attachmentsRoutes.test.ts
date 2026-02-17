@@ -93,7 +93,7 @@ describe("Attachments Domain — Smoke Integration Tests", () => {
     });
   });
 
-  describe("Route matching (3 tests)", () => {
+  describe("Route matching (2 tests)", () => {
     it("should route GET /attachments/config to handler (not express 404)", async () => {
       const app = express();
       app.use(express.json());
@@ -102,19 +102,6 @@ describe("Attachments Domain — Smoke Integration Tests", () => {
 
       const res = await request(app).get("/api/attachments/config");
       expect([200, 500]).toContain(res.status);
-    });
-
-    it("should route GET /crm/flags to handler and return expected shape", async () => {
-      const app = express();
-      app.use(express.json());
-      app.use(injectPassportAuth(testUser));
-      app.use("/api", attachmentsRouter);
-
-      const res = await request(app).get("/api/crm/flags");
-      expect(res.status).toBe(200);
-      expect(res.body).toHaveProperty("client360");
-      expect(res.body).toHaveProperty("contacts");
-      expect(res.body).toHaveProperty("portal");
     });
 
     it("should route GET /projects/:pid/tasks/:tid/attachments to handler (not express 404)", async () => {

@@ -141,6 +141,20 @@ describe("Route Policy Drift Tests", () => {
       expect(attachments!.policy).toBe("authTenant");
       expect(attachments!.legacy).toBe(false);
     });
+
+    it("flags domain must use authTenant policy", () => {
+      const flags = registry.find((r) => r.domain === "flags" && !r.legacy);
+      expect(flags).toBeDefined();
+      expect(flags!.policy).toBe("authTenant");
+      expect(flags!.legacy).toBe(false);
+    });
+
+    it("uploads domain must use authTenant policy", () => {
+      const uploads = registry.find((r) => r.domain === "uploads" && !r.legacy);
+      expect(uploads).toBeDefined();
+      expect(uploads!.policy).toBe("authTenant");
+      expect(uploads!.legacy).toBe(false);
+    });
   });
 
   describe("Factory Router Meta", () => {
@@ -224,6 +238,30 @@ describe("Route Policy Drift Tests", () => {
       expect(attachments!.router).not.toBeNull();
 
       const meta = getRouterMeta(attachments!.router);
+      expect(meta).toBeDefined();
+      expect(meta!.policy).toBe("authTenant");
+    });
+
+    it("flags domain router should have factory metadata with authTenant policy", () => {
+      const flags = registry.find(
+        (r) => r.domain === "flags" && !r.legacy
+      );
+      expect(flags).toBeDefined();
+      expect(flags!.router).not.toBeNull();
+
+      const meta = getRouterMeta(flags!.router);
+      expect(meta).toBeDefined();
+      expect(meta!.policy).toBe("authTenant");
+    });
+
+    it("uploads domain router should have factory metadata with authTenant policy", () => {
+      const uploads = registry.find(
+        (r) => r.domain === "uploads" && !r.legacy
+      );
+      expect(uploads).toBeDefined();
+      expect(uploads!.router).not.toBeNull();
+
+      const meta = getRouterMeta(uploads!.router);
       expect(meta).toBeDefined();
       expect(meta!.policy).toBe("authTenant");
     });

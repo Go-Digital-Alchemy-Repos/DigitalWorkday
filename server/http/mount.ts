@@ -10,6 +10,8 @@ import commentsRouter from "./domains/comments.router";
 import presenceRouter from "./domains/presence.router";
 import aiRouter from "./domains/ai.router";
 import attachmentsRouter from "./domains/attachments.router";
+import flagsRouter from "./domains/flags.router";
+import uploadsRouter from "./domains/uploads.router";
 
 interface DomainEntry {
   path: string;
@@ -67,7 +69,21 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     router: attachmentsRouter,
     policy: "authTenant",
     domain: "attachments",
-    description: "Attachment CRUD, presign, upload complete, download. Includes CRM flags endpoint. Migrated from legacy routes/attachments.router.ts (Prompt #6).",
+    description: "Attachment CRUD, presign, upload complete, download. Migrated from legacy routes/attachments.router.ts (Prompt #6).",
+  },
+  {
+    path: "/api",
+    router: flagsRouter,
+    policy: "authTenant",
+    domain: "flags",
+    description: "CRM feature flags. Extracted from attachments router to restore domain boundaries (Prompt #7).",
+  },
+  {
+    path: "/api/v1/uploads",
+    router: uploadsRouter,
+    policy: "authTenant",
+    domain: "uploads",
+    description: "Unified file upload: presign, proxy upload, status. Migrated from legacy routes/uploads.ts (Prompt #7).",
   },
 ];
 
@@ -109,12 +125,13 @@ const LEGACY_DOMAINS: LegacyEntry[] = [
     domain: "chat",
     description: "Internal chat system with Socket.IO integration.",
   },
-  {
-    path: "/api/v1/uploads",
-    policy: "authTenant",
-    domain: "uploads",
-    description: "File upload routes with rate limiting.",
-  },
+  // uploads: migrated to server/http/domains/uploads.router.ts (Prompt #7)
+  // {
+  //   path: "/api/v1/uploads",
+  //   policy: "authTenant",
+  //   domain: "uploads",
+  //   description: "File upload routes with rate limiting.",
+  // },
 ];
 
 export async function mountAllRoutes(

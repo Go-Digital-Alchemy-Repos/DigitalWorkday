@@ -1,0 +1,138 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL (Prompt #7):
+A) Migrate the Uploads domain to the standardized route architecture using createApiRouter() and authTenant policy.
+B) Reuse and extend uploadGuards middleware:
+   - keep current warn-only behavior as default
+   - add a controlled enforcement mode behind an env flag (or config setting)
+C) Untangle the co-located GET /crm/flags endpoint currently living under attachments:
+   - Move it into its own small router (flags.router.ts) or the CRM domain router,
+   - without changing its URL.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change endpoint URLs.
+- Do NOT change DB schema.
+- Do NOT change auth/session semantics.
+- Preserve existing upload provider behavior (S3/R2/etc).
+- Do NOT force new blocking validation in production without a toggle.
+
+DELIVERABLES:
+1) New router: server/http/domains/uploads.router.ts (authTenant)
+2) Uploads endpoints removed/disabled from legacy mounts and registered via routeRegistry.
+3) uploadGuards upgraded:
+   - validateUploadRequest() supports mode: "warn" | "enforce"
+   - mode controlled by env/config (e.g., UPLOAD_GUARDS_MODE=warn|enforce)
+   - defaults to warn if unset
+4) New router for /crm/flags:
+   - server/http/domains/crmFlags.router.ts OR server/http/domains/flags.router.ts
+   - policy: authTenant (unless it is intentionally broader)
+   - registered via routeRegistry
+   - remove it from attachments router to restore domain boundaries
+5) Tests:
+   - policy drift tests for uploads + flags
+   - integration tests:
+     - uploads: >= 10 tests
+     - flags: >= 3 tests
+6) Docs updated: migrated domains + notes about guard modes and flags router cleanup.
+
+PART A — Uploads Migration
+
+STEPS:
+1) Locate legacy uploads endpoints:
+   - search for "/uploads", "upload", "presign", "multipart", "complete", "abort"
+2) Inventory method/path and categorize:
+   - upload init/presign
+   - complete/confirm
+   - download/view
+   - delete/cleanup
+   - provider config (if any)
+3) Create server/http/domains/uploads.router.ts:
+   - const router = createApiRouter({ domain: "uploads", policy: "authTenant", skipEnvelope: <only if needed> })
+   - Implement endpoints preserving exact paths.
+   - Reuse existing handlers/services.
+4) Register in routeRegistry at the correct mount path(s) (/api vs /api/v1).
+5) Disable legacy mounts for uploads.
+
+NOTES:
+- If uploads endpoints are mixed into multiple routers, extract minimally:
+  - move just the route handlers into a controller module
+  - keep service logic untouched
+
+PART B — uploadGuards: warn/enforce mode
+
+STEPS:
+1) Update server/http/middleware/uploadGuards.ts:
+   - validateUploadRequest(options) where options include:
+     - mode: "warn" | "enforce"
+     - allowedMimeTypes? (optional)
+     - maxSizeBytes? (optional)
+     - allowUnsafeExtensions? (default false)
+   - sanitizeFilename() remains
+   - isFilenameUnsafe() remains
+2) Add config resolution:
+   - read UPLOAD_GUARDS_MODE env var (warn/enforce)
+   - default to "warn"
+3) Behavior:
+   - In warn mode: log structured warning but allow request through
+   - In enforce mode: block only clearly unsafe cases:
+     - path traversal attempts
+     - empty filename when required
+     - dangerous extensions (.exe/.bat/etc) unless explicitly allowed
+     - absurd max size if provided
+   IMPORTANT: Do not add strict mime/type allowlists unless you are sure current product requirements won’t break.
+4) Apply validateUploadRequest() to uploads init/presign endpoints.
+5) Keep existing attachments presign protected as well (already applied) — ensure it still compiles and uses the new signature.
+
+PART C — Move GET /crm/flags out of attachments router
+
+STEPS:
+1) Remove GET /crm/flags route from server/http/domains/attachments.router.ts.
+2) Create server/http/domains/flags.router.ts (or crmFlags.router.ts):
+   - createApiRouter({ domain: "flags", policy: "authTenant", skipEnvelope: true if needed })
+   - implement GET /crm/flags by reusing the existing handler logic.
+3) Register in routeRegistry with the same URL and policy.
+4) Add small integration tests for /crm/flags:
+   - unauth rejected
+   - authenticated returns expected shape
+   - tenant enforcement (if applicable)
+
+TESTING
+
+1) Policy drift tests:
+   - uploads registered, authTenant, metadata present
+   - flags registered, authTenant, metadata present
+2) Integration tests for uploads (>=10):
+   - 2 unauth rejection (GET/POST)
+   - happy path for init/presign returns expected shape
+   - happy path for complete returns expected shape
+   - tenant enforcement on upload object access
+   - route matching tests for nested paths
+   - validation tests:
+     - unsafe filename triggers warning in warn mode (assert log if possible)
+     - in enforce mode (set env in test), unsafe filename returns 400/403 (choose consistent error code)
+   - metadata/registry test
+3) Integration tests for flags (>=3 as above)
+
+DOCUMENTATION
+
+Update docs/architecture/routes.md:
+- Add Uploads + Flags to migrated domains table
+- Note UPLOAD_GUARDS_MODE and behavior
+- Note cleanup: /crm/flags moved out of attachments router (domain boundary restored)
+- Update next migration recommendation:
+  - Chat (next) OR Time/Projects if still legacy (choose based on remaining surface area)
+
+VERIFICATION CHECKLIST:
+- ✅ All tests pass
+- ✅ Upload endpoints behave same externally
+- ✅ Upload guards default warn-only unless env says enforce
+- ✅ /crm/flags still works and is no longer inside attachments router
+- ✅ No rogue mounts; registry-only remains enforced
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+1) Upload endpoints migrated (list + count)
+2) Guard mode behavior and which endpoints use it
+3) Flags router change summary
+4) Tests added and how enforce-mode was validated
+5) Next migration recommendation: Chat vs Time/Projects (with reason)
