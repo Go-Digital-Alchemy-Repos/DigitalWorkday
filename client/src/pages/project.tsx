@@ -653,101 +653,104 @@ export default function ProjectPage() {
               )}
             </div>
           </div>
-          <div className="flex items-center gap-1 md:gap-2 shrink-0">
-            <Button 
-              variant="default" 
-              size="icon"
-              className="md:hidden"
-              onClick={() => setTimerDrawerOpen(true)}
-              data-testid="button-start-timer-project-mobile"
-            >
-              <Play className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="default" 
-              size="sm"
-              className="hidden md:flex"
-              onClick={() => setTimerDrawerOpen(true)}
-              data-testid="button-start-timer-project"
-            >
-              <Play className="h-4 w-4 mr-1" />
-              Start Timer
-            </Button>
-            <Button
-              variant="outline"
-              size="icon"
-              className="md:hidden"
-              onClick={() => setAiPlannerOpen(true)}
-              data-testid="button-ai-planner-mobile"
-            >
-              <Sparkles className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="outline"
-              size="sm"
-              className="hidden md:flex"
-              onClick={() => setAiPlannerOpen(true)}
-              data-testid="button-ai-planner"
-            >
-              <Sparkles className="h-4 w-4 mr-1" />
-              AI Plan
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setMembersOpen(true)}
-              data-testid="button-project-members"
-              className="hidden md:flex"
-            >
-              <Users className="h-4 w-4" />
-            </Button>
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setActivityOpen(true)}
-              data-testid="button-project-activity"
-              className="hidden md:flex"
-            >
-              <Activity className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon" 
-              onClick={() => setSettingsOpen(true)}
-              data-testid="button-project-settings"
-            >
-              <Settings className="h-4 w-4" />
-            </Button>
-            <Button 
-              variant="ghost" 
-              size="icon"
-              onClick={() => hideProjectMutation.mutate()}
-              disabled={hideProjectMutation.isPending}
-              title="Hide from My View"
-              data-testid="button-hide-project"
-            >
-              <EyeOff className="h-4 w-4" />
-            </Button>
-          </div>
         </div>
 
         <div className="flex items-center justify-between px-4 md:px-6 pb-3">
-          <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
-            <TabsList className="h-8 md:h-9">
-              <TabsTrigger value="board" className="gap-1 md:gap-1.5 text-xs md:text-sm" data-testid="tab-board">
-                <LayoutGrid className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Board</span>
-              </TabsTrigger>
-              <TabsTrigger value="list" className="gap-1 md:gap-1.5 text-xs md:text-sm" data-testid="tab-list">
-                <List className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">List</span>
-              </TabsTrigger>
-              <TabsTrigger value="calendar" className="gap-1 md:gap-1.5 text-xs md:text-sm" data-testid="tab-calendar">
-                <CalendarIcon className="h-3.5 w-3.5" />
-                <span className="hidden sm:inline">Calendar</span>
-              </TabsTrigger>
-            </TabsList>
-          </Tabs>
+          <div className="flex items-center gap-2 md:gap-4">
+            <Tabs value={view} onValueChange={(v) => setView(v as ViewType)}>
+              <TabsList className="h-8 md:h-9">
+                <TabsTrigger value="board" className="gap-1 md:gap-1.5 text-xs md:text-sm" data-testid="tab-board">
+                  <LayoutGrid className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Board</span>
+                </TabsTrigger>
+                <TabsTrigger value="list" className="gap-1 md:gap-1.5 text-xs md:text-sm" data-testid="tab-list">
+                  <List className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">List</span>
+                </TabsTrigger>
+                <TabsTrigger value="calendar" className="gap-1 md:gap-1.5 text-xs md:text-sm" data-testid="tab-calendar">
+                  <CalendarIcon className="h-3.5 w-3.5" />
+                  <span className="hidden sm:inline">Calendar</span>
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+
+            <div className="flex items-center gap-1 md:gap-2 shrink-0">
+              <Button 
+                variant="default" 
+                size="icon"
+                className="md:hidden"
+                onClick={() => setTimerDrawerOpen(true)}
+                data-testid="button-start-timer-project-mobile"
+              >
+                <Play className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="default" 
+                size="sm"
+                className="hidden md:flex"
+                onClick={() => setTimerDrawerOpen(true)}
+                data-testid="button-start-timer-project"
+              >
+                <Play className="h-4 w-4 mr-1" />
+                Start Timer
+              </Button>
+              <Button
+                variant="outline"
+                size="icon"
+                className="md:hidden"
+                onClick={() => setAiPlannerOpen(true)}
+                data-testid="button-ai-planner-mobile"
+              >
+                <Sparkles className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                className="hidden md:flex"
+                onClick={() => setAiPlannerOpen(true)}
+                data-testid="button-ai-planner"
+              >
+                <Sparkles className="h-4 w-4 mr-1" />
+                AI Plan
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setMembersOpen(true)}
+                data-testid="button-project-members"
+                className="hidden md:flex"
+              >
+                <Users className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setActivityOpen(true)}
+                data-testid="button-project-activity"
+                className="hidden md:flex"
+              >
+                <Activity className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon" 
+                onClick={() => setSettingsOpen(true)}
+                data-testid="button-project-settings"
+              >
+                <Settings className="h-4 w-4" />
+              </Button>
+              <Button 
+                variant="ghost" 
+                size="icon"
+                onClick={() => hideProjectMutation.mutate()}
+                disabled={hideProjectMutation.isPending}
+                title="Hide from My View"
+                data-testid="button-hide-project"
+              >
+                <EyeOff className="h-4 w-4" />
+              </Button>
+            </div>
+          </div>
           <Button size="sm" onClick={() => handleAddTask()} data-testid="button-add-task">
             <Plus className="h-4 w-4 md:mr-1" />
             <span className="hidden md:inline">Add Task</span>
