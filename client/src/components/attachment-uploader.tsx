@@ -343,7 +343,7 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
   const completedAttachments = attachments.filter(a => a.uploadStatus === "complete");
 
   return (
-    <div className="rounded-md p-3 sm:p-4 bg-muted/30">
+    <div className="rounded-md p-3 sm:p-4 bg-[#edebff4d]">
       <div className="flex items-center gap-2 mb-3">
         <Paperclip className="h-4 w-4 text-muted-foreground" />
         <span className="font-medium text-[16px] text-[#171717]">Attachments</span>
