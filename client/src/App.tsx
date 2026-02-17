@@ -564,6 +564,14 @@ function AppLayout() {
   const { appMode } = useAppMode();
   const [location] = useLocation();
 
+  // Redirect stale project URLs and other legacy patterns to root
+  if (location.startsWith("/projects/")) {
+    const uuidRegex = /^\/projects\/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    if (uuidRegex.test(location)) {
+      return <Redirect to="/" />;
+    }
+  }
+
   if (location === "/login" || location === "/tenant-onboarding" || location === "/accept-terms" || location.startsWith("/auth/platform-invite") || location.startsWith("/accept-invite/") || location.startsWith("/auth/forgot-password") || location.startsWith("/auth/reset-password")) {
     return (
       <Switch>
