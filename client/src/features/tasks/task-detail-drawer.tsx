@@ -909,8 +909,9 @@ export function TaskDetailDrawer({
               value={description}
               onChange={handleDescriptionChange}
               onBlur={handleDescriptionBlur}
-              placeholder="Add a description..."
+              placeholder="Add a description... Type @ to mention someone"
               minHeight="100px"
+              users={availableUsers}
               data-testid="textarea-description"
             />
           </FormFieldWrapper>

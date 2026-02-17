@@ -3,7 +3,8 @@ import StarterKit from "@tiptap/starter-kit";
 import Underline from "@tiptap/extension-underline";
 import Link from "@tiptap/extension-link";
 import TextAlign from "@tiptap/extension-text-align";
-import { useEffect, useCallback, useState, useRef } from "react";
+import Mention from "@tiptap/extension-mention";
+import { useEffect, useCallback, useState, useRef, forwardRef, useImperativeHandle } from "react";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -25,6 +26,7 @@ import EmojiPicker, { Theme, EmojiClickData } from "emoji-picker-react";
 import { useTheme } from "@/lib/theme-provider";
 import { getDocForEditor, serializeDocToString } from "./richTextUtils";
 import { PromptDialog } from "@/components/prompt-dialog";
+import type { User } from "@shared/schema";
 
 interface RichTextEditorProps {
   value: string | null | undefined;
@@ -40,6 +42,7 @@ interface RichTextEditorProps {
   showToolbar?: boolean;
   showAlignment?: boolean;
   showAttachment?: boolean;
+  users?: User[];
   "data-testid"?: string;
 }
 
@@ -51,6 +54,99 @@ interface MenuBarProps {
   showAlignment?: boolean;
   showAttachment?: boolean;
 }
+
+interface MentionListHandle {
+  onKeyDown: (event: KeyboardEvent) => boolean;
+}
+
+interface MentionSuggestionProps {
+  query: string;
+  users: User[];
+  command: (props: { id: string; label: string }) => void;
+}
+
+const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
+  function MentionList({ query, users, command }, ref) {
+    const [selectedIndex, setSelectedIndex] = useState(0);
+
+    const filteredUsers = users.filter((user) => {
+      const searchText = query.toLowerCase();
+      const name = (user.displayName || user.name || "").toLowerCase();
+      const email = user.email?.toLowerCase() || "";
+      const firstName = user.firstName?.toLowerCase() || "";
+      const lastName = user.lastName?.toLowerCase() || "";
+      return (
+        name.includes(searchText) ||
+        email.includes(searchText) ||
+        firstName.includes(searchText) ||
+        lastName.includes(searchText)
+      );
+    }).slice(0, 5);
+
+    useEffect(() => {
+      setSelectedIndex(0);
+    }, [query]);
+
+    const selectUser = useCallback(
+      (index: number) => {
+        const user = filteredUsers[index];
+        if (user) {
+          command({
+            id: user.id,
+            label: user.displayName || user.name || user.email,
+          });
+        }
+      },
+      [filteredUsers, command]
+    );
+
+    useImperativeHandle(ref, () => ({
+      onKeyDown: (event: KeyboardEvent) => {
+        if (event.key === "ArrowDown") {
+          setSelectedIndex((prev) => (prev + 1) % Math.max(filteredUsers.length, 1));
+          return true;
+        }
+        if (event.key === "ArrowUp") {
+          setSelectedIndex((prev) => (prev - 1 + filteredUsers.length) % Math.max(filteredUsers.length, 1));
+          return true;
+        }
+        if (event.key === "Enter") {
+          selectUser(selectedIndex);
+          return true;
+        }
+        return false;
+      },
+    }), [filteredUsers.length, selectedIndex, selectUser]);
+
+    if (filteredUsers.length === 0) {
+      return (
+        <div className="bg-popover border rounded-md shadow-md p-2 text-sm text-muted-foreground">
+          No users found
+        </div>
+      );
+    }
+
+    return (
+      <div className="bg-popover border rounded-md shadow-md overflow-hidden">
+        {filteredUsers.map((user, index) => (
+          <button
+            key={user.id}
+            type="button"
+            className={cn(
+              "w-full px-3 py-2 text-left text-sm flex flex-col",
+              index === selectedIndex && "bg-accent"
+            )}
+            onClick={() => selectUser(index)}
+            data-testid={`mention-option-${user.id}`}
+          >
+            <span className="font-medium">{user.displayName || user.name || "Unknown"}</span>
+            <span className="text-xs text-muted-foreground">{user.email}</span>
+          </button>
+        ))}
+      </div>
+    );
+  }
+);
 
 function MenuBar({ editor, onOpenLinkDialog, onEmojiSelect, onAttachmentClick, showAlignment = true, showAttachment = false }: MenuBarProps) {
   const { theme } = useTheme();
@@ -239,32 +335,85 @@ export function RichTextEditor({
   showToolbar = true,
   showAlignment = true,
   showAttachment = false,
+  users = [],
   "data-testid": testId,
 }: RichTextEditorProps) {
   const [linkDialogOpen, setLinkDialogOpen] = useState(false);
   const [linkDefaultValue, setLinkDefaultValue] = useState("");
+  const [mentionPopupOpen, setMentionPopupOpen] = useState(false);
+  const [mentionQuery, setMentionQuery] = useState("");
+  const [mentionCommand, setMentionCommand] = useState<((props: { id: string; label: string }) => void) | null>(null);
+
+  const usersRef = useRef<User[]>(users);
+  useEffect(() => { usersRef.current = users; }, [users]);
+
+  const mentionListRef = useRef<MentionListHandle>(null);
+
+  const extensions = [
+    StarterKit.configure({
+      heading: false,
+      codeBlock: false,
+      blockquote: false,
+      horizontalRule: false,
+    }),
+    Underline,
+    Link.configure({
+      openOnClick: false,
+      HTMLAttributes: {
+        rel: "noopener noreferrer",
+        target: "_blank",
+      },
+      validate: (href) => /^https?:\/\//.test(href),
+    }),
+    TextAlign.configure({
+      types: ["paragraph", "heading"],
+    }),
+    Mention.configure({
+      HTMLAttributes: {
+        class: "mention",
+      },
+      suggestion: {
+        char: "@",
+        items: ({ query }: { query: string }) => {
+          return usersRef.current.filter((user) => {
+            const searchText = query.toLowerCase();
+            const name = (user.displayName || user.name || "").toLowerCase();
+            const email = user.email?.toLowerCase() || "";
+            return name.includes(searchText) || email.includes(searchText);
+          }).slice(0, 5);
+        },
+        render: () => {
+          return {
+            onStart: (props: { query: string; command: (props: { id: string; label: string }) => void }) => {
+              setMentionQuery(props.query);
+              setMentionCommand(() => props.command);
+              setMentionPopupOpen(true);
+            },
+            onUpdate: (props: { query: string }) => {
+              setMentionQuery(props.query);
+            },
+            onKeyDown: (props: { event: KeyboardEvent }) => {
+              if (props.event.key === "Escape") {
+                setMentionPopupOpen(false);
+                return true;
+              }
+              if (mentionListRef.current) {
+                return mentionListRef.current.onKeyDown(props.event);
+              }
+              return false;
+            },
+            onExit: () => {
+              setMentionPopupOpen(false);
+              setMentionCommand(null);
+            },
+          };
+        },
+      },
+    }),
+  ];
 
   const editor = useEditor({
-    extensions: [
-      StarterKit.configure({
-        heading: false,
-        codeBlock: false,
-        blockquote: false,
-        horizontalRule: false,
-      }),
-      Underline,
-      Link.configure({
-        openOnClick: false,
-        HTMLAttributes: {
-          rel: "noopener noreferrer",
-          target: "_blank",
-        },
-        validate: (href) => /^https?:\/\//.test(href),
-      }),
-      TextAlign.configure({
-        types: ["paragraph", "heading"],
-      }),
-    ],
+    extensions,
     content: getDocForEditor(value),
     editable: !disabled,
     autofocus: autoFocus,
@@ -344,7 +493,7 @@ export function RichTextEditor({
   return (
     <div
       className={cn(
-        "border border-input rounded-md overflow-hidden bg-background",
+        "border border-input rounded-md overflow-hidden bg-background relative",
         disabled && "opacity-50 cursor-not-allowed",
         className
       )}
@@ -363,9 +512,20 @@ export function RichTextEditor({
           "[&_.ProseMirror.is-editor-empty:first-child::before]:text-muted-foreground",
           "[&_.ProseMirror.is-editor-empty:first-child::before]:float-left",
           "[&_.ProseMirror.is-editor-empty:first-child::before]:pointer-events-none",
-          "[&_.ProseMirror.is-editor-empty:first-child::before]:h-0"
+          "[&_.ProseMirror.is-editor-empty:first-child::before]:h-0",
+          "[&_.ProseMirror_.mention]:bg-primary/20 [&_.ProseMirror_.mention]:text-primary [&_.ProseMirror_.mention]:rounded [&_.ProseMirror_.mention]:px-1"
         )}
       />
+      {mentionPopupOpen && mentionCommand && (
+        <div className="absolute bottom-full left-0 mb-1 z-50">
+          <MentionList
+            ref={mentionListRef}
+            query={mentionQuery}
+            users={users}
+            command={mentionCommand}
+          />
+        </div>
+      )}
 
       <PromptDialog
         open={linkDialogOpen}

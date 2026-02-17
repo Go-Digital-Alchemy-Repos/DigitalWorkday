@@ -633,8 +633,9 @@ export function SubtaskDetailDrawer({
                 <RichTextEditor
                   value={description}
                   onChange={handleDescriptionChange}
-                  placeholder="Add a description..."
+                  placeholder="Add a description... Type @ to mention someone"
                   minHeight="100px"
+                  users={availableUsers}
                   data-testid="textarea-subtask-description"
                 />
               </div>

@@ -5,7 +5,7 @@ import { AppError, handleRouteError, sendError, validateBody } from "../lib/erro
 import { captureError } from "../middleware/errorLogging";
 import { getEffectiveTenantId } from "../middleware/tenantContext";
 import { getCurrentUserId, getCurrentWorkspaceId, isSuperUser } from "./helpers";
-import { extractMentionsFromTipTapJson, getPlainTextFromTipTapJson } from "../utils/mentionUtils";
+import { extractMentionsFromTipTapJson, getMentionDelta, getPlainTextFromTipTapJson } from "../utils/mentionUtils";
 import {
   insertTaskSchema,
   insertSubtaskSchema,
@@ -620,6 +620,26 @@ router.patch("/tasks/:id", async (req, res) => {
           }
         }
       }
+
+      if (updateData.description !== undefined) {
+        const { added: newMentions } = getMentionDelta(
+          taskBefore.description,
+          updateData.description
+        );
+        const descriptionPreview = getPlainTextFromTipTapJson(updateData.description);
+        for (const mentionedUserId of newMentions) {
+          if (mentionedUserId !== userId) {
+            notifyCommentMention(
+              mentionedUserId,
+              task.id,
+              task.title,
+              currentUserName,
+              descriptionPreview,
+              notificationContext
+            ).catch(() => {});
+          }
+        }
+      }
     }
 
     res.json(taskWithRelations);
@@ -905,6 +925,33 @@ router.patch("/subtasks/:id", async (req, res) => {
         parentTask.projectId,
         data,
       );
+    }
+
+    if (updateData.description !== undefined) {
+      const userId = getCurrentUserId(req);
+      const tenantIdCtx = getEffectiveTenantId(req);
+      const { added: newMentions } = getMentionDelta(
+        existingSubtask.description,
+        updateData.description
+      );
+      if (newMentions.length > 0) {
+        const currentUser = await storage.getUser(userId);
+        const currentUserName = currentUser?.name || currentUser?.email || "Someone";
+        const descriptionPreview = getPlainTextFromTipTapJson(updateData.description);
+        const notificationContext = { tenantId: tenantIdCtx, excludeUserId: userId };
+        for (const mentionedUserId of newMentions) {
+          if (mentionedUserId !== userId) {
+            notifyCommentMention(
+              mentionedUserId,
+              parentTask.id,
+              parentTask.title,
+              currentUserName,
+              descriptionPreview,
+              notificationContext
+            ).catch(() => {});
+          }
+        }
+      }
     }
 
     res.json(subtask);
