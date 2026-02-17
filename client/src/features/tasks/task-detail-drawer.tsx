@@ -1146,11 +1146,60 @@ export function TaskDetailDrawer({
                   <Timer className="h-3.5 w-3.5" />
                   Time Entries
                 </label>
-                {timeEntries.length > 0 && (
-                  <span className="text-xs text-muted-foreground">
-                    Total: {formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}
-                  </span>
-                )}
+                <div className="flex items-center gap-2">
+                  {timerState === "idle" && (
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        if (canQuickStartTimer && !projectContextError) {
+                          startTimerMutation.mutate();
+                        } else {
+                          setTimerDrawerOpen(true);
+                        }
+                      }}
+                      className="h-8 border border-[#d97d26] text-white bg-[#f7902f] hover:bg-[#e67e22]"
+                      data-testid="button-timer-start"
+                    >
+                      <Play className="h-3.5 w-3.5 mr-1.5" />
+                      Start Timer
+                    </Button>
+                  )}
+                  {timerState === "loading" && (
+                    <Button size="sm" disabled className="h-8 border border-[#d97d26] text-white bg-[#f7902f]">
+                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                      Loading...
+                    </Button>
+                  )}
+                  {timerState === "running" && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-8">
+                        <Pause className="h-3.5 w-3.5 mr-1.5" />
+                        Pause
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
+                        <Square className="h-3.5 w-3.5 mr-1.5" />
+                        Stop
+                      </Button>
+                    </>
+                  )}
+                  {timerState === "paused" && (
+                    <>
+                      <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-8">
+                        <Play className="h-3.5 w-3.5 mr-1.5" />
+                        Resume
+                      </Button>
+                      <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
+                        <Square className="h-3.5 w-3.5 mr-1.5" />
+                        Stop
+                      </Button>
+                    </>
+                  )}
+                  {timeEntries.length > 0 && (
+                    <span className="text-xs text-muted-foreground ml-2">
+                      Total: {formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}
+                    </span>
+                  )}
+                </div>
               </div>
               {timeEntriesLoading ? (
                 <p className="text-sm text-muted-foreground">Loading time entries...</p>
@@ -1194,26 +1243,6 @@ export function TaskDetailDrawer({
           </div>
         </div>
         <DrawerActionBar
-          showTimer={true}
-          timerState={
-            timerLoading ? "loading" :
-            activeTimer && isTimerOnThisTask && isTimerRunning ? "running" :
-            activeTimer && isTimerOnThisTask && !isTimerRunning ? "paused" :
-            activeTimer && !isTimerOnThisTask ? "hidden" :
-            (!activeTimer && !canQuickStartTimer) || projectContextError ? "hidden" :
-            projectContextLoading && task.projectId ? "loading" :
-            "idle"
-          }
-          onStartTimer={() => {
-            if (canQuickStartTimer && !projectContextError) {
-              startTimerMutation.mutate();
-            } else {
-              setTimerDrawerOpen(true);
-            }
-          }}
-          onPauseTimer={() => pauseTimerMutation.mutate()}
-          onResumeTimer={() => resumeTimerMutation.mutate()}
-          onStopTimer={() => stopTimerMutation.mutate()}
           showSave={isDirty}
           onSave={() => {
             if (title.trim() && title !== task.title) {

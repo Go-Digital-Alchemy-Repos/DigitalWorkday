@@ -40,7 +40,6 @@ export function DrawerActionBar({
   isSaving = false,
   showComplete = true,
   showSave = true,
-  showTimer = true,
   extraActions,
   className,
 }: DrawerActionBarProps) {
@@ -52,92 +51,6 @@ export function DrawerActionBar({
       )}
       data-testid="drawer-action-bar"
     >
-      {showTimer && timerState !== "hidden" && (
-        <div className="flex items-center gap-2">
-          {timerState === "idle" && onStartTimer && (
-            <Button
-              size="default"
-              onClick={onStartTimer}
-              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover-elevate active-elevate-2 border border-[#d97d26] md:min-h-9 px-4 py-2 text-white min-h-[44px] bg-[#f7902f]"
-              data-testid="button-action-start-timer"
-            >
-              <Play className="h-4 w-4 mr-1.5" />
-              Start Timer
-            </Button>
-          )}
-
-          {timerState === "loading" && (
-            <Button
-              size="default"
-              disabled
-              className="inline-flex items-center justify-center gap-2 whitespace-nowrap rounded-md text-sm font-medium focus-visible:outline-none focus-visible:ring-1 focus-visible:ring-ring disabled:pointer-events-none disabled:opacity-50 [&_svg]:pointer-events-none [&_svg]:size-4 [&_svg]:shrink-0 hover-elevate active-elevate-2 border border-[#d97d26] md:min-h-9 px-4 py-2 text-white min-h-[44px] bg-[#f7902f]"
-              data-testid="button-action-start-timer"
-            >
-              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-              Loading...
-            </Button>
-          )}
-
-          {timerState === "running" && (
-            <>
-              {onPauseTimer && (
-                <Button
-                  variant="outline"
-                  size="default"
-                  onClick={onPauseTimer}
-                  className="min-h-[44px]"
-                  data-testid="button-action-pause-timer"
-                >
-                  <Pause className="h-4 w-4 mr-1.5" />
-                  Pause
-                </Button>
-              )}
-              {onStopTimer && (
-                <Button
-                  variant="destructive"
-                  size="default"
-                  onClick={onStopTimer}
-                  className="min-h-[44px]"
-                  data-testid="button-action-stop-timer"
-                >
-                  <Square className="h-4 w-4 mr-1.5" />
-                  Stop
-                </Button>
-              )}
-            </>
-          )}
-
-          {timerState === "paused" && (
-            <>
-              {onResumeTimer && (
-                <Button
-                  variant="outline"
-                  size="default"
-                  onClick={onResumeTimer}
-                  className="min-h-[44px]"
-                  data-testid="button-action-resume-timer"
-                >
-                  <Play className="h-4 w-4 mr-1.5" />
-                  Resume
-                </Button>
-              )}
-              {onStopTimer && (
-                <Button
-                  variant="destructive"
-                  size="default"
-                  onClick={onStopTimer}
-                  className="min-h-[44px]"
-                  data-testid="button-action-stop-timer"
-                >
-                  <Square className="h-4 w-4 mr-1.5" />
-                  Stop
-                </Button>
-              )}
-            </>
-          )}
-        </div>
-      )}
-
       {extraActions}
 
       <div className="flex items-center gap-2 ml-auto">

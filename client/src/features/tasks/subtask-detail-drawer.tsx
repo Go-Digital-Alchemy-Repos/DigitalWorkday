@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare } from "lucide-react";
+import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -344,6 +344,73 @@ export function SubtaskDetailDrawer({
       setLocalDueDate(subtask.dueDate ? new Date(subtask.dueDate) : null);
     }
   }, [subtask?.id]);
+
+  const { data: activeTimer, isLoading: timerLoading } = useQuery<ActiveTimer | null>({
+    queryKey: ["/api/timer/current"],
+    enabled: open,
+    refetchInterval: 30000,
+  });
+
+  const isTimerOnThisTask = activeTimer?.taskId === subtask?.id;
+  const isTimerRunning = activeTimer?.status === "running";
+
+  const startTimerMutation = useMutation({
+    mutationFn: async () => {
+      if (projectId && !isActualSubtask) {
+        // Handle case where we might need more context for non-subtask items if any
+      }
+      return apiRequest("POST", "/api/timer/start", {
+        clientId: (subtask as any).project?.clientId || null,
+        projectId: projectId || null,
+        taskId: subtask?.id || null,
+        description: subtask?.title || "",
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      toast({ title: "Timer started", description: `Tracking time for "${subtask?.title}"` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to start timer", variant: "destructive" });
+    },
+  });
+
+  const pauseTimerMutation = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/timer/pause"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      toast({ title: "Timer paused" });
+    },
+  });
+
+  const resumeTimerMutation = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/timer/resume"),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      toast({ title: "Timer resumed" });
+    },
+  });
+
+  const stopTimerMutation = useMutation({
+    mutationFn: async () => apiRequest("POST", "/api/timer/stop", { scope: "in_scope" }),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/time-entries?taskId=${subtask?.id}`] });
+      toast({ title: "Timer stopped", description: "Time entry saved" });
+    },
+  });
+
+  const { data: timeEntries = [], isLoading: timeEntriesLoading } = useQuery<any[]>({
+    queryKey: [`/api/time-entries?taskId=${subtask?.id}`],
+    enabled: !!subtask?.id && open,
+  });
+
+  const timerState = 
+    timerLoading ? "loading" :
+    activeTimer && isTimerOnThisTask && isTimerRunning ? "running" :
+    activeTimer && isTimerOnThisTask && !isTimerRunning ? "paused" :
+    activeTimer && !isTimerOnThisTask ? "other_task" :
+    "idle";
 
   if (!subtask) return null;
 
@@ -811,6 +878,93 @@ export function SubtaskDetailDrawer({
                   )}
                 </div>
               </div>
+
+              <Separator />
+
+              {isActualSubtask && (
+                <div 
+                  className="p-3 sm:p-4 bg-[#ffbb734d] border border-[#f5ac5b]"
+                  style={{ borderRadius: "10px" }}
+                >
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <label className="flex items-center gap-2 font-medium text-[#171717] text-[16px]">
+                        <Timer className="h-3.5 w-3.5" />
+                        Time Entries
+                      </label>
+                      <div className="flex items-center gap-2">
+                        {timerState === "idle" && (
+                          <Button
+                            size="sm"
+                            onClick={() => startTimerMutation.mutate()}
+                            className="h-8 border border-[#d97d26] text-white bg-[#f7902f] hover:bg-[#e67e22]"
+                          >
+                            <Play className="h-3.5 w-3.5 mr-1.5" />
+                            Start Timer
+                          </Button>
+                        )}
+                        {timerState === "loading" && (
+                          <Button size="sm" disabled className="h-8 border border-[#d97d26] text-white bg-[#f7902f]">
+                            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                            Loading...
+                          </Button>
+                        )}
+                        {timerState === "running" && (
+                          <>
+                            <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-8">
+                              <Pause className="h-3.5 w-3.5 mr-1.5" />
+                              Pause
+                            </Button>
+                            <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
+                              <Square className="h-3.5 w-3.5 mr-1.5" />
+                              Stop
+                            </Button>
+                          </>
+                        )}
+                        {timerState === "paused" && (
+                          <>
+                            <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-8">
+                              <Play className="h-3.5 w-3.5 mr-1.5" />
+                              Resume
+                            </Button>
+                            <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
+                              <Square className="h-3.5 w-3.5 mr-1.5" />
+                              Stop
+                            </Button>
+                          </>
+                        )}
+                        {timeEntries.length > 0 && (
+                          <span className="text-xs text-muted-foreground ml-2">
+                            Total: {formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}
+                          </span>
+                        )}
+                      </div>
+                    </div>
+                    {timeEntriesLoading ? (
+                      <p className="text-sm text-muted-foreground">Loading time entries...</p>
+                    ) : timeEntries.length === 0 ? (
+                      <p className="text-sm text-muted-foreground">No time entries for this subtask</p>
+                    ) : (
+                      <div className="space-y-2">
+                        {timeEntries.map((entry) => (
+                          <div key={entry.id} className="flex items-start justify-between p-3 rounded-md border bg-muted/30">
+                            <div className="space-y-1 flex-1 min-w-0">
+                              <div className="flex items-center gap-2 flex-wrap">
+                                <span className="text-sm font-medium">
+                                  {formatDurationShort(entry.durationSeconds)}
+                                </span>
+                              </div>
+                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                                <span>{format(new Date(entry.startTime), "MMM d, yyyy")}</span>
+                              </div>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
 
               <Separator />
 
