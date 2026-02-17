@@ -627,10 +627,11 @@ export function SubtaskDetailDrawer({
                         taskId={subtask.id}
                         assignees={assigneeUsers}
                         apiPrefix={`/api/subtasks/${subtask.id}`}
-                        onAssigneeChange={() => {
-                          queryClient.invalidateQueries({ queryKey: ["/api/subtasks", subtask.id, "assignees"] });
-                        }}
-                        data-testid="multi-select-subtask-assignees"
+                        invalidateKeys={[
+                          ["/api/subtasks", subtask.id, "assignees"],
+                          ["/api/subtasks", subtask.id],
+                          ["/api/tasks/my"],
+                        ]}
                       />
                     )
                   ) : (

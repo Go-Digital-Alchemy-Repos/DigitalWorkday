@@ -200,7 +200,16 @@ Add `overflow-x-auto` wrapper around all `<Table>` components to prevent horizon
 - **Full-width form controls**: DatePicker, PrioritySelector, StatusSelector, Input all use `w-full h-10` on mobile
 - **Touch-friendly controls**: Form inputs use `h-10` (40px) on mobile for better tap targets
 
-### 4. My Tasks Page (my-tasks.tsx)
+### 4. Subtask Detail Drawer (subtask-detail-drawer.tsx)
+- **Full-width on mobile**: Fills entire viewport width
+- **Responsive padding**: `px-3 py-3` header / `px-3 py-4` body on mobile vs `px-6 py-4` / `px-6 py-6` desktop
+- **Single-column metadata**: Grid switches from `grid-cols-2` to `grid-cols-1` on mobile via `useIsMobile()`
+- **Full-width form controls**: PrioritySelector, StatusSelector, DueDate, Estimate all use `w-full` on mobile
+- **Feature parity with TaskDetailDrawer**: CommentThread (with optimistic updates), MultiSelectAssignees (via apiPrefix), AttachmentUploader, tags, created-at display
+- **Responsive breadcrumbs**: Truncation at `max-w-[120px]` on mobile vs `max-w-[150px]` desktop
+- **Comments section**: Light grey background (`bg-muted/30`) with responsive padding
+
+### 5. My Tasks Page (my-tasks.tsx)
 - **Dashboard summary**: Hidden on mobile (`hidden md:block`) to maximize task list space
 - **Task list**: Already responsive with `grid-cols-1 lg:grid-cols-2`
 
@@ -217,3 +226,7 @@ Add `overflow-x-auto` wrapper around all `<Table>` components to prevent horizon
 - [ ] Dashboard summary hidden on mobile
 - [ ] No horizontal overflow on task cards
 - [ ] Drag-and-drop handle visible (not hidden behind hover)
+- [ ] Subtask drawer metadata single-column on mobile
+- [ ] Subtask drawer comments section renders and accepts input
+- [ ] Subtask drawer assignee picker uses MultiSelectAssignees component
+- [ ] Subtask drawer attachments section visible when project exists

@@ -18,6 +18,7 @@ interface MultiSelectAssigneesProps {
   disabled?: boolean;
   onAssigneeChange?: () => void;
   apiPrefix?: string;
+  invalidateKeys?: string[][];
 }
 
 function getInitials(name: string): string {
@@ -36,38 +37,41 @@ export function MultiSelectAssignees({
   disabled = false,
   onAssigneeChange,
   apiPrefix,
+  invalidateKeys,
 }: MultiSelectAssigneesProps) {
   const [open, setOpen] = useState(false);
   const [search, setSearch] = useState("");
 
   const prefix = apiPrefix || `/api/tasks/${taskId}`;
-  const cacheKey = apiPrefix ? [apiPrefix] : ["/api/tasks", taskId];
+  const defaultCacheKeys: string[][] = apiPrefix 
+    ? [] 
+    : [["/api/tasks", taskId], ["/api/tasks/my"]];
+  const keysToInvalidate = invalidateKeys || defaultCacheKeys;
 
   const { data: tenantUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/tenant/users"],
     enabled: open,
   });
 
+  const invalidateAll = () => {
+    for (const key of keysToInvalidate) {
+      queryClient.invalidateQueries({ queryKey: key });
+    }
+    onAssigneeChange?.();
+  };
+
   const addAssigneeMutation = useMutation({
     mutationFn: async (userId: string) => {
       await apiRequest("POST", `${prefix}/assignees`, { userId });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cacheKey });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
-      onAssigneeChange?.();
-    },
+    onSuccess: invalidateAll,
   });
 
   const removeAssigneeMutation = useMutation({
     mutationFn: async (userId: string) => {
       await apiRequest("DELETE", `${prefix}/assignees/${userId}`);
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: cacheKey });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
-      onAssigneeChange?.();
-    },
+    onSuccess: invalidateAll,
   });
 
   const assigneeIds = new Set(assignees.map((a) => a.id));
