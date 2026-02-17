@@ -348,9 +348,8 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
     <div className="mt-4 space-y-3">
       <div className="flex items-center gap-2">
         <Paperclip className="h-4 w-4 text-muted-foreground" />
-        <span className="text-sm font-medium">Attachments</span>
+        <span className="font-medium text-[16px]">Attachments</span>
       </div>
-
       <div
         className={`border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer ${
           isDragOver 
@@ -383,7 +382,6 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
           </p>
         </div>
       </div>
-
       {uploadingFiles.length > 0 && (
         <div className="space-y-2">
           {uploadingFiles.map((file) => (
@@ -420,7 +418,6 @@ export function AttachmentUploader({ taskId, projectId }: AttachmentUploaderProp
           ))}
         </div>
       )}
-
       {isLoading ? (
         <div className="flex items-center justify-center py-4">
           <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
