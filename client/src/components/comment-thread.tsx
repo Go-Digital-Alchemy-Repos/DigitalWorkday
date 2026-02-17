@@ -156,8 +156,7 @@ export function CommentThread({
 
   return (
     <div className="space-y-4" data-testid="comment-thread">
-      <h4 className="text-sm font-medium">{title}</h4>
-
+      <h4 className="font-medium text-[16px]">{title}</h4>
       {comments.length > 0 && (
         <div className="space-y-4">
           {comments.map((comment) => {
@@ -284,13 +283,11 @@ export function CommentThread({
           })}
         </div>
       )}
-
       {comments.length === 0 && (
         <p className="text-xs text-muted-foreground py-2">
           No comments yet. Be the first to comment.
         </p>
       )}
-
       {!readOnly && (
         <div className="flex gap-3 pt-2">
           <Avatar className="h-8 w-8 shrink-0">
