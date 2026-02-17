@@ -1,9 +1,11 @@
-import { useState, useRef, useEffect } from "react";
+// Mobile UX Phase 3B improvements applied here
+import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, ApiError } from "@/lib/queryClient";
 import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanel, ChatContextPanelToggle } from "@/features/chat";
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
+import { useIsMobile } from "@/hooks/use-mobile";
 import { getSocket, joinChatRoom, leaveChatRoom, onConnectionChange, isSocketConnected } from "@/lib/realtime/socket";
 import { useConversationTyping } from "@/hooks/use-typing";
 import { Button } from "@/components/ui/button";
@@ -55,6 +57,7 @@ import {
   AlertCircle,
   Wifi,
   WifiOff,
+  ArrowLeft,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -163,6 +166,7 @@ interface ChatDmThread {
 export default function ChatPage() {
   const { user } = useAuth();
   const { toast } = useToast();
+  const isMobile = useIsMobile();
   const [selectedChannel, setSelectedChannel] = useState<ChatChannel | null>(null);
   const [selectedDm, setSelectedDm] = useState<ChatDmThread | null>(null);
   const [messageInput, setMessageInput] = useState("");
@@ -232,6 +236,32 @@ export default function ChatPage() {
 
   // Delete channel confirmation dialog state
   const [deleteChannelDialogOpen, setDeleteChannelDialogOpen] = useState(false);
+
+  // Mobile keyboard-safe viewport offset
+  const [keyboardOffset, setKeyboardOffset] = useState(0);
+  const composerRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    if (!isMobile) return;
+    const vv = window.visualViewport;
+    if (!vv) return;
+    const onResize = () => {
+      const offset = window.innerHeight - vv.height;
+      setKeyboardOffset(offset > 50 ? offset : 0);
+    };
+    vv.addEventListener("resize", onResize);
+    vv.addEventListener("scroll", onResize);
+    return () => {
+      vv.removeEventListener("resize", onResize);
+      vv.removeEventListener("scroll", onResize);
+    };
+  }, [isMobile]);
+
+  const handleMobileBack = useCallback(() => {
+    setSelectedChannel(null);
+    setSelectedDm(null);
+    updateUrlForConversation(null, null);
+  }, [updateUrlForConversation]);
 
   // Connection status tracking
   const [isConnected, setIsConnected] = useState(isSocketConnected());
@@ -1627,9 +1657,13 @@ export default function ChatPage() {
     return otherMembers.map((m) => m.user.name || m.user.email).join(", ");
   };
 
+  const hasConversation = !!(selectedChannel || selectedDm);
+  const showMobileList = isMobile && !hasConversation;
+  const showMobileConversation = isMobile && hasConversation;
+
   return (
     <div className="flex h-full" data-testid="chat-page">
-      <div className="w-64 border-r bg-sidebar flex flex-col">
+      <div className={`${isMobile ? (showMobileList ? "flex flex-col w-full" : "hidden") : "w-64"} border-r bg-sidebar flex flex-col`}>
         <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as "chats" | "team")} className="flex-1 flex flex-col">
           <TabsList className="grid w-full grid-cols-2 mx-2 mt-2" style={{ width: "calc(100% - 16px)" }}>
             <TabsTrigger value="chats" data-testid="tab-chats">
