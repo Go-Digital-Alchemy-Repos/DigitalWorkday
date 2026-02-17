@@ -240,14 +240,13 @@ export function SubtaskList({
   return (
     <div className="space-y-2" data-testid="subtask-list">
       <div className="flex items-center justify-between">
-        <h4 className="font-medium text-[16px]">
-          Subtasks
+        <div className="flex items-center gap-2">
           {subtasks.length > 0 && (
-            <span className="ml-2 text-xs text-muted-foreground">
+            <span className="text-xs font-medium text-muted-foreground bg-muted px-1.5 py-0.5 rounded-sm">
               {completedCount}/{subtasks.length}
             </span>
           )}
-        </h4>
+        </div>
         <div className="flex items-center gap-1">
           {aiStatus?.enabled && taskTitle && !isAdding && (
             <Button
