@@ -1,11 +1,113 @@
 import type { Express } from "express";
 import type { Server } from "http";
-import { registerRoute, clearRouteRegistry } from "./routeRegistry";
+import { registerRoute, clearRouteRegistry, getRouteRegistry } from "./routeRegistry";
 import { registerRoutes as legacyRegisterRoutes } from "../routes";
+
 import systemRouter from "./domains/system.router";
 import tagsRouter from "./domains/tags.router";
 import activityRouter from "./domains/activity.router";
 import commentsRouter from "./domains/comments.router";
+import presenceRouter from "./domains/presence.router";
+import aiRouter from "./domains/ai.router";
+
+interface DomainEntry {
+  path: string;
+  router: import("express").Router;
+  policy: import("./policy/requiredMiddleware").PolicyName;
+  domain: string;
+  description: string;
+}
+
+const MIGRATED_DOMAINS: DomainEntry[] = [
+  {
+    path: "/api/v1/system",
+    router: systemRouter,
+    policy: "superUser",
+    domain: "system-integrations",
+    description: "System integration management. Pilot: migrated to new router factory with superUser policy.",
+  },
+  {
+    path: "/api",
+    router: tagsRouter,
+    policy: "authTenant",
+    domain: "tags",
+    description: "Tag CRUD and task-tag associations. Migrated from legacy routes/tags.router.ts (Prompt #2).",
+  },
+  {
+    path: "/api",
+    router: activityRouter,
+    policy: "authTenant",
+    domain: "activity",
+    description: "Activity log CRUD. Migrated from legacy routes/activity.router.ts.",
+  },
+  {
+    path: "/api",
+    router: commentsRouter,
+    policy: "authTenant",
+    domain: "comments",
+    description: "Comment CRUD, resolve/unresolve. Migrated from legacy routes/comments.router.ts (Prompt #4).",
+  },
+  {
+    path: "/api",
+    router: presenceRouter,
+    policy: "authTenant",
+    domain: "presence",
+    description: "User presence tracking. Migrated from legacy routes/presence.ts (Prompt #5).",
+  },
+  {
+    path: "/api",
+    router: aiRouter,
+    policy: "authTenant",
+    domain: "ai",
+    description: "AI integration routes (OpenAI). Migrated from legacy routes/ai.ts (Prompt #5).",
+  },
+];
+
+interface LegacyEntry {
+  path: string;
+  policy: import("./policy/requiredMiddleware").PolicyName;
+  domain: string;
+  description: string;
+}
+
+const LEGACY_DOMAINS: LegacyEntry[] = [
+  {
+    path: "/api",
+    policy: "authTenant",
+    domain: "legacy-aggregated",
+    description: "Legacy aggregated routes from routes/index.ts. Auth+tenant guards applied globally in routes.ts with path-based allowlists.",
+  },
+  {
+    path: "/api/v1/webhooks",
+    policy: "public",
+    domain: "webhooks",
+    description: "Stripe webhook routes (signature-verified, no session auth). Exempt from auth/tenant/CSRF.",
+  },
+  {
+    path: "/api/v1/super",
+    policy: "superUser",
+    domain: "super-admin",
+    description: "Super admin routes. Exempt from tenant context requirement.",
+  },
+  {
+    path: "/api/v1/tenant",
+    policy: "authOnly",
+    domain: "tenant-onboarding",
+    description: "Tenant onboarding and billing. Auth required, tenant context exempt during onboarding.",
+  },
+  {
+    path: "/api/v1/chat",
+    policy: "authTenant",
+    domain: "chat",
+    description: "Internal chat system with Socket.IO integration.",
+  },
+  {
+    path: "/api/v1/uploads",
+    policy: "authTenant",
+    domain: "uploads",
+    description: "File upload routes with rate limiting.",
+  },
+];
 
 export async function mountAllRoutes(
   httpServer: Server,
@@ -13,120 +115,36 @@ export async function mountAllRoutes(
 ): Promise<Server> {
   clearRouteRegistry();
 
-  registerRoute({
-    path: "/api",
-    router: null as any,
-    policy: "authTenant",
-    domain: "legacy-aggregated",
-    description: "Legacy aggregated routes from routes/index.ts. Auth+tenant guards applied globally in routes.ts with path-based allowlists.",
-    legacy: true,
-  });
+  for (const entry of LEGACY_DOMAINS) {
+    registerRoute({
+      path: entry.path,
+      router: null as any,
+      policy: entry.policy,
+      domain: entry.domain,
+      description: entry.description,
+      legacy: true,
+    });
+  }
 
-  registerRoute({
-    path: "/api/v1/webhooks",
-    router: null as any,
-    policy: "public",
-    domain: "webhooks",
-    description: "Stripe webhook routes (signature-verified, no session auth). Exempt from auth/tenant/CSRF.",
-    legacy: true,
-  });
-
-  registerRoute({
-    path: "/api/v1/system",
-    router: systemRouter,
-    policy: "superUser",
-    domain: "system-integrations",
-    description: "System integration management. Pilot: migrated to new router factory with superUser policy.",
-    legacy: false,
-  });
-
-  registerRoute({
-    path: "/api/v1/super",
-    router: null as any,
-    policy: "superUser",
-    domain: "super-admin",
-    description: "Super admin routes. Exempt from tenant context requirement.",
-    legacy: true,
-  });
-
-  registerRoute({
-    path: "/api/v1/tenant",
-    router: null as any,
-    policy: "authOnly",
-    domain: "tenant-onboarding",
-    description: "Tenant onboarding and billing. Auth required, tenant context exempt during onboarding.",
-    legacy: true,
-  });
-
-  registerRoute({
-    path: "/api/v1/chat",
-    router: null as any,
-    policy: "authTenant",
-    domain: "chat",
-    description: "Internal chat system with Socket.IO integration.",
-    legacy: true,
-  });
-
-  registerRoute({
-    path: "/api/v1/presence",
-    router: null as any,
-    policy: "authTenant",
-    domain: "presence",
-    description: "User presence tracking for real-time status.",
-    legacy: true,
-  });
-
-  registerRoute({
-    path: "/api/v1/ai",
-    router: null as any,
-    policy: "authTenant",
-    domain: "ai",
-    description: "AI integration routes (OpenAI).",
-    legacy: true,
-  });
-
-  registerRoute({
-    path: "/api/v1/uploads",
-    router: null as any,
-    policy: "authTenant",
-    domain: "uploads",
-    description: "File upload routes with rate limiting.",
-    legacy: true,
-  });
-
-  registerRoute({
-    path: "/api",
-    router: tagsRouter,
-    policy: "authTenant",
-    domain: "tags",
-    description: "Tag CRUD and task-tag associations. Migrated from legacy routes/tags.router.ts (Prompt #2).",
-    legacy: false,
-  });
-
-  registerRoute({
-    path: "/api",
-    router: activityRouter,
-    policy: "authTenant",
-    domain: "activity",
-    description: "Activity log CRUD. Migrated from legacy routes/activity.router.ts.",
-    legacy: false,
-  });
-
-  registerRoute({
-    path: "/api",
-    router: commentsRouter,
-    policy: "authTenant",
-    domain: "comments",
-    description: "Comment CRUD, resolve/unresolve. Migrated from legacy routes/comments.router.ts (Prompt #4).",
-    legacy: false,
-  });
+  for (const entry of MIGRATED_DOMAINS) {
+    registerRoute({
+      path: entry.path,
+      router: entry.router,
+      policy: entry.policy,
+      domain: entry.domain,
+      description: entry.description,
+      legacy: false,
+    });
+  }
 
   await legacyRegisterRoutes(httpServer, app);
 
-  app.use("/api/v1/system", systemRouter);
-  app.use("/api", tagsRouter);
-  app.use("/api", activityRouter);
-  app.use("/api", commentsRouter);
+  const registry = getRouteRegistry();
+  for (const route of registry) {
+    if (!route.legacy && route.router) {
+      app.use(route.path, route.router);
+    }
+  }
 
   return httpServer;
 }

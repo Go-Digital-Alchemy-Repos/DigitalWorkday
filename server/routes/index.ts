@@ -16,8 +16,10 @@ import systemStatusRoutes from "./systemStatus";
 // import systemIntegrationsRoutes from "./systemIntegrations";
 import chatRoutes from "./chat";
 import chatRetentionRoutes from "./chatRetention";
-import presenceRoutes from "./presence";
-import aiRoutes from "./ai";
+// presenceRoutes: migrated to new router factory (server/http/domains/presence.router.ts) — Prompt #5
+// import presenceRoutes from "./presence";
+// aiRoutes: migrated to new router factory (server/http/domains/ai.router.ts) — Prompt #5
+// import aiRoutes from "./ai";
 import featuresRoutes from "../features";
 import superSystemStatusRouter from "./super/systemStatus.router";
 import superIntegrationsRouter from "./super/integrations.router";
@@ -76,8 +78,10 @@ router.use("/v1/uploads", uploadRoutes);
 router.use("/v1", emailOutboxRoutes);
 router.use("/v1/chat", chatRoutes);
 router.use("/v1", chatRetentionRoutes);
-router.use("/v1/presence", presenceRoutes);
-router.use("/v1/ai", aiRoutes);
+// presenceRoutes: migrated to server/http/domains/presence.router.ts (Prompt #5)
+// router.use("/v1/presence", presenceRoutes);
+// aiRoutes: migrated to server/http/domains/ai.router.ts (Prompt #5)
+// router.use("/v1/ai", aiRoutes);
 router.use(tenancyHealthRoutes);
 
 export default router;

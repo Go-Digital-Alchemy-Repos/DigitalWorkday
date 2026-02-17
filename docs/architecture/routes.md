@@ -140,6 +140,25 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
 | tags | `/api` | `authTenant` | `server/http/domains/tags.router.ts` | #2 | Feb 2026 |
 | activity | `/api` | `authTenant` | `server/http/domains/activity.router.ts` | #3 | Feb 2026 |
 | comments | `/api` | `authTenant` | `server/http/domains/comments.router.ts` | #4 | Feb 2026 |
+| presence | `/api` | `authTenant` | `server/http/domains/presence.router.ts` | #5 | Feb 2026 |
+| ai | `/api` | `authTenant` | `server/http/domains/ai.router.ts` | #5 | Feb 2026 |
+
+### Presence Domain Migration Notes (Prompt #5)
+- **1 endpoint** migrated: GET `/v1/presence` (query all or specific user presence)
+- **skipEnvelope: true** — Legacy handler uses `res.json()` directly.
+- **Path mapping**: Legacy mount was `router.use("/v1/presence", presenceRoutes)` where handler used `/`. New router uses `/v1/presence` path directly, mounted at `/api`.
+- **Integration tests**: 5 smoke tests in `server/tests/integration/presenceRoutes.test.ts`.
+
+### AI Domain Migration Notes (Prompt #5)
+- **4 endpoints** migrated: GET `/v1/ai/status`, POST `/v1/ai/suggest/task-breakdown`, POST `/v1/ai/suggest/project-plan`, POST `/v1/ai/suggest/task-description`
+- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
+- **Policy: authTenant** — AI features are tenant-scoped. Legacy used `requireAuth` per-handler; factory policy now applies at router scope.
+- **Validation preserved**: Zod schemas for request body validation retained verbatim.
+- **Integration tests**: 8 smoke tests in `server/tests/integration/aiRoutes.test.ts`.
+
+### Registry-Only Mounting (Prompt #5)
+- **mount.ts refactored**: Domain routers are now declared in `MIGRATED_DOMAINS` array and registered via `registerRoute()`. All non-legacy routes are mounted by iterating `getRouteRegistry()` — no direct `app.use(path, router)` calls for individual domains.
+- **Policy drift test added**: Verifies mount.ts has no direct `app.use()` calls with router literals, and confirms registry iteration pattern is present.
 
 ### Comments Domain Migration Notes (Prompt #4)
 - **6 endpoints** migrated: GET/POST `/tasks/:taskId/comments`, PATCH/DELETE `/comments/:id`, POST `/comments/:id/resolve`, POST `/comments/:id/unresolve`
@@ -168,7 +187,7 @@ To migrate the next domain (Prompt #3):
 2. **Create** `server/http/domains/<domain>.router.ts` using `createApiRouter()`
 3. **Move** the route handlers from the legacy router to the new domain file
 4. **Comment out** the legacy mount in `routes/index.ts` (add TODO marker)
-5. **Register** in `mount.ts` with `registerRoute()` + `app.use()`
+5. **Register** in `MIGRATED_DOMAINS` array in `mount.ts` — routers are auto-mounted via registry iteration
 6. **Add smoke tests** — at least: 401 unauth, 200 auth+tenant, route matching
 7. **Update policy drift tests** — verify the new domain's policy is declared
 8. **Test** — all tests must pass
@@ -179,8 +198,8 @@ To migrate the next domain (Prompt #3):
 2. `/api` tags — tag CRUD + task-tag associations (DONE - Prompt #2)
 3. `/api` activity — activity log (DONE - Prompt #3)
 4. `/api` comments — comment CRUD (DONE - Prompt #4)
-5. `/api/v1/presence` — presence tracking (1 endpoint, self-contained)
-6. `/api/v1/ai` — AI routes (small, self-contained)
+5. `/api/v1/presence` — presence tracking (DONE - Prompt #5)
+6. `/api/v1/ai` — AI routes (DONE - Prompt #5)
 7. `/api` attachments — attachment upload/download (medium)
 8. `/api/v1/chat` — chat system (medium, has Socket.IO deps)
 9. `/api/v1/uploads` — file uploads (medium, has rate limiting)

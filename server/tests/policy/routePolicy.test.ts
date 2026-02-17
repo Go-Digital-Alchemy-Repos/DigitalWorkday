@@ -120,6 +120,20 @@ describe("Route Policy Drift Tests", () => {
       expect(comments!.policy).toBe("authTenant");
       expect(comments!.legacy).toBe(false);
     });
+
+    it("presence domain must use authTenant policy", () => {
+      const presence = registry.find((r) => r.domain === "presence" && !r.legacy);
+      expect(presence).toBeDefined();
+      expect(presence!.policy).toBe("authTenant");
+      expect(presence!.legacy).toBe(false);
+    });
+
+    it("ai domain must use authTenant policy", () => {
+      const ai = registry.find((r) => r.domain === "ai" && !r.legacy);
+      expect(ai).toBeDefined();
+      expect(ai!.policy).toBe("authTenant");
+      expect(ai!.legacy).toBe(false);
+    });
   });
 
   describe("Factory Router Meta", () => {
@@ -170,6 +184,30 @@ describe("Route Policy Drift Tests", () => {
       expect(meta).toBeDefined();
       expect(meta!.policy).toBe("authTenant");
     });
+
+    it("presence domain router should have factory metadata with authTenant policy", () => {
+      const presence = registry.find(
+        (r) => r.domain === "presence" && !r.legacy
+      );
+      expect(presence).toBeDefined();
+      expect(presence!.router).not.toBeNull();
+
+      const meta = getRouterMeta(presence!.router);
+      expect(meta).toBeDefined();
+      expect(meta!.policy).toBe("authTenant");
+    });
+
+    it("ai domain router should have factory metadata with authTenant policy", () => {
+      const ai = registry.find(
+        (r) => r.domain === "ai" && !r.legacy
+      );
+      expect(ai).toBeDefined();
+      expect(ai!.router).not.toBeNull();
+
+      const meta = getRouterMeta(ai!.router);
+      expect(meta).toBeDefined();
+      expect(meta!.policy).toBe("authTenant");
+    });
   });
 
   describe("No Rogue Mount Detection", () => {
@@ -214,6 +252,33 @@ describe("Route Policy Drift Tests", () => {
         );
       }
       expect(rogueLines.length).toBe(0);
+    });
+  });
+
+  describe("Registry-Only Mounting Enforcement", () => {
+    it("mount.ts must not use direct app.use() calls with domain router literals", () => {
+      const fs = require("fs");
+      const mountPath = path.resolve(__dirname, "../../http/mount.ts");
+      const content = fs.readFileSync(mountPath, "utf-8");
+
+      const nonLegacyRoutes = registry.filter((r) => !r.legacy);
+      for (const route of nonLegacyRoutes) {
+        expect(nonLegacyRoutes.length).toBeGreaterThan(0);
+      }
+
+      const directMountPattern = /app\.use\(\s*["'][^"']+["']\s*,\s*\w+Router\s*\)/g;
+      const directMounts = content.match(directMountPattern) || [];
+      expect(directMounts).toEqual([]);
+    });
+
+    it("all non-legacy routes should be mounted via registry iteration", () => {
+      const fs = require("fs");
+      const mountPath = path.resolve(__dirname, "../../http/mount.ts");
+      const content = fs.readFileSync(mountPath, "utf-8");
+
+      expect(content).toContain("getRouteRegistry");
+      expect(content).toContain("route.path");
+      expect(content).toContain("route.router");
     });
   });
 

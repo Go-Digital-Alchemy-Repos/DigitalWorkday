@@ -1,0 +1,112 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL (Prompt #5):
+A) Migrate Presence domain (1 endpoint) to standardized route architecture via createApiRouter + routeRegistry.
+B) Migrate AI domain (small/self-contained) to standardized route architecture via createApiRouter + routeRegistry.
+C) Enforce “registry-only” mounting: mount.ts must NOT declare domain routers directly; it must only iterate the routeRegistry.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change URLs.
+- Do NOT change DB schema.
+- Do NOT change auth/session semantics.
+- Preserve behavior and response formats.
+- Keep legacy routers disabled only after replacement is mounted.
+
+DELIVERABLES:
+1) Presence router migrated:
+   - server/http/domains/presence.router.ts (or equivalent)
+   - policy: authTenant
+   - exact legacy path preserved
+2) AI router migrated:
+   - server/http/domains/ai.router.ts
+   - policy: choose correctly:
+     - authTenant if AI features are tenant-scoped (recommended default)
+     - authOnly ONLY if AI endpoints are explicitly non-tenant (rare)
+   - exact legacy paths preserved (including /api vs /api/v1)
+3) Both routers registered ONLY in server/http/routeRegistry.ts.
+4) mount.ts mounts only what routeRegistry declares.
+5) Tests:
+   - Add policy drift checks for presence + ai
+   - Add integration tests:
+     - presence: at least 3 tests
+     - ai: at least 5 tests
+6) Docs updated: migrated domains table, notes, and next migration candidates after step 5.
+
+PART A — Presence Migration
+
+STEPS:
+1) Locate legacy presence endpoint:
+   - Search for "presence" routes and confirm current path(s).
+   - Confirm whether it lives under /api or /api/v1.
+2) Implement server/http/domains/presence.router.ts:
+   - createApiRouter({ domain: "presence", policy: "authTenant" })
+   - define the endpoint(s) exactly as before
+   - reuse existing handler/service logic
+3) Register in routeRegistry with the exact mount path.
+4) Disable legacy mount for presence.
+
+TESTS (min 3):
+- unauthenticated request rejected (401)
+- authenticated request succeeds (200/expected)
+- tenant enforcement blocks cross-tenant access (403/404 depending on convention)
+
+PART B — AI Migration
+
+STEPS:
+1) Locate legacy AI endpoints:
+   - Search for "/ai", "openai", "assistant", "generate", "summarize"
+2) Inventory endpoints and classify:
+   - which require tenant context?
+   - which are super-admin only? (if any, use superUser policy)
+   - any webhooks/public? (should be none here)
+3) Implement server/http/domains/ai.router.ts:
+   - Use createApiRouter with correct policy (default authTenant).
+   - Preserve paths and request/response shapes.
+   - Preserve rate limiting or safety checks if present.
+4) Register in routeRegistry.
+5) Disable legacy AI mount.
+
+TESTS (min 5):
+- unauth GET/POST rejected (401)
+- authenticated happy path returns expected shape (200)
+- tenant enforcement blocks cross-tenant attempt
+- error behavior test (e.g., missing required field -> 400 with expected error shape)
+- if AI uses streaming or special headers, test that those headers remain present
+
+PART C — Enforce “registry-only” routing
+
+STEPS:
+1) Audit server/http/mount.ts:
+   - Ensure it does NOT import domain routers directly (presence.router.ts, ai.router.ts, etc.)
+   - It should only:
+     - import routeRegistry
+     - loop over registry entries
+     - mount them in the correct order
+2) Strengthen the existing “no rogue mounts” policy drift test:
+   - Add explicit assertion that domain router files are not imported by mount.ts.
+   - Optionally add a simple grep-based test:
+     - Fail if mount.ts contains ".router" import lines OR references to domains directly.
+3) Confirm routeRegistry remains the single source of truth.
+
+DOCUMENTATION:
+Update docs/architecture/routes.md:
+- Add presence + ai to migrated domains table (step 5)
+- Note policies used and any skipEnvelope usage (ideally none)
+- Update next recommended migrations after this:
+  - time entries/timers OR projects/tasks (whichever is smaller/cleaner)
+  - chat last
+
+VERIFICATION CHECKLIST:
+- ✅ All tests pass
+- ✅ Presence endpoint works and is tenant-protected
+- ✅ AI endpoints work, policies correct, and responses unchanged
+- ✅ mount.ts is registry-only
+- ✅ No double-mounting and no drift test failures
+
+OUTPUT REQUIREMENTS:
+When finished, output:
+1) Presence endpoint path(s) + policy
+2) AI endpoints list + policy
+3) Files changed/added
+4) Tests added
+5) Next migration recommendation (time vs projects/tasks)
