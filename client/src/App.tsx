@@ -400,51 +400,6 @@ function ChatToggleButton() {
   );
 }
 
-function MobileHeaderMenu() {
-  const { toggleDrawer } = useChatDrawer();
-  const { mode, setMode, resolvedTheme } = useTheme();
-  
-  return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
-          <MoreVertical className="h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        <DropdownMenuItem onClick={toggleDrawer} data-testid="menu-item-chat">
-          <MessageCircle className="h-4 w-4 mr-2" />
-          Chat
-        </DropdownMenuItem>
-        <DropdownMenuItem 
-          onClick={() => {
-            if (mode === "system") {
-              setMode(resolvedTheme === "dark" ? "light" : "dark");
-            } else {
-              setMode(mode === "dark" ? "light" : "dark");
-            }
-          }}
-          data-testid="menu-item-theme"
-        >
-          {resolvedTheme === "dark" ? (
-            <>
-              <Sun className="h-4 w-4 mr-2" />
-              Light mode
-            </>
-          ) : (
-            <>
-              <Moon className="h-4 w-4 mr-2" />
-              Dark mode
-            </>
-          )}
-        </DropdownMenuItem>
-      </DropdownMenuContent>
-    </DropdownMenu>
-  );
-}
-
-function TenantLayout() {
-  const { isImpersonating } = useAppMode();
   const [, setLocation] = useLocation();
   const isMobile = useIsMobile();
   
