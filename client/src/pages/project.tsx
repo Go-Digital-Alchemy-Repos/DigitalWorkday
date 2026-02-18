@@ -899,29 +899,12 @@ export default function ProjectPage() {
               AI Project Planner
             </SheetTitle>
           </SheetHeader>
-          {project && (
+          {project && projectId && (
             <div className="mt-4 flex-1 overflow-y-auto min-h-0">
               <AIProjectPlanner
                 projectName={project.name}
                 projectDescription={project.description || undefined}
-                onCreateTask={(title) => {
-                  const defaultSectionId = sections?.[0]?.id;
-                  if (!defaultSectionId) {
-                    toast({
-                      title: "Cannot create task",
-                      description: "Please create a section in the project first",
-                      variant: "destructive",
-                    });
-                    return;
-                  }
-                  if (projectId) {
-                    createTaskMutation.mutate({
-                      title,
-                      sectionId: defaultSectionId,
-                      projectId,
-                    });
-                  }
-                }}
+                projectId={projectId}
               />
             </div>
           )}

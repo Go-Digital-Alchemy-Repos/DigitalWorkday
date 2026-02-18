@@ -1,0 +1,250 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+FEATURE:
+Theme Packs with:
+- DEFAULT = Light Mode (tenant default)
+- User override = can pick Light, Dark, or any additional theme pack
+This must be token-based (CSS variables / shadcn tokens), fast, and maintainable.
+
+GOAL:
+Implement Theme Packs end-to-end:
+1) Define ~12 curated color packs + Light + Dark (≈14 total)
+2) Apply packs via a single ThemeProvider (no per-component hardcoding)
+3) Persist tenant default (Light) and user overrides
+4) Add Settings UI for users to choose a pack or “Use default”
+5) Ensure no regressions and keep the app performant
+
+NON-DESTRUCTIVE RULES:
+- Do NOT redesign layout.
+- Do NOT add per-component hardcoded colors.
+- Do NOT break existing Light/Dark behavior (they become packs).
+- Prefer existing settings storage (tenant_settings / user_settings JSON/columns). Avoid DB schema changes if possible.
+- If schema changes are unavoidable, keep them minimal, add migration + tests.
+
+DELIVERABLES:
+A) Theme pack token system
+B) ThemeProvider applying token sets
+C) User Settings UI: choose pack + “Use default”
+D) Tenant default = Light Mode (admin-configurable optional, but default must be Light)
+E) docs/design/theme-packs.md
+F) Verification checklist + minimal tests
+
+------------------------------------------------------------
+PHASE 0 — DISCOVERY
+------------------------------------------------------------
+
+1) Find current theming:
+- Tailwind darkMode strategy (class or media)
+- existing ThemeProvider / theme toggles
+- shadcn/ui variables (e.g., --background, --foreground, etc.)
+- any “tenant theme” provider already in App.tsx composition
+
+2) Find current preference storage:
+- tenant_settings (table or JSON)
+- user_settings/preferences (table or JSON)
+- existing endpoints for updating user/tenant settings
+
+Prefer:
+- tenant_settings.defaultThemePackId (string)
+- user_settings.themePackId (nullable string; null means “use default”)
+
+If tenant settings don’t exist, use a safe default constant in code: "light".
+
+------------------------------------------------------------
+PHASE 1 — THEME PACK SOURCE OF TRUTH
+------------------------------------------------------------
+
+Create:
+client/src/theme/themePacks.ts
+
+Define:
+type ThemePack = {
+  id: string
+  name: string
+  description?: string
+  kind: "light" | "dark"
+  tokens: Record<string, string> // CSS variable name -> value
+}
+
+Use shadcn token variable names (at minimum):
+--background
+--foreground
+--card
+--card-foreground
+--popover
+--popover-foreground
+--primary
+--primary-foreground
+--secondary
+--secondary-foreground
+--muted
+--muted-foreground
+--accent
+--accent-foreground
+--destructive
+--destructive-foreground
+--border
+--input
+--ring
+
+If the app already uses extended tokens (surface layers, etc.), include them too:
+--bg-0..--bg-4, --text-primary, etc. (ONLY if already in use).
+
+Create packs (≈14 total including Light + Dark). Keep them enterprise-safe:
+- light (default)
+- dark
+- midnight (dark navy)
+- graphite (neutral dark)
+- forest (green accent)
+- ocean (teal accent)
+- violet (purple accent)
+- rose (rose accent)
+- amber (warm accent)
+- slate (cool mono)
+- sand (warm light)
+- arctic (cool light)
+- espresso (warm dark)
+- cyber (high contrast but tasteful)
+
+IMPORTANT:
+Do not hardcode these across components—tokens only.
+
+------------------------------------------------------------
+PHASE 2 — THEME RESOLUTION RULES (DEFAULT + OVERRIDE)
+------------------------------------------------------------
+
+Implement deterministic resolution:
+
+effectiveThemePackId =
+  userOverrideThemePackId ?? tenantDefaultThemePackId ?? "light"
+
+Rules:
+- Default (tenant) must be "light" unless tenant explicitly changes it (optional admin UI)
+- User can override to any pack
+- User can reset to “Use default” which clears override (sets to null)
+
+Write a unit test for this resolution function.
+
+------------------------------------------------------------
+PHASE 3 — THEME PROVIDER
+------------------------------------------------------------
+
+Create or update:
+client/src/theme/ThemeProvider.tsx
+
+Responsibilities:
+- load tenant default theme pack id (fallback "light")
+- load user override pack id (nullable)
+- compute effectiveThemePackId
+- apply tokens to document.documentElement.style.setProperty(var, value)
+- set Tailwind dark class if required:
+  - if effective pack kind === "dark", add class "dark"
+  - else remove class "dark"
+
+Performance:
+- apply only when effectiveThemePackId changes
+- do a single pass over token entries
+- avoid rerenders by isolating state and using memoization
+
+Initialize ThemeProvider in App.tsx composition root (or existing provider stack) so it applies globally.
+
+------------------------------------------------------------
+PHASE 4 — PERSISTENCE (DEFAULT LIGHT + USER OVERRIDE)
+------------------------------------------------------------
+
+A) Tenant default:
+- Ensure tenant default exists and defaults to "light"
+- If tenant_settings already exists:
+  - store tenant_settings.defaultThemePackId (string)
+  - if missing, treat as "light" without writing
+- Admin UI for changing tenant default is OPTIONAL for now; keep default Light.
+
+B) User override:
+- Store user_settings.themePackId (nullable string)
+- If user_settings already exists, add field to existing JSON blob or column if already extensible
+- Add/extend existing preferences endpoint:
+  - GET /api/v1/users/me/preferences (or equivalent existing)
+  - PUT /api/v1/users/me/preferences
+Include themePackId: string|null
+
+DO NOT require migrations unless there is absolutely no existing storage mechanism.
+
+------------------------------------------------------------
+PHASE 5 — USER SETTINGS UI (THEME PACK PICKER)
+------------------------------------------------------------
+
+Add in Settings (or user menu) a “Theme Pack” section:
+
+UI:
+- shows current effective pack
+- option: “Use default (Light)” (sets override to null)
+- list/grid of packs for override
+- show small preview swatches (background + primary + accent)
+- apply changes live instantly (optimistic)
+- persist on save (or immediate save if your settings UI is live-update)
+
+Mobile:
+- 44px tap targets
+- compact list with preview chips
+
+Error handling:
+- if save fails, revert and show toast
+
+------------------------------------------------------------
+PHASE 6 — CONSISTENCY PASS (TOKENIZATION)
+------------------------------------------------------------
+
+Scan for hardcoded dark/light colors in components added recently:
+- drawers (AppDrawer/Sheet)
+- chat bubbles/list
+- comment section background
+- mobile nav and header
+- tables/cards
+
+Replace hardcoded colors with token-based classes/variables so theme packs apply everywhere.
+
+Do NOT redesign; only replace hardcoded colors with tokens.
+
+------------------------------------------------------------
+PHASE 7 — TESTS + DOCS
+------------------------------------------------------------
+
+Tests (minimum):
+1) unit test: resolution precedence (user override > tenant default > fallback light)
+2) unit test: ThemeProvider applies dark class for dark packs
+Optional: render test ensuring tokens set (if test infra exists)
+
+Docs:
+Create docs/design/theme-packs.md:
+- pack model
+- resolution rules (default Light + user override)
+- how to add a pack
+- token list and usage rules
+
+------------------------------------------------------------
+VERIFICATION CHECKLIST
+------------------------------------------------------------
+
+1) Fresh user sees Light Mode by default
+2) User selects Dark → app switches immediately; persists on refresh
+3) User selects other pack → applies globally; persists
+4) User chooses “Use default” → returns to Light
+5) Check critical areas:
+- tasks/subtasks drawers
+- chat list + conversation
+- time page + active timer bar
+- mobile nav + header
+- tables + cards
+6) Ensure text contrast is readable in all packs
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+When finished, output:
+1) List of packs added (id + name + kind)
+2) Files changed
+3) Where default and override are stored
+4) Resolution rules summary
+5) Tests added and passing
+6) Manual verification steps

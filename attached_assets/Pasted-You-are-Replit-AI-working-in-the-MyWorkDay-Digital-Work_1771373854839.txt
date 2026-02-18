@@ -1,0 +1,239 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+FEATURE:
+Add a Theme Packs system so users can choose from:
+- Light
+- Dark
+- ~12 additional curated color palettes (“theme packs”)
+Theme packs must apply consistently across the entire app using design tokens (CSS variables / shadcn theme tokens), NOT ad-hoc per-component colors.
+
+GOAL:
+Implement theme packs end-to-end:
+1) Define theme packs as token sets
+2) Apply via a single ThemeProvider
+3) Add UI in Settings (and optionally Super Admin defaults)
+4) Persist preference (user-level preferred; tenant-level default)
+5) Keep performance and maintainability high
+
+NON-DESTRUCTIVE RULES:
+- Do NOT redesign layout.
+- Do NOT add per-component hardcoded colors.
+- Do NOT break existing Light/Dark behavior (they should remain as packs).
+- Prefer storing settings in existing tables/JSON settings fields (no DB schema change if possible).
+- If schema change is absolutely necessary, keep it minimal and include migration + tests.
+
+DELIVERABLES:
+A) Theme packs implementation (token-based)
+B) Settings UI to select a theme pack
+C) Persistence:
+   - tenant default theme pack
+   - user override theme pack
+D) Documentation:
+   - docs/design/theme-packs.md
+E) Verification checklist
+
+------------------------------------------------------------
+PHASE 0 — DISCOVERY
+------------------------------------------------------------
+
+1) Identify existing theming approach:
+- Tailwind config
+- shadcn/ui token system (CSS variables like --background, --foreground, etc.)
+- where dark mode is toggled today (ThemeProvider, class="dark", etc.)
+- any tenant-theme functionality already present (tenant theme provider mentioned earlier)
+
+2) Identify storage options:
+Look for:
+- tenant_settings table / JSON blob
+- user_settings table / JSON blob
+- "preferences" fields
+Prefer storing:
+tenant_settings.themePackId
+user_settings.themePackId
+as string keys.
+
+Document findings briefly in docs/design/theme-packs.md (initial section).
+
+------------------------------------------------------------
+PHASE 1 — DEFINE THE THEME PACK MODEL
+------------------------------------------------------------
+
+Create a single source of truth:
+
+client/src/theme/themePacks.ts
+
+Define:
+type ThemePack = {
+  id: string
+  name: string
+  description?: string
+  mode: "light" | "dark" | "both"
+  tokens: Record<string, string>  // CSS variable name -> value
+}
+
+We will implement packs as CSS variable sets aligned to shadcn tokens:
+- --background
+- --foreground
+- --card
+- --card-foreground
+- --popover
+- --popover-foreground
+- --primary
+- --primary-foreground
+- --secondary
+- --secondary-foreground
+- --muted
+- --muted-foreground
+- --accent
+- --accent-foreground
+- --destructive
+- --destructive-foreground
+- --border
+- --input
+- --ring
+
+If your app already uses extended tokens (surface layers etc.), include them too consistently.
+
+Theme packs to include (~14 total including Light + Dark):
+1) light (existing)
+2) dark (existing, modernized if needed but keep backward compatible)
+3) midnight (deep navy + electric blue accents)
+4) graphite (neutral dark + subtle blue)
+5) forest (dark green accents)
+6) ocean (teal/cyan accents)
+7) violet (purple accents)
+8) rose (pink/rose accents)
+9) amber (warm amber accents)
+10) slate (cool monochrome)
+11) cyber (high-contrast neon accent, still tasteful)
+12) sand (warm light mode, earthy)
+13) arctic (cool light mode, crisp)
+14) espresso (warm dark brown undertones)
+
+Keep palettes “enterprise-safe” (no neon overload).
+
+------------------------------------------------------------
+PHASE 2 — APPLY THEME PACKS VIA ONE PROVIDER
+------------------------------------------------------------
+
+Create or update ThemeProvider:
+
+client/src/theme/ThemeProvider.tsx
+
+Responsibilities:
+- Determine active themePackId from:
+  1) user preference (highest priority)
+  2) tenant default
+  3) fallback: "dark" or existing default
+- Apply pack tokens by setting CSS variables on:
+  - document.documentElement (preferred)
+  OR a top-level app container
+
+Implementation details:
+- Apply tokens in a single pass (Object.entries tokens -> style.setProperty)
+- Avoid rerenders: apply on themePackId change only
+- Preserve existing dark mode class logic if it is required by Tailwind:
+  - If Tailwind uses "dark" class, set it if the chosen pack is a dark pack.
+  - If mode is "both", determine based on pack definition.
+- Ensure shadcn components pick up new variables automatically.
+
+------------------------------------------------------------
+PHASE 3 — SETTINGS UI
+------------------------------------------------------------
+
+Add a Theme Pack selector in user Settings (and/or account menu):
+
+- A dropdown or grid picker:
+  - show name + small preview swatch
+  - “Recommended” tags optional
+- Selecting updates live (preview instantly)
+- “Save” persists preference
+
+Also add:
+- “Use tenant default” option (clears user override)
+
+Mobile-friendly:
+- list items with 44px tap targets
+- preview chip on right
+
+------------------------------------------------------------
+PHASE 4 — PERSISTENCE
+------------------------------------------------------------
+
+Preferred approach: reuse existing settings storage.
+
+A) Tenant default:
+- If there is a tenant settings endpoint / table, store:
+  tenant_settings.themePackId = string
+- Admin UI (optional):
+  In tenant/admin settings: “Default Theme Pack”
+
+B) User override:
+- Store:
+  user_settings.themePackId = string|null
+- Provide endpoints if they exist; otherwise add minimal endpoints:
+  GET/PUT /api/v1/users/me/preferences (or existing equivalent)
+  GET/PUT /api/v1/tenant/settings (or existing equivalent)
+Do NOT break existing APIs; add fields optionally.
+
+If DB changes are required (only if no settings storage exists):
+- Add minimal columns (theme_pack_id) to existing settings tables if present, not new tables.
+- Include migration + rollback + tests.
+
+------------------------------------------------------------
+PHASE 5 — CONSISTENCY PASS
+------------------------------------------------------------
+
+Ensure theme packs affect all major surfaces:
+- PageContainer backgrounds
+- Drawer surfaces (AppDrawer, sheets)
+- Sidebar + MobileNavBar
+- Chat bubbles
+- Comments background blocks
+- Buttons (primary/success/warning/danger)
+- Table borders/hover
+No component should use hard-coded dark colors.
+
+If hardcoded values exist, replace with token-based classes using existing shadcn patterns.
+
+------------------------------------------------------------
+PHASE 6 — DOCS
+------------------------------------------------------------
+
+Create:
+docs/design/theme-packs.md
+
+Include:
+- how packs are defined
+- token list
+- where applied
+- how user vs tenant resolution works
+- how to add a new theme pack safely
+
+------------------------------------------------------------
+PHASE 7 — VERIFICATION
+------------------------------------------------------------
+
+Manual checklist:
+- change theme pack and verify it applies immediately
+- refresh page and verify preference persists
+- clear user override and verify tenant default takes over
+- verify dark packs still set Tailwind dark mode behavior correctly
+- check: tasks drawer, chat, time tracking, mobile nav, tables
+- verify no contrast regressions (text readable)
+
+Optional tests:
+- unit test for theme resolution (user override > tenant default > fallback)
+- unit test that ThemeProvider applies a token set
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+When finished, output:
+1) Theme packs added (ids + names)
+2) Files changed
+3) Where preferences are stored (tenant/user)
+4) How resolution works
+5) How to add a new pack
+6) Verification steps
