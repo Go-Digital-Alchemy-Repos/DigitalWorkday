@@ -5,7 +5,8 @@ export interface ParsedCsv {
 }
 
 export function parseCsv(text: string, maxRows = 50000): ParsedCsv {
-  const lines = splitCsvLines(text);
+  const cleaned = text.charCodeAt(0) === 0xFEFF ? text.slice(1) : text;
+  const lines = splitCsvLines(cleaned);
   if (lines.length === 0) {
     return { headers: [], rows: [], rawRowCount: 0 };
   }

@@ -67,6 +67,25 @@ const ENTITY_DESCRIPTIONS: Record<EntityType, string> = {
   time_entries: "Import time tracking entries for existing users",
 };
 
+function extractErrorMessage(error: any): string {
+  const raw = error?.message || error?.body || "Unknown error";
+  const statusPrefixMatch = raw.match(/^\d{3}:\s*(.*)/s);
+  const bodyText = statusPrefixMatch ? statusPrefixMatch[1] : raw;
+  try {
+    const parsed = JSON.parse(bodyText);
+    if (parsed.error) {
+      if (parsed.details && Array.isArray(parsed.details)) {
+        const detail = parsed.details[0];
+        return `${parsed.error}: ${detail?.message || JSON.stringify(detail)}`;
+      }
+      return parsed.error;
+    }
+    if (parsed.message) return parsed.message;
+  } catch {
+  }
+  return bodyText.length > 300 ? bodyText.slice(0, 300) + "..." : bodyText;
+}
+
 export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps) {
   const { toast } = useToast();
   const [step, setStep] = useState<WizardStep>("type");
@@ -114,7 +133,7 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
       setFields(ENTITY_FIELD_MAP[type]);
       setStep("upload");
     } catch (err: any) {
-      toast({ title: "Error", description: err?.message || "Failed to create import job", variant: "destructive" });
+      toast({ title: "Error", description: extractErrorMessage(err), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -137,7 +156,7 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
       setFields(data.fields);
       setStep("mapping");
     } catch (err: any) {
-      toast({ title: "Upload Failed", description: err?.message || "Failed to process CSV file", variant: "destructive" });
+      toast({ title: "Upload Failed", description: extractErrorMessage(err), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -175,7 +194,7 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
       setStep("validate");
       await handleValidate();
     } catch (err: any) {
-      toast({ title: "Error", description: err?.message || "Failed to save mapping", variant: "destructive" });
+      toast({ title: "Error", description: extractErrorMessage(err), variant: "destructive" });
       setIsLoading(false);
     }
   };
@@ -188,7 +207,7 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
       const data = await res.json();
       setValidationSummary(data.summary);
     } catch (err: any) {
-      toast({ title: "Validation Failed", description: err?.message || "Failed to validate", variant: "destructive" });
+      toast({ title: "Validation Failed", description: extractErrorMessage(err), variant: "destructive" });
     } finally {
       setIsLoading(false);
     }
@@ -210,7 +229,7 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
       queryClient.invalidateQueries({ queryKey: [`/api/v1/super/tenants/${tenantId}/users`] });
       queryClient.invalidateQueries({ queryKey: [`/api/v1/super/tenants/${tenantId}/projects`] });
     } catch (err: any) {
-      toast({ title: "Import Failed", description: err?.message || "Failed to execute import", variant: "destructive" });
+      toast({ title: "Import Failed", description: extractErrorMessage(err), variant: "destructive" });
       setStep("validate");
     } finally {
       setIsLoading(false);

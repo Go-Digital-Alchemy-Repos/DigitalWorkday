@@ -1054,9 +1054,6 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "clients"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "audit"] });
     },
-    onError: (error: any) => {
-      toast({ title: "Import failed", description: error.message, variant: "destructive" });
-    },
   });
 
   const bulkProjectsImportMutation = useMutation({
@@ -1082,9 +1079,6 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "clients"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "audit"] });
-    },
-    onError: (error: any) => {
-      toast({ title: "Import failed", description: error.message, variant: "destructive" });
     },
   });
 
@@ -1137,9 +1131,6 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
       setShowTaskImportPanel(false);
       setSelectedProjectForTasks(null);
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", activeTenant?.id, "audit"] });
-    },
-    onError: (error: any) => {
-      toast({ title: "Failed to import tasks", description: error.message, variant: "destructive" });
     },
   });
 

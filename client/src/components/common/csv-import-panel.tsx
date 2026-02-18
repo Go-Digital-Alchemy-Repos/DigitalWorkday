@@ -143,7 +143,8 @@ export function CsvImportPanel({
 
     const reader = new FileReader();
     reader.onload = (event) => {
-      const text = event.target?.result as string;
+      let text = event.target?.result as string;
+      if (text.charCodeAt(0) === 0xFEFF) text = text.slice(1);
       const lines = parseCSV(text);
       
       if (lines.length < 2) {
@@ -203,6 +204,25 @@ export function CsvImportPanel({
     reader.readAsText(file);
   };
 
+  const extractErrorMessage = (error: any): string => {
+    const raw = error?.message || error?.body || "Unknown error";
+    const statusPrefixMatch = raw.match(/^\d{3}:\s*(.*)/s);
+    const bodyText = statusPrefixMatch ? statusPrefixMatch[1] : raw;
+    try {
+      const parsed = JSON.parse(bodyText);
+      if (parsed.error) {
+        if (parsed.details && Array.isArray(parsed.details)) {
+          const detail = parsed.details[0];
+          return `${parsed.error}: ${detail?.message || JSON.stringify(detail)}`;
+        }
+        return parsed.error;
+      }
+      if (parsed.message) return parsed.message;
+    } catch {
+    }
+    return bodyText.length > 200 ? bodyText.slice(0, 200) + "..." : bodyText;
+  };
+
   const handleImport = async () => {
     if (parsedData.length === 0) return;
     
@@ -216,7 +236,7 @@ export function CsvImportPanel({
     } catch (error: any) {
       toast({ 
         title: "Import failed", 
-        description: error.message || "Unknown error", 
+        description: extractErrorMessage(error), 
         variant: "destructive" 
       });
     }
