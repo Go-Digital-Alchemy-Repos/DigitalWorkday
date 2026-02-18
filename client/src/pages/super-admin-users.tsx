@@ -741,7 +741,12 @@ export default function SuperAdminUsers() {
                 ) : platformAdmins.length > 0 ? (
                   <div className="space-y-3">
                     {platformAdmins.map((admin) => (
-                      <div key={admin.id} className="flex items-center justify-between p-4 border rounded-lg" data-testid={`admin-row-${admin.id}`}>
+                      <div 
+                        key={admin.id} 
+                        className="flex items-center justify-between p-4 border rounded-lg hover-elevate cursor-pointer"
+                        onClick={() => handleEditAdmin(admin)}
+                        data-testid={`admin-row-${admin.id}`}
+                      >
                         <div className="flex items-center gap-3">
                           <div className="h-10 w-10 rounded-full bg-primary/10 flex items-center justify-center">
                             <Shield className="h-5 w-5 text-primary" />
@@ -755,7 +760,7 @@ export default function SuperAdminUsers() {
                           {getAdminStatusBadge(admin)}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost" data-testid={`button-admin-actions-${admin.id}`}>
+                              <Button size="icon" variant="ghost" onClick={(e) => e.stopPropagation()} data-testid={`button-admin-actions-${admin.id}`}>
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
