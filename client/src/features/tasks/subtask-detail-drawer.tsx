@@ -113,7 +113,7 @@ export function SubtaskDetailDrawer({
   const [description, setDescription] = useState<string>(
     typeof subtask?.description === 'string' 
       ? subtask.description 
-      : subtask?.description ? JSON.stringify(subtask.description) : ""
+      : subtask?.description ? (typeof subtask.description === 'object' ? JSON.stringify(subtask.description) : String(subtask.description)) : ""
   );
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);

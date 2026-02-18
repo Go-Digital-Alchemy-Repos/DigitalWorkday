@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useTaskDrawer } from "@/lib/task-drawer-context";
 import { Link } from "wouter";
-import { stripHtml } from "@/lib/utils";
+import { richTextToPlainText } from "@/lib/richtext/richText";
 import {
   Sheet,
   SheetContent,
@@ -184,7 +184,7 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
                 <SheetTitle className="text-xl">{currentProject.name}</SheetTitle>
                 {currentProject.description && (
                   <p className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                    {stripHtml(currentProject.description)}
+                    {richTextToPlainText(currentProject.description)}
                   </p>
                 )}
               </div>

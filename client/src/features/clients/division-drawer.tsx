@@ -4,6 +4,7 @@ import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { getPreviewText } from "@/components/richtext";
+import { richTextToPreview } from "@/lib/richtext/richText";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { FullScreenDrawer, FullScreenDrawerFooter } from "@/components/ui/full-screen-drawer";
 import {
@@ -584,7 +585,7 @@ export function DivisionDrawer({
                         <div className="flex-1 min-w-0">
                           <p className="font-medium truncate">{task.title}</p>
                           {task.description && (
-                            <p className="text-sm text-muted-foreground truncate">{task.description}</p>
+                            <p className="text-sm text-muted-foreground truncate">{richTextToPreview(task.description)}</p>
                           )}
                         </div>
                         <Badge className={getTaskStatusColor(task.status || "todo")}>

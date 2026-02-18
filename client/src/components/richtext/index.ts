@@ -14,3 +14,9 @@ export {
   type ParsedRichText,
   type RichTextType,
 } from "./richTextUtils";
+export {
+  isProseMirrorDoc,
+  richTextToPlainText,
+  richTextToPreview,
+  renderRichText,
+} from "@/lib/richtext/richText";

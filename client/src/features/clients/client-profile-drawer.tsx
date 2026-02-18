@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { richTextToPlainText } from "@/lib/richtext/richText";
 import { formatDistanceToNow, format } from "date-fns";
 import { Link } from "wouter";
 
@@ -150,7 +151,7 @@ function OverviewTab({ client }: { client: ClientWithContacts }) {
               <Separator />
               <div>
                 <p className="text-xs font-medium text-muted-foreground mb-1">Description</p>
-                <p className="text-sm">{client.description}</p>
+                <p className="text-sm">{richTextToPlainText(client.description)}</p>
               </div>
             </>
           )}
