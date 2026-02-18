@@ -101,7 +101,7 @@ router.post(
 
       const data = presignRequestSchema.parse(req.body);
 
-      const validation = validateFile(data.mimeType, data.fileSizeBytes);
+      const validation = validateFile(data.mimeType, data.fileSizeBytes, data.fileName);
       if (!validation.valid) {
         throw AppError.badRequest(validation.error || "Invalid file");
       }

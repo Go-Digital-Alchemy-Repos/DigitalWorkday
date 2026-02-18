@@ -34,6 +34,7 @@ interface CommentEditorProps {
   autoFocus?: boolean;
   users?: User[];
   isSubmitting?: boolean;
+  attachButton?: React.ReactNode;
   "data-testid"?: string;
 }
 
@@ -141,9 +142,10 @@ interface CommentMenuBarProps {
   isSubmitting?: boolean;
   onOpenLinkDialog: () => void;
   onEmojiSelect: (emoji: string) => void;
+  attachButton?: React.ReactNode;
 }
 
-function MenuBar({ editor, onSubmit, isSubmitting, onOpenLinkDialog, onEmojiSelect }: CommentMenuBarProps) {
+function MenuBar({ editor, onSubmit, isSubmitting, onOpenLinkDialog, onEmojiSelect, attachButton }: CommentMenuBarProps) {
   const { theme } = useTheme();
   const [emojiOpen, setEmojiOpen] = useState(false);
 
@@ -250,6 +252,7 @@ function MenuBar({ editor, onSubmit, isSubmitting, onOpenLinkDialog, onEmojiSele
           />
         </PopoverContent>
       </Popover>
+      {attachButton}
       <div className="flex-1" />
       {onSubmit && (
         <Button
@@ -279,6 +282,7 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
       autoFocus = false,
       users = [],
       isSubmitting = false,
+      attachButton,
       "data-testid": testId,
     },
     ref
@@ -483,7 +487,7 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
           </div>,
           document.body
         )}
-        <MenuBar editor={editor} onSubmit={handleSubmit} isSubmitting={isSubmitting} onOpenLinkDialog={openLinkDialog} onEmojiSelect={handleEmojiSelect} />
+        <MenuBar editor={editor} onSubmit={handleSubmit} isSubmitting={isSubmitting} onOpenLinkDialog={openLinkDialog} onEmojiSelect={handleEmojiSelect} attachButton={attachButton} />
 
         <PromptDialog
           open={linkDialogOpen}

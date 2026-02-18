@@ -14,6 +14,7 @@ const ALLOWED_MIME_TYPES = [
   "image/png",
   "image/gif",
   "image/webp",
+  "image/svg+xml",
   "application/pdf",
   "application/msword",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
@@ -23,9 +24,24 @@ const ALLOWED_MIME_TYPES = [
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
   "text/plain",
   "text/csv",
+  "text/rtf",
+  "application/rtf",
+  "application/json",
+  "application/xml",
+  "text/xml",
   "application/zip",
   "application/x-zip-compressed",
+  "application/postscript",
+  "application/illustrator",
+  "image/vnd.adobe.photoshop",
+  "application/x-photoshop",
+  "application/octet-stream",
 ];
+
+const BLOCKED_EXTENSIONS = new Set([
+  "exe", "bat", "cmd", "msi", "sh", "dmg", "iso", "apk",
+  "com", "scr", "pif", "vbs", "vbe", "js", "jse", "wsf", "wsh",
+]);
 
 const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25MB
 const PRESIGN_EXPIRES_SECONDS = parseInt(process.env.R2_PRESIGN_EXPIRES_SECONDS || "300", 10);
@@ -74,7 +90,19 @@ export function generateStorageKey(
   return `${prefix}/${projectId}/tasks/${taskId}/${attachmentId}-${sanitized}`;
 }
 
-export function validateFile(mimeType: string, fileSizeBytes: number): { valid: boolean; error?: string } {
+export function isBlockedExtension(fileName: string): boolean {
+  const ext = fileName.split(".").pop()?.toLowerCase() || "";
+  return BLOCKED_EXTENSIONS.has(ext);
+}
+
+export function validateFile(mimeType: string, fileSizeBytes: number, fileName?: string): { valid: boolean; error?: string } {
+  if (fileName && isBlockedExtension(fileName)) {
+    return {
+      valid: false,
+      error: `File extension is not allowed for security reasons.`,
+    };
+  }
+
   if (!ALLOWED_MIME_TYPES.includes(mimeType)) {
     return { 
       valid: false, 

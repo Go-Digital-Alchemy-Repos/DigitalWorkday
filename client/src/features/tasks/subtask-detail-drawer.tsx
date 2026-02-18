@@ -166,11 +166,13 @@ export function SubtaskDetailDrawer({
   };
 
   const addCommentMutation = useMutation({
-    mutationFn: async (body: string) => {
-      const response = await apiRequest("POST", `/api/subtasks/${subtask?.id}/comments`, { body });
+    mutationFn: async ({ body, attachmentIds }: { body: string; attachmentIds?: string[] }) => {
+      const payload: any = { body };
+      if (attachmentIds && attachmentIds.length > 0) payload.attachmentIds = attachmentIds;
+      const response = await apiRequest("POST", `/api/subtasks/${subtask?.id}/comments`, payload);
       return response.json() as Promise<Comment & { user?: User }>;
     },
-    onMutate: async (body: string) => {
+    onMutate: async ({ body }: { body: string; attachmentIds?: string[] }) => {
       if (!subtask?.id || !currentUser) return undefined;
       const commentsKey = [`/api/subtasks/${subtask.id}/comments`];
       await queryClient.cancelQueries({ queryKey: commentsKey });
@@ -983,8 +985,9 @@ export function SubtaskDetailDrawer({
                   <CommentThread
                     comments={subtaskComments}
                     taskId={subtask.id}
+                    projectId={projectId}
                     currentUserId={currentUser?.id}
-                    onAdd={(body) => addCommentMutation.mutate(body)}
+                    onAdd={(body, attachmentIds) => addCommentMutation.mutate({ body, attachmentIds })}
                     onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
                     onDelete={(id) => deleteCommentMutation.mutate(id)}
                     onResolve={(id) => resolveCommentMutation.mutate(id)}

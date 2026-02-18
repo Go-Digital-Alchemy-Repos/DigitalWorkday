@@ -8,13 +8,32 @@ import {
   notifyCommentAdded,
   notifyCommentMention,
 } from "../features/notifications/notification.service";
+import {
+  extractAttachmentIdsFromBody,
+  embedAttachmentIdsInBody,
+  toAttachmentMeta,
+} from "../utils/commentAttachments";
 
 const router = Router();
 
 router.get("/tasks/:taskId/comments", async (req, res) => {
   try {
-    const comments = await storage.getCommentsByTask(req.params.taskId);
-    res.json(comments);
+    const taskId = req.params.taskId;
+    const comments = await storage.getCommentsByTask(taskId);
+    const commentsWithAttachments = await Promise.all(
+      comments.map(async (comment) => {
+        const attachmentIds = extractAttachmentIdsFromBody(comment.body);
+        if (attachmentIds.length === 0) return { ...comment, attachments: [] };
+        const attachments = await storage.getTaskAttachmentsByIds(attachmentIds);
+        return {
+          ...comment,
+          attachments: attachments
+            .filter((a) => a.taskId === taskId && a.uploadStatus === "complete")
+            .map(toAttachmentMeta),
+        };
+      })
+    );
+    res.json(commentsWithAttachments);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/tasks/:taskId/comments", req);
   }
@@ -23,8 +42,25 @@ router.get("/tasks/:taskId/comments", async (req, res) => {
 router.post("/tasks/:taskId/comments", async (req, res) => {
   try {
     const currentUserId = getCurrentUserId(req);
+    const { attachmentIds: rawAttachmentIds, ...bodyData } = req.body;
+    const attachmentIds: string[] = Array.isArray(rawAttachmentIds)
+      ? rawAttachmentIds.filter((id: unknown) => typeof id === "string" && id.length > 0)
+      : [];
+
+    let commentBody = bodyData.body || "";
+    if (attachmentIds.length > 0) {
+      const validAttachments = await storage.getTaskAttachmentsByIds(attachmentIds);
+      const validIds = validAttachments
+        .filter((a) => a.taskId === req.params.taskId && a.uploadStatus === "complete")
+        .map((a) => a.id);
+      if (validIds.length > 0) {
+        commentBody = embedAttachmentIdsInBody(commentBody, validIds);
+      }
+    }
+
     const data = insertCommentSchema.parse({
-      ...req.body,
+      ...bodyData,
+      body: commentBody,
       taskId: req.params.taskId,
       userId: currentUserId,
     });
@@ -99,8 +135,16 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
       }
     }
 
+    const embeddedIds = extractAttachmentIdsFromBody(comment.body);
+    let commentAttachments: ReturnType<typeof toAttachmentMeta>[] = [];
+    if (embeddedIds.length > 0) {
+      const atts = await storage.getTaskAttachmentsByIds(embeddedIds);
+      commentAttachments = atts.filter((a) => a.uploadStatus === "complete").map(toAttachmentMeta);
+    }
+
     const commentWithUser = {
       ...comment,
+      attachments: commentAttachments,
       user: commenter ? {
         id: commenter.id,
         name: commenter.name,

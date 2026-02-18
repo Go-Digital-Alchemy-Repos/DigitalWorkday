@@ -22,6 +22,11 @@ import { getEffectiveTenantId } from "../middleware/tenantContext";
 import { getCurrentUserId, isSuperUser } from "./helpers";
 import { extractMentionsFromTipTapJson, getPlainTextFromTipTapJson } from "../utils/mentionUtils";
 import {
+  extractAttachmentIdsFromBody,
+  embedAttachmentIdsInBody,
+  toAttachmentMeta,
+} from "../utils/commentAttachments";
+import {
   insertSubtaskSchema,
   insertCommentSchema,
   updateSubtaskSchema,
@@ -289,7 +294,21 @@ router.get("/subtasks/:subtaskId/comments", async (req, res) => {
     }
     
     const comments = await storage.getCommentsBySubtask(req.params.subtaskId);
-    res.json(comments);
+    const parentTaskId = subtask.taskId;
+    const commentsWithAttachments = await Promise.all(
+      comments.map(async (comment) => {
+        const attachmentIds = extractAttachmentIdsFromBody(comment.body);
+        if (attachmentIds.length === 0) return { ...comment, attachments: [] };
+        const attachments = await storage.getTaskAttachmentsByIds(attachmentIds);
+        return {
+          ...comment,
+          attachments: attachments
+            .filter((a) => a.taskId === parentTaskId && a.uploadStatus === "complete")
+            .map(toAttachmentMeta),
+        };
+      })
+    );
+    res.json(commentsWithAttachments);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/subtasks/:subtaskId/comments", req);
   }
@@ -314,9 +333,26 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
     if (!parentTask) {
       return sendError(res, AppError.notFound("Task"), req);
     }
+
+    const { attachmentIds: rawAttachmentIds, ...bodyData } = req.body;
+    const attachmentIds: string[] = Array.isArray(rawAttachmentIds)
+      ? rawAttachmentIds.filter((id: unknown) => typeof id === "string" && id.length > 0)
+      : [];
+
+    let commentBody = bodyData.body || "";
+    if (attachmentIds.length > 0) {
+      const validAttachments = await storage.getTaskAttachmentsByIds(attachmentIds);
+      const validIds = validAttachments
+        .filter((a) => a.taskId === subtask.taskId && a.uploadStatus === "complete")
+        .map((a) => a.id);
+      if (validIds.length > 0) {
+        commentBody = embedAttachmentIdsInBody(commentBody, validIds);
+      }
+    }
     
     const data = insertCommentSchema.parse({
-      ...req.body,
+      ...bodyData,
+      body: commentBody,
       subtaskId: req.params.subtaskId,
       userId: currentUserId,
     });
@@ -387,8 +423,16 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
       }
     }
 
+    const embeddedIds = extractAttachmentIdsFromBody(comment.body);
+    let commentAttachments: ReturnType<typeof toAttachmentMeta>[] = [];
+    if (embeddedIds.length > 0) {
+      const atts = await storage.getTaskAttachmentsByIds(embeddedIds);
+      commentAttachments = atts.filter((a) => a.uploadStatus === "complete").map(toAttachmentMeta);
+    }
+
     const commentWithUser = {
       ...comment,
+      attachments: commentAttachments,
       user: commenter ? {
         id: commenter.id,
         name: commenter.name,

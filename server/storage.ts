@@ -219,6 +219,7 @@ export interface IStorage {
   getProjectActivity(projectId: string, tenantId: string | null, limit?: number): Promise<ProjectActivityItem[]>;
   
   getTaskAttachment(id: string): Promise<TaskAttachment | undefined>;
+  getTaskAttachmentsByIds(ids: string[]): Promise<TaskAttachment[]>;
   getTaskAttachmentsByTask(taskId: string): Promise<TaskAttachmentWithUser[]>;
   createTaskAttachment(attachment: InsertTaskAttachment): Promise<TaskAttachment>;
   updateTaskAttachment(id: string, attachment: Partial<InsertTaskAttachment>): Promise<TaskAttachment | undefined>;
@@ -1617,6 +1618,11 @@ export class DatabaseStorage implements IStorage {
   async getTaskAttachment(id: string): Promise<TaskAttachment | undefined> {
     const [attachment] = await db.select().from(taskAttachments).where(eq(taskAttachments.id, id));
     return attachment || undefined;
+  }
+
+  async getTaskAttachmentsByIds(ids: string[]): Promise<TaskAttachment[]> {
+    if (ids.length === 0) return [];
+    return db.select().from(taskAttachments).where(inArray(taskAttachments.id, ids));
   }
 
   async getTaskAttachmentsByTask(taskId: string): Promise<TaskAttachmentWithUser[]> {

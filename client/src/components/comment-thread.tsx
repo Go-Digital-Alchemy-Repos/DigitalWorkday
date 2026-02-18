@@ -8,6 +8,7 @@
  * - Edit/delete comments (owner-only permission)
  * - Resolve/unresolve comment threads for discussion tracking
  * - Real-time @mention autocomplete from tenant users
+ * - File attachments on comments (images + documents)
  * 
  * Permissions Model:
  * - Edit: Only the comment owner (userId matches currentUserId) can edit
@@ -22,28 +23,40 @@
  * 
  * @see POST /api/tasks/:taskId/comments in server/routes.ts for mention parsing
  */
-import { useState, useRef } from "react";
-import { Pencil, Trash2, Check, X, CheckCircle2, CircleDot } from "lucide-react";
+import { useState, useRef, useCallback } from "react";
+import { Pencil, Trash2, Check, X, CheckCircle2, CircleDot, Paperclip, Loader2, RotateCcw } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { CommentEditor, RichTextRenderer, type CommentEditorRef } from "@/components/richtext";
+import { CommentAttachments, type CommentAttachmentMeta } from "@/components/comments/CommentAttachments";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import type { Comment, User } from "@shared/schema";
 
-/** Comment with optional user relation for display */
 interface CommentWithUser extends Comment {
   user?: User;
+  attachments?: CommentAttachmentMeta[];
+}
+
+interface PendingUpload {
+  id: string;
+  file: File;
+  status: "uploading" | "completing" | "complete" | "error";
+  attachmentId?: string;
+  error?: string;
 }
 
 interface CommentThreadProps {
   comments: CommentWithUser[];
   taskId?: string;
+  projectId?: string | null;
   entityType?: "task" | "project" | "client";
   entityId?: string;
   currentUserId?: string;
   users?: User[];
-  onAdd?: (body: string) => void;
+  onAdd?: (body: string, attachmentIds?: string[]) => void;
   onUpdate?: (id: string, body: string) => void;
   onDelete?: (id: string) => void;
   onResolve?: (id: string) => void;
@@ -62,17 +75,6 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-/**
- * Renders @mentions as styled spans within comment text.
- * 
- * Parses mention format: @[DisplayName](userId)
- * - DisplayName is shown to user (e.g., "@John Smith")
- * - userId is captured but not displayed (for future linking)
- * - User emails are never stored in mentions for privacy
- * 
- * @param body - Comment body text containing mentions
- * @returns JSX with plain text and styled @mention spans
- */
 function renderMentions(body: string): JSX.Element {
   const mentionRegex = /@\[([^\]]+)\]\(([a-f0-9-]+)\)/g;
   const parts: (string | JSX.Element)[] = [];
@@ -98,9 +100,16 @@ function renderMentions(body: string): JSX.Element {
   return <>{parts}</>;
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 export function CommentThread({
   comments,
   taskId,
+  projectId,
   entityType = "task",
   entityId,
   currentUserId,
@@ -117,9 +126,14 @@ export function CommentThread({
   const [body, setBody] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
+  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const commentEditorRef = useRef<CommentEditorRef>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
+  const { toast } = useToast();
 
-  // Use tenant users endpoint for @mentions as fallback
+  const canAttach = !!projectId && !!taskId;
+
   const { data: tenantUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/tenant/users"],
     enabled: !users || users.length === 0,
@@ -127,14 +141,116 @@ export function CommentThread({
 
   const mentionUsers = users && users.length > 0 ? users : tenantUsers;
 
-  const handleSubmit = (content?: string) => {
-    const commentBody = content || body;
-    if (commentBody.trim()) {
-      onAdd?.(commentBody.trim());
-      setBody("");
-      commentEditorRef.current?.clear();
+  const uploadFile = useCallback(async (file: File): Promise<string | null> => {
+    if (!projectId || !taskId) return null;
+    const uploadId = crypto.randomUUID();
+
+    setPendingUploads((prev) => [
+      ...prev,
+      { id: uploadId, file, status: "uploading" },
+    ]);
+
+    try {
+      const presignRes = await apiRequest(
+        "POST",
+        `/api/projects/${projectId}/tasks/${taskId}/attachments/presign`,
+        {
+          fileName: file.name,
+          mimeType: file.type || "application/octet-stream",
+          fileSizeBytes: file.size,
+        }
+      );
+      const { attachment, upload } = await presignRes.json();
+
+      const s3Res = await fetch(upload.url, {
+        method: upload.method,
+        headers: upload.headers,
+        body: file,
+      });
+
+      if (!s3Res.ok) throw new Error("Upload to storage failed");
+
+      setPendingUploads((prev) =>
+        prev.map((u) => (u.id === uploadId ? { ...u, status: "completing" } : u))
+      );
+
+      await apiRequest(
+        "POST",
+        `/api/projects/${projectId}/tasks/${taskId}/attachments/${attachment.id}/complete`,
+        {}
+      );
+
+      setPendingUploads((prev) =>
+        prev.map((u) =>
+          u.id === uploadId
+            ? { ...u, status: "complete", attachmentId: attachment.id }
+            : u
+        )
+      );
+
+      return attachment.id;
+    } catch (err: any) {
+      setPendingUploads((prev) =>
+        prev.map((u) =>
+          u.id === uploadId ? { ...u, status: "error", error: err.message } : u
+        )
+      );
+      return null;
     }
-  };
+  }, [projectId, taskId]);
+
+  const handleFileSelect = useCallback(
+    async (files: FileList | null) => {
+      if (!files) return;
+      for (const file of Array.from(files)) {
+        await uploadFile(file);
+      }
+    },
+    [uploadFile]
+  );
+
+  const removePending = useCallback((id: string) => {
+    setPendingUploads((prev) => prev.filter((u) => u.id !== id));
+  }, []);
+
+  const handleSubmit = useCallback(
+    async (content?: string) => {
+      const commentBody = content || body;
+      if (!commentBody.trim() && pendingUploads.length === 0) return;
+
+      const completedIds = pendingUploads
+        .filter((u) => u.status === "complete" && u.attachmentId)
+        .map((u) => u.attachmentId!);
+
+      const stillUploading = pendingUploads.some(
+        (u) => u.status === "uploading" || u.status === "completing"
+      );
+      if (stillUploading) {
+        toast({
+          title: "Files still uploading",
+          description: "Please wait for uploads to complete before posting.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      const hasErrors = pendingUploads.some((u) => u.status === "error");
+      if (hasErrors) {
+        toast({
+          title: "Upload errors",
+          description: "Remove failed uploads before posting.",
+          variant: "destructive",
+        });
+        return;
+      }
+
+      onAdd?.(commentBody.trim(), completedIds.length > 0 ? completedIds : undefined);
+      setBody("");
+      setPendingUploads([]);
+      commentEditorRef.current?.clear();
+    },
+    [body, pendingUploads, onAdd, toast]
+  );
 
   const handleEdit = (comment: CommentWithUser) => {
     setEditingId(comment.id);
@@ -226,6 +342,14 @@ export function CommentThread({
                     </div>
                   )}
 
+                  {!isEditing && comment.attachments && comment.attachments.length > 0 && projectId && taskId && (
+                    <CommentAttachments
+                      attachments={comment.attachments}
+                      projectId={projectId}
+                      taskId={taskId}
+                    />
+                  )}
+
                   {!isEditing && (
                     <div className="flex gap-1 pt-1">
                       {isOwner && (
@@ -293,7 +417,7 @@ export function CommentThread({
           <Avatar className="h-8 w-8 shrink-0">
             <AvatarFallback className="bg-primary/10 text-primary text-xs">U</AvatarFallback>
           </Avatar>
-          <div className="flex-1">
+          <div className="flex-1 space-y-2">
             <CommentEditor
               ref={commentEditorRef}
               value={body}
@@ -302,6 +426,79 @@ export function CommentThread({
               placeholder={placeholder}
               users={mentionUsers}
               data-testid="textarea-comment"
+              attachButton={
+                canAttach ? (
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => fileInputRef.current?.click()}
+                    data-testid="button-comment-attach"
+                  >
+                    <Paperclip className="h-3 w-3" />
+                  </Button>
+                ) : undefined
+              }
+            />
+
+            {pendingUploads.length > 0 && (
+              <div className="space-y-1">
+                {pendingUploads.map((upload) => (
+                  <div
+                    key={upload.id}
+                    className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-md border border-border bg-muted/20"
+                    style={{ minHeight: 36 }}
+                    data-testid={`pending-upload-${upload.id}`}
+                  >
+                    <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+                    <span className="truncate flex-1">{upload.file.name}</span>
+                    <span className="text-muted-foreground shrink-0">
+                      {formatFileSize(upload.file.size)}
+                    </span>
+                    {(upload.status === "uploading" || upload.status === "completing") && (
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />
+                    )}
+                    {upload.status === "complete" && (
+                      <Check className="h-3 w-3 text-green-600 shrink-0" />
+                    )}
+                    {upload.status === "error" && (
+                      <>
+                        <span className="text-destructive shrink-0" title={upload.error}>Failed</span>
+                        <Button
+                          size="icon"
+                          variant="ghost"
+                          className="h-5 w-5 shrink-0"
+                          onClick={() => {
+                            removePending(upload.id);
+                            uploadFile(upload.file);
+                          }}
+                          data-testid={`button-retry-upload-${upload.id}`}
+                        >
+                          <RotateCcw className="h-3 w-3" />
+                        </Button>
+                      </>
+                    )}
+                    <Button
+                      size="icon"
+                      variant="ghost"
+                      className="h-5 w-5 shrink-0"
+                      onClick={() => removePending(upload.id)}
+                      data-testid={`button-remove-pending-${upload.id}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => handleFileSelect(e.target.files)}
+              data-testid="input-comment-attach"
             />
           </div>
         </div>

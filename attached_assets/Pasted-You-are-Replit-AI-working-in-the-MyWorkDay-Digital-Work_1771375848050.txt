@@ -1,0 +1,160 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+FEATURE:
+Enable attachments on Task and Subtask comments (all common business file types), stored in Cloudflare R2 via existing attachments pipeline.
+
+GOAL:
+Users can attach 1+ files to a comment when writing it in the task/subtask drawer.
+After posting:
+- the comment appears immediately
+- attachments appear under the comment
+- users can download/open attachments
+- images show thumbnails; other files show file chips
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change API URLs.
+- Do NOT change DB schema.
+- Reuse existing attachments domain endpoints (presign/complete/download/delete).
+- Maintain tenant scoping and permissions.
+- Preserve existing comment response shapes and skipEnvelope behavior.
+
+DELIVERABLES:
+1) Comment composer supports file selection (multi-file) and upload progress
+2) Uploaded files are associated to the created comment (task and subtask comments)
+3) Comment list returns attachments metadata so UI can render without extra calls
+4) Attachments render:
+   - images: thumbnail grid with tap-to-preview
+   - other files: file row/chip with icon, name, size, download
+5) Tests:
+   - backend integration tests >= 3
+6) Docs update
+
+------------------------------------------------------------
+PHASE 0 — DISCOVERY
+------------------------------------------------------------
+
+1) Identify existing comment endpoints for:
+- task comments create/list
+- subtask comments create/list
+
+2) Identify existing attachment pipeline:
+- presign endpoint
+- complete endpoint
+- download endpoint
+- storage key patterns, mime/size fields
+
+3) Identify existing association model:
+Look for any of these:
+- attachments.entityType/entityId (polymorphic)
+- attachment_links table
+- comment_attachments table
+- comments.attachments field
+Use the existing model (no migrations).
+
+Document chosen association model in:
+docs/review/comment-attachments.md
+
+------------------------------------------------------------
+PHASE 1 — BACKEND: LINK ATTACHMENTS TO COMMENTS
+------------------------------------------------------------
+
+4) Update comment create service to accept:
+- attachmentIds?: string[]
+
+Behavior:
+- validate user can comment on the task/subtask
+- validate each attachment belongs to same tenant/workspace and is accessible
+- link attachments to the created comment using the existing association model
+- return comment payload including attachments metadata:
+  [{ id, filename, mimeType, size, createdAt }]
+
+5) Update comment list endpoint to include attachments per comment.
+
+6) Ensure download access:
+- downloading a comment attachment must enforce tenant/workspace access
+- reuse existing presigned download endpoint
+
+------------------------------------------------------------
+PHASE 2 — FRONTEND: COMPOSER + UPLOAD FLOW
+------------------------------------------------------------
+
+7) Add attach UI to comment composer:
+- paperclip button
+- multi-select
+- show pending uploads list with progress + remove
+
+8) Implement upload flow using existing attachments endpoints:
+- presign -> PUT -> complete
+- collect attachmentIds for successful uploads
+- allow retry on failed upload
+
+9) On comment submit:
+- include attachmentIds
+- optimistically insert new comment into cache with attachments
+- invalidate comment list query on settled
+
+------------------------------------------------------------
+PHASE 3 — FRONTEND: RENDER ATTACHMENTS
+------------------------------------------------------------
+
+10) Create:
+client/src/components/comments/CommentAttachments.tsx
+
+Render rules:
+- images (mime starts with image/):
+  - thumbnail grid
+  - tap opens modal viewer
+- other files:
+  - file chip/row with icon by extension (pdf/doc/xls/ppt/zip/etc.)
+  - size display
+  - download button:
+    - calls download endpoint to get presigned URL
+    - opens in new tab
+
+Mobile:
+- tap targets >= 44px
+- wraps well
+- no overflow
+
+------------------------------------------------------------
+PHASE 4 — ALLOWED TYPES / SECURITY
+------------------------------------------------------------
+
+11) Ensure upload guards support business types:
+- allow: pdf, doc/docx, xls/xlsx, ppt/pptx, csv, txt, rtf, json, xml, svg, ai, eps, psd, png/jpg/webp/gif, pages (if treated as generic)
+- block dangerous: exe, bat, cmd, msi, sh, dmg, iso, apk
+Keep server enforcement minimal unless policy already enforces.
+
+------------------------------------------------------------
+PHASE 5 — TESTS
+------------------------------------------------------------
+
+Backend integration tests (>=3):
+1) Creating a task comment with attachmentIds returns comment with attachments
+2) Cross-tenant attachmentIds are rejected/ignored
+3) Download requires access (403 for unauthorized)
+
+------------------------------------------------------------
+PHASE 6 — DOCS
+------------------------------------------------------------
+
+Update:
+docs/review/comment-attachments.md with:
+- association model used
+- endpoints involved
+- allowed types policy
+- verification steps
+
+Update:
+docs/mobile-audit.md with a brief note:
+“Task/Subtask comment attachments now supported (R2).”
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+Return:
+- files changed
+- association model used
+- tests added and passing
+- manual verification checklist
