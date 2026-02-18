@@ -1257,3 +1257,162 @@ tenantUsersRouter.post("/tenants/:tenantId/import-users", requireSuperUser, asyn
     res.status(500).json({ error: "Failed to import users" });
   }
 });
+
+// =============================================================================
+// GET /tenants/:tenantId/users/:userId/workspaces - Get user workspace memberships
+// =============================================================================
+tenantUsersRouter.get("/tenants/:tenantId/users/:userId/workspaces", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, userId } = req.params;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    const existingUser = await storage.getUserByIdAndTenant(userId, tenantId);
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found in this tenant" });
+    }
+
+    const tenantWorkspaces = await db.select().from(workspaces).where(eq(workspaces.tenantId, tenantId));
+
+    const memberships = await db.select({
+      id: workspaceMembers.id,
+      workspaceId: workspaceMembers.workspaceId,
+      role: workspaceMembers.role,
+      status: workspaceMembers.status,
+      createdAt: workspaceMembers.createdAt,
+      workspaceName: workspaces.name,
+    })
+      .from(workspaceMembers)
+      .innerJoin(workspaces, eq(workspaces.id, workspaceMembers.workspaceId))
+      .where(and(
+        eq(workspaceMembers.userId, userId),
+        eq(workspaces.tenantId, tenantId),
+      ));
+
+    res.json({
+      memberships,
+      availableWorkspaces: tenantWorkspaces.map(w => ({ id: w.id, name: w.name, isPrimary: w.isPrimary })),
+    });
+  } catch (error) {
+    console.error("Error fetching user workspaces:", error);
+    res.status(500).json({ error: "Failed to fetch workspace data" });
+  }
+});
+
+// =============================================================================
+// POST /tenants/:tenantId/users/:userId/assign-workspace - Assign user to workspace
+// =============================================================================
+const assignWorkspaceSchema = z.object({
+  workspaceId: z.string().min(1),
+  role: z.string().optional().default("member"),
+});
+
+tenantUsersRouter.post("/tenants/:tenantId/users/:userId/assign-workspace", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, userId } = req.params;
+    const { workspaceId, role } = assignWorkspaceSchema.parse(req.body);
+    const superUser = req.user!;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    const existingUser = await storage.getUserByIdAndTenant(userId, tenantId);
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found in this tenant" });
+    }
+
+    const [workspace] = await db.select().from(workspaces).where(
+      and(eq(workspaces.id, workspaceId), eq(workspaces.tenantId, tenantId))
+    );
+    if (!workspace) {
+      return res.status(404).json({ error: "Workspace not found in this tenant" });
+    }
+
+    const [existingMember] = await db.select().from(workspaceMembers).where(
+      and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId))
+    );
+
+    if (existingMember) {
+      return res.status(409).json({ error: "User is already a member of this workspace" });
+    }
+
+    const [membership] = await db.insert(workspaceMembers).values({
+      workspaceId,
+      userId,
+      role,
+      status: "active",
+    }).returning();
+
+    await recordTenantAuditEvent(
+      tenantId,
+      "user_workspace_assigned",
+      `User ${existingUser.email} assigned to workspace "${workspace.name}" with role "${role}"`,
+      superUser.id,
+      { userId, workspaceId, workspaceName: workspace.name, role }
+    );
+
+    res.json({
+      message: `User assigned to workspace "${workspace.name}" successfully`,
+      membership,
+    });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors });
+    }
+    console.error("Error assigning user to workspace:", error);
+    res.status(500).json({ error: "Failed to assign workspace" });
+  }
+});
+
+// =============================================================================
+// DELETE /tenants/:tenantId/users/:userId/workspaces/:workspaceId - Remove user from workspace
+// =============================================================================
+tenantUsersRouter.delete("/tenants/:tenantId/users/:userId/workspaces/:workspaceId", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, userId, workspaceId } = req.params;
+    const superUser = req.user!;
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) {
+      return res.status(404).json({ error: "Tenant not found" });
+    }
+
+    const existingUser = await storage.getUserByIdAndTenant(userId, tenantId);
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found in this tenant" });
+    }
+
+    const [workspace] = await db.select().from(workspaces).where(
+      and(eq(workspaces.id, workspaceId), eq(workspaces.tenantId, tenantId))
+    );
+    if (!workspace) {
+      return res.status(404).json({ error: "Workspace not found" });
+    }
+
+    const [deleted] = await db.delete(workspaceMembers).where(
+      and(eq(workspaceMembers.workspaceId, workspaceId), eq(workspaceMembers.userId, userId))
+    ).returning();
+
+    if (!deleted) {
+      return res.status(404).json({ error: "User is not a member of this workspace" });
+    }
+
+    await recordTenantAuditEvent(
+      tenantId,
+      "user_workspace_removed",
+      `User ${existingUser.email} removed from workspace "${workspace.name}"`,
+      superUser.id,
+      { userId, workspaceId, workspaceName: workspace.name }
+    );
+
+    res.json({ message: `User removed from workspace "${workspace.name}"` });
+  } catch (error) {
+    console.error("Error removing user from workspace:", error);
+    res.status(500).json({ error: "Failed to remove from workspace" });
+  }
+});

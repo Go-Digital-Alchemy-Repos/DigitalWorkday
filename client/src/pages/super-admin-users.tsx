@@ -18,7 +18,7 @@ import { Redirect } from "wouter";
 import { 
   Loader2, Shield, Save, Mail, Plus, Link, Copy, MoreHorizontal, 
   UserCheck, UserX, Clock, AlertCircle, KeyRound, Eye, EyeOff, Trash2, Send,
-  Search, Building2, Users, ChevronLeft, ChevronRight, Activity, Edit
+  Search, Building2, Users, ChevronLeft, ChevronRight, Activity, Edit, X
 } from "lucide-react";
 import {
   DropdownMenu,
@@ -225,6 +225,20 @@ export default function SuperAdminUsers() {
   const { data: userActivity, isLoading: activityLoading } = useQuery<UserActivity>({
     queryKey: ["/api/v1/super/users", selectedAppUser?.id, "activity"],
     enabled: appUserDrawerOpen && !!selectedAppUser,
+  });
+
+  // User workspace memberships query
+  const { data: userWorkspaceData, isLoading: workspaceLoading } = useQuery<{
+    memberships: Array<{ id: string; workspaceId: string; role: string; status: string; workspaceName: string }>;
+    availableWorkspaces: Array<{ id: string; name: string; isPrimary: boolean }>;
+  }>({
+    queryKey: ["/api/v1/super/tenants", selectedAppUser?.tenantId, "users", selectedAppUser?.id, "workspaces"],
+    queryFn: async () => {
+      const r = await fetch(`/api/v1/super/tenants/${selectedAppUser!.tenantId}/users/${selectedAppUser!.id}/workspaces`, { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load workspaces");
+      return r.json();
+    },
+    enabled: appUserDrawerOpen && !!selectedAppUser && !!selectedAppUser.tenantId && !selectedAppUser.isPendingInvite,
   });
 
   const createAdminMutation = useMutation({
@@ -639,6 +653,37 @@ export default function SuperAdminUsers() {
       sendEmail: appUserResetSendEmail,
     });
   };
+
+  // Workspace assignment mutation
+  const assignWorkspaceMutation = useMutation({
+    mutationFn: async ({ tenantId, userId, workspaceId }: { tenantId: string; userId: string; workspaceId: string }) => {
+      return apiRequest("POST", `/api/v1/super/tenants/${tenantId}/users/${userId}/assign-workspace`, { workspaceId });
+    },
+    onSuccess: () => {
+      toast({ title: "Workspace assigned successfully" });
+      if (selectedAppUser?.tenantId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", selectedAppUser.tenantId, "users", selectedAppUser.id, "workspaces"] });
+      }
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to assign workspace", description: error?.message || "An error occurred", variant: "destructive" });
+    },
+  });
+
+  const removeWorkspaceMutation = useMutation({
+    mutationFn: async ({ tenantId, userId, workspaceId }: { tenantId: string; userId: string; workspaceId: string }) => {
+      return apiRequest("DELETE", `/api/v1/super/tenants/${tenantId}/users/${userId}/workspaces/${workspaceId}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Workspace membership removed" });
+      if (selectedAppUser?.tenantId) {
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", selectedAppUser.tenantId, "users", selectedAppUser.id, "workspaces"] });
+      }
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to remove workspace membership", description: error?.message || "An error occurred", variant: "destructive" });
+    },
+  });
 
   const handleDeactivateAdmin = (admin: PlatformAdmin) => {
     setAdminToDeactivate(admin);
@@ -1060,6 +1105,88 @@ export default function SuperAdminUsers() {
                   </div>
                 </div>
               </div>
+
+              {/* Workspace Memberships */}
+              {!selectedAppUser.isPendingInvite && selectedAppUser.tenantId && (
+                <div className="border-t pt-4">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Building2 className="h-4 w-4" />
+                    <h4 className="font-medium">Workspace Access</h4>
+                  </div>
+                  {workspaceLoading ? (
+                    <div className="flex items-center justify-center py-4">
+                      <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                    </div>
+                  ) : userWorkspaceData ? (
+                    <div className="space-y-3">
+                      {userWorkspaceData.memberships.length === 0 ? (
+                        <div className="p-3 rounded-lg border border-destructive/50 bg-destructive/5">
+                          <div className="flex items-center gap-2 text-destructive text-sm font-medium">
+                            <AlertCircle className="h-4 w-4" />
+                            No workspace access
+                          </div>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            This user cannot log in because they are not a member of any workspace.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          {userWorkspaceData.memberships.map((m) => (
+                            <div key={m.id} className="flex items-center justify-between p-2 rounded-lg border" data-testid={`workspace-membership-${m.workspaceId}`}>
+                              <div className="flex items-center gap-2">
+                                <Building2 className="h-4 w-4 text-muted-foreground" />
+                                <span className="text-sm">{m.workspaceName}</span>
+                                <Badge variant="outline" className="text-xs">{m.role}</Badge>
+                              </div>
+                              <Button 
+                                size="sm" 
+                                variant="ghost"
+                                className="text-destructive"
+                                onClick={() => removeWorkspaceMutation.mutate({ 
+                                  tenantId: selectedAppUser.tenantId!, 
+                                  userId: selectedAppUser.id, 
+                                  workspaceId: m.workspaceId 
+                                })}
+                                disabled={removeWorkspaceMutation.isPending}
+                                data-testid={`button-remove-workspace-${m.workspaceId}`}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+                      {(() => {
+                        const assignedIds = new Set(userWorkspaceData.memberships.map(m => m.workspaceId));
+                        const unassigned = userWorkspaceData.availableWorkspaces.filter(w => !assignedIds.has(w.id));
+                        if (unassigned.length === 0) return null;
+                        return (
+                          <div className="flex flex-wrap items-center gap-2">
+                            <span className="text-xs text-muted-foreground">Assign to:</span>
+                            {unassigned.map((w) => (
+                              <Button
+                                key={w.id}
+                                size="sm"
+                                variant="outline"
+                                onClick={() => assignWorkspaceMutation.mutate({ 
+                                  tenantId: selectedAppUser.tenantId!, 
+                                  userId: selectedAppUser.id, 
+                                  workspaceId: w.id 
+                                })}
+                                disabled={assignWorkspaceMutation.isPending}
+                                data-testid={`button-assign-workspace-${w.id}`}
+                              >
+                                <Plus className="h-3 w-3 mr-1" />
+                                {w.name}
+                              </Button>
+                            ))}
+                          </div>
+                        );
+                      })()}
+                    </div>
+                  ) : null}
+                </div>
+              )}
 
               {/* Management Actions */}
               <div className="border-t pt-4">

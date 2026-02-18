@@ -121,6 +121,46 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
     enabled: open && !!tenantId && !!userId && activeTab === "invitation",
   });
 
+  // Workspace memberships query
+  const { data: userWorkspaceData, isLoading: workspaceLoading } = useQuery<{
+    memberships: Array<{ id: string; workspaceId: string; role: string; status: string; workspaceName: string }>;
+    availableWorkspaces: Array<{ id: string; name: string; isPrimary: boolean }>;
+  }>({
+    queryKey: ["/api/v1/super/tenants", tenantId, "users", userId, "workspaces"],
+    queryFn: async () => {
+      const r = await fetch(`/api/v1/super/tenants/${tenantId}/users/${userId}/workspaces`, { credentials: "include" });
+      if (!r.ok) throw new Error("Failed to load workspaces");
+      return r.json();
+    },
+    enabled: open && !!tenantId && !!userId && activeTab === "overview",
+  });
+
+  const assignWorkspaceMutation = useMutation({
+    mutationFn: async (workspaceId: string) => {
+      return apiRequest("POST", `/api/v1/super/tenants/${tenantId}/users/${userId}/assign-workspace`, { workspaceId });
+    },
+    onSuccess: () => {
+      toast({ title: "Workspace assigned successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenantId, "users", userId, "workspaces"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to assign workspace", variant: "destructive" });
+    },
+  });
+
+  const removeWorkspaceMutation = useMutation({
+    mutationFn: async (workspaceId: string) => {
+      return apiRequest("DELETE", `/api/v1/super/tenants/${tenantId}/users/${userId}/workspaces/${workspaceId}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Workspace membership removed" });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenantId, "users", userId, "workspaces"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to remove workspace membership", variant: "destructive" });
+    },
+  });
+
   const regenerateInviteMutation = useMutation({
     mutationFn: async () => {
       const res = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/users/${userId}/regenerate-invite`);
@@ -618,6 +658,88 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
                         Impersonate
                       </Button>
                     </div>
+                  </CardContent>
+                </Card>
+
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Key className="h-4 w-4" />
+                      Workspace Access
+                    </CardTitle>
+                    <CardDescription>Manage which workspaces this user can access</CardDescription>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    {workspaceLoading ? (
+                      <div className="flex items-center justify-center py-4">
+                        <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : userWorkspaceData ? (
+                      <>
+                        {userWorkspaceData.memberships.length === 0 ? (
+                          <div className="p-3 rounded-lg border border-destructive/50 bg-destructive/5">
+                            <div className="flex items-center gap-2 text-destructive text-sm font-medium">
+                              <AlertTriangle className="h-4 w-4" />
+                              No workspace access
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-1">
+                              This user cannot log in because they have no workspace membership. Assign a workspace below.
+                            </p>
+                          </div>
+                        ) : (
+                          <div className="space-y-2">
+                            {userWorkspaceData.memberships.map((m) => (
+                              <div key={m.id} className="flex items-center justify-between p-3 rounded-lg border" data-testid={`workspace-membership-${m.workspaceId}`}>
+                                <div className="flex items-center gap-2">
+                                  <span className="text-sm font-medium">{m.workspaceName}</span>
+                                  <Badge variant="outline" className="text-xs">{m.role}</Badge>
+                                </div>
+                                <Button 
+                                  size="sm" 
+                                  variant="ghost"
+                                  className="text-destructive"
+                                  onClick={() => removeWorkspaceMutation.mutate(m.workspaceId)}
+                                  disabled={removeWorkspaceMutation.isPending}
+                                  data-testid={`button-remove-workspace-${m.workspaceId}`}
+                                >
+                                  <X className="h-3 w-3 mr-1" />
+                                  Remove
+                                </Button>
+                              </div>
+                            ))}
+                          </div>
+                        )}
+                        {(() => {
+                          const assignedIds = new Set(userWorkspaceData.memberships.map(m => m.workspaceId));
+                          const unassigned = userWorkspaceData.availableWorkspaces.filter(w => !assignedIds.has(w.id));
+                          if (unassigned.length === 0) return null;
+                          return (
+                            <div className="pt-2 space-y-2">
+                              <p className="text-xs text-muted-foreground">Assign to available workspace:</p>
+                              <div className="flex flex-wrap gap-2">
+                                {unassigned.map((w) => (
+                                  <Button
+                                    key={w.id}
+                                    size="sm"
+                                    variant="outline"
+                                    onClick={() => assignWorkspaceMutation.mutate(w.id)}
+                                    disabled={assignWorkspaceMutation.isPending}
+                                    data-testid={`button-assign-workspace-${w.id}`}
+                                  >
+                                    {assignWorkspaceMutation.isPending ? (
+                                      <Loader2 className="h-3 w-3 mr-1 animate-spin" />
+                                    ) : (
+                                      <CheckCircle className="h-3 w-3 mr-1" />
+                                    )}
+                                    {w.name}
+                                  </Button>
+                                ))}
+                              </div>
+                            </div>
+                          );
+                        })()}
+                      </>
+                    ) : null}
                   </CardContent>
                 </Card>
 
