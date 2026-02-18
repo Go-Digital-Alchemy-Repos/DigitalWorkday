@@ -1,7 +1,7 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
-import { useTheme, type ThemeMode, type AccentColor } from "@/lib/theme-provider";
+import { useTheme } from "@/lib/theme-provider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 
 interface UiPreferences {
@@ -17,10 +17,11 @@ interface TenantBrandingResponse {
 
 export function useThemeSync() {
   const { isAuthenticated } = useAuth();
-  const { hydrateFromServer, mode, accent } = useTheme();
+  const { hydrateFromServer, packId, isSystemMode, accent } = useTheme();
   const hydrated = useRef(false);
-  const prevMode = useRef<ThemeMode>(mode);
-  const prevAccent = useRef<AccentColor>(accent);
+  const prevPackId = useRef<string>(packId);
+  const prevIsSystem = useRef<boolean>(isSystemMode);
+  const prevAccent = useRef<string>(accent);
 
   const { data: prefs, isFetched: prefsFetched } = useQuery<UiPreferences>({
     queryKey: ["/api/users/me/ui-preferences"],
@@ -43,9 +44,10 @@ export function useThemeSync() {
       tenantDefaultAccent: branding?.tenantSettings?.defaultThemeAccent ?? null,
     });
     hydrated.current = true;
-    prevMode.current = (prefs?.themeMode as ThemeMode) || mode;
-    prevAccent.current = (prefs?.themeAccent as AccentColor) || accent;
-  }, [prefsFetched, brandingFetched, prefs, branding, hydrateFromServer, mode, accent]);
+    prevPackId.current = prefs?.themeMode || packId;
+    prevIsSystem.current = prefs?.themeMode === "system";
+    prevAccent.current = prefs?.themeAccent || accent;
+  }, [prefsFetched, brandingFetched, prefs, branding, hydrateFromServer, packId, accent]);
 
   const saveMutation = useMutation({
     mutationFn: async (body: { themeMode?: string; themeAccent?: string }) =>
@@ -58,16 +60,19 @@ export function useThemeSync() {
   useEffect(() => {
     if (!isAuthenticated || !hydrated.current) return;
 
-    const modeChanged = mode !== prevMode.current;
+    const serverValue = isSystemMode ? "system" : packId;
+    const prevServerValue = prevIsSystem.current ? "system" : prevPackId.current;
+    const packChanged = serverValue !== prevServerValue;
     const accentChanged = accent !== prevAccent.current;
 
-    if (modeChanged || accentChanged) {
-      prevMode.current = mode;
+    if (packChanged || accentChanged) {
+      prevPackId.current = packId;
+      prevIsSystem.current = isSystemMode;
       prevAccent.current = accent;
       saveMutation.mutate({
-        ...(modeChanged ? { themeMode: mode } : {}),
+        ...(packChanged ? { themeMode: serverValue } : {}),
         ...(accentChanged ? { themeAccent: accent } : {}),
       });
     }
-  }, [mode, accent, isAuthenticated]);
+  }, [packId, isSystemMode, accent, isAuthenticated]);
 }

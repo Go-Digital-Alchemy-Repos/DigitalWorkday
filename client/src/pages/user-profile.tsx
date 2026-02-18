@@ -11,9 +11,10 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { S3Dropzone } from "@/components/common/S3Dropzone";
-import { User, Mail, Shield, Users, Save, Loader2, ArrowLeft, Key, Eye, EyeOff, Sun, Moon, Monitor, Palette, Check } from "lucide-react";
+import { User, Mail, Shield, Users, Save, Loader2, ArrowLeft, Key, Eye, EyeOff, Sun, Moon, Palette, Check } from "lucide-react";
 import { useLocation } from "wouter";
-import { useTheme, type ThemeMode, type AccentColor } from "@/lib/theme-provider";
+import { useTheme } from "@/lib/theme-provider";
+import { type ThemePack } from "@/theme/themePacks";
 import { cn } from "@/lib/utils";
 
 function getRoleLabel(role: string) {
@@ -381,23 +382,61 @@ export default function UserProfilePage() {
   );
 }
 
-const MODE_OPTIONS: { value: ThemeMode; label: string; icon: typeof Sun }[] = [
-  { value: "light", label: "Light", icon: Sun },
-  { value: "dark", label: "Dark", icon: Moon },
-  { value: "system", label: "System", icon: Monitor },
-];
+function PackPreview({ pack, isActive, onClick }: { pack: ThemePack; isActive: boolean; onClick: () => void }) {
+  const bg = pack.tokens["--background"];
+  const fg = pack.tokens["--foreground"];
+  const sidebar = pack.tokens["--sidebar"];
+  const primary = pack.tokens["--primary"];
+  const card = pack.tokens["--card"];
+  const muted = pack.tokens["--muted-foreground"];
 
-const ACCENT_SWATCHES: { value: AccentColor; label: string; color: string }[] = [
-  { value: "blue", label: "Blue", color: "bg-blue-500" },
-  { value: "indigo", label: "Indigo", color: "bg-indigo-500" },
-  { value: "teal", label: "Teal", color: "bg-teal-500" },
-  { value: "green", label: "Green", color: "bg-green-500" },
-  { value: "orange", label: "Orange", color: "bg-orange-500" },
-  { value: "slate", label: "Slate", color: "bg-slate-500" },
-];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      className={cn(
+        "relative flex flex-col items-center gap-1.5 rounded-md p-1.5 transition-all",
+        isActive
+          ? "ring-2 ring-primary ring-offset-2 ring-offset-background"
+          : "ring-1 ring-border hover:ring-muted-foreground/40"
+      )}
+      title={pack.description}
+      data-testid={`button-theme-pack-${pack.id}`}
+    >
+      <div
+        className="rounded-sm overflow-hidden border border-border/30"
+        style={{ width: 72, height: 48, display: "flex" }}
+      >
+        <div style={{ backgroundColor: `hsl(${sidebar})`, width: "28%", display: "flex", flexDirection: "column", padding: 2, gap: 2 }}>
+          <div style={{ backgroundColor: `hsl(${primary})`, height: 4, borderRadius: 1, opacity: 0.8 }} />
+          <div style={{ backgroundColor: `hsl(${muted})`, height: 3, borderRadius: 1, opacity: 0.3 }} />
+          <div style={{ backgroundColor: `hsl(${muted})`, height: 3, borderRadius: 1, opacity: 0.3 }} />
+        </div>
+        <div style={{ backgroundColor: `hsl(${bg})`, flex: 1, display: "flex", flexDirection: "column", padding: 3, gap: 2 }}>
+          <div style={{ backgroundColor: `hsl(${fg})`, height: 3, width: "60%", borderRadius: 1, opacity: 0.5 }} />
+          <div style={{ backgroundColor: `hsl(${card})`, flex: 1, borderRadius: 2, border: `1px solid hsl(${pack.tokens["--border"]})`, display: "flex", flexDirection: "column", padding: 2, gap: 1 }}>
+            <div style={{ backgroundColor: `hsl(${primary})`, height: 3, width: "40%", borderRadius: 1 }} />
+            <div style={{ backgroundColor: `hsl(${muted})`, height: 2, width: "70%", borderRadius: 1, opacity: 0.4 }} />
+          </div>
+        </div>
+      </div>
+      <span className="text-[11px] leading-tight truncate w-full text-center" style={{ maxWidth: 72 }}>
+        {pack.name}
+      </span>
+      {isActive && (
+        <div className="absolute top-0.5 right-0.5 rounded-full bg-primary p-0.5">
+          <Check className="h-2.5 w-2.5 text-primary-foreground" />
+        </div>
+      )}
+    </button>
+  );
+}
 
 function AppearanceCard() {
-  const { mode, setMode, accent, setAccent } = useTheme();
+  const { packId, setPackId, availablePacks } = useTheme();
+
+  const lightPacks = availablePacks.filter((p) => p.kind === "light");
+  const darkPacks = availablePacks.filter((p) => p.kind === "dark");
 
   return (
     <Card>
@@ -407,63 +446,47 @@ function AppearanceCard() {
           Appearance
         </CardTitle>
         <CardDescription>
-          Customize how the application looks for you
+          Choose a color theme for the application
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-6">
         <div className="space-y-3">
-          <Label>Theme Mode</Label>
+          <Label className="flex items-center gap-1.5">
+            <Sun className="h-3.5 w-3.5" />
+            Light Themes
+          </Label>
           <div className="flex gap-2 flex-wrap">
-            {MODE_OPTIONS.map((opt) => {
-              const Icon = opt.icon;
-              const isActive = mode === opt.value;
-              return (
-                <Button
-                  key={opt.value}
-                  variant={isActive ? "default" : "outline"}
-                  size="sm"
-                  onClick={() => setMode(opt.value)}
-                  data-testid={`button-theme-mode-${opt.value}`}
-                >
-                  <Icon className="h-4 w-4 mr-2" />
-                  {opt.label}
-                </Button>
-              );
-            })}
+            {lightPacks.map((pack) => (
+              <PackPreview
+                key={pack.id}
+                pack={pack}
+                isActive={packId === pack.id}
+                onClick={() => setPackId(pack.id)}
+              />
+            ))}
           </div>
         </div>
 
         <div className="space-y-3">
-          <Label>Accent Color</Label>
-          <div className="flex gap-3 flex-wrap">
-            {ACCENT_SWATCHES.map((swatch) => {
-              const isActive = accent === swatch.value;
-              return (
-                <button
-                  key={swatch.value}
-                  type="button"
-                  onClick={() => setAccent(swatch.value)}
-                  className={cn(
-                    "relative h-9 w-9 rounded-full transition-all",
-                    swatch.color,
-                    isActive
-                      ? "ring-2 ring-offset-2 ring-offset-background ring-foreground"
-                      : "ring-1 ring-transparent hover:ring-muted-foreground/40"
-                  )}
-                  title={swatch.label}
-                  data-testid={`button-accent-${swatch.value}`}
-                >
-                  {isActive && (
-                    <Check className="absolute inset-0 m-auto h-4 w-4 text-white" />
-                  )}
-                </button>
-              );
-            })}
+          <Label className="flex items-center gap-1.5">
+            <Moon className="h-3.5 w-3.5" />
+            Dark Themes
+          </Label>
+          <div className="flex gap-2 flex-wrap">
+            {darkPacks.map((pack) => (
+              <PackPreview
+                key={pack.id}
+                pack={pack}
+                isActive={packId === pack.id}
+                onClick={() => setPackId(pack.id)}
+              />
+            ))}
           </div>
-          <p className="text-xs text-muted-foreground">
-            Changes are saved automatically
-          </p>
         </div>
+
+        <p className="text-xs text-muted-foreground">
+          Changes are saved automatically
+        </p>
       </CardContent>
     </Card>
   );

@@ -1,15 +1,17 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
+import { THEME_PACKS, THEME_PACK_MAP, getThemePack, type ThemePack, type ThemePackKind } from "@/theme/themePacks";
 
 export type ThemeMode = "light" | "dark" | "system";
 export type ResolvedTheme = "light" | "dark";
 export type AccentColor = "blue" | "indigo" | "teal" | "green" | "orange" | "slate";
 
 const ACCENT_OPTIONS: AccentColor[] = ["blue", "indigo", "teal", "green", "orange", "slate"];
-const DEFAULT_MODE: ThemeMode = "light";
-const DEFAULT_ACCENT: AccentColor = "blue";
+const DEFAULT_PACK_ID = "light";
 
+const LS_PACK_KEY = "myworkday.theme.pack";
 const LS_MODE_KEY = "myworkday.theme.mode";
 const LS_ACCENT_KEY = "myworkday.theme.accent";
+const LS_SYSTEM_KEY = "myworkday.theme.system";
 
 type ThemeProviderContextType = {
   mode: ThemeMode;
@@ -21,7 +23,12 @@ type ThemeProviderContextType = {
   theme: ResolvedTheme;
   setTheme: (theme: ResolvedTheme) => void;
   toggleTheme: () => void;
-  hydrateFromServer: (prefs: { themeMode?: string | null; themeAccent?: string | null }) => void;
+  hydrateFromServer: (prefs: { themeMode?: string | null; themeAccent?: string | null; tenantDefaultAccent?: string | null }) => void;
+  packId: string;
+  setPackId: (id: string) => void;
+  activePack: ThemePack;
+  availablePacks: ThemePack[];
+  isSystemMode: boolean;
 };
 
 const ThemeProviderContext = createContext<ThemeProviderContextType | undefined>(undefined);
@@ -31,78 +38,86 @@ function getSystemTheme(): ResolvedTheme {
   return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
 }
 
-function resolveTheme(mode: ThemeMode): ResolvedTheme {
-  if (mode === "system") return getSystemTheme();
-  return mode;
+function readStoredPack(): string {
+  if (typeof window === "undefined") return DEFAULT_PACK_ID;
+  const stored = localStorage.getItem(LS_PACK_KEY);
+  if (stored && THEME_PACK_MAP.has(stored)) return stored;
+
+  const oldMode = localStorage.getItem(LS_MODE_KEY);
+  if (oldMode === "dark") return "dark";
+  if (oldMode === "system") {
+    return getSystemTheme() === "dark" ? "dark" : "light";
+  }
+  return DEFAULT_PACK_ID;
 }
 
-function readLocalStorage<T extends string>(key: string, allowed: T[], fallback: T): T {
-  if (typeof window === "undefined") return fallback;
-  const stored = localStorage.getItem(key) as T | null;
-  if (stored && allowed.includes(stored)) return stored;
-  return fallback;
+function readStoredSystemFlag(): boolean {
+  if (typeof window === "undefined") return false;
+  if (localStorage.getItem(LS_SYSTEM_KEY) === "true") return true;
+  const oldMode = localStorage.getItem(LS_MODE_KEY);
+  return oldMode === "system";
 }
 
-function migrateOldKeys(): void {
-  if (typeof window === "undefined") return;
-  const oldTheme = localStorage.getItem("dasana-theme");
-  const oldAccent = localStorage.getItem("dasana-accent");
-  if (oldTheme && !localStorage.getItem(LS_MODE_KEY)) {
-    localStorage.setItem(LS_MODE_KEY, oldTheme);
-    localStorage.removeItem("dasana-theme");
-  }
-  if (oldAccent && !localStorage.getItem(LS_ACCENT_KEY)) {
-    localStorage.setItem(LS_ACCENT_KEY, oldAccent);
-    localStorage.removeItem("dasana-accent");
-  }
+function applyPackTokens(pack: ThemePack) {
+  const root = document.documentElement;
+  Object.entries(pack.tokens).forEach(([key, value]) => {
+    root.style.setProperty(key, value);
+  });
+  root.classList.remove("light", "dark");
+  root.classList.add(pack.kind);
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
-  const initialized = useRef(false);
-  if (!initialized.current) {
-    migrateOldKeys();
-    initialized.current = true;
-  }
+  const [packId, setPackIdState] = useState<string>(readStoredPack);
+  const [isSystemMode, setIsSystemMode] = useState<boolean>(readStoredSystemFlag);
+  const [accent, setAccentState] = useState<AccentColor>(() => {
+    if (typeof window === "undefined") return "blue";
+    const stored = localStorage.getItem(LS_ACCENT_KEY) as AccentColor | null;
+    if (stored && ACCENT_OPTIONS.includes(stored)) return stored;
+    return "blue";
+  });
 
-  const [mode, setModeState] = useState<ThemeMode>(() =>
-    readLocalStorage(LS_MODE_KEY, ["light", "dark", "system"] as ThemeMode[], DEFAULT_MODE)
-  );
-
-  const [accent, setAccentState] = useState<AccentColor>(() =>
-    readLocalStorage(LS_ACCENT_KEY, ACCENT_OPTIONS, DEFAULT_ACCENT)
-  );
-
-  const [resolved, setResolved] = useState<ResolvedTheme>(() => resolveTheme(mode));
+  const activePack = useMemo(() => getThemePack(packId), [packId]);
 
   useEffect(() => {
-    const next = resolveTheme(mode);
-    setResolved(next);
-
-    if (mode !== "system") return;
-
-    const mql = window.matchMedia("(prefers-color-scheme: dark)");
-    const handler = () => setResolved(getSystemTheme());
-    mql.addEventListener("change", handler);
-    return () => mql.removeEventListener("change", handler);
-  }, [mode]);
-
-  useEffect(() => {
-    const root = document.documentElement;
-    root.classList.remove("light", "dark");
-    root.classList.add(resolved);
-  }, [resolved]);
+    applyPackTokens(activePack);
+  }, [activePack]);
 
   useEffect(() => {
     const root = document.documentElement;
     ACCENT_OPTIONS.forEach((a) => root.classList.remove(`accent-${a}`));
-    if (accent !== DEFAULT_ACCENT) {
+    if (accent !== "blue") {
       root.classList.add(`accent-${accent}`);
     }
   }, [accent]);
 
-  const setMode = useCallback((m: ThemeMode) => {
-    setModeState(m);
-    localStorage.setItem(LS_MODE_KEY, m);
+  useEffect(() => {
+    if (!isSystemMode) return;
+
+    const resolveSystemPack = () => {
+      const osTheme = getSystemTheme();
+      const currentKind = getThemePack(packId).kind;
+      if (osTheme !== currentKind) {
+        const newId = osTheme === "dark" ? "dark" : "light";
+        setPackIdState(newId);
+        localStorage.setItem(LS_PACK_KEY, newId);
+      }
+    };
+
+    resolveSystemPack();
+
+    const mql = window.matchMedia("(prefers-color-scheme: dark)");
+    const handler = () => resolveSystemPack();
+    mql.addEventListener("change", handler);
+    return () => mql.removeEventListener("change", handler);
+  }, [isSystemMode, packId]);
+
+  const setPackId = useCallback((id: string) => {
+    const pack = getThemePack(id);
+    setPackIdState(pack.id);
+    localStorage.setItem(LS_PACK_KEY, pack.id);
+    setIsSystemMode(false);
+    localStorage.setItem(LS_SYSTEM_KEY, "false");
   }, []);
 
   const setAccent = useCallback((a: AccentColor) => {
@@ -110,10 +125,38 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(LS_ACCENT_KEY, a);
   }, []);
 
+  const resolvedTheme: ResolvedTheme = activePack.kind;
+
+  const mode: ThemeMode = isSystemMode ? "system" : activePack.kind;
+
+  const setMode = useCallback((m: ThemeMode) => {
+    if (m === "system") {
+      setIsSystemMode(true);
+      localStorage.setItem(LS_SYSTEM_KEY, "true");
+      const osTheme = getSystemTheme();
+      const newId = osTheme === "dark" ? "dark" : "light";
+      setPackIdState(newId);
+      localStorage.setItem(LS_PACK_KEY, newId);
+    } else {
+      setIsSystemMode(false);
+      localStorage.setItem(LS_SYSTEM_KEY, "false");
+      if (m === "dark" && activePack.kind !== "dark") {
+        setPackId("dark");
+      } else if (m === "light" && activePack.kind !== "light") {
+        setPackId("light");
+      }
+    }
+  }, [activePack.kind, setPackId]);
+
   const toggleTheme = useCallback(() => {
-    const next: ResolvedTheme = resolved === "light" ? "dark" : "light";
-    setMode(next);
-  }, [resolved, setMode]);
+    setIsSystemMode(false);
+    localStorage.setItem(LS_SYSTEM_KEY, "false");
+    if (activePack.kind === "light") {
+      setPackId("dark");
+    } else {
+      setPackId("light");
+    }
+  }, [activePack.kind, setPackId]);
 
   const setTheme = useCallback((t: ResolvedTheme) => {
     setMode(t);
@@ -124,11 +167,26 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     themeAccent?: string | null;
     tenantDefaultAccent?: string | null;
   }) => {
-    if (prefs.themeMode && ["light", "dark", "system"].includes(prefs.themeMode)) {
-      const m = prefs.themeMode as ThemeMode;
-      setModeState(m);
-      localStorage.setItem(LS_MODE_KEY, m);
+    const serverPack = prefs.themeMode;
+    if (serverPack === "system") {
+      setIsSystemMode(true);
+      localStorage.setItem(LS_SYSTEM_KEY, "true");
+      const osTheme = getSystemTheme();
+      const resolved = osTheme === "dark" ? "dark" : "light";
+      setPackIdState(resolved);
+      localStorage.setItem(LS_PACK_KEY, resolved);
+    } else if (serverPack && THEME_PACK_MAP.has(serverPack)) {
+      setIsSystemMode(false);
+      localStorage.setItem(LS_SYSTEM_KEY, "false");
+      setPackIdState(serverPack);
+      localStorage.setItem(LS_PACK_KEY, serverPack);
+    } else if (serverPack === "dark") {
+      setIsSystemMode(false);
+      localStorage.setItem(LS_SYSTEM_KEY, "false");
+      setPackIdState("dark");
+      localStorage.setItem(LS_PACK_KEY, "dark");
     }
+
     const accentValue = prefs.themeAccent || prefs.tenantDefaultAccent;
     if (accentValue && ACCENT_OPTIONS.includes(accentValue as AccentColor)) {
       const a = accentValue as AccentColor;
@@ -140,15 +198,20 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
   const value = useMemo<ThemeProviderContextType>(() => ({
     mode,
     setMode,
-    resolvedTheme: resolved,
+    resolvedTheme,
     accent,
     setAccent,
     accentOptions: ACCENT_OPTIONS,
-    theme: resolved,
+    theme: resolvedTheme,
     setTheme,
     toggleTheme,
     hydrateFromServer,
-  }), [mode, setMode, resolved, accent, setAccent, setTheme, toggleTheme, hydrateFromServer]);
+    packId,
+    setPackId,
+    activePack,
+    availablePacks: THEME_PACKS,
+    isSystemMode,
+  }), [mode, setMode, resolvedTheme, accent, setAccent, setTheme, toggleTheme, hydrateFromServer, packId, setPackId, activePack, isSystemMode]);
 
   return (
     <ThemeProviderContext.Provider value={value}>

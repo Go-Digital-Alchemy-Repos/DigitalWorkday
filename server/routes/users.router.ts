@@ -270,8 +270,8 @@ router.get("/users/me/ui-preferences", requireAuth, async (req, res) => {
 });
 
 const uiPreferencesSchema = z.object({
-  themeMode: z.enum(["light", "dark", "system"]).nullable().optional(),
-  themeAccent: z.enum(["blue", "indigo", "teal", "green", "orange", "slate"]).nullable().optional(),
+  themeMode: z.string().max(32).nullable().optional(),
+  themeAccent: z.string().max(32).nullable().optional(),
 });
 
 router.patch("/users/me/ui-preferences", requireAuth, async (req, res) => {

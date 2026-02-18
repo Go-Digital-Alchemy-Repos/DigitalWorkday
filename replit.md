@@ -12,6 +12,7 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - Projects Dashboard with search, status/client/team filters, table view showing project details via drawer, and budget utilization indicators
 - Workload Reports in Settings showing task distribution by employee with completion metrics
 - Workload Forecast with task time estimates, project budgets, budget tracking, and workload distribution by assignee
+- **Theme Packs**: 14 curated color schemes (light, dark, midnight, graphite, forest, ocean, violet, rose, amber, slate, sand, arctic, espresso, cyber). Accessible via the sun/moon toggle in the header and the Appearance card in User Profile. Stored in `themeMode` column of `user_ui_preferences` table (no migration needed). Theme packs are defined in `client/src/theme/themePacks.ts`, applied via `ThemeProvider` CSS custom properties.
 
 ## System Architecture
 
