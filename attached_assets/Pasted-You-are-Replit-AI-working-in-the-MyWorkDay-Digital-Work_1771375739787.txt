@@ -1,0 +1,116 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Hardening pass for:
+1) Project description rendering (fix raw ProseMirror JSON / HTML everywhere, not just one drawer)
+2) Theme Packs system stability (storage model, validation, migrations, tests)
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change API URLs.
+- Avoid DB schema changes if possible; if absolutely needed, propose smallest change and include migration + tests.
+- No UI redesign — only hardening and correctness.
+
+DELIVERABLES:
+A) Canonical rich text render utilities used consistently across project descriptions:
+   - richTextToPlainText(value)
+   - renderRichText(value) (optional, safe)
+B) Theme packs storage/validation hardening:
+   - correct separation of "mode" vs "pack"
+   - safe fallback for unknown pack IDs
+   - tests for resolution + migration
+C) Docs update (replit.md + in-app Docs Library if exists)
+D) All tests passing
+
+------------------------------------------------------------
+PART 1 — RICH TEXT RENDERING (PROJECT DESCRIPTIONS)
+------------------------------------------------------------
+
+1) Create a shared utility:
+client/src/lib/richtext/richText.ts (or similar)
+
+Functions:
+- isProseMirrorDoc(value): boolean
+- richTextToPlainText(value): string
+  - supports:
+    a) ProseMirror JSON object {type:"doc"...}
+    b) JSON string that parses to doc
+    c) HTML string (strip tags safely)
+    d) plain string
+- (optional) renderRichText(value): ReactNode
+  - if you already have a TipTap renderer, use it + sanitize
+  - else just render plain text for now
+
+2) Find ALL usages of project.description rendering:
+- project detail drawer
+- project list/cards
+- sidebar previews
+- anywhere else description is shown
+
+Replace ad-hoc stripHtml with richTextToPlainText (preview contexts) or renderRichText (full contexts).
+
+3) Add unit tests (>=4) for richTextToPlainText:
+- ProseMirror JSON object input produces expected plain text
+- ProseMirror JSON string input produces expected plain text
+- HTML input strips tags
+- Plain text input unchanged
+
+------------------------------------------------------------
+PART 2 — THEME PACKS HARDENING
+------------------------------------------------------------
+
+4) Audit storage:
+- Confirm how theme pack id is stored today (themeMode column used as pack id per summary).
+This is risky. Implement a safer model:
+
+Preferred:
+- Keep themeMode as: "light"|"dark"|"system" OR "system"|"manual"
+- Store themePackId separately:
+  - in user preferences JSON (recommended if exists)
+  - or add themePackId column if no storage exists and adding is acceptable
+
+If you cannot change schema:
+- store themePackId in localStorage + sync to backend via existing preferences endpoint
+- keep themeMode semantics intact
+
+5) Validation:
+- Backend should accept only known pack IDs OR accept any and fallback safely to "light"
+- Frontend should fallback safely if an unknown pack id is loaded
+- Never break rendering due to bad saved value
+
+6) System mode behavior:
+- If mode == system: choose light/dark variant based on matchMedia
+- Ensure selected pack applies appropriately:
+  - simplest rule: system chooses between pack "light" and "dark" ONLY
+  - OR if you support pack families, document it clearly
+Pick one consistent rule and document it.
+Do not store ambiguous states like "system + midnight".
+
+7) Tests (minimum):
+- resolution precedence: user override > tenant default > fallback
+- unknown pack id falls back safely
+- migration from old localStorage values light/dark/system to new model works
+- system mode toggles dark class based on OS preference
+
+------------------------------------------------------------
+PART 3 — DOCS
+------------------------------------------------------------
+
+8) Update docs:
+- replit.md Theme Packs section: include storage model and rules
+- Add docs/design/theme-packs.md if not present
+- If in-app Docs Library exists, add/update:
+  - “Theme Packs & Appearance”
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+Return:
+- files changed
+- tests added and passing
+- final storage model explanation
+- verification steps:
+  - project descriptions never show JSON/HTML
+  - theme packs persist correctly
+  - system mode works
+  - unknown values don’t break UI
