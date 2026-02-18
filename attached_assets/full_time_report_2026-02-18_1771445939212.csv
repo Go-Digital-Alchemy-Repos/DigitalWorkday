@@ -1,0 +1,1389 @@
+userEmail,clientName,billableHours,firstName,lastName,role,parentClientName,startTime,endTime,description,scope
+"imran@w3isystems.com","300 South Tyron","0.48","Imran","Ahmed","admin","","2026-01-28 2026-01-28T06:12:45.945Z","2026-01-28 2026-01-28T06:41:28.602Z","1) For some reason the 300 South Tryon website is all compressed to one side.  I just removed the brochure link and that seemed to mess everything up.  Can you help me fix this????
+2) “Stay connected” on the main page.       
+3) Hide Leasing Tab","internal"
+"imran@w3isystems.com","300 South Tyron","0.30","Imran","Ahmed","admin","","2026-01-29 2026-01-29T06:39:42.000Z","2026-01-29 2026-01-29T06:56:55.275Z","When I scroll to the bottom, where it says “Building” “Neighborhood” “Amenities” “Brochure”, is there any way to remove that “Brochure” link?
+Under “leasing / building details” can we remove Joe Franco’s contact information and only have the floor plan graphics?","internal"
+"imran@w3isystems.com","Arkayne","1.07","Imran","Ahmed","admin","","2026-01-12 2026-01-12T07:40:21.641Z","2026-01-12 2026-01-12T08:43:54.627Z","Fixed price schema in GSC","internal"
+"imran@w3isystems.com","Avialabs","0.33","Imran","Ahmed","admin","","2026-01-13 2026-01-13T06:06:11.205Z","2026-01-13 2026-01-13T06:25:11.961Z","https://app.asana.com/1/1189641712209633/project/1189828456371287/task/1212729582296628?focus=true","internal"
+"imran@w3isystems.com","Captive8 Marketing","2.73","Imran","Ahmed","admin","","2026-01-19 2026-01-19T10:33:53.799Z","2026-01-19 2026-01-19T13:16:57.794Z","Demo 1 Captive 8","internal"
+"imran@w3isystems.com","Charlittahatch","0.82","Imran","Ahmed","admin","","2026-01-09 2026-01-09T09:24:57.655Z","2026-01-09 2026-01-09T10:13:02.963Z","https://app.asana.com/1/1189641712209633/project/1189828456371287/task/1212651327606835?focus=true
+Client has added a pop up and linked newsletter sign up. Please add same to footer incase user closes out of pop up. Could be a link ""Newsletter Sign Up"" and box pops up or text and enter email address. Whatever is easier. Thank you.","internal"
+"imran@w3isystems.com","Content Crafter","1.45","Imran","Ahmed","admin","","2026-02-17 2026-02-17T06:09:33.074Z","2026-02-17 2026-02-17T07:35:40.064Z","Theme Fix","internal"
+"imran@w3isystems.com","Cutthroat Performance","2.05","Imran","Ahmed","admin","","2026-02-11 2026-02-11T05:58:33.284Z","2026-02-11 2026-02-11T08:01:14.904Z","Category Landing pages + Year/Make/Model","internal"
+"imran@w3isystems.com","Cygnet Theatre","2.03","Imran","Ahmed","admin","","2026-02-05 2026-02-05T06:42:23.891Z","2026-02-05 2026-02-05T08:43:28.854Z","https://cygnettheatre.org/shows-calendar/
+Individual calendar on show pages","internal"
+"imran@w3isystems.com","Cygnet Theatre","1.28","Imran","Ahmed","admin","","2026-02-10 2026-02-10T05:55:27.938Z","2026-02-10 2026-02-10T07:12:26.046Z","Calendar issues continue","internal"
+"imran@w3isystems.com","Haerfest Coffee","0.90","Imran","Ahmed","admin","","2026-01-16 2026-01-16T05:45:23.510Z","2026-01-16 2026-01-16T06:38:33.827Z","https://app.asana.com/1/1189641712209633/project/1189828456371287/task/1212812423593730?focus=true","internal"
+"imran@w3isystems.com","Illicitprovisions","0.97","Imran","Ahmed","admin","","2026-01-09 2026-01-09T15:24:12.316Z","2026-01-09 2026-01-09T16:21:18.439Z","https://app.asana.com/1/1189641712209633/project/1189828456371287/task/1212483554008582?focus=true
+Client needs us to add a new field at the end of their WooCommerce Checkout page that is a check box already pre-selected with the check. ","internal"
+"imran@w3isystems.com","Illustrata","1.52","Imran","Ahmed","admin","","2026-01-30 2026-01-30T07:32:57.692Z","2026-01-30 2026-01-30T09:03:40.883Z","1) The blank field for the actual birthdate or age needs to be required, not the selection.
+2) Make all info ! red not green. Start dropdown on ""Choose"". And make sure user is not able to move to the next screen unless filled out.","internal"
+"imran@w3isystems.com","Kineo Kids","0.22","Imran","Ahmed","admin","","2026-02-05 2026-02-05T05:20:31.386Z","2026-02-05 2026-02-05T05:33:05.560Z","Please give Amanda Webb webbjoam@gmail.com access to videos and reset her password (attach new one here) Thank you","internal"
+"imran@w3isystems.com","Lozier Institute","0.50","Imran","Ahmed","admin","Susan B. Anthony","2026-01-09 2026-01-09T03:30:00.000Z","2026-01-09 2026-01-09T04:00:00.000Z","https://app.asana.com/1/1205560278530011/project/1205668157293427/task/1209372058644659?focus=true
+the pregnancy calculator tool here is being buggy: https://charlottelostg.wpengine.com/voyage/
+For some users, calendar appears partially out of sight down below the bottom of the browser.
+And clicking on ""get my date"" button is unresponsive.","internal"
+"imran@w3isystems.com","Lozier Institute","1.57","Imran","Ahmed","admin","Susan B. Anthony","2026-01-29 2026-01-29T11:34:09.173Z","2026-01-29 2026-01-29T13:08:04.940Z","1) Tooltips are currently showing up in 3 different ways. Please ensure that wherever a tooltip is, it always appears the same font size, color, weight (the first screenshot below is the way we want it to appear).
+2) At the bottom of VOL pages, please change ""See Full Bibliography"" to ""Learn more about Gestational Age"" And ensure link is: /voyage/gestational-age/
+3) please use icon for LMP of calendar with no blood
+change headline to ""See Where Your Baby is on the Voyage""
+change description text to ""Select either your last period date or due date below to learn more about where you baby is on the voyage.""
+change ""Get My Date"" button text to ""Submit""
+Clicking ""get my date"" button redirects user to live CLI website. It should be redirecting to the appropriate page on the staging site.
+4) Passing due date to HubSpot","internal"
+"imran@w3isystems.com","Manna Food Bank","1.10","Imran","Ahmed","admin","","2026-01-21 2026-01-21T07:39:58.451Z","2026-01-21 2026-01-21T08:45:51.851Z","Post and Recalls Imported","internal"
+"imran@w3isystems.com","Manna Food Bank","0.28","Imran","Ahmed","admin","","2026-01-21 2026-01-21T07:17:02.033Z","2026-01-21 2026-01-21T07:33:13.749Z","Manna Donation Link","internal"
+"imran@w3isystems.com","Manna Food Bank","0.45","Imran","Ahmed","admin","","2026-01-31 2026-01-31T13:51:47.865Z","2026-01-31 2026-01-31T14:18:31.549Z","on mobile view, it looks like the Food Finder is defaulting to the list view. Can it default to the map view?  Hoping for this change to occur on all pages that use the Food Finder: Home Page, Find Food, and Mobile Markets. ","internal"
+"imran@w3isystems.com","Miscellaneous","0.12","Imran","Ahmed","admin","","2026-01-14 2026-01-14T06:05:06.634Z","2026-01-14 2026-01-14T06:11:39.035Z","https://app.asana.com/1/1189641712209633/project/1189828456371287/task/1212766773770225?focus=true","internal"
+"imran@w3isystems.com","Miscellaneous","0.65","Imran","Ahmed","admin","","2026-01-15 2026-01-15T12:26:26.244Z","2026-01-15 2026-01-15T13:05:22.379Z","Set up as is on CamLife, trianglelifenc.com, discoveryatperimeter.com, durhamid.com","internal"
+"imran@w3isystems.com","Miscellaneous","0.87","Imran","Ahmed","admin","","2026-01-19 2026-01-19T06:00:39.637Z","2026-01-19 2026-01-19T06:52:18.258Z","1) Please add Rank Math so the client can add more as they do on CamLife site
+1) Change Emily Pearce’s title to Senior Consultant in the About section.
+2) Add three logos to the Client Partners section https://vandeverbatten.com/services: Gaston Community Foundation, Foundation for the Charlotte Jewish Community, and SouthPark Community Partners.","internal"
+"imran@w3isystems.com","Miscellaneous","1.30","Imran","Ahmed","admin","","2026-02-18 2026-02-18T07:10:36.100Z","2026-02-18 2026-02-18T08:28:19.143Z","1) Fixed the site, the Canvas theme is discontinued and php8.2 do not support some old php function, so I have update the theme code. Also, migrated to WPE https://jimlukes.wpenginepowered.com/, please update DNS and update primary domain.","internal"
+"imran@w3isystems.com","Ortho Carolina Research","1.60","Imran","Ahmed","admin","","2026-01-15 2026-01-15T10:39:09.763Z","2026-01-15 2026-01-15T12:14:38.605Z","Please add basic content to Yoast
+Optimize photos
+Submit page to Google Search Console
+Anything else that may help!","internal"
+"imran@w3isystems.com","Presbyterian Psychological Services","0.52","Imran","Ahmed","admin","","2026-01-26 2026-01-26T07:46:16.355Z","2026-01-26 2026-01-26T08:17:05.394Z","Add simple ""JOIN OUR MAILING LIST"" in footer with only email collection.","internal"
+"imran@w3isystems.com","Queen Hemp Co","1.68","Imran","Ahmed","admin","","2026-01-23 2026-01-23T14:24:35.648Z","2026-01-23 2026-01-23T16:05:26.323Z","Queenhemp - Quickbook Setup","internal"
+"imran@w3isystems.com","Queen Hemp Co","1.15","Imran","Ahmed","admin","","2026-01-30 2026-01-30T14:28:10.353Z","2026-01-30 2026-01-30T15:36:24.241Z"," 1) Quickbook Sync Fixed","internal"
+"imran@w3isystems.com","Queen Hemp Co","1.87","Imran","Ahmed","admin","","2026-02-02 2026-02-02T06:17:04.549Z","2026-02-02 2026-02-02T08:08:09.007Z","Drawing Map fixes","internal"
+"imran@w3isystems.com","Queen Hemp Co","0.53","Imran","Ahmed","admin","","2026-02-05 2026-02-05T11:10:53.922Z","2026-02-05 2026-02-05T11:42:45.828Z","February 2026 coupons","internal"
+"imran@w3isystems.com","Queen Hemp Co","0.35","Imran","Ahmed","admin","","2026-02-10 2026-02-10T04:47:45.922Z","2026-02-10 2026-02-10T05:08:38.950Z","Numerous fake/failed orders please check","internal"
+"imran@w3isystems.com","Queen Hemp Co","0.20","Imran","Ahmed","admin","","2026-02-11 2026-02-11T10:40:10.872Z","2026-02-11 2026-02-11T10:51:19.617Z","reCaptcha added to checkout page","internal"
+"imran@w3isystems.com","Rebic","0.25","Imran","Ahmed","admin","","2026-01-15 2026-01-15T13:51:14.711Z","2026-01-15 2026-01-15T14:05:45.963Z","Please remove mandi@hiddenjemmarketing.com from all form notifications","internal"
+"imran@w3isystems.com","Redwood Life","3.25","Imran","Ahmed","admin","","2026-02-11 2026-02-11T11:46:05.431Z","2026-02-11 2026-02-11T15:00:18.050Z","Started working Redwood Life","internal"
+"imran@w3isystems.com","Redwood Life","3.82","Imran","Ahmed","admin","","2026-02-12 2026-02-12T09:35:35.769Z","2026-02-12 2026-02-12T13:23:43.485Z","Continued development","internal"
+"imran@w3isystems.com","SALT","3.63","Imran","Ahmed","admin","","2026-01-21 2026-01-21T15:18:45.472Z","2026-01-21 2026-01-21T18:56:45.067Z","Finished with dynamic, desktop","internal"
+"imran@w3isystems.com","SALT","1.62","Imran","Ahmed","admin","","2026-01-21 2026-01-21T05:27:15.384Z","2026-01-21 2026-01-21T07:03:26.859Z","Theme Setup + ACF Setup and Fields Creation","internal"
+"imran@w3isystems.com","SALT","0.45","Imran","Ahmed","admin","","2026-01-22 2026-01-22T16:16:20.824Z","2026-01-22 2026-01-22T16:43:16.997Z","Donation Setup","internal"
+"imran@w3isystems.com","SALT","3.05","Imran","Ahmed","admin","","2026-01-22 2026-01-22T12:00:57.283Z","2026-01-22 2026-01-22T15:03:07.254Z","Finished Dynamic","internal"
+"imran@w3isystems.com","SALT","3.38","Imran","Ahmed","admin","","2026-01-22 2026-01-22T06:54:28.511Z","2026-01-22 2026-01-22T10:17:04.609Z","Our Mission HTML Finished","internal"
+"imran@w3isystems.com","SALT","0.25","Imran","Ahmed","admin","","2026-01-26 2026-01-26T06:52:38.729Z","2026-01-26 2026-01-26T07:06:51.314Z","SMTP FORM Setup","internal"
+"imran@w3isystems.com","SALT","0.33","Imran","Ahmed","admin","","2026-02-02 2026-02-02T12:34:11.368Z","2026-02-02 2026-02-02T12:53:26.381Z","https://app.asana.com/1/1189641712209633/project/1189828456371287/task/1213075305699322?focus=true","internal"
+"imran@w3isystems.com","SALT","0.27","Imran","Ahmed","admin","","2026-02-06 2026-02-06T05:51:36.385Z","2026-02-06 2026-02-06T06:07:08.019Z","Content Fixes","internal"
+"imran@w3isystems.com","SALT","0.48","Imran","Ahmed","admin","","2026-02-10 2026-02-10T08:15:04.282Z","2026-02-10 2026-02-10T08:43:36.277Z","SMTP Connected with Microsoft","internal"
+"imran@w3isystems.com","SALT","0.65","Imran","Ahmed","admin","","2026-02-12 2026-02-12T15:53:18.729Z","2026-02-12 2026-02-12T16:31:35.268Z","1) Mailchimp GF setup 2) M360 Reconnect","internal"
+"imran@w3isystems.com","SBA Pro-Life","1.57","Imran","Ahmed","admin","Susan B. Anthony","2026-01-09 2026-01-09T13:49:50.919Z","2026-01-09 2026-01-09T15:23:40.676Z","Current/Former toggle added in the admin","internal"
+"imran@w3isystems.com","SBA Pro-Life","0.05","Imran","Ahmed","admin","Susan B. Anthony","2026-01-09 2026-01-09T08:27:55.424Z","2026-01-09 2026-01-09T08:30:22.983Z","Testing","internal"
+"imran@w3isystems.com","SBA Pro-Life","2.17","Imran","Ahmed","admin","Susan B. Anthony","2026-01-13 2026-01-13T16:06:30.213Z","2026-01-13 2026-01-13T18:15:49.911Z","Posts Migration finish","internal"
+"imran@w3isystems.com","SBA Pro-Life","4.70","Imran","Ahmed","admin","Susan B. Anthony","2026-01-13 2026-01-13T10:25:09.961Z","2026-01-13 2026-01-13T15:07:04.653Z","Importing Data News Finished","internal"
+"imran@w3isystems.com","SBA Pro-Life","1.95","Imran","Ahmed","admin","Susan B. Anthony","2026-01-13 2026-01-13T07:04:44.814Z","2026-01-13 2026-01-13T09:01:32.041Z","Created PRD and DEV /uploads backup, copied zip to DEV, checked all the files in the backup","internal"
+"imran@w3isystems.com","SBA Pro-Life","0.87","Imran","Ahmed","admin","Susan B. Anthony","2026-01-13 2026-01-13T05:13:43.861Z","2026-01-13 2026-01-13T06:05:41.096Z","https://app.asana.com/1/1205560278530011/project/1205668157293427/task/1212738669767075?focus=true
+Please add styles for this - see example of what it currently looks like: https://sbaprolifedev.wpenginepowered.com/voter-contact-program-2","internal"
+"imran@w3isystems.com","SBA Pro-Life","3.32","Imran","Ahmed","admin","Susan B. Anthony","2026-01-14 2026-01-14T12:01:33.302Z","2026-01-14 2026-01-14T15:19:39.603Z","Galleries added + QA","internal"
+"imran@w3isystems.com","SBA Pro-Life","0.82","Imran","Ahmed","admin","Susan B. Anthony","2026-01-14 2026-01-14T08:30:36.102Z","2026-01-14 2026-01-14T09:19:29.859Z","Fixed Podcast and Pro-Life-Videos","internal"
+"imran@w3isystems.com","SBA Pro-Life","0.33","Imran","Ahmed","admin","Susan B. Anthony","2026-01-14 2026-01-14T07:56:58.422Z","2026-01-14 2026-01-14T08:16:02.791Z","https://app.asana.com/1/1205560278530011/project/1205668157293427/task/1212774784177448?focus=true","internal"
+"imran@w3isystems.com","SBA Pro-Life","0.77","Imran","Ahmed","admin","Susan B. Anthony","2026-01-15 2026-01-15T08:18:01.895Z","2026-01-15 2026-01-15T09:04:00.200Z","Redirect Fix + Suzy Blog Fix","internal"
+"imran@w3isystems.com","SBA Pro-Life","1.85","Imran","Ahmed","admin","Susan B. Anthony","2026-01-15 2026-01-15T05:49:46.189Z","2026-01-15 2026-01-15T07:39:47.314Z","Feedback before launch","internal"
+"imran@w3isystems.com","SBA Pro-Life","1.30","Imran","Ahmed","admin","Susan B. Anthony","2026-01-16 2026-01-16T07:06:32.731Z","2026-01-16 2026-01-16T08:23:56.899Z","1) Please add a ""No Rating"" option to the dropdown for ""SBA Rating"" field for members This is the dropdown that contains A+, A, etc. If ""No Rating"" is selected, please hide the rating circle on the member's page
+2) this page is pulling in candidates even if they're in draft. Please ensure the template only pulls published candidate CPT posts.
+3) New redirects were created. However old redirects from Redirection plugin on old website have not been imported. Please import these.","internal"
+"imran@w3isystems.com","SBA Pro-Life","3.15","Imran","Ahmed","admin","Susan B. Anthony","2026-01-21 2026-01-21T10:48:11.943Z","2026-01-21 2026-01-21T13:57:09.960Z","1) Scorecard - Activity pages - tables empty
+2) Scorecard pages metadata
+3) Scorecard ""unknown"" item in party dropdown
+4) Scorecard - Hide empty tables
+5) Link Scorecard child header image back to main Scorecard page
+6) Filter/search tools on table for individual vote/action pages","internal"
+"imran@w3isystems.com","SBA Pro-Life","3.12","Imran","Ahmed","admin","Susan B. Anthony","2026-01-23 2026-01-23T06:06:26.837Z","2026-01-23 2026-01-23T09:12:40.575Z","Working on Asana Feedback - (Break)","internal"
+"imran@w3isystems.com","SBA Pro-Life","2.88","Imran","Ahmed","admin","Susan B. Anthony","2026-01-27 2026-01-27T06:29:24.742Z","2026-01-27 2026-01-27T09:21:45.785Z","1) Please add password-protection to the old website: https://sbaprolife2025.wpenginepowered.com/ The same way you did for CLI staging site: https://charlottelostg.wpengine.com/
+2) See screen recording - needs CSS fix to allow user to see bottom of content in each menu. Thanks.
+3) Support said Google Analytics was configured, however it was not. I have installed Google's Site Kit plugin and connected to GA. Please remove this old GA script that contains UA-17677099-1
+4) On mobile, please add colored (red/blue/grey) border to photo: https://sbaprolife.org/senator/angela-d-alsobrooks
+5) 1. On Votes page and Activities page, add column to the left of current column for date Heading: Date Content: e.g. 1/26/26 2. On Individual Vote/Action pages, e.g. https://sbaprolife.org/vote/694026c0087e06da4829bd7a, immediately below date, add: SBA position: Supported/Opposed
+6) off-white background color option doesn't work heading weight is 800px - should be normal to be consistent with other h4","internal"
+"imran@w3isystems.com","SBA Pro-Life","1.02","Imran","Ahmed","admin","Susan B. Anthony","2026-01-29 2026-01-29T07:59:23.183Z","2026-01-29 2026-01-29T09:00:03.682Z","Polling page accordion issue fixed","internal"
+"imran@w3isystems.com","SBA Pro-Life","1.00","Imran","Ahmed","admin","Susan B. Anthony","2026-01-30 2026-01-30T09:56:20.605Z","2026-01-30 2026-01-30T10:55:55.208Z","Added Fallback CTA","internal"
+"imran@w3isystems.com","SBA Pro-Life","0.45","Imran","Ahmed","admin","Susan B. Anthony","2026-02-03 2026-02-03T07:37:19.779Z","2026-02-03 2026-02-03T08:03:28.215Z","https://app.asana.com/1/1205560278530011/project/1205668157293427/task/1213006107394015?focus=true
+https://app.asana.com/1/1205560278530011/project/1205668157293427/task/1213006107394018?focus=true","internal"
+"imran@w3isystems.com","SBA Pro-Life","1.37","Imran","Ahmed","admin","Susan B. Anthony","2026-02-03 2026-02-03T06:01:26.239Z","2026-02-03 2026-02-03T07:22:59.061Z","News SIngle CTA's fallback style","internal"
+"imran@w3isystems.com","SBA Pro-Life","0.70","Imran","Ahmed","admin","Susan B. Anthony","2026-02-04 2026-02-04T07:51:00.604Z","2026-02-04 2026-02-04T08:32:51.191Z","SBA Live - Migrated News CTA and Fallback CTA's","internal"
+"imran@w3isystems.com","SBA Pro-Life","3.12","Imran","Ahmed","admin","Susan B. Anthony","2026-02-05 2026-02-05T11:45:16.268Z","2026-02-05 2026-02-05T14:51:41.750Z","1) layout needed on staff pages
+2) DO Server setup","internal"
+"imran@w3isystems.com","SBA Pro-Life","0.97","Imran","Ahmed","admin","Susan B. Anthony","2026-02-06 2026-02-06T08:02:46.872Z","2026-02-06 2026-02-06T09:00:20.582Z","1) donate megamenu
+2) On mobile, the top level menu cannot scroll at all.","internal"
+"imran@w3isystems.com","SBA Pro-Life","4.50","Imran","Ahmed","admin","Susan B. Anthony","2026-02-06 2026-02-06T03:30:00.000Z","2026-02-06 2026-02-06T08:00:00.000Z","SBA Scorecard 2FA Integration","internal"
+"imran@w3isystems.com","SBA Pro-Life","2.68","Imran","Ahmed","admin","Susan B. Anthony","2026-02-10 2026-02-10T09:20:37.918Z","2026-02-10 2026-02-10T12:00:41.428Z","1) New Admin panel live
+2) Scorecard ""miss vote"" and ""present"" added
+3) New CTA shortcode created","internal"
+"imran@w3isystems.com","SBA Pro-Life","0.82","Imran","Ahmed","admin","Susan B. Anthony","2026-02-11 2026-02-11T08:38:39.288Z","2026-02-11 2026-02-11T09:27:33.973Z","Migrated new shortcode to production","internal"
+"imran@w3isystems.com","SBA Pro-Life","3.37","Imran","Ahmed","admin","Susan B. Anthony","2026-02-12 2026-02-12T16:31:50.845Z","2026-02-12 2026-02-12T19:53:13.950Z","Scorecard Vote Miss, Present data added with updated frontend and Admin logic","internal"
+"imran@w3isystems.com","SBA Pro-Life","0.85","Imran","Ahmed","admin","Susan B. Anthony","2026-02-12 2026-02-12T14:19:59.138Z","2026-02-12 2026-02-12T15:10:14.565Z","SBA Mobile Menu Fix","internal"
+"imran@w3isystems.com","SBA Pro-Life","3.52","Imran","Ahmed","admin","Susan B. Anthony","2026-02-13 2026-02-13T06:14:12.246Z","2026-02-13 2026-02-13T09:44:44.487Z","Scorecard link to old/new profile","internal"
+"imran@w3isystems.com","SBA Pro-Life","2.67","Imran","Ahmed","admin","Susan B. Anthony","2026-02-16 2026-02-16T16:24:43.042Z","2026-02-16 2026-02-16T19:03:48.169Z","1) Former toggle rework
+2) Fixed Activities for Members","internal"
+"imran@w3isystems.com","SBA Pro-Life","1.28","Imran","Ahmed","admin","Susan B. Anthony","2026-02-16 2026-02-16T06:03:00.526Z","2026-02-16 2026-02-16T07:19:29.111Z","1) Individual votes yeah-nay sbapostion logic fix
+2) Former toggle rework","internal"
+"imran@w3isystems.com","Solida Financial","0.23","Imran","Ahmed","admin","","2026-02-03 2026-02-03T05:36:27.883Z","2026-02-03 2026-02-03T05:49:32.898Z","Added GA User","internal"
+"imran@w3isystems.com","South America Mission","0.58","Imran","Ahmed","admin","","2026-02-05 2026-02-05T05:33:14.807Z","2026-02-05 2026-02-05T06:07:55.457Z","1) Please remove prayers from search
+2) In prayer CTA, remove name field
+3) SAM will be moving away from posting prayers as they currently do. Can we export the nearly 3k that are currently on the site for their record? https://southamericamission.org/wp-admin/edit.php?post_type=prayers","internal"
+"imran@w3isystems.com","South America Mission","0.53","Imran","Ahmed","admin","","2026-02-11 2026-02-11T11:04:17.222Z","2026-02-11 2026-02-11T11:35:19.756Z","1) Removed extra Typekit
+2) Checked mobile loading issue","internal"
+"imran@w3isystems.com","South America Mission","2.02","Imran","Ahmed","admin","","2026-02-18 2026-02-18T08:30:30.490Z","2026-02-18 2026-02-18T10:31:13.097Z","1) https://southamericamission.org/child-medical-summary/
+2) https://southamericamission.org/intern-medical-summary/
+3) https://southamericamission.org/medical-summary/
+4) https://southamericamission.org/two-way-medical-release/
+5) https://southamericamission.org/peru-100/
+6) New work page created as draft","internal"
+"imran@w3isystems.com","Sun Stoppers","1.45","Imran","Ahmed","admin","","2026-01-14 2026-01-14T06:18:33.489Z","2026-01-14 2026-01-14T07:45:16.661Z","https://app.asana.com/1/1189641712209633/project/1189828456371287/task/1212766773770208?focus=true","internal"
+"imran@w3isystems.com","Sun Stoppers","0.45","Imran","Ahmed","admin","","2026-02-02 2026-02-02T09:29:37.879Z","2026-02-02 2026-02-02T09:56:19.199Z","Store locator map mile fix","internal"
+"imran@w3isystems.com","Sun Stoppers","5.25","Imran","Ahmed","admin","","2026-02-17 2026-02-17T14:06:06.912Z","2026-02-17 2026-02-17T19:20:22.852Z","1) added missing location from live site (10 locations)
+2) Sort/Order Location by live site","internal"
+"imran@w3isystems.com","Sun Stoppers","4.18","Imran","Ahmed","admin","","2026-02-17 2026-02-17T08:03:51.634Z","2026-02-17 2026-02-17T12:13:58.933Z","1) List out the missing store locations
+2) Rename location based on live site
+3) Added missing featured image
+4) added missing location from live site (WIP)","internal"
+"imran@w3isystems.com","Sun Stoppers","2.45","Imran","Ahmed","admin","","2026-02-18 2026-02-18T11:15:20.500Z","2026-02-18 2026-02-18T13:41:53.483Z","matching existing old locations page content to adapt to the new layout","internal"
+"imran@w3isystems.com","SunCoast","0.28","Imran","Ahmed","admin","","2026-01-26 2026-01-26T07:28:16.160Z","2026-01-26 2026-01-26T07:44:51.747Z","https://app.asana.com/1/1189641712209633/project/1189828456371287/task/1212940351659223?focus=true","internal"
+"imran@w3isystems.com","Susan B. Anthony","2.07","Imran","Ahmed","admin","","2026-01-28 2026-01-28T14:06:43.748Z","2026-01-28 2026-01-28T16:09:59.561Z","1) Donate CTA > modal window - mike@godigitalalchemy.com this would be a good thing for us to keep working on - but on a new staging site - we don't want to do this work on the production site. It's not urgent. But if it's doable, we should do it.
+2) CTAs at bottom of news posts","internal"
+"imran@w3isystems.com","Susan B. Anthony","3.75","Imran","Ahmed","admin","","2026-01-28 2026-01-28T09:15:42.460Z","2026-01-28 2026-01-28T13:00:08.988Z","1) This vote was missing in the backend, so our team created a new vote: https://demos.godigitalalchemy.com/scorecard/admin/edit-vote/6977e531f9801a3197059f69 However it is appearing at the end of the list on member pages instead of being in the correct position in the list based on date: https://sbaprolife.org/representative/henry-cuellar Can you please correct this? And please let me know why this happened.
+2) a)Remove top border from this module - or if it's useful in some locations, add a toggle in the module. As you can see, it doesn't work in the location (bottom of page) here: https://sbaprolifedev.wpenginepowered.com/issues/abortion-drugs
+	b) Move author/date up immediately under headline, but keep boxes equal height
+3) Give each accordion a section ID and if user goes to https://sbaprolifedev.wpenginepowered.com/polling#late-abortions, page should scroll to appropriate accordion and open it
+4) Three column boxes module - doesn't have background color option
+5) On mobile only: Change red ""Pregnant?"" button so that it is no longer sticky on the right side of the screen. Instead, change it to blue, and move it to the left of the red ""Donate"" button at the top. Please keep everything else about the side panel menu the same.
+6) Can we inject the section ID value into the name of a layout item when it is compressed? This would make it much easier to navigate a page backend when layouts are compressed. So, instead of: Two Column Content It would look like: Two Column Content - SECTION_VALUE (And please ensure this change doesn't disappear when ACF is updated)","internal"
+"imran@w3isystems.com","Tandem Spirituality","3.08","Imran","Ahmed","admin","","2026-01-20 2026-01-20T14:25:15.771Z","2026-01-20 2026-01-20T17:29:19.097Z","Continued working on Header and Homepage","internal"
+"imran@w3isystems.com","Tandem Spirituality","3.52","Imran","Ahmed","admin","","2026-01-20 2026-01-20T07:27:47.619Z","2026-01-20 2026-01-20T10:58:23.331Z","WP Setup and Working on Homepage","internal"
+"imran@w3isystems.com","TMA","0.28","Imran","Ahmed","admin","","2026-01-26 2026-01-26T07:08:42.206Z","2026-01-26 2026-01-26T07:25:18.100Z","1) On TMA1.com they are using revolution slider.  The video shows on all screen sizes except the smallest on mobile.  I know it's possible for rev slider to show video on mobile but I can't figure out how to do this in the settings.  Client needs video to play on mobile home hero rather than just show the current fall back image.  
+2) On mobile, on the home page, the service boxes - After the 3rd service box the spacing below it is larger than the rest.  This is because those boxes are grouped in 3 and the group has spacing to make them appear correctly on desktop but on mobile it creates extra space.  Can you please try to correct that?","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.17","Saikat","Chhatui","employee","","2026-01-20 2026-01-20T15:45:59.994Z","2026-01-20 2026-01-20T15:55:59.186Z","footer markup done","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.10","Saikat","Chhatui","employee","","2026-01-20 2026-01-20T13:31:32.631Z","2026-01-20 2026-01-20T15:36:58.656Z","header markup done working on footer markup","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.38","Saikat","Chhatui","employee","","2026-01-20 2026-01-20T11:48:23.156Z","2026-01-20 2026-01-20T13:10:38.914Z","working on header markup","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.80","Saikat","Chhatui","employee","","2026-01-20 2026-01-20T10:11:00.622Z","2026-01-20 2026-01-20T10:58:24.086Z","working on header","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.12","Saikat","Chhatui","employee","","2026-01-21 2026-01-21T04:52:29.100Z","2026-01-21 2026-01-21T05:59:20.171Z","footer to cta and footer social icon markup done","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.53","Saikat","Chhatui","employee","","2026-01-21 2026-01-21T03:44:20.540Z","2026-01-21 2026-01-21T04:15:38.114Z","working on footer top cta","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.22","Saikat","Chhatui","employee","","2026-01-26 2026-01-26T05:12:45.628Z","2026-01-26 2026-01-26T06:25:17.458Z","working on landing page banner","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.60","Saikat","Chhatui","employee","","2026-01-27 2026-01-27T16:44:15.051Z","2026-01-27 2026-01-27T17:20:07.114Z","working on landing page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.80","Saikat","Chhatui","employee","","2026-01-27 2026-01-27T14:37:25.295Z","2026-01-27 2026-01-27T16:25:19.163Z","working on cta animation","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.72","Saikat","Chhatui","employee","","2026-01-28 2026-01-28T09:26:11.163Z","2026-01-28 2026-01-28T12:08:20.901Z","working on landing page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.05","Saikat","Chhatui","employee","","2026-01-29 2026-01-29T16:16:25.281Z","2026-01-29 2026-01-29T18:19:21.027Z","landing page working","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.27","Saikat","Chhatui","employee","","2026-01-29 2026-01-29T15:40:29.874Z","2026-01-29 2026-01-29T15:55:55.008Z","working","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.08","Saikat","Chhatui","employee","","2026-01-29 2026-01-29T12:55:42.141Z","2026-01-29 2026-01-29T15:00:05.986Z","working on homepage","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.05","Saikat","Chhatui","employee","","2026-01-29 2026-01-29T10:13:26.758Z","2026-01-29 2026-01-29T12:16:20.620Z","working on landing page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.83","Saikat","Chhatui","employee","","2026-01-30 2026-01-30T15:26:00.127Z","2026-01-30 2026-01-30T16:15:29.978Z","working on testimonials","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.12","Saikat","Chhatui","employee","","2026-01-30 2026-01-30T13:55:20.583Z","2026-01-30 2026-01-30T15:01:35.849Z","working on landing page bottom CTA","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.00","Saikat","Chhatui","employee","","2026-01-30 2026-01-30T11:18:54.419Z","2026-01-30 2026-01-30T13:18:53.886Z","working on landing page bottom gallery","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.68","Saikat","Chhatui","employee","","2026-01-30 2026-01-30T09:21:42.644Z","2026-01-30 2026-01-30T11:02:27.860Z","working on testimonials","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.50","Saikat","Chhatui","employee","","2026-01-30 2026-01-30T04:43:57.982Z","2026-01-30 2026-01-30T06:13:57.014Z","Working On Cards","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.00","Saikat","Chhatui","employee","","2026-01-31 2026-01-31T17:38:48.758Z","2026-01-31 2026-01-31T18:38:19.550Z","working on home page dynamic","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.05","Saikat","Chhatui","employee","","2026-01-31 2026-01-31T13:16:15.537Z","2026-01-31 2026-01-31T15:18:29.602Z","working on home page dynamic","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.33","Saikat","Chhatui","employee","","2026-01-31 2026-01-31T10:00:31.704Z","2026-01-31 2026-01-31T12:19:55.102Z","working on home page dynamic","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.07","Saikat","Chhatui","employee","","2026-01-31 2026-01-31T07:12:29.209Z","2026-01-31 2026-01-31T08:16:07.034Z","working on home page dynamic","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.80","Saikat","Chhatui","employee","","2026-02-02 2026-02-02T17:03:27.561Z","2026-02-02 2026-02-02T18:51:11.684Z","working on get a free quote form","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.65","Saikat","Chhatui","employee","","2026-02-02 2026-02-02T16:00:45.937Z","2026-02-02 2026-02-02T16:38:53.095Z","working on get a free quote form","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.38","Saikat","Chhatui","employee","","2026-02-02 2026-02-02T13:51:58.948Z","2026-02-02 2026-02-02T15:14:23.378Z","working on get a free quote form","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","4.27","Saikat","Chhatui","employee","","2026-02-02 2026-02-02T09:29:41.229Z","2026-02-02 2026-02-02T13:45:14.703Z","completed landing page dynamic and working on other page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.28","Saikat","Chhatui","employee","","2026-02-03 2026-02-03T17:12:41.016Z","2026-02-03 2026-02-03T18:29:37.677Z","about us page working","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.83","Saikat","Chhatui","employee","","2026-02-03 2026-02-03T16:10:36.404Z","2026-02-03 2026-02-03T16:59:44.787Z","working on about us page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.85","Saikat","Chhatui","employee","","2026-02-03 2026-02-03T12:34:08.131Z","2026-02-03 2026-02-03T15:25:06.909Z","working on get a free quote form","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.17","Saikat","Chhatui","employee","","2026-02-04 2026-02-04T13:29:43.371Z","2026-02-04 2026-02-04T15:39:19.425Z","Aabout Us page done","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","3.20","Saikat","Chhatui","employee","","2026-02-04 2026-02-04T09:27:50.105Z","2026-02-04 2026-02-04T12:39:42.094Z","working on about us page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.17","Saikat","Chhatui","employee","","2026-02-04 2026-02-04T06:24:21.834Z","2026-02-04 2026-02-04T07:33:23.467Z","working on about us page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.33","Saikat","Chhatui","employee","","2026-02-04 2026-02-04T05:26:31.138Z","2026-02-04 2026-02-04T05:45:40.101Z","about us page working","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.80","Saikat","Chhatui","employee","","2026-02-05 2026-02-05T14:12:13.001Z","2026-02-05 2026-02-05T14:59:52.992Z","working on Careers page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","4.05","Saikat","Chhatui","employee","","2026-02-05 2026-02-05T09:45:40.982Z","2026-02-05 2026-02-05T13:47:41.222Z","working on Careers page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.87","Saikat","Chhatui","employee","","2026-02-05 2026-02-05T07:28:13.786Z","2026-02-05 2026-02-05T08:20:11.592Z","working our services","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.08","Saikat","Chhatui","employee","","2026-02-05 2026-02-05T05:46:10.275Z","2026-02-05 2026-02-05T06:50:12.862Z","working on our services","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","3.45","Saikat","Chhatui","employee","","2026-02-06 2026-02-06T10:54:17.043Z","2026-02-06 2026-02-06T14:20:50.375Z","caeeers dynamic done blog page working","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.03","Saikat","Chhatui","employee","","2026-02-06 2026-02-06T05:40:25.873Z","2026-02-06 2026-02-06T06:41:40.755Z","careers page done","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","3.02","Saikat","Chhatui","employee","","2026-02-10 2026-02-10T15:48:52.273Z","2026-02-10 2026-02-10T18:49:28.667Z","working on our projects","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.77","Saikat","Chhatui","employee","","2026-02-10 2026-02-10T05:56:05.997Z","2026-02-10 2026-02-10T06:41:33.594Z","Blog detail page markup and dynamic done","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.08","Saikat","Chhatui","employee","","2026-02-10 2026-02-10T04:38:39.476Z","2026-02-10 2026-02-10T05:43:20.624Z","blog page markup done ","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.95","Saikat","Chhatui","employee","","2026-02-11 2026-02-11T11:27:57.555Z","2026-02-11 2026-02-11T12:24:49.329Z","project markup with dynamic done working on other page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.18","Saikat","Chhatui","employee","","2026-02-11 2026-02-11T07:18:51.986Z","2026-02-11 2026-02-11T08:29:18.768Z","project page working","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.53","Saikat","Chhatui","employee","","2026-02-11 2026-02-11T05:11:26.985Z","2026-02-11 2026-02-11T06:43:06.124Z","projects working on markup","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.45","Saikat","Chhatui","employee","","2026-02-12 2026-02-12T14:42:11.723Z","2026-02-12 2026-02-12T15:08:23.877Z","working on services landing page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.30","Saikat","Chhatui","employee","","2026-02-12 2026-02-12T13:05:59.524Z","2026-02-12 2026-02-12T14:23:23.981Z","working on services landing page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.45","Saikat","Chhatui","employee","","2026-02-12 2026-02-12T08:55:32.365Z","2026-02-12 2026-02-12T11:22:18.082Z","working on services landing page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.77","Saikat","Chhatui","employee","","2026-02-12 2026-02-12T04:00:30.387Z","2026-02-12 2026-02-12T06:45:59.629Z","working on services landing page","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","3.60","Saikat","Chhatui","employee","","2026-02-13 2026-02-13T16:14:00.378Z","2026-02-13 2026-02-13T19:49:58.190Z","service page markup with dynamic done","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.55","Saikat","Chhatui","employee","","2026-02-13 2026-02-13T15:14:52.706Z","2026-02-13 2026-02-13T15:47:02.066Z","working on service package module","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.17","Saikat","Chhatui","employee","","2026-02-13 2026-02-13T12:37:59.898Z","2026-02-13 2026-02-13T14:47:30.335Z","working on service package module","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.78","Saikat","Chhatui","employee","","2026-02-13 2026-02-13T07:03:21.213Z","2026-02-13 2026-02-13T07:49:41.530Z","working on services landing latest projects","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.60","Saikat","Chhatui","employee","","2026-02-13 2026-02-13T04:40:01.038Z","2026-02-13 2026-02-13T06:15:39.986Z","working on services landing testimonials done","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.02","Saikat","Chhatui","employee","","2026-02-15 2026-02-15T12:25:41.146Z","2026-02-15 2026-02-15T14:26:09.370Z","project popup added.","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.12","Saikat","Chhatui","employee","","2026-02-16 2026-02-16T17:02:14.235Z","2026-02-16 2026-02-16T19:09:03.260Z","dynamic","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.47","Saikat","Chhatui","employee","","2026-02-16 2026-02-16T13:41:21.968Z","2026-02-16 2026-02-16T14:08:32.589Z","dynamic ","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","2.02","Saikat","Chhatui","employee","","2026-02-16 2026-02-16T10:41:12.508Z","2026-02-16 2026-02-16T12:41:36.841Z","working miscellaneous module","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","0.10","Saikat","Chhatui","employee","","2026-02-16 2026-02-16T10:04:51.429Z","2026-02-16 2026-02-16T10:10:20.355Z","working miscellaneous module","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.83","Saikat","Chhatui","employee","","2026-02-16 2026-02-16T06:55:19.296Z","2026-02-16 2026-02-16T08:45:05.929Z","services CPT done and content added","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.57","Saikat","Chhatui","employee","","2026-02-16 2026-02-16T04:36:29.020Z","2026-02-16 2026-02-16T06:09:55.272Z","workin services CPT","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","3.15","Saikat","Chhatui","employee","","2026-02-17 2026-02-17T15:57:36.759Z","2026-02-17 2026-02-17T19:06:18.139Z","working on custom scrollbar","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","3.15","Saikat","Chhatui","employee","","2026-02-17 2026-02-17T11:19:57.218Z","2026-02-17 2026-02-17T14:28:41.439Z","footer dynamic done working on custom scrollbar","internal"
+"saikat.redmi4@gmail.com","Captive8 Marketing","1.60","Saikat","Chhatui","employee","","2026-02-17 2026-02-17T09:09:52.751Z","2026-02-17 2026-02-17T10:44:54.173Z","header sub-menu added","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","2.23","Saikat","Chhatui","employee","","2026-01-09 2026-01-09T11:33:06.261Z","2026-01-09 2026-01-09T13:46:09.903Z","working on landing page","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","0.13","Saikat","Chhatui","employee","","2026-01-09 2026-01-09T11:03:27.837Z","2026-01-09 2026-01-09T11:10:48.885Z","working","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","0.93","Saikat","Chhatui","employee","","2026-01-09 2026-01-09T09:55:58.997Z","2026-01-09 2026-01-09T10:51:15.446Z","Started Working","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","2.17","Saikat","Chhatui","employee","","2026-01-12 2026-01-12T12:21:33.394Z","2026-01-12 2026-01-12T14:31:03.817Z","V1 desktop markup (completed).","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","1.32","Saikat","Chhatui","employee","","2026-01-12 2026-01-12T10:31:14.322Z","2026-01-12 2026-01-12T11:50:00.547Z","working on landing page tab content","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","0.68","Saikat","Chhatui","employee","","2026-01-12 2026-01-12T09:42:41.640Z","2026-01-12 2026-01-12T10:23:04.300Z","started working tab content","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","0.20","Saikat","Chhatui","employee","","2026-01-16 2026-01-16T15:04:40.601Z","2026-01-16 2026-01-16T15:16:30.691Z","
+working on responsive","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","0.52","Saikat","Chhatui","employee","","2026-01-16 2026-01-16T13:58:57.345Z","2026-01-16 2026-01-16T14:29:25.949Z","working on responsive","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","2.03","Saikat","Chhatui","employee","","2026-01-16 2026-01-16T11:09:55.990Z","2026-01-16 2026-01-16T13:11:39.406Z","desktop dynamic done","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","1.82","Saikat","Chhatui","employee","","2026-01-16 2026-01-16T09:07:37.424Z","2026-01-16 2026-01-16T10:55:57.269Z","working","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","0.33","Saikat","Chhatui","employee","","2026-01-16 2026-01-16T07:50:22.173Z","2026-01-16 2026-01-16T08:09:31.893Z","working","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","0.23","Saikat","Chhatui","employee","","2026-01-17 2026-01-17T14:22:41.678Z","2026-01-17 2026-01-17T14:36:38.276Z","Add tan underline when on on that section ABOUT US or CONTACT US","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","1.25","Saikat","Chhatui","employee","","2026-01-17 2026-01-17T12:23:39.340Z","2026-01-17 2026-01-17T13:38:26.505Z","updated","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","2.00","Saikat","Chhatui","employee","","2026-01-17 2026-01-17T09:36:19.553Z","2026-01-17 2026-01-17T11:35:23.139Z","working ","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","0.03","Saikat","Chhatui","employee","","2026-01-17 2026-01-17T08:09:05.920Z","2026-01-17 2026-01-17T08:10:11.634Z","working","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","0.42","Saikat","Chhatui","employee","","2026-01-17 2026-01-17T07:40:24.010Z","2026-01-17 2026-01-17T08:04:32.920Z","Placement adjustments","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","0.20","Saikat","Chhatui","employee","","2026-01-17 2026-01-17T07:28:36.005Z","2026-01-17 2026-01-17T07:40:10.118Z","Replace all ""Heart Land"" with ""Heartland""","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","1.63","Saikat","Chhatui","employee","","2026-01-19 2026-01-19T05:59:46.862Z","2026-01-19 2026-01-19T07:37:25.217Z","working","internal"
+"saikat.redmi4@gmail.com","Heartland Assets Holding","0.32","Saikat","Chhatui","employee","","2026-01-20 2026-01-20T09:08:32.704Z","2026-01-20 2026-01-20T09:26:49.738Z","hover animation to underline","internal"
+"saikat.redmi4@gmail.com","Icona","0.50","Saikat","Chhatui","employee","","2026-01-12 2026-01-12T07:50:00.258Z","2026-01-12 2026-01-12T08:19:32.806Z","remove the availability on Sector A Floor 6 (yellow) and Sector B Floor 6 (burgundy)","internal"
+"saikat.redmi4@gmail.com","Icona","0.25","Saikat","Chhatui","employee","","2026-01-22 2026-01-22T10:15:09.061Z","2026-01-22 2026-01-22T10:30:03.682Z","https://iconalabs.com/availability/
+","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","0.32","Saikat","Chhatui","employee","","2026-01-09 2026-01-09T08:18:10.026Z","2026-01-09 2026-01-09T08:36:14.090Z","https://mannafoodbastg.wpenginepowered.com/heroes-of-helene-food-sourcing/ (remaining content added.)
+	https://mannafoodbastg.wpenginepowered.com/learn-about-partnership/
+	https://mannafoodbastg.wpenginepowered.com/manna-volunteer-roles/","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","1.23","Saikat","Chhatui","employee","","2026-01-13 2026-01-13T12:15:47.895Z","2026-01-13 2026-01-13T13:29:34.381Z","New page added https://mannafoodbastg.wpenginepowered.com/snap-guide/
+	https://mannafoodbastg.wpenginepowered.com/student-food-drive/
+	https://mannafoodbastg.wpenginepowered.com/table-for-three/","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","1.55","Saikat","Chhatui","employee","","2026-01-13 2026-01-13T10:24:19.750Z","2026-01-13 2026-01-13T11:56:51.077Z","new page added
+https://mannafoodbastg.wpenginepowered.com/other-fundraisers/
+	https://mannafoodbastg.wpenginepowered.com/our-community-commitment/
+	https://mannafoodbastg.wpenginepowered.com/pack-to-give-back/","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","0.60","Saikat","Chhatui","employee","","2026-01-15 2026-01-15T13:21:38.816Z","2026-01-15 2026-01-15T13:57:26.747Z","New page added : https://mannafoodbastg.wpenginepowered.com/product-recalls/","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","1.40","Saikat","Chhatui","employee","","2026-01-15 2026-01-15T11:33:18.162Z","2026-01-15 2026-01-15T12:56:23.137Z","working","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","1.95","Saikat","Chhatui","employee","","2026-01-15 2026-01-15T08:46:54.965Z","2026-01-15 2026-01-15T10:43:47.499Z","working","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","0.58","Saikat","Chhatui","employee","","2026-01-15 2026-01-15T05:13:12.471Z","2026-01-15 2026-01-15T05:47:49.848Z","New page added
+https://mannafoodbastg.wpenginepowered.com/turkey-drive/
+	https://mannafoodbastg.wpenginepowered.com/volunteer-group-opportunities/
+	https://mannafoodbastg.wpenginepowered.com/volunteers-frequently-asked-questions/","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","0.45","Saikat","Chhatui","employee","","2026-01-19 2026-01-19T12:43:48.610Z","2026-01-19 2026-01-19T13:09:56.119Z","double-check this document","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","0.30","Saikat","Chhatui","employee","","2026-01-21 2026-01-21T15:10:34.908Z","2026-01-21 2026-01-21T15:28:24.776Z","I am noticing that the slideshow seems to stop on frame 2 on most browsers. I have 3 photos loaded. Can we fix this? Also, would it be possible for there to be a dissolve from photo to photo rather than hard cut?","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","1.97","Saikat","Chhatui","employee","","2026-01-21 2026-01-21T12:27:47.274Z","2026-01-21 2026-01-21T14:24:49.223Z","Notes from client","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","2.47","Saikat","Chhatui","employee","","2026-01-21 2026-01-21T09:29:07.234Z","2026-01-21 2026-01-21T11:56:33.790Z","4.Mike, can we turn off the map in this module on both this page and the Community Markets page? I tried via the settings, but it doesn't seem to 
+	be putting it into effect. We don't want the map on this page, as it becomes confusing with the above map.    Could this display the markets for the week, in a 
+	list, or by day, view? Again, no map.  Thanks!
+	5.Please update this sitewide footer. Correct the ""FoodBanK"" to ""FoodBank"".    and then use the correct EIN ""58-1514800""
+	6.In general, sitewide, I believe these pods have some kind of opacity on them, darkening the photos. Since the text pops up with a background, 
+	can we please remove that darkening on these pods, sitewide?
+	7.Please add instagram. https://www.instagram.com/manna_foodbank
+	8.Same thing here, Mike. 25, 100, 250
+	9.please increase font 
+	10.Add link button to advocacy page 
+	11.I would like to have a subscribe option on every page. Maybe this need to be included in the site-wide footer?
+	12.Please increase font size ","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","0.98","Saikat","Chhatui","employee","","2026-01-21 2026-01-21T07:11:53.727Z","2026-01-21 2026-01-21T08:10:14.574Z","I'd like to increase this font size for both the header and subheader here
+Also increase font size here
+Mike, can you make these amounts: 25, 100, 250?
+","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","0.07","Saikat","Chhatui","employee","","2026-01-21 2026-01-21T07:06:39.356Z","2026-01-21 2026-01-21T07:10:19.824Z","Need to make sure that the URL for this subdirectory is /recalls/ rather than /manna_recalls/ ","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","0.72","Saikat","Chhatui","employee","","2026-01-22 2026-01-22T09:24:12.941Z","2026-01-22 2026-01-22T10:06:21.966Z","Remove featured image for these posts ONLY
+Donate button in homepage hero - no need for new tab
+Forms notification update","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","1.00","Saikat","Chhatui","employee","","2026-01-22 2026-01-22T07:13:57.128Z","2026-01-22 2026-01-22T08:13:34.288Z","working","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","2.02","Saikat","Chhatui","employee","","2026-01-23 2026-01-23T12:21:24.591Z","2026-01-23 2026-01-23T14:21:55.556Z","Remove featured image for these posts ONLY/ Check Forms","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","2.05","Saikat","Chhatui","employee","","2026-01-26 2026-01-26T09:25:25.901Z","2026-01-26 2026-01-26T11:28:11.474Z","done","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","1.33","Saikat","Chhatui","employee","","2026-01-26 2026-01-26T07:12:56.555Z","2026-01-26 2026-01-26T08:32:49.904Z","working ","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","0.53","Saikat","Chhatui","employee","","2026-01-27 2026-01-27T13:59:23.887Z","2026-01-27 2026-01-27T14:31:10.960Z","done","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","4.40","Saikat","Chhatui","employee","","2026-01-27 2026-01-27T09:30:58.257Z","2026-01-27 2026-01-27T13:54:27.338Z","working","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","0.63","Saikat","Chhatui","employee","","2026-01-28 2026-01-28T16:36:26.158Z","2026-01-28 2026-01-28T17:14:24.342Z","feedback Done","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","1.07","Saikat","Chhatui","employee","","2026-01-28 2026-01-28T13:59:44.119Z","2026-01-28 2026-01-28T15:03:24.810Z","working","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","1.47","Saikat","Chhatui","employee","","2026-01-28 2026-01-28T12:08:27.091Z","2026-01-28 2026-01-28T13:36:25.358Z","working on mobile feedback","internal"
+"saikat.redmi4@gmail.com","Manna Food Bank","1.23","Saikat","Chhatui","employee","","2026-01-28 2026-01-28T05:44:51.381Z","2026-01-28 2026-01-28T06:58:31.784Z","Partner Login- should open in seperate tab.
+To much spacing -accordians.
+to much spacing around CTA""s ","internal"
+"saikat.redmi4@gmail.com","Miscellaneous","0.33","Saikat","Chhatui","employee","","2026-01-29 2026-01-29T09:37:29.578Z","2026-01-29 2026-01-29T09:56:30.240Z","4th floor is leased and needs to be removed. Correct in preview, incorrect in live view.
+
+Brochure also not updating","internal"
+"saikat.redmi4@gmail.com","Miscellaneous","0.23","Saikat","Chhatui","employee","","2026-02-03 2026-02-03T09:46:38.941Z","2026-02-03 2026-02-03T10:00:09.486Z","https://vandeverbatten.com/about/
+Center team members photos","internal"
+"saikat.redmi4@gmail.com","Miscellaneous","0.12","Saikat","Chhatui","employee","","2026-02-03 2026-02-03T09:35:56.989Z","2026-02-03 2026-02-03T09:42:51.446Z","https://innovateatpalisades.com/building/palisades-iii/
+Brochure Update.","internal"
+"saikat.redmi4@gmail.com","Miscellaneous","0.22","Saikat","Chhatui","employee","","2026-02-14 2026-02-14T09:38:40.860Z","2026-02-14 2026-02-14T09:50:54.957Z","Update dougshawperdev.wpenginepowered.com with live content.
+
+Update links to purchase books.
+
+https://www.barnesandnoble.com/w/curative-culture-douglas-k-shaw/1147717338?ean=9798998678806
+
+https://www.barnesandnoble.com/w/the-rules-of-fundraising-douglas-k-shaw/1113640630?ean=9798998678868
+
+https://www.barnesandnoble.com/w/more-rules-of-fundraising-douglas-k-shaw/1125899906?ean=9798998678844
+
+https://www.barnesandnoble.com/w/the-six-essentials-of-rapidly-growing-nonprofits-douglas-k-shaw/1136384219?ean=9798998678851","internal"
+"saikat.redmi4@gmail.com","Neighborhoodhope","0.33","Saikat","Chhatui","employee","","2026-01-13 2026-01-13T15:18:28.132Z","2026-01-13 2026-01-13T15:37:33.014Z","working","internal"
+"saikat.redmi4@gmail.com","Neighborhoodhope","0.65","Saikat","Chhatui","employee","","2026-01-13 2026-01-13T14:15:30.747Z","2026-01-13 2026-01-13T14:54:01.923Z","Working","internal"
+"saikat.redmi4@gmail.com","Neighborhoodhope","0.40","Saikat","Chhatui","employee","","2026-01-14 2026-01-14T14:15:06.474Z","2026-01-14 2026-01-14T14:38:34.946Z","working","internal"
+"saikat.redmi4@gmail.com","Neighborhoodhope","1.45","Saikat","Chhatui","employee","","2026-01-14 2026-01-14T12:28:50.921Z","2026-01-14 2026-01-14T13:55:10.840Z","Working","internal"
+"saikat.redmi4@gmail.com","Neighborhoodhope","0.62","Saikat","Chhatui","employee","","2026-01-14 2026-01-14T11:50:37.486Z","2026-01-14 2026-01-14T12:27:00.176Z","working","internal"
+"saikat.redmi4@gmail.com","Neighborhoodhope","0.28","Saikat","Chhatui","employee","","2026-01-19 2026-01-19T11:44:00.237Z","2026-01-19 2026-01-19T12:00:34.235Z","Done","internal"
+"saikat.redmi4@gmail.com","Neighborhoodhope","0.82","Saikat","Chhatui","employee","","2026-01-19 2026-01-19T10:50:20.068Z","2026-01-19 2026-01-19T11:38:30.656Z","working","internal"
+"saikat.redmi4@gmail.com","Neighborhoodhope","1.53","Saikat","Chhatui","employee","","2026-02-03 2026-02-03T10:11:11.950Z","2026-02-03 2026-02-03T11:42:33.673Z","New photos added to Dropbox (see above) - add team photos and ","internal"
+"saikat.redmi4@gmail.com","Neighborhoodhope","1.50","Saikat","Chhatui","employee","","2026-02-10 2026-02-10T12:07:19.632Z","2026-02-10 2026-02-10T13:36:56.428Z","New 2/2/2026 CHANGES: ","internal"
+"saikat.redmi4@gmail.com","Neighborhoodhope","0.27","Saikat","Chhatui","employee","","2026-02-12 2026-02-12T15:55:11.802Z","2026-02-12 2026-02-12T16:10:30.811Z","In Connect Night Page, the green triangle is overlapping the body text. Please fix","internal"
+"saikat.redmi4@gmail.com","Neighborhoodhope","0.15","Saikat","Chhatui","employee","","2026-02-12 2026-02-12T08:27:53.292Z","2026-02-12 2026-02-12T08:36:24.111Z","https://app.asana.com/1/1189641712209633/project/1189883232309462/task/1213193340263575","internal"
+"saikat.redmi4@gmail.com","Neighborhoodhope","0.75","Saikat","Chhatui","employee","","2026-02-13 2026-02-13T08:54:55.479Z","2026-02-13 2026-02-13T09:39:36.223Z","Link the Purple Donate button beside the navigation and in the navigation to same link as blue donate button. Also the yellow ""Donate Now"" button in the Donate Page.","internal"
+"saikat.redmi4@gmail.com","Neighborhoodhope","0.70","Saikat","Chhatui","employee","","2026-02-14 2026-02-14T03:56:51.271Z","2026-02-14 2026-02-14T04:38:37.198Z","Desktop: Donate Page : Please center ""Make a Donation""
+	Mobile: Home Page : Please align Our Programs and the Join the Neighborhood button to the left when in mobile version only
+	Mobile: Options Program : Please fix the spiral graphic. Maybe make it smaller when in mobile so it does not cover the face of the girl.
+	Desktop: Connect Night : Move the green graphic so that it does not cover the text in desktop version
+	Mobile: About Us  Move graphic a bit when in mobile so it does not cover text. ","internal"
+"saikat.redmi4@gmail.com","Rebic","4.22","Saikat","Chhatui","employee","","2026-01-22 2026-01-22T11:21:18.298Z","2026-01-22 2026-01-22T15:33:44.699Z","done","internal"
+"saikat.redmi4@gmail.com","Rebic","1.50","Saikat","Chhatui","employee","","2026-01-23 2026-01-23T09:50:04.351Z","2026-01-23 2026-01-23T11:19:59.304Z","done","internal"
+"saikat.redmi4@gmail.com","ReEverything","0.60","Saikat","Chhatui","employee","","2026-01-23 2026-01-23T09:00:56.863Z","2026-01-23 2026-01-23T09:36:49.071Z","feedback (working)","internal"
+"saikat.redmi4@gmail.com","SunCoast","0.38","Saikat","Chhatui","employee","","2026-02-06 2026-02-06T09:40:26.055Z","2026-02-06 2026-02-06T10:02:48.060Z","Make sure desktop and mobile menu items match","internal"
+"saikat.redmi4@gmail.com","SunCoast","0.75","Saikat","Chhatui","employee","","2026-02-06 2026-02-06T07:24:01.570Z","2026-02-06 2026-02-06T08:08:19.565Z","https://suncoastmarket.coop/home-v2/
+	Events module is missing next to News and Recipes.
+	Could we round the corners of the image in the deli section to look like the others on the site?
+	Can you move the sale sticker to the left side of the flyer in the Co-op deals section?
+	Can we turn off the “See the store” button next to the map? This was intended to link to a gallery, but they don’t have one set up yet.
+	","internal"
+"saikat.redmi4@gmail.com","SunCoast","0.13","Saikat","Chhatui","employee","","2026-02-09 2026-02-09T06:54:57.960Z","2026-02-09 2026-02-09T07:02:50.619Z","But a different thing I noticed is the footer not having Our Vendors under The Co-op. 
+Also Become a Vendor and Become a Staff Member has their places swapped on the footer.","internal"
+"saikat.redmi4@gmail.com","SunCoast","0.73","Saikat","Chhatui","employee","","2026-02-10 2026-02-10T10:53:27.206Z","2026-02-10 2026-02-10T11:36:55.322Z","Create pop up gallery and Events module done","internal"
+"saikat.redmi4@gmail.com","SunCoast","0.75","Saikat","Chhatui","employee","","2026-02-10 2026-02-10T09:27:50.338Z","2026-02-10 2026-02-10T10:12:44.554Z","working","internal"
+"saikat.redmi4@gmail.com","SunCoast","0.15","Saikat","Chhatui","employee","","2026-02-12 2026-02-12T08:45:19.453Z","2026-02-12 2026-02-12T08:53:49.796Z","Missing image - https://suncoastmarket.coop/be-a-business-supporter/","internal"
+"saikat.redmi4@gmail.com","SunCoast","0.08","Saikat","Chhatui","employee","","2026-02-12 2026-02-12T08:39:03.211Z","2026-02-12 2026-02-12T08:43:14.300Z","PDF should open in a new tab when button is clicked","internal"
+"saikat.redmi4@gmail.com","SunCoast","0.38","Saikat","Chhatui","employee","","2026-02-13 2026-02-13T09:41:08.869Z","2026-02-13 2026-02-13T10:03:16.086Z","Add additional button under this one. Leave blank for now, the client will add text. The button will link to PDF like the current one. The new one will just be in Spanish. Thank you.","internal"
+"mike@godigitalalchemy.com","A M King Group","0.02","Mike","Dickerman","admin","","2026-01-12 2026-01-12T15:23:18.641Z","2026-01-12 2026-01-12T15:24:11.329Z","Configured forms prior to launch","internal"
+"mike@godigitalalchemy.com","A M King Group","0.02","Mike","Dickerman","admin","","2026-01-14 2026-01-14T16:58:46.473Z","2026-01-14 2026-01-14T16:58:58.865Z","Test","billable"
+"mike@godigitalalchemy.com","Gilbert + Burke","0.02","Mike","Dickerman","admin","","2026-01-22 2026-01-22T03:20:09.506Z","2026-01-22 2026-01-22T03:20:24.018Z","Test","internal"
+"mike@godigitalalchemy.com","Not Dead Yet","0.02","Mike","Dickerman","admin","","2026-01-21 2026-01-21T20:14:45.445Z","2026-01-21 2026-01-21T20:15:01.790Z","Reviewed Emails","internal"
+"kandi@godigitalalchemy.com","SALT","2.00","Kandi","Evans","employee","","2026-01-09 2026-01-09T19:00:00.000Z","2026-01-09 2026-01-09T21:00:00.000Z","Research Desktop Design","internal"
+"kandi@godigitalalchemy.com","SALT","2.80","Kandi","Evans","employee","","2026-01-12 2026-01-12T16:08:18.168Z","2026-01-12 2026-01-12T18:55:40.728Z","Starting desktop design","internal"
+"kandi@godigitalalchemy.com","South America Mission","1.50","Kandi","Evans","employee","","2026-02-17 2026-02-17T14:00:00.000Z","2026-02-17 2026-02-17T15:30:00.000Z","Strategic homepage UX review and narrative redesign concept
+Analyzed current homepage structure, messaging clarity, and engagement pathways. Created a simplified, visitor-first narrative framework including hero messaging, need/response structure, invitation hierarchy, and ongoing engagement model to support clarity, trust, and giving.","billable"
+"kandi@godigitalalchemy.com","South America Mission","1.50","Kandi","Evans","employee","","2026-02-17 2026-02-17T14:00:00.000Z","2026-02-17 2026-02-17T15:30:00.000Z","Combining current work page with Projects page for new page layout. Includes time spent reviewing client ideas, building new layout and edits until approved. Minor edits to homepage","internal"
+"kandi@godigitalalchemy.com","Sun Stoppers","2.50","Kandi","Evans","employee","","2026-02-17 2026-02-17T14:00:00.000Z","2026-02-17 2026-02-17T16:30:00.000Z","Redesign location page based on Bren's instructions. Includes: edits, prototyping and about section redesign (tabbed) to be paused for a later date.","billable"
+"amiel@godigitalalchemy.com","Heartland Assets Holding","4.75","Amiel","Fuentes","employee","","2026-01-06 2026-01-06T01:30:00.000Z","2026-01-06 2026-01-06T06:15:00.000Z","Created 3 logos for Heartland","internal"
+"amiel@godigitalalchemy.com","Heartland Assets Holding","3.17","Amiel","Fuentes","employee","","2026-01-06 2026-01-06T00:00:00.000Z","2026-01-06 2026-01-06T03:10:00.000Z","Heartland Logos (Created new version)","internal"
+"amiel@godigitalalchemy.com","Heartland Assets Holding","0.27","Amiel","Fuentes","employee","","2026-01-07 2026-01-07T01:33:00.000Z","2026-01-07 2026-01-07T01:49:00.000Z","Heartland Logo Edit","internal"
+"amiel@godigitalalchemy.com","Heartland Assets Holding","0.47","Amiel","Fuentes","employee","","2026-01-07 2026-01-06T20:41:00.000Z","2026-01-07 2026-01-06T21:09:00.000Z","Heartland Logo edits","internal"
+"amiel@godigitalalchemy.com","Heartland Assets Holding","1.23","Amiel","Fuentes","employee","","2026-01-07 2026-01-06T19:00:00.000Z","2026-01-07 2026-01-06T20:14:00.000Z","Created wireframe for Heartland (Discontinued)","internal"
+"amiel@godigitalalchemy.com","Heartland Assets Holding","2.83","Amiel","Fuentes","employee","","2026-01-07 2026-01-06T16:04:00.000Z","2026-01-07 2026-01-06T18:54:00.000Z","Heartland Logos (Created 2 versions for different waves)","internal"
+"amiel@godigitalalchemy.com","Heartland Assets Holding","0.08","Amiel","Fuentes","employee","","2026-01-16 2026-01-16T15:36:08.605Z","2026-01-16 2026-01-16T15:40:33.574Z","Edited browns on Logo","billable"
+"amiel@godigitalalchemy.com","LiveCalled (Leighton Ford Ministries)","0.18","Amiel","Fuentes","employee","","2026-01-27 2026-01-27T12:50:11.135Z","2026-01-27 2026-01-27T13:00:15.637Z","Downloaded Assets ","billable"
+"amiel@godigitalalchemy.com","LiveCalled (Leighton Ford Ministries)","2.12","Amiel","Fuentes","employee","","2026-01-27 2026-01-26T18:07:00.000Z","2026-01-27 2026-01-26T20:14:00.000Z","LiveCalled Website Redesign","billable"
+"amiel@godigitalalchemy.com","LiveCalled (Leighton Ford Ministries)","0.30","Amiel","Fuentes","employee","","2026-01-27 2026-01-26T17:19:00.000Z","2026-01-27 2026-01-26T17:37:00.000Z","Initial meeting with Kandi","billable"
+"amiel@godigitalalchemy.com","LiveCalled (Leighton Ford Ministries)","1.70","Amiel","Fuentes","employee","","2026-01-29 2026-01-29T16:49:18.740Z","2026-01-29 2026-01-29T18:31:14.597Z","LiveCalled Edits and Nav Prototyping","billable"
+"amiel@godigitalalchemy.com","LiveCalled (Leighton Ford Ministries)","1.48","Amiel","Fuentes","employee","","2026-01-29 2026-01-29T14:59:28.143Z","2026-01-29 2026-01-29T16:28:07.863Z","LiveCalled Home and Giving Page Redesign","billable"
+"amiel@godigitalalchemy.com","LiveCalled (Leighton Ford Ministries)","1.23","Amiel","Fuentes","employee","","2026-01-31 2026-01-30T16:40:00.000Z","2026-01-31 2026-01-30T17:54:00.000Z","Designed CTA for LiveCalled","billable"
+"amiel@godigitalalchemy.com","LiveCalled (Leighton Ford Ministries)","2.05","Amiel","Fuentes","employee","","2026-02-02 2026-02-02T08:24:00.000Z","2026-02-02 2026-02-02T10:27:00.000Z","LiveCalled Website Redesign Checking","billable"
+"amiel@godigitalalchemy.com","LiveCalled (Leighton Ford Ministries)","0.75","Amiel","Fuentes","employee","","2026-02-03 2026-02-03T16:26:52.978Z","2026-02-03 2026-02-03T17:11:21.823Z","Checked all pages for mobile versions of LiveCalled","billable"
+"amiel@godigitalalchemy.com","LiveCalled (Leighton Ford Ministries)","0.77","Amiel","Fuentes","employee","","2026-02-03 2026-02-03T13:57:05.056Z","2026-02-03 2026-02-03T14:42:50.159Z","LiveCalled redesign website checking","billable"
+"amiel@godigitalalchemy.com","LiveCalled (Leighton Ford Ministries)","0.13","Amiel","Fuentes","employee","","2026-02-04 2026-02-04T12:18:42.749Z","2026-02-04 2026-02-04T12:25:59.527Z","LiveCalled edits checking. ","billable"
+"amiel@godigitalalchemy.com","LiveCalled (Leighton Ford Ministries)","0.25","Amiel","Fuentes","employee","","2026-02-05 2026-02-05T15:38:33.445Z","2026-02-05 2026-02-05T15:52:52.343Z","LiveCalled Redesign edits checking. ","billable"
+"amiel@godigitalalchemy.com","LiveCalled (Leighton Ford Ministries)","0.90","Amiel","Fuentes","employee","","2026-02-05 2026-02-05T13:10:16.298Z","2026-02-05 2026-02-05T14:03:30.949Z","LiveCalled Website Redesign Checking","billable"
+"amiel@godigitalalchemy.com","Not Dead Yet","2.50","Amiel","Fuentes","employee","","2026-01-13 2026-01-13T13:34:53.471Z","2026-01-13 2026-01-13T16:04:41.006Z","2 Logo Concepts","billable"
+"amiel@godigitalalchemy.com","Not Dead Yet","3.02","Amiel","Fuentes","employee","","2026-01-13 2026-01-12T17:09:00.000Z","2026-01-13 2026-01-12T20:10:00.000Z","Created Logos for Not Dead Yet","billable"
+"amiel@godigitalalchemy.com","Not Dead Yet","1.57","Amiel","Fuentes","employee","","2026-01-14 2026-01-14T13:00:59.388Z","2026-01-14 2026-01-14T14:34:47.904Z","NDY Logos continuation","billable"
+"amiel@godigitalalchemy.com","Not Dead Yet","0.73","Amiel","Fuentes","employee","","2026-01-15 2026-01-14T17:41:00.000Z","2026-01-15 2026-01-14T18:25:00.000Z","Finalized the icons for export, created the icon versions for all logos. Created logo pdf presentation","billable"
+"amiel@godigitalalchemy.com","Not Dead Yet","4.17","Amiel","Fuentes","employee","","2026-01-16 2026-01-16T15:45:17.783Z","2026-01-16 2026-01-16T19:54:22.041Z","Created Batch 5 of NDY Logos","billable"
+"amiel@godigitalalchemy.com","Not Dead Yet","2.40","Amiel","Fuentes","employee","","2026-01-22 2026-01-22T11:34:00.000Z","2026-01-22 2026-01-22T13:58:00.000Z","Not Dead Yet Logos (Batch 6)","billable"
+"amiel@godigitalalchemy.com","Not Dead Yet","1.28","Amiel","Fuentes","employee","","2026-02-03 2026-02-03T17:57:13.957Z","2026-02-03 2026-02-03T19:14:00.128Z","Not Dead Yet Logos Batch 7 ","billable"
+"amiel@godigitalalchemy.com","Not Dead Yet","1.32","Amiel","Fuentes","employee","","2026-02-13 2026-02-12T16:08:00.000Z","2026-02-13 2026-02-12T17:27:00.000Z","Not Dead Yet Logos Batch 8","billable"
+"amiel@godigitalalchemy.com","Not Dead Yet","0.57","Amiel","Fuentes","employee","","2026-02-14 2026-02-13T19:11:00.000Z","2026-02-14 2026-02-13T19:45:00.000Z","Not Dead Yet Logos Batch 9","billable"
+"amiel@godigitalalchemy.com","Rebic","0.25","Amiel","Fuentes","employee","","2025-01-08 2025-01-07T18:25:00.000Z","2025-01-08 2025-01-07T18:40:00.000Z","Website text edits - Organized instructions for developer","billable"
+"amiel@godigitalalchemy.com","Rebic","1.00","Amiel","Fuentes","employee","","2025-12-09 2025-12-08T17:00:00.000Z","2025-12-09 2025-12-08T18:00:00.000Z","Transparency Link
+Video Pop up Button
+Support Our Mission Button","billable"
+"amiel@godigitalalchemy.com","Rebic","1.00","Amiel","Fuentes","employee","","2025-12-10 2025-12-09T17:30:00.000Z","2025-12-10 2025-12-09T18:30:00.000Z","Transparency Text
+Ideation, Draft text","billable"
+"amiel@godigitalalchemy.com","Rebic","0.50","Amiel","Fuentes","employee","","2025-12-30 2025-12-30T12:15:00.000Z","2025-12-30 2025-12-30T12:45:00.000Z","Website text edits - Organized Instructions for Developer","billable"
+"amiel@godigitalalchemy.com","Rebic","2.00","Amiel","Fuentes","employee","","2026-01-08 2026-01-07T18:20:00.000Z","2026-01-08 2026-01-07T20:20:00.000Z","Rebic Redesign Homepage","billable"
+"amiel@godigitalalchemy.com","Rebic","0.25","Amiel","Fuentes","employee","","2026-01-12 2026-01-12T13:30:00.000Z","2026-01-12 2026-01-12T13:45:00.000Z","Rebic Redesign Homepage","billable"
+"amiel@godigitalalchemy.com","Rebic","3.58","Amiel","Fuentes","employee","","2026-01-13 2026-01-12T16:25:00.000Z","2026-01-13 2026-01-12T20:00:00.000Z","Rebic Impact Pages Redesign Homepage redesign, Assigned task to Debarjun in asana","billable"
+"amiel@godigitalalchemy.com","Rebic","0.45","Amiel","Fuentes","employee","","2026-01-19 2026-01-18T18:35:00.000Z","2026-01-19 2026-01-18T19:02:00.000Z","Reviewed the content doc sent by Camine through email and created a mockup for developers.","internal"
+"amiel@godigitalalchemy.com","Rebic","0.35","Amiel","Fuentes","employee","","2026-01-20 2026-01-20T12:05:00.000Z","2026-01-20 2026-01-20T12:26:00.000Z","Sliders Mockup","internal"
+"amiel@godigitalalchemy.com","Rebic","0.20","Amiel","Fuentes","employee","","2026-01-23 2026-01-23T11:42:00.000Z","2026-01-23 2026-01-23T11:54:00.000Z","Rebic Website Review and Client email","billable"
+"amiel@godigitalalchemy.com","Rebic","0.92","Amiel","Fuentes","employee","","2026-01-23 2026-01-23T06:38:56.135Z","2026-01-23 2026-01-23T07:33:11.356Z","Rebic Website review and organized revisions for developers","billable"
+"amiel@godigitalalchemy.com","Rebic","0.17","Amiel","Fuentes","employee","","2026-01-23 2026-01-22T16:00:00.000Z","2026-01-23 2026-01-22T16:10:00.000Z","Checked Revisions from Sekhar","billable"
+"amiel@godigitalalchemy.com","Rebic","1.73","Amiel","Fuentes","employee","","2026-01-26 2026-01-26T14:27:26.104Z","2026-01-26 2026-01-26T16:10:55.149Z","Rebic Website Troubleshooting","billable"
+"amiel@godigitalalchemy.com","Rebic","0.58","Amiel","Fuentes","employee","","2026-01-27 2026-01-27T16:15:13.231Z","2026-01-27 2026-01-27T16:49:51.413Z","Created new tasks based on meeting","billable"
+"amiel@godigitalalchemy.com","Rebic","0.73","Amiel","Fuentes","employee","","2026-01-27 2026-01-27T14:18:29.938Z","2026-01-27 2026-01-27T15:02:18.531Z","Checking and Assigning tasks","billable"
+"amiel@godigitalalchemy.com","Rebic","0.43","Amiel","Fuentes","employee","","2026-01-27 2026-01-27T13:00:24.543Z","2026-01-27 2026-01-27T13:26:07.279Z","Assigned New Edits","billable"
+"amiel@godigitalalchemy.com","Rebic","0.33","Amiel","Fuentes","employee","","2026-01-27 2026-01-27T11:20:34.929Z","2026-01-27 2026-01-27T11:40:09.976Z","Rebic Website Edits Troubleshooting","billable"
+"amiel@godigitalalchemy.com","Rebic","0.17","Amiel","Fuentes","employee","","2026-01-27 2026-01-27T09:28:04.931Z","2026-01-27 2026-01-27T09:38:02.451Z","Rebic Revisions Checking","billable"
+"amiel@godigitalalchemy.com","Rebic","3.15","Amiel","Fuentes","employee","","2026-01-28 2026-01-28T11:58:14.165Z","2026-01-28 2026-01-28T15:06:49.477Z","Rebic Website Review, Edits and Task Assignment","billable"
+"amiel@godigitalalchemy.com","Rebic","0.63","Amiel","Fuentes","employee","","2026-01-28 2026-01-27T20:17:00.000Z","2026-01-28 2026-01-27T20:55:00.000Z","Created New tasks based on Meeting","billable"
+"amiel@godigitalalchemy.com","ReEverything","0.50","Amiel","Fuentes","employee","","2025-12-30 2025-12-30T00:15:00.000Z","2025-12-30 2025-12-30T00:45:00.000Z","Website text edits - Organized Instructions for Developer","billable"
+"amiel@godigitalalchemy.com","ReEverything","0.25","Amiel","Fuentes","employee","","2026-01-08 2026-01-07T18:25:00.000Z","2026-01-08 2026-01-07T18:40:00.000Z","Website text edits - Organized instructions for developer","billable"
+"amiel@godigitalalchemy.com","ReEverything","0.27","Amiel","Fuentes","employee","","2026-01-22 2026-01-22T18:12:19.038Z","2026-01-22 2026-01-22T18:28:11.495Z","Edited the Image on the Canva Pitch Deck, Created Task for website edits","billable"
+"amiel@godigitalalchemy.com","ReEverything","0.22","Amiel","Fuentes","employee","","2026-01-22 2026-01-21T16:00:00.000Z","2026-01-22 2026-01-21T16:13:00.000Z","Downloaded images and created Asana Task","billable"
+"amiel@godigitalalchemy.com","ReEverything","0.18","Amiel","Fuentes","employee","","2026-01-23 2026-01-23T18:12:51.370Z","2026-01-23 2026-01-23T18:23:07.146Z","Checked ReEverything website edits and emailed to Scott for Review.","billable"
+"amiel@godigitalalchemy.com","ReEverything","0.23","Amiel","Fuentes","employee","","2026-01-26 2026-01-26T18:19:52.674Z","2026-01-26 2026-01-26T18:33:11.580Z","Added 2nd image to ""The Space""","billable"
+"amiel@godigitalalchemy.com","ReEverything","0.15","Amiel","Fuentes","employee","","2026-01-28 2026-01-28T06:14:19.416Z","2026-01-28 2026-01-28T06:23:09.265Z","ReEverything Task Assignment","billable"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","1.53","Sekhar","Kundu","employee","","2026-02-05 2026-02-05T16:47:14.788Z","2026-02-05 2026-02-05T18:18:20.420Z","Update footer to match nav bar:
+Please update footer. It should be organized exactly as the pages in the main nav. 
+
+Nav bar:
+Under ""Get Involved"", make ""Become a mentor"" title case
+
+Change ""Giving"" link  to ""Support"" (client asked for this change) and move after ""Get Involved""
+
+When in Stewardship page, the green navigation bar should still be present similar to other pages in ""Ministry Service""
+
+All buttons make 4pt rounded corners - moving to square shape:
+Buttons- “Older Posts” button in “Whole Life Mentoring” and “News” should have 4px corners
+
+“Submit” button in Ministry Service should have 4px corners
+“Enter” button in “International Mentor Group Application” should have 4px corners
+“Send” button in “Become a Mentor” and “Contact” should have 4px corners. 
+
+Search under “Sunday Extra” has 6px rounded corners. And Search in “Whole Life Mentoring”, “News”, and “Blog” has 0px corner rounding. Make it all 4 for consistency. 
+
+“BROWSE EPISODES NOW” under Podcast is all caps. Make it Title case.
+“SIGN UP NOW” button in all CTA newsletter sections are all caps. Make it Title case for consistency.
+
+
+Mobile Version Revisions:
+Video in ""Ministry Consulting"", make spaces smaller
+In LFM Articles, the cards are all showing too small. Make it take up the space. 
+When in Mobile version, the images that has text underneath breaks the paragraph. Is there a way to fix this?
+Fix search bar in navigation, overlapping the nav pages. Try to fix it at the bottom
+In Mobile version, the green dropdown always show ""Transforming Church Cohorts"" as default. Please fix.
+
+Add space on the right side of the cards when in mobile.
+Here also: 
+
+On the pages with sidebar, the last category has less padding than the others. Make consistent. 
+Example of category with less bottom padding - Spiritual Vitality, Self Regulation
+This one still needs fixing. The arrow on the Select month in Sunday Extra page. 
+
+Submit version in Ministry Consulting looks different. Make the top and bottom padding like other buttons 
+
+Big space in Video Library when scrolling. Please fix
+
+The buttons under ""Thriving Ministry Services"" are not aligned. Please align it. 
+
+Make Leadership Team to Our Staff in order.
+
+I think the hero was deleted.. 
+
+Video beside the LFM difference became too small. Revert it back to its original size.
+
+","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","1.28","Sekhar","Kundu","employee","","2026-02-05 2026-02-05T14:17:15.624Z","2026-02-05 2026-02-05T15:33:27.502Z","Break","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","3.43","Sekhar","Kundu","employee","","2026-02-05 2026-02-05T10:16:07.998Z","2026-02-05 2026-02-05T13:41:49.665Z","Break","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","1.47","Sekhar","Kundu","employee","","2026-02-05 2026-02-05T06:58:15.002Z","2026-02-05 2026-02-05T08:25:15.060Z","Break","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","3.33","Sekhar","Kundu","employee","","2026-02-06 2026-02-06T10:55:28.132Z","2026-02-06 2026-02-06T14:14:34.617Z","Homepage design update - Done with responsive
+https://www.figma.com/design/rVA9MY9CTLEJiNK3QGUokc/LIveCalled--LFM---Edited-Copy-?node-id=1-2&t=VSciADWluySVdacF-1
+
+Giving Pages: [ Working]
+condensed to onepage
+new layout","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","3.32","Sekhar","Kundu","employee","","2026-02-06 2026-02-06T06:31:34.825Z","2026-02-06 2026-02-06T09:50:18.298Z","Break","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","3.95","Sekhar","Kundu","employee","","2026-02-09 2026-02-09T09:41:05.874Z","2026-02-09 2026-02-09T13:37:57.631Z","Sidebar Category selection - Whole Life mentoring
+When a category is selected it needs to be highlighted in blue. 
+""Healthy Leaders"" and ""Thriving Ministries"" are primary categories with a drop down menu. Add a down arrow next to the primary category to show the menu is open and it can collapse.
+
+New page create with module and responsive:
+Giving Pages - condensed to onepage
+https://www.figma.com/design/rVA9MY9CTLEJiNK3QGUokc/LIveCalled--LFM---Edited-Copy-?node-id=7-1170&t=VSciADWluySVdacF-1","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","1.22","Sekhar","Kundu","employee","","2026-02-09 2026-02-09T07:24:52.311Z","2026-02-09 2026-02-09T08:37:19.205Z","Break","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","0.50","Sekhar","Kundu","employee","","2026-02-10 2026-02-10T14:56:36.890Z","2026-02-10 2026-02-10T15:26:12.044Z","Lastly, kindly remove this text under Testamentary ""We would be honored for you to include Leighton Ford Ministries in your will! Please talk with your attorney to arrange this gift for us.""
+
+Make sure the staging site only shows the new homepage and new giving page. If, I click around the site the homepage links and giving links take me back to the old pages.
+
+dropdown - where to give , Ways to Give
+
+Fix responsiveness of Support page when in Mobile version","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","0.43","Sekhar","Kundu","employee","","2026-02-10 2026-02-10T10:21:01.265Z","2026-02-10 2026-02-10T10:46:22.822Z","Make Button Options for popup form under popup","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","1.02","Sekhar","Kundu","employee","","2026-02-10 2026-02-10T07:01:47.060Z","2026-02-10 2026-02-10T08:02:00.333Z","Homepage design update:
+Looks good. One more thing. For the ""What we do"" and the ""Latest Video"" sections, please use the text found in this live page: https://leightonfo2stg.wpenginepowered.com/
+
+Giving Pages - condensed to onepage:
+For the ""Other Ways to Give"" section. Please use the pop up text found from this live site page: https://leightonfo2stg.wpenginepowered.com/ways-to-give/
+The newly combined Giving page will be called ""Support"" page
+","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","0.35","Sekhar","Kundu","employee","","2026-02-11 2026-02-11T14:32:30.778Z","2026-02-11 2026-02-11T14:53:13.654Z","LFM","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","0.40","Sekhar","Kundu","employee","","2026-02-11 2026-02-11T06:11:54.462Z","2026-02-11 2026-02-11T06:35:47.725Z","hover animation to boxes:
+Please change stroke color of hover to same color as the icon/button. Both for Who We Are and What We Do. Thanks
+","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","0.52","Sekhar","Kundu","employee","","2026-02-12 2026-02-12T11:51:35.739Z","2026-02-12 2026-02-12T12:22:27.831Z","Hero being covered in mobile
+Please fix. Upper part of Hero section for home page is being covered by nav
+
+z-index of "" Charitable Gift Annuity"" and ""Non-Cash Gifts"" form
+Please fix footer contents having higher z-index when Non-Cash Gifts and Charitable Gift Annuity form is open. Also persists in mobile version.","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","0.30","Sekhar","Kundu","employee","","2026-02-14 2026-02-14T11:19:35.211Z","2026-02-14 2026-02-14T11:37:21.180Z","LFM","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","1.33","Sekhar","Kundu","employee","","2026-02-14 2026-02-14T06:23:09.258Z","2026-02-14 2026-02-14T07:42:55.084Z","Homepage:
+""Who We Are""  & ""What We Do"" replace section icons
+remove “Latest Video” header from the place holder where the LiveCalled video will go. But keep the section that’s more towards the bottom that shows the latest video.
+
+Contribute & Donate Buttons - new link:
+https://secure.qgiv.com/for/livecalled/
+
+Giving Page:
+update Hero image
+Campaign descriptions - (videos & Images coming soon)","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","1.05","Sekhar","Kundu","employee","","2026-02-16 2026-02-16T15:01:16.511Z","2026-02-16 2026-02-16T16:04:06.873Z","remove “Latest Video” header from the place holder where the LiveCalled video will go. But keep the section that’s more towards the bottom that shows the latest video.
+Please remove ""Latest Video"" header on the first section after the hero. 
+
+Giving Page:
+change orange H1 text to all white
+
+In Who We Are and What We Do sections, ""Our Purpose"" and ""Investing in Healthy Leadership"" looks a bit too big compared to other icons. Please make them 25% to 30% smaller by adding padding around it. 
+
+What we do Section - cards are to tall  remove 50% spacing between text and button. Aplly the same height to the ""who We are section""
+
+remove animation from the ""who we are"" section
+
+Change ""Support' to ""About Giving"" (we changed our mind on this terminology) and it should be just a link to the single giving page, not a dropdown.
+
+","internal"
+"kundu.sekharg@gmail.com","Leighton Ford Ministries","0.15","Sekhar","Kundu","employee","","2026-02-17 2026-02-17T06:27:20.878Z","2026-02-17 2026-02-17T06:35:43.351Z","Update campaign images - https://drive.google.com/drive/folders/1MWdHlEvvIC1sxzr8IXXnlAssfwwnP20p","internal"
+"kundu.sekharg@gmail.com","Longfellow","1.72","Sekhar","Kundu","employee","","2026-01-13 2026-01-13T17:05:17.731Z","2026-01-13 2026-01-13T18:47:33.614Z","Working on Case Studies single static [Working].","internal"
+"kundu.sekharg@gmail.com","Longfellow","1.63","Sekhar","Kundu","employee","","2026-01-13 2026-01-13T14:27:26.726Z","2026-01-13 2026-01-13T16:05:14.551Z","Dinner break","internal"
+"kundu.sekharg@gmail.com","Longfellow","2.70","Sekhar","Kundu","employee","","2026-01-16 2026-01-16T12:01:34.396Z","2026-01-16 2026-01-16T14:42:38.199Z","Case studies page static complete","internal"
+"kundu.sekharg@gmail.com","Longfellow","0.70","Sekhar","Kundu","employee","","2026-01-17 2026-01-17T17:29:10.000Z","2026-01-17 2026-01-17T18:11:03.445Z","Static page responsible-investing [working]","internal"
+"kundu.sekharg@gmail.com","Longfellow","2.07","Sekhar","Kundu","employee","","2026-01-17 2026-01-17T12:54:43.048Z","2026-01-17 2026-01-17T14:57:45.423Z","Static:
+partner-testimonial page - done
+Responsible Investing page - working","internal"
+"kundu.sekharg@gmail.com","Longfellow","2.92","Sekhar","Kundu","employee","","2026-01-19 2026-01-19T17:15:32.539Z","2026-01-19 2026-01-19T20:10:04.009Z","page (responsible-investing) - Static page with js done.","internal"
+"kundu.sekharg@gmail.com","Longfellow","2.88","Sekhar","Kundu","employee","","2026-01-19 2026-01-19T13:02:27.104Z","2026-01-19 2026-01-19T15:54:46.630Z","Break","internal"
+"kundu.sekharg@gmail.com","Longfellow","1.93","Sekhar","Kundu","employee","","2026-01-19 2026-01-19T09:29:47.627Z","2026-01-19 2026-01-19T11:25:18.257Z","responsible-investing page working","internal"
+"kundu.sekharg@gmail.com","Longfellow","2.25","Sekhar","Kundu","employee","","2026-01-20 2026-01-20T17:27:31.202Z","2026-01-20 2026-01-20T19:42:03.309Z","Multiple modules static create in this page https://longfellow1stg.wpenginepowered.com/our-services","internal"
+"kundu.sekharg@gmail.com","Longfellow","3.63","Sekhar","Kundu","employee","","2026-01-20 2026-01-20T11:15:15.504Z","2026-01-20 2026-01-20T14:52:29.494Z","Break","internal"
+"kundu.sekharg@gmail.com","Ortho Carolina Research","0.35","Sekhar","Kundu","employee","","2026-02-03 2026-02-03T06:19:04.569Z","2026-02-03 2026-02-03T06:39:31.870Z","Social media:
+Please add icons (IG and YouTube)- https://www.youtube.com/playlist?list=PLxzOloCEgu1nzLM5YsDJhe1BDU6wq9yA7","internal"
+"kundu.sekharg@gmail.com","Preserve Lab","0.57","Sekhar","Kundu","employee","","2026-02-11 2026-02-11T13:07:08.012Z","2026-02-11 2026-02-11T13:40:27.310Z","2026 redesign:
+Client would like this site to look just like https://preservelabs.space/. Please create new staging site with https://preservelabs.space/ framework. Use gray boxes for photos and latin text. 
+","internal"
+"kundu.sekharg@gmail.com","Rebic","2.10","Sekhar","Kundu","employee","","2026-01-13 2026-01-13T12:13:32.623Z","2026-01-13 2026-01-13T14:18:57.525Z","Homepage update","internal"
+"kundu.sekharg@gmail.com","Rebic","1.27","Sekhar","Kundu","employee","","2026-01-15 2026-01-15T14:14:04.290Z","2026-01-15 2026-01-15T15:29:55.534Z","Break.","internal"
+"kundu.sekharg@gmail.com","Rebic","2.12","Sekhar","Kundu","employee","","2026-01-16 2026-01-16T07:16:06.075Z","2026-01-16 2026-01-16T09:22:34.673Z","The pages needed are:
+-Impact Page
+-The subpages: Policy & Law, Regional Impact, Political Leadership, Member Development
+
+For the buttons on the Impact page, please see that each is a dropdown. When an item on the dropdown list is clicked (for example ""Charlotte Douglas Int’l Airport"" under Regional Impact), it should automatically scroll down to that section of the page. 
+Another thing is, when scrolling on the sections, the item on the sidebar on the left side should turn green when currently in that section.","internal"
+"kundu.sekharg@gmail.com","Rebic","2.05","Sekhar","Kundu","employee","","2026-01-20 2026-01-20T07:06:51.752Z","2026-01-20 2026-01-20T09:09:41.381Z","Break","internal"
+"kundu.sekharg@gmail.com","Rebic","0.82","Sekhar","Kundu","employee","","2026-01-26 2026-01-26T09:05:16.829Z","2026-01-26 2026-01-26T09:53:58.361Z","New Impact pages update:
+On mobile the menu is not accessible. When clicked items should shift down so all are visible, and a user is able to navigate each.
+
+New home page updates
+Bring this green to the top
+Center logo and remove gray line going horizontally
+
+Remove arrows and center dots
+Logos on mobile should not stack. They should show all 5 in a row and adjust size as the screen size is reduced. Client understands they will be very small on mobile and that is what they would like.
+
+Check display on mobile. This section should show the same with no white space. It looks like the diagonal line will not translate to mobile so this section on mobile only can be square verses show a diagonal line.","internal"
+"kundu.sekharg@gmail.com","Rebic","1.65","Sekhar","Kundu","employee","","2026-01-26 2026-01-26T06:48:05.718Z","2026-01-26 2026-01-26T08:26:44.126Z","Break","internal"
+"kundu.sekharg@gmail.com","Rebic","1.47","Sekhar","Kundu","employee","","2026-01-27 2026-01-27T13:50:14.667Z","2026-01-27 2026-01-27T15:17:53.756Z","Replace slider dots:
+Please replace slider dots on home page to rectangles similar to this. But instead of the green as main/active dot, active dot should be white. 
+
+When links go to a website outside of this one, it needs to open in a new tab.
+Please check all links in the impact pages. If a link goes outside of the website, it should open in a new tab
+
+Make space consistent:
+Increase the space here to make spacing more consistent
+
+Fix the current live homepage. Image should take whole container
+
+Make the space above more less so he takes up most of the image","internal"
+"kundu.sekharg@gmail.com","Rebic","1.35","Sekhar","Kundu","employee","","2026-01-27 2026-01-27T10:18:26.382Z","2026-01-27 2026-01-27T11:38:38.802Z","Points done:
+New impact pages updates:
+Sekhar when clicking from this sidebar menu, have page land at top of selected section please, not top of the page.
+
+Housing Attainability button does not work. (Under Policy and Law dropdown > Housing Attainability)
+
+Our Members page missing from the dropdown under Member Development
+
+When the navigation menu is open while in a smaller window, then you resize to a bigger window, it will leave the items of the menu stuck on the side.
+
+On the mobile version, the white container of the logo extends beyond the navigation bar.
+
+Image and text  of slider not centered when9 in mobile version
+When in mobile version, the image and text is not centered. I think it has something to do with the old images not being centered?
+Instead of a whole image,  please break down the slider into image and a text below it. For initial version please use the images below and use the same text as the one from the original sliders. The background should still be a transparent green. ","internal"
+"kundu.sekharg@gmail.com","Rebic","1.38","Sekhar","Kundu","employee","","2026-01-27 2026-01-27T07:18:16.267Z","2026-01-27 2026-01-27T08:40:46.485Z","Break","internal"
+"kundu.sekharg@gmail.com","Rebic","1.03","Sekhar","Kundu","employee","","2026-01-28 2026-01-28T12:11:26.530Z","2026-01-28 2026-01-28T13:12:38.943Z","All tasts are done:
+Make the images clickable similar to the blue boxes
+The images should also be clickable and linked similar to the blue boxes under it. 
+
+Reuse the specific hero images from the old impact pages. 
+Please use the specific hero images from the old impact pages. 
+The images should look like how they were before – just a gradient blue on the left side, the image on the right side.
+
+
+Once all the edits are done, link the ""impact"" main nav menu item and all other dropdown items to correct pages
+For Main Navigation Menu, make ""Impact"" Button clickable and linked to new main impact page. All dropdown items will go to the new individual pages. 
+
+When in MOBILE VERSION, no more dropdown for the impact buttons
+When in Mobile version, the dropdown buttons will just be buttons that go to their individual pages. They should not act as dropdowns.
+
+Remove overview buttons for all dropdown menus
+Remove all overview buttons for all dropdown menus. Instead, make the 4 main rectangle buttons clickable (Policy & Law, Political Leadership, etc.). Each should go to their individual pages.
+
+Please fix all dropdown menus while on the impact page. All dropdown should look like this:
+Please also fix for Mobile version. When the nav buttons are clicked, they still go to the old impact pages.
+
+Container is clipping the text on the hero section when in mobile version.
+Please fix for all impact pages. Text is cut-off.
+
+Changes to the Impact Buttons:
+""Policy Law"" should stay as POLICY AND LAW
+Also, the order should be, Membership Development should be last, Regional Impact is the 3rd.
+Kindly correct the Membership Dropdown also, all should remain white while on the Membership page. The only one that should be green is the main ""Membership"" nav item
+","internal"
+"kundu.sekharg@gmail.com","Rebic","2.38","Sekhar","Kundu","employee","","2026-01-28 2026-01-28T08:13:36.286Z","2026-01-28 2026-01-28T10:35:57.831Z","Break","internal"
+"kundu.sekharg@gmail.com","Rebic","1.08","Sekhar","Kundu","employee","","2026-01-30 2026-01-30T14:19:02.807Z","2026-01-30 2026-01-30T15:23:23.397Z","Count 30 min forgot to change. working on Tandem Spirituality [35min].","internal"
+"kundu.sekharg@gmail.com","Rebic","1.02","Sekhar","Kundu","employee","","2026-01-30 2026-01-30T08:05:19.756Z","2026-01-30 2026-01-30T09:05:21.204Z","Mobile Version Nav Menu:
+Add a 5th dropdown to each titled ""_______ Overview"" (For instance, ""Impact Overview"". This will be the first item in dropdown on each section.
+
+Add new image and link to Member Spotlight on new home page ONLY
+https://rebic.com/members/dr-chisa-brookes/
+
+Code home slider green overlay - must match green from logo. Current color is not correct.
+
+Update hero image on new home page ONLY","internal"
+"kundu.sekharg@gmail.com","Rebic","0.25","Sekhar","Kundu","employee","","2026-02-13 2026-02-13T15:37:50.601Z","2026-02-13 2026-02-13T15:51:59.275Z","Edit logo section on home page to match logo section on member page https://rebic.com/membership/ (size, spacing, etc.) See attachement for logo order and one logo has been changed from the original. The most important thing here is that the size, spacing, etc. are the same as the show on the member page. This is the reason for the change! Thank you.
+Last logo needs enlarged please","internal"
+"kundu.sekharg@gmail.com","Rebic","0.32","Sekhar","Kundu","employee","","2026-02-13 2026-02-13T11:14:49.554Z","2026-02-13 2026-02-13T11:33:09.617Z","Logos:
+Make logo section on home page identical to logo section here https://rebic.com/membership/","internal"
+"kundu.sekharg@gmail.com","Rebic","0.48","Sekhar","Kundu","employee","","2026-02-16 2026-02-16T17:05:04.209Z","2026-02-16 2026-02-16T17:33:20.589Z","Logos:
+The logos on the homepage should only be the logos that were showing originally. I am sorry for the misunderstanding on my part. We just want those original logos to look (size, spacing, etc.) to the member page. The individual logos stay the same.
+
+Staging site first please. Client wants to be 100% certain before making any edits live. Thank you for understanding.","internal"
+"kundu.sekharg@gmail.com","Redwood Life","3.90","Sekhar","Kundu","employee","","2026-02-12 2026-02-12T13:19:33.127Z","2026-02-12 2026-02-12T17:13:27.099Z","Markup started with dynamic.","internal"
+"kundu.sekharg@gmail.com","Redwood Life","0.92","Sekhar","Kundu","employee","","2026-02-13 2026-02-13T17:37:05.020Z","2026-02-13 2026-02-13T18:31:35.854Z","Working on Fitted Labs page","internal"
+"kundu.sekharg@gmail.com","Redwood Life","1.32","Sekhar","Kundu","employee","","2026-02-17 2026-02-17T17:14:21.725Z","2026-02-17 2026-02-17T18:33:05.314Z","Working on Fitted Labs page","internal"
+"kundu.sekharg@gmail.com","Redwood Life","5.12","Sekhar","Kundu","employee","","2026-02-17 2026-02-17T09:34:46.102Z","2026-02-17 2026-02-17T14:40:50.249Z","Break","internal"
+"kundu.sekharg@gmail.com","Redwood Life","0.62","Sekhar","Kundu","employee","","2026-02-17 2026-02-17T06:53:40.094Z","2026-02-17 2026-02-17T07:30:38.191Z","Break","internal"
+"kundu.sekharg@gmail.com","Redwood Life","2.35","Sekhar","Kundu","employee","","2026-02-18 2026-02-18T13:04:12.108Z","2026-02-18 2026-02-18T15:24:33.757Z","Working on progress [Fitted Labs page]","internal"
+"kundu.sekharg@gmail.com","SALT","0.85","Sekhar","Kundu","employee","","2026-01-21 2026-01-21T18:39:41.071Z","2026-01-21 2026-01-21T19:30:40.062Z","Contact page done ","internal"
+"kundu.sekharg@gmail.com","SALT","5.00","Sekhar","Kundu","employee","","2026-01-21 2026-01-21T11:09:04.394Z","2026-01-21 2026-01-21T16:08:41.054Z","Home page: done
+Our Mission: working","internal"
+"kundu.sekharg@gmail.com","SALT","3.82","Sekhar","Kundu","employee","","2026-01-21 2026-01-21T06:45:15.357Z","2026-01-21 2026-01-21T10:33:43.560Z","Markup Started","internal"
+"kundu.sekharg@gmail.com","SALT","1.93","Sekhar","Kundu","employee","","2026-01-22 2026-01-22T17:58:12.688Z","2026-01-22 2026-01-22T19:54:07.986Z","Markup finished with dynamic. Working on responsive","internal"
+"kundu.sekharg@gmail.com","SALT","1.38","Sekhar","Kundu","employee","","2026-01-22 2026-01-22T14:20:52.381Z","2026-01-22 2026-01-22T15:43:35.818Z","Break
+","internal"
+"kundu.sekharg@gmail.com","SALT","1.53","Sekhar","Kundu","employee","","2026-01-22 2026-01-22T11:42:56.343Z","2026-01-22 2026-01-22T13:14:45.938Z","Break","internal"
+"kundu.sekharg@gmail.com","SALT","3.53","Sekhar","Kundu","employee","","2026-01-22 2026-01-22T06:41:48.394Z","2026-01-22 2026-01-22T10:13:42.686Z","Break","internal"
+"kundu.sekharg@gmail.com","SALT","1.83","Sekhar","Kundu","employee","","2026-01-23 2026-01-23T11:33:57.231Z","2026-01-23 2026-01-23T13:22:59.254Z","Responsive all done
+Text load on scroll - done.","internal"
+"kundu.sekharg@gmail.com","SALT","1.88","Sekhar","Kundu","employee","","2026-01-23 2026-01-23T07:00:00.552Z","2026-01-23 2026-01-23T08:52:17.500Z","Break","internal"
+"kundu.sekharg@gmail.com","SBA Pro-Life","1.38","Sekhar","Kundu","employee","Susan B. Anthony","2026-01-09 2026-01-09T14:19:16.036Z","2026-01-09 2026-01-09T15:42:00.643Z","Responsive all screen: done. Debug & fix some issues.","internal"
+"kundu.sekharg@gmail.com","SBA Pro-Life","3.72","Sekhar","Kundu","employee","Susan B. Anthony","2026-01-09 2026-01-09T08:25:10.210Z","2026-01-09 2026-01-09T12:08:09.973Z","Checking and fixing responsive (laptop and mobile) version.
+Working in progress.","internal"
+"kundu.sekharg@gmail.com","SBA Pro-Life","0.25","Sekhar","Kundu","employee","Susan B. Anthony","2026-01-12 2026-01-12T17:03:38.592Z","2026-01-12 2026-01-12T17:18:26.840Z","side panel title:
+please change text on red button from ""Get Quick Help"" to ""Pregnant? Need help?""
+
+sorry - seeing it now - it's too much text - can we please change to just ""Pregnant?""
+
+If possible, please add field in backend here in case we need to change later: https://sbaprolifedev.wpenginepowered.com/wp-admin/admin.php?page=theme-options","internal"
+"kundu.sekharg@gmail.com","SBA Pro-Life","0.13","Sekhar","Kundu","employee","Susan B. Anthony","2026-01-13 2026-01-13T12:05:35.576Z","2026-01-13 2026-01-13T12:13:08.959Z","Feedback from Imran.","internal"
+"kundu.sekharg@gmail.com","SBA Pro-Life","1.50","Sekhar","Kundu","employee","Susan B. Anthony","2026-01-14 2026-01-14T08:20:09.622Z","2026-01-14 2026-01-14T09:49:40.376Z","Points are done:
+
+Election Report submenu:
+We decided we do not want the ""choose report"" section immediately under hero on election report pages.
+I added the following CSS here: .choose-report-year { display:none; }
+Once you have removed this div from the template, please remove this CSS.
+Instead of ""choose report"" we will display the Submenu VCP menu under hero.
+However, now the floating ""sidebar links"" section is slightly hidden by the submenu - see example as you scroll down here - please adjust so it sits below it.
+
+submenu dropdown:
+Please add styles for this - see example of what it currently looks like: https://sbaprolifedev.wpenginepowered.com/voter-contact-program-2
+
+image captions:
+Please style image captions - font should be smaller (about 70% of body <p>) and grey color
+
+See captions on this post for example: https://sbaprolife.org/latest-news/students-advancing-the-pro-life-mission-in-virginia
+
+
+missing posts:
+These are the only posts as of right now that haven't been imported (they were created today):
+
+https://sbaprolife.org/newsroom/press-releases/leading-pro-life-group-blasts-sham-compromise-propos…
+https://sbaprolife.org/latest-news/abortion-drug-harm-doras-story-of-trauma-and-redemption
+https://sbaprolife.org/latest-news/abortion-drugs-americas-new-public-health-crisis
+
+I will add more in comments if more posts are created on the old site today/tomorrow.","internal"
+"kundu.sekharg@gmail.com","SBA Pro-Life","1.53","Sekhar","Kundu","employee","Susan B. Anthony","2026-01-14 2026-01-14T06:30:25.076Z","2026-01-14 2026-01-14T08:01:26.503Z","Break","internal"
+"kundu.sekharg@gmail.com","SBA Pro-Life","0.73","Sekhar","Kundu","employee","Susan B. Anthony","2026-01-15 2026-01-15T13:12:12.174Z","2026-01-15 2026-01-15T13:56:10.188Z","Checking all pages after live.","internal"
+"kundu.sekharg@gmail.com","SBA Pro-Life","1.18","Sekhar","Kundu","employee","Susan B. Anthony","2026-01-15 2026-01-15T03:32:28.784Z","2026-01-15 2026-01-15T04:43:12.162Z","These points are done:
+search results page:
+no content loads on page if no results match the search term - please fix
+e.g. https://sbaprolifedev.wpenginepowered.com/?s=%22no+results%22
+
+latest news on homepage:
+Border radius on top item needs to be fixed - see screenshots at different browser widths below:
+
+Add new post:
+https://sbaprolifedev.wpenginepowered.com/newsroom/press-releases/today-senate-help-committee-holds-hearing-on-the-dangers-of-abortion-drugs-in-wake-of-admin-inaction
+
+Mobile:
+Search panel not showing after click.
+
+Latest videos on news page:
+slider bullet issue
+auto slide on","internal"
+"kundu.sekharg@gmail.com","Site Updates","8.42","Sekhar","Kundu","employee","","2026-01-12 2026-01-12T17:19:03.636Z","2026-01-12 2026-01-13T01:43:46.757Z","Working only 2hr 30min
+Forgot to stop
+Please count only 2hr 30min","internal"
+"kundu.sekharg@gmail.com","Site Updates","1.47","Sekhar","Kundu","employee","","2026-02-11 2026-02-11T17:31:04.923Z","2026-02-11 2026-02-11T18:58:05.863Z","Site Update","internal"
+"kundu.sekharg@gmail.com","Site Updates","0.75","Sekhar","Kundu","employee","","2026-02-11 2026-02-11T13:47:31.736Z","2026-02-11 2026-02-11T14:32:23.497Z","Site update","internal"
+"kundu.sekharg@gmail.com","Site Updates","2.03","Sekhar","Kundu","employee","","2026-02-14 2026-02-14T17:24:41.002Z","2026-02-14 2026-02-14T19:26:08.814Z","https://cadenceprop.com/
+https://bhglassanddoor.com/
+https://armsforall.org/
+https://areibooks.com/
+https://agingwithdistg.wpenginepowered.com/
+https://charlittahatch.com/
+https://charlottewindowtinting.com/
+https://emmalittlejohn.com/
+https://emmalittlejstg.wpenginepowered.com/
+https://new.sunstoppers.com/
+https://neighborlifstg.wpenginepowered.com/
+https://neighborhoodhope.life/
+https://heavenonthehorizon.com/
+https://heartlandassetholdings.com/
+https://graysonmurrayfoundation.com/
+https://reminiscencesofwar.com/
+https://opioidreduction.com/
+https://resunstoppers.wpenginepowered.com/
+https://simplecrawlspa.wpenginepowered.com/
+https://shop.bracketocracy.com/
+https://spazchicken.com/
+https://stdealerportal.wpengine.com/
+https://suncoastmarket.coop/
+https://suncoastmarstg.wpenginepowered.com/
+https://sunstoppersconcord.com/
+https://sunstoppersautowest.com/
+https://sunstopperscharleston.com/
+https://sunstoppers.com/
+https://sunraytint.com/
+https://sunstopperslakenorman.com/
+https://sunstoppersmatthews.com/
+https://sunstopperssouthport.com/
+https://sunstoppersrockhill.com/
+https://sunstoppersfairmont.com/
+https://sunstopperssouthend.com/
+https://tandemspiritua.wpenginepowered.com/
+https://tucsontintcompany.com/
+https://300southtryon.com/
+https://4700falls.com/
+https://amaragolf.com/
+https://barnabascapital.com/
+https://aerialcenternc.com/
+https://bioterrasd.com/
+https://centercitygreen.com/
+https://biovistasd.com/
+https://centerparklabs.com/
+https://creativeretailpackaging.com/
+https://durhamid.com/
+https://dawptestsite.wpenginepowered.com/
+https://ecolorworld.com/
+https://elevatebylongfellow.com/
+https://emergesciencecenter.com/
+https://exoticexcursion.com/
+https://frieling.com/
+https://exactaudience2.wpenginepowered.com/
+https://gilbertburke.ca/
+https://grantgc.com/
+https://globefranchstg.wpenginepowered.com/
+https://greenwayphilanthropy.com/
+https://hatchlifesciences.com/
+https://lalasercutting.wpenginepowered.com/
+https://lfrep.com/
+https://interactionintl.org/
+https://illustrata.io/
+https://hznled.com/
+https://iconalabs.com/
+https://lifeinnovators.com/
+https://mannafoodbank.org/
+https://lifeproductreview.com/
+https://longfellow1stg.wpenginepowered.com/
+https://mannafoodbastg.wpenginepowered.com/
+https://ministry-alliance.org/
+https://navigateaccess.com/
+https://northsidedev1.wpengine.com/
+https://paloaltolabsca.com/
+https://pgsecurityservices.com/
+https://rebic2stg.wpenginepowered.com/
+https://presbypsych.org/
+https://www.rebic.com/
+https://proplugger.com/
+https://southparkchurch.com/
+https://shepherdwealthpartners.com/
+https://regencywoods-cary.com/
+https://regencycreek.com/
+https://south300stg.wpenginepowered.com/
+https://reserve-labs.com/
+https://sovasd.com/
+https://spectrumcos.com/
+https://theannuityedge.com/
+https://tma1.com/
+https://trianglelifenc.com/
+https://tma1stg.wpenginepowered.com/
+https://tryonfitness.com/
+https://www.vantagesouthend.com/
+https://botanicanc.com/
+https://avialabs.com/
+https://autumnwooddesigns.com/
+https://amongworlds.interactionintl.org/
+https://aberdeen-rockfish.com/
+https://church21.wpenginepowered.com/
+https://carolinaconstructionservices.us/
+https://camlife.co.uk/
+https://brianmiller1.wpengine.com/
+https://dawiki.wpenginepowered.com/
+https://digcarolina.com/
+https://dawiki.wpenginepowered.com/
+https://documentation.gofreightpath.com/
+https://dronescape.com/
+https://dsagreatercharlotte.org/
+https://fredschnider.com/
+https://flexit3.wpenginepowered.com/
+https://exodus-overland.com/
+https://exoduscompanies.com/
+https://gofreightpath.com/
+https://geoscloset.com/
+https://freightpat1stg.wpenginepowered.com/
+https://grovepropertyfund.com/
+https://growinghopethroughart.org/
+https://hobbsbrook.com/wp-admin/about.php?updated
+https://hornetsrecap.com/
+https://ifeellikecooking.com/
+https://ifeellikecooking.com/
+https://hornetsrecap.com/
+https://hobbsbrook.com/
+https://growinghopethroughart.org/
+https://grovepropertyfund.com/
+","internal"
+"kundu.sekharg@gmail.com","Site Updates","1.68","Sekhar","Kundu","employee","","2026-02-14 2026-02-14T11:48:08.237Z","2026-02-14 2026-02-14T13:28:30.584Z","break","internal"
+"kundu.sekharg@gmail.com","Solida Financial","0.40","Sekhar","Kundu","employee","","2026-02-11 2026-02-11T09:04:20.158Z","2026-02-11 2026-02-11T09:27:50.612Z","Add button:
+Under team members please add ""Join Our Team"" button and link to https://www.linkedin.com/company/solida-financial/jobs/ (open in new tab)","internal"
+"kundu.sekharg@gmail.com","Sun Stoppers","1.82","Sekhar","Kundu","employee","","2026-01-13 2026-01-13T09:29:56.507Z","2026-01-13 2026-01-13T11:18:26.641Z","These points are done
+---------------------------
+xpel-ceramic-coating:
+Make ""WATCH NOW"" button open video in module window
+Remove ""WATCH ON YOUTUBE""
+All videos should open in module window NOT open Youtube page
+
+Add quote button:
+Replace ""Learn more"" with get a quote form
+
+Gallery
+Remove these images
+
+paint-protection-film:
+Update video link - https://www.youtube.com/watch?v=cCwP0gvg7fs
+Wrong link - Should be /contact-us
+Remove small photos:
+When opening full screen photos several are very small, please remove and replace with:
+https://new.sunstoppers.com/galleries/kia-rv6-ppf-lake-norman/#images-8
+https://new.sunstoppers.com/galleries/2016-chevrolet-c7-corvette-stingray/#images-13
+https://new.sunstoppers.com/galleries/trx-ppf-lake-norman-nc/#images-15
+
+Service pages:
+""Learn More"" button - When clicked land on each page under the review section","internal"
+"kundu.sekharg@gmail.com","Sun Stoppers","1.07","Sekhar","Kundu","employee","","2026-01-14 2026-01-14T18:28:55.893Z","2026-01-14 2026-01-14T19:32:07.044Z","These pages are created:
+https://new.sunstoppers.com/tint_laws/maryland-tint-laws/
+https://new.sunstoppers.com/tint_laws/colorado-tint-laws/
+https://new.sunstoppers.com/tint_laws/california-tint-laws/
+https://new.sunstoppers.com/tint_laws/oklahoma-tint-laws/
+https://new.sunstoppers.com/tint_laws/florida-tint-laws/
+https://new.sunstoppers.com/tint_laws/south-carolina-tint-laws/
+https://new.sunstoppers.com/tint_laws/texas-tint-laws/
+https://new.sunstoppers.com/tint_laws/north-carolina-tint-laws/","internal"
+"kundu.sekharg@gmail.com","Sun Stoppers","1.85","Sekhar","Kundu","employee","","2026-01-14 2026-01-14T14:13:36.948Z","2026-01-14 2026-01-14T16:04:32.640Z","Working on Progress","internal"
+"kundu.sekharg@gmail.com","Sun Stoppers","3.65","Sekhar","Kundu","employee","","2026-01-14 2026-01-14T10:00:06.362Z","2026-01-14 2026-01-14T13:38:54.448Z","Working on Tint Laws pages. Break for now.","internal"
+"kundu.sekharg@gmail.com","Sun Stoppers","1.73","Sekhar","Kundu","employee","","2026-01-15 2026-01-15T11:28:10.695Z","2026-01-15 2026-01-15T13:11:57.486Z","Working on services new pages. [working...]","internal"
+"kundu.sekharg@gmail.com","Sun Stoppers","1.28","Sekhar","Kundu","employee","","2026-01-15 2026-01-15T08:30:34.426Z","2026-01-15 2026-01-15T09:47:09.064Z","Break","internal"
+"kundu.sekharg@gmail.com","Sun Stoppers","2.37","Sekhar","Kundu","employee","","2026-01-16 2026-01-16T17:05:54.900Z","2026-01-16 2026-01-16T19:27:03.164Z","Add New pages content:
+https://new.sunstoppers.com/services/window-tinting/avondale-tx/
+https://new.sunstoppers.com/services/window-tinting/bedford-tx/
+https://new.sunstoppers.com/services/window-tinting/colleyville-tx/","internal"
+"kundu.sekharg@gmail.com","Sun Stoppers","0.80","Sekhar","Kundu","employee","","2026-01-16 2026-01-16T09:26:07.652Z","2026-01-16 2026-01-16T10:14:00.727Z","Break","internal"
+"kundu.sekharg@gmail.com","Sun Stoppers","1.53","Sekhar","Kundu","employee","","2026-01-17 2026-01-17T09:56:27.925Z","2026-01-17 2026-01-17T11:27:48.909Z","Break","internal"
+"kundu.sekharg@gmail.com","Sun Stoppers","1.45","Sekhar","Kundu","employee","","2026-01-17 2026-01-17T07:50:50.247Z","2026-01-17 2026-01-17T09:16:57.591Z","Lunch Break ","internal"
+"kundu.sekharg@gmail.com","SunCoast","0.68","Sekhar","Kundu","employee","","2026-02-16 2026-02-16T18:10:32.038Z","2026-02-16 2026-02-16T18:50:59.718Z","Add button:
+Add additional button under this one. Leave blank for now, the client will add text. The button will link to PDF like the current one. The new one will just be in Spanish. Thank you.
+
+Can we please try both button are in one line?","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","0.87","Sekhar","Kundu","employee","","2026-01-23 2026-01-23T18:36:57.215Z","2026-01-23 2026-01-23T19:28:52.657Z","Working on markup","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","0.57","Sekhar","Kundu","employee","","2026-01-23 2026-01-23T14:30:55.258Z","2026-01-23 2026-01-23T15:04:04.444Z","Work in progress","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.50","Sekhar","Kundu","employee","","2026-01-26 2026-01-26T17:55:08.515Z","2026-01-26 2026-01-26T19:24:25.037Z","Markup with dynamic [working]","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","2.15","Sekhar","Kundu","employee","","2026-01-26 2026-01-26T13:49:05.065Z","2026-01-26 2026-01-26T15:57:49.643Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.93","Sekhar","Kundu","employee","","2026-01-27 2026-01-27T16:59:55.732Z","2026-01-27 2026-01-27T18:55:04.215Z","Working on homepage","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","0.97","Sekhar","Kundu","employee","","2026-01-27 2026-01-27T15:18:00.081Z","2026-01-27 2026-01-27T16:15:14.382Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.00","Sekhar","Kundu","employee","","2026-01-28 2026-01-28T18:29:41.208Z","2026-01-28 2026-01-28T19:29:09.110Z","Homepage markup with dynamic and animations [working].","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.68","Sekhar","Kundu","employee","","2026-01-28 2026-01-28T13:53:01.345Z","2026-01-28 2026-01-28T15:33:28.695Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","2.70","Sekhar","Kundu","employee","","2026-01-29 2026-01-29T16:09:50.467Z","2026-01-29 2026-01-29T18:50:56.302Z","Homepage Done
+Couples Mentoring page - working","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","2.35","Sekhar","Kundu","employee","","2026-01-29 2026-01-29T11:16:49.336Z","2026-01-29 2026-01-29T13:37:28.805Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","2.53","Sekhar","Kundu","employee","","2026-01-29 2026-01-29T06:34:54.909Z","2026-01-29 2026-01-29T09:05:57.605Z","Lunch Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","3.12","Sekhar","Kundu","employee","","2026-01-30 2026-01-30T16:55:01.926Z","2026-01-30 2026-01-30T20:01:12.292Z","Pages are done:
+https://tandemspiritua.wpenginepowered.com/couples-mentoring/
+https://tandemspiritua.wpenginepowered.com/ministry-transitions/
+https://tandemspiritua.wpenginepowered.com/spiritual-health/ - WORKING","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","0.70","Sekhar","Kundu","employee","","2026-01-30 2026-01-30T13:37:33.168Z","2026-01-30 2026-01-30T14:18:57.597Z","Tandem","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","2.15","Sekhar","Kundu","employee","","2026-01-30 2026-01-30T10:12:59.236Z","2026-01-30 2026-01-30T12:21:03.654Z","break
+","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","2.67","Sekhar","Kundu","employee","","2026-01-31 2026-01-31T14:13:10.273Z","2026-01-31 2026-01-31T16:53:01.947Z","Pages are done:
+https://tandemspiritua.wpenginepowered.com/spiritual-health/ - done
+https://tandemspiritua.wpenginepowered.com/international-ministry/ - done
+https://tandemspiritua.wpenginepowered.com/preaching-teaching/ - done
+https://tandemspiritua.wpenginepowered.com/church-leadership-coaching/ - done
+https://tandemspiritua.wpenginepowered.com/about/ - working","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.55","Sekhar","Kundu","employee","","2026-01-31 2026-01-31T09:59:50.679Z","2026-01-31 2026-01-31T11:31:54.309Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","2.32","Sekhar","Kundu","employee","","2026-01-31 2026-01-31T06:30:08.733Z","2026-01-31 2026-01-31T08:48:16.952Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.78","Sekhar","Kundu","employee","","2026-02-02 2026-02-02T17:18:16.513Z","2026-02-02 2026-02-02T19:04:34.148Z","Fixed Header - homepage-logo, menu, sticky header.
+
+Header Search
+
+New page:
+Markup, dynamic with animations
+https://tandemspiritua.wpenginepowered.com/contact/ - done
+https://tandemspiritua.wpenginepowered.com/about/ [working] ","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.65","Sekhar","Kundu","employee","","2026-02-02 2026-02-02T13:50:36.475Z","2026-02-02 2026-02-02T15:29:34.900Z","Work in progress","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","3.77","Sekhar","Kundu","employee","","2026-02-02 2026-02-02T07:35:28.389Z","2026-02-02 2026-02-02T11:20:38.219Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","2.33","Sekhar","Kundu","employee","","2026-02-03 2026-02-03T15:58:51.427Z","2026-02-03 2026-02-03T18:18:15.568Z","Homepage podcast section
+About page - done
+New page:
+https://tandemspiritua.wpenginepowered.com/book-2/ - done
+https://tandemspiritua.wpenginepowered.com/podcast/ - working","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.52","Sekhar","Kundu","employee","","2026-02-03 2026-02-03T11:56:22.796Z","2026-02-03 2026-02-03T13:26:57.336Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","2.43","Sekhar","Kundu","employee","","2026-02-03 2026-02-03T08:56:50.826Z","2026-02-03 2026-02-03T11:22:00.152Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.20","Sekhar","Kundu","employee","","2026-02-04 2026-02-04T17:47:04.352Z","2026-02-04 2026-02-04T18:58:44.729Z","https://tandemspiritua.wpenginepowered.com/podcast/ - Done
+https://tandemspiritua.wpenginepowered.com/events/ - Done
+Menu Links
+Responsive - Working","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","0.67","Sekhar","Kundu","employee","","2026-02-04 2026-02-04T15:36:10.843Z","2026-02-04 2026-02-04T16:15:17.880Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","4.35","Sekhar","Kundu","employee","","2026-02-04 2026-02-04T09:45:49.599Z","2026-02-04 2026-02-04T14:06:42.063Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","2.18","Sekhar","Kundu","employee","","2026-02-09 2026-02-09T17:46:54.594Z","2026-02-09 2026-02-09T19:57:28.596Z","Fixed some issues
+about page: faq section complete
+404
+single - podcast
+Archive
+Search page","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","0.73","Sekhar","Kundu","employee","","2026-02-09 2026-02-09T14:48:10.175Z","2026-02-09 2026-02-09T15:31:53.299Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.42","Sekhar","Kundu","employee","","2026-02-10 2026-02-10T17:55:36.047Z","2026-02-10 2026-02-10T19:20:07.275Z","Latest podcast dynamic - homepage
+Animation - from Asana task
+Responsive - Done","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","3.92","Sekhar","Kundu","employee","","2026-02-10 2026-02-10T11:01:01.514Z","2026-02-10 2026-02-10T14:55:48.819Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","2.08","Sekhar","Kundu","employee","","2026-02-11 2026-02-11T10:43:48.546Z","2026-02-11 2026-02-11T12:48:18.203Z","Podcast: Load more button with jQuery
+
+QA full site and fix some issues","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","0.43","Sekhar","Kundu","employee","","2026-02-12 2026-02-12T17:23:00.786Z","2026-02-12 2026-02-12T17:48:37.323Z","Parallax section (see attached image) - needs to function like Gilbert & Burke when window is expanded...see here (https://gilbertburke.ca/)
+","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","0.40","Sekhar","Kundu","employee","","2026-02-12 2026-02-12T11:28:18.404Z","2026-02-12 2026-02-12T11:51:26.955Z","Nav bar is transparent site wide like the homepage and on scroll turns white","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.18","Sekhar","Kundu","employee","","2026-02-12 2026-02-12T09:20:16.705Z","2026-02-12 2026-02-12T10:30:22.340Z","Homepage:
+Testimony section - remove arrows
+Carousel - use same arrows like in the testimoy section but white
+
+
+Nav bar:
+Ministry services link - missing down arrow, to indicate dropdown menu
+Nav bar is transparent site wide like the homepage and on scroll turns white
+All drop down menus - make them up and overlap the nav bar by 16px. Instead of flush underneath
+
+
+
+ABout:
+Founder section- image is fixed as text scrolls next to it.
+
+Book page - link to Amazon account
+
+Hero: Hero banners site wide - see figma file have fixed height- don't fill view port
+
+Ministry Service pages:
+reduce spacing by 50% between image and text
+
+All buttons - reduce spacing between label And arrow to 8px
+
+Double check all H1 & H2, and other header font sizes - are smaller by 10px or more when at the 1366 desktop size
+these are supposed to be a little oversized
+","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.50","Sekhar","Kundu","employee","","2026-02-12 2026-02-12T06:24:33.950Z","2026-02-12 2026-02-12T07:54:30.388Z","Working on Feedback.","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","0.52","Sekhar","Kundu","employee","","2026-02-13 2026-02-13T14:03:40.125Z","2026-02-13 2026-02-13T14:33:54.734Z","
+H1 - text breaking at odd places
+spiritual coaching - 2 lines max height.     https://tandemspiritua.wpenginepowered.com/spiritual-health/
+Struggling Well Podcast - max 2 lines height
+Homepage header should be 3 lines max height","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.13","Sekhar","Kundu","employee","","2026-02-13 2026-02-13T09:39:18.896Z","2026-02-13 2026-02-13T10:47:02.240Z","Feedback from Asana:
+Font Sizing/desktop size?:
+what desktop size did you design at? I'm viewing in 1366 and the fonts are still small. and too much spacing between text(see example above)
+homepage carousel is to large when I view at 1366 
+
+Paralax Section: 
+not the parallax effect animation. I was just using that to describe the section. But how the images behind the content boxes should expand like they do on the Gilbert & Burke site when the desktop window expands or shrinks.
+
+Footer:
+Add actual social media links shown from live site https://www.tandemspirituality.com/ (open in new tab)
+
+""Begin Your Journey"" buttons link to contact page
+
+Podcast:
+Add real content and links shown here https://tandemspiritua.wpenginepowered.com/podcast/. Is there a way to upload all? If not, add the last 4 and we will work with Kandi to rework the ""Load More Episodes"" button.","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.77","Sekhar","Kundu","employee","","2026-02-13 2026-02-13T06:41:18.571Z","2026-02-13 2026-02-13T08:26:49.840Z","Break","internal"
+"kundu.sekharg@gmail.com","Tandem Spirituality","1.20","Sekhar","Kundu","employee","","2026-02-18 2026-02-18T07:26:29.719Z","2026-02-18 2026-02-18T08:37:50.511Z","Hero images should not fill the screen/ view port - too much wasted space
+
+mobile slide out menu:
+blue begin journey button directly underneath menu and not fixed at the bottom of mobile menu slide-out screen
+keep green give button in mobile nav to the left of hamburger menu
+make same font as nav bar fonts
+Add search feature above menu links like we've done in other responsive websites","internal"
+"ben@godigitalalchemy.com","Her PLAN Case Management","1.50","Ben","Rutt","admin","Susan B. Anthony","2026-01-07 2026-01-07T22:00:00.000Z","2026-01-07 2026-01-07T23:30:00.000Z","Pushing Changes to Production","internal"
+"ben@godigitalalchemy.com","Her PLAN Case Management","0.30","Ben","Rutt","admin","Susan B. Anthony","2026-01-07 2026-01-07T18:49:36.061Z","2026-01-07 2026-01-07T19:07:12.350Z","verifying developer changes to infant form","internal"
+"ben@godigitalalchemy.com","Her PLAN Directory","0.60","Ben","Rutt","admin","Susan B. Anthony","2026-01-07 2026-01-07T18:12:00.835Z","2026-01-07 2026-01-07T18:47:07.745Z","importing new services into directory from spreadsheet","internal"
+"ben@godigitalalchemy.com","Her PLAN Directory","0.08","Ben","Rutt","admin","Susan B. Anthony","2026-01-07 2026-01-07T17:29:53.958Z","2026-01-07 2026-01-07T17:34:26.698Z","New signup pages for events","internal"
+"ben@godigitalalchemy.com","Her PLAN Directory","0.23","Ben","Rutt","admin","Susan B. Anthony","2026-01-07 2026-01-07T17:09:58.331Z","2026-01-07 2026-01-07T17:22:59.221Z","more code changes","internal"
+"ben@godigitalalchemy.com","Her PLAN Directory","3.15","Ben","Rutt","admin","Susan B. Anthony","2026-01-07 2026-01-07T14:00:00.000Z","2026-01-07 2026-01-07T17:09:00.000Z","Worked on adding event signup logic. Last minute rush changes","internal"
+"ben@godigitalalchemy.com","Her PLAN Directory","1.07","Ben","Rutt","admin","Susan B. Anthony","2026-01-08 2026-01-08T19:26:00.000Z","2026-01-08 2026-01-08T20:30:00.000Z","Directory Keyword Search","internal"
+"ben@godigitalalchemy.com","Her PLAN Directory","1.02","Ben","Rutt","admin","Susan B. Anthony","2026-01-09 2026-01-09T20:18:47.391Z","2026-01-09 2026-01-09T21:19:06.887Z","working on more requests for reports","internal"
+"ben@godigitalalchemy.com","Her PLAN Directory","0.47","Ben","Rutt","admin","Susan B. Anthony","2026-01-09 2026-01-09T19:08:47.642Z","2026-01-09 2026-01-09T19:36:00.217Z","Add slide deck for event signups to profile","internal"
+"ben@godigitalalchemy.com","Her PLAN Directory","1.18","Ben","Rutt","admin","Susan B. Anthony","2026-01-14 2026-01-14T18:45:06.289Z","2026-01-14 2026-01-14T19:55:29.571Z","pathways","internal"
+"ben@godigitalalchemy.com","Her PLAN Directory","0.97","Ben","Rutt","admin","Susan B. Anthony","2026-01-14 2026-01-14T16:33:35.168Z","2026-01-14 2026-01-14T17:31:03.363Z","New Daycare reports import","internal"
+"ben@godigitalalchemy.com","Her PLAN Directory","1.45","Ben","Rutt","admin","Susan B. Anthony","2026-01-14 2026-01-14T14:23:39.074Z","2026-01-14 2026-01-14T15:50:02.256Z","Hubspot Webhooks Debugging","internal"
+"sendebarjun1984@gmail.com","Leighton Ford Ministries","1.07","Debarjun","Sen","employee","","2026-01-30 2026-01-30T10:11:19.200Z","2026-01-30 2026-01-30T11:15:03.989Z","Completed below listed tasks from Asana.
+a) Update logo (nav bar & Footer) - see subtask
+b) All buttons make 4pt rounded corners - moving to square shape
+c) All Fonts change to Proxima Nove ","internal"
+"sendebarjun1984@gmail.com","Leighton Ford Ministries","0.17","Debarjun","Sen","employee","","2026-01-30 2026-01-30T08:25:46.478Z","2026-01-30 2026-01-30T08:35:05.043Z","Work in progress","internal"
+"sendebarjun1984@gmail.com","Leighton Ford Ministries","0.95","Debarjun","Sen","employee","","2026-01-31 2026-01-31T13:50:15.682Z","2026-01-31 2026-01-31T14:46:27.791Z","Completed all the tasks.","internal"
+"sendebarjun1984@gmail.com","Leighton Ford Ministries","1.68","Debarjun","Sen","employee","","2026-01-31 2026-01-31T10:52:40.951Z","2026-01-31 2026-01-31T12:33:16.219Z","Completed all tasks, except this subtasks under Nav-bar:
+Change ""About Leighton Ford Ministries"" ""About""  and moveto Main navigation left of ""Mentoring"" .","internal"
+"sendebarjun1984@gmail.com","Leighton Ford Ministries","1.70","Debarjun","Sen","employee","","2026-01-31 2026-01-31T08:20:51.353Z","2026-01-31 2026-01-31T10:02:16.438Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Leighton Ford Ministries","0.78","Debarjun","Sen","employee","","2026-01-31 2026-01-31T06:29:33.087Z","2026-01-31 2026-01-31T07:15:43.574Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Leighton Ford Ministries","1.18","Debarjun","Sen","employee","","2026-02-02 2026-02-02T16:29:26.587Z","2026-02-02 2026-02-02T17:39:49.214Z","c) Update logo (nav bar & Footer) - see subtask: navigation bar - Logo in top right corner needs to be maybe 50% bigger. The Leighton Ford Ministries text needs to be legible.
+** new logo attached	
+d) Amiel Fuentes:  For the 1st bullet, I think ""About Giving"" should be ""Giving"". I will confirm it with Kandi Evans
+e) When in the “Mentoring” pages, the page names in the blue navigation under the hero do not have consistent letter-cases. Make it all Title Case. 
+f) Nav dropdown items, hover status should also be 4px rounded corner. 
+g) Reduce padding between primary nav links (20px)
+h) ""Contribute"" Button make text size 16px	","internal"
+"sendebarjun1984@gmail.com","Leighton Ford Ministries","1.25","Debarjun","Sen","employee","","2026-02-02 2026-02-02T11:13:16.972Z","2026-02-02 2026-02-02T12:27:46.182Z","Tasks:
+a) Home page- Add space in between watch video and the next body header. 
+
+			Also can we try aligning the video to top, not centered? Thanks. 
+
+		b) Hero Text- Only “LiveCalled” should be orange, the rest should be white.","internal"
+"sendebarjun1984@gmail.com","Leighton Ford Ministries","0.32","Debarjun","Sen","employee","","2026-02-03 2026-02-03T17:50:25.589Z","2026-02-03 2026-02-03T18:08:45.396Z","Completed below listed points:
+e) Leadership Team - tabs should also have 4px rounded corners on top left and right. Bottom corners remain 0px.
+f) There are some missed, Featured topics in some pages under Resources","internal"
+"sendebarjun1984@gmail.com","Leighton Ford Ministries","2.30","Debarjun","Sen","employee","","2026-02-03 2026-02-03T13:32:03.650Z","2026-02-03 2026-02-03T15:49:16.981Z","Completed below listed tasks:
+a) Use the white logo on the homepage
+
+Reply: I’ve updated the homepage with the white logo. Please review
+
+b) (About, Mentoring, Ministry Services, Resources, Get Involved)
+
+c) Make mobile version nav page names the same as desktop version
+
+d) Make corner rounding for images beside text consistent
+	i) Some images beside text do not have consistent 4px corners and some have. Make it consistent. Add 4px corners to all.
+	ii) Make the Green boxes in “Governance” under “The Leadership Triangle” have 4px rounded corners.	","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.12","Debarjun","Sen","employee","","2026-01-09 2026-01-09T15:16:30.273Z","2026-01-09 2026-01-09T15:23:02.580Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","1.62","Debarjun","Sen","employee","","2026-01-09 2026-01-09T13:37:59.998Z","2026-01-09 2026-01-09T15:14:59.361Z","Completed the about page with dynamic.","internal"
+"sendebarjun1984@gmail.com","Longfellow","2.23","Debarjun","Sen","employee","","2026-01-09 2026-01-09T08:37:15.851Z","2026-01-09 2026-01-09T10:50:21.465Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","1.40","Debarjun","Sen","employee","","2026-01-19 2026-01-19T16:02:08.684Z","2026-01-19 2026-01-19T17:25:18.850Z","Completed this page with dynamic.","internal"
+"sendebarjun1984@gmail.com","Longfellow","2.27","Debarjun","Sen","employee","","2026-01-19 2026-01-19T13:26:26.613Z","2026-01-19 2026-01-19T15:41:47.853Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","1.85","Debarjun","Sen","employee","","2026-01-19 2026-01-19T08:27:42.638Z","2026-01-19 2026-01-19T10:18:08.151Z","Completed the ""Case Studies"" single page with dynamic.","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.77","Debarjun","Sen","employee","","2026-01-19 2026-01-19T07:31:19.640Z","2026-01-19 2026-01-19T08:17:07.663Z","Work in progress...","internal"
+"sendebarjun1984@gmail.com","Longfellow","3.07","Debarjun","Sen","employee","","2026-01-20 2026-01-20T15:19:44.937Z","2026-01-20 2026-01-20T18:23:12.506Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.43","Debarjun","Sen","employee","","2026-01-20 2026-01-20T12:42:05.152Z","2026-01-20 2026-01-20T13:07:13.883Z","Completed the page structure with dynamic.
+https://longfellow1stg.wpenginepowered.com/responsible-investing/","internal"
+"sendebarjun1984@gmail.com","Longfellow","1.15","Debarjun","Sen","employee","","2026-01-20 2026-01-20T11:24:17.077Z","2026-01-20 2026-01-20T12:32:42.000Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.57","Debarjun","Sen","employee","","2026-01-20 2026-01-20T09:24:44.522Z","2026-01-20 2026-01-20T09:57:55.369Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","1.67","Debarjun","Sen","employee","","2026-01-20 2026-01-20T06:26:42.302Z","2026-01-20 2026-01-20T08:06:35.549Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","3.42","Debarjun","Sen","employee","","2026-01-21 2026-01-21T12:58:54.677Z","2026-01-21 2026-01-21T16:23:46.679Z","Below listed pages are completed with dynamic.
+Services: https://longfellow1stg.wpenginepowered.com/services/
+Elevate: https://longfellow1stg.wpenginepowered.com/services/elevate/
+About Us: https://longfellow1stg.wpenginepowered.com/about/
+Responsible Investing: https://longfellow1stg.wpenginepowered.com/services/investment-services/
+Longfellow Advance: https://longfellow1stg.wpenginepowered.com/longfellow-advance/
+News: https://longfellow1stg.wpenginepowered.com/news/
+News Single: https://longfellow1stg.wpenginepowered.com/narrative-coffee-set-to-open-at-durham-id/
+Contact: https://longfellow1stg.wpenginepowered.com/contact/","internal"
+"sendebarjun1984@gmail.com","Longfellow","1.22","Debarjun","Sen","employee","","2026-01-21 2026-01-21T08:26:10.563Z","2026-01-21 2026-01-21T09:38:33.794Z","Completed theoage with dynamic.","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.55","Debarjun","Sen","employee","","2026-01-21 2026-01-21T05:18:29.039Z","2026-01-21 2026-01-21T05:51:08.683Z","Completed this page.","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.80","Debarjun","Sen","employee","","2026-01-22 2026-01-22T15:04:44.702Z","2026-01-22 2026-01-22T15:51:44.918Z","Home: Completed
+Menu: Completed.","internal"
+"sendebarjun1984@gmail.com","Longfellow","3.73","Debarjun","Sen","employee","","2026-01-23 2026-01-23T11:13:08.677Z","2026-01-23 2026-01-23T14:56:22.376Z","Completed below listed tasks:
+a) Partner Testimonials:
+	i) Crop photo from center so buildings show not just sky. I also see a blue line.
+	ii) Richard Blais photo pixelated
+
+b) Services:
+	i) Lets make container close on the second click. So one click to completely open and a second to take it back to the starting position.
+	ii) Some of them jump when clicking open so that it skips a good portion of the text. Need to open at top and user can scroll through to read.	
+
+c) Elevate:
+	i) The Pointe Palo Alto photo pixelated
+	ii) After watching the video when navigating back to the Elevate page the video plays in the background of the hero
+
+	Reply: I downloaded the “Pointe Palo Alto” photo using an online YouTube image downloader, as a high-quality version was not available. I’ve slightly enhanced the image quality using an online image enhancement tool. Please review and let me know your feedback.
+
+	As per the XD design, this page’s hero section uses a seamlessly looping video background, and I used the same video for both the hero and the bottom section. I’ve now updated the hero video. Kindly review the change and share your thoughts.	
+
+
+d) About:
+	i) Trim 25% of sky from top of photo
+	ii) On bios need READ MORE to move so not conflicting when text expanded
+	iii) Names cut off on left side
+
+e) Responsible Investing:
+
+	i) Slow down scroll slightly (same speed as Corporate Giving)
+	ii) Durham ID photo at the bottom - trim 25% off top of photo so people show
+	iii) Bioterra photo at the bottom - trim 50% of sky off photo so buildings show	","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.25","Debarjun","Sen","employee","","2026-01-23 2026-01-23T06:51:18.532Z","2026-01-23 2026-01-23T07:05:48.512Z","Partner Testimonials feedback: Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.10","Debarjun","Sen","employee","","2026-02-03 2026-02-03T18:14:06.266Z","2026-02-03 2026-02-03T18:19:14.994Z","About: 
+a) Trim 25% of sky from top of photo
+Working on this.","internal"
+"sendebarjun1984@gmail.com","Longfellow","5.20","Debarjun","Sen","employee","","2026-02-04 2026-02-04T10:46:40.567Z","2026-02-04 2026-02-04T15:58:21.725Z","Working on the attached feedback document.","internal"
+"sendebarjun1984@gmail.com","Longfellow","1.05","Debarjun","Sen","employee","","2026-02-05 2026-02-05T17:05:26.078Z","2026-02-05 2026-02-05T18:08:01.809Z","Below listed points are completed>
+Sitewide Updates
+
+a) Navigation Menu: Navigation Not accurate: Please refer to XD file for requested navigation menu style.
+
+Landing Page:
+
+a) Featured Markets: The ‘View Our Markets’ button mismatch (Please update button to match the rest of the website)
+
+b) Featured Markets: Market options are static: Enable hover-triggered image updates and scroll-based horizontal navigation within this section
+
+c) Featured News: Frames are different size: Update image containers so all images use the same fixed dimensions and aspect ratio. 
+
+d) Featured News: Image hover zoom missing: Apply a subtle hover zoom (scale) effect to images, but keep the frame ration intact.
+
+e) Featured News: This is an addition: Include the following blurb to our news section and have the button “Explore Our Newsroom” link to the news page: “A closer look at recent announcements, milestones, and media coverage from across our portfolio.” 
+
+f) Featured Partner Testimonials: Partner testimonials don’t shuffle form existing partner testimonials and the current 3 that are not linking to their corresponding testimonial in the Partner testimonial page
+
+**Working on other points.","internal"
+"sendebarjun1984@gmail.com","Longfellow","4.93","Debarjun","Sen","employee","","2026-02-05 2026-02-05T11:18:46.609Z","2026-02-05 2026-02-05T16:14:44.600Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.82","Debarjun","Sen","employee","","2026-02-06 2026-02-06T14:54:40.767Z","2026-02-06 2026-02-06T15:42:45.797Z","Working on it.","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.35","Debarjun","Sen","employee","","2026-02-06 2026-02-06T13:45:30.359Z","2026-02-06 2026-02-06T14:05:53.071Z","Markets Page: The ‘View Our Markets’ button mismatch
+** completed","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.47","Debarjun","Sen","employee","","2026-02-12 2026-02-12T17:56:51.941Z","2026-02-12 2026-02-12T18:24:07.869Z","Completed below listed tasks:
+a) Landing Page:
+			i) Featured News: This is an addition: Include the following blurb to our news section and have the button “Explore Our Newsroom” link to the news page: “A closer look at recent announcements, milestones, and media coverage from across our portfolio.” 
+
+			ii) Features Markets: The carousel of markets is not rotating or taking you to the corresponding market : The markets should subtly shuffle like a carousel and link to the corresponding 
+
+		b) Markets Page:
+			i) Featured Markets: The ‘View Our Markets’ button mismatch: Please update button to match the rest of the website
+
+			ii) Featured News: Frames are different size: Update image containers so all images use the same fixed dimensions and aspect ratio.
+
+			iii) Featured News: This is an addition: Include the following blurb to our news section and have the button “Explore Our Newsroom” link to the news page: “A closer look at recent announcements, milestones, and media coverage from across our portfolio.” ","internal"
+"sendebarjun1984@gmail.com","Longfellow","2.12","Debarjun","Sen","employee","","2026-02-12 2026-02-12T13:45:06.561Z","2026-02-12 2026-02-12T15:51:32.715Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.62","Debarjun","Sen","employee","","2026-02-13 2026-02-13T17:01:55.201Z","2026-02-13 2026-02-13T17:38:18.771Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","2.08","Debarjun","Sen","employee","","2026-02-13 2026-02-13T12:40:33.857Z","2026-02-13 2026-02-13T14:44:41.364Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","2.58","Debarjun","Sen","employee","","2026-02-13 2026-02-13T09:48:37.221Z","2026-02-13 2026-02-13T12:23:16.751Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.88","Debarjun","Sen","employee","","2026-02-13 2026-02-13T06:12:06.500Z","2026-02-13 2026-02-13T07:04:34.937Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","9.97","Debarjun","Sen","employee","","2026-02-16 2026-02-16T20:04:28.172Z","2026-02-16 2026-02-17T06:01:33.715Z","Completed the feedback from doc. Time: 1 hour
+=============================================
+The remaining hours are unbillable, as I forgot to stop the timer after completing the work.
+
+","internal"
+"sendebarjun1984@gmail.com","Longfellow","2.42","Debarjun","Sen","employee","","2026-02-16 2026-02-16T13:38:06.833Z","2026-02-16 2026-02-16T16:02:34.704Z","working on this.","internal"
+"sendebarjun1984@gmail.com","Longfellow","3.30","Debarjun","Sen","employee","","2026-02-16 2026-02-16T07:25:47.497Z","2026-02-16 2026-02-16T10:43:09.270Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.60","Debarjun","Sen","employee","","2026-02-16 2026-02-16T06:31:29.408Z","2026-02-16 2026-02-16T07:06:45.386Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","3.50","Debarjun","Sen","employee","","2026-02-17 2026-02-17T18:41:05.331Z","2026-02-17 2026-02-17T22:10:35.575Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.52","Debarjun","Sen","employee","","2026-02-17 2026-02-17T17:36:43.528Z","2026-02-17 2026-02-17T18:07:10.382Z","Completed the homepage responsive upto Tablet version.
+Working on the mobile version.","internal"
+"sendebarjun1984@gmail.com","Longfellow","1.10","Debarjun","Sen","employee","","2026-02-17 2026-02-17T14:21:18.737Z","2026-02-17 2026-02-17T15:26:43.305Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Longfellow","0.87","Debarjun","Sen","employee","","2026-02-17 2026-02-17T06:13:48.386Z","2026-02-17 2026-02-17T07:04:49.170Z","Working on it.","internal"
+"sendebarjun1984@gmail.com","Longfellow","3.40","Debarjun","Sen","employee","","2026-02-18 2026-02-18T06:31:45.374Z","2026-02-18 2026-02-18T09:55:39.545Z","Work in progress","internal"
+"sendebarjun1984@gmail.com","ReEverything","1.05","Debarjun","Sen","employee","","2026-01-23 2026-01-23T15:49:49.587Z","2026-01-23 2026-01-23T16:52:17.920Z","I have completed below listed tasks.
+1) Please replace the images in the ""Our Team"" section to the following:
+
+		a) Scott Waters
+		b) Jennifer Bingham
+		c) teven Wray
+		d) Mark Cook
+		e) Michael Haun
+
+		2_ Also, please replace the image under the section of ""Already Working"" with this:
+
+		3. Also, kindly change the last sentence here to ""If you need any documents, please email Scott.""","internal"
+"sendebarjun1984@gmail.com","ReEverything","3.32","Debarjun","Sen","employee","","2026-01-29 2026-01-29T07:43:06.120Z","2026-01-29 2026-01-29T11:01:16.234Z","I completed the edits within 1 hour. Due to a 2-hour power cut, the additional 2 hours and 16 minutes should not be counted.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.23","Debarjun","Sen","employee","","2026-01-13 2026-01-13T18:48:22.944Z","2026-01-13 2026-01-13T20:01:34.391Z","a) Google review sections below hero image - All Pages is not pure black
+b) Recheck the https://new.sunstoppers.com/xpel-ceramic-coating/
+c) Recheck the https://new.sunstoppers.com/paint-protection-film/
+d) Service pages feedback: Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.88","Debarjun","Sen","employee","","2026-01-15 2026-01-15T14:47:39.971Z","2026-01-15 2026-01-15T15:39:52.103Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.17","Debarjun","Sen","employee","","2026-01-15 2026-01-15T05:04:24.938Z","2026-01-15 2026-01-15T06:14:03.856Z","Completed all ""Tint-law"" individual pages.
+https://new.sunstoppers.com/tint_laws/arizona-tint-laws/
+https://new.sunstoppers.com/tint_laws/kansas-tint-laws/
+https://new.sunstoppers.com/tint_laws/delaware-tint-laws/
+https://new.sunstoppers.com/tint_laws/georgia-tint-laws/
+https://new.sunstoppers.com/tint_laws/maryland-tint-laws/
+https://new.sunstoppers.com/tint_laws/colorado-tint-laws/
+https://new.sunstoppers.com/tint_laws/california-tint-laws/
+https://new.sunstoppers.com/tint_laws/oklahoma-tint-laws/
+https://new.sunstoppers.com/tint_laws/florida-tint-laws/
+https://new.sunstoppers.com/tint_laws/south-carolina-tint-laws/
+https://new.sunstoppers.com/tint_laws/texas-tint-laws/
+https://new.sunstoppers.com/tint_laws/north-carolina-tint-laws/
+https://new.sunstoppers.com/tint_laws/massachusetts-tint-laws/","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","9.02","Debarjun","Sen","employee","","2026-01-16 2026-01-16T11:40:53.547Z","2026-01-16 2026-01-16T20:41:02.630Z","I forgot to stop the tracker. The total time should be 3 hours only.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.93","Debarjun","Sen","employee","","2026-01-17 2026-01-17T14:41:08.161Z","2026-01-17 2026-01-17T15:36:22.156Z","Fixed the services page structure.
+https://new.sunstoppers.com/services/","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.80","Debarjun","Sen","employee","","2026-01-22 2026-01-22T16:28:23.134Z","2026-01-22 2026-01-22T18:15:30.858Z","Completed below listed tasks:
+a) Main navigation menu: Services not landing on corresponding section on the service page
+
+
+		b) Home: 
+			i) Link all buttons
+			ii) Crop photos from center
+
+		c) Markets: 
+		
+			i) https://longfellow1stg.wpenginepowered.com/markets/boston/ - 42 million square feet external link needs to open new tab		
+
+			ii) When selecting market in side bar page should land just under photo not at the top of the page
+
+			**iii) https://longfellow1stg.wpenginepowered.com/markets/maryland-washington-d-c/ - Preserve Labs in text should open new Preserve Labs portfolio page	
+
+			iv) https://longfellow1stg.wpenginepowered.com/markets/philadelphia/ - hero photo very pixelated
+
+			v) https://longfellow1stg.wpenginepowered.com/markets/san-diego/ -  4 million square feet in San Diego should open in new tab
+
+			vi) https://longfellow1stg.wpenginepowered.com/markets/sf-bay-area/ - Bay Area portfolio - open in new tab
+
+		d) Portfolio: 
+			i) Header - change text by arrow to ""View Our Portfolio""
+			ii) Confirm all portfolios from live site on new site https://lfrep.com/properties/	
+
+		e) Footer: Services not landing on corresponding section on the service page	
+
+		f) Case Studies:
+		
+			i) The rolling sidebar doesn't work for me. It starts but then stops and I cannot see all items.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.50","Debarjun","Sen","employee","","2026-01-22 2026-01-22T14:32:29.767Z","2026-01-22 2026-01-22T15:01:47.069Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.52","Debarjun","Sen","employee","","2026-01-22 2026-01-22T12:25:06.483Z","2026-01-22 2026-01-22T13:55:36.411Z","Set up the premium version of the Map-SVG plugin and added region-specific links to the map.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.30","Debarjun","Sen","employee","","2026-01-23 2026-01-23T15:31:51.375Z","2026-01-23 2026-01-23T15:48:52.647Z","Setup the map links are not opened in new tab.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.22","Debarjun","Sen","employee","","2026-01-26 2026-01-26T11:06:23.341Z","2026-01-26 2026-01-26T12:19:15.020Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.85","Debarjun","Sen","employee","","2026-01-26 2026-01-26T08:24:01.042Z","2026-01-26 2026-01-26T09:14:07.020Z","a) https://new.sunstoppers.com/contact-us/:  Where did info on this page come from? Should be same as this https://sunstoppers.com/contact-us/ unless specifically told to do this. But there is no way to contact company.
+** Completd this tasks.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.93","Debarjun","Sen","employee","","2026-01-27 2026-01-27T14:55:04.548Z","2026-01-27 2026-01-27T15:50:10.135Z","Work in progress","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.72","Debarjun","Sen","employee","","2026-01-27 2026-01-27T11:59:13.836Z","2026-01-27 2026-01-27T13:41:19.655Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.15","Debarjun","Sen","employee","","2026-01-27 2026-01-27T11:16:32.279Z","2026-01-27 2026-01-27T11:24:48.045Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","3.80","Debarjun","Sen","employee","","2026-01-27 2026-01-27T07:27:06.119Z","2026-01-27 2026-01-27T11:14:09.406Z","Resolved the below listed map issues.
+a) State working upon first click. Then not working when ""Select A State"" to see all
+b) Select a service not working at all.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.22","Debarjun","Sen","employee","","2026-01-29 2026-01-29T17:40:07.199Z","2026-01-29 2026-01-29T17:52:08.435Z","Completed below listed tasks:
+a) Entire location box should be tappable/clickable and should take user directly to page - not highlight it on the map
+		b) Rendering issue for map detail","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.92","Debarjun","Sen","employee","","2026-01-29 2026-01-29T14:31:25.431Z","2026-01-29 2026-01-29T16:25:41.631Z","work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.15","Debarjun","Sen","employee","","2026-01-29 2026-01-29T12:39:36.970Z","2026-01-29 2026-01-29T13:47:46.472Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.35","Debarjun","Sen","employee","","2026-01-29 2026-01-29T12:06:21.977Z","2026-01-29 2026-01-29T12:26:37.148Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.50","Debarjun","Sen","employee","","2026-01-30 2026-01-30T07:54:48.396Z","2026-01-30 2026-01-30T08:23:51.938Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.67","Debarjun","Sen","employee","","2026-02-02 2026-02-02T09:29:43.404Z","2026-02-02 2026-02-02T10:09:14.266Z","Fixed the “Store Locator” styling issues and verified the search functionality.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","2.25","Debarjun","Sen","employee","","2026-02-03 2026-02-03T10:57:31.063Z","2026-02-03 2026-02-03T13:12:23.055Z","Completed Navigation menu  - updates (adding social Icons)","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.37","Debarjun","Sen","employee","","2026-02-03 2026-02-03T08:14:30.702Z","2026-02-03 2026-02-03T09:35:58.389Z","a) Location Map - filter updates: markup completed.
+b) Navigation menu  - updates (adding social Icons): Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.13","Debarjun","Sen","employee","","2026-02-04 2026-02-04T17:44:57.078Z","2026-02-04 2026-02-04T17:52:50.339Z","Working on it.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.52","Debarjun","Sen","employee","","2026-02-04 2026-02-04T07:11:59.935Z","2026-02-04 2026-02-04T08:42:49.183Z","Completed.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.43","Debarjun","Sen","employee","","2026-02-05 2026-02-05T10:44:29.571Z","2026-02-05 2026-02-05T11:09:41.985Z","I’ve added these two new locations to the staging site. Please review them here:
+
+https://new.sunstoppers.com/locations/texas/sun-stoppers-olmito-80/
+https://new.sunstoppers.com/locations/texas/sun-stoppers-mcallen79/","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.92","Debarjun","Sen","employee","","2026-02-05 2026-02-05T08:17:46.445Z","2026-02-05 2026-02-05T10:11:50.227Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.52","Debarjun","Sen","employee","","2026-02-05 2026-02-05T05:57:02.390Z","2026-02-05 2026-02-05T07:27:57.543Z","Working on it","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.17","Debarjun","Sen","employee","","2026-02-06 2026-02-06T13:24:35.118Z","2026-02-06 2026-02-06T13:34:19.100Z","Add videos and photos from all galleries on live site
+
+** Completed.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.18","Debarjun","Sen","employee","","2026-02-06 2026-02-06T13:10:01.575Z","2026-02-06 2026-02-06T13:20:18.368Z","https://new.sunstoppers.com/home-office/residential-galleries/ - all videos and photos from live site need to be added
+**Completed.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.52","Debarjun","Sen","employee","","2026-02-06 2026-02-06T08:23:07.460Z","2026-02-06 2026-02-06T09:53:22.102Z","https://new.sunstoppers.com/home-office/residential-galleries/ - all videos and photos from live site need to be added https://sunstoppers.com/home-services/residential-galleries/
+
+**Working on it.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.88","Debarjun","Sen","employee","","2026-02-06 2026-02-06T06:52:26.165Z","2026-02-06 2026-02-06T07:45:05.125Z","Working on it.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.75","Debarjun","Sen","employee","","2026-02-09 2026-02-09T17:05:42.748Z","2026-02-09 2026-02-09T17:49:53.706Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","4.28","Debarjun","Sen","employee","","2026-02-09 2026-02-09T10:55:56.315Z","2026-02-09 2026-02-09T15:12:06.162Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","3.17","Debarjun","Sen","employee","","2026-02-09 2026-02-09T06:13:03.787Z","2026-02-09 2026-02-09T09:22:41.753Z","Working on this.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.92","Debarjun","Sen","employee","","2026-02-09 2026-02-09T04:53:33.950Z","2026-02-09 2026-02-09T05:47:56.184Z","Working on it.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.25","Debarjun","Sen","employee","","2026-02-10 2026-02-10T17:46:31.699Z","2026-02-10 2026-02-10T18:01:20.206Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","3.35","Debarjun","Sen","employee","","2026-02-10 2026-02-10T12:17:38.136Z","2026-02-10 2026-02-10T15:38:32.912Z","Working on it.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.27","Debarjun","Sen","employee","","2026-02-10 2026-02-10T09:00:03.578Z","2026-02-10 2026-02-10T10:15:37.163Z","Fixed style adjustment for store locator page.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.80","Debarjun","Sen","employee","","2026-02-10 2026-02-10T06:25:15.273Z","2026-02-10 2026-02-10T08:13:12.429Z","Working on it.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.27","Debarjun","Sen","employee","","2026-02-11 2026-02-11T18:17:10.388Z","2026-02-11 2026-02-11T18:33:01.644Z","Working on it.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.80","Debarjun","Sen","employee","","2026-02-11 2026-02-11T13:32:49.388Z","2026-02-11 2026-02-11T15:19:54.842Z","working on it.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.45","Debarjun","Sen","employee","","2026-02-11 2026-02-11T10:18:00.091Z","2026-02-11 2026-02-11T11:44:20.712Z","https://new.sunstoppers.com/locations/north-carolina/matthews-window-tinting/","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.38","Debarjun","Sen","employee","","2026-02-11 2026-02-11T09:31:28.659Z","2026-02-11 2026-02-11T09:53:42.793Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.57","Debarjun","Sen","employee","","2026-02-11 2026-02-11T05:59:15.999Z","2026-02-11 2026-02-11T07:32:27.433Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.90","Debarjun","Sen","employee","","2026-02-12 2026-02-12T11:19:02.063Z","2026-02-12 2026-02-12T12:12:54.524Z","a)Homepage tab:
+
+	Review: CTA button : Add 'See All Reviews' button (Done)
+
+b)Footer Tab:
+
+	Menu: Navigation mirror: Mirror top navigation expanded (Done)
+
+	Extras: Badges: Add awards and certifications (optional) (Done)
+
+c)Services pages Tab:
+
+	Review: Widget : Add review widget with transparent background under quote buttons  (Done)
+
+	Review: Styling: Transparent widget background  (Done)
+
+d)Performance & Blog Tab: 
+
+	Blog: Underlines: Remove title underlines  (Done)
+
+e)IBX & Misc  items:	
+
+	Gallery photos: Placeholder vs final unclear 
+
+	Text shadows : See if shadows should be added to all H1 text as was done to subheadings  (Done)","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.43","Debarjun","Sen","employee","","2026-02-12 2026-02-12T07:55:11.842Z","2026-02-12 2026-02-12T09:21:00.428Z","https://docs.google.com/spreadsheets/d/10xN31YuHOGmvU6cv1iF2_F8KX-FNzKAp/edit?gid=453798456#gid=453798456
+Work in progress.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.55","Debarjun","Sen","employee","","2026-02-12 2026-02-12T06:35:15.571Z","2026-02-12 2026-02-12T07:07:31.617Z","Working on it.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.33","Debarjun","Sen","employee","","2026-02-12 2026-02-12T05:13:47.426Z","2026-02-12 2026-02-12T06:33:05.703Z","Completed.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","0.85","Debarjun","Sen","employee","","2026-02-16 2026-02-16T17:43:42.806Z","2026-02-16 2026-02-16T18:33:59.785Z","I have thoroughly reviewed the pages and identified the causes of the missing page issues. There are several reasons for this, which I’ve outlined below:
+
+1) Staging Site Created Earlier: We cloned the live site to staging around the beginning of 2025. Several pages listed in your report were published on the live site after that time, so they are not present in the staging site.
+Examples: https://sunstoppers.com/car-services/automotive-window-tinting-keller/
+            https://sunstoppers.com/car-services/automotive-window-tinting-tucson/
+            https://sunstoppers.com/car-services/automotive-window-tinting-charlotte/ etc..
+
+2) Pages Merged in the New Design: In the new design, some pages were merged into a single page. As a result, the secondary page URLs no longer exist on staging. These should be resolved by implementing proper redirects.  
+
+3) URL Structure Changes: While we initially maintained the previous URL structure, there were earlier Asana tasks requesting updates to the URL structure. 
+
+   Example:
+   Old URL: https://sunstoppers.com/home-services/security-film/
+   New URL: https://new.sunstoppers.com/home-office/security-film/ 
+
+   As you can see, the parent slug has changed from “home-services” to “home-office”, which affects the URL path.
+
+ 4) The SEO team updated several page names and slugs for optimization purposes, but the menu links were not updated accordingly. As previously mentioned in Asana, the “Tesla Ceramic Coating” and “Tesla Model 3” pages were renamed, but the menu still links to the old URLs, resulting in 404 errors.
+ 
+ 5) There are multiple blog posts currently live that were published after the staging site was created. These posts are not yet present in staging and will need to be migrated.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","1.40","Debarjun","Sen","employee","","2026-02-16 2026-02-16T05:05:40.000Z","2026-02-16 2026-02-16T06:29:06.573Z","Task: Fix the phone number/ Get a Quote bar underneath the navigation bar.  Also, the  yellow""Get a Quote"" bar will be fixed on ALL pages underneath navigation bar. It's only on the Location pages that it will be split with the phone number and get a quote.
+
+** Completed.","internal"
+"sendebarjun1984@gmail.com","Sun Stoppers","2.70","Debarjun","Sen","employee","","2026-02-17 2026-02-17T10:26:07.077Z","2026-02-17 2026-02-17T13:07:11.955Z","Fixed some styling in location single page.
+Working on the missing pages.","internal"
+"sendebarjun1984@gmail.com","Thomas Wheeler","0.22","Debarjun","Sen","employee","","2026-02-02 2026-02-02T16:13:32.047Z","2026-02-02 2026-02-02T16:26:05.174Z","Tasks:
+a) Remove ability to order on website - Magic Bridge, White Gladis, and Rise Up. Instead add ""Buy Now"" with link to Amazon.
+b) Add text ""Now available on Audible, Kindle, and paperback"" above the Buy Now button that links to Amazon - Magic Bridge and White Gladis
+c) Add note ""Listen to the first chapter for free!"" - Magic Bridge and White Gladis
+d) Add reviews - Magic Bridge","internal"
+"sendebarjun1984@gmail.com","Thomas Wheeler","3.03","Debarjun","Sen","employee","","2026-02-02 2026-02-02T12:52:22.292Z","2026-02-02 2026-02-02T15:53:22.965Z","Work in progress.","internal"
+"sendebarjun1984@gmail.com","Thomas Wheeler","0.18","Debarjun","Sen","employee","","2026-02-03 2026-02-03T07:17:37.771Z","2026-02-03 2026-02-03T07:27:51.526Z","Completed","internal"
+"sendebarjun1984@gmail.com","Thomas Wheeler","0.67","Debarjun","Sen","employee","","2026-02-06 2026-02-06T14:08:42.416Z","2026-02-06 2026-02-06T14:48:09.505Z","Completed.","internal"
+"sendebarjun1984@gmail.com","Thomas Wheeler","0.23","Debarjun","Sen","employee","","2026-02-10 2026-02-10T06:11:10.931Z","2026-02-10 2026-02-10T06:24:24.657Z","Completed.","internal"
+"devteam@godigitalalchemy.com","Bracketocracy","2.50","Dev","Team","employee","","2026-02-09 2026-02-09T12:36:03.910Z","2026-02-09 2026-02-09T15:05:30.891Z","Fixed Google Play photo/video permission compliance
+
+Resolved splash screen and iOS status bar issues
+
+Updated app entry and cleaned unused files
+
+Added Google services configuration (JSON & plist)
+
+Bumped iOS version number
+
+General performance, stability, and release readiness improvements","internal"
+"devteam@godigitalalchemy.com","Bracketocracy","3.00","Dev","Team","employee","","2026-02-13 2026-02-13T12:23:15.289Z","2026-02-13 2026-02-13T15:23:06.787Z","Added Android App Links support to handle deep linking for password reset and league invitation flows. Users can now directly open the app from links and complete the respective actions seamlessly.","internal"
+"devteam@godigitalalchemy.com","Her PLAN Directory","1.15","Dev","Team","employee","Susan B. Anthony","2026-02-10 2026-02-10T12:31:49.318Z","2026-02-10 2026-02-10T13:40:09.746Z","Fixed issue where users with role provider-member sometimes do not see the Notes on the /search-providers page.","internal"
+"devteam@godigitalalchemy.com","Her PLAN Directory","2.00","Dev","Team","employee","Susan B. Anthony","2026-02-12 2026-02-12T11:42:26.727Z","2026-02-12 2026-02-12T13:41:42.559Z","Pathways Design Updates","internal"
+"devteam@godigitalalchemy.com","Her PLAN Directory","4.83","Dev","Team","employee","Susan B. Anthony","2026-02-16 2026-02-16T10:36:02.021Z","2026-02-16 2026-02-16T15:25:32.130Z","Pathways Design Updates","internal"
+"devteam@godigitalalchemy.com","Her Plan Mobile App","2.13","Dev","Team","employee","Susan B. Anthony","2026-02-05 2026-02-05T12:03:41.510Z","2026-02-05 2026-02-05T14:11:01.699Z","Resolved all existing merge conflicts and created a pull request into the development branch.","internal"
+"devteam@godigitalalchemy.com","Her Plan Mobile App","2.10","Dev","Team","employee","Susan B. Anthony","2026-02-06 2026-02-06T11:39:21.526Z","2026-02-06 2026-02-06T13:44:31.002Z","Resolved merge conflict between development and main and fixed sticky note UI.","internal"
+"devteam@godigitalalchemy.com","Her Plan Mobile App","0.85","Dev","Team","employee","Susan B. Anthony","2026-02-09 2026-02-09T11:44:08.016Z","2026-02-09 2026-02-09T12:34:45.984Z","Update app pin and badge colors for vetted vs. unvetted resources to match the web implementation.","internal"
+"devteam@godigitalalchemy.com","Knighthead","0.55","Dev","Team","employee","Illustrata","2026-02-05 2026-02-05T07:51:24.698Z","2026-02-05 2026-02-05T08:23:49.002Z","update allocation labels to Strategy Allocations and Comparison Strategy Allocations and fixed step indicators gaps.","internal"

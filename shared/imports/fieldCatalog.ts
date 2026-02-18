@@ -90,6 +90,10 @@ export const TIME_ENTRY_FIELDS: FieldDefinition[] = [
   { key: "projectName", label: "Project Name", type: "string", required: false, aliases: ["project_name", "project"], examples: ["Website Redesign"], isResolver: true },
   { key: "taskTitle", label: "Task Title", type: "string", required: false, aliases: ["task_title", "task", "taskName", "task_name"], examples: ["Design homepage"], isResolver: true },
   { key: "isManual", label: "Is Manual", type: "boolean", required: false, aliases: ["is_manual", "manual"], examples: ["true"] },
+  { key: "firstName", label: "First Name", type: "string", required: false, aliases: ["first_name", "first", "given_name"], examples: ["John"] },
+  { key: "lastName", label: "Last Name", type: "string", required: false, aliases: ["last_name", "last", "family_name", "surname"], examples: ["Doe"] },
+  { key: "role", label: "Role", type: "enum", required: false, aliases: ["user_role", "employee_role"], enumValues: ["employee", "admin", "manager", "contractor"], examples: ["employee"] },
+  { key: "parentClientName", label: "Parent Client Name", type: "string", required: false, aliases: ["parent_client", "parent_company", "parent", "parentClient"], examples: ["Parent Corp"], isResolver: true },
 ];
 
 export const ENTITY_FIELD_MAP: Record<EntityType, FieldDefinition[]> = {

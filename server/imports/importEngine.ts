@@ -246,8 +246,8 @@ async function autoCreateMissingDeps(job: ImportJob, lookups: TenantLookups): Pr
   let usersCreated = 0;
   let projectsCreated = 0;
 
-  const neededClients = new Set<string>();
-  const neededUsers = new Set<string>();
+  const neededClients = new Map<string, { name: string; parentClientName?: string }>();
+  const neededUsers = new Map<string, { email: string; firstName?: string; lastName?: string; role?: string }>();
   const neededProjects = new Set<string>();
 
   for (const rawRow of job.rawRows) {
@@ -256,14 +256,33 @@ async function autoCreateMissingDeps(job: ImportJob, lookups: TenantLookups): Pr
     if (job.entityType === "projects" || job.entityType === "time_entries" || job.entityType === "clients") {
       const clientName = (job.entityType === "clients" ? mapped.parentClientName : mapped.clientName)?.trim();
       if (clientName && !lookups.clientsByName.has(clientName.toLowerCase())) {
-        neededClients.add(clientName);
+        if (!neededClients.has(clientName.toLowerCase())) {
+          const parentClientName = (job.entityType === "time_entries" ? mapped.parentClientName?.trim() : undefined);
+          neededClients.set(clientName.toLowerCase(), { name: clientName, parentClientName });
+        }
+      }
+    }
+
+    if (job.entityType === "time_entries") {
+      const parentName = mapped.parentClientName?.trim();
+      if (parentName && !lookups.clientsByName.has(parentName.toLowerCase())) {
+        if (!neededClients.has(parentName.toLowerCase())) {
+          neededClients.set(parentName.toLowerCase(), { name: parentName });
+        }
       }
     }
 
     if (job.entityType === "tasks" || job.entityType === "time_entries") {
       const email = (job.entityType === "tasks" ? mapped.assigneeEmail : mapped.userEmail)?.trim();
       if (email && !lookups.usersByEmail.has(email.toLowerCase())) {
-        neededUsers.add(email);
+        if (!neededUsers.has(email.toLowerCase())) {
+          neededUsers.set(email.toLowerCase(), {
+            email,
+            firstName: mapped.firstName?.trim(),
+            lastName: mapped.lastName?.trim(),
+            role: mapped.role?.trim(),
+          });
+        }
       }
     }
 
@@ -275,31 +294,64 @@ async function autoCreateMissingDeps(job: ImportJob, lookups: TenantLookups): Pr
     }
   }
 
-  for (const clientName of neededClients) {
-    if (lookups.clientsByName.has(clientName.toLowerCase())) continue;
+  const parentClients = new Map<string, { name: string }>();
+  for (const [key, info] of neededClients) {
+    if (info.parentClientName) {
+      const parentKey = info.parentClientName.toLowerCase();
+      if (!lookups.clientsByName.has(parentKey) && !neededClients.has(parentKey)) {
+        parentClients.set(parentKey, { name: info.parentClientName });
+      }
+    }
+  }
+  for (const [key, info] of parentClients) {
+    neededClients.set(key, info);
+  }
+
+  const clientCreationOrder: { name: string; parentClientName?: string }[] = [];
+  const withParent: typeof clientCreationOrder = [];
+  for (const info of neededClients.values()) {
+    if (info.parentClientName) {
+      withParent.push(info);
+    } else {
+      clientCreationOrder.push(info);
+    }
+  }
+  clientCreationOrder.push(...withParent);
+
+  for (const info of clientCreationOrder) {
+    if (lookups.clientsByName.has(info.name.toLowerCase())) continue;
+    let parentClientId: string | null = null;
+    if (info.parentClientName) {
+      const parent = lookups.clientsByName.get(info.parentClientName.toLowerCase());
+      if (parent) parentClientId = parent.id;
+    }
     const [newClient] = await db.insert(clients).values({
       tenantId: lookups.tenantId,
       workspaceId: lookups.workspaceId,
-      companyName: clientName,
+      companyName: info.name,
+      parentClientId,
       status: "active",
     }).returning({ id: clients.id, companyName: clients.companyName, parentClientId: clients.parentClientId });
-    lookups.clientsByName.set(clientName.toLowerCase(), newClient);
+    lookups.clientsByName.set(info.name.toLowerCase(), newClient);
     clientsCreated++;
   }
 
-  for (const email of neededUsers) {
-    if (lookups.usersByEmail.has(email.toLowerCase())) continue;
-    const namePart = email.split("@")[0];
+  for (const [, info] of neededUsers) {
+    if (lookups.usersByEmail.has(info.email.toLowerCase())) continue;
+    const firstName = info.firstName || info.email.split("@")[0];
+    const lastName = info.lastName || "";
+    const fullName = lastName ? `${firstName} ${lastName}` : firstName;
+    const role = (info.role === "admin" || info.role === "manager" || info.role === "contractor") ? info.role : "employee";
     const [newUser] = await db.insert(users).values({
       tenantId: lookups.tenantId,
-      email: email.toLowerCase(),
-      name: namePart,
-      firstName: namePart,
-      lastName: "",
-      role: "employee",
+      email: info.email.toLowerCase(),
+      name: fullName,
+      firstName,
+      lastName,
+      role,
       isActive: true,
     }).returning({ id: users.id, email: users.email, role: users.role });
-    lookups.usersByEmail.set(email.toLowerCase(), newUser);
+    lookups.usersByEmail.set(info.email.toLowerCase(), newUser);
     usersCreated++;
   }
 
