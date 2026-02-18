@@ -15,6 +15,8 @@
  * - POST /integrations/mailgun/test - Test Mailgun connection
  * - POST /integrations/mailgun/send-test-email - Send test email
  * - DELETE /integrations/mailgun/secret/:secretName - Clear Mailgun secret
+ * - GET/PUT /integrations/s3 - S3 storage settings
+ * - DELETE /integrations/s3/secret/:secretName - Clear S3 secret
  * - GET/PUT /integrations/stripe - Stripe settings
  * - POST /integrations/stripe/test - Test Stripe connection
  * - DELETE /integrations/stripe/secret/:secretName - Clear Stripe secret
@@ -67,6 +69,13 @@ router.get("/integrations/status", requireSuperUser, async (req, res) => {
       process.env.CF_R2_SECRET_ACCESS_KEY &&
       process.env.CF_R2_BUCKET_NAME
     );
+
+    const s3Configured = !!(
+      settings?.s3Region &&
+      settings?.s3BucketName &&
+      settings?.s3AccessKeyIdEncrypted &&
+      settings?.s3SecretAccessKeyEncrypted
+    );
     
     const stripeConfigured = !!(
       settings?.stripePublishableKey && 
@@ -78,6 +87,7 @@ router.get("/integrations/status", requireSuperUser, async (req, res) => {
     res.json({
       mailgun: mailgunConfigured,
       r2: r2Configured,
+      s3: s3Configured,
       stripe: stripeConfigured,
       encryptionConfigured,
     });
@@ -86,6 +96,7 @@ router.get("/integrations/status", requireSuperUser, async (req, res) => {
     res.json({
       mailgun: false,
       r2: false,
+      s3: false,
       stripe: false,
       encryptionConfigured: isEncryptionAvailable(),
     });
@@ -325,6 +336,159 @@ router.delete("/integrations/mailgun/secret/:secretName", requireSuperUser, asyn
     res.json({ success: true, message: `${secretName} cleared successfully` });
   } catch (error) {
     console.error("[integrations] Failed to clear Mailgun secret:", error);
+    res.status(500).json({ error: "Failed to clear secret" });
+  }
+});
+
+const globalS3UpdateSchema = z.object({
+  region: z.string().optional(),
+  bucketName: z.string().optional(),
+  publicBaseUrl: z.string().optional(),
+  cloudfrontUrl: z.string().optional(),
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
+});
+
+router.get("/integrations/s3", requireSuperUser, async (req, res) => {
+  const notConfiguredResponse = {
+    status: "not_configured",
+    config: null,
+    secretMasked: null,
+    lastTestedAt: null,
+  };
+
+  try {
+    let settings: typeof systemSettings.$inferSelect | null = null;
+    try {
+      const [row] = await db.select().from(systemSettings).limit(1);
+      settings = row || null;
+    } catch (dbError: unknown) {
+      const message = dbError instanceof Error ? dbError.message : String(dbError);
+      if (message.includes("does not exist") || message.includes("column")) {
+        console.warn("[integrations] systemSettings table/column issue:", message);
+        return res.json(notConfiguredResponse);
+      }
+      throw dbError;
+    }
+
+    if (!settings) {
+      return res.json(notConfiguredResponse);
+    }
+
+    let accessKeyIdMasked: string | null = null;
+    let secretAccessKeyMasked: string | null = null;
+
+    if (settings.s3AccessKeyIdEncrypted && isEncryptionAvailable()) {
+      try {
+        const decrypted = decryptValue(settings.s3AccessKeyIdEncrypted);
+        accessKeyIdMasked = maskSecret(decrypted);
+      } catch (e) {
+        console.error("[integrations] Failed to decrypt S3 access key ID for masking");
+      }
+    }
+
+    if (settings.s3SecretAccessKeyEncrypted && isEncryptionAvailable()) {
+      try {
+        const decrypted = decryptValue(settings.s3SecretAccessKeyEncrypted);
+        secretAccessKeyMasked = maskSecret(decrypted);
+      } catch (e) {
+        console.error("[integrations] Failed to decrypt S3 secret access key for masking");
+      }
+    }
+
+    const isConfigured = !!(
+      settings.s3Region &&
+      settings.s3BucketName &&
+      settings.s3AccessKeyIdEncrypted
+    );
+
+    res.json({
+      status: isConfigured ? "configured" : "not_configured",
+      config: {
+        region: settings.s3Region,
+        bucketName: settings.s3BucketName,
+        publicBaseUrl: settings.s3PublicBaseUrl,
+        cloudfrontUrl: settings.s3CloudfrontUrl,
+      },
+      secretMasked: {
+        accessKeyIdMasked,
+        secretAccessKeyMasked,
+      },
+      lastTestedAt: settings.s3LastTestedAt?.toISOString() || null,
+    });
+  } catch (error) {
+    console.error("[integrations] Failed to get S3 settings:", error);
+    res.json(notConfiguredResponse);
+  }
+});
+
+router.put("/integrations/s3", requireSuperUser, async (req, res) => {
+  try {
+    const body = globalS3UpdateSchema.parse(req.body);
+
+    const updateData: Record<string, any> = {
+      updatedAt: new Date(),
+    };
+
+    if (body.region !== undefined) {
+      updateData.s3Region = body.region || null;
+    }
+    if (body.bucketName !== undefined) {
+      updateData.s3BucketName = body.bucketName || null;
+    }
+    if (body.publicBaseUrl !== undefined) {
+      updateData.s3PublicBaseUrl = body.publicBaseUrl || null;
+    }
+    if (body.cloudfrontUrl !== undefined) {
+      updateData.s3CloudfrontUrl = body.cloudfrontUrl || null;
+    }
+    if (body.accessKeyId && body.accessKeyId.trim()) {
+      if (!isEncryptionAvailable()) {
+        return res.status(400).json({ error: "Encryption not configured. Cannot store secrets." });
+      }
+      updateData.s3AccessKeyIdEncrypted = encryptValue(body.accessKeyId.trim());
+    }
+    if (body.secretAccessKey && body.secretAccessKey.trim()) {
+      if (!isEncryptionAvailable()) {
+        return res.status(400).json({ error: "Encryption not configured. Cannot store secrets." });
+      }
+      updateData.s3SecretAccessKeyEncrypted = encryptValue(body.secretAccessKey.trim());
+    }
+
+    const [existing] = await db.select().from(systemSettings).limit(1);
+    if (existing) {
+      await db.update(systemSettings).set(updateData).where(eq(systemSettings.id, 1));
+    } else {
+      await db.insert(systemSettings).values({ id: 1, ...updateData });
+    }
+
+    res.json({ success: true, message: "S3 settings saved successfully" });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation error", details: error.errors });
+    }
+    console.error("[integrations] Failed to save S3 settings:", error);
+    res.status(500).json({ error: "Failed to save S3 settings" });
+  }
+});
+
+router.delete("/integrations/s3/secret/:secretName", requireSuperUser, async (req, res) => {
+  try {
+    const { secretName } = req.params;
+    const updateData: Record<string, any> = { updatedAt: new Date() };
+
+    if (secretName === "accessKeyId") {
+      updateData.s3AccessKeyIdEncrypted = null;
+    } else if (secretName === "secretAccessKey") {
+      updateData.s3SecretAccessKeyEncrypted = null;
+    } else {
+      return res.status(400).json({ error: "Invalid secret name" });
+    }
+
+    await db.update(systemSettings).set(updateData).where(eq(systemSettings.id, 1));
+    res.json({ success: true, message: `${secretName} cleared successfully` });
+  } catch (error) {
+    console.error("[integrations] Failed to clear S3 secret:", error);
     res.status(500).json({ error: "Failed to clear secret" });
   }
 });

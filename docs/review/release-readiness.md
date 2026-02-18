@@ -37,8 +37,8 @@ Build succeeds because `esbuild` (server) and `vite` (client) skip type checking
 
 | Status | Count |
 |--------|-------|
-| Passed | 19 |
-| Failed | 38 |
+| Passed | 24 (was 19, +5 after S3 route fix) |
+| Failed | 33 (was 38, -5 after S3 route fix) |
 | Skipped | 14 |
 
 ### Failure Categories
@@ -47,10 +47,10 @@ Build succeeds because `esbuild` (server) and `vite` (client) skip type checking
 |----------|-------|------------|
 | FK constraint violations | 18 | Likely cause: `platform_audit_events` and `subtask_assignees` FK cascades missing in test teardown. `beforeEach` cleanup fails to delete users/subtasks due to dependent rows. Needs investigation. |
 | Agreement enforcement | 5 | Likely cause: Tests expect old behavior (pass-through when no agreements). Current middleware returns 451 for users without tenantId. Test expectations may need updating, but middleware behavior should also be verified against spec. |
-| Global integrations persist | 5 | Routes return 404. **Potential routing regression** - needs investigation to determine if global integration routes are properly mounted or if the feature was removed/relocated. |
+| Global integrations persist | 5 → 0 | **FIXED** (2026-02-18): S3 routes were never added to the super integrations router (`server/routes/super/integrations.router.ts`). Mailgun/Stripe had routes but S3 was missing. Also, `/integrations/status` returned `r2` key but not `s3`. Added GET/PUT/DELETE S3 routes and `s3` key to status. All 9 tests now pass. |
 | Project membership scoping | 1 | Test expects 1 project, gets 2. Likely cause: project visibility logic changed or test data contamination. Needs verification. |
 
-**Recommendation**: Prioritize investigating the global integrations 404s (potential production bug). Fix FK cascade in test cleanup. Verify agreement enforcement invariants match intended behavior.
+**Recommendation**: Global integrations 404s are now fixed (5 tests restored). Remaining: fix FK cascade in test cleanup (18 tests), verify agreement enforcement invariants (5 tests), investigate project membership scoping (1 test).
 
 ---
 
