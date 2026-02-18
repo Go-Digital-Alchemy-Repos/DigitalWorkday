@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, sql } from 'drizzle-orm';
 import {
   users,
   taskAssignees,
@@ -11,6 +11,7 @@ import {
   personalTaskSections,
   subtaskAssignees,
   clientUserAccess,
+  userClientAccess,
   notifications,
   notificationPreferences,
   activeTimers,
@@ -55,9 +56,12 @@ import {
 type TxOrDb = {
   delete: (table: any) => any;
   update: (table: any) => any;
+  execute: (query: any) => any;
 };
 
 export async function cleanupUserReferences(tx: TxOrDb, userId: string, actorId: string) {
+  await tx.execute(sql`DELETE FROM user_sessions WHERE sess->>'passport' IS NOT NULL AND sess->'passport'->>'user' = ${userId}`);
+
   await tx.delete(taskAssignees).where(eq(taskAssignees.userId, userId));
   await tx.delete(taskWatchers).where(eq(taskWatchers.userId, userId));
   await tx.delete(workspaceMembers).where(eq(workspaceMembers.userId, userId));
@@ -68,6 +72,7 @@ export async function cleanupUserReferences(tx: TxOrDb, userId: string, actorId:
   await tx.delete(personalTaskSections).where(eq(personalTaskSections.userId, userId));
   await tx.delete(subtaskAssignees).where(eq(subtaskAssignees.userId, userId));
   await tx.delete(clientUserAccess).where(eq(clientUserAccess.userId, userId));
+  await tx.delete(userClientAccess).where(eq(userClientAccess.userId, userId));
 
   await tx.delete(notifications).where(eq(notifications.userId, userId));
   await tx.delete(notificationPreferences).where(eq(notificationPreferences.userId, userId));

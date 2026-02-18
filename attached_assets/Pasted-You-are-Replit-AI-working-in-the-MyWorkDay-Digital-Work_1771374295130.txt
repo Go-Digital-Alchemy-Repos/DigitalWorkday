@@ -1,0 +1,214 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+REQUEST:
+Full end-to-end review: debug, test, document, streamline performance, and improve organization.
+At the end, prepare the app for production release (“publish-ready”) with a clear deploy checklist.
+
+IMPORTANT LIMITATION:
+You cannot actually “publish” on behalf of the user, but you MUST:
+- ensure repo is release-ready
+- produce a step-by-step publish/deploy checklist tailored to this repo (Replit → GitHub → Railway/hosting, etc.)
+- verify all checks pass locally/CI-style
+- document everything
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change DB schema in this sprint.
+- Do NOT change public API URLs/behaviors unless fixing a confirmed bug (must be documented).
+- Do NOT weaken auth/tenancy policies.
+- Prefer incremental refactors and measurable performance improvements.
+- Do NOT remove code unless proven unused and safe (proof + tests/build pass).
+
+DELIVERABLES:
+1) Release Review Report:
+   docs/review/release-readiness-YYYY-MM-DD.md
+   Must include:
+   - baseline health results (typecheck/lint/tests/build)
+   - top issues found + fixes applied
+   - performance findings + measurable improvements
+   - organization improvements + what moved where
+   - remaining known issues / follow-ups
+   - “Publish Checklist” (exact steps)
+   - “Rollback Plan”
+
+2) Tech debt cleanup:
+   - remove dead code safely (with proof)
+   - reduce bloat where low-risk
+   - enforce consistent organization conventions
+
+3) Performance pass:
+   - measure first
+   - fix hot paths (chat/tasks/time)
+   - add light guardrails to prevent regressions
+
+4) Documentation updates:
+   - docs/architecture/routes.md (accuracy)
+   - docs/architecture/organization.md (accuracy)
+   - docs/design/theme-packs.md (if theme packs exist)
+   - docs/mobile-audit.md (accuracy)
+   - update any in-app Docs Library if present
+
+5) Verification:
+   - all tests passing
+   - typecheck passing
+   - lint passing
+   - production build passing
+   - minimal manual QA checklist completed (document results)
+
+------------------------------------------------------------
+PHASE 0 — BASELINE (NO CODE CHANGES YET)
+------------------------------------------------------------
+
+A) Run baseline checks and record results/timings in the report:
+- pnpm/npm/yarn install (use repo standard)
+- typecheck
+- lint
+- unit tests
+- integration tests
+- frontend production build
+- backend production build
+
+B) Confirm environment expectations:
+- validate required env vars for production startup
+- ensure .env.example matches runtime needs
+Record drift in report and fix docs/.env.example if needed (no secrets).
+
+------------------------------------------------------------
+PHASE 1 — CRITICAL BUG SWEEP (P0 ONLY)
+------------------------------------------------------------
+
+A) Run a focused manual smoke pass (record in report):
+- Auth login/logout
+- Task drawer: create/edit, due date, tags, watchers, subtasks live update, comments, attachments
+- Chat: list, conversation, send/receive, typing, read receipts, sound toggle (if present)
+- Time: start/stop/switch, active timer bar, entries list
+- AI Project Planner: Add All creates sections + tasks in order
+- Theme packs: default light + user override persists
+- Super Admin: delete deactivated platform admin
+
+B) If any P0 is found:
+- Fix immediately
+- Add regression test if feasible
+
+------------------------------------------------------------
+PHASE 2 — PERFORMANCE PASS (MEASURE → FIX → GUARDRAILS)
+------------------------------------------------------------
+
+A) Backend performance:
+- Identify top 5 most-hit endpoints (chat/messages, unread counts, tasks list, comments list, time entries)
+- Add PERF_LOG=1 guarded timing logs (requestId + endpoint name + ms)
+- Run the key flows and capture before/after timing in the report
+- Fix measurable issues only:
+  - eliminate N+1
+  - batch lookups
+  - reduce redundant queries
+
+B) Frontend performance:
+- Profile chat conversation and task list render churn
+- Memoize heavy row components
+- Stabilize derived computations
+- Ensure query keys are consistent (avoid double fetching)
+
+C) Add light guardrails:
+- 2–3 tests or assertions preventing reintroduction of N+1 patterns on critical chat/task endpoints
+- Or a documented perf checklist if automated tests are too heavy
+
+------------------------------------------------------------
+PHASE 3 — ORGANIZATION / MAINTAINABILITY (LOW-RISK)
+------------------------------------------------------------
+
+A) Confirm route architecture conventions:
+- routeRegistry is the single source of truth
+- no rogue mounts
+- policy drift tests up-to-date
+
+B) Reduce bloat safely:
+- Remove unused imports, unused files with proof
+- If deprecated files exist (e.g., legacy chat.ts):
+  - prove no imports/refs (including tests/docs)
+  - delete it
+  - ensure build/tests pass
+  - document removal
+
+C) Layering conventions:
+- Keep routers thin
+- push business logic into services
+- push DB into repositories
+Only refactor where it reduces support burden and risk is low.
+
+D) Standardize query keys:
+- centralize queryKey builders per domain (tasks, subtasks, comments, chat, time)
+- ensure invalidations match query keys
+
+------------------------------------------------------------
+PHASE 4 — SECURITY / TENANCY / POLICY VALIDATION
+------------------------------------------------------------
+
+A) Confirm:
+- all super admin actions require superUser policy
+- all tenant routes enforce authTenant
+- sockets: all join/subscribe handlers require auth + tenant + membership where relevant
+
+B) Add audit logging for sensitive actions if missing:
+- super admin deletion
+- impersonation
+- tenant override usage
+Use requestId and existing logger.
+
+Document security-sensitive paths in the report.
+
+------------------------------------------------------------
+PHASE 5 — DOCUMENTATION UPDATE
+------------------------------------------------------------
+
+Update/ensure accuracy:
+- docs/review/release-readiness-YYYY-MM-DD.md (main report)
+- docs/architecture/routes.md
+- docs/architecture/organization.md
+- docs/design/theme-packs.md
+- docs/mobile-audit.md
+
+If in-app Docs Library exists:
+- add concise entries for any changes since last sprint
+
+------------------------------------------------------------
+PHASE 6 — RELEASE PREP (“PUBLISH READY”)
+------------------------------------------------------------
+
+A) Versioning:
+- bump version if repo uses it (package.json/app version)
+- generate CHANGELOG entry (brief, user-facing)
+
+B) Production build verification:
+- run production build
+- run production start locally (if supported)
+- verify health/readiness endpoints in production mode
+
+C) Prepare “Publish Checklist” section in the report:
+Include exact commands and steps for:
+- Replit → GitHub sync (if used)
+- CI checks (if any)
+- Railway deploy steps (project/service/image)
+- DB migrations status (should be none in this sprint)
+- env var checklist
+- smoke test checklist post-deploy
+
+D) Rollback plan:
+- previous release tag/commit
+- redeploy steps
+- DB rollback (should be none)
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+When finished, output:
+1) Path to docs/review/release-readiness-YYYY-MM-DD.md
+2) Summary of fixes applied (bullets)
+3) Performance before/after (numbers where possible)
+4) Files removed/changed for cleanup (with proof notes)
+5) Confirmation of passing:
+   - typecheck
+   - lint
+   - tests
+   - production build
+6) The “Publish Checklist” (copy/paste steps)
