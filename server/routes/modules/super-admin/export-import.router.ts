@@ -12,7 +12,7 @@ import { createJob, getJob, getJobsForTenant, updateJob, jobToDTO } from '../../
 import { validateJob, executeJob } from '../../../imports/importEngine';
 import { ENTITY_FIELD_MAP, suggestMappings, type EntityType, type ColumnMapping } from '../../../../shared/imports/fieldCatalog';
 
-const largeJsonParser = express.json({ limit: "30mb" });
+const largeJsonParser = express.json({ limit: "200mb" });
 
 export const exportImportRouter = Router();
 
@@ -584,7 +584,7 @@ exportImportRouter.post("/tenants/:tenantId/import/user-client-summary", require
   }
 });
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024;
+const MAX_FILE_SIZE = 200 * 1024 * 1024;
 const MAX_ROW_COUNT = 50000;
 const VALID_ENTITY_TYPES: EntityType[] = ["clients", "projects", "tasks", "users", "admins", "time_entries"];
 
