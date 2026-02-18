@@ -1,0 +1,203 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+BUG / FEATURE GAP:
+AI Project Planner generates recommended Project Sections and Tasks.
+When the user clicks “Add All Tasks”, the system currently adds tasks only, and they land ungrouped / unordered.
+Requirement: “Add All Tasks” must add:
+1) The suggested SECTION(S) and
+2) The suggested TASKS under the correct section(s), preserving order.
+
+GOAL:
+Update the AI Project Planner “Add All Tasks” flow so it creates any missing sections first, then creates tasks mapped to those sections, in the intended order, with correct tenant/workspace/project scoping.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change DB schema.
+- Do NOT change existing API URLs.
+- Preserve existing tasks/sections behavior.
+- Must be idempotent-safe: clicking twice should not duplicate blindly (at minimum, disable button during run and show success state).
+- Keep the UI responsive; show progress and handle partial failures gracefully.
+
+DELIVERABLES:
+1) Root cause analysis: why sections aren’t created now and why ordering/grouping is lost.
+2) Backend + frontend changes (as needed) to:
+   - create sections
+   - create tasks assigned to sections
+   - preserve order
+3) Tests:
+   - integration tests for section+task creation pipeline (>=3)
+4) Documentation update:
+   - short note in docs/mobile-audit.md or a relevant docs page describing the Add All behavior.
+
+------------------------------------------------------------
+PHASE 0 — DISCOVERY (MUST DO FIRST)
+------------------------------------------------------------
+
+A) Identify the AI Project Planner components:
+- UI component where sections + tasks are displayed
+- “Add All Tasks” button handler
+- Single “Add Task” handler (if present)
+- Data model used by AI output:
+  Example expected structure:
+  plan = [
+    { sectionTitle, sectionDescription?, tasks: [{ title, description?, order? }, ...] },
+    ...
+  ]
+
+B) Identify existing project section model in DB/API:
+- Is there a “project_sections” table?
+- Do tasks have a sectionId / columnId / groupId?
+- Is ordering stored as “position”, “sortOrder”, “rank”, etc.?
+
+C) Identify current API calls used by Add All:
+- Are tasks created via:
+  - bulk endpoint?
+  - repeated POST /tasks calls?
+- Is there an endpoint for creating sections?
+
+Document findings in:
+docs/review/ai-planner-add-all.md
+
+------------------------------------------------------------
+PHASE 1 — DEFINE THE CORRECT PIPELINE
+------------------------------------------------------------
+
+Implement an ordered, two-stage pipeline:
+
+Stage 1: Ensure sections exist
+- For each suggested section in AI output:
+  - check if a section with same name already exists in the target project
+  - if not, create it
+  - capture sectionId mapping: sectionTitle -> sectionId
+- Preserve order by storing section position/order if supported (or create in sequence)
+
+Stage 2: Create tasks under sections in order
+- For each section, create its tasks in order:
+  - assign task.sectionId = mapped sectionId
+  - set task position/order if supported (or create sequentially)
+- If the AI output includes explicit ordering numbers, use them.
+
+If tasks do not currently support section linkage:
+- Do NOT add schema.
+- Instead, use the existing system’s grouping concept (status column, list, category, etc.).
+- If none exists, create sections anyway and store as a tag-like label ONLY if such mapping already exists.
+(But first attempt to use the proper existing section/task relationship.)
+
+------------------------------------------------------------
+PHASE 2 — BACKEND SUPPORT (ONLY IF NEEDED)
+------------------------------------------------------------
+
+Preferred approach:
+- Reuse existing endpoints:
+  - create section
+  - create task with sectionId
+  - bulk create if available
+
+If backend does NOT support passing sectionId on task creation but schema has it:
+- extend task create service to accept sectionId (keeping API compatible)
+- do not change URL; add optional field
+
+If bulk create exists:
+- consider adding a single “apply plan” endpoint:
+  POST /api/v1/ai/plans/apply (or similar)
+But ONLY if there is already an AI/planner apply endpoint.
+If not, keep client-driven pipeline to avoid new API surface.
+
+All operations must enforce:
+- authTenant
+- project access checks
+- tenant scoping
+
+------------------------------------------------------------
+PHASE 3 — FRONTEND IMPLEMENTATION
+------------------------------------------------------------
+
+A) Update “Add All Tasks” handler to:
+1) Disable button and show loading/progress UI:
+   - “Creating sections (2/5)…”
+   - “Adding tasks (7/24)…”
+2) Create sections first (await)
+3) Create tasks second (await)
+4) On success:
+   - invalidate relevant queries:
+     - project sections list
+     - project tasks list
+     - project detail
+   - show toast “Plan added to project”
+
+B) Preserve grouping visually immediately (optimistic optional):
+- If React Query cache structure supports it, insert created sections and tasks into cache for instant UI.
+- Otherwise invalidate queries and refetch.
+
+C) Idempotency safety:
+- While running, disable button.
+- After success, switch to “Added” state OR hide the button.
+- If user clicks again, either no-op or warn before re-adding.
+
+D) Error handling:
+- If section creation fails, stop and show error.
+- If a task fails mid-run:
+  - continue creating remaining tasks
+  - show summary: “21/24 tasks added. 3 failed.”
+  - provide “Retry failed” button if feasible.
+
+------------------------------------------------------------
+PHASE 4 — ORDERING / POSITION LOGIC
+------------------------------------------------------------
+
+A) Section ordering:
+- If sections have a position field, set it incrementally.
+- Otherwise create in order and rely on createdAt sorting.
+
+B) Task ordering within section:
+- If tasks have position/sortOrder, set it incrementally within each section.
+- Otherwise create sequentially and rely on createdAt sorting, but ensure UI sorts by createdAt ascending for this insertion flow (do not disrupt global sorting rules).
+
+Document how ordering is achieved in docs/review/ai-planner-add-all.md.
+
+------------------------------------------------------------
+PHASE 5 — TESTS
+------------------------------------------------------------
+
+Add backend integration tests (preferred) or frontend tests if backend is unchanged.
+
+Minimum tests:
+1) Applying AI plan creates sections first, then tasks with correct sectionId mapping.
+2) Order is preserved (first task in section appears before second, etc.) based on whatever ordering field exists.
+3) Authorization: non-project member cannot apply plan.
+
+If no apply endpoint exists and this is client-driven:
+- Add a mocked test around the planner apply function to ensure it calls section create then task creates in order.
+
+------------------------------------------------------------
+PHASE 6 — DOC UPDATE
+------------------------------------------------------------
+
+Update docs (choose most appropriate):
+- docs/review/ai-planner-add-all.md (detailed)
+- Add a brief note in docs/mobile-audit.md or in-app Docs Library:
+  “AI Planner: Add All creates sections + tasks grouped by section.”
+
+------------------------------------------------------------
+MANUAL VERIFICATION CHECKLIST
+------------------------------------------------------------
+
+- Generate AI plan with 2+ sections, multiple tasks each
+- Click Add All Tasks
+- Verify:
+  - Sections are created in project
+  - Tasks appear under correct section
+  - Task order within section matches AI output
+  - No duplicate or scrambled insertion
+  - UI updates without page refresh
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+When finished, output:
+1) Root cause summary
+2) Files changed
+3) Section/task mapping strategy used
+4) Ordering strategy used
+5) Tests added/passing
+6) Verification steps
