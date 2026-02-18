@@ -74,6 +74,7 @@ import {
   History
 } from "lucide-react";
 import { CsvImportPanel, type ParsedRow, type ImportResult, type CsvColumn } from "@/components/common/csv-import-panel";
+import { DataImportWizard as DataImportWizardComponent } from "@/components/super-admin/data-import-wizard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TenantUserDrawer } from "./tenant-user-drawer";
 import { ProvisionUserDrawer } from "./provision-user-drawer";
@@ -5004,11 +5005,10 @@ function TabLoadingSkeleton({ rows = 3 }: { rows?: number }) {
 
 /**
  * DataImportExportTab - Import/export data for tenant provisioning
- * Supports clients, team members, and time entries
+ * Uses the Data Import Wizard for imports and retains legacy export buttons
  */
 function DataImportExportTab({ tenantId, tenantSlug }: { tenantId: string; tenantSlug: string }) {
   const { toast } = useToast();
-  const [activeSection, setActiveSection] = useState<"clients" | "users" | "time-entries" | "user-client-summary">("clients");
   const [isExporting, setIsExporting] = useState(false);
   
   const handleExport = async (type: "clients" | "users" | "time-entries") => {
@@ -5044,290 +5044,50 @@ function DataImportExportTab({ tenantId, tenantSlug }: { tenantId: string; tenan
     }
   };
 
-  const clientColumns: CsvColumn[] = [
-    { key: "companyName", label: "Company Name", required: true },
-    { key: "displayName", label: "Display Name" },
-    { key: "industry", label: "Industry" },
-    { key: "website", label: "Website" },
-    { key: "phone", label: "Phone" },
-    { key: "email", label: "Email" },
-    { key: "status", label: "Status" },
-    { key: "notes", label: "Notes" },
-    { key: "addressLine1", label: "Address Line 1" },
-    { key: "city", label: "City" },
-    { key: "state", label: "State" },
-    { key: "postalCode", label: "Postal Code" },
-    { key: "country", label: "Country" },
-  ];
-
-  const timeEntryColumns: CsvColumn[] = [
-    { key: "userEmail", label: "User Email", required: true, aliases: ["email", "user"] },
-    { key: "clientName", label: "Client Name", aliases: ["client"] },
-    { key: "projectName", label: "Project Name", aliases: ["project"] },
-    { key: "description", label: "Description", aliases: ["notes", "task"] },
-    { key: "scope", label: "Scope", aliases: ["billable"] },
-    { key: "startTime", label: "Start Time", required: true, aliases: ["start", "date", "startDate"] },
-    { key: "endTime", label: "End Time", aliases: ["end", "endDate"] },
-    { key: "durationSeconds", label: "Duration (seconds)", aliases: ["duration", "seconds", "time"] },
-    { key: "isManual", label: "Is Manual", aliases: ["manual"] },
-  ];
-
-  const userClientSummaryColumns: CsvColumn[] = [
-    { key: "userEmail", label: "User Email", required: true, aliases: ["email", "user", "employee_email"] },
-    { key: "firstName", label: "First Name", aliases: ["first", "given_name"] },
-    { key: "lastName", label: "Last Name", aliases: ["last", "family_name", "surname"] },
-    { key: "role", label: "Role", aliases: ["user_role", "employee_role"] },
-    { key: "clientName", label: "Client Name", required: true, aliases: ["client", "company"] },
-    { key: "parentClientName", label: "Parent Client", aliases: ["parent", "parent_client", "parent_company"] },
-    { key: "billableHours", label: "Billable Hours", required: true, aliases: ["hours", "billable", "billable_time"] },
-    { key: "startTime", label: "Start Time", aliases: ["start", "date", "entry_date"] },
-    { key: "endTime", label: "End Time", aliases: ["end", "end_date"] },
-    { key: "description", label: "Description", aliases: ["notes", "task", "work_description"] },
-    { key: "scope", label: "Scope", aliases: ["billable_scope", "entry_scope"] },
-  ];
-
-  const handleImportClients = async (rows: ParsedRow[], _options: Record<string, boolean>): Promise<{ created: number; skipped: number; errors: number; results: ImportResult[] }> => {
-    const response = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/import/clients`, { rows });
-    const data = await response.json();
-    queryClient.invalidateQueries({ queryKey: [`/api/v1/super/tenants/${tenantId}/clients`] });
-    return {
-      created: data.created,
-      skipped: data.skipped,
-      errors: data.errors,
-      results: data.results.map((r: { name: string; status: string; reason?: string }) => ({
-        name: r.name,
-        status: r.status as "created" | "skipped" | "error",
-        reason: r.reason,
-      })),
-    };
-  };
-
-  const handleImportTimeEntries = async (rows: ParsedRow[], _options: Record<string, boolean>): Promise<{ created: number; skipped: number; errors: number; results: ImportResult[] }> => {
-    const response = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/import/time-entries`, { rows });
-    const data = await response.json();
-    return {
-      created: data.created,
-      skipped: data.skipped,
-      errors: data.errors,
-      results: data.results.map((r: { name: string; status: string; reason?: string }) => ({
-        name: r.name,
-        status: r.status as "created" | "skipped" | "error",
-        reason: r.reason,
-      })),
-    };
-  };
-
-  const handleImportUserClientSummary = async (rows: ParsedRow[], _options: Record<string, boolean>): Promise<{ created: number; skipped: number; errors: number; results: ImportResult[] }> => {
-    const response = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/import/user-client-summary`, { rows });
-    const data = await response.json();
-    queryClient.invalidateQueries({ queryKey: [`/api/v1/super/tenants/${tenantId}`] });
-    return {
-      created: data.created,
-      skipped: data.skipped,
-      errors: data.errors,
-      results: data.results.map((r: { name: string; status: string; reason?: string }) => ({
-        name: r.name,
-        status: r.status as "created" | "skipped" | "error",
-        reason: r.reason,
-      })),
-    };
-  };
-
   return (
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2">
-            <FileSpreadsheet className="h-4 w-4" />
-            Data Import & Export
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Download className="h-4 w-4" />
+            Quick Export
           </CardTitle>
-          <CardDescription>
-            Import or export clients, team members, and time entries for bulk provisioning.
-            Useful for migrating data from other applications like DA Time Tracker.
-          </CardDescription>
+          <CardDescription>Download tenant data as CSV files</CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-2 mb-6">
-            <Button
-              variant={activeSection === "clients" ? "default" : "outline"}
-              onClick={() => setActiveSection("clients")}
-              data-testid="button-section-clients"
+          <div className="flex gap-2 flex-wrap">
+            <Button 
+              variant="outline"
+              onClick={() => handleExport("clients")} 
+              disabled={isExporting}
+              data-testid="button-export-clients"
             >
-              <Briefcase className="h-4 w-4 mr-2" />
+              {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
               Clients
             </Button>
-            <Button
-              variant={activeSection === "users" ? "default" : "outline"}
-              onClick={() => setActiveSection("users")}
-              data-testid="button-section-users"
+            <Button 
+              variant="outline"
+              onClick={() => handleExport("users")} 
+              disabled={isExporting}
+              data-testid="button-export-users"
             >
-              <Users className="h-4 w-4 mr-2" />
+              {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
               Team Members
             </Button>
-            <Button
-              variant={activeSection === "time-entries" ? "default" : "outline"}
-              onClick={() => setActiveSection("time-entries")}
-              data-testid="button-section-time-entries"
+            <Button 
+              variant="outline"
+              onClick={() => handleExport("time-entries")} 
+              disabled={isExporting}
+              data-testid="button-export-time-entries"
             >
-              <Clock className="h-4 w-4 mr-2" />
+              {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
               Time Entries
-            </Button>
-            <Button
-              variant={activeSection === "user-client-summary" ? "default" : "outline"}
-              onClick={() => setActiveSection("user-client-summary")}
-              data-testid="button-section-user-client-summary"
-            >
-              <FileSpreadsheet className="h-4 w-4 mr-2" />
-              User-Client Summary
             </Button>
           </div>
         </CardContent>
       </Card>
 
-      {activeSection === "clients" && (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Export Clients</CardTitle>
-              <CardDescription>Download all clients as a CSV file</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                onClick={() => handleExport("clients")} 
-                disabled={isExporting}
-                data-testid="button-export-clients"
-              >
-                {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
-                Export Clients
-              </Button>
-            </CardContent>
-          </Card>
-
-          <CsvImportPanel
-            title="Import Clients"
-            description="Upload a CSV file to import clients. Existing clients with matching company names will be skipped."
-            columns={clientColumns}
-            templateFilename={`${tenantSlug}-clients-template.csv`}
-            onImport={handleImportClients}
-            nameField="companyName"
-          />
-        </>
-      )}
-
-      {activeSection === "users" && (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Export Team Members</CardTitle>
-              <CardDescription>Download all team members as a CSV file</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                onClick={() => handleExport("users")} 
-                disabled={isExporting}
-                data-testid="button-export-users"
-              >
-                {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
-                Export Team Members
-              </Button>
-            </CardContent>
-          </Card>
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Import Team Members</CardTitle>
-              <CardDescription>
-                Use the bulk CSV import on the Users tab for importing team members with invitations.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <p className="text-sm text-muted-foreground">
-                Navigate to the Users tab and use the CSV Import feature there to import team members.
-                This allows you to send invitation emails and configure roles.
-              </p>
-            </CardContent>
-          </Card>
-        </>
-      )}
-
-      {activeSection === "time-entries" && (
-        <>
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">Export Time Entries</CardTitle>
-              <CardDescription>Download all time tracking entries as a CSV file</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Button 
-                onClick={() => handleExport("time-entries")} 
-                disabled={isExporting}
-                data-testid="button-export-time-entries"
-              >
-                {isExporting ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Download className="h-4 w-4 mr-2" />}
-                Export Time Entries
-              </Button>
-            </CardContent>
-          </Card>
-
-          <CsvImportPanel
-            title="Import Time Entries"
-            description="Upload a CSV file to import time tracking entries from DA Time Tracker or other apps. Users must exist in the system (matched by email). Clients and projects are matched by name if they exist."
-            columns={timeEntryColumns}
-            templateFilename={`${tenantSlug}-time-entries-template.csv`}
-            onImport={handleImportTimeEntries}
-            nameField="userEmail"
-          />
-        </>
-      )}
-
-      {activeSection === "user-client-summary" && (
-        <>
-          <CsvImportPanel
-            title="Import User-Client Summary"
-            description="Upload a CSV file containing team members with their time entries grouped by client. This import creates or updates users, establishes client hierarchies (parent/child relationships), and imports billable hours as time entries. Users are matched by email, clients by name. Parent clients are created automatically if they don't exist."
-            columns={userClientSummaryColumns}
-            templateFilename={`${tenantSlug}-user-client-summary-template.csv`}
-            onImport={handleImportUserClientSummary}
-            nameField="userEmail"
-          />
-
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-sm">CSV Format Guide</CardTitle>
-              <CardDescription>Expected columns for user-client summary import</CardDescription>
-            </CardHeader>
-            <CardContent className="space-y-3 text-sm">
-              <div>
-                <strong>Required columns:</strong>
-                <ul className="list-disc list-inside ml-2 text-muted-foreground">
-                  <li><code>userEmail</code> - Employee email address</li>
-                  <li><code>clientName</code> - Client/company name</li>
-                  <li><code>billableHours</code> - Hours worked (decimal, e.g., 8.5)</li>
-                </ul>
-              </div>
-              <div>
-                <strong>Optional columns:</strong>
-                <ul className="list-disc list-inside ml-2 text-muted-foreground">
-                  <li><code>firstName</code>, <code>lastName</code> - User name (for new users)</li>
-                  <li><code>role</code> - User role (employee, admin)</li>
-                  <li><code>parentClientName</code> - Parent client for hierarchy</li>
-                  <li><code>startTime</code>, <code>endTime</code> - Time entry dates</li>
-                  <li><code>description</code> - Work description</li>
-                  <li><code>scope</code> - Billable scope (billable, internal)</li>
-                </ul>
-              </div>
-              <div className="pt-2 border-t">
-                <strong>Client hierarchy:</strong>
-                <p className="text-muted-foreground">
-                  If <code>parentClientName</code> is specified, the client will be created as a 
-                  sub-client under the parent. Parent clients are created automatically if they 
-                  don't exist.
-                </p>
-              </div>
-            </CardContent>
-          </Card>
-        </>
-      )}
+      <DataImportWizardComponent tenantId={tenantId} tenantSlug={tenantSlug} />
     </div>
   );
 }

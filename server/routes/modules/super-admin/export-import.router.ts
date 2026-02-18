@@ -6,6 +6,10 @@ import { clients, users, timeEntries, projects, tasks } from '@shared/schema';
 import { eq, and, desc } from 'drizzle-orm';
 import { z } from 'zod';
 import { recordTenantAuditEvent } from '../../superAdmin';
+import { parseCsv } from '../../../imports/csvParser';
+import { createJob, getJob, getJobsForTenant, updateJob, jobToDTO } from '../../../imports/jobStore';
+import { validateJob, executeJob } from '../../../imports/importEngine';
+import { ENTITY_FIELD_MAP, suggestMappings, type EntityType, type ColumnMapping } from '../../../../shared/imports/fieldCatalog';
 
 export const exportImportRouter = Router();
 
@@ -574,5 +578,194 @@ exportImportRouter.post("/tenants/:tenantId/import/user-client-summary", require
   } catch (error) {
     console.error("[import] Failed to import user-client summary:", error);
     res.status(500).json({ error: "Failed to import user-client summary" });
+  }
+});
+
+const MAX_FILE_SIZE = 25 * 1024 * 1024;
+const MAX_ROW_COUNT = 50000;
+const VALID_ENTITY_TYPES: EntityType[] = ["clients", "projects", "tasks", "users", "admins", "time_entries"];
+
+exportImportRouter.post("/tenants/:tenantId/import/jobs", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const { entityType } = req.body;
+
+    if (!VALID_ENTITY_TYPES.includes(entityType)) {
+      return res.status(400).json({ error: `Invalid entity type. Must be one of: ${VALID_ENTITY_TYPES.join(", ")}` });
+    }
+
+    const tenant = await storage.getTenant(tenantId);
+    if (!tenant) return res.status(404).json({ error: "Tenant not found" });
+
+    const job = createJob(tenantId, req.user!.id, entityType);
+
+    await recordTenantAuditEvent(tenantId, "import_job_created", `Import job created for ${entityType}`, req.user!.id, { jobId: job.id, entityType });
+
+    res.json({ job: jobToDTO(job) });
+  } catch (error) {
+    console.error("[import-wizard] Failed to create job:", error);
+    res.status(500).json({ error: "Failed to create import job" });
+  }
+});
+
+exportImportRouter.post("/tenants/:tenantId/import/jobs/:jobId/upload", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, jobId } = req.params;
+    const job = getJob(jobId);
+    if (!job || job.tenantId !== tenantId) return res.status(404).json({ error: "Job not found" });
+
+    const { csvText, fileName } = req.body;
+    if (!csvText || typeof csvText !== "string") return res.status(400).json({ error: "csvText is required" });
+
+    if (csvText.length > MAX_FILE_SIZE) {
+      return res.status(400).json({ error: `File too large. Maximum size is ${MAX_FILE_SIZE / 1024 / 1024}MB` });
+    }
+
+    const parsed = parseCsv(csvText, MAX_ROW_COUNT);
+    if (parsed.rows.length === 0) return res.status(400).json({ error: "CSV file is empty or has no data rows" });
+
+    if (parsed.rawRowCount > MAX_ROW_COUNT) {
+      return res.status(400).json({ error: `Too many rows. Maximum is ${MAX_ROW_COUNT}. File has ${parsed.rawRowCount} rows.` });
+    }
+
+    const fields = ENTITY_FIELD_MAP[job.entityType];
+    const suggestedMapping = suggestMappings(parsed.headers, fields);
+
+    updateJob(jobId, {
+      fileName: fileName || "upload.csv",
+      rawRows: parsed.rows,
+      columns: parsed.headers,
+      sampleRows: parsed.rows.slice(0, 20),
+      mapping: suggestedMapping,
+      status: "draft",
+    });
+
+    res.json({
+      columns: parsed.headers,
+      sampleRows: parsed.rows.slice(0, 20),
+      rowCount: parsed.rows.length,
+      suggestedMapping,
+      fields,
+    });
+  } catch (error) {
+    console.error("[import-wizard] Failed to upload:", error);
+    res.status(500).json({ error: "Failed to process upload" });
+  }
+});
+
+exportImportRouter.put("/tenants/:tenantId/import/jobs/:jobId/mapping", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, jobId } = req.params;
+    const job = getJob(jobId);
+    if (!job || job.tenantId !== tenantId) return res.status(404).json({ error: "Job not found" });
+
+    const { mapping } = req.body as { mapping: ColumnMapping[] };
+    if (!Array.isArray(mapping)) return res.status(400).json({ error: "mapping must be an array" });
+
+    updateJob(jobId, { mapping });
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("[import-wizard] Failed to update mapping:", error);
+    res.status(500).json({ error: "Failed to update mapping" });
+  }
+});
+
+exportImportRouter.post("/tenants/:tenantId/import/jobs/:jobId/validate", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, jobId } = req.params;
+    const job = getJob(jobId);
+    if (!job || job.tenantId !== tenantId) return res.status(404).json({ error: "Job not found" });
+    if (job.rawRows.length === 0) return res.status(400).json({ error: "No data uploaded yet" });
+
+    const summary = await validateJob(job);
+    updateJob(jobId, { status: "validated", validationSummary: summary });
+
+    await recordTenantAuditEvent(tenantId, "import_job_validated", `Import job validated for ${job.entityType}: ${summary.wouldCreate} create, ${summary.wouldSkip} skip, ${summary.wouldFail} fail`, req.user!.id, { jobId, ...summary });
+
+    res.json({ summary, errorsPreview: summary.errors.slice(0, 50), warningsPreview: summary.warnings.slice(0, 50) });
+  } catch (error) {
+    console.error("[import-wizard] Failed to validate:", error);
+    res.status(500).json({ error: "Failed to validate import" });
+  }
+});
+
+exportImportRouter.post("/tenants/:tenantId/import/jobs/:jobId/run", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, jobId } = req.params;
+    const job = getJob(jobId);
+    if (!job || job.tenantId !== tenantId) return res.status(404).json({ error: "Job not found" });
+    if (job.rawRows.length === 0) return res.status(400).json({ error: "No data uploaded yet" });
+
+    updateJob(jobId, { status: "running", progress: { processed: 0, total: job.rawRows.length } });
+
+    const summary = await executeJob(job);
+
+    await recordTenantAuditEvent(tenantId, "import_job_executed", `Import completed for ${job.entityType}: ${summary.created} created, ${summary.skipped} skipped, ${summary.failed} failed`, req.user!.id, { jobId, ...summary });
+
+    const updatedJob = getJob(jobId);
+    res.json({ summary, job: updatedJob ? jobToDTO(updatedJob) : null });
+  } catch (error) {
+    console.error("[import-wizard] Failed to execute:", error);
+    res.status(500).json({ error: "Failed to execute import" });
+  }
+});
+
+exportImportRouter.get("/tenants/:tenantId/import/jobs/:jobId", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, jobId } = req.params;
+    const job = getJob(jobId);
+    if (!job || job.tenantId !== tenantId) return res.status(404).json({ error: "Job not found" });
+    res.json({ job: jobToDTO(job), progress: job.progress });
+  } catch (error) {
+    console.error("[import-wizard] Failed to get job:", error);
+    res.status(500).json({ error: "Failed to get job" });
+  }
+});
+
+exportImportRouter.get("/tenants/:tenantId/import/jobs", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId } = req.params;
+    const jobList = getJobsForTenant(tenantId);
+    res.json({ jobs: jobList.map(jobToDTO) });
+  } catch (error) {
+    console.error("[import-wizard] Failed to list jobs:", error);
+    res.status(500).json({ error: "Failed to list jobs" });
+  }
+});
+
+exportImportRouter.get("/tenants/:tenantId/import/jobs/:jobId/errors.csv", requireSuperUser, async (req, res) => {
+  try {
+    const { tenantId, jobId } = req.params;
+    const job = getJob(jobId);
+    if (!job || job.tenantId !== tenantId) return res.status(404).json({ error: "Job not found" });
+
+    const errorRows = job.errorRows || [];
+    const headers = ["row", "primaryKey", "errorCode", "message"];
+    const csvLines = [
+      headers.join(","),
+      ...errorRows.map(e =>
+        [e.row, escapeCsvField(e.primaryKey), escapeCsvField(e.errorCode), escapeCsvField(e.message)].join(",")
+      ),
+    ];
+
+    res.setHeader("Content-Type", "text/csv");
+    res.setHeader("Content-Disposition", `attachment; filename="import-errors-${jobId}.csv"`);
+    res.send(csvLines.join("\n"));
+  } catch (error) {
+    console.error("[import-wizard] Failed to get error CSV:", error);
+    res.status(500).json({ error: "Failed to generate error CSV" });
+  }
+});
+
+exportImportRouter.get("/tenants/:tenantId/import/fields/:entityType", requireSuperUser, async (req, res) => {
+  try {
+    const { entityType } = req.params;
+    if (!VALID_ENTITY_TYPES.includes(entityType as EntityType)) {
+      return res.status(400).json({ error: "Invalid entity type" });
+    }
+    const fields = ENTITY_FIELD_MAP[entityType as EntityType];
+    res.json({ fields });
+  } catch (error) {
+    res.status(500).json({ error: "Failed to get fields" });
   }
 });
