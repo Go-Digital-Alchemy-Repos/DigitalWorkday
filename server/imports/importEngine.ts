@@ -348,17 +348,37 @@ async function autoCreateMissingDeps(job: ImportJob, lookups: TenantLookups): Pr
     const lastName = info.lastName || "";
     const fullName = lastName ? `${firstName} ${lastName}` : firstName;
     const role = (info.role === "admin" || info.role === "manager" || info.role === "contractor") ? info.role : "employee";
-    const [newUser] = await db.insert(users).values({
-      tenantId: lookups.tenantId,
-      email: info.email.toLowerCase(),
-      name: fullName,
-      firstName,
-      lastName,
-      role,
-      isActive: true,
-    }).returning({ id: users.id, email: users.email, role: users.role });
-    lookups.usersByEmail.set(info.email.toLowerCase(), newUser);
-    usersCreated++;
+    try {
+      const result = await db.insert(users).values({
+        tenantId: lookups.tenantId,
+        email: info.email.toLowerCase(),
+        name: fullName,
+        firstName,
+        lastName,
+        role,
+        isActive: true,
+      }).onConflictDoNothing({ target: users.email }).returning({ id: users.id, email: users.email, role: users.role });
+      if (result.length > 0) {
+        lookups.usersByEmail.set(info.email.toLowerCase(), result[0]);
+        usersCreated++;
+      } else {
+        const [existing] = await db.select({ id: users.id, email: users.email, role: users.role })
+          .from(users).where(eq(users.email, info.email.toLowerCase()));
+        if (existing) {
+          lookups.usersByEmail.set(info.email.toLowerCase(), existing);
+        }
+      }
+    } catch (err: any) {
+      if (err?.code === "23505") {
+        const [existing] = await db.select({ id: users.id, email: users.email, role: users.role })
+          .from(users).where(eq(users.email, info.email.toLowerCase()));
+        if (existing) {
+          lookups.usersByEmail.set(info.email.toLowerCase(), existing);
+        }
+      } else {
+        throw err;
+      }
+    }
   }
 
   for (const projName of neededProjects) {
@@ -615,17 +635,38 @@ async function importUser(m: Record<string, string>, row: number, lookups: Tenan
   const validRoles = ["employee", "admin", "manager", "contractor"];
   const role = validRoles.includes(roleInput) ? roleInput : defaultRole;
 
-  const [newUser] = await db.insert(users).values({
-    tenantId: lookups.tenantId,
-    email,
-    name: fullName,
-    firstName,
-    lastName,
-    role,
-    isActive: m.isActive?.trim().toLowerCase() !== "false",
-  }).returning({ id: users.id, email: users.email, role: users.role });
-  lookups.usersByEmail.set(email, newUser);
-  return { action: "create" };
+  try {
+    const result = await db.insert(users).values({
+      tenantId: lookups.tenantId,
+      email,
+      name: fullName,
+      firstName,
+      lastName,
+      role,
+      isActive: m.isActive?.trim().toLowerCase() !== "false",
+    }).onConflictDoNothing({ target: users.email }).returning({ id: users.id, email: users.email, role: users.role });
+    if (result.length > 0) {
+      lookups.usersByEmail.set(email, result[0]);
+      return { action: "create" };
+    } else {
+      const [existing] = await db.select({ id: users.id, email: users.email, role: users.role })
+        .from(users).where(eq(users.email, email));
+      if (existing) {
+        lookups.usersByEmail.set(email, existing);
+      }
+      return { action: "skip" };
+    }
+  } catch (err: any) {
+    if (err?.code === "23505") {
+      const [existing] = await db.select({ id: users.id, email: users.email, role: users.role })
+        .from(users).where(eq(users.email, email));
+      if (existing) {
+        lookups.usersByEmail.set(email, existing);
+      }
+      return { action: "skip" };
+    }
+    throw err;
+  }
 }
 
 async function importTimeEntry(m: Record<string, string>, row: number, lookups: TenantLookups): Promise<RowResult> {
