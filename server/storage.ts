@@ -2080,7 +2080,7 @@ export class DatabaseStorage implements IStorage {
       .where(eq(workspaceMembers.workspaceId, workspaceId));
     
     if (members.length === 0) {
-      return db.select().from(users);
+      return [];
     }
     
     const userIds = members.map(m => m.userId);

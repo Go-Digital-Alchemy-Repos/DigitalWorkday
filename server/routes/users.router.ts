@@ -43,10 +43,22 @@ const requireAdmin: RequestHandler = (req, res, next) => {
 
 router.get("/users", async (req, res) => {
   try {
-    const users = await storage.getUsersByWorkspace(
-      getCurrentWorkspaceId(req),
-    );
-    res.json(users);
+    const currentUser = req.user as any;
+    const tenantId = req.tenant?.effectiveTenantId || currentUser?.tenantId;
+
+    if (!tenantId) {
+      return res.json([]);
+    }
+
+    const workspaceId = getCurrentWorkspaceId(req);
+    let result = await storage.getUsersByWorkspace(workspaceId);
+
+    if (result.length === 0) {
+      result = await storage.getUsersByTenant(tenantId);
+    }
+
+    const tenantScoped = result.filter(u => u.tenantId === tenantId);
+    res.json(tenantScoped);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/users", req);
   }
