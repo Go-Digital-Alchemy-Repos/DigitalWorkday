@@ -11,7 +11,7 @@ import {
   FileBox,
   ClipboardCheck,
 } from "lucide-react";
-import dasanaLogo from "@assets/Symbol_1767994625714.png";
+import appLogo from "@assets/Symbol_1767994625714.png";
 import {
   Sidebar,
   SidebarContent,
@@ -77,7 +77,7 @@ export function ClientPortalSidebar() {
     <Sidebar collapsible="icon">
       <SidebarHeader className="border-b border-border h-12 flex items-center">
         <div className="flex items-center gap-2 px-2">
-          <img src={dasanaLogo} alt="Logo" className="h-6 w-6" />
+          <img src={appLogo} alt="Digital Workday" className="h-6 w-6" />
           <span className="font-semibold text-sm truncate group-data-[collapsible=icon]:hidden">
             Client Portal
           </span>

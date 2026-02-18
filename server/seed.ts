@@ -29,7 +29,7 @@ async function seed() {
 
   const [admin] = await db.insert(users).values({
     id: "admin-user-id",
-    email: "admin@dasana.com",
+    email: "admin@digitalworkday.com",
     name: "Admin User",
     firstName: "Admin",
     lastName: "User",
@@ -40,7 +40,7 @@ async function seed() {
 
   const [sarah] = await db.insert(users).values({
     id: "sarah-user-id",
-    email: "sarah@dasana.com",
+    email: "sarah@digitalworkday.com",
     name: "Sarah Chen",
     firstName: "Sarah",
     lastName: "Chen",
@@ -51,7 +51,7 @@ async function seed() {
 
   const [marcus] = await db.insert(users).values({
     id: "marcus-user-id",
-    email: "marcus@dasana.com",
+    email: "marcus@digitalworkday.com",
     name: "Marcus Johnson",
     firstName: "Marcus",
     lastName: "Johnson",
@@ -62,7 +62,7 @@ async function seed() {
 
   const [emily] = await db.insert(users).values({
     id: "emily-user-id",
-    email: "emily@dasana.com",
+    email: "emily@digitalworkday.com",
     name: "Emily Rodriguez",
     firstName: "Emily",
     lastName: "Rodriguez",
@@ -73,7 +73,7 @@ async function seed() {
 
   const [alex] = await db.insert(users).values({
     id: "alex-user-id",
-    email: "alex@dasana.com",
+    email: "alex@digitalworkday.com",
     name: "Alex Kim",
     firstName: "Alex",
     lastName: "Kim",
@@ -84,7 +84,7 @@ async function seed() {
 
   const [jordan] = await db.insert(users).values({
     id: "jordan-user-id",
-    email: "jordan@dasana.com",
+    email: "jordan@digitalworkday.com",
     name: "Jordan Taylor",
     firstName: "Jordan",
     lastName: "Taylor",
@@ -106,7 +106,7 @@ async function seed() {
 
   const [workspace] = await db.insert(workspaces).values({
     id: DEMO_WORKSPACE_ID,
-    name: "DASANA Workspace",
+    name: "Digital Workday Workspace",
     createdBy: admin.id,
   }).returning();
 
@@ -693,8 +693,8 @@ async function seed() {
 
   console.log("Database seeded successfully!");
   console.log("\n=== LOGIN CREDENTIALS ===");
-  console.log("Admin:    admin@dasana.com / admin123");
-  console.log("Employee: sarah@dasana.com / password123");
+  console.log("Admin:    admin@digitalworkday.com / admin123");
+  console.log("Employee: sarah@digitalworkday.com / password123");
   console.log("Client:   client@example.com / password123");
   console.log("==========================\n");
 

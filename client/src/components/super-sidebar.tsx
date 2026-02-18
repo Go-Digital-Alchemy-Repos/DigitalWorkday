@@ -10,7 +10,7 @@ import {
   Users,
   PieChart,
 } from "lucide-react";
-import dasanaLogo from "@assets/Symbol_1767994625714.png";
+import appLogo from "@assets/Symbol_1767994625714.png";
 import {
   Sidebar,
   SidebarContent,
@@ -49,7 +49,7 @@ export function SuperSidebar() {
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
         <div className="flex items-center gap-3">
-          <img src={dasanaLogo} alt="MyWorkDay" className="h-8 w-8" />
+          <img src={appLogo} alt="Digital Workday" className="h-8 w-8" />
           <div className="flex flex-col">
             <span className="text-lg font-semibold text-sidebar-foreground">
               MyWorkDay

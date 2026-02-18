@@ -65,8 +65,8 @@ Accent classes are applied to the `<html>` element alongside the mode class:
 ```
 
 The ThemeProvider manages both classes via React state persisted in localStorage:
-- `dasana-theme` — stores `"light"` or `"dark"`
-- `dasana-accent` — stores the accent name (e.g. `"blue"`, `"green"`)
+- `digitalworkday-theme` — stores `"light"` or `"dark"`
+- `digitalworkday-accent` — stores the accent name (e.g. `"blue"`, `"green"`)
 
 ## Using Tokens in Components
 
