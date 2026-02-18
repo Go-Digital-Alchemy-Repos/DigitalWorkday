@@ -1,0 +1,189 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+FEATURE:
+Add a Dropzone (drag-and-drop) file attachment option to the Comments section of BOTH:
+- Task Drawer
+- Subtask Drawer
+
+This must support all major business file types (same policy as existing attachment uploads), upload to Cloudflare R2 using the existing attachments pipeline, and attach uploaded files to the comment being posted.
+
+GOAL:
+Users can drag files into the comments area (or click to select), see upload progress, remove pending files, and then post a comment with attachments. Posted comments must render attachments (images as thumbnails, others as file rows) and allow download via existing endpoints.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change DB schema.
+- Do NOT change existing API URLs.
+- Reuse existing attachments endpoints (presign/complete/download/delete) and uploadGuards.
+- Maintain tenant scoping and permissions.
+- Do NOT break existing comment compose behavior.
+- Subtask comments must have ALL THE SAME options/sections/functions as task comments.
+
+DELIVERABLES:
+1) Dropzone UI integrated into the comments composer section (task + subtask drawers)
+2) Multi-file drag/drop + click-to-select
+3) Upload progress per file + remove/cancel pending files
+4) Comment submit includes attachmentIds and associates them to the created comment
+5) Attachments render under each comment
+6) Tests:
+   - backend integration tests >= 3 verifying comment attachments linking + security
+   - (optional) UI test if infra exists, otherwise add manual checklist to docs/mobile-audit.md
+7) Documentation update:
+   - docs/review/comment-dropzone.md
+   - brief note in docs/mobile-audit.md
+
+------------------------------------------------------------
+PHASE 0 — DISCOVERY (MUST DO FIRST)
+------------------------------------------------------------
+
+1) Locate the Task Drawer and Subtask Drawer comment composer components and confirm if they share a common component.
+2) Identify existing attachment pipeline usage in tasks/subtasks (presign/complete/download) and existing uploadGuards.
+3) Identify how attachments are associated to entities today and confirm comments can store/relate attachments WITHOUT schema changes:
+   - attachments.entityType/entityId
+   - link table
+   - comments.attachments field
+Pick the existing model.
+
+Write findings to docs/review/comment-dropzone.md.
+
+------------------------------------------------------------
+PHASE 1 — DROPZONE COMPONENT
+------------------------------------------------------------
+
+Implement a reusable component:
+
+client/src/components/uploads/CommentDropzone.tsx
+
+Requirements:
+- No heavy dependency preferred (use native drag events), BUT if the repo already uses react-dropzone, reuse it.
+- Supports:
+  - drag enter/leave styling
+  - drop files
+  - click to browse
+  - multiple files
+  - max files configurable (default 10)
+  - max file size configurable (default 25MB unless system already defines)
+- Visuals:
+  - subtle dashed border container
+  - small helper text: “Drag files here or click to upload”
+  - mobile friendly (tap target >= 44px)
+- Must NOT interfere with typing in the comment box.
+
+------------------------------------------------------------
+PHASE 2 — UPLOAD QUEUE + R2 FLOW
+------------------------------------------------------------
+
+Create a shared hook:
+
+client/src/lib/uploads/useAttachmentUploadQueue.ts
+
+Responsibilities:
+- accept File[] input
+- for each file:
+  1) call existing presign endpoint
+  2) PUT to returned URL
+  3) call complete endpoint
+- track per-file state:
+  queued | uploading | complete | failed
+- store:
+  attachmentId (on complete)
+  filename, size, mime
+- allow:
+  remove file from queue (if queued/failed/complete)
+  retry failed upload
+- throttle/concurrency limit (e.g., 2–3 concurrent uploads)
+
+Security/type policy:
+- allow common business types (pdf/doc/docx/xls/xlsx/ppt/pptx/csv/txt/rtf/png/jpg/webp/gif/svg/ai/eps/psd/json/xml/zip)
+- block dangerous extensions (exe/bat/cmd/msi/sh/dmg/iso/apk)
+- Use server-side guards as source of truth; client shows friendly warnings.
+
+------------------------------------------------------------
+PHASE 3 — INTEGRATE INTO COMMENT COMPOSER (TASK + SUBTASK)
+------------------------------------------------------------
+
+1) Add the Dropzone just above the “Post Comment” action area in the comments section.
+2) When files are dropped/selected:
+- enqueue uploads immediately
+- show upload list beneath dropzone:
+  - filename
+  - size
+  - progress/spinner
+  - status chip (Uploading/Ready/Failed)
+  - remove button
+3) Disable “Post Comment” while uploads are in progress OR allow posting and attach only completed files (choose one, prefer disable until all uploads complete).
+4) On submit:
+- include attachmentIds: string[] of completed uploads in the comment create payload
+- clear the queue on success
+
+Ensure Subtask comment composer matches Task comment composer exactly.
+
+------------------------------------------------------------
+PHASE 4 — BACKEND SUPPORT (ONLY IF NOT ALREADY DONE)
+------------------------------------------------------------
+
+If comment endpoints do not accept attachmentIds yet:
+- Add optional attachmentIds?: string[] to both task-comment and subtask-comment create endpoints/services
+- Validate tenant/workspace access for attachments
+- Link attachments to the new comment using existing association model
+- Ensure comment list endpoint returns attachments metadata so UI can render without extra requests
+
+No schema changes.
+
+------------------------------------------------------------
+PHASE 5 — RENDER ATTACHMENTS ON COMMENTS
+------------------------------------------------------------
+
+Create/Reuse:
+
+client/src/components/attachments/CommentAttachments.tsx
+
+Rendering rules:
+- images: thumbnail grid, click opens modal viewer
+- non-images: file row with icon, filename, size, Download action
+- download uses existing download/presign-download endpoint and opens in new tab
+- mobile friendly spacing
+
+Ensure comment list updates immediately after posting:
+- optimistic insert comment + attachments OR invalidate and refetch after success
+
+------------------------------------------------------------
+PHASE 6 — TESTS
+------------------------------------------------------------
+
+Backend integration tests (>=3):
+1) create task comment with attachmentIds links attachments and returns attachments
+2) create subtask comment with attachmentIds links attachments and returns attachments
+3) tenant isolation: cannot attach attachmentId from another tenant/workspace (403 or ignore + log, per current conventions)
+
+If UI tests exist:
+- add 1 test: dropping files shows them in the pending list
+
+If UI tests not feasible:
+- Add manual checklist in docs/mobile-audit.md.
+
+------------------------------------------------------------
+PHASE 7 — DOCUMENTATION
+------------------------------------------------------------
+
+Update:
+docs/review/comment-dropzone.md with:
+- component/hook names
+- endpoints used
+- behavior rules (disable post until uploads complete vs partial)
+- verification steps
+
+Update:
+docs/mobile-audit.md:
+- short bullet: “Task/Subtask comments support dropzone attachments (R2).”
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+Return:
+1) Files changed/added
+2) Which dropzone library used (native vs react-dropzone)
+3) Upload queue behavior (concurrency, limits)
+4) How comment attachments are associated server-side
+5) Tests added and passing
+6) Manual verification steps

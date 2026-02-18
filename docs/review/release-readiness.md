@@ -37,8 +37,8 @@ Build succeeds because `esbuild` (server) and `vite` (client) skip type checking
 
 | Status | Count |
 |--------|-------|
-| Passed | 24 (was 19, +5 after S3 route fix) |
-| Failed | 33 (was 38, -5 after S3 route fix) |
+| Passed | 31 (was 19; +5 S3 route fix, +5 agreement fix, +2 new agreement tests) |
+| Failed | 26 (was 38; -5 S3 route fix, -5 agreement fix) |
 | Skipped | 14 |
 
 ### Failure Categories
@@ -46,11 +46,11 @@ Build succeeds because `esbuild` (server) and `vite` (client) skip type checking
 | Category | Tests | Root Cause |
 |----------|-------|------------|
 | FK constraint violations | 18 | Likely cause: `platform_audit_events` and `subtask_assignees` FK cascades missing in test teardown. `beforeEach` cleanup fails to delete users/subtasks due to dependent rows. Needs investigation. |
-| Agreement enforcement | 5 | Likely cause: Tests expect old behavior (pass-through when no agreements). Current middleware returns 451 for users without tenantId. Test expectations may need updating, but middleware behavior should also be verified against spec. |
+| Agreement enforcement | 5 → 0 | **FIXED** (2026-02-18): Three root causes: (1) Global active agreement (tenantId=NULL) in DB caused fallback blocking when tests expected "no active agreement → allow". Fixed by suspending/restoring global agreements in test beforeEach/afterEach. (2) Stale error code expectation (`NO_TENANT_ASSIGNED` → `TENANT_REQUIRED`). (3) Test misnamed as "fail-closed" was actually testing INVARIANT 3 (no-agreement path). All 15 tests pass (13 original + 2 new round-trip tests). No production code changed. |
 | Global integrations persist | 5 → 0 | **FIXED** (2026-02-18): S3 routes were never added to the super integrations router (`server/routes/super/integrations.router.ts`). Mailgun/Stripe had routes but S3 was missing. Also, `/integrations/status` returned `r2` key but not `s3`. Added GET/PUT/DELETE S3 routes and `s3` key to status. All 9 tests now pass. |
 | Project membership scoping | 1 | Test expects 1 project, gets 2. Likely cause: project visibility logic changed or test data contamination. Needs verification. |
 
-**Recommendation**: Global integrations 404s are now fixed (5 tests restored). Remaining: fix FK cascade in test cleanup (18 tests), verify agreement enforcement invariants (5 tests), investigate project membership scoping (1 test).
+**Recommendation**: Global integrations and agreement enforcement tests are now fixed (10 tests restored, 2 new tests added). Remaining: fix FK cascade in test cleanup (18 tests), investigate project membership scoping (1 test).
 
 ---
 

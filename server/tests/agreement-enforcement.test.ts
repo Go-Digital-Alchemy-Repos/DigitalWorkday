@@ -19,7 +19,7 @@ import {
   UserRole, 
   AgreementStatus 
 } from "../../shared/schema";
-import { sql, eq } from "drizzle-orm";
+import { sql, eq, and, isNull } from "drizzle-orm";
 import { hashPassword, setupAuth } from "../auth";
 import { 
   agreementEnforcementGuard, 
@@ -35,8 +35,30 @@ let testAgreementId: string;
 let app: Express;
 let userCookie: string;
 
+let stashedGlobalAgreements: { id: string; originalStatus: string }[] = [];
+
+async function suspendGlobalAgreements() {
+  const globals = await db.select({ id: tenantAgreements.id, status: tenantAgreements.status })
+    .from(tenantAgreements)
+    .where(and(isNull(tenantAgreements.tenantId), eq(tenantAgreements.status, AgreementStatus.ACTIVE)));
+  stashedGlobalAgreements = globals.map(g => ({ id: g.id, originalStatus: g.status }));
+  for (const g of stashedGlobalAgreements) {
+    await db.update(tenantAgreements)
+      .set({ status: AgreementStatus.DRAFT })
+      .where(eq(tenantAgreements.id, g.id));
+  }
+}
+
+async function restoreGlobalAgreements() {
+  for (const g of stashedGlobalAgreements) {
+    await db.update(tenantAgreements)
+      .set({ status: g.originalStatus })
+      .where(eq(tenantAgreements.id, g.id));
+  }
+  stashedGlobalAgreements = [];
+}
+
 async function cleanupTestData() {
-  // Delete in FK order
   await db.execute(sql`DELETE FROM tenant_agreement_acceptances WHERE tenant_id = ${testTenantId}`);
   await db.execute(sql`DELETE FROM tenant_agreements WHERE tenant_id = ${testTenantId}`);
   await db.execute(sql`DELETE FROM workspace_members WHERE workspace_id = ${testWorkspaceId}`);
@@ -154,6 +176,8 @@ async function loginUser(app: Express, email: string, password: string): Promise
 describe("Agreement Enforcement Middleware", () => {
   beforeEach(async () => {
     clearAgreementCache();
+    await suspendGlobalAgreements();
+    clearAgreementCache();
   });
 
   afterEach(async () => {
@@ -164,6 +188,7 @@ describe("Agreement Enforcement Middleware", () => {
         // Ignore cleanup errors
       }
     }
+    await restoreGlobalAgreements();
     clearAgreementCache();
   });
 
@@ -330,8 +355,8 @@ describe("Agreement Enforcement Middleware", () => {
     });
   });
 
-  describe("Enforcement Check Error Handling", () => {
-    it("should block access (fail-closed) when database query fails", async () => {
+  describe("No Active Agreement After Deletion", () => {
+    it("should allow access when active agreement is deleted (INVARIANT 3)", async () => {
       const { email } = await createTestFixtures({ 
         createAgreement: true, 
         agreementStatus: AgreementStatus.ACTIVE 
@@ -339,22 +364,13 @@ describe("Agreement Enforcement Middleware", () => {
       app = await setupTestApp();
       userCookie = await loginUser(app, email, "testpassword123");
 
-      // Corrupt the cache to simulate a failure scenario
-      // In real scenario, this would be a DB connection failure
-      // We'll test by clearing the tenant to cause an error
-      const originalTenantId = testTenantId;
-      
-      // Delete the agreement to simulate inconsistent state after cache invalidation
       invalidateAgreementCache(testTenantId);
       await db.delete(tenantAgreements).where(eq(tenantAgreements.id, testAgreementId));
       
-      // Now create a broken scenario - the agreement check will pass (no agreement)
-      // but let's verify the "no agreement" path works correctly
       const response = await request(app)
         .get("/api/v1/protected")
         .set("Cookie", userCookie);
 
-      // With no active agreement, access should be allowed (INVARIANT 3)
       expect(response.status).toBe(200);
     });
   });
@@ -409,9 +425,8 @@ describe("Agreement Enforcement Middleware", () => {
       const response = await request(testApp)
         .get("/api/v1/protected");
 
-      // Non-super users without tenant should be blocked with 451
       expect(response.status).toBe(451);
-      expect(response.body.code).toBe("NO_TENANT_ASSIGNED");
+      expect(response.body.code).toBe("TENANT_REQUIRED");
       expect(response.body.message).toContain("not properly configured");
 
       // Cleanup
@@ -459,9 +474,57 @@ describe("Agreement Enforcement Middleware", () => {
         .get("/api/v1/protected")
         .set("Cookie", userCookie);
 
-      // Archived = no active agreement, so access is allowed
       expect(response.status).toBe(200);
       expect(response.body.success).toBe(true);
+    });
+  });
+
+  describe("Agreement Gating Round-Trip", () => {
+    it("should return 451 when active agreement exists but user has not accepted", async () => {
+      const { email } = await createTestFixtures({
+        createAgreement: true,
+        agreementStatus: AgreementStatus.ACTIVE,
+        createAcceptance: false,
+      });
+      app = await setupTestApp();
+      userCookie = await loginUser(app, email, "testpassword123");
+
+      const response = await request(app)
+        .get("/api/v1/protected")
+        .set("Cookie", userCookie);
+
+      expect(response.status).toBe(451);
+      expect(response.body.code).toBe("AGREEMENT_REQUIRED");
+      expect(response.body.redirectTo).toBe("/accept-terms");
+    });
+
+    it("should return 200 after user accepts the active agreement", async () => {
+      const { email } = await createTestFixtures({
+        createAgreement: true,
+        agreementStatus: AgreementStatus.ACTIVE,
+        createAcceptance: false,
+      });
+      app = await setupTestApp();
+      userCookie = await loginUser(app, email, "testpassword123");
+
+      const blocked = await request(app)
+        .get("/api/v1/protected")
+        .set("Cookie", userCookie);
+      expect(blocked.status).toBe(451);
+
+      await db.insert(tenantAgreementAcceptances).values({
+        tenantId: testTenantId,
+        userId: testUserId,
+        agreementId: testAgreementId,
+        version: 1,
+      });
+      clearAgreementCache();
+
+      const allowed = await request(app)
+        .get("/api/v1/protected")
+        .set("Cookie", userCookie);
+      expect(allowed.status).toBe(200);
+      expect(allowed.body.success).toBe(true);
     });
   });
 });
