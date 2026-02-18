@@ -39,7 +39,7 @@ interface AsanaImportWizardProps {
   tenantId: string;
 }
 
-type WizardStep = "connect" | "workspace" | "projects" | "options" | "validate" | "execute" | "summary" | "history";
+type WizardStep = "connect" | "workspace" | "projects" | "assign" | "options" | "validate" | "execute" | "summary" | "history";
 
 interface AsanaWorkspace {
   gid: string;
@@ -152,9 +152,10 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
   const [autoCreateTasks, setAutoCreateTasks] = useState(true);
   const [autoCreateUsers, setAutoCreateUsers] = useState(false);
   const [fallbackUnassigned, setFallbackUnassigned] = useState(true);
-  const [clientMappingStrategy, setClientMappingStrategy] = useState<"single" | "team">("single");
+  const [clientMappingStrategy, setClientMappingStrategy] = useState<"single" | "team" | "per_project">("per_project");
   const [singleClientId, setSingleClientId] = useState("");
   const [singleClientName, setSingleClientName] = useState("");
+  const [projectClientMap, setProjectClientMap] = useState<Record<string, { clientId: string; clientName: string }>>({});
 
   const [validationResult, setValidationResult] = useState<ValidationResult | null>(null);
 
@@ -347,8 +348,32 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
         clientMappingStrategy,
         singleClientId: clientMappingStrategy === "single" ? singleClientId : undefined,
         singleClientName: clientMappingStrategy === "single" ? singleClientName : undefined,
+        projectClientMap: clientMappingStrategy === "per_project" ? projectClientMap : undefined,
       },
     };
+  }
+
+  function setProjectClient(projectGid: string, clientId: string) {
+    const client = localClients.find(c => c.id === clientId);
+    setProjectClientMap(prev => ({
+      ...prev,
+      [projectGid]: {
+        clientId: clientId === "__none__" ? "" : clientId,
+        clientName: client?.companyName || "",
+      },
+    }));
+  }
+
+  function setAllProjectsToClient(clientId: string) {
+    const client = localClients.find(c => c.id === clientId);
+    const newMap: Record<string, { clientId: string; clientName: string }> = {};
+    for (const gid of selectedProjectGids) {
+      newMap[gid] = {
+        clientId: clientId === "__none__" ? "" : clientId,
+        clientName: client?.companyName || "",
+      };
+    }
+    setProjectClientMap(newMap);
   }
 
   function toggleProject(gid: string) {
@@ -368,6 +393,7 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
     setStep("connect");
     setSelectedProjectGids(new Set());
     setAsanaProjects([]);
+    setProjectClientMap({});
     setValidationResult(null);
     setExecutionResult(null);
     setRunId(null);
@@ -540,7 +566,123 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
               <Button variant="outline" onClick={() => setStep("workspace")} data-testid="button-asana-back-workspace">
                 <ArrowLeft className="h-4 w-4 mr-2" /> Back
               </Button>
-              <Button onClick={() => setStep("options")} disabled={selectedProjectGids.size === 0} data-testid="button-asana-to-options">
+              <Button onClick={() => setStep("assign")} disabled={selectedProjectGids.size === 0} data-testid="button-asana-to-assign">
+                <ArrowRight className="h-4 w-4 mr-2" /> Assign Clients
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {step === "assign" && (
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label className="text-sm font-medium">Client Mapping Strategy</Label>
+              <Select value={clientMappingStrategy} onValueChange={(v) => setClientMappingStrategy(v as "single" | "team" | "per_project")}>
+                <SelectTrigger data-testid="select-client-mapping">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="per_project">Assign each project to a client individually</SelectItem>
+                  <SelectItem value="single">Same client for all imported projects</SelectItem>
+                  <SelectItem value="team">Map Asana team name to client</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            {clientMappingStrategy === "per_project" && (
+              <>
+                <div className="border rounded-md p-3 space-y-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <Label className="text-xs text-muted-foreground">Quick assign all to:</Label>
+                    <Select onValueChange={(v) => setAllProjectsToClient(v)} data-testid="select-assign-all-client">
+                      <SelectTrigger className="w-48" data-testid="select-assign-all-trigger">
+                        <SelectValue placeholder="Apply to all..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="__none__">No client</SelectItem>
+                        {localClients.map(c => (
+                          <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <ScrollArea className="h-64 border rounded-md p-2">
+                  {asanaProjects.filter(p => !p.archived && selectedProjectGids.has(p.gid)).map(p => {
+                    const assignedClientId = projectClientMap[p.gid]?.clientId || "__none__";
+                    return (
+                      <div
+                        key={p.gid}
+                        className="flex items-center gap-3 py-2 px-1 border-b last:border-b-0"
+                        data-testid={`assign-row-${p.gid}`}
+                      >
+                        <div className="flex items-center gap-2 flex-1 min-w-0">
+                          <FolderKanban className="h-4 w-4 text-muted-foreground shrink-0" />
+                          <span className="text-sm truncate">{p.name}</span>
+                        </div>
+                        <ArrowRight className="h-3 w-3 text-muted-foreground shrink-0" />
+                        <Select value={assignedClientId} onValueChange={(v) => setProjectClient(p.gid, v)}>
+                          <SelectTrigger className="w-44 shrink-0" data-testid={`select-client-${p.gid}`}>
+                            <SelectValue placeholder="Select client..." />
+                          </SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="__none__">No client</SelectItem>
+                            {localClients.map(c => (
+                              <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
+                      </div>
+                    );
+                  })}
+                </ScrollArea>
+              </>
+            )}
+
+            {clientMappingStrategy === "single" && (
+              <div className="space-y-2">
+                <Label className="text-xs text-muted-foreground">Select the client for all imported projects:</Label>
+                <Select value={singleClientId} onValueChange={(v) => {
+                  setSingleClientId(v);
+                  const cl = localClients.find(c => c.id === v);
+                  setSingleClientName(cl?.companyName || "");
+                }}>
+                  <SelectTrigger data-testid="select-single-client">
+                    <SelectValue placeholder="Select existing client (or leave empty to create new)" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__none__">No client (unlinked projects)</SelectItem>
+                    {localClients.map(c => (
+                      <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+                {singleClientId === "__none__" && (
+                  <Input
+                    placeholder="New client name (if auto-create enabled)"
+                    value={singleClientName}
+                    onChange={(e) => setSingleClientName(e.target.value)}
+                    data-testid="input-new-client-name"
+                  />
+                )}
+              </div>
+            )}
+
+            {clientMappingStrategy === "team" && (
+              <div className="border rounded-md p-3">
+                <p className="text-sm text-muted-foreground">
+                  Projects will be automatically assigned to clients based on their Asana team name.
+                  If a client with the matching team name doesn't exist, it will be created (if auto-create is enabled).
+                </p>
+              </div>
+            )}
+
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" onClick={() => setStep("projects")} data-testid="button-asana-back-projects-from-assign">
+                <ArrowLeft className="h-4 w-4 mr-2" /> Back
+              </Button>
+              <Button onClick={() => setStep("options")} data-testid="button-asana-to-options">
                 <ArrowRight className="h-4 w-4 mr-2" /> Configure Options
               </Button>
             </div>
@@ -549,49 +691,6 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
 
         {step === "options" && (
           <div className="space-y-4">
-            <div className="space-y-3">
-              <Label className="text-sm font-medium">Client Mapping</Label>
-              <Select value={clientMappingStrategy} onValueChange={(v) => setClientMappingStrategy(v as "single" | "team")}>
-                <SelectTrigger data-testid="select-client-mapping">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="single">Single client for all imported projects</SelectItem>
-                  <SelectItem value="team">Map Asana team name to client</SelectItem>
-                </SelectContent>
-              </Select>
-
-              {clientMappingStrategy === "single" && (
-                <div className="space-y-2 pl-2">
-                  <Select value={singleClientId} onValueChange={(v) => {
-                    setSingleClientId(v);
-                    const cl = localClients.find(c => c.id === v);
-                    setSingleClientName(cl?.companyName || "");
-                  }}>
-                    <SelectTrigger data-testid="select-single-client">
-                      <SelectValue placeholder="Select existing client (or leave empty to create new)" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="__none__">No client (unlinked projects)</SelectItem>
-                      {localClients.map(c => (
-                        <SelectItem key={c.id} value={c.id}>{c.companyName}</SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                  {singleClientId === "__none__" && (
-                    <Input
-                      placeholder="New client name (if auto-create enabled)"
-                      value={singleClientName}
-                      onChange={(e) => setSingleClientName(e.target.value)}
-                      data-testid="input-new-client-name"
-                    />
-                  )}
-                </div>
-              )}
-            </div>
-
-            <Separator />
-
             <div className="space-y-3">
               <Label className="text-sm font-medium">Auto-Create Options</Label>
               <div className="space-y-2">
@@ -626,7 +725,7 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
             </div>
 
             <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" onClick={() => setStep("projects")} data-testid="button-asana-back-projects">
+              <Button variant="outline" onClick={() => setStep("assign")} data-testid="button-asana-back-assign">
                 <ArrowLeft className="h-4 w-4 mr-2" /> Back
               </Button>
               <Button onClick={handleValidate} disabled={isLoading} data-testid="button-asana-validate">

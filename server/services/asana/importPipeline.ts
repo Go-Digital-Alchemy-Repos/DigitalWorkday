@@ -22,10 +22,11 @@ export interface AsanaImportOptions {
   autoCreateTasks: boolean;
   autoCreateUsers: boolean;
   fallbackUnassigned: boolean;
-  clientMappingStrategy: "single" | "team" | "custom_field";
+  clientMappingStrategy: "single" | "team" | "per_project" | "custom_field";
   singleClientId?: string;
   singleClientName?: string;
   clientCustomFieldName?: string;
+  projectClientMap?: Record<string, { clientId?: string; clientName?: string }>;
 }
 
 export interface ImportCounts {
@@ -212,20 +213,25 @@ export class AsanaImportPipeline {
         counts.projects.create++;
       }
 
-      const clientName = this.resolveClientName(asanaProject);
-      if (clientName) {
-        const existingClient = await this.findClientByName(clientName);
-        if (!existingClient) {
-          const existingClientMapping = await lookupMapping(this.tenantId, "client", clientName);
-          if (!existingClientMapping) {
-            if (this.options.autoCreateClients) {
-              if (!autoCreatePreview.clients.includes(clientName)) {
-                autoCreatePreview.clients.push(clientName);
+      const directClientId = this.resolveDirectClientId(asanaProject);
+      if (directClientId) {
+        counts.clients.skip++;
+      } else {
+        const clientName = this.resolveClientName(asanaProject);
+        if (clientName) {
+          const existingClient = await this.findClientByName(clientName);
+          if (!existingClient) {
+            const existingClientMapping = await lookupMapping(this.tenantId, "client", clientName);
+            if (!existingClientMapping) {
+              if (this.options.autoCreateClients) {
+                if (!autoCreatePreview.clients.includes(clientName)) {
+                  autoCreatePreview.clients.push(clientName);
+                }
+                counts.clients.create++;
+              } else {
+                counts.clients.error++;
+                errors.push({ entityType: "client", asanaGid: "n/a", name: clientName, message: "Client not found and auto-create disabled" });
               }
-              counts.clients.create++;
-            } else {
-              counts.clients.error++;
-              errors.push({ entityType: "client", asanaGid: "n/a", name: clientName, message: "Client not found and auto-create disabled" });
             }
           }
         }
@@ -363,9 +369,14 @@ export class AsanaImportPipeline {
     }
 
     let clientId: string | null = null;
-    const clientName = this.resolveClientName(asanaProject);
-    if (clientName) {
-      clientId = await this.resolveClientId(clientName, counts, errors);
+    const directClientId = this.resolveDirectClientId(asanaProject);
+    if (directClientId) {
+      clientId = directClientId;
+    } else {
+      const clientName = this.resolveClientName(asanaProject);
+      if (clientName) {
+        clientId = await this.resolveClientId(clientName, counts, errors, asanaProject);
+      }
     }
 
     const existingProjectId = await lookupMapping(this.tenantId, "project", projectGid);
@@ -593,6 +604,10 @@ export class AsanaImportPipeline {
         return this.options.singleClientName || null;
       case "team":
         return asanaProject.team?.name || null;
+      case "per_project": {
+        const mapping = this.options.projectClientMap?.[asanaProject.gid];
+        return mapping?.clientName || null;
+      }
       case "custom_field":
         return null;
       default:
@@ -600,7 +615,21 @@ export class AsanaImportPipeline {
     }
   }
 
-  private async resolveClientId(clientName: string, counts: ImportCounts, errors: ImportError[]): Promise<string | null> {
+  private resolveDirectClientId(asanaProject: AsanaProject): string | null {
+    if (this.options.clientMappingStrategy === "single" && this.options.singleClientId) {
+      return this.options.singleClientId;
+    }
+    if (this.options.clientMappingStrategy === "per_project") {
+      const mapping = this.options.projectClientMap?.[asanaProject.gid];
+      if (mapping?.clientId) return mapping.clientId;
+    }
+    return null;
+  }
+
+  private async resolveClientId(clientName: string, counts: ImportCounts, errors: ImportError[], asanaProject?: AsanaProject): Promise<string | null> {
+    const directId = asanaProject ? this.resolveDirectClientId(asanaProject) : null;
+    if (directId) return directId;
+
     if (this.options.clientMappingStrategy === "single" && this.options.singleClientId) {
       return this.options.singleClientId;
     }

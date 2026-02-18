@@ -115,10 +115,14 @@ const importOptionsSchema = z.object({
     autoCreateTasks: z.boolean().default(true),
     autoCreateUsers: z.boolean().default(false),
     fallbackUnassigned: z.boolean().default(true),
-    clientMappingStrategy: z.enum(["single", "team", "custom_field"]).default("single"),
+    clientMappingStrategy: z.enum(["single", "team", "per_project", "custom_field"]).default("per_project"),
     singleClientId: z.string().optional(),
     singleClientName: z.string().optional(),
     clientCustomFieldName: z.string().optional(),
+    projectClientMap: z.record(z.string(), z.object({
+      clientId: z.string().optional(),
+      clientName: z.string().optional(),
+    })).optional(),
   }),
 });
 
