@@ -149,6 +149,7 @@ export default function SuperAdminUsers() {
     lastName: "",
   });
   
+  const [adminEditMode, setAdminEditMode] = useState(false);
   const [editAdminForm, setEditAdminForm] = useState({
     email: "",
     firstName: "",
@@ -261,11 +262,22 @@ export default function SuperAdminUsers() {
     mutationFn: async ({ id, data }: { id: string; data: Partial<PlatformAdmin> }) => {
       return apiRequest("PATCH", `/api/v1/super/admins/${id}`, data);
     },
-    onSuccess: () => {
+    onSuccess: (_data, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/admins"] });
       toast({ title: "Platform admin updated successfully" });
-      setEditAdminDrawerOpen(false);
-      setSelectedAdmin(null);
+      if (selectedAdmin && variables.data.firstName !== undefined) {
+        setSelectedAdmin({
+          ...selectedAdmin,
+          firstName: variables.data.firstName as string || selectedAdmin.firstName,
+          lastName: variables.data.lastName as string || selectedAdmin.lastName,
+          email: variables.data.email as string || selectedAdmin.email,
+        });
+        setAdminEditMode(false);
+      } else if (variables.data.isActive !== undefined) {
+        if (selectedAdmin) {
+          setSelectedAdmin({ ...selectedAdmin, isActive: variables.data.isActive as boolean });
+        }
+      }
     },
     onError: (error: any) => {
       const parsed = parseApiError(error);
@@ -282,6 +294,8 @@ export default function SuperAdminUsers() {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/admins"] });
       toast({ title: "Platform admin deleted", description: data.message || "The admin has been permanently deleted." });
       setAdminToDelete(null);
+      setEditAdminDrawerOpen(false);
+      setSelectedAdmin(null);
     },
     onError: (error: any) => {
       const parsed = parseApiError(error);
@@ -305,6 +319,9 @@ export default function SuperAdminUsers() {
         toast({ title: "Invite email sent successfully" });
       }
       refetchAdmins();
+      if (selectedAdmin) {
+        setSelectedAdmin({ ...selectedAdmin, hasPendingInvite: true });
+      }
     },
     onError: (error: any) => {
       const parsed = parseApiError(error);
@@ -335,6 +352,9 @@ export default function SuperAdminUsers() {
         toast({ title: "Password set successfully" });
         setPasswordDrawerOpen(false);
         resetPasswordForm();
+        if (selectedAdmin) {
+          setSelectedAdmin({ ...selectedAdmin, passwordSet: true, hasPendingInvite: false });
+        }
       } else if (data.method === "RESET_LINK") {
         setGeneratedResetUrl(data.resetUrl);
         toast({ title: "Password reset link generated" });
@@ -415,6 +435,7 @@ export default function SuperAdminUsers() {
 
   const handleEditAdmin = (admin: PlatformAdmin) => {
     setSelectedAdmin(admin);
+    setAdminEditMode(false);
     setEditAdminForm({
       email: admin.email,
       firstName: admin.firstName || "",
@@ -1609,61 +1630,278 @@ export default function SuperAdminUsers() {
         </SheetContent>
       </Sheet>
 
-      {/* Edit Platform Admin Drawer */}
-      <Sheet open={editAdminDrawerOpen} onOpenChange={setEditAdminDrawerOpen}>
-        <SheetContent className="w-full sm:max-w-xl" data-testid="drawer-edit-admin">
+      {/* Platform Admin Profile Drawer */}
+      <Sheet open={editAdminDrawerOpen} onOpenChange={(open) => {
+        setEditAdminDrawerOpen(open);
+        if (!open) {
+          setSelectedAdmin(null);
+          setAdminEditMode(false);
+        }
+      }}>
+        <SheetContent className="w-full sm:max-w-xl overflow-y-auto" data-testid="drawer-admin-profile">
           <SheetHeader>
-            <SheetTitle>Edit Platform Admin</SheetTitle>
-            <SheetDescription>Update administrator details</SheetDescription>
+            <SheetTitle>Admin Details</SheetTitle>
+            <SheetDescription>View and manage platform administrator</SheetDescription>
           </SheetHeader>
-          <div className="space-y-6 py-6">
-            <div className="space-y-2">
-              <Label htmlFor="editFirstName">First Name</Label>
-              <Input
-                id="editFirstName"
-                value={editAdminForm.firstName}
-                onChange={(e) => setEditAdminForm({ ...editAdminForm, firstName: e.target.value })}
-                data-testid="input-edit-first-name"
-              />
+          {selectedAdmin && (
+            <div className="space-y-6 py-6">
+              <div className="flex items-center gap-4">
+                <Avatar className="h-16 w-16">
+                  <AvatarFallback className="text-lg bg-primary/10">
+                    {getInitials(
+                      selectedAdmin.firstName && selectedAdmin.lastName
+                        ? `${selectedAdmin.firstName} ${selectedAdmin.lastName}`
+                        : selectedAdmin.name || null,
+                      selectedAdmin.email
+                    )}
+                  </AvatarFallback>
+                </Avatar>
+                <div>
+                  <div className="font-semibold text-lg" data-testid="text-admin-name">
+                    {selectedAdmin.firstName && selectedAdmin.lastName
+                      ? `${selectedAdmin.firstName} ${selectedAdmin.lastName}`
+                      : selectedAdmin.name || selectedAdmin.email}
+                  </div>
+                  <div className="text-sm text-muted-foreground" data-testid="text-admin-email">{selectedAdmin.email}</div>
+                  <div className="flex gap-2 mt-2">
+                    {getAdminStatusBadge(selectedAdmin)}
+                    <Badge variant="outline">
+                      <Shield className="h-3 w-3 mr-1" />
+                      Super Admin
+                    </Badge>
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Created</Label>
+                  <div className="text-sm">{formatDate(selectedAdmin.createdAt)}</div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Password Status</Label>
+                  <div className="text-sm">
+                    {selectedAdmin.passwordSet ? (
+                      <span className="text-green-600">Password Set</span>
+                    ) : (
+                      <span className="text-amber-600">No Password</span>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Invite Status</Label>
+                  <div className="text-sm">
+                    {selectedAdmin.hasPendingInvite ? (
+                      <Badge variant="outline"><Clock className="h-3 w-3 mr-1" />Pending</Badge>
+                    ) : (
+                      <span className="text-muted-foreground">{selectedAdmin.passwordSet ? "Accepted" : "Not sent"}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs text-muted-foreground">Account Status</Label>
+                  <div className="text-sm">
+                    {selectedAdmin.isActive ? (
+                      <span className="text-green-600">Active</span>
+                    ) : (
+                      <span className="text-destructive">Deactivated</span>
+                    )}
+                  </div>
+                </div>
+              </div>
+
+              {adminEditMode ? (
+                <div className="border-t pt-4 space-y-4">
+                  <div className="flex items-center gap-2 mb-1">
+                    <Edit className="h-4 w-4" />
+                    <h4 className="font-medium">Edit Details</h4>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="space-y-2">
+                      <Label htmlFor="editFirstName">First Name</Label>
+                      <Input
+                        id="editFirstName"
+                        value={editAdminForm.firstName}
+                        onChange={(e) => setEditAdminForm({ ...editAdminForm, firstName: e.target.value })}
+                        data-testid="input-edit-first-name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="editLastName">Last Name</Label>
+                      <Input
+                        id="editLastName"
+                        value={editAdminForm.lastName}
+                        onChange={(e) => setEditAdminForm({ ...editAdminForm, lastName: e.target.value })}
+                        data-testid="input-edit-last-name"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="editEmail">Email</Label>
+                      <Input
+                        id="editEmail"
+                        type="email"
+                        value={editAdminForm.email}
+                        onChange={(e) => setEditAdminForm({ ...editAdminForm, email: e.target.value })}
+                        data-testid="input-edit-email"
+                      />
+                    </div>
+                  </div>
+                  <div className="flex gap-3 pt-2">
+                    <Button
+                      onClick={handleUpdateAdmin}
+                      disabled={updateAdminMutation.isPending}
+                      className="flex-1"
+                      data-testid="button-update-admin"
+                    >
+                      {updateAdminMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                      ) : (
+                        <Save className="h-4 w-4 mr-2" />
+                      )}
+                      Save Changes
+                    </Button>
+                    <Button variant="outline" onClick={() => setAdminEditMode(false)} data-testid="button-admin-edit-cancel">
+                      Cancel
+                    </Button>
+                  </div>
+                </div>
+              ) : (
+                <>
+                  <div className="border-t pt-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Settings className="h-4 w-4" />
+                      <h4 className="font-medium">Actions</h4>
+                    </div>
+                    <div className="space-y-2">
+                      <Button
+                        className="w-full justify-start"
+                        variant="outline"
+                        onClick={() => setAdminEditMode(true)}
+                        data-testid="button-edit-admin-details"
+                      >
+                        <Edit className="h-4 w-4 mr-2" />
+                        Edit Details
+                      </Button>
+
+                      {selectedAdmin.isActive && !selectedAdmin.passwordSet && (
+                        <>
+                          <Button
+                            className="w-full justify-start"
+                            variant="outline"
+                            onClick={() => handleOpenPasswordDrawer(selectedAdmin, "SET_PASSWORD")}
+                            data-testid="button-admin-set-password"
+                          >
+                            <KeyRound className="h-4 w-4 mr-2" />
+                            Set Password
+                          </Button>
+                          <Button
+                            className="w-full justify-start"
+                            variant="outline"
+                            onClick={() => handleOpenPasswordDrawer(selectedAdmin, "RESET_LINK")}
+                            data-testid="button-admin-generate-reset"
+                          >
+                            <Link className="h-4 w-4 mr-2" />
+                            Generate Reset Link
+                          </Button>
+                          <Button
+                            className="w-full justify-start"
+                            variant="outline"
+                            onClick={() => handleGenerateInvite(selectedAdmin)}
+                            disabled={generateInviteMutation.isPending}
+                            data-testid="button-admin-generate-invite"
+                          >
+                            {generateInviteMutation.isPending ? (
+                              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            ) : (
+                              <Link className="h-4 w-4 mr-2" />
+                            )}
+                            Generate Invite Link
+                          </Button>
+                          {integrationStatus?.mailgun && (
+                            <Button
+                              className="w-full justify-start"
+                              variant="outline"
+                              onClick={() => handleGenerateInvite(selectedAdmin, true)}
+                              disabled={generateInviteMutation.isPending}
+                              data-testid="button-admin-send-invite-email"
+                            >
+                              {generateInviteMutation.isPending ? (
+                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                              ) : (
+                                <Send className="h-4 w-4 mr-2" />
+                              )}
+                              Send Invite Email
+                            </Button>
+                          )}
+                        </>
+                      )}
+
+                      {selectedAdmin.isActive && selectedAdmin.passwordSet && (
+                        <Button
+                          className="w-full justify-start"
+                          variant="outline"
+                          onClick={() => handleOpenPasswordDrawer(selectedAdmin, "RESET_LINK")}
+                          data-testid="button-admin-reset-password"
+                        >
+                          <KeyRound className="h-4 w-4 mr-2" />
+                          Reset Password
+                        </Button>
+                      )}
+
+                      {selectedAdmin.isActive ? (
+                        <Button
+                          className="w-full justify-start"
+                          variant="outline"
+                          onClick={() => handleDeactivateAdmin(selectedAdmin)}
+                          data-testid="button-admin-deactivate"
+                        >
+                          <UserX className="h-4 w-4 mr-2" />
+                          Deactivate Admin
+                        </Button>
+                      ) : (
+                        <Button
+                          className="w-full justify-start"
+                          variant="outline"
+                          onClick={() => handleReactivateAdmin(selectedAdmin)}
+                          disabled={updateAdminMutation.isPending}
+                          data-testid="button-admin-reactivate"
+                        >
+                          {updateAdminMutation.isPending ? (
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                          ) : (
+                            <UserCheck className="h-4 w-4 mr-2" />
+                          )}
+                          Reactivate Admin
+                        </Button>
+                      )}
+
+                      {!selectedAdmin.isActive && (
+                        <Button
+                          className="w-full justify-start text-destructive"
+                          variant="outline"
+                          onClick={() => setAdminToDelete(selectedAdmin)}
+                          data-testid="button-admin-delete"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Permanently Delete
+                        </Button>
+                      )}
+                    </div>
+                  </div>
+
+                  <div className="border-t pt-4">
+                    <div className="flex items-center gap-2 mb-3">
+                      <Activity className="h-4 w-4" />
+                      <h4 className="font-medium">Platform Activity</h4>
+                    </div>
+                    <div className="text-sm text-muted-foreground" data-testid="text-admin-activity-info">
+                      Platform administrators operate at the system level. Activity tracking for admin operations is available in the system audit logs.
+                    </div>
+                  </div>
+                </>
+              )}
             </div>
-            <div className="space-y-2">
-              <Label htmlFor="editLastName">Last Name</Label>
-              <Input
-                id="editLastName"
-                value={editAdminForm.lastName}
-                onChange={(e) => setEditAdminForm({ ...editAdminForm, lastName: e.target.value })}
-                data-testid="input-edit-last-name"
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="editEmail">Email</Label>
-              <Input
-                id="editEmail"
-                type="email"
-                value={editAdminForm.email}
-                onChange={(e) => setEditAdminForm({ ...editAdminForm, email: e.target.value })}
-                data-testid="input-edit-email"
-              />
-            </div>
-            <div className="flex gap-3 pt-4">
-              <Button 
-                onClick={handleUpdateAdmin} 
-                disabled={updateAdminMutation.isPending}
-                className="flex-1"
-                data-testid="button-update-admin"
-              >
-                {updateAdminMutation.isPending ? (
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                ) : (
-                  <Save className="h-4 w-4 mr-2" />
-                )}
-                Save Changes
-              </Button>
-              <Button variant="outline" onClick={() => setEditAdminDrawerOpen(false)}>
-                Cancel
-              </Button>
-            </div>
-          </div>
+          )}
         </SheetContent>
       </Sheet>
 
