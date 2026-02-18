@@ -659,6 +659,46 @@ export function TaskDetailDrawer({
     }
   }, [task?.id, task?.description, task?.title, task?.estimateMinutes]);
 
+  const assigneeUsers = useMemo<Partial<User>[]>(
+    () => task?.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [],
+    [task?.assignees]
+  );
+  const watcherUsers = useMemo<Partial<User>[]>(
+    () => task?.watchers?.map((w) => w.user).filter(Boolean) as Partial<User>[] || [],
+    [task?.watchers]
+  );
+  const taskTags = useMemo<TagType[]>(
+    () => task?.tags?.map((tt) => tt.tag).filter(Boolean) as TagType[] || [],
+    [task?.tags]
+  );
+
+  const handleAddSubtask = useCallback(
+    (title: string) => {
+      if (task) addSubtaskMutation.mutate({ taskId: task.id, title });
+    },
+    [task?.id]
+  );
+
+  const handleToggleSubtask = useCallback(
+    (subtaskId: string, completed: boolean) => toggleSubtaskMutation.mutate({ subtaskId, completed }),
+    []
+  );
+
+  const handleDeleteSubtask = useCallback(
+    (subtaskId: string) => deleteSubtaskMutation.mutate(subtaskId),
+    []
+  );
+
+  const handleUpdateSubtask = useCallback(
+    (subtaskId: string, title: string) => updateSubtaskTitleMutation.mutate({ subtaskId, title }),
+    []
+  );
+
+  const handleSubtaskUpdate = useCallback(() => {
+    onRefresh?.();
+    invalidateTaskQueries();
+  }, [onRefresh, invalidateTaskQueries]);
+
   const drawerContentClass = isMobile 
     ? "w-full overflow-y-auto p-0" 
     : "w-full sm:max-w-2xl overflow-y-auto p-0";
@@ -727,19 +767,6 @@ export function TaskDetailDrawer({
     );
   }
 
-  const assigneeUsers = useMemo<Partial<User>[]>(
-    () => task.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [],
-    [task.assignees]
-  );
-  const watcherUsers = useMemo<Partial<User>[]>(
-    () => task.watchers?.map((w) => w.user).filter(Boolean) as Partial<User>[] || [],
-    [task.watchers]
-  );
-  const taskTags = useMemo<TagType[]>(
-    () => task.tags?.map((tt) => tt.tag).filter(Boolean) as TagType[] || [],
-    [task.tags]
-  );
-  
   const handleTitleSave = () => {
     if (title.trim() && title !== task.title) {
       onUpdate?.(task.id, { title: title.trim() });
@@ -761,31 +788,6 @@ export function TaskDetailDrawer({
       markClean();
     }
   };
-
-  const handleAddSubtask = useCallback(
-    (title: string) => addSubtaskMutation.mutate({ taskId: task.id, title }),
-    [task.id]
-  );
-
-  const handleToggleSubtask = useCallback(
-    (subtaskId: string, completed: boolean) => toggleSubtaskMutation.mutate({ subtaskId, completed }),
-    []
-  );
-
-  const handleDeleteSubtask = useCallback(
-    (subtaskId: string) => deleteSubtaskMutation.mutate(subtaskId),
-    []
-  );
-
-  const handleUpdateSubtask = useCallback(
-    (subtaskId: string, title: string) => updateSubtaskTitleMutation.mutate({ subtaskId, title }),
-    []
-  );
-
-  const handleSubtaskUpdate = useCallback(() => {
-    onRefresh?.();
-    invalidateTaskQueries();
-  }, [onRefresh, invalidateTaskQueries]);
 
   const handleDrawerClose = (shouldClose: boolean) => {
     if (!shouldClose) return;

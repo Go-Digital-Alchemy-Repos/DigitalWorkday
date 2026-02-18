@@ -1,0 +1,258 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+FEATURE:
+Asana Importer (Super Admin → Tenants → Tenant → Data → “Import from Asana”)
+with strong duplicate prevention AND configurable auto-create behavior for missing referenced items (clients/projects/tasks/users/etc).
+
+GOAL:
+Import Asana workspace/projects/sections/tasks/subtasks (and optional comments/attachments metadata) into a selected tenant/workspace with:
+1) NO DUPLICATES on reruns or partial reruns
+2) Options to auto-create missing referenced items (clients, projects, parent tasks, users) when they don’t exist
+3) A dry-run validate step that previews create/update/skip counts and shows exactly what would be auto-created
+
+NON-DESTRUCTIVE RULES:
+- Do NOT weaken tenancy/security. All actions superUser only.
+- Do NOT change existing API URLs; add new /api/v1/super endpoints.
+- Avoid DB schema changes if possible; if required for idempotency mapping, add minimal mapping tables + migration + tests.
+- Tokens must be encrypted at rest; reuse existing secrets utilities.
+- Respect rate limits and implement throttling/backoff.
+
+DELIVERABLES:
+A) Importer UI with toggles:
+   - “Prevent duplicates (idempotent)” (always ON)
+   - “Auto-create missing Clients”
+   - “Auto-create missing Projects”
+   - “Auto-create missing Tasks/Subtasks”
+   - “Auto-create missing Users (Employees)”
+   - “Map unknown users to Unassigned” (fallback)
+B) Idempotency and de-duplication using provider external IDs
+C) Validation (dry-run) showing create/update/skip + auto-create impact
+D) Execution with progress + summary and downloadable error report
+E) Tests covering idempotency + auto-create toggles
+
+------------------------------------------------------------
+PHASE 0 — DISCOVERY
+------------------------------------------------------------
+
+1) Confirm current MyWorkDay data model:
+- clients, projects, tasks, subtasks, sections
+- whether tasks belong to project and/or section
+- existing externalId columns or integration mapping table(s)
+- existing tenant_integrations storage model
+
+2) Confirm what “Client” means for your system:
+- If projects link to clients, define how Asana “projects” map to MyWorkDay clients/projects:
+  Option A (recommended):
+    - Asana Project → MyWorkDay Project
+    - Asana Workspace/Team/Custom field → MyWorkDay Client (configurable)
+  Option B:
+    - Asana Project → MyWorkDay Client + Project (two-layer mapping) if your system requires it
+Pick the best mapping and make it configurable in the wizard.
+
+------------------------------------------------------------
+PHASE 1 — IDEMPOTENCY / DUPLICATE PREVENTION DESIGN
+------------------------------------------------------------
+
+Duplicates must be prevented even if:
+- import is re-run
+- import is partially re-run
+- multiple projects imported at different times
+
+Implement provider mapping (preferred):
+If external ID fields exist, use them.
+If not, add minimal mapping tables:
+
+- integration_entity_map:
+  id
+  tenantId
+  provider ("asana")
+  entityType ("client"|"project"|"section"|"task"|"subtask"|"user")
+  providerEntityId (asana id)
+  localEntityId (uuid/int)
+  createdAt
+  UNIQUE(tenantId, provider, entityType, providerEntityId)
+
+Optionally add local uniqueness:
+  UNIQUE(tenantId, provider, entityType, localEntityId)
+
+This table allows perfect idempotency without relying on names.
+
+If you already have a generic mapping table, reuse it instead.
+
+Dedupe strategy (always ON):
+- Before creating any entity, lookup mapping by (tenantId, provider, entityType, providerEntityId)
+  - if found → update existing entity (or skip if identical)
+  - if not found → create new entity and write mapping row
+- Also apply in-file dedupe: do not process same Asana ID twice within one run.
+
+------------------------------------------------------------
+PHASE 2 — AUTO-CREATE OPTIONS (MISSING REFERENCES)
+------------------------------------------------------------
+
+Add importer options (wizard toggles):
+- autoCreateClients: boolean
+- autoCreateProjects: boolean
+- autoCreateTasks: boolean
+- autoCreateUsers: boolean
+- fallbackUnassigned: boolean
+
+Rules:
+- If a referenced entity is missing and its autoCreate toggle is OFF:
+  - mark row as error in validation and execution (skip creation)
+- If autoCreate toggle is ON:
+  - create missing entity with sensible defaults
+  - write mapping row
+  - continue import
+
+Specifics:
+Users:
+- Match by email first (Asana users often have email).
+- If no email or cannot match:
+  - If autoCreateUsers ON and email present → create employee user
+  - Else if fallbackUnassigned ON → assign to unassigned
+  - Else → validation error
+
+Clients:
+- Client mapping source must be explicit:
+  - either Asana “team” name
+  - or a chosen custom field (e.g., “Client” field)
+  - or a fixed client selected in wizard for all imported projects
+Support at least:
+  - “Single client for this import” (choose existing or auto-create)
+  - “Use Asana custom field ‘Client’” (map to clientName)
+If client name resolves to none and autoCreateClients ON → create client.
+
+Projects:
+- Asana project not found in local and mapping missing:
+  - if autoCreateProjects ON → create project
+  - else error
+
+Tasks/Subtasks:
+- For each Asana task:
+  - if mapped local task exists → update
+  - else if autoCreateTasks ON → create
+  - else skip/error
+For subtasks:
+  - if parent task missing and autoCreateTasks OFF → error
+  - if parent task missing and autoCreateTasks ON → create parent first then subtasks
+
+------------------------------------------------------------
+PHASE 3 — ASANA CONNECT (OAUTH) + CLIENT
+------------------------------------------------------------
+
+Implement OAuth connect + encrypted token storage:
+- ASANA_CLIENT_ID / ASANA_CLIENT_SECRET / ASANA_REDIRECT_URL
+- endpoints under /api/v1/super/...
+
+Build Asana client with:
+- pagination
+- throttling/backoff on 429
+- low concurrency
+- requestId logging
+
+------------------------------------------------------------
+PHASE 4 — IMPORT WIZARD (UI)
+------------------------------------------------------------
+
+Wizard steps:
+1) Connect Asana (if not connected)
+2) Select Asana Workspace
+3) Select Projects (multi-select)
+4) Mapping & Options:
+   - client mapping strategy (single client / custom field / team mapping)
+   - toggles: autoCreateClients/projects/tasks/users
+   - fallbackUnassigned option
+5) Dry-Run Validate:
+   - show counts:
+     - willCreate, willUpdate, willSkip, willFail
+   - show “Auto-create preview” counts per entity type
+   - provide downloadable error report
+6) Run Import:
+   - progress
+   - results summary
+
+Add Import History list (per tenant) showing:
+- date, actor, workspace, projects imported, counts, status
+
+------------------------------------------------------------
+PHASE 5 — EXECUTION PIPELINE (ORDER + CONSISTENCY)
+------------------------------------------------------------
+
+Import order:
+1) Users (if needed for assignees)
+2) Clients (if client mapping requires it)
+3) Projects
+4) Sections
+5) Tasks
+6) Subtasks
+7) Optional: comments/attachments metadata
+
+Ensure ordering preserved:
+- sections in Asana order
+- tasks grouped by section membership, in order if possible
+- store position/sortOrder if schema supports
+
+Use batch transactions and safe retries.
+
+------------------------------------------------------------
+PHASE 6 — VALIDATION (DRY RUN)
+------------------------------------------------------------
+
+Validation must:
+- not write anything
+- simulate mappings + autoCreate toggles
+- detect duplicates using mapping table (wouldUpdate vs wouldCreate)
+- detect missing required fields
+- detect ambiguous user matches
+- show per-row errors with row number and entity context
+
+------------------------------------------------------------
+PHASE 7 — TESTS
+------------------------------------------------------------
+
+Add tests using a mocked Asana client (do NOT call Asana in tests):
+
+1) Idempotency:
+- run import twice, assert no duplicates created (counts: first run creates, second run updates/skips)
+
+2) Auto-create clients:
+- when client reference missing:
+  - with toggle OFF → validation fails
+  - with toggle ON → client created and mapped
+
+3) Auto-create tasks:
+- subtasks referencing missing parent task:
+  - with toggle OFF → fail
+  - with toggle ON → parent created then subtasks
+
+4) User mapping:
+- match by email updates/assigns correctly
+- missing email uses fallbackUnassigned when enabled
+
+5) Security:
+- non-superUser forbidden on all endpoints
+
+6) Mapping uniqueness constraint:
+- ensures UNIQUE(tenantId, provider, entityType, providerEntityId) prevents duplicates
+
+------------------------------------------------------------
+PHASE 8 — DOCS
+------------------------------------------------------------
+
+Create docs/admin/asana-importer.md including:
+- setup env vars and OAuth steps
+- idempotency model (mapping table)
+- auto-create toggle behaviors
+- recommended first import settings
+- troubleshooting + rate limit notes
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+When finished, output:
+- idempotency strategy and where it is stored
+- exact auto-create toggle behaviors
+- files changed
+- tests added/passing
+- manual verification steps
