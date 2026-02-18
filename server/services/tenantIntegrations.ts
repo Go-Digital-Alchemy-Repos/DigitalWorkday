@@ -5,7 +5,7 @@ import { encryptValue, decryptValue, isEncryptionAvailable } from "../lib/encryp
 import Mailgun from "mailgun.js";
 import FormData from "form-data";
 
-export type IntegrationProvider = "mailgun" | "s3" | "r2" | "sso_google" | "openai";
+export type IntegrationProvider = "mailgun" | "s3" | "r2" | "sso_google" | "openai" | "asana";
 
 interface MailgunPublicConfig {
   domain: string;
@@ -73,8 +73,18 @@ export interface OpenAISecretConfig {
   apiKey: string;
 }
 
-type PublicConfig = MailgunPublicConfig | S3PublicConfig | R2PublicConfig | SsoGooglePublicConfig | OpenAIPublicConfig;
-type SecretConfig = MailgunSecretConfig | S3SecretConfig | R2SecretConfig | SsoGoogleSecretConfig | OpenAISecretConfig;
+export interface AsanaPublicConfig {
+  enabled: boolean;
+  workspaceGid?: string;
+  workspaceName?: string;
+}
+
+export interface AsanaSecretConfig {
+  personalAccessToken: string;
+}
+
+type PublicConfig = MailgunPublicConfig | S3PublicConfig | R2PublicConfig | SsoGooglePublicConfig | OpenAIPublicConfig | AsanaPublicConfig;
+type SecretConfig = MailgunSecretConfig | S3SecretConfig | R2SecretConfig | SsoGoogleSecretConfig | OpenAISecretConfig | AsanaSecretConfig;
 
 interface SecretMaskedInfo {
   apiKeyMasked?: string | null;
@@ -172,6 +182,11 @@ export class TenantIntegrationService {
           const aiSecrets = secrets as OpenAISecretConfig;
           secretMasked = {
             apiKeyMasked: maskSecret(aiSecrets.apiKey),
+          };
+        } else if (provider === "asana") {
+          const asanaSecrets = secrets as AsanaSecretConfig;
+          secretMasked = {
+            apiKeyMasked: maskSecret(asanaSecrets.personalAccessToken),
           };
         }
       } catch (err) {
@@ -779,6 +794,17 @@ export class TenantIntegrationService {
     } catch (err) {
       console.error(`[TenantIntegrations] Failed to clear secret ${secretName} for ${provider}:`, err);
       throw err;
+    }
+  }
+
+  async getDecryptedSecrets<T extends SecretConfig>(tenantId: string, provider: IntegrationProvider): Promise<T | null> {
+    const condition = and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider));
+    const [integration] = await db.select().from(tenantIntegrations).where(condition).limit(1);
+    if (!integration?.configEncrypted || !isEncryptionAvailable()) return null;
+    try {
+      return JSON.parse(decryptValue(integration.configEncrypted)) as T;
+    } catch {
+      return null;
     }
   }
 }

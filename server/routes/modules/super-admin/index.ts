@@ -26,3 +26,4 @@ export * from './docs.router';
 export * from './export-import.router';
 export * from './ai-config.router';
 export * from './diagnostics.router';
+export * from './asana-import.router';

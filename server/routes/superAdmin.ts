@@ -39,6 +39,7 @@ import {
   exportImportRouter,
   aiConfigRouter,
   diagnosticsRouter,
+  asanaImportRouter,
 } from "./modules/super-admin";
 
 const router = Router();
@@ -71,6 +72,7 @@ router.use(docsRouter);
 router.use(exportImportRouter);
 router.use(aiConfigRouter);
 router.use(diagnosticsRouter);
+router.use(asanaImportRouter);
 
 // =============================================================================
 // SHARED HELPERS — Exported for use by sub-routers

@@ -75,6 +75,7 @@ import {
 } from "lucide-react";
 import { CsvImportPanel, type ParsedRow, type ImportResult, type CsvColumn } from "@/components/common/csv-import-panel";
 import { DataImportWizard as DataImportWizardComponent } from "@/components/super-admin/data-import-wizard";
+import { AsanaImportWizard } from "@/components/super-admin/asana-import-wizard";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { TenantUserDrawer } from "./tenant-user-drawer";
 import { ProvisionUserDrawer } from "./provision-user-drawer";
@@ -5079,6 +5080,10 @@ function DataImportExportTab({ tenantId, tenantSlug }: { tenantId: string; tenan
       </Card>
 
       <DataImportWizardComponent tenantId={tenantId} tenantSlug={tenantSlug} />
+
+      <Separator />
+
+      <AsanaImportWizard tenantId={tenantId} />
     </div>
   );
 }

@@ -3015,3 +3015,49 @@ export const insertClientMessageSchema = createInsertSchema(clientMessages).omit
 
 export type ClientMessage = typeof clientMessages.$inferSelect;
 export type InsertClientMessage = z.infer<typeof insertClientMessageSchema>;
+
+// ============================================================
+// Integration Entity Mapping (for Asana / external provider idempotency)
+// ============================================================
+export const integrationEntityMap = pgTable("integration_entity_map", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  provider: text("provider").notNull(),
+  entityType: text("entity_type").notNull(),
+  providerEntityId: text("provider_entity_id").notNull(),
+  localEntityId: varchar("local_entity_id").notNull(),
+  metadata: jsonb("metadata"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("integration_entity_map_unique").on(table.tenantId, table.provider, table.entityType, table.providerEntityId),
+  index("integration_entity_map_local_idx").on(table.tenantId, table.provider, table.entityType, table.localEntityId),
+  index("integration_entity_map_tenant_idx").on(table.tenantId),
+]);
+
+export type IntegrationEntityMapRow = typeof integrationEntityMap.$inferSelect;
+
+// ============================================================
+// Asana Import Runs (history tracking)
+// ============================================================
+export const asanaImportRuns = pgTable("asana_import_runs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  actorUserId: varchar("actor_user_id").references(() => users.id).notNull(),
+  asanaWorkspaceGid: text("asana_workspace_gid").notNull(),
+  asanaWorkspaceName: text("asana_workspace_name"),
+  asanaProjectGids: text("asana_project_gids").array().notNull(),
+  targetWorkspaceId: varchar("target_workspace_id").references(() => workspaces.id),
+  options: jsonb("options").notNull(),
+  status: text("status").notNull().default("pending"),
+  phase: text("phase"),
+  validationSummary: jsonb("validation_summary"),
+  executionSummary: jsonb("execution_summary"),
+  errorLog: jsonb("error_log"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("asana_import_runs_tenant_idx").on(table.tenantId),
+  index("asana_import_runs_status_idx").on(table.status),
+]);
