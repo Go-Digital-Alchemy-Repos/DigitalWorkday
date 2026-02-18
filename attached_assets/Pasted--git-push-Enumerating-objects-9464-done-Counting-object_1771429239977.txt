@@ -1,0 +1,49 @@
+$ git push
+Enumerating objects: 9464, done.
+Counting objects: 100% (9464/9464), done.
+Delta compression using up to 8 threads
+Compressing objects: 100% (5305/5305), done.
+Writing objects: 100% (9464/9464), 89.50 MiB | 4.83 MiB/s, done.
+Total 9464 (delta 7415), reused 5202 (delta 4074), pack-reused 0 (from 0)
+remote: Resolving deltas: 100% (7415/7415), done.
+remote: warning: See https://gh.io/lfs for more information.
+remote: warning: File zitnan1z is 91.40 MB; this is larger than GitHub's recommended maximum file size of 50.00 MB
+remote: warning: GH001: Large files detected. You may want to try Git Large File Storage - https://git-lfs.github.com.
+remote: error: GH013: Repository rule violations found for refs/heads/main.
+remote: 
+remote: - GITHUB PUSH PROTECTION
+remote:   —————————————————————————————————————————
+remote:     Resolve the following violations before pushing again
+remote: 
+remote:     - Push cannot contain secrets
+remote: 
+remote:     
+remote:      (?) Learn how to resolve a blocked push
+remote:      https://docs.github.com/code-security/secret-scanning/working-with-secret-scanning-and-push-protection/working-with-push-protection-from-the-command-line#resolving-a-blocked-push
+remote:     
+remote:      (?) This repository does not have Secret Scanning enabled, but is eligible. Enable Secret Scanning to view and manage detected secrets.
+remote:      Visit the repository settings page, https://github.com/Go-Digital-Alchemy-Repos/DigitalWorkday/settings/security_analysis
+remote:     
+remote:     
+remote:       —— Stripe API Key ————————————————————————————————————
+remote:        locations:
+remote:          - commit: b6d4de0afe5d8bdf1583f67a8b08d53f587a384e
+remote:            path: server/tests/stripe_settings_masking_and_persist.test.ts:40
+remote:     
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.
+remote:        https://github.com/Go-Digital-Alchemy-Repos/DigitalWorkday/security/secret-scanning/unblock-secret/39oAU97wApNjgtkJfeTzaLQHitZ
+remote:     
+remote:     
+remote:       —— Stripe API Key ————————————————————————————————————
+remote:        locations:
+remote:          - commit: 59dfce7c0a62c5bf441a89ccdcbc03d150bd4985
+remote:            path: server/tests/stripe_webhook_hardening.test.ts:60
+remote:     
+remote:        (?) To push, remove secret from commit(s) or follow this URL to allow the secret.
+remote:        https://github.com/Go-Digital-Alchemy-Repos/DigitalWorkday/security/secret-scanning/unblock-secret/39oAU72T6lsMDZBxSNdCeC34DGK
+remote:     
+remote: 
+remote: 
+To https://github.com/Go-Digital-Alchemy-Repos/DigitalWorkday.git
+ ! [remote rejected] main -> main (push declined due to repository rule violations)
+error: failed to push some refs to 'https://github.com/Go-Digital-Alchemy-Repos/DigitalWorkday.git'
