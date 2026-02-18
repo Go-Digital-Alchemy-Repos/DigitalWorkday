@@ -522,7 +522,7 @@ export interface IStorage {
 
   // User UI Preferences
   getUserUiPreferences(userId: string): Promise<UserUiPreferences | undefined>;
-  upsertUserUiPreferences(userId: string, tenantId: string | null, prefs: { themeMode?: string | null; themeAccent?: string | null }): Promise<UserUiPreferences>;
+  upsertUserUiPreferences(userId: string, tenantId: string | null, prefs: { themeMode?: string | null; themePackId?: string | null; themeAccent?: string | null }): Promise<UserUiPreferences>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4548,7 +4548,7 @@ export class DatabaseStorage implements IStorage {
     return prefs || undefined;
   }
 
-  async upsertUserUiPreferences(userId: string, tenantId: string | null, prefs: { themeMode?: string | null; themeAccent?: string | null }): Promise<UserUiPreferences> {
+  async upsertUserUiPreferences(userId: string, tenantId: string | null, prefs: { themeMode?: string | null; themePackId?: string | null; themeAccent?: string | null }): Promise<UserUiPreferences> {
     const now = new Date();
     const [result] = await db
       .insert(userUiPreferences)
@@ -4556,6 +4556,7 @@ export class DatabaseStorage implements IStorage {
         userId,
         tenantId,
         themeMode: prefs.themeMode ?? null,
+        themePackId: prefs.themePackId ?? null,
         themeAccent: prefs.themeAccent ?? null,
         createdAt: now,
         updatedAt: now,
@@ -4564,6 +4565,7 @@ export class DatabaseStorage implements IStorage {
         target: userUiPreferences.userId,
         set: {
           ...(prefs.themeMode !== undefined ? { themeMode: prefs.themeMode } : {}),
+          ...(prefs.themePackId !== undefined ? { themePackId: prefs.themePackId } : {}),
           ...(prefs.themeAccent !== undefined ? { themeAccent: prefs.themeAccent } : {}),
           updatedAt: now,
         },

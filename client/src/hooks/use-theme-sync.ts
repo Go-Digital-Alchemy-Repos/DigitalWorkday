@@ -3,15 +3,18 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme-provider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { getThemePack } from "@/theme/themePacks";
 
 interface UiPreferences {
   themeMode: string | null;
+  themePackId: string | null;
   themeAccent: string | null;
 }
 
 interface TenantBrandingResponse {
   tenantSettings: {
     defaultThemeAccent?: string | null;
+    defaultThemePack?: string | null;
   } | null;
 }
 
@@ -40,17 +43,20 @@ export function useThemeSync() {
 
     hydrateFromServer({
       themeMode: prefs?.themeMode ?? null,
+      themePackId: prefs?.themePackId ?? null,
       themeAccent: prefs?.themeAccent ?? null,
       tenantDefaultAccent: branding?.tenantSettings?.defaultThemeAccent ?? null,
+      tenantDefaultThemePack: branding?.tenantSettings?.defaultThemePack ?? null,
     });
     hydrated.current = true;
-    prevPackId.current = prefs?.themeMode || packId;
-    prevIsSystem.current = prefs?.themeMode === "system";
+    const effectivePack = prefs?.themePackId ?? prefs?.themeMode ?? packId;
+    prevPackId.current = effectivePack;
+    prevIsSystem.current = effectivePack === "system";
     prevAccent.current = prefs?.themeAccent || accent;
   }, [prefsFetched, brandingFetched, prefs, branding, hydrateFromServer, packId, accent]);
 
   const saveMutation = useMutation({
-    mutationFn: async (body: { themeMode?: string; themeAccent?: string }) =>
+    mutationFn: async (body: { themeMode?: string; themePackId?: string; themeAccent?: string }) =>
       apiRequest("PATCH", "/api/users/me/ui-preferences", body),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/users/me/ui-preferences"] });
@@ -70,7 +76,7 @@ export function useThemeSync() {
       prevIsSystem.current = isSystemMode;
       prevAccent.current = accent;
       saveMutation.mutate({
-        ...(packChanged ? { themeMode: serverValue } : {}),
+        ...(packChanged ? { themeMode: isSystemMode ? "system" : getThemePack(packId).kind, themePackId: serverValue } : {}),
         ...(accentChanged ? { themeAccent: accent } : {}),
       });
     }

@@ -165,6 +165,7 @@ export const tenantSettings = pgTable("tenant_settings", {
   hideVendorBranding: boolean("hide_vendor_branding").notNull().default(false),
   // Theme defaults (preset name, null = use system default "blue")
   defaultThemeAccent: text("default_theme_accent"),
+  defaultThemePack: text("default_theme_pack"),
   // Chat retention settings (tenant-specific override, null = use system default)
   chatRetentionDays: integer("chat_retention_days"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -2855,6 +2856,7 @@ export const userUiPreferences = pgTable("user_ui_preferences", {
   tenantId: varchar("tenant_id").references(() => tenants.id),
   userId: varchar("user_id").references(() => users.id).notNull(),
   themeMode: text("theme_mode"),
+  themePackId: text("theme_pack_id"),
   themeAccent: text("theme_accent"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

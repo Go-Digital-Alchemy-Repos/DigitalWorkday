@@ -262,6 +262,7 @@ router.get("/users/me/ui-preferences", requireAuth, async (req, res) => {
     const prefs = await storage.getUserUiPreferences(user.id);
     res.json({
       themeMode: prefs?.themeMode ?? null,
+      themePackId: prefs?.themePackId ?? prefs?.themeMode ?? null,
       themeAccent: prefs?.themeAccent ?? null,
     });
   } catch (error) {
@@ -271,6 +272,7 @@ router.get("/users/me/ui-preferences", requireAuth, async (req, res) => {
 
 const uiPreferencesSchema = z.object({
   themeMode: z.string().max(32).nullable().optional(),
+  themePackId: z.string().max(32).nullable().optional(),
   themeAccent: z.string().max(32).nullable().optional(),
 });
 
@@ -287,6 +289,7 @@ router.patch("/users/me/ui-preferences", requireAuth, async (req, res) => {
     const prefs = await storage.upsertUserUiPreferences(user.id, tenantId, parseResult.data);
     res.json({
       themeMode: prefs.themeMode,
+      themePackId: prefs.themePackId,
       themeAccent: prefs.themeAccent,
     });
   } catch (error) {

@@ -336,6 +336,7 @@ router.get("/branding", requireAuth, requireTenantContext, async (req, res) => {
         secondaryColor: settings.secondaryColor,
         accentColor: settings.accentColor,
         defaultThemeAccent: settings.defaultThemeAccent,
+        defaultThemePack: settings.defaultThemePack,
         whiteLabelEnabled: settings.whiteLabelEnabled,
         hideVendorBranding: settings.hideVendorBranding,
       },

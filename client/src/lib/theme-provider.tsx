@@ -23,7 +23,7 @@ type ThemeProviderContextType = {
   theme: ResolvedTheme;
   setTheme: (theme: ResolvedTheme) => void;
   toggleTheme: () => void;
-  hydrateFromServer: (prefs: { themeMode?: string | null; themeAccent?: string | null; tenantDefaultAccent?: string | null }) => void;
+  hydrateFromServer: (prefs: { themeMode?: string | null; themePackId?: string | null; themeAccent?: string | null; tenantDefaultAccent?: string | null; tenantDefaultThemePack?: string | null }) => void;
   packId: string;
   setPackId: (id: string) => void;
   activePack: ThemePack;
@@ -164,27 +164,30 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
 
   const hydrateFromServer = useCallback((prefs: {
     themeMode?: string | null;
+    themePackId?: string | null;
     themeAccent?: string | null;
     tenantDefaultAccent?: string | null;
+    tenantDefaultThemePack?: string | null;
   }) => {
-    const serverPack = prefs.themeMode;
-    if (serverPack === "system") {
+    const resolvedPackId = prefs.themePackId ?? prefs.themeMode ?? prefs.tenantDefaultThemePack ?? DEFAULT_PACK_ID;
+
+    if (resolvedPackId === "system") {
       setIsSystemMode(true);
       localStorage.setItem(LS_SYSTEM_KEY, "true");
       const osTheme = getSystemTheme();
       const resolved = osTheme === "dark" ? "dark" : "light";
       setPackIdState(resolved);
       localStorage.setItem(LS_PACK_KEY, resolved);
-    } else if (serverPack && THEME_PACK_MAP.has(serverPack)) {
+    } else if (THEME_PACK_MAP.has(resolvedPackId)) {
       setIsSystemMode(false);
       localStorage.setItem(LS_SYSTEM_KEY, "false");
-      setPackIdState(serverPack);
-      localStorage.setItem(LS_PACK_KEY, serverPack);
-    } else if (serverPack === "dark") {
+      setPackIdState(resolvedPackId);
+      localStorage.setItem(LS_PACK_KEY, resolvedPackId);
+    } else {
       setIsSystemMode(false);
       localStorage.setItem(LS_SYSTEM_KEY, "false");
-      setPackIdState("dark");
-      localStorage.setItem(LS_PACK_KEY, "dark");
+      setPackIdState(DEFAULT_PACK_ID);
+      localStorage.setItem(LS_PACK_KEY, DEFAULT_PACK_ID);
     }
 
     const accentValue = prefs.themeAccent || prefs.tenantDefaultAccent;
