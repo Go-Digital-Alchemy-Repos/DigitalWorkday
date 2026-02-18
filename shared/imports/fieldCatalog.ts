@@ -123,6 +123,13 @@ export interface ImportJobDTO {
   mapping: ColumnMapping[];
   validationSummary?: ValidationSummary;
   importSummary?: ImportSummary;
+  autoCreateMissing?: boolean;
+}
+
+export interface MissingDependency {
+  type: "client" | "user" | "project";
+  name: string;
+  referencedByRows: number[];
 }
 
 export interface ValidationSummary {
@@ -132,6 +139,8 @@ export interface ValidationSummary {
   wouldFail: number;
   errors: ValidationError[];
   warnings: ValidationWarning[];
+  missingDependencies: MissingDependency[];
+  wouldFailWithoutAutoCreate: number;
 }
 
 export interface ImportSummary {

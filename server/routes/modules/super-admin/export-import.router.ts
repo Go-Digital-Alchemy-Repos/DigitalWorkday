@@ -699,7 +699,8 @@ exportImportRouter.post("/tenants/:tenantId/import/jobs/:jobId/run", requireSupe
     if (!job || job.tenantId !== tenantId) return res.status(404).json({ error: "Job not found" });
     if (job.rawRows.length === 0) return res.status(400).json({ error: "No data uploaded yet" });
 
-    updateJob(jobId, { status: "running", progress: { processed: 0, total: job.rawRows.length } });
+    const autoCreateMissing = req.body?.autoCreateMissing === true;
+    updateJob(jobId, { status: "running", progress: { processed: 0, total: job.rawRows.length }, autoCreateMissing });
 
     const summary = await executeJob(job);
 

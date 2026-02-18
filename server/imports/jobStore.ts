@@ -18,6 +18,7 @@ export interface ImportJob {
   importSummary?: ImportSummary;
   progress?: { processed: number; total: number };
   errorRows?: Array<{ row: number; primaryKey: string; errorCode: string; message: string }>;
+  autoCreateMissing?: boolean;
 }
 
 const jobs = new Map<string, ImportJob>();
@@ -108,5 +109,6 @@ export function jobToDTO(job: ImportJob): ImportJobDTO {
     mapping: job.mapping,
     validationSummary: job.validationSummary,
     importSummary: job.importSummary,
+    autoCreateMissing: job.autoCreateMissing,
   };
 }

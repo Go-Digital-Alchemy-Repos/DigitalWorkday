@@ -5,7 +5,7 @@ import { eq, and } from "drizzle-orm";
 import { applyMapping } from "./applyMapping";
 import type { ImportJob } from "./jobStore";
 import { updateJob } from "./jobStore";
-import type { EntityType, ColumnMapping, ValidationError, ValidationWarning, ValidationSummary, ImportSummary } from "../../shared/imports/fieldCatalog";
+import type { EntityType, ColumnMapping, ValidationError, ValidationWarning, ValidationSummary, ImportSummary, MissingDependency } from "../../shared/imports/fieldCatalog";
 
 interface RowResult {
   action: "create" | "update" | "skip";
@@ -50,15 +50,31 @@ export async function validateJob(job: ImportJob): Promise<ValidationSummary> {
   const summary: ValidationSummary = {
     wouldCreate: 0, wouldUpdate: 0, wouldSkip: 0, wouldFail: 0,
     errors: [], warnings: [],
+    missingDependencies: [],
+    wouldFailWithoutAutoCreate: 0,
   };
+
+  const missingClientsMap = new Map<string, number[]>();
+  const missingUsersMap = new Map<string, number[]>();
+  const missingProjectsMap = new Map<string, number[]>();
 
   for (let i = 0; i < job.rawRows.length; i++) {
     const mapped = applyMapping(job.rawRows[i], job.mapping);
-    const result = validateRow(job.entityType, mapped, i + 2, lookups);
+    const rowNum = i + 2;
+
+    collectMissingDeps(job.entityType, mapped, rowNum, lookups, missingClientsMap, missingUsersMap, missingProjectsMap);
+
+    const result = validateRow(job.entityType, mapped, rowNum, lookups);
 
     if (result.error) {
-      summary.wouldFail++;
-      summary.errors.push(result.error);
+      const isDepError = ["PROJECT_NOT_FOUND", "USER_NOT_FOUND", "CLIENT_NOT_FOUND", "ASSIGNEE_NOT_FOUND"].includes(result.error.code);
+      if (isDepError) {
+        summary.wouldFailWithoutAutoCreate++;
+        summary.wouldCreate++;
+      } else {
+        summary.wouldFail++;
+        summary.errors.push(result.error);
+      }
     } else if (result.action === "skip") {
       summary.wouldSkip++;
     } else if (result.action === "update") {
@@ -72,7 +88,81 @@ export async function validateJob(job: ImportJob): Promise<ValidationSummary> {
     }
   }
 
+  for (const [name, rows] of missingClientsMap) {
+    summary.missingDependencies.push({ type: "client", name, referencedByRows: rows });
+  }
+  for (const [name, rows] of missingUsersMap) {
+    summary.missingDependencies.push({ type: "user", name, referencedByRows: rows });
+  }
+  for (const [name, rows] of missingProjectsMap) {
+    summary.missingDependencies.push({ type: "project", name, referencedByRows: rows });
+  }
+
   return summary;
+}
+
+function collectMissingDeps(
+  entityType: EntityType,
+  mapped: Record<string, string>,
+  rowNum: number,
+  lookups: TenantLookups,
+  missingClients: Map<string, number[]>,
+  missingUsers: Map<string, number[]>,
+  missingProjects: Map<string, number[]>,
+) {
+  if (entityType === "projects") {
+    const clientName = mapped.clientName?.trim();
+    if (clientName && !lookups.clientsByName.has(clientName.toLowerCase())) {
+      const key = clientName.toLowerCase();
+      if (!missingClients.has(key)) missingClients.set(key, []);
+      missingClients.get(key)!.push(rowNum);
+    }
+  }
+
+  if (entityType === "tasks") {
+    const projectName = mapped.projectName?.trim();
+    if (projectName && !lookups.projectsByName.has(projectName.toLowerCase())) {
+      const key = projectName.toLowerCase();
+      if (!missingProjects.has(key)) missingProjects.set(key, []);
+      missingProjects.get(key)!.push(rowNum);
+    }
+    const assigneeEmail = mapped.assigneeEmail?.trim();
+    if (assigneeEmail && !lookups.usersByEmail.has(assigneeEmail.toLowerCase())) {
+      const key = assigneeEmail.toLowerCase();
+      if (!missingUsers.has(key)) missingUsers.set(key, []);
+      missingUsers.get(key)!.push(rowNum);
+    }
+  }
+
+  if (entityType === "time_entries") {
+    const userEmail = mapped.userEmail?.trim();
+    if (userEmail && !lookups.usersByEmail.has(userEmail.toLowerCase())) {
+      const key = userEmail.toLowerCase();
+      if (!missingUsers.has(key)) missingUsers.set(key, []);
+      missingUsers.get(key)!.push(rowNum);
+    }
+    const clientName = mapped.clientName?.trim();
+    if (clientName && !lookups.clientsByName.has(clientName.toLowerCase())) {
+      const key = clientName.toLowerCase();
+      if (!missingClients.has(key)) missingClients.set(key, []);
+      missingClients.get(key)!.push(rowNum);
+    }
+    const projectName = mapped.projectName?.trim();
+    if (projectName && !lookups.projectsByName.has(projectName.toLowerCase())) {
+      const key = projectName.toLowerCase();
+      if (!missingProjects.has(key)) missingProjects.set(key, []);
+      missingProjects.get(key)!.push(rowNum);
+    }
+  }
+
+  if (entityType === "clients") {
+    const parentName = mapped.parentClientName?.trim();
+    if (parentName && !lookups.clientsByName.has(parentName.toLowerCase())) {
+      const key = parentName.toLowerCase();
+      if (!missingClients.has(key)) missingClients.set(key, []);
+      missingClients.get(key)!.push(rowNum);
+    }
+  }
 }
 
 function validateRow(entityType: EntityType, mapped: Record<string, string>, rowNum: number, lookups: TenantLookups): RowResult {
@@ -102,24 +192,23 @@ function validateProject(m: Record<string, string>, row: number, lookups: Tenant
   if (!m.name?.trim()) return { action: "skip", error: { row, field: "name", code: "REQUIRED", message: "Project name is required" } };
   const existing = lookups.projectsByName.get(m.name.trim().toLowerCase());
   if (existing) return { action: "skip" };
-  let warning: ValidationWarning | undefined;
   if (m.clientName?.trim() && !lookups.clientsByName.has(m.clientName.trim().toLowerCase())) {
-    warning = { row, field: "clientName", code: "CLIENT_NOT_FOUND", message: `Client "${m.clientName}" not found, project will have no client` };
+    return { action: "create", error: { row, field: "clientName", code: "CLIENT_NOT_FOUND", message: `Client "${m.clientName}" not found` } };
   }
-  return { action: "create", warning };
+  return { action: "create" };
 }
 
 function validateTask(m: Record<string, string>, row: number, lookups: TenantLookups): RowResult {
   if (!m.title?.trim()) return { action: "skip", error: { row, field: "title", code: "REQUIRED", message: "Task title is required" } };
   if (m.projectName?.trim()) {
     const proj = lookups.projectsByName.get(m.projectName.trim().toLowerCase());
-    if (!proj) return { action: "skip", error: { row, field: "projectName", code: "PROJECT_NOT_FOUND", message: `Project "${m.projectName}" not found` } };
+    if (!proj) return { action: "create", error: { row, field: "projectName", code: "PROJECT_NOT_FOUND", message: `Project "${m.projectName}" not found` } };
     const key = `${proj.id}::${m.title.trim().toLowerCase()}`;
     if (lookups.tasksByKey.has(key)) return { action: "skip" };
   }
   if (m.assigneeEmail?.trim()) {
     if (!lookups.usersByEmail.has(m.assigneeEmail.trim().toLowerCase())) {
-      return { action: "create", warning: { row, field: "assigneeEmail", code: "ASSIGNEE_NOT_FOUND", message: `User "${m.assigneeEmail}" not found, task will be unassigned` } };
+      return { action: "create", error: { row, field: "assigneeEmail", code: "ASSIGNEE_NOT_FOUND", message: `User "${m.assigneeEmail}" not found` } };
     }
   }
   return { action: "create" };
@@ -135,7 +224,7 @@ function validateUser(m: Record<string, string>, row: number, lookups: TenantLoo
 function validateTimeEntry(m: Record<string, string>, row: number, lookups: TenantLookups): RowResult {
   if (!m.userEmail?.trim()) return { action: "skip", error: { row, field: "userEmail", code: "REQUIRED", message: "User email is required" } };
   const user = lookups.usersByEmail.get(m.userEmail.trim().toLowerCase());
-  if (!user) return { action: "skip", error: { row, field: "userEmail", code: "USER_NOT_FOUND", message: `User "${m.userEmail}" not found` } };
+  if (!user) return { action: "create", error: { row, field: "userEmail", code: "USER_NOT_FOUND", message: `User "${m.userEmail}" not found` } };
 
   if (!m.startTime?.trim()) return { action: "skip", error: { row, field: "startTime", code: "REQUIRED", message: "Start time is required" } };
   const startDate = new Date(m.startTime);
@@ -152,11 +241,94 @@ function validateTimeEntry(m: Record<string, string>, row: number, lookups: Tena
   return { action: "create", warning };
 }
 
+async function autoCreateMissingDeps(job: ImportJob, lookups: TenantLookups): Promise<{ clientsCreated: number; usersCreated: number; projectsCreated: number }> {
+  let clientsCreated = 0;
+  let usersCreated = 0;
+  let projectsCreated = 0;
+
+  const neededClients = new Set<string>();
+  const neededUsers = new Set<string>();
+  const neededProjects = new Set<string>();
+
+  for (const rawRow of job.rawRows) {
+    const mapped = applyMapping(rawRow, job.mapping);
+
+    if (job.entityType === "projects" || job.entityType === "time_entries" || job.entityType === "clients") {
+      const clientName = (job.entityType === "clients" ? mapped.parentClientName : mapped.clientName)?.trim();
+      if (clientName && !lookups.clientsByName.has(clientName.toLowerCase())) {
+        neededClients.add(clientName);
+      }
+    }
+
+    if (job.entityType === "tasks" || job.entityType === "time_entries") {
+      const email = (job.entityType === "tasks" ? mapped.assigneeEmail : mapped.userEmail)?.trim();
+      if (email && !lookups.usersByEmail.has(email.toLowerCase())) {
+        neededUsers.add(email);
+      }
+    }
+
+    if (job.entityType === "tasks" || job.entityType === "time_entries") {
+      const projName = mapped.projectName?.trim();
+      if (projName && !lookups.projectsByName.has(projName.toLowerCase())) {
+        neededProjects.add(projName);
+      }
+    }
+  }
+
+  for (const clientName of neededClients) {
+    if (lookups.clientsByName.has(clientName.toLowerCase())) continue;
+    const [newClient] = await db.insert(clients).values({
+      tenantId: lookups.tenantId,
+      workspaceId: lookups.workspaceId,
+      companyName: clientName,
+      status: "active",
+    }).returning({ id: clients.id, companyName: clients.companyName, parentClientId: clients.parentClientId });
+    lookups.clientsByName.set(clientName.toLowerCase(), newClient);
+    clientsCreated++;
+  }
+
+  for (const email of neededUsers) {
+    if (lookups.usersByEmail.has(email.toLowerCase())) continue;
+    const namePart = email.split("@")[0];
+    const [newUser] = await db.insert(users).values({
+      tenantId: lookups.tenantId,
+      email: email.toLowerCase(),
+      name: namePart,
+      firstName: namePart,
+      lastName: "",
+      role: "employee",
+      isActive: true,
+    }).returning({ id: users.id, email: users.email, role: users.role });
+    lookups.usersByEmail.set(email.toLowerCase(), newUser);
+    usersCreated++;
+  }
+
+  for (const projName of neededProjects) {
+    if (lookups.projectsByName.has(projName.toLowerCase())) continue;
+    const [newProject] = await db.insert(projects).values({
+      tenantId: lookups.tenantId,
+      workspaceId: lookups.workspaceId,
+      name: projName,
+      status: "active",
+      color: "#3B82F6",
+    }).returning({ id: projects.id, name: projects.name, clientId: projects.clientId });
+    lookups.projectsByName.set(projName.toLowerCase(), newProject);
+    projectsCreated++;
+  }
+
+  return { clientsCreated, usersCreated, projectsCreated };
+}
+
 export async function executeJob(job: ImportJob): Promise<ImportSummary> {
   const lookups = await buildLookups(job.tenantId);
   const startTime = Date.now();
   const summary: ImportSummary = { created: 0, updated: 0, skipped: 0, failed: 0, durationMs: 0, errors: [] };
   const errorRows: Array<{ row: number; primaryKey: string; errorCode: string; message: string }> = [];
+
+  if (job.autoCreateMissing) {
+    const deps = await autoCreateMissingDeps(job, lookups);
+    summary.created += deps.clientsCreated + deps.usersCreated + deps.projectsCreated;
+  }
 
   const BATCH_SIZE = 200;
   const total = job.rawRows.length;

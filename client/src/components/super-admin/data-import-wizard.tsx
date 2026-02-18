@@ -37,6 +37,7 @@ import {
   type ImportJobDTO,
   type ValidationSummary,
   type ImportSummary,
+  type MissingDependency,
   ENTITY_LABELS,
   ENTITY_FIELD_MAP,
 } from "../../../../shared/imports/fieldCatalog";
@@ -84,6 +85,7 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
   const [validationSummary, setValidationSummary] = useState<ValidationSummary | null>(null);
   const [importSummary, setImportSummary] = useState<ImportSummary | null>(null);
   const [progress, setProgress] = useState<{ processed: number; total: number } | null>(null);
+  const [autoCreateMissing, setAutoCreateMissing] = useState(false);
 
   const reset = useCallback(() => {
     setStep("type");
@@ -98,6 +100,7 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
     setValidationSummary(null);
     setImportSummary(null);
     setProgress(null);
+    setAutoCreateMissing(false);
   }, []);
 
   const handleSelectType = async (type: EntityType) => {
@@ -197,7 +200,7 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
     setStep("execute");
     setProgress({ processed: 0, total: rowCount });
     try {
-      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/import/jobs/${jobId}/run`);
+      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/import/jobs/${jobId}/run`, { autoCreateMissing });
       const data = await res.json();
       setImportSummary(data.summary);
       setProgress({ processed: rowCount, total: rowCount });
@@ -287,6 +290,8 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
           onExecute={handleExecute}
           onBack={() => setStep("mapping")}
           onRevalidate={handleValidate}
+          autoCreateMissing={autoCreateMissing}
+          onToggleAutoCreate={setAutoCreateMissing}
         />
       )}
 
@@ -639,12 +644,16 @@ function ValidationStep({
   onExecute,
   onBack,
   onRevalidate,
+  autoCreateMissing,
+  onToggleAutoCreate,
 }: {
   validationSummary: ValidationSummary | null;
   isLoading: boolean;
   onExecute: () => void;
   onBack: () => void;
   onRevalidate: () => void;
+  autoCreateMissing: boolean;
+  onToggleAutoCreate: (value: boolean) => void;
 }) {
   if (isLoading) {
     return (
@@ -659,14 +668,25 @@ function ValidationStep({
 
   if (!validationSummary) return null;
 
+  const hasMissingDeps = validationSummary.missingDependencies.length > 0;
   const hasErrors = validationSummary.wouldFail > 0;
   const canProceed = validationSummary.wouldCreate > 0 || validationSummary.wouldUpdate > 0;
+
+  const missingByType = {
+    client: validationSummary.missingDependencies.filter(d => d.type === "client"),
+    user: validationSummary.missingDependencies.filter(d => d.type === "user"),
+    project: validationSummary.missingDependencies.filter(d => d.type === "project"),
+  };
+
+  const DEP_TYPE_LABELS: Record<string, string> = { client: "Clients", user: "Users", project: "Projects" };
 
   return (
     <Card>
       <CardHeader>
         <CardTitle className="text-sm flex items-center gap-2">
-          {hasErrors ? <AlertTriangle className="h-4 w-4 text-yellow-500" /> : <CheckCircle className="h-4 w-4 text-green-500" />}
+          {hasErrors && !hasMissingDeps ? <XCircle className="h-4 w-4 text-destructive" /> :
+           hasMissingDeps ? <AlertTriangle className="h-4 w-4 text-yellow-500" /> :
+           <CheckCircle className="h-4 w-4 text-green-500" />}
           Validation Results
         </CardTitle>
         <CardDescription>
@@ -680,6 +700,68 @@ function ValidationStep({
           <StatCard label="Will Skip" value={validationSummary.wouldSkip} variant="muted" />
           <StatCard label="Will Fail" value={validationSummary.wouldFail} variant="error" />
         </div>
+
+        {hasMissingDeps && (
+          <div className="space-y-3 border rounded-md p-3 bg-yellow-500/5">
+            <div className="flex items-start gap-2">
+              <AlertTriangle className="h-4 w-4 text-yellow-500 mt-0.5 flex-shrink-0" />
+              <div className="flex-1">
+                <h4 className="text-sm font-semibold">Missing Referenced Entities</h4>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  {validationSummary.wouldFailWithoutAutoCreate} row{validationSummary.wouldFailWithoutAutoCreate !== 1 ? "s" : ""} reference entities that don't exist yet. Enable auto-create to automatically create them during import.
+                </p>
+              </div>
+            </div>
+
+            {(["client", "user", "project"] as const).map(depType => {
+              const deps = missingByType[depType];
+              if (deps.length === 0) return null;
+              const totalRows = deps.reduce((sum, d) => sum + d.referencedByRows.length, 0);
+              return (
+                <div key={depType} className="space-y-1">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline">{DEP_TYPE_LABELS[depType]}</Badge>
+                    <span className="text-xs text-muted-foreground">
+                      {deps.length} missing, referenced by {totalRows} row{totalRows !== 1 ? "s" : ""}
+                    </span>
+                  </div>
+                  <div className="flex flex-wrap gap-1">
+                    {deps.slice(0, 15).map(d => (
+                      <Badge key={d.name} variant="secondary" className="text-[10px]" data-testid={`badge-missing-${depType}-${d.name}`}>
+                        {d.name}
+                        <span className="ml-1 opacity-60">({d.referencedByRows.length})</span>
+                      </Badge>
+                    ))}
+                    {deps.length > 15 && (
+                      <Badge variant="secondary" className="text-[10px]">
+                        +{deps.length - 15} more
+                      </Badge>
+                    )}
+                  </div>
+                </div>
+              );
+            })}
+
+            <Separator />
+
+            <label className="flex items-center gap-3 cursor-pointer" data-testid="toggle-auto-create">
+              <div
+                role="switch"
+                aria-checked={autoCreateMissing}
+                onClick={() => onToggleAutoCreate(!autoCreateMissing)}
+                className={`relative inline-flex h-5 w-9 flex-shrink-0 rounded-full border-2 border-transparent transition-colors cursor-pointer ${autoCreateMissing ? "bg-primary" : "bg-muted-foreground/30"}`}
+              >
+                <span className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${autoCreateMissing ? "translate-x-4" : "translate-x-0"}`} />
+              </div>
+              <div>
+                <span className="text-sm font-medium">Auto-create missing entities</span>
+                <p className="text-xs text-muted-foreground">
+                  Automatically create {validationSummary.missingDependencies.length} missing {validationSummary.missingDependencies.length === 1 ? "entity" : "entities"} with default values during import
+                </p>
+              </div>
+            </label>
+          </div>
+        )}
 
         {validationSummary.errors.length > 0 && (
           <div className="space-y-2">
@@ -743,11 +825,11 @@ function ValidationStep({
           </div>
           <Button
             onClick={onExecute}
-            disabled={!canProceed}
+            disabled={!canProceed || (hasMissingDeps && !autoCreateMissing)}
             data-testid="button-execute-import"
           >
             <Play className="h-4 w-4 mr-2" />
-            Execute Import
+            {autoCreateMissing && hasMissingDeps ? "Execute Import (with auto-create)" : "Execute Import"}
           </Button>
         </div>
       </CardContent>
