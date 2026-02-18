@@ -32,7 +32,7 @@ export const CLIENT_FIELDS: FieldDefinition[] = [
   { key: "email", label: "Email", type: "email", required: false, aliases: ["contact_email", "company_email"], examples: ["info@acme.com"] },
   { key: "status", label: "Status", type: "enum", required: false, aliases: ["client_status"], enumValues: ["active", "inactive", "lead", "prospect", "past", "on_hold"], examples: ["active"] },
   { key: "notes", label: "Notes", type: "string", required: false, aliases: ["note", "comments", "comment"], examples: ["Key client"] },
-  { key: "parentClientName", label: "Parent Client Name", type: "string", required: false, aliases: ["parent_client", "parent_company", "parent", "parentClient"], examples: ["Parent Corp"], isResolver: true },
+  { key: "parentClientName", label: "Parent Client", type: "string", required: false, aliases: ["parent_client", "parent_company", "parent", "parentClient", "parent_client_name", "parentClientName", "division_of", "divisionOf", "client_group", "clientGroup"], examples: ["Parent Corp"], isResolver: true },
   { key: "addressLine1", label: "Address Line 1", type: "string", required: false, aliases: ["address_line_1", "address", "street"], examples: ["123 Main St"] },
   { key: "addressLine2", label: "Address Line 2", type: "string", required: false, aliases: ["address_line_2", "suite", "apt"], examples: ["Suite 100"] },
   { key: "city", label: "City", type: "string", required: false, aliases: ["town"], examples: ["New York"] },
@@ -93,7 +93,7 @@ export const TIME_ENTRY_FIELDS: FieldDefinition[] = [
   { key: "firstName", label: "First Name", type: "string", required: false, aliases: ["first_name", "first", "given_name"], examples: ["John"] },
   { key: "lastName", label: "Last Name", type: "string", required: false, aliases: ["last_name", "last", "family_name", "surname"], examples: ["Doe"] },
   { key: "role", label: "Role", type: "enum", required: false, aliases: ["user_role", "employee_role"], enumValues: ["employee", "admin", "manager", "contractor"], examples: ["employee"] },
-  { key: "parentClientName", label: "Parent Client Name", type: "string", required: false, aliases: ["parent_client", "parent_company", "parent", "parentClient"], examples: ["Parent Corp"], isResolver: true },
+  { key: "parentClientName", label: "Parent Client", type: "string", required: false, aliases: ["parent_client", "parent_company", "parent", "parentClient", "parent_client_name", "parentClientName", "division_of", "divisionOf", "client_group", "clientGroup"], examples: ["Parent Corp"], isResolver: true },
 ];
 
 export const ENTITY_FIELD_MAP: Record<EntityType, FieldDefinition[]> = {

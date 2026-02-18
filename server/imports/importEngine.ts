@@ -147,6 +147,12 @@ function collectMissingDeps(
       if (!missingClients.has(key)) missingClients.set(key, []);
       missingClients.get(key)!.push(rowNum);
     }
+    const parentName = mapped.parentClientName?.trim();
+    if (parentName && !lookups.clientsByName.has(parentName.toLowerCase())) {
+      const key = parentName.toLowerCase();
+      if (!missingClients.has(key)) missingClients.set(key, []);
+      missingClients.get(key)!.push(rowNum);
+    }
     const projectName = mapped.projectName?.trim();
     if (projectName && !lookups.projectsByName.has(projectName.toLowerCase())) {
       const key = projectName.toLowerCase();
@@ -658,7 +664,16 @@ async function importTimeEntry(m: Record<string, string>, row: number, lookups: 
   let clientId: string | null = null;
   if (m.clientName?.trim()) {
     const client = lookups.clientsByName.get(m.clientName.trim().toLowerCase());
-    if (client) clientId = client.id;
+    if (client) {
+      clientId = client.id;
+      if (m.parentClientName?.trim() && !client.parentClientId) {
+        const parentClient = lookups.clientsByName.get(m.parentClientName.trim().toLowerCase());
+        if (parentClient) {
+          await db.update(clients).set({ parentClientId: parentClient.id }).where(eq(clients.id, client.id));
+          client.parentClientId = parentClient.id;
+        }
+      }
+    }
   }
 
   let projectId: string | null = null;
