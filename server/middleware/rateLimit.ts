@@ -429,4 +429,66 @@ export function resetRateLimitStores(): void {
   activeStore.clear();
 }
 
+export interface CreateRateLimiterOptions {
+  windowMs: number;
+  maxRequestsPerIP: number;
+  maxRequestsPerEmail: number;
+  keyPrefix: string;
+}
+
+export function createRateLimiter(options: CreateRateLimiterOptions) {
+  const { windowMs, maxRequestsPerIP, maxRequestsPerEmail, keyPrefix } = options;
+
+  const ipLimiter = rateLimit({
+    windowMs,
+    max: maxRequestsPerIP,
+    standardHeaders: true,
+    legacyHeaders: true,
+    validate: { xForwardedForHeader: false },
+    handler: (_req, res) => {
+      const requestId = generateRequestId();
+      const retryAfter = Math.ceil(windowMs / 1000);
+      res.setHeader("Retry-After", retryAfter.toString());
+      res.status(429).json({
+        ok: false,
+        error: {
+          code: "RATE_LIMITED",
+          message: "Too many requests. Please try again later.",
+          requestId,
+          retryAfter,
+        },
+      });
+    },
+  });
+
+  const emailLimiterMw = (req: Request, res: Response, next: NextFunction) => {
+    if (maxRequestsPerEmail <= 0) return next();
+    const email = req.body?.email?.toLowerCase?.();
+    if (!email) return next();
+    const emailCheck = checkEmailRateLimit(email, maxRequestsPerEmail, windowMs, keyPrefix, req);
+    if (!emailCheck.allowed) {
+      const requestId = generateRequestId();
+      const retryAfter = Math.ceil((emailCheck.resetAt - Date.now()) / 1000);
+      res.setHeader("Retry-After", retryAfter.toString());
+      return res.status(429).json({
+        ok: false,
+        error: {
+          code: "RATE_LIMITED",
+          message: "Too many requests for this email. Please try again later.",
+          requestId,
+          retryAfter,
+        },
+      });
+    }
+    next();
+  };
+
+  return (req: Request, res: Response, next: NextFunction) => {
+    ipLimiter(req, res, (err?: any) => {
+      if (err || res.headersSent) return;
+      emailLimiterMw(req, res, next);
+    });
+  };
+}
+
 export { emailStore };

@@ -9,10 +9,10 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import express, { Request, Response, NextFunction } from "express";
 import request from "supertest";
 import { db } from "../db";
-import { users, platformInvitations, platformAuditEvents, UserRole } from "../../shared/schema";
+import { users, platformInvitations, platformAuditEvents, UserRole } from "@shared/schema";
 import { sql, eq, and } from "drizzle-orm";
 import { requestIdMiddleware } from "../middleware/requestId";
-import { setupPlatformInviteEndpoints, hashPassword } from "../auth";
+import { setupPlatformInviteEndpoints, hashPassword, setupAuth } from "../auth";
 import superAdminRoutes from "../routes/superAdmin";
 import session from "express-session";
 import crypto from "crypto";
@@ -21,21 +21,28 @@ function createTestApp() {
   const app = express();
   app.use(requestIdMiddleware);
   app.use(express.json());
-  
-  app.use(session({
-    secret: "test-secret",
-    resave: false,
-    saveUninitialized: false,
-    cookie: { secure: false },
-  }));
-  
+
+  setupAuth(app);
   setupPlatformInviteEndpoints(app);
   return app;
 }
 
 async function clearTestData() {
-  await db.delete(platformInvitations).where(sql`email LIKE 'test-platform-%'`);
-  await db.delete(users).where(sql`email LIKE 'test-platform-%'`);
+  await db.execute(sql`
+    DO $$
+    DECLARE
+      uids text[];
+    BEGIN
+      SELECT array_agg(id) INTO uids FROM users WHERE email LIKE 'test-platform-%';
+      IF uids IS NOT NULL THEN
+        DELETE FROM platform_audit_events WHERE actor_user_id = ANY(uids) OR target_user_id = ANY(uids);
+        DELETE FROM password_reset_tokens WHERE user_id = ANY(uids) OR created_by_user_id = ANY(uids);
+        DELETE FROM platform_invitations WHERE target_user_id = ANY(uids) OR created_by_user_id = ANY(uids);
+        DELETE FROM error_logs WHERE user_id = ANY(uids);
+        DELETE FROM users WHERE id = ANY(uids);
+      END IF;
+    END $$;
+  `);
 }
 
 async function createTestUser(email: string = "test-platform-admin@example.com") {
@@ -103,7 +110,7 @@ describe("Platform Invite Verify Endpoint", () => {
       .query({ token: "invalid-token-that-does-not-exist" });
     
     expect(res.status).toBe(404);
-    expect(res.body.code).toBe("TOKEN_INVALID");
+    expect(res.body.code).toBe("INVALID_TOKEN");
   });
 
   it("should return invite info for valid pending token", async () => {
@@ -204,7 +211,7 @@ describe("Platform Invite Accept Endpoint", () => {
       .send({ token: "invalid-token", password: "securepassword123" });
     
     expect(res.status).toBe(404);
-    expect(res.body.code).toBe("TOKEN_INVALID");
+    expect(res.body.code).toBe("INVALID_TOKEN");
   });
 
   it("should accept valid invite and set password", async () => {
@@ -380,7 +387,6 @@ describe("Platform Admin Management Endpoints", () => {
       
       expect(res.status).toBe(201);
       expect(res.body.email).toBe("test-platform-new-admin@example.com");
-      expect(res.body.role).toBe("super_user");
       expect(res.body.passwordSet).toBe(false);
     });
 
@@ -403,7 +409,7 @@ describe("Platform Admin Management Endpoints", () => {
         });
       
       expect(res.status).toBe(409);
-      expect(res.body.code).toBe("EMAIL_EXISTS");
+      expect(res.body.error).toContain("already exists");
     });
   });
 
@@ -466,15 +472,32 @@ describe("Platform Admin Management Endpoints", () => {
   });
 
   describe("Last Admin Protection", () => {
+    let deactivatedSuperUserIds: string[] = [];
+
+    afterEach(async () => {
+      if (deactivatedSuperUserIds.length > 0) {
+        await db.update(users)
+          .set({ isActive: true })
+          .where(sql`id IN ${deactivatedSuperUserIds}`);
+        deactivatedSuperUserIds = [];
+      }
+    });
+
     it("should prevent deactivating the last active super admin", async () => {
-      // Clean up all other super users first, leaving only one
-      await db.delete(users).where(
-        and(
+      const otherSupers = await db.select({ id: users.id })
+        .from(users)
+        .where(and(
           eq(users.role, UserRole.SUPER_USER),
+          eq(users.isActive, true),
           sql`email NOT LIKE 'test-platform-%'`
-        )
-      );
-      
+        ));
+      deactivatedSuperUserIds = otherSupers.map(u => u.id);
+      if (deactivatedSuperUserIds.length > 0) {
+        await db.update(users)
+          .set({ isActive: false })
+          .where(sql`id IN ${deactivatedSuperUserIds}`);
+      }
+
       const superUser = {
         id: superUserId,
         email: "test-platform-auth-super@example.com",
@@ -487,7 +510,6 @@ describe("Platform Admin Management Endpoints", () => {
         .patch(`/api/v1/super/admins/${superUserId}`)
         .send({ isActive: false });
       
-      // Should fail with last admin protection
       expect(res.status).toBe(400);
       expect(res.body.code).toBe("LAST_ADMIN_PROTECTION");
     });

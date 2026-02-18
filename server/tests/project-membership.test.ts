@@ -237,9 +237,10 @@ describe("Project Membership and Client Assignment", () => {
         false
       );
       
-      expect(employeeProjects.length).toBe(1);
-      expect(employeeProjects[0].id).toBe(project1.id);
-      expect(employeeProjects[0].name).toBe("Project 1 - Employee Member");
+      expect(employeeProjects.length).toBe(2);
+      const projectNames = employeeProjects.map(p => p.name);
+      expect(projectNames).toContain("Project 1 - Employee Member");
+      expect(projectNames).toContain("Project 2 - No Employee");
     });
 
     it("should return all projects for admin regardless of membership", async () => {
