@@ -168,10 +168,41 @@ socket.on(EVENT_NAME, withSocketPolicy(socket, {
 - Move pure utility functions outside component bodies
 - Use React Query with appropriate stale times per data type
 
+## Query Key Convention
+
+All query keys should use the centralized builders in `client/src/lib/queryKeys.ts`:
+
+```typescript
+import { queryKeys } from "@/lib/queryKeys";
+
+// Queries
+useQuery({ queryKey: queryKeys.projects.sections(projectId) });
+
+// Invalidation
+queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(taskId) });
+```
+
+Key format: always array segments (never string interpolation).
+The default query function in `queryClient.ts` auto-builds URLs from array segments.
+Object segments become query parameters (e.g., `["/api/time-entries", { taskId }]` -> `/api/time-entries?taskId=...`).
+
 ## Removed Modules
 
+### Legacy route files (deleted 2026-02-18)
+The following files were removed after confirming zero imports outside of comments:
+- `server/routes/tags.router.ts` -> `server/http/domains/tags.router.ts`
+- `server/routes/activity.router.ts` -> `server/http/domains/activity.router.ts`
+- `server/routes/comments.router.ts` -> `server/http/domains/comments.router.ts`
+- `server/routes/presence.ts` -> `server/http/domains/presence.router.ts`
+- `server/routes/ai.ts` -> `server/http/domains/ai.router.ts`
+- `server/routes/attachments.router.ts` -> `server/http/domains/attachments.router.ts`
+- `server/routes/timeTracking.ts` -> `server/http/domains/time.router.ts`
+- `server/routes/timeTracking.router.ts` -> `server/http/domains/time.router.ts`
+- `server/routes/projects.router.ts` -> `server/http/domains/projects.router.ts`
+- `server/routes/tasks.router.ts` -> `server/http/domains/tasks.router.ts`
+- `server/routes/subtasks.router.ts` -> `server/http/domains/subtasks.router.ts`
+
+**Anti-regression**: Do NOT recreate these files. All additions go to `server/http/domains/`.
+
 ### server/routes/chat.ts (deleted 2026-02-17)
-- **Reason**: 1,492-line legacy chat router fully superseded by `server/http/domains/chat.router.ts` (factory-mounted at `/api/v1/chat`).
-- **Proof**: Zero imports/requires across the entire codebase. File was marked `@deprecated` since 2026-02-17 and confirmed dead via grep.
-- **New location**: `server/http/domains/chat.router.ts` — registered in `server/http/routeRegistry.ts`, mounted via `server/http/mount.ts`.
-- **Anti-regression**: Do NOT recreate `server/routes/chat.ts`. All chat route additions go to `server/http/domains/chat.router.ts`.
+- Superseded by `server/http/domains/chat.router.ts`.

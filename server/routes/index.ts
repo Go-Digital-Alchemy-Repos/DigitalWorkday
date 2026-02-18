@@ -1,6 +1,4 @@
 import { Router } from "express";
-// Migrated to server/http/domains/ factory routers:
-// tags, comments, activity, attachments, projects, tasks, subtasks, time, uploads, chat, presence, ai, systemIntegrations
 
 import superAdminRoutes from "./superAdmin";
 import superDebugRoutes from "./superDebug";

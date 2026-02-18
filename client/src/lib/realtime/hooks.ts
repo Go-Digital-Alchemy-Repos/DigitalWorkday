@@ -2,6 +2,19 @@ import { useEffect, useRef, useCallback } from "react";
 import { useQueryClient } from "@tanstack/react-query";
 import { getSocket, joinProjectRoom, leaveProjectRoom } from "./socket";
 import type { ServerToClientEvents } from "@shared/events";
+import { queryKeys } from "@/lib/queryKeys";
+
+function invalidateProjectViews(queryClient: ReturnType<typeof useQueryClient>, projectId: string) {
+  queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.projects.tasks(projectId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.projects.calendarEvents(projectId) });
+}
+
+function invalidateParentTask(queryClient: ReturnType<typeof useQueryClient>, parentTaskId: string | null | undefined) {
+  if (!parentTaskId) return;
+  queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(parentTaskId) });
+  queryClient.invalidateQueries({ queryKey: queryKeys.tasks.childTasks(parentTaskId) });
+}
 
 export function useProjectSocket(projectId: string | null | undefined) {
   const queryClient = useQueryClient();
@@ -22,121 +35,106 @@ export function useProjectSocket(projectId: string | null | undefined) {
 
     const handleProjectUpdated: ServerToClientEvents["project:updated"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId] });
-        queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
       }
     };
 
     const handleSectionCreated: ServerToClientEvents["section:created"] = (payload) => {
       if (payload.section.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId) });
       }
     };
 
     const handleSectionUpdated: ServerToClientEvents["section:updated"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId) });
       }
     };
 
     const handleSectionDeleted: ServerToClientEvents["section:deleted"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId) });
       }
     };
 
     const handleSectionReordered: ServerToClientEvents["section:reordered"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId) });
       }
     };
 
     const handleTaskCreated: ServerToClientEvents["task:created"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "calendar-events"] });
-        if (payload.task.parentTaskId) {
-          queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.task.parentTaskId] });
-          queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.task.parentTaskId, "childtasks"] });
-        }
+        invalidateProjectViews(queryClient, projectId);
+        invalidateParentTask(queryClient, payload.task.parentTaskId);
       }
     };
 
     const handleTaskUpdated: ServerToClientEvents["task:updated"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "calendar-events"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.taskId] });
-        if (payload.parentTaskId) {
-          queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.parentTaskId] });
-          queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.parentTaskId, "childtasks"] });
-        }
+        invalidateProjectViews(queryClient, projectId);
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(payload.taskId) });
+        invalidateParentTask(queryClient, payload.parentTaskId);
       }
     };
 
     const handleTaskDeleted: ServerToClientEvents["task:deleted"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "calendar-events"] });
-        if (payload.parentTaskId) {
-          queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.parentTaskId] });
-          queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.parentTaskId, "childtasks"] });
-        }
+        invalidateProjectViews(queryClient, projectId);
+        invalidateParentTask(queryClient, payload.parentTaskId);
       }
     };
 
     const handleTaskMoved: ServerToClientEvents["task:moved"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.tasks(projectId) });
       }
     };
 
     const handleTaskReordered: ServerToClientEvents["task:reordered"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId) });
       }
     };
 
     const handleSubtaskCreated: ServerToClientEvents["subtask:created"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.taskId, "subtasks"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.taskId] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks.subtasks(payload.taskId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(payload.taskId) });
       }
     };
 
     const handleSubtaskUpdated: ServerToClientEvents["subtask:updated"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.taskId, "subtasks"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.taskId] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks.subtasks(payload.taskId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(payload.taskId) });
       }
     };
 
     const handleSubtaskDeleted: ServerToClientEvents["subtask:deleted"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.taskId, "subtasks"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.taskId] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks.subtasks(payload.taskId) });
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(payload.taskId) });
       }
     };
 
     const handleSubtaskReordered: ServerToClientEvents["subtask:reordered"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", payload.taskId, "subtasks"] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks.subtasks(payload.taskId) });
       }
     };
 
     const handleAttachmentAdded: ServerToClientEvents["attachment:added"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks", payload.taskId, "attachments"] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks.attachments(projectId!, payload.taskId) });
       }
     };
 
     const handleAttachmentDeleted: ServerToClientEvents["attachment:deleted"] = (payload) => {
       if (payload.projectId === projectId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks", payload.taskId, "attachments"] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.tasks.attachments(projectId!, payload.taskId) });
       }
     };
 

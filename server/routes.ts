@@ -1,30 +1,21 @@
 /**
  * Main API Routes — Thin Aggregator
  * 
- * Purpose: Mounts global middleware and sub-routers for the project management application.
+ * Mounts global middleware and sub-routers.
  * 
- * All route handlers have been extracted into domain-specific modules:
- *   - server/routes/workspaces.router.ts   (workspace CRUD, members)
- *   - server/routes/teams.router.ts        (team CRUD, members)
- *   - server/routes/tags.router.ts         (tag CRUD, task-tag associations)
- *   - server/routes/comments.router.ts     (comment CRUD, resolve/unresolve, mentions)
- *   - server/routes/activity.router.ts     (activity log)
- *   - server/routes/attachments.router.ts  (attachment presign/upload/download, CRM flags)
- *   - server/routes/tasks.router.ts        (task CRUD, subtasks, assignees)
- *   - server/routes/projects.router.ts     (project CRUD, sections, members)
- *   - server/routes/clients.router.ts      (client CRUD, contacts, notes, divisions)
- *   - server/routes/users.router.ts        (user CRUD, invitations, profile, settings)
- *   - server/routes/timeTracking.router.ts (timer, time entries, calendar)
- *   - server/routes/crm.router.ts          (CRM pipeline, approvals, messaging, portal)
+ * Domain routers are split between two systems:
+ *   - **Migrated** (server/http/domains/): tags, activity, comments, presence,
+ *     ai, attachments, uploads, chat, time, projects, tasks, subtasks, system
+ *     — registered via routeRegistry + routerFactory with policy enforcement.
+ *   - **Legacy** (server/routes/): workspaces, teams, users, clients, crm,
+ *     search, features, super-admin, tenant, system-status, email, chat-retention
+ *     — aggregated in routes/index.ts, mounted here under /api.
  *
  * This file handles:
  *   1. Global /api auth middleware (requireAuth)
  *   2. Global /api tenant context middleware (requireTenantContext)
  *   3. Mounting sub-routes and webhooks
  *   4. Starting background notification checkers
- *
- * @see docs/ENDPOINTS.md for complete API documentation
- * @see docs/KNOWN_ISSUES.md for refactoring notes
  */
 import type { Express } from "express";
 import type { Server } from "http";

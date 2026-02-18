@@ -159,20 +159,6 @@ const LEGACY_DOMAINS: LegacyEntry[] = [
     domain: "tenant-onboarding",
     description: "Tenant onboarding and billing. Auth required, tenant context exempt during onboarding.",
   },
-  // chat: migrated to server/http/domains/chat.router.ts (Prompt #8)
-  // {
-  //   path: "/api/v1/chat",
-  //   policy: "authTenant",
-  //   domain: "chat",
-  //   description: "Internal chat system with Socket.IO integration.",
-  // },
-  // uploads: migrated to server/http/domains/uploads.router.ts (Prompt #7)
-  // {
-  //   path: "/api/v1/uploads",
-  //   policy: "authTenant",
-  //   domain: "uploads",
-  //   description: "File upload routes with rate limiting.",
-  // },
 ];
 
 export async function mountAllRoutes(
