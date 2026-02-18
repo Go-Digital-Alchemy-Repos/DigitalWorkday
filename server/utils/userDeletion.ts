@@ -1,4 +1,4 @@
-import { eq, sql } from 'drizzle-orm';
+import { eq, sql, inArray } from 'drizzle-orm';
 import {
   users,
   taskAssignees,
@@ -56,6 +56,7 @@ import {
 type TxOrDb = {
   delete: (table: any) => any;
   update: (table: any) => any;
+  select: (fields?: any) => any;
   execute: (query: any) => any;
 };
 
@@ -85,23 +86,29 @@ export async function cleanupUserReferences(tx: TxOrDb, userId: string, actorId:
   await tx.delete(chatReads).where(eq(chatReads.userId, userId));
   await tx.delete(chatChannelMembers).where(eq(chatChannelMembers.userId, userId));
   await tx.delete(chatDmMembers).where(eq(chatDmMembers.userId, userId));
+  await tx.execute(sql`DELETE FROM chat_mentions WHERE message_id IN (SELECT id FROM chat_messages WHERE author_user_id = ${userId})`);
   await tx.delete(chatMessages).where(eq(chatMessages.authorUserId, userId));
   await tx.delete(chatExportJobs).where(eq(chatExportJobs.requestedByUserId, userId));
 
   await tx.update(chatChannels).set({ createdBy: actorId }).where(eq(chatChannels.createdBy, userId));
 
+  await tx.execute(sql`DELETE FROM comment_mentions WHERE comment_id IN (SELECT id FROM comments WHERE user_id = ${userId})`);
   await tx.delete(commentMentions).where(eq(commentMentions.mentionedUserId, userId));
   await tx.delete(comments).where(eq(comments.userId, userId));
 
   await tx.delete(activityLog).where(eq(activityLog.actorUserId, userId));
 
   await tx.delete(taskAttachments).where(eq(taskAttachments.uploadedByUserId, userId));
+
+  await tx.execute(sql`DELETE FROM client_note_attachments WHERE note_id IN (SELECT id FROM client_notes WHERE author_user_id = ${userId})`);
   await tx.delete(clientNoteAttachments).where(eq(clientNoteAttachments.uploadedByUserId, userId));
+  await tx.execute(sql`DELETE FROM client_note_versions WHERE note_id IN (SELECT id FROM client_notes WHERE author_user_id = ${userId})`);
   await tx.delete(clientNoteVersions).where(eq(clientNoteVersions.editorUserId, userId));
   await tx.delete(clientNotes).where(eq(clientNotes.authorUserId, userId));
   await tx.delete(clientDocuments).where(eq(clientDocuments.uploadedByUserId, userId));
   await tx.delete(clientFiles).where(eq(clientFiles.uploadedByUserId, userId));
 
+  await tx.execute(sql`DELETE FROM client_messages WHERE conversation_id IN (SELECT id FROM client_conversations WHERE created_by_user_id = ${userId})`);
   await tx.delete(clientMessages).where(eq(clientMessages.authorUserId, userId));
   await tx.delete(clientConversations).where(eq(clientConversations.createdByUserId, userId));
 
