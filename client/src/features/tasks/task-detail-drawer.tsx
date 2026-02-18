@@ -938,7 +938,7 @@ export function TaskDetailDrawer({
 
           {task.projectId && (
             <div 
-              className="p-3 sm:p-4 bg-[#edebff4d] dark:bg-[#1e1e1e] border border-[#d6d2ff] dark:border-[#3d3870]"
+              className="p-3 sm:p-4 bg-[#edebff4d] dark:bg-[#1e1e1e] border border-[#d6d2ff] dark:border-[#2a2a2a]"
               style={{ borderRadius: "10px" }}
             >
               <AttachmentUploader taskId={task.id} projectId={task.projectId} />
@@ -953,7 +953,7 @@ export function TaskDetailDrawer({
           <Separator />
 
           <div 
-            className="p-3 sm:p-4 bg-[#e3e3e34d] dark:bg-[#1e1e1e] border border-[#cfcfcf] dark:border-[#333333]"
+            className="p-3 sm:p-4 bg-[#e3e3e34d] dark:bg-[#1e1e1e] border border-[#cfcfcf] dark:border-[#2a2a2a]"
             style={{ borderRadius: "10px" }}
           >
             <div className="flex items-center justify-between mb-3">
@@ -986,7 +986,7 @@ export function TaskDetailDrawer({
           </div>
 
           <div 
-            className="p-3 sm:p-4 bg-[#d1f6ff4d] dark:bg-[#1e1e1e] border border-[#ade8f5] dark:border-[#2a4a54]"
+            className="p-3 sm:p-4 bg-[#d1f6ff4d] dark:bg-[#1e1e1e] border border-[#ade8f5] dark:border-[#2a2a2a]"
             style={{ borderRadius: "10px" }}
           >
             <div className="space-y-2">
@@ -1134,7 +1134,7 @@ export function TaskDetailDrawer({
           <Separator />
 
           <div 
-            className="p-3 sm:p-4 bg-[#c2dfff4d] dark:bg-[#1e1e1e] border border-[#adc6e6] dark:border-[#2a3d5e]"
+            className="p-3 sm:p-4 bg-[#c2dfff4d] dark:bg-[#1e1e1e] border border-[#adc6e6] dark:border-[#2a2a2a]"
             style={{ borderRadius: "10px" }}
           >
             <CommentThread
@@ -1153,7 +1153,7 @@ export function TaskDetailDrawer({
           <Separator />
 
           <div 
-            className="p-3 sm:p-4 bg-[#ffbb734d] dark:bg-[#1e1e1e] border border-[#f5ac5b] dark:border-[#5a4020]"
+            className="p-3 sm:p-4 bg-[#ffbb734d] dark:bg-[#1e1e1e] border border-[#f5ac5b] dark:border-[#2a2a2a]"
             style={{ borderRadius: "10px" }}
           >
             <div className="space-y-3">

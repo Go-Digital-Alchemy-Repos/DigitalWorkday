@@ -711,7 +711,7 @@ export function SubtaskDetailDrawer({
 
               {projectId && (
                 <div 
-                  className="p-3 sm:p-4 bg-[#edebff4d] dark:bg-[#1e1e1e] border border-[#d6d2ff] dark:border-[#3d3870]"
+                  className="p-3 sm:p-4 bg-[#edebff4d] dark:bg-[#1e1e1e] border border-[#d6d2ff] dark:border-[#2a2a2a]"
                   style={{ borderRadius: "10px" }}
                 >
                   <AttachmentUploader taskId={subtask.id} projectId={projectId} />
@@ -719,7 +719,7 @@ export function SubtaskDetailDrawer({
               )}
 
               <div 
-                className="p-3 sm:p-4 bg-[#d1f6ff4d] dark:bg-[#1e1e1e] border border-[#ade8f5] dark:border-[#2a4a54]"
+                className="p-3 sm:p-4 bg-[#d1f6ff4d] dark:bg-[#1e1e1e] border border-[#ade8f5] dark:border-[#2a2a2a]"
                 style={{ borderRadius: "10px" }}
               >
                 <div className="flex items-center justify-between">
@@ -883,7 +883,7 @@ export function SubtaskDetailDrawer({
 
               {isActualSubtask && (
                 <div 
-                  className="p-3 sm:p-4 bg-[#ffbb734d] dark:bg-[#1e1e1e] border border-[#f5ac5b] dark:border-[#5a4020]"
+                  className="p-3 sm:p-4 bg-[#ffbb734d] dark:bg-[#1e1e1e] border border-[#f5ac5b] dark:border-[#2a2a2a]"
                   style={{ borderRadius: "10px" }}
                 >
                   <div className="space-y-3">
@@ -970,7 +970,7 @@ export function SubtaskDetailDrawer({
 
               {isActualSubtask && (
                 <div 
-                  className="p-3 sm:p-4 bg-[#c2dfff4d] dark:bg-[#1e1e1e] border border-[#adc6e6] dark:border-[#2a3d5e]"
+                  className="p-3 sm:p-4 bg-[#c2dfff4d] dark:bg-[#1e1e1e] border border-[#adc6e6] dark:border-[#2a2a2a]"
                   style={{ borderRadius: "10px" }}
                   data-testid="subtask-comments-section"
                 >
