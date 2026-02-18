@@ -99,6 +99,12 @@ export function SubtaskDetailDrawer({
   onBack,
   availableUsers = [],
 }: SubtaskDetailDrawerProps) {
+  const { data: tenantUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/tenant/users"],
+    enabled: open && (!availableUsers || availableUsers.length === 0),
+  });
+  const mentionUsers = availableUsers && availableUsers.length > 0 ? availableUsers : tenantUsers;
+
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
   const isMobile = useIsMobile();
@@ -702,7 +708,7 @@ export function SubtaskDetailDrawer({
                   onChange={handleDescriptionChange}
                   placeholder="Add a description... Type @ to mention someone"
                   minHeight="100px"
-                  users={availableUsers}
+                  users={mentionUsers}
                   data-testid="textarea-subtask-description"
                 />
               </div>
@@ -983,7 +989,7 @@ export function SubtaskDetailDrawer({
                     onDelete={(id) => deleteCommentMutation.mutate(id)}
                     onResolve={(id) => resolveCommentMutation.mutate(id)}
                     onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
-                    users={availableUsers}
+                    users={mentionUsers}
                   />
                 </div>
               )}

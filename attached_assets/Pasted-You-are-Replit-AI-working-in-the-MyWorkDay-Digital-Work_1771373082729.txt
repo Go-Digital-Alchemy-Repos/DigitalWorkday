@@ -1,0 +1,229 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+BUG:
+The @mention dropdown with tenant user list does not appear in task comments and task descriptions.
+
+GOAL:
+Make the mention dropdown appear reliably when typing "@" (and continue to work while typing) in:
+- Task comment composer
+- Task description editor
+
+We will focus ONLY on getting the dropdown to appear and populate correctly.
+(Extraction/notifications come after this is fixed.)
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change API URLs or DB schema.
+- Do NOT weaken tenant isolation.
+- Do NOT implement a second mention system; reuse the canonical mention UI component/hook if present.
+- Prefer minimal, targeted changes.
+
+DELIVERABLES:
+1) Root cause note: docs/review/mentions-dropdown-debug.md
+2) Fix:
+   - dropdown appears on "@"
+   - dropdown populates tenant/workspace users
+   - keyboard navigation works (up/down/enter/esc)
+   - click selection works
+3) Tests or verification checklist:
+   - If UI tests exist, add >= 1 test
+   - Otherwise add a manual checklist to docs/mobile-audit.md
+
+------------------------------------------------------------
+PHASE 0 — DISCOVERY (MUST DO FIRST)
+------------------------------------------------------------
+
+A) Identify the exact input components used:
+1) Task comment composer input component file(s)
+2) Task description editor component file(s)
+
+For each, determine:
+- Is it a plain <textarea> / <input>?
+- A rich editor (TipTap/Lexical/Quill/ProseMirror)?
+- A shared "RichTextEditor" component?
+
+B) Search for existing mention UI implementation:
+Search repo for:
+- Mention
+- mentions
+- trigger "@"
+- suggestion
+- tippy
+- popover
+- combobox
+- "data-mention"
+- "mentionedUserIds"
+
+Find the canonical mention module (preferred):
+client/src/components/mentions/* or client/src/lib/mentions/*
+
+If none exists, create ONE shared implementation rather than duplicating.
+
+C) Determine if dropdown is:
+1) Not being triggered at all
+2) Triggered but rendered off-screen/hidden
+3) Triggered but query returns empty/fails
+4) Triggered but immediately closes due to blur/focus
+
+Write initial findings into docs/review/mentions-dropdown-debug.md.
+
+------------------------------------------------------------
+PHASE 1 — ADD TEMP DEBUG INSTRUMENTATION (DEV-ONLY)
+------------------------------------------------------------
+
+Add a dev-only debug flag, e.g.:
+MENTIONS_UI_DEBUG=true
+
+Log these events (console.debug only when flag enabled):
+- "mentions: trigger detected" (when "@" typed)
+- "mentions: query fired" with tenantId/workspaceId/searchTerm
+- "mentions: query result count"
+- "mentions: dropdown open/close" with reason
+- "mentions: selection" with selected userId
+
+This is critical to identify which failure category you’re in.
+
+------------------------------------------------------------
+PHASE 2 — ENSURE "@" TRIGGER IS WIRED
+------------------------------------------------------------
+
+A) If input is a plain textarea:
+Implement a small hook:
+client/src/lib/mentions/useMentionsTrigger.ts
+
+Behavior:
+- watches caret position and current token
+- when user types "@", open dropdown
+- while typing "@mi", keep dropdown open and update searchTerm
+- close dropdown on:
+  - space
+  - escape
+  - selection made
+  - input blur (but see blur handling below)
+
+B) If input is a rich text editor (TipTap/Lexical):
+Use the editor’s suggestion/mention plugin mechanism.
+Ensure:
+- mention extension/plugin is enabled
+- trigger is "@"
+- suggestion renderer is attached
+- it receives the search term
+
+Make sure the task comment composer and task description editor actually enable the mention plugin.
+
+------------------------------------------------------------
+PHASE 3 — FIX POPUP RENDERING (Z-INDEX / OVERFLOW / PORTAL)
+------------------------------------------------------------
+
+Common issue: dropdown exists but is clipped by drawer or scroll container.
+
+Rules:
+- Dropdown must render in a portal to <body> OR a top-level overlay container.
+- Ensure z-index is higher than drawers/modals.
+
+Implementation:
+- Use your existing popover/portal pattern (Radix Popover/Portal preferred).
+- If you already have AppDrawer / Sheet, ensure dropdown portal target is outside the drawer overflow container.
+- Ensure dropdown position anchors to caret:
+  - For textarea: anchor near input caret or input bottom-left as acceptable fallback.
+  - For rich editor: use the suggestion plugin’s clientRect.
+
+Add CSS fixes:
+- z-index: higher than drawer overlay content
+- max-height + scroll for long lists
+
+------------------------------------------------------------
+PHASE 4 — FIX USER LIST DATA SOURCE (TENANT USER LIST)
+------------------------------------------------------------
+
+A) Identify the correct endpoint/query for tenant/workspace users:
+- likely an endpoint used by watchers selector or workspace team list.
+Reuse it.
+
+B) Ensure query actually runs:
+Common reasons it doesn’t:
+- query enabled flag false because tenantId/workspaceId undefined
+- missing auth header/session
+- incorrect query key scoping so it returns cached empty data
+
+Implement:
+- A React Query hook: useTenantUsersForMentions({ tenantId, workspaceId, searchTerm })
+- Debounce searchTerm 150–250ms
+- Ensure it loads an initial list on open (searchTerm="")
+
+C) Render states:
+- loading spinner
+- “No users found”
+- error state with retry
+
+D) Ensure results include:
+- userId
+- displayName
+- optional avatar
+
+------------------------------------------------------------
+PHASE 5 — FIX BLUR/FLOW (DROPDOWN INSTANTLY CLOSING)
+------------------------------------------------------------
+
+If dropdown closes instantly when clicking it:
+- Prevent input blur from closing dropdown before selection.
+Solutions:
+- On dropdown mousedown: preventDefault()
+- Manage open state so click selection happens before close
+- Close only after selection
+
+Also ensure keyboard navigation works:
+- ArrowDown/ArrowUp move selection
+- Enter selects
+- Escape closes
+
+------------------------------------------------------------
+PHASE 6 — APPLY TO BOTH SURFACES
+------------------------------------------------------------
+
+Ensure the SAME mention dropdown component/hook is used in:
+- Task comment composer
+- Task description editor
+
+Do not maintain two copies.
+
+------------------------------------------------------------
+PHASE 7 — TEST / VERIFICATION
+------------------------------------------------------------
+
+If UI test infra exists:
+- Add one test that:
+  - focuses comment input
+  - types "@"
+  - asserts dropdown appears
+  - mocks users query returning list
+  - asserts list items render
+
+If not feasible:
+- Add manual checklist to docs/mobile-audit.md:
+  - open task drawer
+  - click comment box
+  - type "@"
+  - dropdown appears with users
+  - type "mi" filters list
+  - arrow + enter selects
+
+------------------------------------------------------------
+DOC UPDATE
+------------------------------------------------------------
+
+Update:
+docs/review/mentions-dropdown-debug.md with:
+- root cause
+- the fix category (trigger vs portal vs query vs blur)
+- files touched
+- how to verify
+
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+When finished, output:
+1) Root cause summary (why dropdown didn’t appear)
+2) Files changed
+3) What user query/endpoint is used for mention list
+4) Any z-index/portal changes made
+5) Verification steps

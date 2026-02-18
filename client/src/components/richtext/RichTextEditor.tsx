@@ -5,6 +5,7 @@ import Link from "@tiptap/extension-link";
 import TextAlign from "@tiptap/extension-text-align";
 import Mention from "@tiptap/extension-mention";
 import { useEffect, useCallback, useState, useRef, forwardRef, useImperativeHandle } from "react";
+import { createPortal } from "react-dom";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import {
@@ -343,6 +344,7 @@ export function RichTextEditor({
   const [mentionPopupOpen, setMentionPopupOpen] = useState(false);
   const [mentionQuery, setMentionQuery] = useState("");
   const [mentionCommand, setMentionCommand] = useState<((props: { id: string; label: string }) => void) | null>(null);
+  const [mentionRect, setMentionRect] = useState<{ top: number; left: number } | null>(null);
 
   const usersRef = useRef<User[]>(users);
   useEffect(() => { usersRef.current = users; }, [users]);
@@ -384,13 +386,25 @@ export function RichTextEditor({
         },
         render: () => {
           return {
-            onStart: (props: { query: string; command: (props: { id: string; label: string }) => void }) => {
+            onStart: (props: { query: string; command: (props: { id: string; label: string }) => void; clientRect?: (() => DOMRect | null) | null }) => {
               setMentionQuery(props.query);
               setMentionCommand(() => props.command);
               setMentionPopupOpen(true);
+              if (props.clientRect) {
+                const rect = props.clientRect();
+                if (rect) {
+                  setMentionRect({ top: rect.top + window.scrollY, left: rect.left + window.scrollX });
+                }
+              }
             },
-            onUpdate: (props: { query: string }) => {
+            onUpdate: (props: { query: string; clientRect?: (() => DOMRect | null) | null }) => {
               setMentionQuery(props.query);
+              if (props.clientRect) {
+                const rect = props.clientRect();
+                if (rect) {
+                  setMentionRect({ top: rect.top + window.scrollY, left: rect.left + window.scrollX });
+                }
+              }
             },
             onKeyDown: (props: { event: KeyboardEvent }) => {
               if (props.event.key === "Escape") {
@@ -405,6 +419,7 @@ export function RichTextEditor({
             onExit: () => {
               setMentionPopupOpen(false);
               setMentionCommand(null);
+              setMentionRect(null);
             },
           };
         },
@@ -516,15 +531,24 @@ export function RichTextEditor({
           "[&_.ProseMirror_.mention]:bg-primary/20 [&_.ProseMirror_.mention]:text-primary [&_.ProseMirror_.mention]:rounded [&_.ProseMirror_.mention]:px-1"
         )}
       />
-      {mentionPopupOpen && mentionCommand && (
-        <div className="absolute bottom-full left-0 mb-1 z-50">
+      {mentionPopupOpen && mentionCommand && mentionRect && createPortal(
+        <div
+          className="fixed z-[9999]"
+          style={{
+            top: mentionRect.top - 4,
+            left: mentionRect.left,
+            transform: "translateY(-100%)",
+          }}
+          onMouseDown={(e) => e.preventDefault()}
+        >
           <MentionList
             ref={mentionListRef}
             query={mentionQuery}
             users={users}
             command={mentionCommand}
           />
-        </div>
+        </div>,
+        document.body
       )}
 
       <PromptDialog

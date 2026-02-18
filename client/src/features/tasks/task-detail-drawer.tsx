@@ -107,6 +107,13 @@ export function TaskDetailDrawer({
     staleTime: 5000,
   });
   const task = liveTask || taskProp;
+
+  const { data: tenantUsers = [] } = useQuery<User[]>({
+    queryKey: ["/api/tenant/users"],
+    enabled: open && (!availableUsers || availableUsers.length === 0),
+  });
+  const mentionUsers = availableUsers && availableUsers.length > 0 ? availableUsers : tenantUsers;
+
   const { user: currentUser } = useAuth();
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
@@ -929,7 +936,7 @@ export function TaskDetailDrawer({
               onBlur={handleDescriptionBlur}
               placeholder="Add a description... Type @ to mention someone"
               minHeight="100px"
-              users={availableUsers}
+              users={mentionUsers}
               data-testid="textarea-description"
             />
           </FormFieldWrapper>
@@ -1146,7 +1153,7 @@ export function TaskDetailDrawer({
               onDelete={(id) => deleteCommentMutation.mutate(id)}
               onResolve={(id) => resolveCommentMutation.mutate(id)}
               onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
-              users={availableUsers}
+              users={mentionUsers}
             />
           </div>
 
@@ -1319,7 +1326,7 @@ export function TaskDetailDrawer({
           setSubtaskDrawerOpen(false);
           setSelectedSubtask(null);
         }}
-        availableUsers={availableUsers}
+        availableUsers={mentionUsers}
       />
 
       <StartTimerDrawer

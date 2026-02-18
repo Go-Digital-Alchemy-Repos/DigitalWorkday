@@ -1,0 +1,256 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+GOAL:
+Reassess and rebuild the Dark Mode color palette so it matches the current application complexity:
+- drawers
+- chat UI
+- comments
+- attachments
+- navigation
+- tables
+- cards
+- mobile navigation
+- PageContainer layout system
+
+We are NOT redesigning the app — we are modernizing the dark theme tokens and applying them consistently.
+
+This should result in:
+- cleaner visual hierarchy
+- improved readability
+- consistent surfaces
+- better contrast
+- modern SaaS-quality dark UI
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change layout.
+- Do NOT change component structure.
+- Do NOT change light mode.
+- Do NOT introduce new design libraries.
+- Keep Tailwind + shadcn/ui theme structure.
+- Modify tokens, not individual components where possible.
+
+--------------------------------------------------
+PHASE 1 — AUDIT CURRENT DARK MODE
+--------------------------------------------------
+
+Audit the current dark theme implementation:
+
+Check:
+- tailwind.config.ts
+- CSS variables (if present)
+- shadcn theme tokens
+- global.css or theme.css
+- body.dark styles
+
+Document findings in:
+docs/design/dark-mode-audit.md
+
+Include:
+- background colors used
+- card/drawer surface colors
+- border colors
+- text color scale
+- accent/primary colors
+- muted colors
+- hover states
+- mobile nav colors
+- chat bubble colors
+- comment section colors
+
+Identify:
+- duplicate colors
+- muddy grays
+- insufficient contrast
+- inconsistent surface layering
+
+--------------------------------------------------
+PHASE 2 — DEFINE NEW DARK MODE TOKEN SYSTEM
+--------------------------------------------------
+
+Create a modern dark palette using layered surfaces.
+
+Define tokens (CSS variables or Tailwind theme extension):
+
+BACKGROUND LAYERS:
+--bg-0 (app background)
+--bg-1 (page surface)
+--bg-2 (cards)
+--bg-3 (drawers)
+--bg-4 (elevated surfaces)
+
+TEXT:
+--text-primary
+--text-secondary
+--text-muted
+
+BORDERS:
+--border-subtle
+--border-default
+
+ACCENT:
+--accent-primary
+--accent-primary-hover
+
+STATUS:
+--success
+--warning
+--danger
+
+Use a modern palette like:
+
+Base background:
+#0B0F14
+
+Surface scale:
+#11161C
+#151B22
+#1B222B
+#222B35
+
+Borders:
+#2A3440
+
+Primary text:
+#E6EDF3
+
+Secondary text:
+#9DA7B3
+
+Muted:
+#6B7683
+
+Accent:
+#3B82F6
+
+Success:
+#22C55E
+
+Warning:
+#F59E0B
+
+Danger:
+#EF4444
+
+Ensure contrast ratios are readable.
+
+--------------------------------------------------
+PHASE 3 — APPLY TOKENS CONSISTENTLY
+--------------------------------------------------
+
+Update dark theme so these components use the new tokens:
+
+Global:
+- body background
+- PageContainer
+- PageShell
+
+Navigation:
+- sidebar
+- mobile nav
+- header
+
+Drawers:
+- Task drawer
+- Subtask drawer
+- chat drawer
+- any AppDrawer usage
+
+Cards:
+- project cards
+- CRM cards
+- time entry cards
+
+Chat:
+- message bubbles
+- chat list rows
+- typing indicator area
+
+Comments:
+- comment section background
+- comment items
+
+Tables:
+- header row
+- hover row
+- borders
+
+Forms:
+- inputs
+- selects
+- buttons
+
+Ensure no component uses hardcoded dark colors.
+
+--------------------------------------------------
+PHASE 4 — BUTTON COLOR CONSISTENCY
+--------------------------------------------------
+
+Ensure button system matches earlier rules:
+
+Primary:
+blue accent
+
+Success:
+green
+
+Timer:
+orange
+
+Neutral:
+surface + border
+
+Hover states must be visible but subtle.
+
+--------------------------------------------------
+PHASE 5 — MOBILE DARK MODE PASS
+--------------------------------------------------
+
+Verify on small screens:
+
+- MobileNavBar contrast
+- drawer backgrounds
+- keyboard overlays
+- scroll containers
+- chat composer area
+- active timer bar
+
+Ensure readability on mobile.
+
+--------------------------------------------------
+PHASE 6 — DOCUMENTATION
+--------------------------------------------------
+
+Create:
+docs/design/dark-mode-system.md
+
+Include:
+- color token definitions
+- usage rules
+- surface layering explanation
+- examples
+
+--------------------------------------------------
+PHASE 7 — VERIFICATION
+--------------------------------------------------
+
+Manually verify:
+
+- Chat readability
+- Task drawer readability
+- Subtask drawer readability
+- Comments section contrast
+- Tables readable
+- Buttons visible
+- Mobile nav readable
+- Attachments section readable
+
+--------------------------------------------------
+OUTPUT
+--------------------------------------------------
+
+Return:
+- updated token palette
+- files changed
+- components updated
+- dark-mode-audit summary
+- verification checklist
