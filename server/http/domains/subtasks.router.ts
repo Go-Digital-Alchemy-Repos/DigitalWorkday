@@ -12,6 +12,11 @@ import {
   addAssigneeSchema,
 } from "@shared/schema";
 import {
+  embedAttachmentIdsInBody,
+  enrichCommentsWithAttachments as enrichComments,
+  toAttachmentMeta,
+} from "../../utils/commentAttachments";
+import {
   emitSubtaskCreated,
   emitSubtaskUpdated,
   emitSubtaskDeleted,
@@ -276,7 +281,8 @@ router.get("/subtasks/:subtaskId/comments", async (req, res) => {
     }
     
     const comments = await storage.getCommentsBySubtask(req.params.subtaskId);
-    res.json(comments);
+    const enriched = await enrichComments(comments, storage);
+    res.json(enriched);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/subtasks/:subtaskId/comments", req);
   }
@@ -301,9 +307,18 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
     if (!parentTask) {
       return sendError(res, AppError.notFound("Task"), req);
     }
+
+    const rawAttachmentIds: string[] = Array.isArray(req.body.attachmentIds)
+      ? req.body.attachmentIds.filter((id: unknown) => typeof id === "string" && id.length > 0)
+      : [];
+    let commentBody = req.body.body || "";
+    if (rawAttachmentIds.length > 0) {
+      commentBody = embedAttachmentIdsInBody(commentBody, rawAttachmentIds);
+    }
     
     const data = insertCommentSchema.parse({
       ...req.body,
+      body: commentBody,
       subtaskId: req.params.subtaskId,
       userId: currentUserId,
     });
@@ -380,6 +395,12 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
       }
     }
 
+    let attachments: ReturnType<typeof toAttachmentMeta>[] = [];
+    if (rawAttachmentIds.length > 0) {
+      const taskAttachments = await storage.getTaskAttachmentsByIds(rawAttachmentIds);
+      attachments = taskAttachments.map(toAttachmentMeta);
+    }
+
     const commentWithUser = {
       ...comment,
       user: commenter ? {
@@ -388,6 +409,7 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
         email: commenter.email,
         avatarUrl: commenter.avatarUrl,
       } : undefined,
+      attachments,
     };
 
     res.status(201).json(commentWithUser);

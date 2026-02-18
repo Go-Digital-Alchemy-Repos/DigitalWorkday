@@ -8,7 +8,7 @@
  * - Edit/delete comments (owner-only permission)
  * - Resolve/unresolve comment threads for discussion tracking
  * - Real-time @mention autocomplete from tenant users
- * - File attachments on comments (images + documents)
+ * - File attachments on comments (drag-and-drop + click-to-select)
  * 
  * Permissions Model:
  * - Edit: Only the comment owner (userId matches currentUserId) can edit
@@ -31,21 +31,14 @@ import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { CommentEditor, RichTextRenderer, type CommentEditorRef } from "@/components/richtext";
 import { CommentAttachments, type CommentAttachmentMeta } from "@/components/comments/CommentAttachments";
-import { apiRequest } from "@/lib/queryClient";
+import { CommentDropzone } from "@/components/uploads/CommentDropzone";
+import { useAttachmentUploadQueue } from "@/lib/uploads/useAttachmentUploadQueue";
 import { useToast } from "@/hooks/use-toast";
 import type { Comment, User } from "@shared/schema";
 
 interface CommentWithUser extends Comment {
   user?: User;
   attachments?: CommentAttachmentMeta[];
-}
-
-interface PendingUpload {
-  id: string;
-  file: File;
-  status: "uploading" | "completing" | "complete" | "error";
-  attachmentId?: string;
-  error?: string;
 }
 
 interface CommentThreadProps {
@@ -126,13 +119,28 @@ export function CommentThread({
   const [body, setBody] = useState("");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
-  const [pendingUploads, setPendingUploads] = useState<PendingUpload[]>([]);
-  const [isSubmitting, setIsSubmitting] = useState(false);
   const commentEditorRef = useRef<CommentEditorRef>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const { toast } = useToast();
 
   const canAttach = !!projectId && !!taskId;
+
+  const {
+    uploads: pendingUploads,
+    enqueueFiles,
+    removeUpload: removePending,
+    retryUpload,
+    clearQueue,
+    completedIds,
+    isUploading,
+    hasErrors,
+  } = useAttachmentUploadQueue({
+    projectId,
+    taskId,
+    onValidationError: (message) => {
+      toast({ title: "File validation", description: message, variant: "destructive" });
+    },
+  });
 
   const { data: tenantUsers = [] } = useQuery<User[]>({
     queryKey: ["/api/tenant/users"],
@@ -141,91 +149,31 @@ export function CommentThread({
 
   const mentionUsers = users && users.length > 0 ? users : tenantUsers;
 
-  const uploadFile = useCallback(async (file: File): Promise<string | null> => {
-    if (!projectId || !taskId) return null;
-    const uploadId = crypto.randomUUID();
-
-    setPendingUploads((prev) => [
-      ...prev,
-      { id: uploadId, file, status: "uploading" },
-    ]);
-
-    try {
-      const presignRes = await apiRequest(
-        "POST",
-        `/api/projects/${projectId}/tasks/${taskId}/attachments/presign`,
-        {
-          fileName: file.name,
-          mimeType: file.type || "application/octet-stream",
-          fileSizeBytes: file.size,
-        }
-      );
-      const { attachment, upload } = await presignRes.json();
-
-      const s3Res = await fetch(upload.url, {
-        method: upload.method,
-        headers: upload.headers,
-        body: file,
-      });
-
-      if (!s3Res.ok) throw new Error("Upload to storage failed");
-
-      setPendingUploads((prev) =>
-        prev.map((u) => (u.id === uploadId ? { ...u, status: "completing" } : u))
-      );
-
-      await apiRequest(
-        "POST",
-        `/api/projects/${projectId}/tasks/${taskId}/attachments/${attachment.id}/complete`,
-        {}
-      );
-
-      setPendingUploads((prev) =>
-        prev.map((u) =>
-          u.id === uploadId
-            ? { ...u, status: "complete", attachmentId: attachment.id }
-            : u
-        )
-      );
-
-      return attachment.id;
-    } catch (err: any) {
-      setPendingUploads((prev) =>
-        prev.map((u) =>
-          u.id === uploadId ? { ...u, status: "error", error: err.message } : u
-        )
-      );
-      return null;
-    }
-  }, [projectId, taskId]);
-
   const handleFileSelect = useCallback(
-    async (files: FileList | null) => {
-      if (!files) return;
-      for (const file of Array.from(files)) {
-        await uploadFile(file);
-      }
+    (files: FileList | null) => {
+      if (!files || !canAttach) return;
+      enqueueFiles(Array.from(files));
     },
-    [uploadFile]
+    [enqueueFiles, canAttach]
   );
 
-  const removePending = useCallback((id: string) => {
-    setPendingUploads((prev) => prev.filter((u) => u.id !== id));
-  }, []);
+  const handleDropFiles = useCallback(
+    (files: File[]) => {
+      if (!canAttach) {
+        toast({ title: "Cannot attach files", description: "Project context is required for attachments.", variant: "destructive" });
+        return;
+      }
+      enqueueFiles(files);
+    },
+    [enqueueFiles, canAttach, toast]
+  );
 
   const handleSubmit = useCallback(
     async (content?: string) => {
       const commentBody = content || body;
       if (!commentBody.trim() && pendingUploads.length === 0) return;
 
-      const completedIds = pendingUploads
-        .filter((u) => u.status === "complete" && u.attachmentId)
-        .map((u) => u.attachmentId!);
-
-      const stillUploading = pendingUploads.some(
-        (u) => u.status === "uploading" || u.status === "completing"
-      );
-      if (stillUploading) {
+      if (isUploading) {
         toast({
           title: "Files still uploading",
           description: "Please wait for uploads to complete before posting.",
@@ -234,11 +182,10 @@ export function CommentThread({
         return;
       }
 
-      const hasErrors = pendingUploads.some((u) => u.status === "error");
       if (hasErrors) {
         toast({
           title: "Upload errors",
-          description: "Remove failed uploads before posting.",
+          description: "Remove or retry failed uploads before posting.",
           variant: "destructive",
         });
         return;
@@ -246,10 +193,10 @@ export function CommentThread({
 
       onAdd?.(commentBody.trim(), completedIds.length > 0 ? completedIds : undefined);
       setBody("");
-      setPendingUploads([]);
+      clearQueue();
       commentEditorRef.current?.clear();
     },
-    [body, pendingUploads, onAdd, toast]
+    [body, pendingUploads, onAdd, toast, isUploading, hasErrors, completedIds, clearQueue]
   );
 
   const handleEdit = (comment: CommentWithUser) => {
@@ -413,95 +360,100 @@ export function CommentThread({
         </p>
       )}
       {!readOnly && (
-        <div className="flex gap-3 pt-2">
-          <Avatar className="h-8 w-8 shrink-0">
-            <AvatarFallback className="bg-primary/10 text-primary text-xs">U</AvatarFallback>
-          </Avatar>
-          <div className="flex-1 space-y-2">
-            <CommentEditor
-              ref={commentEditorRef}
-              value={body}
-              onChange={setBody}
-              onSubmit={handleSubmit}
-              placeholder={placeholder}
-              users={mentionUsers}
-              data-testid="textarea-comment"
-              attachButton={
-                canAttach ? (
-                  <Button
-                    type="button"
-                    variant="ghost"
-                    size="icon"
-                    onClick={() => fileInputRef.current?.click()}
-                    data-testid="button-comment-attach"
-                  >
-                    <Paperclip className="h-3 w-3" />
-                  </Button>
-                ) : undefined
-              }
-            />
-
-            {pendingUploads.length > 0 && (
-              <div className="space-y-1">
-                {pendingUploads.map((upload) => (
-                  <div
-                    key={upload.id}
-                    className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-md border border-border bg-muted/20"
-                    style={{ minHeight: 36 }}
-                    data-testid={`pending-upload-${upload.id}`}
-                  >
-                    <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
-                    <span className="truncate flex-1">{upload.file.name}</span>
-                    <span className="text-muted-foreground shrink-0">
-                      {formatFileSize(upload.file.size)}
-                    </span>
-                    {(upload.status === "uploading" || upload.status === "completing") && (
-                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />
-                    )}
-                    {upload.status === "complete" && (
-                      <Check className="h-3 w-3 text-green-600 shrink-0" />
-                    )}
-                    {upload.status === "error" && (
-                      <>
-                        <span className="text-destructive shrink-0" title={upload.error}>Failed</span>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          className="h-5 w-5 shrink-0"
-                          onClick={() => {
-                            removePending(upload.id);
-                            uploadFile(upload.file);
-                          }}
-                          data-testid={`button-retry-upload-${upload.id}`}
-                        >
-                          <RotateCcw className="h-3 w-3" />
-                        </Button>
-                      </>
-                    )}
+        <CommentDropzone onFiles={handleDropFiles} disabled={!canAttach || readOnly}>
+          <div className="flex gap-3 pt-2">
+            <Avatar className="h-8 w-8 shrink-0">
+              <AvatarFallback className="bg-primary/10 text-primary text-xs">U</AvatarFallback>
+            </Avatar>
+            <div className="flex-1 space-y-2">
+              <CommentEditor
+                ref={commentEditorRef}
+                value={body}
+                onChange={setBody}
+                onSubmit={handleSubmit}
+                placeholder={placeholder}
+                users={mentionUsers}
+                data-testid="textarea-comment"
+                attachButton={
+                  canAttach ? (
                     <Button
-                      size="icon"
+                      type="button"
                       variant="ghost"
-                      className="h-5 w-5 shrink-0"
-                      onClick={() => removePending(upload.id)}
-                      data-testid={`button-remove-pending-${upload.id}`}
+                      size="icon"
+                      onClick={() => fileInputRef.current?.click()}
+                      data-testid="button-comment-attach"
                     >
-                      <X className="h-3 w-3" />
+                      <Paperclip className="h-3 w-3" />
                     </Button>
-                  </div>
-                ))}
-              </div>
-            )}
+                  ) : undefined
+                }
+              />
 
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => handleFileSelect(e.target.files)}
-              data-testid="input-comment-attach"
-            />
+              {canAttach && pendingUploads.length === 0 && (
+                <p className="text-[11px] text-muted-foreground">
+                  Drag files here or use the paperclip to attach
+                </p>
+              )}
+
+              {pendingUploads.length > 0 && (
+                <div className="space-y-1">
+                  {pendingUploads.map((upload) => (
+                    <div
+                      key={upload.id}
+                      className="flex items-center gap-2 text-xs px-2 py-1.5 rounded-md border border-border bg-muted/20"
+                      style={{ minHeight: 36 }}
+                      data-testid={`pending-upload-${upload.id}`}
+                    >
+                      <Paperclip className="h-3 w-3 text-muted-foreground shrink-0" />
+                      <span className="truncate flex-1">{upload.file.name}</span>
+                      <span className="text-muted-foreground shrink-0">
+                        {formatFileSize(upload.file.size)}
+                      </span>
+                      {(upload.status === "queued" || upload.status === "uploading" || upload.status === "completing") && (
+                        <Loader2 className="h-3 w-3 animate-spin text-muted-foreground shrink-0" />
+                      )}
+                      {upload.status === "complete" && (
+                        <Check className="h-3 w-3 text-green-600 shrink-0" />
+                      )}
+                      {upload.status === "error" && (
+                        <>
+                          <span className="text-destructive shrink-0" title={upload.error}>Failed</span>
+                          <Button
+                            size="icon"
+                            variant="ghost"
+                            className="h-5 w-5 shrink-0"
+                            onClick={() => retryUpload(upload.id)}
+                            data-testid={`button-retry-upload-${upload.id}`}
+                          >
+                            <RotateCcw className="h-3 w-3" />
+                          </Button>
+                        </>
+                      )}
+                      <Button
+                        size="icon"
+                        variant="ghost"
+                        className="h-5 w-5 shrink-0"
+                        onClick={() => removePending(upload.id)}
+                        data-testid={`button-remove-pending-${upload.id}`}
+                      >
+                        <X className="h-3 w-3" />
+                      </Button>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => handleFileSelect(e.target.files)}
+                data-testid="input-comment-attach"
+              />
+            </div>
           </div>
-        </div>
+        </CommentDropzone>
       )}
     </div>
   );

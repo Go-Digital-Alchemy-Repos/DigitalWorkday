@@ -8,6 +8,11 @@ import {
   notifyCommentAdded,
   notifyCommentMention,
 } from "../../features/notifications/notification.service";
+import {
+  embedAttachmentIdsInBody,
+  enrichCommentsWithAttachments as enrichComments,
+  toAttachmentMeta,
+} from "../../utils/commentAttachments";
 
 const router = createApiRouter({
   policy: "authTenant",
@@ -17,7 +22,8 @@ const router = createApiRouter({
 router.get("/tasks/:taskId/comments", async (req, res) => {
   try {
     const comments = await storage.getCommentsByTask(req.params.taskId);
-    res.json(comments);
+    const enriched = await enrichComments(comments, storage);
+    res.json(enriched);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/tasks/:taskId/comments", req);
   }
@@ -27,8 +33,16 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
   try {
     const currentUserId = getCurrentUserId(req);
     const requestId = (req as any).requestId || "unknown";
+    const rawAttachmentIds: string[] = Array.isArray(req.body.attachmentIds)
+      ? req.body.attachmentIds.filter((id: unknown) => typeof id === "string" && id.length > 0)
+      : [];
+    let commentBody = req.body.body || "";
+    if (rawAttachmentIds.length > 0) {
+      commentBody = embedAttachmentIdsInBody(commentBody, rawAttachmentIds);
+    }
     const data = insertCommentSchema.parse({
       ...req.body,
+      body: commentBody,
       taskId: req.params.taskId,
       userId: currentUserId,
     });
@@ -118,6 +132,12 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
       }
     }
 
+    let attachments: ReturnType<typeof toAttachmentMeta>[] = [];
+    if (rawAttachmentIds.length > 0) {
+      const taskAttachments = await storage.getTaskAttachmentsByIds(rawAttachmentIds);
+      attachments = taskAttachments.map(toAttachmentMeta);
+    }
+
     const commentWithUser = {
       ...comment,
       user: commenter ? {
@@ -126,6 +146,7 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
         email: commenter.email,
         avatarUrl: commenter.avatarUrl,
       } : undefined,
+      attachments,
     };
 
     res.status(201).json(commentWithUser);
