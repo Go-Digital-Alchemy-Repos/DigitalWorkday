@@ -77,6 +77,8 @@ import {
   Briefcase,
   Save,
   Loader2,
+  ArrowRight,
+  GitBranch,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
