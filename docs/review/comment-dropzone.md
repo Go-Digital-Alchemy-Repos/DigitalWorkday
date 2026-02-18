@@ -56,14 +56,16 @@ Attachments are linked to comments **without schema changes** using the existing
 
 | File | Purpose |
 |------|---------|
-| `client/src/components/comment-thread.tsx` | Enhanced with dropzone wrapper around comment compose area |
+| `client/src/components/uploads/CommentDropzone.tsx` | Reusable drag-and-drop wrapper with visual feedback (dashed border on drag over) |
+| `client/src/lib/uploads/useAttachmentUploadQueue.ts` | Upload queue hook with concurrency throttling (max 2), retry, and file validation |
+| `client/src/components/comments/CommentAttachments.tsx` | Renders posted attachment thumbnails (images) and file rows (non-images) with download |
+| `client/src/components/comment-thread.tsx` | Integrates CommentDropzone, useAttachmentUploadQueue, and file input into the compose area |
 
 ### Approach
 
-Rather than creating a separate `CommentDropzone` component, the dropzone behavior is integrated directly into the existing `CommentThread` component since:
-1. It already manages the full upload lifecycle (presign → upload → complete)
-2. It already renders pending uploads with status/retry/remove
-3. Both task and subtask drawers already use it
+A dedicated `CommentDropzone` component wraps the comment compose area. The upload queue logic is extracted into `useAttachmentUploadQueue` for separation of concerns. `CommentThread` orchestrates everything since:
+1. It already manages the full comment lifecycle
+2. Both task and subtask drawers already use it (single integration point)
 
 ### Drag-and-Drop Behavior
 
@@ -95,6 +97,44 @@ Rather than creating a separate `CommentDropzone` component, the dropzone behavi
 - `POST /api/subtasks/:subtaskId/comments` — same pattern
 - `GET /api/tasks/:taskId/comments` — returns comments with attachment metadata
 - `GET /api/subtasks/:subtaskId/comments` — same pattern
+
+### Tests
+
+| Test file | Count | Focus |
+|-----------|-------|-------|
+| `server/tests/comment-attachments.test.ts` | 18 | embed/extract roundtrip, toAttachmentMeta sanitization, enrichCommentsWithAttachments (enrichment, dedup, missing-att graceful handling, tenant isolation via storage scoping) |
+
+### Files Changed/Added
+
+| File | Action |
+|------|--------|
+| `client/src/components/uploads/CommentDropzone.tsx` | Added — native drag-and-drop wrapper |
+| `client/src/lib/uploads/useAttachmentUploadQueue.ts` | Added — upload queue hook with concurrency |
+| `client/src/components/comments/CommentAttachments.tsx` | Added — renders attachments on posted comments |
+| `client/src/components/comment-thread.tsx` | Modified — integrated dropzone, upload queue, file input |
+| `server/utils/commentAttachments.ts` | Modified — added `enrichCommentsWithAttachments` |
+| `server/http/domains/comments.router.ts` | Modified — embed/enrich attachment flow |
+| `server/http/domains/subtasks.router.ts` | Modified — embed/enrich attachment flow |
+| `server/tests/comment-attachments.test.ts` | Added — 18 backend tests |
+| `docs/review/comment-dropzone.md` | Added — this file |
+| `docs/mobile-audit.md` | Modified — added dropzone section |
+
+### Dropzone Library
+
+Native HTML5 drag events — no external dependency.
+
+### Upload Queue Behavior
+
+- Concurrency: max 2 concurrent uploads
+- Max files: 10 per comment
+- Max file size: 25 MB per file
+- Blocked extensions: exe, bat, cmd, msi, sh, dmg, iso, apk, com, scr, pif, vbs, js, ws, wsf
+- States: queued → uploading → completing → complete | error
+- Retry/remove available for failed/completed uploads
+
+### Comment-Attachment Association (Server-Side)
+
+Attachment IDs are embedded in the comment body JSON (`attachmentIds` array). On retrieval, `enrichCommentsWithAttachments` extracts IDs, batch-loads from `task_attachments` table, and returns `CommentAttachmentMeta` DTOs (id, filename, mimeType, size, createdAt). No schema changes required.
 
 ### Verification Steps
 

@@ -492,3 +492,13 @@ All rich text rendering goes through `client/src/components/richtext/`:
 3. **Search filtering**: Use `toPlainText(description)` to extract searchable text
 4. **Form defaults**: Pass raw stored value directly — the editor handles parsing via `getDocForEditor()`
 5. **All utilities gracefully handle**: null, undefined, empty string, plain text, HTML strings, TipTap JSON strings, and TipTap JSON objects
+
+---
+
+## Comment Dropzone Attachments (R2)
+
+- Task and Subtask comment composers support drag-and-drop file attachments via Cloudflare R2.
+- Tap target for dropzone area meets minimum 44px requirement.
+- Pending uploads display filename, size, status, and remove button — all touch-friendly.
+- Posted comments render image thumbnails and non-image file rows with download action.
+- See `docs/review/comment-dropzone.md` for full implementation details.
