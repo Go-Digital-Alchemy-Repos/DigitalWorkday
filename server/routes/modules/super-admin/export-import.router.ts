@@ -1,4 +1,5 @@
 import { Router } from 'express';
+import express from 'express';
 import { requireSuperUser } from '../../../middleware/tenantContext';
 import { storage } from '../../../storage';
 import { db } from '../../../db';
@@ -10,6 +11,8 @@ import { parseCsv } from '../../../imports/csvParser';
 import { createJob, getJob, getJobsForTenant, updateJob, jobToDTO } from '../../../imports/jobStore';
 import { validateJob, executeJob } from '../../../imports/importEngine';
 import { ENTITY_FIELD_MAP, suggestMappings, type EntityType, type ColumnMapping } from '../../../../shared/imports/fieldCatalog';
+
+const largeJsonParser = express.json({ limit: "30mb" });
 
 export const exportImportRouter = Router();
 
@@ -608,7 +611,7 @@ exportImportRouter.post("/tenants/:tenantId/import/jobs", requireSuperUser, asyn
   }
 });
 
-exportImportRouter.post("/tenants/:tenantId/import/jobs/:jobId/upload", requireSuperUser, async (req, res) => {
+exportImportRouter.post("/tenants/:tenantId/import/jobs/:jobId/upload", largeJsonParser, requireSuperUser, async (req, res) => {
   try {
     const { tenantId, jobId } = req.params;
     const job = getJob(jobId);
