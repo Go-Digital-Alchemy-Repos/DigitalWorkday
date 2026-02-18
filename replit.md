@@ -1,7 +1,7 @@
 # MyWorkDay - Project Management Application
 
 ## Overview
-MyWorkDay is an Asana-inspired project management application aimed at streamlining project workflows and enhancing team collaboration. It provides comprehensive tools for organizing projects, teams, and clients, featuring workspaces, tasks with subtasks, tags, comments, and activity tracking. The application focuses on centralizing project and client management, offering robust reporting, and real-time communication to improve productivity.
+MyWorkDay is an Asana-inspired project management application designed to streamline project workflows and enhance team collaboration. It centralizes project and client management, offering tools for organizing projects, teams, and clients with features like workspaces, tasks, subtasks, tags, comments, and activity tracking. The application aims to improve productivity through robust reporting and real-time communication. Key capabilities include multi-tenancy, comprehensive client relationship management (CRM) with a client portal, workload management, and a focus on a professional, intuitive user experience.
 
 ## User Preferences
 - Professional, clean Asana-like design
@@ -16,70 +16,32 @@ MyWorkDay is an Asana-inspired project management application aimed at streamlin
 ## System Architecture
 
 ### Tech Stack
-- **Frontend**: React 18, TypeScript, Tailwind CSS, shadcn/ui, React Query (TanStack Query v5), FullCalendar
+- **Frontend**: React 18, TypeScript, Tailwind CSS, shadcn/ui, React Query, FullCalendar
 - **Backend**: Express.js, TypeScript, Socket.IO
 - **Database**: PostgreSQL with Drizzle ORM
 - **Routing**: Wouter (frontend)
-- **State Management**: React Query for server state
-- **Real-time**: Socket.IO for live updates across connected clients
+- **State Management**: React Query
+- **Real-time**: Socket.IO
 
 ### Core Features and Design Patterns
-- **Multi-Tenancy**: Supports multi-tenancy with admin dashboard, white-label branding, per-tenant integrations, onboarding, and user management.
-- **Authentication**: Session-based authentication using Passport.js with email/password and Google OAuth.
-- **Real-time Communication**: Socket.IO for live updates, supporting a tenant-scoped chat system with channels, DMs, file attachments, and user presence tracking. Includes threaded replies and unread message management.
-- **Project Management**: Includes workspaces, teams, clients, projects, tasks, activity logs, and time tracking. Projects support client assignment, team membership, and a division model for access control.
-- **Client Management**: Client detail pages feature Notes (rich text, categorization, version tracking) and Documents (Cloudflare R2 uploads, categories, metadata). CRM features include client pipeline tracking, contacts, and an external client portal. Enhanced CRM list view with filters (status, industry), sort options (8 variants), view mode toggle (grid/table), density toggle (comfortable/compact), saved views (localStorage), bulk actions (multi-select, bulk status change), and a ClientProfileDrawer (health score, overview/timeline/projects/files tabs, quick note logging).
-- **Task Management**: Tasks support subtasks, tags, comments with rich text, @mentions, and notifications. Project templates allow reusable project structures.
-- **Collaboration System**: Reusable `CommentThread` component (supports task/project/client entity types with readOnly mode), generic `ActivityFeed` component (virtualized, with type and date range filters, backed by `/api/activity-log/:entityType/:entityId` or custom endpoints), and `CommandPalette` (Cmd+K global search with debounced `/api/search` endpoint).
-- **Workload Management**: Features workload forecast and reports for task distribution and budget utilization.
-- **Time Tracking**: Stopwatch-based time tracking with persistence and a dedicated dashboard.
-- **Notifications**: Customizable real-time notification system with NotificationCenter popover (virtualized list, unread badge, per-type preferences, Socket.IO real-time updates). Backend: `POST /api/notifications/mark-all-read`, `PATCH /api/notifications/:id/read`.
-- **Rich Text Editor**: Unified TipTap-based rich text editor for various features.
-- **Client Portal**: External client access to projects/tasks with restricted permissions and token-based invitation.
-- **CRM Feature Flags**: Environment-driven feature flags (`CRM_CLIENT_360_ENABLED`, `CRM_CONTACTS_ENABLED`, `CRM_TIMELINE_ENABLED`, `CRM_PORTAL_ENABLED`, `CRM_FILES_ENABLED`, `CRM_APPROVALS_ENABLED`, `CRM_CLIENT_MESSAGING_ENABLED`) control CRM module visibility and functionality.
-- **Client 360 View**: A tabbed CRM profile page providing an overview, projects, contacts, activity timeline, files, notes, profitability reports, approvals, and messaging.
-- **Client Profitability Reports**: Admin-only reporting in Client 360 view, providing metrics like total/billable hours, revenue estimates, and detailed time entries by project and employee.
-- **Client Approval Workflows**: Allows admins to create approval requests for clients, which clients can review and approve or request changes via the portal.
-- **Client Messaging**: A client-safe communication system separate from internal chat, allowing admins/employees to converse with clients within client-specific conversations.
-- **System Robustness**: Includes centralized error logging, standardized API error handling, data purge capabilities, and schema readiness checks.
-- **Super Admin Capabilities**: Full tenant user management, diagnostics, repair automation, and comprehensive entity deletion (users, admins, clients, tasks, projects) via shared `cleanupUserReferences` utility (`server/utils/userDeletion.ts`).
-- **User Experience**: Global command palette, keyboard shortcuts, `useUnsavedChanges` hook, dark mode, and a CSS-variable-based accent color theming system.
-- **Design Token System**: Formal CSS design tokens for spacing, typography, motion, radii, z-index, and semantic surface aliases ensure UI consistency.
-- **SaaS Agreement System**: Manages tenant SaaS agreements with lifecycle, versioning, and user acceptance tracking.
-- **Cloudflare R2 Storage**: Exclusive file storage with automatic image compression.
-- **Modular Architecture**: Modular API routes are organized by domain, including dedicated Super Admin sub-routers, with standardized error handling. CRM routes split into 5 domain sub-modules under `server/routes/modules/crm/` (contacts, notes, files, approvals, conversations) with shared `crm.helpers.ts`. SuperDebug routes split into 3 sub-modules under `server/routes/modules/superDebug/` (quarantine, backfill, diagnostics) with shared `superDebug.helpers.ts`.
-- **Route Architecture Convergence**: Standardized route registration via `createApiRouter()` factory (`server/http/routerFactory.ts`) with composable guard policies (`public`, `authOnly`, `authTenant`, `superUser`). Route registry (`server/http/routeRegistry.ts`) declares all mounts in one place. `mountAllRoutes()` in `server/http/mount.ts` is the single entry point. Pilot domain: `system-integrations` at `/api/v1/system`. Policy drift tests ensure new routers can't bypass required guards. See `docs/architecture/routes.md` for migration playbook.
-- **DB Performance Indexes**: Composite and single-column indexes are strategically applied for performance.
-- **React Query Performance**: Tuned defaults, per-data-type stale times, optimistic updates with rollback, and array-based query keys for efficient cache management. Batch storage methods (`getUsersByIds`, `getUnreadCountsForChannels`, `getUnreadCountsForDmThreads`) eliminate N+1 patterns in chat endpoints.
-- **List Virtualization**: `VirtualizedList` component and React Virtuoso for efficient rendering of large lists. Chat timeline uses Virtuoso directly with `firstItemIndex` prepend pattern, `followOutput` for stick-to-bottom, and `atBottomStateChange` for new-messages pill.
-- **Error Boundaries**: Comprehensive error boundaries for React render errors with recovery UI. Frontend errors (uncaught exceptions, unhandled promise rejections, React render errors) are automatically reported to `POST /api/v1/system/errors/frontend` and stored in the `error_logs` table for backend correlation.
-- **Motion System**: Framer Motion-based animation primitives for enhanced user experience.
-- **Mobile-First UX**: Responsive padding scale `px-3 sm:px-4 lg:px-6` normalized across all pages. Mobile tap targets 40px+ (`min-h-10 md:min-h-9` for Button, `h-10 md:h-9` for Input/Select). `PageContainer` component (`client/src/components/layout/page-container.tsx`) provides responsive wrapper. `PageShell` and `AppShell` use consistent responsive padding. MobileNavBar (`z-50`, fixed bottom `h-16`) with `pb-16` on main content area. Tables wrapped in `overflow-x-auto` for mobile horizontal scroll. Mobile audit documented in `docs/mobile-audit.md`.
-- **Drawer UI Consistency**: Shared `DrawerActionBar` component (`client/src/components/layout/drawer-action-bar.tsx`) provides standardized sticky footer action bar for all drawers. Button ordering: Start Timer (orange) | Save (blue) | Mark Complete (green). All action buttons meet 44px mobile tap target. TaskDetailDrawer and SubtaskDetailDrawer both use DrawerActionBar. Section order normalized: Description → Attachments → Subtasks → Tags → Comments (bg-muted/30) → Time Entries. Body spacing standardized at `space-y-6`.
-- **Graceful Shutdown**: SIGTERM/SIGINT handlers close HTTP server, Socket.IO, and database pool in order with a 10-second timeout before forced exit. Ensures clean resource release during deployments and restarts.
-
-### Observability & Operations
-- **Request IDs**: Every request gets a UUID via `X-Request-Id` header (middleware: `server/middleware/requestId.ts`). Propagated through logs, error responses, and error_logs table for end-to-end correlation.
-- **Structured Request Logging**: `server/middleware/requestLogger.ts` logs JSON entries with requestId, method, path, status, durationMs, tenantId, userId. Log level varies by status code (error for 500+, warn for 4xx).
-- **Error Logging to DB**: `server/middleware/errorLogging.ts` captures 500+ errors and key 4xx (403, 404, 429) to `error_logs` table with automatic secret redaction. Frontend errors also stored via dedicated endpoint.
-- **Health Endpoints**: `/health` (always 200 for load balancers), `/healthz` (liveness), `/ready` (readiness with DB + schema checks, returns 503 if not ready), `/api/v1/system/health/db` (database connectivity, latency, pool stats, migration count).
-- **Env Var Validation**: `server/config.ts` validates critical environment variables (DATABASE_URL, SESSION_SECRET) at startup. Production mode fails fast with `process.exit(1)` if critical vars are missing.
-
-### Security Hardening
-- **Tenancy Enforcement**: `server/middleware/tenancyEnforcement.ts` with three modes: `off` (development), `soft` (log warnings), `strict` (block cross-tenant access). Validates ownership on read, insert, update, and delete operations.
-- **Defense-in-Depth Tenant Scoping**: All mutating queries (UPDATE/DELETE) include `tenantId` in WHERE clauses alongside record IDs, even when preceded by a tenant-scoped SELECT. Applied across CRM routes (contacts, notes, files, access, approvals), client documents/notes, and templates.
-- **Standardized Error Envelope**: All API errors use `AppError` class producing `StandardErrorEnvelope` format: `{ ok, requestId, error: { code, message, status, requestId, details }, message, code }`. Tenant guard middleware (`requireTenantContext`, `requireSuperUser`) uses `next(AppError.xxx())` pattern for consistent error handling.
-- **Canonical requireTenantContext**: Primary implementation in `server/middleware/tenantContext.ts`. Duplicate in `tenancyEnforcement.ts` is deprecated (factory pattern, unused by routes).
-- **Rate Limiting**: Applied to auth endpoints (login, bootstrap, invite, forgot-password), file uploads, internal chat sends, and CRM client messaging. Configurable via environment variables. Uses pluggable `RateLimitStore` interface (in-memory default, extensible for Redis) with tenant-scoped keying and email-based/IP-based limits. Middleware: `server/middleware/rateLimit.ts`.
-- **CSRF Protection**: Origin/referer validation middleware (`server/middleware/csrf.ts`) blocks cross-origin state-changing requests. Exempts safe methods (GET/HEAD/OPTIONS), webhooks, and health endpoints. Development mode allows localhost origins; configurable via `CSRF_ENABLED` env var.
-- **Stripe Webhook Hardening**: Centralized Stripe config module (`server/config/stripe.ts`) with `getStripeWebhookSecret()` and `getStripeSecretKey()` helpers. Rejects placeholder/fake secrets, safely decrypts DB-stored secrets, and fails fast in production. Secret precedence: env var overrides database. Webhook handler (`server/routes/webhooks.ts`) fails closed (500) when misconfigured and uses standardized error envelopes.
-- **Secret Redaction**: All error logs automatically redact passwords, API keys, tokens, and database URLs before storage.
+- **Multi-Tenancy**: Supports multiple tenants with an admin dashboard, white-label branding, and per-tenant user management.
+- **Authentication**: Session-based authentication using Passport.js (email/password, Google OAuth).
+- **Real-time Communication**: Socket.IO for live updates, supporting tenant-scoped chat, threaded replies, and notifications.
+- **Project & Task Management**: Includes workspaces, teams, clients, projects, tasks with subtasks, activity logs, and time tracking. Supports project templates and rich text comments with @mentions.
+- **Client Relationship Management (CRM)**: Comprehensive client detail pages with notes, documents (Cloudflare R2), client pipeline tracking, contacts, and an external client portal. Features a Client 360 View, profitability reports, approval workflows, and client-safe messaging. Functionality is controlled by environment-driven feature flags.
+- **Workload Management**: Provides workload forecasting and reporting based on task distribution and budget utilization.
+- **Notifications**: Customizable, real-time notification system with a Notification Center.
+- **User Experience**: Global command palette, keyboard shortcuts, dark mode, CSS-variable-based accent color theming, and Framer Motion animations. Implements mobile-first responsive design and consistent drawer UI.
+- **Modular Architecture**: API routes are organized by domain with standardized error handling and a centralized route registration system.
+- **Performance & Robustness**: Utilizes DB performance indexes, optimized React Query usage, list virtualization, error boundaries, and graceful shutdown mechanisms.
+- **Security Hardening**: Features tenancy enforcement, defense-in-depth tenant scoping, standardized API error handling, rate limiting on critical endpoints, CSRF protection, and secret redaction in logs.
+- **Observability**: Implements request IDs for end-to-end correlation, structured request logging, and error logging to the database. Includes health endpoints for liveness and readiness checks.
 
 ## External Dependencies
 - **PostgreSQL**: Primary database.
 - **Socket.IO**: Real-time communication.
-- **FullCalendar**: Calendar view for tasks.
-- **Passport.js**: Session-based authentication.
+- **FullCalendar**: Calendar UI component.
+- **Passport.js**: Authentication library.
 - **Railway**: Deployment platform.
-- **Mailgun**: Email sending.
-- **Cloudflare R2**: Exclusive file storage.
+- **Mailgun**: Email service.
+- **Cloudflare R2**: Object storage for files.
