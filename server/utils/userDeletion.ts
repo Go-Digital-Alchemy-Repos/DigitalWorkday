@@ -42,7 +42,6 @@ import {
   tasks,
   subtasks,
   projects,
-  sections,
   invitations,
   appSettings,
   workspaces,
@@ -51,6 +50,7 @@ import {
   platformAuditEvents,
   platformInvitations,
   projectTemplates,
+  asanaImportRuns,
 } from '@shared/schema';
 
 type TxOrDb = {
@@ -125,7 +125,6 @@ export async function cleanupUserReferences(tx: TxOrDb, userId: string, actorId:
   await tx.update(tasks).set({ createdBy: null }).where(eq(tasks.createdBy, userId));
   await tx.update(subtasks).set({ assigneeId: null }).where(eq(subtasks.assigneeId, userId));
   await tx.update(projects).set({ createdBy: null }).where(eq(projects.createdBy, userId));
-  await tx.update(sections).set({ createdBy: null }).where(eq(sections.createdBy, userId));
   await tx.update(invitations).set({ createdByUserId: null }).where(eq(invitations.createdByUserId, userId));
   await tx.update(appSettings).set({ updatedByUserId: null }).where(eq(appSettings.updatedByUserId, userId));
   await tx.update(comments).set({ resolvedByUserId: null }).where(eq(comments.resolvedByUserId, userId));
@@ -137,4 +136,6 @@ export async function cleanupUserReferences(tx: TxOrDb, userId: string, actorId:
   await tx.update(platformAuditEvents).set({ actorUserId: null }).where(eq(platformAuditEvents.actorUserId, userId));
   await tx.update(platformAuditEvents).set({ targetUserId: null }).where(eq(platformAuditEvents.targetUserId, userId));
   await tx.update(passwordResetTokens).set({ createdByUserId: null }).where(eq(passwordResetTokens.createdByUserId, userId));
+
+  await tx.update(asanaImportRuns).set({ actorUserId: actorId }).where(eq(asanaImportRuns.actorUserId, userId));
 }
