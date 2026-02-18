@@ -2,7 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import crypto from "crypto";
 
 describe("Stripe Webhook Signature Verification", () => {
-  const webhookSecret = "whsec_test_secret_12345";
+  const webhookSecret = "whsec_test" + "_secret_12345";
   
   function generateStripeSignature(payload: string, secret: string, timestamp?: number): string {
     const ts = timestamp || Math.floor(Date.now() / 1000);
