@@ -88,7 +88,7 @@ interface TaskDetailDrawerProps {
 }
 
 export function TaskDetailDrawer({
-  task,
+  task: taskProp,
   open,
   onOpenChange,
   onUpdate,
@@ -100,6 +100,13 @@ export function TaskDetailDrawer({
   isLoading = false,
   isError = false,
 }: TaskDetailDrawerProps) {
+  const { data: liveTask } = useQuery<TaskWithRelations>({
+    queryKey: ["/api/tasks", taskProp?.id],
+    enabled: !!taskProp?.id && open,
+    initialData: taskProp || undefined,
+    staleTime: 5000,
+  });
+  const task = liveTask || taskProp;
   const { user: currentUser } = useAuth();
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
