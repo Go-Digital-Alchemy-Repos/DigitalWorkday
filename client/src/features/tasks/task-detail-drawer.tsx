@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus } from "lucide-react";
 import { useAuth } from "@/lib/auth";
@@ -73,6 +73,14 @@ function formatDurationShort(seconds: number): string {
   return `${minutes}m`;
 }
 
+const PERF_ENABLED = typeof window !== "undefined" && (window as any).__TASK_DRAWER_PERF === 1;
+
+function perfLog(label: string, startMs: number) {
+  if (PERF_ENABLED) {
+    console.log(`[TaskDrawer:perf] ${label}: ${(performance.now() - startMs).toFixed(2)}ms`);
+  }
+}
+
 interface TaskDetailDrawerProps {
   task: TaskWithRelations | null;
   open: boolean;
@@ -100,6 +108,13 @@ export function TaskDetailDrawer({
   isLoading = false,
   isError = false,
 }: TaskDetailDrawerProps) {
+  const renderCount = useRef(0);
+  if (PERF_ENABLED) {
+    renderCount.current++;
+    console.log(`[TaskDrawer:perf] render #${renderCount.current}, taskId=${taskProp?.id ?? "none"}, open=${open}`);
+  }
+  const renderStart = PERF_ENABLED ? performance.now() : 0;
+
   const { data: liveTask } = useQuery<TaskWithRelations>({
     queryKey: ["/api/tasks", taskProp?.id],
     enabled: !!taskProp?.id && open,
@@ -112,7 +127,10 @@ export function TaskDetailDrawer({
     queryKey: ["/api/tenant/users"],
     enabled: open && (!availableUsers || availableUsers.length === 0),
   });
-  const mentionUsers = availableUsers && availableUsers.length > 0 ? availableUsers : tenantUsers;
+  const mentionUsers = useMemo(
+    () => availableUsers && availableUsers.length > 0 ? availableUsers : tenantUsers,
+    [availableUsers, tenantUsers]
+  );
 
   const { user: currentUser } = useAuth();
   const isMobile = useIsMobile();
@@ -139,14 +157,19 @@ export function TaskDetailDrawer({
   
   const { isDirty, setDirty, markClean, confirmIfDirty, UnsavedChangesDialog } = useUnsavedChanges();
 
-  const invalidateCommentQueries = () => {
+  const commentQueryKey = useMemo(
+    () => ["/api/tasks", task?.id, "comments"] as const,
+    [task?.id]
+  );
+
+  const invalidateCommentQueries = useCallback(() => {
     if (task) {
-      queryClient.invalidateQueries({ queryKey: [`/api/tasks/${task.id}/comments`] });
+      queryClient.invalidateQueries({ queryKey: commentQueryKey });
     }
-  };
+  }, [task?.id, commentQueryKey]);
 
   const { data: taskComments = [] } = useQuery<(Comment & { user?: User })[]>({
-    queryKey: [`/api/tasks/${task?.id}/comments`],
+    queryKey: commentQueryKey,
     enabled: !!task?.id && open,
   });
 
@@ -159,7 +182,7 @@ export function TaskDetailDrawer({
     },
     onMutate: async ({ body }: { body: string; attachmentIds?: string[] }) => {
       if (!task?.id || !currentUser) return undefined;
-      const commentsKey = [`/api/tasks/${task.id}/comments`];
+      const commentsKey = commentQueryKey;
       await queryClient.cancelQueries({ queryKey: commentsKey });
       const previousComments = queryClient.getQueryData<(Comment & { user?: User })[]>(commentsKey);
       const optimisticComment = {
@@ -242,14 +265,16 @@ export function TaskDetailDrawer({
     onSuccess: invalidateCommentQueries,
   });
 
-  const invalidateTaskQueries = () => {
-    // Broad invalidation to ensure all task-related caches refresh
+  const invalidateTaskQueries = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
     queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+    if (task?.id) {
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.id] });
+    }
     if (task?.projectId) {
       queryClient.invalidateQueries({ queryKey: ["/api/projects", task.projectId, "tasks"] });
     }
-  };
+  }, [task?.id, task?.projectId]);
 
   // Workspace tags query for adding existing tags
   const { data: workspaceTags = [] } = useQuery<TagType[]>({
@@ -257,8 +282,10 @@ export function TaskDetailDrawer({
     enabled: !!workspaceId && open,
   });
 
-  // Get IDs of tags already on this task
-  const taskTagIds = new Set((task?.tags || []).map((tt) => tt.tagId));
+  const taskTagIds = useMemo(
+    () => new Set((task?.tags || []).map((tt) => tt.tagId)),
+    [task?.tags]
+  );
 
   const addTagToTaskMutation = useMutation({
     mutationFn: async (tagId: string) => {
@@ -266,9 +293,6 @@ export function TaskDetailDrawer({
     },
     onSuccess: () => {
       invalidateTaskQueries();
-      if (task?.id) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.id] });
-      }
       setTagPopoverOpen(false);
     },
     onError: (error: any) => {
@@ -282,9 +306,6 @@ export function TaskDetailDrawer({
     },
     onSuccess: () => {
       invalidateTaskQueries();
-      if (task?.id) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.id] });
-      }
     },
     onError: (error: any) => {
       toast({ title: "Failed to remove tag", description: error.message, variant: "destructive" });
@@ -320,11 +341,7 @@ export function TaskDetailDrawer({
       return apiRequest("POST", `/api/tasks/${taskId}/subtasks`, { title });
     },
     onSuccess: () => {
-      // Invalidate both broad and specific queries
       invalidateTaskQueries();
-      if (task?.id) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.id] });
-      }
       onRefresh?.();
     },
     onError: (error: any) => {
@@ -357,8 +374,18 @@ export function TaskDetailDrawer({
     onSuccess: invalidateTaskQueries,
   });
 
+  const timeEntriesQueryKey = useMemo(
+    () => ["/api/time-entries", { taskId: task?.id }] as const,
+    [task?.id]
+  );
+
   const { data: timeEntries = [], isLoading: timeEntriesLoading } = useQuery<TimeEntry[]>({
-    queryKey: [`/api/time-entries?taskId=${task?.id}`],
+    queryKey: timeEntriesQueryKey,
+    queryFn: async () => {
+      const res = await fetch(`/api/time-entries?taskId=${task?.id}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load time entries");
+      return res.json();
+    },
     enabled: !!task?.id && open,
   });
 
@@ -461,7 +488,7 @@ export function TaskDetailDrawer({
     mutationFn: async () => apiRequest("POST", "/api/timer/stop", { scope: "in_scope" }),
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ["/api/timer/current"] });
-      qc.invalidateQueries({ queryKey: [`/api/time-entries?taskId=${task?.id}`] });
+      qc.invalidateQueries({ queryKey: timeEntriesQueryKey });
       toast({ title: "Timer stopped", description: "Time entry saved" });
     },
   });
@@ -485,7 +512,7 @@ export function TaskDetailDrawer({
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: [`/api/time-entries?taskId=${task?.id}`] });
+      qc.invalidateQueries({ queryKey: timeEntriesQueryKey });
       qc.invalidateQueries({ queryKey: ["/api/time-entries"] });
     },
   });
@@ -700,9 +727,18 @@ export function TaskDetailDrawer({
     );
   }
 
-  const assigneeUsers: Partial<User>[] = task.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [];
-  const watcherUsers: Partial<User>[] = task.watchers?.map((w) => w.user).filter(Boolean) as Partial<User>[] || [];
-  const taskTags: TagType[] = task.tags?.map((tt) => tt.tag).filter(Boolean) as TagType[] || [];
+  const assigneeUsers = useMemo<Partial<User>[]>(
+    () => task.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [],
+    [task.assignees]
+  );
+  const watcherUsers = useMemo<Partial<User>[]>(
+    () => task.watchers?.map((w) => w.user).filter(Boolean) as Partial<User>[] || [],
+    [task.watchers]
+  );
+  const taskTags = useMemo<TagType[]>(
+    () => task.tags?.map((tt) => tt.tag).filter(Boolean) as TagType[] || [],
+    [task.tags]
+  );
   
   const handleTitleSave = () => {
     if (title.trim() && title !== task.title) {
@@ -726,6 +762,31 @@ export function TaskDetailDrawer({
     }
   };
 
+  const handleAddSubtask = useCallback(
+    (title: string) => addSubtaskMutation.mutate({ taskId: task.id, title }),
+    [task.id]
+  );
+
+  const handleToggleSubtask = useCallback(
+    (subtaskId: string, completed: boolean) => toggleSubtaskMutation.mutate({ subtaskId, completed }),
+    []
+  );
+
+  const handleDeleteSubtask = useCallback(
+    (subtaskId: string) => deleteSubtaskMutation.mutate(subtaskId),
+    []
+  );
+
+  const handleUpdateSubtask = useCallback(
+    (subtaskId: string, title: string) => updateSubtaskTitleMutation.mutate({ subtaskId, title }),
+    []
+  );
+
+  const handleSubtaskUpdate = useCallback(() => {
+    onRefresh?.();
+    invalidateTaskQueries();
+  }, [onRefresh, invalidateTaskQueries]);
+
   const handleDrawerClose = (shouldClose: boolean) => {
     if (!shouldClose) return;
     if (isDirty) {
@@ -737,6 +798,8 @@ export function TaskDetailDrawer({
       onOpenChange(false);
     }
   };
+
+  if (PERF_ENABLED) perfLog("render-complete", renderStart);
 
   return (
     <>
@@ -979,14 +1042,11 @@ export function TaskDetailDrawer({
               clientId={task.project?.clientId}
               taskTitle={task.title}
               taskDescription={task.description || undefined}
-              onAdd={(title) => addSubtaskMutation.mutate({ taskId: task.id, title })}
-              onToggle={(subtaskId, completed) => toggleSubtaskMutation.mutate({ subtaskId, completed })}
-              onDelete={(subtaskId) => deleteSubtaskMutation.mutate(subtaskId)}
-              onUpdate={(subtaskId, title) => updateSubtaskTitleMutation.mutate({ subtaskId, title })}
-              onSubtaskUpdate={() => {
-                onRefresh?.();
-                qc.invalidateQueries({ queryKey: ["/api/tasks", task.id] });
-              }}
+              onAdd={handleAddSubtask}
+              onToggle={handleToggleSubtask}
+              onDelete={handleDeleteSubtask}
+              onUpdate={handleUpdateSubtask}
+              onSubtaskUpdate={handleSubtaskUpdate}
               onSubtaskClick={(subtask) => {
                 setSelectedSubtask(subtask);
                 setSubtaskDrawerOpen(true);

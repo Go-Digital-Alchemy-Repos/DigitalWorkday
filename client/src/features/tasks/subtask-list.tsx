@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, memo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Plus, GripVertical, X, CalendarIcon, UserCircle, Sparkles, Loader2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -40,7 +40,7 @@ function getInitials(name: string): string {
     .slice(0, 2);
 }
 
-export function SubtaskList({
+function SubtaskListInner({
   subtasks,
   taskId,
   workspaceId,
@@ -128,8 +128,6 @@ export function SubtaskList({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
       onSubtaskUpdate?.();
     },
   });
@@ -147,14 +145,6 @@ export function SubtaskList({
           if (result instanceof Promise) {
             await result;
           }
-        }
-        
-        // Final fallback invalidation to be sure
-        if (taskId) {
-          await Promise.all([
-            queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId] }),
-            queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] })
-          ]);
         }
         
         if (onSubtaskUpdate) {
@@ -549,3 +539,5 @@ export function SubtaskList({
     </div>
   );
 }
+
+export const SubtaskList = memo(SubtaskListInner);
