@@ -3005,6 +3005,7 @@ export const userUiPreferences = pgTable("user_ui_preferences", {
   themeMode: text("theme_mode"),
   themePackId: text("theme_pack_id"),
   themeAccent: text("theme_accent"),
+  sidebarProjectOrder: text("sidebar_project_order").array(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
