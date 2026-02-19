@@ -1,0 +1,216 @@
+PROMPT — 🔐 Chat Security Hardening (RLS-like Enforcement)
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE:
+Harden internal Chat security with “RLS-like” enforcement:
+- Make tenant + membership scoping mechanically enforced at the data-access layer
+- Prevent any accidental cross-tenant leakage
+- Ensure sockets, HTTP, and background paths all share the same guardrails
+- Add automated drift detection tests so future routes/handlers cannot bypass policy
+
+SCOPE:
+Internal tenant Chat only.
+Do NOT touch client portal Messages.
+Do NOT change existing business behavior except to reject unauthorized access.
+
+NON-DESTRUCTIVE RULES:
+- Keep API response shapes stable.
+- Use createApiRouter + routeRegistry conventions.
+- Add tests (policy drift + integration).
+- Prefer centralized guards over duplicating checks.
+
+DELIVERABLES:
+1) “RLS-like” repository enforcement primitives
+2) Membership-scoped query helpers for all chat reads/writes
+3) Socket authorization for every chat event (channel + DM)
+4) Cross-cutting audit events for sensitive actions (room joins, channel access, admin overrides)
+5) CI guards: forbid unscoped chat queries in strict mode
+6) Docs update: docs/security/chat-security.md
+
+===========================================================
+PHASE 1 — Define the Security Contract (Single Source of Truth)
+===========================================================
+
+1) Create:
+server/features/chat/security/chatPolicy.ts
+
+It must expose:
+- requireTenant(ctx): tenantId required
+- requireChatMembership(ctx, channelId)
+- requireDmMembership(ctx, dmId)
+- canViewMessage(ctx, messageId)  // optional helper
+- isChatAdmin(ctx)               // tenant admin or role-based
+
+2) Security invariants:
+- Every chat read/write must be gated by:
+  tenantId + membership
+- No messageId-only lookups without tenant + membership validation
+- Channel membership governs access to:
+  messages, reactions, reads, pins, uploads
+- DM membership governs access similarly
+- Socket room join requires membership verification at join-time and on reconnect
+- Super-admin overrides must be explicit, logged, and disabled by default in production
+
+===========================================================
+PHASE 2 — RLS-like Repo Wrappers (Hard Enforcement at Data Layer)
+===========================================================
+
+1) Create a scoped repo factory:
+server/features/chat/security/scopedChatRepo.ts
+
+Pattern:
+- All chat repos must be constructed with:
+  { tenantId, userId, enforcement: "soft"|"strict" }
+- The wrapper exposes only safe methods.
+- Internals automatically add tenantId constraints.
+- Methods that require membership take channelId/dmId and validate membership once, then query.
+
+Example methods:
+- listChannels()
+- getChannel(channelId)
+- listMessages(channelId, cursor)
+- sendMessage(channelId, payload)
+- addReaction(messageId, emoji)   // internally resolves message → channelId then re-validates membership
+- markRead(channelId, lastReadAt)
+- listPins(channelId)
+
+2) Remove/ban unscoped access:
+- Search for any direct db.select() on chat tables from routes/services.
+- Refactor to call scopedChatRepo methods only.
+
+3) Add “strict mode” assertion:
+- If enforcement=strict and tenantId missing → throw AppError(401/403)
+- If membership missing → AppError(403)
+- If message belongs to another tenant → AppError(404) (do not reveal existence)
+
+===========================================================
+PHASE 3 — Membership Model Hardening
+===========================================================
+
+1) Ensure membership tables are authoritative:
+- channel_members (tenantId, channelId, userId)
+- dm_members (tenantId, dmId, userId)
+Indexes:
+- (tenantId, channelId, userId)
+- (tenantId, dmId, userId)
+- (tenantId, userId)
+
+2) Add “membership resolution helpers”:
+server/features/chat/security/membership.ts
+- requireChannelMember(tenantId, userId, channelId)
+- requireDmMember(tenantId, userId, dmId)
+- resolveMessageContainer(messageId) -> { type: "channel"|"dm", id, tenantId }
+
+IMPORTANT:
+resolveMessageContainer MUST:
+- lookup message with tenantId scoping where possible
+- if message table does not store tenantId directly, add it (recommended) OR join through channel/dm tables
+
+===========================================================
+PHASE 4 — HTTP Route Hardening
+===========================================================
+
+1) Audit all chat HTTP endpoints:
+- Ensure every endpoint:
+  - requires authTenant
+  - uses scopedChatRepo
+  - validates membership for the referenced container
+- Remove any endpoint that accepts messageId and returns message without membership check.
+
+2) Add a middleware:
+server/http/middleware/chatGuards.ts
+- attachChatContext(req): { tenantId, userId, enforcement }
+- instantiate scopedChatRepo in request context
+
+3) Add server-side “no-store” headers (if not already) for chat endpoints.
+
+===========================================================
+PHASE 5 — Socket.IO Hardening (All Events, All Joins)
+===========================================================
+
+1) Expand withSocketPolicy usage:
+- Every chat socket event must be wrapped with:
+  - requireAuth
+  - requireTenant
+  - requireChatMembership OR requireDmMembership depending on payload
+
+2) Room join rules:
+- Joining:
+  - channel:{channelId} requires membership
+  - dm:{dmId} requires membership
+- On reconnect:
+  - clear previous rooms
+  - re-join only validated rooms
+- Add server-side caps:
+  - max rooms per socket (reasonable number)
+  - rate-limit join attempts
+
+3) Log + audit:
+- chat.room_join_attempt (allowed/denied, channelId/dmId)
+- chat.room_join_denied (reason)
+- chat.override_used (if ever used)
+
+===========================================================
+PHASE 6 — “RLS-like” Safety Tests (Prevent Future Regressions)
+===========================================================
+
+1) Add policy drift tests:
+- Ensure all /api/v1/chat routes are registered in routeRegistry
+- Ensure all chat routes use authTenant
+- Ensure no direct app.use mounts exist for chat
+
+2) Add integration tests (must pass):
+- User cannot list messages for channel they’re not in
+- User cannot read message by ID if not a member
+- User cannot react to message in channel they’re not in
+- User cannot join socket room for channel they’re not in
+- Cross-tenant safety: user in tenant A cannot access tenant B channel IDs
+- Membership revoke: after removing member, subsequent reads fail (403/404)
+- “404 not 403” for non-member messageId fetch (no existence leak)
+
+3) Add static guard (best-effort):
+- ESLint rule or grep-based CI check:
+  - forbid importing shared/schema chat tables directly inside routes
+  - require using scopedChatRepo
+(If linting is heavy, implement as a test that scans file text in CI.)
+
+===========================================================
+PHASE 7 — Optional DB-Level RLS (If Operationally Permitted)
+===========================================================
+
+If you can enable Postgres RLS safely (optional, behind env flag):
+- Add a migration that creates RLS policies for chat tables keyed by current_setting('app.tenant_id')
+- In DB connection per request, set:
+  SET LOCAL app.tenant_id = '<tenantId>'
+This is optional and can be staged.
+
+If RLS is too heavy now, document it as “Phase 2”.
+
+===========================================================
+PHASE 8 — Documentation
+===========================================================
+
+Create:
+docs/security/chat-security.md
+
+Include:
+- threat model (IDOR, room snooping, cross-tenant leakage)
+- enforcement architecture (scopedChatRepo + membership guards)
+- HTTP + socket invariants
+- how to add new chat endpoints safely
+- test checklist
+
+Update Super Admin Docs Library:
+- “Chat Security Hardening (RLS-like)”
+
+===========================================================
+OUTPUT REQUIREMENTS
+===========================================================
+
+When done, output:
+- list of files changed
+- repos/services refactored to scopedChatRepo
+- tests added + pass counts
+- any endpoints fixed/removed
+- docs updated

@@ -902,4 +902,35 @@ export type ClientToServerEvents = {
   // Presence events
   [PRESENCE_EVENTS.PING]: (payload: PresencePingPayload) => void;
   [PRESENCE_EVENTS.IDLE]: (payload: PresenceIdlePayload) => void;
+  // Client conversation events
+  [CLIENT_CONVERSATION_EVENTS.ASSIGNED]: (payload: ClientConversationAssignedPayload) => void;
+  [CLIENT_CONVERSATION_EVENTS.MESSAGE_ADDED]: (payload: ClientConversationMessagePayload) => void;
 };
+
+// =============================================================================
+// CLIENT CONVERSATION EVENTS
+// =============================================================================
+
+export const CLIENT_CONVERSATION_EVENTS = {
+  ASSIGNED: 'client_conversation:assigned',
+  MESSAGE_ADDED: 'client_conversation:messageAdded',
+} as const;
+
+export interface ClientConversationAssignedPayload {
+  conversationId: string;
+  tenantId: string;
+  clientId: string;
+  subject: string;
+  assignedToUserId: string | null;
+  assignedByUserId: string;
+}
+
+export interface ClientConversationMessagePayload {
+  conversationId: string;
+  tenantId: string;
+  clientId: string;
+  subject: string;
+  assignedToUserId: string | null;
+  authorUserId: string;
+  messageId: string;
+}

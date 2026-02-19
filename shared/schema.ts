@@ -3130,6 +3130,7 @@ export const clientConversations = pgTable("client_conversations", {
   projectId: varchar("project_id").references(() => projects.id),
   subject: text("subject").notNull(),
   createdByUserId: varchar("created_by_user_id").references(() => users.id).notNull(),
+  assignedToUserId: varchar("assigned_to_user_id").references(() => users.id),
   closedAt: timestamp("closed_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -3137,6 +3138,7 @@ export const clientConversations = pgTable("client_conversations", {
   index("client_conversations_tenant_idx").on(table.tenantId),
   index("client_conversations_client_idx").on(table.clientId),
   index("client_conversations_project_idx").on(table.projectId),
+  index("client_conversations_assigned_idx").on(table.assignedToUserId),
 ]);
 
 export const insertClientConversationSchema = createInsertSchema(clientConversations).omit({

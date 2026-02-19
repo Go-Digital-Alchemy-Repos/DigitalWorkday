@@ -89,7 +89,14 @@ import {
 import { RichTextEditor, RichTextViewer } from "@/components/ui/rich-text-editor";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
 import { RequestApprovalDialog } from "@/components/request-approval-dialog";
-import { ClipboardCheck } from "lucide-react";
+import { ClipboardCheck, UserCheck } from "lucide-react";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { ClientReportsTab } from "@/components/client-reports-tab";
 
 interface CrmSummary {
@@ -1272,14 +1279,25 @@ function MessagesTab({ clientId }: { clientId: string }) {
   const [showNewConvo, setShowNewConvo] = useState(false);
   const [newSubject, setNewSubject] = useState("");
   const [newMessage, setNewMessage] = useState("");
+  const [newAssignee, setNewAssignee] = useState<string>("__self__");
   const [replyText, setReplyText] = useState("");
   const [convoSearch, setConvoSearch] = useState("");
+  const [assignedFilter, setAssignedFilter] = useState<string>("all");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
+  const { data: tenantUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/tenant/users"],
+  });
+
+  const staffUsers = useMemo(() =>
+    tenantUsers.filter((u: any) => u.role !== "client"),
+  [tenantUsers]);
+
   const { data: conversations = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/crm/clients", clientId, "conversations"],
+    queryKey: ["/api/crm/clients", clientId, "conversations", assignedFilter],
     queryFn: async () => {
-      const res = await apiRequest("GET", `/api/crm/clients/${clientId}/conversations`);
+      const params = assignedFilter !== "all" ? `?assigned=${assignedFilter}` : "";
+      const res = await apiRequest("GET", `/api/crm/clients/${clientId}/conversations${params}`);
       return res.json();
     },
   });
@@ -1305,7 +1323,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { subject: string; initialMessage: string }) => {
+    mutationFn: async (data: { subject: string; initialMessage: string; assignedToUserId?: string }) => {
       const res = await apiRequest("POST", `/api/crm/clients/${clientId}/conversations`, data);
       return res.json();
     },
@@ -1313,6 +1331,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
       setShowNewConvo(false);
       setNewSubject("");
       setNewMessage("");
+      setNewAssignee("__self__");
       setSelectedConvoId(convo.id);
       queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
       toast({ title: "Conversation started" });
@@ -1337,6 +1356,21 @@ function MessagesTab({ clientId }: { clientId: string }) {
     },
   });
 
+  const assignMutation = useMutation({
+    mutationFn: async ({ conversationId, assignedToUserId }: { conversationId: string; assignedToUserId: string | null }) => {
+      const res = await apiRequest("PATCH", `/api/crm/conversations/${conversationId}/assign`, { assignedToUserId });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", selectedConvoId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
+      toast({ title: "Assignee updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [threadData?.messages]);
@@ -1349,7 +1383,11 @@ function MessagesTab({ clientId }: { clientId: string }) {
 
   const handleCreateConvo = () => {
     if (!newSubject.trim() || !newMessage.trim()) return;
-    createMutation.mutate({ subject: newSubject.trim(), initialMessage: newMessage.trim() });
+    const payload: any = { subject: newSubject.trim(), initialMessage: newMessage.trim() };
+    if (newAssignee && newAssignee !== "__self__") {
+      payload.assignedToUserId = newAssignee;
+    }
+    createMutation.mutate(payload);
   };
 
   if (selectedConvoId && threadData) {
@@ -1369,7 +1407,31 @@ function MessagesTab({ clientId }: { clientId: string }) {
               {messages.length} message{messages.length !== 1 ? "s" : ""}
             </p>
           </div>
-          {isClosed && <Badge variant="secondary">Closed</Badge>}
+          <div className="flex items-center gap-2 shrink-0">
+            <Select
+              value={convo?.assignedToUserId || "__none__"}
+              onValueChange={(val) => {
+                assignMutation.mutate({
+                  conversationId: selectedConvoId,
+                  assignedToUserId: val === "__none__" ? null : val,
+                });
+              }}
+            >
+              <SelectTrigger className="w-[160px]" data-testid="select-convo-assignee">
+                <div className="flex items-center gap-1.5">
+                  <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                  <SelectValue placeholder="Unassigned" />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">Unassigned</SelectItem>
+                {staffUsers.map((u: any) => (
+                  <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {isClosed && <Badge variant="secondary">Closed</Badge>}
+          </div>
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1" data-testid="internal-messages-list">
@@ -1434,10 +1496,22 @@ function MessagesTab({ clientId }: { clientId: string }) {
         onSearchChange={setConvoSearch}
         searchPlaceholder="Search conversations..."
         actions={
-          <Button size="sm" onClick={() => setShowNewConvo(true)} data-testid="button-new-conversation">
-            <Plus className="h-4 w-4 mr-1" />
-            New Conversation
-          </Button>
+          <div className="flex items-center gap-2 flex-wrap">
+            <Select value={assignedFilter} onValueChange={setAssignedFilter}>
+              <SelectTrigger className="w-[140px]" data-testid="select-convo-filter">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All threads</SelectItem>
+                <SelectItem value="me">Assigned to me</SelectItem>
+                <SelectItem value="unassigned">Unassigned</SelectItem>
+              </SelectContent>
+            </Select>
+            <Button size="sm" onClick={() => setShowNewConvo(true)} data-testid="button-new-conversation">
+              <Plus className="h-4 w-4 mr-1" />
+              New Conversation
+            </Button>
+          </div>
         }
       />
 
@@ -1457,19 +1531,35 @@ function MessagesTab({ clientId }: { clientId: string }) {
               className="resize-none min-h-[80px]"
               data-testid="input-new-convo-message"
             />
-            <div className="flex gap-2 justify-end">
-              <Button variant="outline" size="sm" onClick={() => setShowNewConvo(false)} data-testid="button-cancel-new-convo">
-                Cancel
-              </Button>
-              <Button
-                size="sm"
-                onClick={handleCreateConvo}
-                disabled={!newSubject.trim() || !newMessage.trim() || createMutation.isPending}
-                data-testid="button-send-new-convo"
-              >
-                <Send className="h-4 w-4 mr-1" />
-                Send
-              </Button>
+            <div className="flex items-center gap-2 flex-wrap">
+              <div className="flex items-center gap-1.5 flex-1 min-w-[160px]">
+                <UserCheck className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Select value={newAssignee} onValueChange={setNewAssignee}>
+                  <SelectTrigger className="flex-1" data-testid="select-new-convo-assignee">
+                    <SelectValue placeholder="Assign to..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="__self__">Assign to me</SelectItem>
+                    {staffUsers.map((u: any) => (
+                      <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+              <div className="flex gap-2 ml-auto">
+                <Button variant="outline" size="sm" onClick={() => setShowNewConvo(false)} data-testid="button-cancel-new-convo">
+                  Cancel
+                </Button>
+                <Button
+                  size="sm"
+                  onClick={handleCreateConvo}
+                  disabled={!newSubject.trim() || !newMessage.trim() || createMutation.isPending}
+                  data-testid="button-send-new-convo"
+                >
+                  <Send className="h-4 w-4 mr-1" />
+                  Send
+                </Button>
+              </div>
             </div>
           </CardContent>
         </Card>
@@ -1512,7 +1602,15 @@ function MessagesTab({ clientId }: { clientId: string }) {
                     <span className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(c.updatedAt), { addSuffix: true })}
                     </span>
-                    <Badge variant="outline" className="text-xs">{c.messageCount}</Badge>
+                    <div className="flex items-center gap-1.5">
+                      {c.assigneeName && (
+                        <Badge variant="outline" className="text-xs">
+                          <UserCheck className="h-3 w-3 mr-0.5" />
+                          {c.assigneeName}
+                        </Badge>
+                      )}
+                      <Badge variant="outline" className="text-xs">{c.messageCount}</Badge>
+                    </div>
                   </div>
                 </div>
               </CardContent>
