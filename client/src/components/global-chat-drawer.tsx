@@ -18,11 +18,6 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
-  Popover,
-  PopoverContent,
-  PopoverTrigger,
-} from "@/components/ui/popover";
-import {
   Hash,
   Send,
   MessageCircle,
@@ -38,11 +33,9 @@ import {
   Trash2,
   Check,
   X,
-  Smile,
 } from "lucide-react";
-import EmojiPicker, { Theme, EmojiClickData } from "emoji-picker-react";
+import { LazyEmojiPicker } from "@/components/lazy-emoji-picker";
 import { chatSounds } from "@/lib/sounds";
-import { useTheme } from "@/lib/theme-provider";
 import { CHAT_EVENTS, CHAT_ROOM_EVENTS, ChatNewMessagePayload, ChatMessageUpdatedPayload, ChatMessageDeletedPayload } from "@shared/events";
 
 interface ChatChannel {
@@ -106,7 +99,6 @@ interface ChatDmThread {
 export function GlobalChatDrawer() {
   const { user } = useAuth();
   const { toast } = useToast();
-  const { theme } = useTheme();
   const { isOpen, closeDrawer, lastActiveThread, setLastActiveThread } = useChatDrawer();
   const [selectedChannel, setSelectedChannel] = useState<ChatChannel | null>(null);
   const [selectedDm, setSelectedDm] = useState<ChatDmThread | null>(null);
@@ -117,7 +109,6 @@ export function GlobalChatDrawer() {
   const [isUploading, setIsUploading] = useState(false);
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
-  const [showEmojiPicker, setShowEmojiPicker] = useState(false);
   const scrollRef = useRef<HTMLDivElement>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -454,9 +445,8 @@ export function GlobalChatDrawer() {
     });
   };
 
-  const handleEmojiClick = (emojiData: EmojiClickData) => {
-    setMessageInput(prev => prev + emojiData.emoji);
-    setShowEmojiPicker(false);
+  const handleEmojiSelect = (emoji: string) => {
+    setMessageInput(prev => prev + emoji);
     textareaRef.current?.focus();
   };
 
@@ -854,35 +844,11 @@ export function GlobalChatDrawer() {
                         <Paperclip className="h-4 w-4" />
                       )}
                     </Button>
-                    <Popover open={showEmojiPicker} onOpenChange={setShowEmojiPicker}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          type="button"
-                          size="icon"
-                          variant="ghost"
-                          disabled={sendMessageMutation.isPending}
-                          aria-label="Emoji"
-                          data-testid="drawer-button-emoji"
-                        >
-                          <Smile className="h-4 w-4" />
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent 
-                        side="top" 
-                        align="start" 
-                        className="w-auto p-0 border-0"
-                        sideOffset={8}
-                      >
-                        <EmojiPicker
-                          onEmojiClick={handleEmojiClick}
-                          theme={theme === "dark" ? Theme.DARK : Theme.LIGHT}
-                          width={300}
-                          height={350}
-                          searchPlaceHolder="Search emoji..."
-                          previewConfig={{ showPreview: false }}
-                        />
-                      </PopoverContent>
-                    </Popover>
+                    <LazyEmojiPicker
+                      onEmojiSelect={handleEmojiSelect}
+                      disabled={sendMessageMutation.isPending}
+                      data-testid="drawer-button-emoji"
+                    />
                   </div>
                   <Button
                     type="submit"

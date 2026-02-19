@@ -100,7 +100,7 @@ Corresponding unused UI component files (`carousel.tsx`, `input-otp.tsx`, `resiz
 | Library | node_modules size | Bundle impact | Used by |
 |---|---|---|---|
 | `react-icons` | 83 MB | Tree-shaken (only `si` icons) | Company logos |
-| `emoji-picker-react` | 34 MB | Lazy (chat page only) | Chat message input |
+| `emoji-picker-react` | 34 MB | Lazy (deferred via `LazyEmojiPicker`) | Chat message input, global chat drawer |
 | `@tiptap/*` | 6.6 MB | Lazy (chat/comments) | Rich text editor |
 | `recharts` | 5.2 MB | Lazy (reports/dashboards) | Charts and graphs |
 | `@fullcalendar/*` | 4.1 MB | Lazy (calendar pages) | Calendar views |
@@ -112,10 +112,37 @@ All heavy libraries except `socket.io-client` are now loaded lazily through the 
 
 ---
 
+## Lazy-Loaded Chat Extras
+
+**Applied:** 2026-02-19
+
+The emoji picker (`emoji-picker-react`, 34 MB on disk) was previously imported eagerly at module scope in both `chat-message-input.tsx` and `global-chat-drawer.tsx`. This meant the full library was parsed and instantiated whenever chat loaded, even if the user never opened the emoji picker.
+
+**Refactor:** Created `LazyEmojiPicker` wrapper component (`client/src/components/lazy-emoji-picker.tsx`) that:
+1. Uses `React.lazy(() => import("emoji-picker-react"))` to defer module loading.
+2. Only mounts the picker component after the user clicks the emoji button (`hasOpened` guard).
+3. Shows a spinner placeholder (300x350px) while the picker loads.
+4. Encapsulates Popover, theme detection, and selection callback.
+
+**Files changed:**
+- `client/src/components/lazy-emoji-picker.tsx` (new)
+- `client/src/components/chat-message-input.tsx` (removed direct `emoji-picker-react` import)
+- `client/src/components/global-chat-drawer.tsx` (removed direct `emoji-picker-react` import, removed unused `Popover`, `Smile`, `useTheme` imports)
+
+**Result:** Emoji picker module evaluation is deferred until user interaction. Chat route chunk remains at ~79 kB (20 kB gzip); the emoji library code in the shared deps chunk is only instantiated on demand.
+
+**Regression checklist:**
+- Message send works without opening emoji picker
+- Emoji picker opens on button click with brief spinner
+- Selected emoji inserts at cursor position
+- Mobile composer still works
+- Global chat drawer emoji works identically
+
+---
+
 ## Future Optimisation Opportunities
 
 1. **Manual vendor chunks** — If `vite.config.ts` modification is permitted, `manualChunks` can group vendor libraries (recharts, fullcalendar, tiptap, dnd-kit) into dedicated cacheable chunks that persist across deploys.
 2. **Prefetching** — Add `<link rel="prefetch">` hints for likely next-page chunks (e.g., prefetch the Home chunk after login completes).
-3. **Dynamic import for emoji picker** — The emoji picker inside chat could use a secondary lazy boundary so it only loads when the user opens the picker, not when they open chat.
-4. **Icon library** — `react-icons` (83 MB on disk) is tree-shaken, but auditing for unused icon imports could further reduce bundle size.
-5. **CSS splitting** — The CSS is currently a single 148 kB file; CSS modules or route-level CSS splitting could improve first-paint metrics.
+3. **Icon library** — `react-icons` (83 MB on disk) is tree-shaken, but auditing for unused icon imports could further reduce bundle size.
+4. **CSS splitting** — The CSS is currently a single 148 kB file; CSS modules or route-level CSS splitting could improve first-paint metrics.
