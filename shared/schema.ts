@@ -170,6 +170,8 @@ export const tenantSettings = pgTable("tenant_settings", {
   chatRetentionDays: integer("chat_retention_days"),
   // Fine-grained conversation/message permissions per role (JSONB, null = use defaults)
   messagePermissions: jsonb("message_permissions"),
+  // Default assignee for new client conversations (auto-assign rule)
+  defaultConversationAssigneeId: varchar("default_conversation_assignee_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
