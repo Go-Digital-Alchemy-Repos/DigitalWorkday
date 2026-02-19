@@ -32,7 +32,8 @@ import {
   loginRateLimiter, 
   bootstrapRateLimiter, 
   inviteAcceptRateLimiter,
-  forgotPasswordRateLimiter 
+  forgotPasswordRateLimiter,
+  userCreateRateLimiter 
 } from "./middleware/rateLimit";
 
 const scryptAsync = promisify(scrypt);
@@ -111,11 +112,13 @@ export function setupAuth(app: Express): void {
     secret: process.env.SESSION_SECRET || "dasana-dev-secret-key",
     resave: false,
     saveUninitialized: false,
+    name: process.env.NODE_ENV === "production" ? "__Host-sid" : "connect.sid",
     cookie: {
       maxAge: 30 * 24 * 60 * 60 * 1000,
       httpOnly: true,
       secure: process.env.NODE_ENV === "production",
       sameSite: "lax",
+      path: "/",
     },
   });
 
@@ -228,7 +231,14 @@ export function setupAuth(app: Express): void {
         if (sessionErr) {
           console.error("Session destroy error:", sessionErr);
         }
-        res.clearCookie("connect.sid");
+        const isProduction = process.env.NODE_ENV === "production";
+        const cookieName = isProduction ? "__Host-sid" : "connect.sid";
+        res.clearCookie(cookieName, {
+          path: "/",
+          httpOnly: true,
+          secure: isProduction,
+          sameSite: "lax",
+        });
         res.json({ success: true });
       });
     });
@@ -299,7 +309,7 @@ export function setupAuth(app: Express): void {
    * SECURITY: The role field is NEVER accepted from the client.
    * The role is determined automatically based on whether users exist.
    */
-  app.post("/api/auth/register", async (req, res) => {
+  app.post("/api/auth/register", userCreateRateLimiter, async (req, res) => {
     try {
       const { email, password, firstName, lastName } = req.body;
 

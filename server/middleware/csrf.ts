@@ -1,4 +1,7 @@
 import { Request, Response, NextFunction } from "express";
+import { createLogger, ctxFromReq } from "../lib/logger";
+
+const csrfLog = createLogger("csrf");
 
 const SAFE_METHODS = new Set(["GET", "HEAD", "OPTIONS"]);
 
@@ -123,11 +126,13 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
     }
   }
 
-  if (process.env.CSRF_DEBUG === "true") {
-    console.warn(
-      `[CSRF] Blocked: origin=${requestOrigin}, expected=${expectedOrigin}, path=${req.path}`
-    );
-  }
+  csrfLog.warn("CSRF origin mismatch blocked", {
+    ...ctxFromReq(req),
+    requestOrigin,
+    expectedOrigin,
+    path: req.path,
+    method: req.method,
+  });
 
   res.status(403).json({
     ok: false,

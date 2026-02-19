@@ -132,7 +132,7 @@ app.use(requestIdMiddleware);
 
 app.use(
   express.json({
-    limit: "200mb",
+    limit: "10mb",
     verify: (req, _res, buf) => {
       req.rawBody = buf;
     },

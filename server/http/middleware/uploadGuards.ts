@@ -13,8 +13,9 @@ export type UploadGuardMode = "warn" | "enforce";
 function resolveGuardMode(explicit?: UploadGuardMode): UploadGuardMode {
   if (explicit) return explicit;
   const env = process.env.UPLOAD_GUARDS_MODE;
+  if (env === "warn") return "warn";
   if (env === "enforce") return "enforce";
-  return "warn";
+  return process.env.NODE_ENV === "production" ? "enforce" : "warn";
 }
 
 export function sanitizeFilename(raw: string): string {
