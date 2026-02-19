@@ -27,7 +27,7 @@ import {
   Activity,
   Sparkles,
   Loader2,
-  EyeOff,
+  FileStack,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -62,11 +62,15 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { ScrollArea } from "@/components/ui/scroll-area";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { RichTextRenderer } from "@/components/richtext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useProjectSocket } from "@/lib/realtime";
-import type { Project, SectionWithTasks, TaskWithRelations, Section } from "@shared/schema";
+import type { Project, SectionWithTasks, TaskWithRelations, Section, ProjectTemplate, ProjectTemplateContent } from "@shared/schema";
 import { Link } from "wouter";
 import { usePromptDialog } from "@/components/prompt-dialog";
 import {
@@ -113,6 +117,7 @@ export default function ProjectPage() {
 
   const [deleteSectionDialogOpen, setDeleteSectionDialogOpen] = useState(false);
   const [sectionToDelete, setSectionToDelete] = useState<string | null>(null);
+  const [templatePopoverOpen, setTemplatePopoverOpen] = useState(false);
 
   const { prompt: promptSectionName, PromptDialogComponent: SectionNameDialog } = usePromptDialog({
     title: "Create Section",
@@ -270,22 +275,27 @@ export default function ProjectPage() {
     },
   });
 
-  const hideProjectMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("POST", `/api/projects/${projectId}/hide`, {});
+  const { data: templates = [], isLoading: templatesLoading } = useQuery<ProjectTemplate[]>({
+    queryKey: ["/api/project-templates"],
+    enabled: templatePopoverOpen,
+  });
+
+  const applyTemplateMutation = useMutation({
+    mutationFn: async (templateId: string) => {
+      return apiRequest("POST", `/api/projects/${projectId}/apply-template`, { templateId });
     },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+    onSuccess: (_data, _templateId) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
+      setTemplatePopoverOpen(false);
       toast({
-        title: "Project hidden",
-        description: "This project has been hidden from your view. You can find it in your hidden projects list.",
+        title: "Template applied",
+        description: "Sections and tasks from the template have been added to this project.",
       });
-      navigate("/");
     },
     onError: () => {
       toast({
-        title: "Failed to hide project",
-        description: "The project could not be hidden. Please try again.",
+        title: "Failed to apply template",
         variant: "destructive",
       });
     },
@@ -743,16 +753,65 @@ export default function ProjectPage() {
               >
                 <Settings className="h-4 w-4" />
               </Button>
-              <Button 
-                variant="ghost" 
-                size="icon"
-                onClick={() => hideProjectMutation.mutate()}
-                disabled={hideProjectMutation.isPending}
-                title="Hide from My View"
-                data-testid="button-hide-project"
-              >
-                <EyeOff className="h-4 w-4" />
-              </Button>
+              <Popover open={templatePopoverOpen} onOpenChange={setTemplatePopoverOpen}>
+                <PopoverTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon"
+                    title="Apply Template"
+                    data-testid="button-apply-template"
+                  >
+                    <FileStack className="h-4 w-4" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-80 p-0" align="end">
+                  <div className="p-3 border-b">
+                    <h4 className="text-sm font-medium">Apply Template</h4>
+                    <p className="text-xs text-muted-foreground mt-1">Add sections and tasks from a template</p>
+                  </div>
+                  <ScrollArea className="max-h-[300px]">
+                    {templatesLoading ? (
+                      <div className="p-6 flex items-center justify-center">
+                        <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                      </div>
+                    ) : templates.length > 0 ? (
+                      <div className="p-2 space-y-1">
+                        {templates.map((tpl) => {
+                          const content = tpl.content as ProjectTemplateContent | undefined;
+                          const sectionCount = content?.sections?.length || 0;
+                          const taskCount = content?.sections?.reduce((sum, s) => sum + (s.tasks?.length || 0), 0) || 0;
+                          return (
+                            <button
+                              key={tpl.id}
+                              className="w-full text-left p-2 rounded-md hover-elevate cursor-pointer disabled:opacity-50"
+                              onClick={() => applyTemplateMutation.mutate(tpl.id)}
+                              disabled={applyTemplateMutation.isPending}
+                              data-testid={`template-option-${tpl.id}`}
+                            >
+                              <div className="flex items-center justify-between gap-2">
+                                <span className="text-sm font-medium truncate">{tpl.name}</span>
+                                <div className="flex items-center gap-1 shrink-0">
+                                  <Badge variant="secondary" className="text-xs">{sectionCount} sections</Badge>
+                                  <Badge variant="secondary" className="text-xs">{taskCount} tasks</Badge>
+                                </div>
+                              </div>
+                              {tpl.description && (
+                                <p className="text-xs text-muted-foreground mt-1 line-clamp-1">{tpl.description}</p>
+                              )}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    ) : (
+                      <div className="p-6 text-center">
+                        <FileStack className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
+                        <p className="text-sm text-muted-foreground">No templates available</p>
+                        <p className="text-xs text-muted-foreground mt-1">Create templates in the Templates page</p>
+                      </div>
+                    )}
+                  </ScrollArea>
+                </PopoverContent>
+              </Popover>
             </div>
           </div>
           <Button size="sm" onClick={() => handleAddTask()} data-testid="button-add-task">

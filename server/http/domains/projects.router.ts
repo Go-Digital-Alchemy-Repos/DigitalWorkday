@@ -46,7 +46,11 @@ import {
   insertSectionSchema,
   updateProjectSchema,
   updateSectionSchema,
+  projectTemplates,
 } from "@shared/schema";
+import type { ProjectTemplateContent } from "@shared/schema";
+import { db } from "../../db";
+import { eq, and } from "drizzle-orm";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import {
   getCurrentUserId,
@@ -640,6 +644,90 @@ router.patch("/projects/:projectId/tasks/reorder", async (req: Request, res: Res
     res.json({ success: true });
   } catch (error) {
     return handleRouteError(res, error, "PUT /api/tasks/reorder", req);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Apply Template to Project
+// ---------------------------------------------------------------------------
+
+router.post("/projects/:projectId/apply-template", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.tenantRequired();
+
+    const bodySchema = z.object({ templateId: z.string().min(1) });
+    const { templateId } = bodySchema.parse(req.body);
+
+    const project = await storage.getProject(req.params.projectId);
+    if (!project) throw AppError.notFound("Project");
+    if (project.tenantId !== tenantId && !isSuperUser(req)) {
+      throw AppError.forbidden("Not authorized");
+    }
+
+    const userId = getCurrentUserId(req);
+    if (!isSuperUser(req)) {
+      const members = await storage.getProjectMembers(project.id);
+      const isMember = members.some((m: any) => m.userId === userId);
+      if (!isMember && project.createdBy !== userId) {
+        if (project.visibility !== "workspace") {
+          throw AppError.forbidden("You do not have access to this project");
+        }
+      }
+    }
+
+    const [template] = await db.select()
+      .from(projectTemplates)
+      .where(and(
+        eq(projectTemplates.id, templateId),
+        eq(projectTemplates.tenantId, tenantId)
+      ))
+      .limit(1);
+
+    if (!template) throw AppError.notFound("Template");
+
+    const content = template.content as ProjectTemplateContent;
+    if (!content?.sections?.length) {
+      return res.json({ success: true, sectionsCreated: 0, tasksCreated: 0 });
+    }
+
+    const existingSections = await storage.getSectionsByProject(project.id);
+    const startOrderIndex = existingSections.length;
+
+    let sectionsCreated = 0;
+    let tasksCreated = 0;
+
+    for (let si = 0; si < content.sections.length; si++) {
+      const sectionDef = content.sections[si];
+      const section = await storage.createSection({
+        projectId: project.id,
+        name: sectionDef.name,
+        orderIndex: startOrderIndex + si,
+      });
+      sectionsCreated++;
+
+      if (sectionDef.tasks?.length) {
+        for (let ti = 0; ti < sectionDef.tasks.length; ti++) {
+          const taskDef = sectionDef.tasks[ti];
+          await storage.createTask({
+            tenantId,
+            projectId: project.id,
+            sectionId: section.id,
+            title: taskDef.title,
+            description: taskDef.description || null,
+            status: "todo",
+            priority: "medium",
+            createdBy: getCurrentUserId(req),
+            orderIndex: ti,
+          });
+          tasksCreated++;
+        }
+      }
+    }
+
+    res.json({ success: true, sectionsCreated, tasksCreated });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/projects/:projectId/apply-template", req);
   }
 });
 

@@ -37,10 +37,6 @@ const updateTemplateSchema = createTemplateSchema.partial();
 
 router.get("/", async (req, res) => {
   try {
-    if (!isAdmin(req)) {
-      throw AppError.forbidden("Admin access required");
-    }
-
     const tenantId = getEffectiveTenantId(req);
     
     if (!tenantId) {
