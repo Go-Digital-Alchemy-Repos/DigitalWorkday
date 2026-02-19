@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useTenantTheme } from "@/lib/tenant-theme-loader";
@@ -21,6 +21,7 @@ import {
   BarChart3,
   CalendarDays,
   FileStack,
+  ChevronsDown,
 } from "lucide-react";
 import appLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -65,6 +66,9 @@ export function TenantSidebar() {
   const [location] = useLocation();
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
+  const [projectsLimit, setProjectsLimit] = useState(10);
+
+  const PROJECTS_PAGE_SIZE = 10;
   const { user } = useAuth();
   const { toast } = useToast();
   const { appName, logoUrl } = useTenantTheme();
@@ -118,6 +122,22 @@ export function TenantSidebar() {
     const division = allDivisions.find(d => d.id === divisionId);
     return division?.name || null;
   };
+
+  const sortedProjects = useMemo(() => {
+    if (!projects) return [];
+    return [...projects].sort((a, b) => {
+      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return dateB - dateA;
+    });
+  }, [projects]);
+
+  const visibleProjects = useMemo(
+    () => sortedProjects.slice(0, projectsLimit),
+    [sortedProjects, projectsLimit]
+  );
+
+  const hasMoreProjects = sortedProjects.length > projectsLimit;
 
   const createProjectMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -211,52 +231,64 @@ export function TenantSidebar() {
             </div>
             <CollapsibleContent>
               <SidebarGroupContent>
-                <SidebarMenu>
-                  {projects?.map((project) => {
-                    const clientName = getClientName(project.clientId);
-                    const divisionName = getDivisionName(project.divisionId);
-                    return (
-                      <SidebarMenuItem key={project.id}>
-                        <SidebarMenuButton
-                          asChild
-                          isActive={location === `/projects/${project.id}`}
-                        >
-                          <Link
-                            href={`/projects/${project.id}`}
-                            data-testid={`link-project-${project.id}`}
+                <div className={visibleProjects.length > 10 ? "max-h-[360px] overflow-y-auto" : ""}>
+                  <SidebarMenu>
+                    {visibleProjects.map((project) => {
+                      const clientName = getClientName(project.clientId);
+                      const divisionName = getDivisionName(project.divisionId);
+                      return (
+                        <SidebarMenuItem key={project.id}>
+                          <SidebarMenuButton
+                            asChild
+                            isActive={location === `/projects/${project.id}`}
                           >
-                            <div className="flex items-center gap-2 min-w-0 flex-1">
-                              <div
-                                className="h-3 w-3 rounded-sm shrink-0"
-                                style={{ backgroundColor: project.color || "#3B82F6" }}
-                              />
-                              <span className="truncate flex-1">{project.name}</span>
-                              {(clientName || divisionName) && (
-                                <div className="flex items-center gap-1 shrink-0">
-                                  {clientName && (
-                                    <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-client-${project.id}`}>
-                                      {clientName.length > 10 ? clientName.slice(0, 10) + "…" : clientName}
-                                    </Badge>
-                                  )}
-                                  {divisionName && (
-                                    <Badge variant="outline" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-division-${project.id}`}>
-                                      {divisionName.length > 8 ? divisionName.slice(0, 8) + "…" : divisionName}
-                                    </Badge>
-                                  )}
-                                </div>
-                              )}
-                            </div>
-                          </Link>
-                        </SidebarMenuButton>
-                      </SidebarMenuItem>
-                    );
-                  })}
-                  {(!projects || projects.length === 0) && (
-                    <div className="px-3 py-2 text-xs text-muted-foreground">
-                      No projects yet
-                    </div>
-                  )}
-                </SidebarMenu>
+                            <Link
+                              href={`/projects/${project.id}`}
+                              data-testid={`link-project-${project.id}`}
+                            >
+                              <div className="flex items-center gap-2 min-w-0 flex-1">
+                                <div
+                                  className="h-3 w-3 rounded-sm shrink-0"
+                                  style={{ backgroundColor: project.color || "#3B82F6" }}
+                                />
+                                <span className="truncate flex-1">{project.name}</span>
+                                {(clientName || divisionName) && (
+                                  <div className="flex items-center gap-1 shrink-0">
+                                    {clientName && (
+                                      <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-client-${project.id}`}>
+                                        {clientName.length > 10 ? clientName.slice(0, 10) + "…" : clientName}
+                                      </Badge>
+                                    )}
+                                    {divisionName && (
+                                      <Badge variant="outline" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-division-${project.id}`}>
+                                        {divisionName.length > 8 ? divisionName.slice(0, 8) + "…" : divisionName}
+                                      </Badge>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            </Link>
+                          </SidebarMenuButton>
+                        </SidebarMenuItem>
+                      );
+                    })}
+                    {(!projects || projects.length === 0) && (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        No projects yet
+                      </div>
+                    )}
+                  </SidebarMenu>
+                </div>
+                {hasMoreProjects && (
+                  <button
+                    onClick={() => setProjectsLimit(prev => prev + PROJECTS_PAGE_SIZE)}
+                    className="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs text-muted-foreground hover-elevate rounded-md mt-1"
+                    data-testid="button-load-more-projects"
+                  >
+                    <ChevronsDown className="h-3 w-3" />
+                    <span>Load More ({sortedProjects.length - projectsLimit} remaining)</span>
+                  </button>
+                )}
               </SidebarGroupContent>
             </CollapsibleContent>
           </Collapsible>
