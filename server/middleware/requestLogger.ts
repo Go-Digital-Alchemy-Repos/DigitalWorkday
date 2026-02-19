@@ -2,7 +2,9 @@
  * @module server/middleware/requestLogger
  * @description HTTP request logging middleware for observability.
  * 
- * Logs every request with:
+ * Logs every request with structured JSON including:
+ * - timestamp: ISO 8601
+ * - level: info | warn | error
  * - requestId: Unique identifier for request correlation
  * - method: HTTP method (GET, POST, etc.)
  * - path: Request path
@@ -18,10 +20,10 @@
  */
 
 import type { Request, Response, NextFunction } from "express";
+import { createLogger, perfMark, perfMs, type LogContext } from "../lib/logger";
 
-/**
- * Paths to exclude from logging (health checks, static assets)
- */
+const reqLog = createLogger("request");
+
 const EXCLUDED_PATHS = [
   "/health",
   "/healthz",
@@ -30,16 +32,10 @@ const EXCLUDED_PATHS = [
   "/favicon.ico",
 ];
 
-/**
- * Check if a path should be excluded from logging
- */
 function shouldExclude(path: string): boolean {
   return EXCLUDED_PATHS.some(excluded => path === excluded || path.startsWith("/assets/"));
 }
 
-/**
- * Get tenant ID from request context
- */
 function getTenantId(req: Request): string | undefined {
   return req.tenant?.effectiveTenantId 
     || req.tenant?.tenantId 
@@ -47,53 +43,40 @@ function getTenantId(req: Request): string | undefined {
     || undefined;
 }
 
-/**
- * Get user ID from request context
- */
 function getUserId(req: Request): string | undefined {
   return req.user?.id || undefined;
 }
 
-/**
- * Request logging middleware
- * 
- * Must be registered early in the middleware chain (after requestId and auth).
- * Logs on response finish to capture accurate status and duration.
- */
 export function requestLogger(
   req: Request,
   res: Response,
   next: NextFunction
 ): void {
-  // Skip excluded paths
   if (shouldExclude(req.path)) {
     return next();
   }
 
-  const startTime = process.hrtime.bigint();
+  const start = perfMark();
 
-  // Log when response finishes
   res.on("finish", () => {
-    const endTime = process.hrtime.bigint();
-    const durationMs = Number(endTime - startTime) / 1_000_000;
+    const durationMs = perfMs(start);
 
-    const logEntry = {
+    const ctx: LogContext = {
       requestId: req.requestId || "unknown",
+      tenantId: getTenantId(req),
+      userId: getUserId(req),
       method: req.method,
       path: req.path,
       status: res.statusCode,
-      durationMs: Math.round(durationMs * 100) / 100,
-      tenantId: getTenantId(req),
-      userId: getUserId(req),
+      durationMs,
     };
 
-    // Use appropriate log level based on status
     if (res.statusCode >= 500) {
-      console.error("[request]", JSON.stringify(logEntry));
+      reqLog.error("Request failed", ctx);
     } else if (res.statusCode >= 400) {
-      console.warn("[request]", JSON.stringify(logEntry));
+      reqLog.warn("Request client error", ctx);
     } else {
-      console.log("[request]", JSON.stringify(logEntry));
+      reqLog.info("Request completed", ctx);
     }
   });
 

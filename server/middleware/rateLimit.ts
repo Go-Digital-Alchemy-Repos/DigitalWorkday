@@ -8,6 +8,7 @@
  * - Rate limiting is disabled by default in development for convenience
  * - All limits are configurable via environment variables
  * - Tenant-scoped keying ensures fair limits per tenant in multi-tenant mode
+ * - All rate limit events are logged via structured logger
  * 
  * Architecture:
  * - RateLimitStore interface enables pluggable backends (in-memory default, Redis future)
@@ -22,10 +23,9 @@
 
 import rateLimit from "express-rate-limit";
 import { Request, Response, NextFunction } from "express";
+import { createLogger, ctxFromReq } from "../lib/logger";
 
-// ============================================================================
-// Pluggable Rate Limit Store Interface
-// ============================================================================
+const rlLog = createLogger("rate-limit");
 
 export interface RateLimitEntry {
   count: number;
@@ -97,10 +97,6 @@ export function getRateLimitStore(): RateLimitStore {
   return activeStore;
 }
 
-// ============================================================================
-// Configuration
-// ============================================================================
-
 const RATE_LIMIT_LOGIN_WINDOW_MS = parseInt(process.env.RATE_LIMIT_LOGIN_WINDOW_MS || "60000", 10);
 const RATE_LIMIT_LOGIN_MAX_IP = parseInt(process.env.RATE_LIMIT_LOGIN_MAX_IP || "10", 10);
 const RATE_LIMIT_LOGIN_MAX_EMAIL = parseInt(process.env.RATE_LIMIT_LOGIN_MAX_EMAIL || "5", 10);
@@ -128,13 +124,9 @@ function shouldSkipRateLimit(): boolean {
   return false;
 }
 
-function generateRequestId(): string {
-  return `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;
+function getReqId(req: Request): string {
+  return req.requestId || "unknown";
 }
-
-// ============================================================================
-// Tenant-Scoped Key Generation
-// ============================================================================
 
 function getTenantScope(req: Request): string {
   const user = req.user as any;
@@ -147,9 +139,31 @@ function buildScopedKey(prefix: string, identifier: string, req?: Request): stri
   return `${scope}:${prefix}:${identifier}`;
 }
 
-// ============================================================================
-// Email Rate Limiting (uses pluggable store)
-// ============================================================================
+function logRateLimitHit(req: Request, limiterName: string, extra?: Record<string, unknown>): void {
+  rlLog.warn("Rate limit triggered", {
+    ...ctxFromReq(req),
+    limiter: limiterName,
+    ip: req.ip,
+    path: req.path,
+    method: req.method,
+    ...extra,
+  });
+}
+
+function rateLimitHandler(limiterName: string, message: string) {
+  return (req: Request, res: Response) => {
+    const requestId = getReqId(req);
+    logRateLimitHit(req, limiterName);
+    res.status(429).json({
+      ok: false,
+      error: {
+        code: "RATE_LIMITED",
+        message,
+        requestId,
+      },
+    });
+  };
+}
 
 const emailStore = new Map<string, RateLimitEntry>();
 
@@ -206,12 +220,13 @@ function createEmailRateLimiter(
     const emailCheck = checkEmailRateLimit(email, maxRequestsPerEmail, windowMs, keyPrefix, req);
     
     if (!emailCheck.allowed) {
-      const requestId = generateRequestId();
+      const requestId = getReqId(req);
       const retryAfter = Math.ceil((emailCheck.resetAt - Date.now()) / 1000);
       
-      if (process.env.RATE_LIMIT_DEBUG === "true") {
-        console.warn(`[RateLimit] Email rate limit hit: ${email.substring(0, 3)}*** on ${keyPrefix}`);
-      }
+      logRateLimitHit(req, `${keyPrefix}:email`, {
+        emailPrefix: email.substring(0, 3) + "***",
+        retryAfter,
+      });
       
       res.setHeader("Retry-After", retryAfter.toString());
       return res.status(429).json({
@@ -242,17 +257,7 @@ function createCombinedRateLimiter(
     legacyHeaders: false,
     skip: shouldSkipRateLimit,
     validate: { xForwardedForHeader: false },
-    handler: (_req, res) => {
-      const requestId = generateRequestId();
-      res.status(429).json({
-        ok: false,
-        error: {
-          code: "RATE_LIMITED",
-          message: "Too many requests. Please try again later.",
-          requestId,
-        },
-      });
-    },
+    handler: rateLimitHandler(`${keyPrefix}:ip`, "Too many requests. Please try again later."),
   });
 
   const emailLimiter = createEmailRateLimiter(maxRequestsPerEmail, windowMs, keyPrefix);
@@ -278,17 +283,7 @@ export const bootstrapRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: shouldSkipRateLimit,
-  handler: (_req, res) => {
-    const requestId = generateRequestId();
-    res.status(429).json({
-      ok: false,
-      error: {
-        code: "RATE_LIMITED",
-        message: "Too many registration attempts. Please try again later.",
-        requestId,
-      },
-    });
-  },
+  handler: rateLimitHandler("bootstrap", "Too many registration attempts. Please try again later."),
 });
 
 export const inviteAcceptRateLimiter = rateLimit({
@@ -297,17 +292,7 @@ export const inviteAcceptRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: shouldSkipRateLimit,
-  handler: (_req, res) => {
-    const requestId = generateRequestId();
-    res.status(429).json({
-      ok: false,
-      error: {
-        code: "RATE_LIMITED",
-        message: "Too many invite acceptance attempts. Please try again later.",
-        requestId,
-      },
-    });
-  },
+  handler: rateLimitHandler("invite-accept", "Too many invite acceptance attempts. Please try again later."),
 });
 
 export const forgotPasswordRateLimiter = createCombinedRateLimiter(
@@ -323,17 +308,7 @@ export const uploadRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: shouldSkipRateLimit,
-  handler: (_req, res) => {
-    const requestId = generateRequestId();
-    res.status(429).json({
-      ok: false,
-      error: {
-        code: "RATE_LIMITED",
-        message: "Too many upload requests. Please try again later.",
-        requestId,
-      },
-    });
-  },
+  handler: rateLimitHandler("upload", "Too many upload requests. Please try again later."),
 });
 
 const RATE_LIMIT_INVITE_CREATE_WINDOW_MS = parseInt(process.env.RATE_LIMIT_INVITE_CREATE_WINDOW_MS || "60000", 10);
@@ -345,17 +320,7 @@ export const inviteCreateRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: shouldSkipRateLimit,
-  handler: (_req, res) => {
-    const requestId = generateRequestId();
-    res.status(429).json({
-      ok: false,
-      error: {
-        code: "RATE_LIMITED",
-        message: "Too many invite requests. Please try again later.",
-        requestId,
-      },
-    });
-  },
+  handler: rateLimitHandler("invite-create", "Too many invite requests. Please try again later."),
 });
 
 const RATE_LIMIT_USER_CREATE_WINDOW_MS = parseInt(process.env.RATE_LIMIT_USER_CREATE_WINDOW_MS || "60000", 10);
@@ -367,17 +332,7 @@ export const userCreateRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: shouldSkipRateLimit,
-  handler: (_req, res) => {
-    const requestId = generateRequestId();
-    res.status(429).json({
-      ok: false,
-      error: {
-        code: "RATE_LIMITED",
-        message: "Too many user creation requests. Please try again later.",
-        requestId,
-      },
-    });
-  },
+  handler: rateLimitHandler("user-create", "Too many user creation requests. Please try again later."),
 });
 
 const RATE_LIMIT_CHAT_SEND_WINDOW_MS = parseInt(process.env.RATE_LIMIT_CHAT_SEND_WINDOW_MS || "10000", 10);
@@ -389,17 +344,7 @@ export const chatSendRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: shouldSkipRateLimit,
-  handler: (_req, res) => {
-    const requestId = generateRequestId();
-    res.status(429).json({
-      ok: false,
-      error: {
-        code: "RATE_LIMITED",
-        message: "Too many messages. Please slow down.",
-        requestId,
-      },
-    });
-  },
+  handler: rateLimitHandler("chat-send", "Too many messages. Please slow down."),
 });
 
 const RATE_LIMIT_CLIENT_MSG_WINDOW_MS = parseInt(process.env.RATE_LIMIT_CLIENT_MSG_WINDOW_MS || "10000", 10);
@@ -411,17 +356,7 @@ export const clientMessageRateLimiter = rateLimit({
   standardHeaders: true,
   legacyHeaders: false,
   skip: shouldSkipRateLimit,
-  handler: (_req, res) => {
-    const requestId = generateRequestId();
-    res.status(429).json({
-      ok: false,
-      error: {
-        code: "RATE_LIMITED",
-        message: "Too many messages. Please slow down.",
-        requestId,
-      },
-    });
-  },
+  handler: rateLimitHandler("client-message", "Too many messages. Please slow down."),
 });
 
 export function resetRateLimitStores(): void {
@@ -445,9 +380,10 @@ export function createRateLimiter(options: CreateRateLimiterOptions) {
     standardHeaders: true,
     legacyHeaders: true,
     validate: { xForwardedForHeader: false },
-    handler: (_req, res) => {
-      const requestId = generateRequestId();
+    handler: (req: Request, res: Response) => {
+      const requestId = getReqId(req);
       const retryAfter = Math.ceil(windowMs / 1000);
+      logRateLimitHit(req, `${keyPrefix}:ip`, { retryAfter });
       res.setHeader("Retry-After", retryAfter.toString());
       res.status(429).json({
         ok: false,
@@ -467,8 +403,12 @@ export function createRateLimiter(options: CreateRateLimiterOptions) {
     if (!email) return next();
     const emailCheck = checkEmailRateLimit(email, maxRequestsPerEmail, windowMs, keyPrefix, req);
     if (!emailCheck.allowed) {
-      const requestId = generateRequestId();
+      const requestId = getReqId(req);
       const retryAfter = Math.ceil((emailCheck.resetAt - Date.now()) / 1000);
+      logRateLimitHit(req, `${keyPrefix}:email`, {
+        emailPrefix: email.substring(0, 3) + "***",
+        retryAfter,
+      });
       res.setHeader("Retry-After", retryAfter.toString());
       return res.status(429).json({
         ok: false,

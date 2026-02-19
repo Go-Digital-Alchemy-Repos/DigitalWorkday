@@ -30,7 +30,10 @@ import {
 } from '@shared/events';
 import { randomUUID } from 'crypto';
 import { log } from '../lib/log';
+import { createLogger } from '../lib/logger';
 import { getSessionMiddleware } from '../auth';
+
+const socketLog = createLogger("socket.io");
 import passport from 'passport';
 import { chatDebugStore, isChatDebugEnabled } from './chatDebug';
 import { 
@@ -93,18 +96,16 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
     const res = { on: () => {}, end: () => {} } as any;
     sessionMiddleware(req, res, (err?: any) => {
       if (err) {
-        log(`Session middleware error: ${err}`, 'socket.io');
+        socketLog.error("Session middleware error", { socketId: socket.id, error: String(err) });
         return next(new Error('Session error'));
       }
-      // Initialize passport for this request
       passport.initialize()(req, res, () => {
         passport.session()(req, res, () => {
-          // Attach user data to socket for use in handlers
           const authSocket = socket as AuthenticatedSocket;
           if (req.user) {
             authSocket.userId = req.user.id;
             authSocket.tenantId = req.user.tenantId;
-            log(`Socket authenticated: ${socket.id} -> user: ${req.user.id}`, 'socket.io');
+            socketLog.info("Socket authenticated", { socketId: socket.id, userId: req.user.id, tenantId: req.user.tenantId });
           }
           next();
         });
