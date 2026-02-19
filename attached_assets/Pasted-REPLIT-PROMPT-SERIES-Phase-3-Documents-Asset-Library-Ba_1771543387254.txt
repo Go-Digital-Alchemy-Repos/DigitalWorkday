@@ -1,0 +1,146 @@
+REPLIT PROMPT SERIES — Phase 3: Documents → Asset Library Backend (No UI Rewrite)
+DigitalWorkday
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE:
+Make the existing Client “Documents” area read/write from the new Asset Library services/APIs,
+so Documents becomes a legacy view over the unified Asset Library.
+Do NOT remove Documents UI or change UX significantly.
+Keep ASSET_LIBRARY_V2 feature flag; introduce DOCUMENTS_USING_ASSETS flag for phased rollout.
+
+HARD RULES:
+- No breaking route changes.
+- Preserve current Documents response shapes if any consumers rely on them.
+- If Documents currently uses its own endpoints, keep them but proxy internally to Asset service.
+- Keep tenant scoping, workspace scoping, and client scoping enforced.
+- Ensure uploads still use Cloudflare R2.
+- Existing Documents folder/file IDs may differ; map safely.
+
+DELIVERABLES:
+1) Asset-backed Documents adapter layer (server)
+2) Documents endpoints proxy to assets (server)
+3) Documents UI switches data source behind flag (client)
+4) Migration/backfill for Documents-only records into assets if needed
+5) Tests + docs updates
+
+===========================================================
+PROMPT 3A — Server: Documents Adapter Layer (Assets as Source of Truth)
+===========================================================
+
+TASKS:
+1) Locate current Documents system:
+- server routes/handlers
+- DB tables (documents, client_documents, folders, etc)
+- client UI queries
+
+2) Implement adapter:
+server/features/documents/documentsAssetAdapter.ts
+Provide methods matching current Documents expectations:
+- listFolders(clientId)
+- listFiles(clientId, folderId)
+- createFolder(...)
+- rename/move/delete folder
+- upload presign/complete
+- download
+- delete file
+Internally call:
+server/features/assetLibrary services
+
+3) Create a mapping strategy:
+- If Documents already has folders/files:
+  - ensure they are indexed into asset_folders/assets (backfill if missing)
+  - store legacyId into sourceContextJson (e.g., { legacyDocumentId })
+- Ensure adapter returns same shapes as Documents currently returns.
+
+4) Proxy endpoints:
+If Documents routes exist (e.g. /api/v1/documents/...):
+- Keep routes unchanged
+- Replace implementations to call adapter
+- Keep response envelopes identical (skipEnvelope if needed)
+
+5) Add DOCUMENTS_USING_ASSETS feature flag server-side:
+- default false
+- when false: keep existing behavior
+- when true: use adapter/asset service
+
+OUTPUT:
+- adapter implemented
+- endpoints proxy-ready
+- behavior gated by flag
+
+===========================================================
+PROMPT 3B — Client: Switch Documents UI Data Source Behind Flag
+===========================================================
+
+TASKS:
+1) Add client feature flag DOCUMENTS_USING_ASSETS:
+- from server-provided flags or safe config
+
+2) In Documents UI queries:
+- If flag OFF: use current endpoints/hooks
+- If flag ON: use either:
+  A) existing Documents endpoints (now proxied to assets), or
+  B) direct /api/v1/assets endpoints
+Prefer A for minimal UI changes.
+
+3) Ensure folder tree and file list render identically.
+4) Ensure upload flow works:
+- presign -> upload -> complete -> refresh list
+5) Ensure delete and rename work.
+6) Ensure “Documents” remains stable on mobile.
+
+OUTPUT:
+- no major UI changes
+- stable UX
+- behind flag
+
+===========================================================
+PROMPT 3C — Data Parity: Backfill + Validation
+===========================================================
+
+TASKS:
+1) Create a validation script:
+script/validateDocumentsAssetParity.ts
+- For a sample of clients:
+  - compare counts (folders, files)
+  - compare filenames and sizes
+  - compare download availability
+
+2) If legacy documents exist and not indexed:
+- extend backfill script to include legacy docs tables
+- ensure idempotent
+
+3) Add an admin-only dev endpoint to run validation/backfill (optional)
+
+OUTPUT:
+- parity script
+- backfill coverage
+
+===========================================================
+PROMPT 3D — Tests + Docs + Rollout Plan
+===========================================================
+
+TESTS:
+- Integration tests:
+  - Documents list works with DOCUMENTS_USING_ASSETS=1
+  - Upload + download works
+  - Tenant isolation enforced
+  - Folder unique constraints preserved
+- Policy drift tests unchanged and passing.
+
+DOCS:
+- Update docs/migrations/client-workspace.md:
+  - Phase 3 complete
+- Update docs/features/asset-library.md:
+  - Documents now backed by assets (flagged)
+- Add rollout:
+  - enable flag in staging
+  - validate parity script
+  - enable for 1 tenant
+  - expand gradually
+
+OUTPUT:
+- docs updated
+- tests passing
+- build status logged in docs/review/documents-phase3.md

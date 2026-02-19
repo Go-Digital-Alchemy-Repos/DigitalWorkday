@@ -255,7 +255,7 @@ router.get("/crm/clients/:clientId/conversations", requireAuth, async (req: Requ
               u.name as author_name
             FROM client_messages cm
             LEFT JOIN users u ON cm.author_user_id = u.id
-            WHERE cm.conversation_id = ANY(${convoIds})
+            WHERE cm.conversation_id IN (${dsql.join(convoIds.map(id => dsql`${id}`), dsql`, `)})
             ORDER BY cm.conversation_id, cm.created_at DESC
           `)
         : Promise.resolve({ rows: [] }),
@@ -297,7 +297,7 @@ router.get("/crm/clients/:clientId/conversations", requireAuth, async (req: Requ
               ts_headline('english', cm.body_text, to_tsquery('english', ${tsQuery}),
                 'MaxWords=20, MinWords=10, StartSel=, StopSel=') as snippet
             FROM client_messages cm
-            WHERE cm.conversation_id = ANY(${convoIds})
+            WHERE cm.conversation_id IN (${dsql.join(convoIds.map(id => dsql`${id}`), dsql`, `)})
               AND cm.tenant_id = ${tenantId}
               AND to_tsvector('english', cm.body_text) @@ to_tsquery('english', ${tsQuery})
             ORDER BY cm.conversation_id, cm.created_at ASC
@@ -311,7 +311,7 @@ router.get("/crm/clients/:clientId/conversations", requireAuth, async (req: Requ
               cm.conversation_id,
               substring(cm.body_text from 1 for 120) as snippet
             FROM client_messages cm
-            WHERE cm.conversation_id = ANY(${convoIds})
+            WHERE cm.conversation_id IN (${dsql.join(convoIds.map(id => dsql`${id}`), dsql`, `)})
               AND cm.tenant_id = ${tenantId}
               AND cm.body_text ILIKE ${'%' + search + '%'}
             ORDER BY cm.conversation_id, cm.created_at ASC
