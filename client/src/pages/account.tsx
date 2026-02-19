@@ -3,12 +3,11 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useAuth } from "@/lib/auth";
 import { Redirect } from "wouter";
-import { Building2, Palette, CreditCard, ClipboardList, UserCog, Layers, HardDrive } from "lucide-react";
+import { Building2, Palette, CreditCard, UserCog, Layers, HardDrive } from "lucide-react";
 import { ProfileTab } from "@/components/settings/profile-tab";
 import { BrandingTab } from "@/components/settings/branding-tab";
 import { WorkspacesTab } from "@/components/settings/workspaces-tab";
 import { BillingTab } from "@/components/settings/billing-tab";
-import { WorkloadTab } from "@/components/settings/workload-tab";
 import { DataTab } from "@/components/settings/data-tab";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
@@ -49,7 +48,7 @@ export default function AccountPage() {
         </div>
 
         <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-6 lg:w-auto lg:inline-grid">
+          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
             <TabsTrigger value="profile" className="gap-2" data-testid="tab-profile">
               <Building2 className="h-4 w-4" />
               <span className="hidden sm:inline">Profile</span>
@@ -65,10 +64,6 @@ export default function AccountPage() {
             <TabsTrigger value="billing" className="gap-2" data-testid="tab-billing">
               <CreditCard className="h-4 w-4" />
               <span className="hidden sm:inline">Billing</span>
-            </TabsTrigger>
-            <TabsTrigger value="workload" className="gap-2" data-testid="tab-workload">
-              <ClipboardList className="h-4 w-4" />
-              <span className="hidden sm:inline">Workload</span>
             </TabsTrigger>
             <TabsTrigger value="data" className="gap-2" data-testid="tab-data">
               <HardDrive className="h-4 w-4" />
@@ -90,10 +85,6 @@ export default function AccountPage() {
 
           <TabsContent value="billing" className="mt-6">
             <BillingTab />
-          </TabsContent>
-
-          <TabsContent value="workload" className="mt-6">
-            <WorkloadTab />
           </TabsContent>
 
           <TabsContent value="data" className="mt-6">
