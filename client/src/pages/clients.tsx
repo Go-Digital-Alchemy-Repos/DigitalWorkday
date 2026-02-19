@@ -215,6 +215,204 @@ function ClientGridCard({
   );
 }
 
+function ClientGroupCard({
+  parent,
+  children,
+  selectedIds,
+  onSelect,
+  showCheckbox,
+  onOpenProfile,
+}: {
+  parent: ClientWithHierarchy;
+  children: ClientWithHierarchy[];
+  selectedIds: Set<string>;
+  onSelect: (id: string) => void;
+  showCheckbox: boolean;
+  onOpenProfile: (id: string) => void;
+}) {
+  if (children.length === 0) {
+    return (
+      <ClientGridCard
+        client={parent}
+        isSelected={selectedIds.has(parent.id)}
+        onSelect={onSelect}
+        showCheckbox={showCheckbox}
+        onOpenProfile={onOpenProfile}
+      />
+    );
+  }
+
+  return (
+    <div className="relative group">
+      {showCheckbox && (
+        <div
+          className="absolute top-3 left-3 z-10"
+          onClick={(e) => {
+            e.preventDefault();
+            e.stopPropagation();
+          }}
+        >
+          <Checkbox
+            checked={selectedIds.has(parent.id)}
+            onCheckedChange={() => onSelect(parent.id)}
+            data-testid={`checkbox-client-${parent.id}`}
+          />
+        </div>
+      )}
+      <Card
+        className={cn(
+          "transition-colors",
+          selectedIds.has(parent.id) && "ring-2 ring-primary"
+        )}
+        data-testid={`card-client-group-${parent.id}`}
+      >
+        <div
+          onClick={() => onOpenProfile(parent.id)}
+          className="cursor-pointer overflow-visible hover-elevate rounded-t-md"
+        >
+          <CardHeader className="pb-3">
+            <div className="flex items-start justify-between gap-2">
+              <div className="flex items-center gap-3">
+                <Avatar className="h-10 w-10">
+                  <AvatarFallback className="bg-primary/10 text-primary">
+                    {getInitials(parent.companyName)}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="flex-1 min-w-0">
+                  <CardTitle className="text-base truncate">
+                    {parent.companyName}
+                  </CardTitle>
+                  {parent.displayName && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      {parent.displayName}
+                    </p>
+                  )}
+                </div>
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge className={getStatusColor(parent.status)}>
+                  {parent.status}
+                </Badge>
+              </div>
+            </div>
+          </CardHeader>
+          <CardContent className="pt-0 pb-3">
+            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-1">
+                <FolderKanban className="h-3.5 w-3.5" />
+                <span>{parent.projectCount} projects</span>
+              </div>
+              <div className="flex items-center gap-1">
+                <User className="h-3.5 w-3.5" />
+                <span>{parent.contactCount} contacts</span>
+              </div>
+            </div>
+            {parent.industry && (
+              <p className="text-xs text-muted-foreground mt-2 truncate">
+                {parent.industry}
+              </p>
+            )}
+          </CardContent>
+        </div>
+
+        <div className="border-t border-border mx-4" />
+        <div className="px-4 py-2">
+          <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+            Divisions ({children.length})
+          </p>
+          <div className="space-y-1">
+            {children.map((child) => (
+              <div
+                key={child.id}
+                onClick={() => onOpenProfile(child.id)}
+                className={cn(
+                  "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover-elevate",
+                  selectedIds.has(child.id) && "ring-1 ring-primary"
+                )}
+                data-testid={`card-child-client-${child.id}`}
+              >
+                {showCheckbox && (
+                  <div
+                    onClick={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onSelect(child.id);
+                    }}
+                  >
+                    <Checkbox
+                      checked={selectedIds.has(child.id)}
+                      onCheckedChange={() => onSelect(child.id)}
+                      data-testid={`checkbox-child-client-${child.id}`}
+                    />
+                  </div>
+                )}
+                <Avatar className="h-6 w-6">
+                  <AvatarFallback className="bg-muted text-muted-foreground text-xs">
+                    {getInitials(child.companyName)}
+                  </AvatarFallback>
+                </Avatar>
+                <span
+                  className="text-sm truncate flex-1 min-w-0"
+                  data-testid={`text-child-client-name-${child.id}`}
+                >
+                  {child.companyName}
+                </span>
+                <Badge
+                  className={cn(getStatusColor(child.status), "text-xs")}
+                >
+                  {child.status}
+                </Badge>
+              </div>
+            ))}
+          </div>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
+function ClientGroupRows({
+  parent,
+  children,
+  selectedIds,
+  onSelect,
+  showCheckbox,
+  compact,
+  onOpenProfile,
+}: {
+  parent: ClientWithHierarchy;
+  children: ClientWithHierarchy[];
+  selectedIds: Set<string>;
+  onSelect: (id: string) => void;
+  showCheckbox: boolean;
+  compact: boolean;
+  onOpenProfile: (id: string) => void;
+}) {
+  return (
+    <>
+      <ClientTableRow
+        client={parent}
+        isSelected={selectedIds.has(parent.id)}
+        onSelect={onSelect}
+        showCheckbox={showCheckbox}
+        compact={compact}
+        onOpenProfile={onOpenProfile}
+      />
+      {children.map((child) => (
+        <ClientTableRow
+          key={child.id}
+          client={child}
+          isSelected={selectedIds.has(child.id)}
+          onSelect={onSelect}
+          showCheckbox={showCheckbox}
+          compact={compact}
+          onOpenProfile={onOpenProfile}
+        />
+      ))}
+    </>
+  );
+}
+
 function ClientTableRow({
   client,
   isSelected,
@@ -748,6 +946,50 @@ export default function ClientsPage() {
     return result;
   }, [hierarchyClients, searchQuery, filterValues, sortValue]);
 
+  const groupedClients = useMemo(() => {
+    const groups: { parent: ClientWithHierarchy; children: ClientWithHierarchy[] }[] = [];
+    const clientMap = new Map<string, ClientWithHierarchy>();
+    const childrenByParent = new Map<string, ClientWithHierarchy[]>();
+
+    for (const client of filteredAndSortedClients) {
+      clientMap.set(client.id, client);
+    }
+
+    const findRoot = (client: ClientWithHierarchy): string => {
+      if (!client.parentClientId) return client.id;
+      const parent = clientMap.get(client.parentClientId);
+      if (parent) return findRoot(parent);
+      return client.id;
+    };
+
+    for (const client of filteredAndSortedClients) {
+      if (!client.parentClientId) continue;
+      const rootId = findRoot(client);
+      if (rootId === client.id) continue;
+      if (!childrenByParent.has(rootId)) {
+        childrenByParent.set(rootId, []);
+      }
+      childrenByParent.get(rootId)!.push(client);
+    }
+
+    const assignedIds = new Set<string>();
+    for (const children of childrenByParent.values()) {
+      for (const child of children) {
+        assignedIds.add(child.id);
+      }
+    }
+
+    for (const client of filteredAndSortedClients) {
+      if (assignedIds.has(client.id)) continue;
+      groups.push({
+        parent: client,
+        children: childrenByParent.get(client.id) || [],
+      });
+    }
+
+    return groups;
+  }, [filteredAndSortedClients]);
+
   const hasActiveFilters = Object.values(filterValues).some(
     (v) => v && v !== "all"
   );
@@ -929,11 +1171,12 @@ export default function ClientsPage() {
       {filteredAndSortedClients.length > 0 ? (
         viewMode === "grid" ? (
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {filteredAndSortedClients.map((client) => (
-              <ClientGridCard
-                key={client.id}
-                client={client}
-                isSelected={selectedIds.has(client.id)}
+            {groupedClients.map(({ parent, children }) => (
+              <ClientGroupCard
+                key={parent.id}
+                parent={parent}
+                children={children}
+                selectedIds={selectedIds}
                 onSelect={handleSelectClient}
                 showCheckbox={selectedIds.size > 0}
                 onOpenProfile={(id) => navigate(`/clients/${id}`)}
@@ -943,11 +1186,12 @@ export default function ClientsPage() {
         ) : (
           <Card>
             <TableHeader compact={density === "compact"} />
-            {filteredAndSortedClients.map((client) => (
-              <ClientTableRow
-                key={client.id}
-                client={client}
-                isSelected={selectedIds.has(client.id)}
+            {groupedClients.map(({ parent, children }) => (
+              <ClientGroupRows
+                key={parent.id}
+                parent={parent}
+                children={children}
+                selectedIds={selectedIds}
                 onSelect={handleSelectClient}
                 showCheckbox={selectedIds.size > 0}
                 compact={density === "compact"}
