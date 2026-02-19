@@ -131,7 +131,7 @@ export function setupAuth(app: Express): void {
       { usernameField: "email" },
       async (email, password, done) => {
         try {
-          const user = await storage.getUserByEmail(email);
+          const user = await storage.getUserByEmail(email.toLowerCase().trim());
           if (!user) {
             return done(null, false, { message: "Invalid email or password" });
           }
@@ -311,9 +311,9 @@ export function setupAuth(app: Express): void {
    */
   app.post("/api/auth/register", userCreateRateLimiter, async (req, res) => {
     try {
-      const { email, password, firstName, lastName } = req.body;
+      const { email: rawEmail, password, firstName, lastName } = req.body;
+      const email = rawEmail?.toLowerCase().trim();
 
-      // Validate required fields
       if (!email || !password) {
         return res.status(400).json({ error: "Email and password are required" });
       }
@@ -322,7 +322,6 @@ export function setupAuth(app: Express): void {
         return res.status(400).json({ error: "Password must be at least 8 characters" });
       }
 
-      // Check if email is already in use
       const existingUser = await storage.getUserByEmail(email);
       if (existingUser) {
         return res.status(409).json({ error: "Email already registered" });

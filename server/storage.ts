@@ -594,7 +594,7 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUserByEmail(email: string): Promise<User | undefined> {
-    const [user] = await db.select().from(users).where(eq(users.email, email));
+    const [user] = await db.select().from(users).where(ilike(users.email, email));
     return user || undefined;
   }
 
@@ -2683,7 +2683,7 @@ export class DatabaseStorage implements IStorage {
 
   async getUserByEmailAndTenant(email: string, tenantId: string): Promise<User | undefined> {
     const [user] = await db.select().from(users)
-      .where(and(eq(users.email, email), eq(users.tenantId, tenantId)));
+      .where(and(ilike(users.email, email), eq(users.tenantId, tenantId)));
     return user || undefined;
   }
 
