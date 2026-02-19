@@ -6,9 +6,7 @@ type ConnectionInfo = {
 const MAX_PREFETCH_OPS = 6;
 let prefetchFired = false;
 
-function shouldPrefetch(): boolean {
-  if (prefetchFired) return false;
-
+function isNetworkOk(): boolean {
   const nav = navigator as Navigator & { connection?: ConnectionInfo };
   if (nav.connection?.saveData) return false;
 
@@ -35,20 +33,28 @@ const TENANT_ROUTE_MODULES = [
   () => import("@/pages/my-time"),
 ];
 
+function fireTenantPrefetch(): void {
+  const modules = TENANT_ROUTE_MODULES.slice(0, MAX_PREFETCH_OPS);
+  for (const load of modules) {
+    load().catch(() => {});
+  }
+}
+
 export function prefetchPostLogin(role?: string): void {
-  if (!shouldPrefetch()) return;
+  if (prefetchFired || !isNetworkOk()) return;
+
+  if (role === "client") return;
+
+  if (role === "super_user") return;
+
   prefetchFired = true;
+  schedulePrefetch(fireTenantPrefetch);
+}
 
-  schedulePrefetch(() => {
-    const modules =
-      role === "client" || role === "super_user"
-        ? []
-        : TENANT_ROUTE_MODULES.slice(0, MAX_PREFETCH_OPS);
-
-    for (const load of modules) {
-      load().catch(() => {});
-    }
-  });
+export function prefetchTenantRoutes(): void {
+  if (prefetchFired || !isNetworkOk()) return;
+  prefetchFired = true;
+  schedulePrefetch(fireTenantPrefetch);
 }
 
 export function resetPrefetchState(): void {

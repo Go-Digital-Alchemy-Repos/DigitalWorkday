@@ -18,8 +18,9 @@ After a user logs in (or has their session restored), the most commonly visited 
 |---|---|---|
 | Login form success | `client/src/pages/login.tsx` | After `login()` returns `success: true` |
 | Session restore | `client/src/lib/auth.tsx` | After `/api/auth/me` returns a valid user |
+| Tenant selection | `client/src/hooks/useAppMode.ts` | When super user enters tenant mode via `startImpersonation()` |
 
-Both call `prefetchPostLogin(role)` from `client/src/lib/prefetch.ts`.
+Login and session restore call `prefetchPostLogin(role)`. Tenant selection calls `prefetchTenantRoutes()`. Both are in `client/src/lib/prefetch.ts`.
 
 ### Scheduling
 
@@ -81,6 +82,7 @@ Heavy extras (emoji picker, rich text editor, calendar libraries) are **not** pr
 | `client/src/lib/prefetch.ts` | Orchestrator: gating, scheduling, module list |
 | `client/src/lib/auth.tsx` | Calls prefetch on session restore; resets on logout |
 | `client/src/pages/login.tsx` | Calls prefetch on login success |
+| `client/src/hooks/useAppMode.ts` | Calls prefetch on tenant selection (super user entering tenant mode) |
 
 ---
 

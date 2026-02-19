@@ -24,6 +24,7 @@ import {
   queryClient,
 } from "@/lib/queryClient";
 import { UserRole } from "@shared/schema";
+import { prefetchTenantRoutes } from "@/lib/prefetch";
 
 export type AppMode = "super" | "tenant";
 
@@ -120,7 +121,8 @@ export function useAppMode(): AppModeHook {
     localStorage.setItem(ACTING_TENANT_NAME_KEY, tenantName);
     setImpersonation({ tenantId, tenantName });
     
-    // Allow UI to settle before completing transition
+    prefetchTenantRoutes();
+
     setTimeout(() => setIsModeTransitioning(false), 100);
   }, []);
 
