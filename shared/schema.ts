@@ -1034,6 +1034,9 @@ export const projects = pgTable("projects", {
   index("projects_tenant_status_idx").on(table.tenantId, table.status),
   index("projects_tenant_client_idx").on(table.tenantId, table.clientId),
   index("projects_tenant_created_at_idx").on(table.tenantId, table.createdAt),
+  index("projects_workspace_id_idx").on(table.workspaceId),
+  index("projects_tenant_workspace_idx").on(table.tenantId, table.workspaceId),
+  index("projects_status_idx").on(table.status),
 ]);
 
 // Project Members table
@@ -1119,6 +1122,9 @@ export const tasks = pgTable("tasks", {
   index("tasks_tenant_status_idx").on(table.tenantId, table.status),
   index("tasks_tenant_created_by_idx").on(table.tenantId, table.createdBy),
   index("tasks_tenant_due_date_idx").on(table.tenantId, table.dueDate),
+  index("tasks_project_id_idx").on(table.projectId),
+  index("tasks_project_status_idx").on(table.projectId, table.status),
+  index("tasks_status_priority_idx").on(table.status, table.priority),
 ]);
 
 // Task Assignees table (for multiple assignees)
@@ -1132,6 +1138,7 @@ export const taskAssignees = pgTable("task_assignees", {
   uniqueIndex("task_assignees_unique").on(table.taskId, table.userId),
   index("task_assignees_user").on(table.userId),
   index("task_assignees_tenant_idx").on(table.tenantId),
+  index("task_assignees_task_id_idx").on(table.taskId),
 ]);
 
 // Task Watchers table (users who want to be notified about task changes but aren't assigned)

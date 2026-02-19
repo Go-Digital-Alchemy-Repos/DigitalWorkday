@@ -47,72 +47,32 @@ tracker.track("fetch-tasks");
 tracker.log(); // Outputs: [QUERY_DEBUG] endpoint-name: 2 queries in Xms
 ```
 
-## Recommended Database Indexes
+## Database Indexes — IMPLEMENTED
 
-The following indexes are recommended for optimal query performance but are not yet implemented. Add to `shared/schema.ts` when ready:
+All recommended indexes have been implemented. See `docs/performance/db-indexes.md` for full details, rationale, and affected endpoints.
 
-### Priority 1: High-Impact Foreign Key Indexes
+**Migration:** `migrations/0027_needy_sway.sql` (applied 2026-02-19)
 
-```sql
--- Tasks by projectId (critical for batch task fetches)
-CREATE INDEX idx_tasks_project_id ON tasks(project_id);
-CREATE INDEX idx_tasks_project_status ON tasks(project_id, status);
+### New Indexes Added (Sprint)
 
--- Task assignees by taskId (used in batch assignee fetches)
-CREATE INDEX idx_task_assignees_task_id ON task_assignees(task_id);
+| Index | Table | Columns |
+|---|---|---|
+| `tasks_project_id_idx` | tasks | `(project_id)` |
+| `tasks_project_status_idx` | tasks | `(project_id, status)` |
+| `tasks_status_priority_idx` | tasks | `(status, priority)` |
+| `task_assignees_task_id_idx` | task_assignees | `(task_id)` |
+| `projects_workspace_id_idx` | projects | `(workspace_id)` |
+| `projects_tenant_workspace_idx` | projects | `(tenant_id, workspace_id)` |
+| `projects_status_idx` | projects | `(status)` — synced to schema (already in DB) |
 
--- Tenant scoping (critical for multi-tenant queries)
-CREATE INDEX idx_projects_tenant_id ON projects(tenant_id);
-CREATE INDEX idx_tasks_tenant_id ON tasks(tenant_id);
-CREATE INDEX idx_users_tenant_id ON users(tenant_id);
-CREATE INDEX idx_time_entries_tenant_id ON time_entries(tenant_id);
-```
+### Pre-Existing Indexes (Were Already Present)
 
-### Priority 2: Workspace Scoping
+All tenant-scoping, FK, and time-range indexes listed in the original Priority 1-3 recommendations were already present in the database and schema. See `docs/performance/db-indexes.md` § "Pre-Existing Indexes" for the full cross-reference.
 
-```sql
--- Projects by workspace
-CREATE INDEX idx_projects_workspace_id ON projects(workspace_id);
-CREATE INDEX idx_projects_tenant_workspace ON projects(tenant_id, workspace_id);
+### Verification
 
--- Time entries by project (used in forecast calculations)
-CREATE INDEX idx_time_entries_project_id ON time_entries(project_id);
-```
-
-### Priority 3: Analytics and Filtering
-
-```sql
--- Tasks by due date (used in overdue/due today calculations)
-CREATE INDEX idx_tasks_due_date ON tasks(due_date) WHERE due_date IS NOT NULL;
-
--- Tenant settings by tenantId
-CREATE INDEX idx_tenant_settings_tenant_id ON tenant_settings(tenant_id);
-
--- Projects by status (common filter)
-CREATE INDEX idx_projects_status ON projects(status);
-```
-
-## Adding Indexes via Drizzle
-
-To add indexes in `shared/schema.ts`:
-
-```typescript
-import { index } from "drizzle-orm/pg-core";
-
-export const tasks = pgTable("tasks", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectId: varchar("project_id").references(() => projects.id),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
-  // ... other columns
-}, (table) => ({
-  projectIdIdx: index("idx_tasks_project_id").on(table.projectId),
-  tenantIdIdx: index("idx_tasks_tenant_id").on(table.tenantId),
-}));
-```
-
-Then run:
 ```bash
-npm run db:push
+npx tsx scripts/verify-indexes.ts
 ```
 
 ## API Contract Guarantee
