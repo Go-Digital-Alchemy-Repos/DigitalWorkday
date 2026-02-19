@@ -23,6 +23,7 @@ import teamsRouter from "./domains/teams.router";
 import workloadReportsRouter from "./domains/workload-reports.router";
 import { jobsRouter } from "../jobs/jobs.router";
 import supportRouter from "./domains/support.router";
+import clientDocumentsRouter from "./domains/clientDocuments.router";
 
 interface DomainEntry {
   path: string;
@@ -172,6 +173,13 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "support",
     description: "Support tickets: CRUD, messages, status transitions, assignment. Tenant console endpoints.",
+  },
+  {
+    path: "/api/v1",
+    router: clientDocumentsRouter,
+    policy: "authTenant",
+    domain: "client-documents",
+    description: "Client Documents 2.0: folder CRUD, file presign/complete/move/rename/delete/download, bulk ops. Dropbox-style document manager.",
   },
 ];
 

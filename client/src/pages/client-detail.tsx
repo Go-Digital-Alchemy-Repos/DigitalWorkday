@@ -91,7 +91,7 @@ import { StartTimerDrawer } from "@/features/timer";
 import { DivisionDrawer } from "@/features/clients";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
 import { ClientNotesTab } from "@/components/client-notes-tab";
-import { ClientDocumentsTab } from "@/components/client-documents-tab";
+import { ClientDocumentsPanel } from "@/components/client-documents-panel";
 import { useToast } from "@/hooks/use-toast";
 import type { ClientWithContacts, Project, ClientContact, ClientDivision } from "@shared/schema";
 
@@ -2019,7 +2019,7 @@ export default function ClientDetailPage() {
           </TabsContent>
 
           <TabsContent value="documents" className="p-6">
-            <ClientDocumentsTab clientId={clientId || ""} />
+            <ClientDocumentsPanel clientId={clientId || ""} />
           </TabsContent>
         </Tabs>
       </div>

@@ -87,6 +87,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import { RichTextEditor, RichTextViewer } from "@/components/ui/rich-text-editor";
+import { ClientDocumentsPanel } from "@/components/client-documents-panel";
 import { RequestApprovalDialog } from "@/components/request-approval-dialog";
 import { ClipboardCheck } from "lucide-react";
 import { ClientReportsTab } from "@/components/client-reports-tab";
@@ -1819,7 +1820,7 @@ export default function Client360Page() {
             </TabsContent>
 
             <TabsContent value="files" className="p-6 animate-tab-in">
-              <FilesTab clientId={clientId || ""} />
+              <ClientDocumentsPanel clientId={clientId || ""} />
             </TabsContent>
 
             <TabsContent value="notes" className="p-6 animate-tab-in">
