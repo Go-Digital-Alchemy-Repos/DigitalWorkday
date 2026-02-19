@@ -1,0 +1,307 @@
+You are Replit AI working in the DigitalWorkday monorepo.
+
+FEATURE:
+Client Documents 2.0 — “Dropbox/Google Drive style” file + folder manager inside Client Profile → Documents
+
+GOAL:
+Upgrade the Client Profile “Documents” tab into a modern document manager with:
+- Nested folders (tree)
+- Drag-and-drop upload onto the page (dropzone)
+- Drag-and-drop move files between folders
+- Drag-and-drop move folders (optional v1; include if low risk)
+- Rename / Move / Delete for files and folders
+- Breadcrumb navigation
+- Search within a client’s documents
+- Bulk select actions
+- Strong tenant + client scoping
+- Cloudflare R2 storage using your existing presign → upload → complete pipeline
+- Mobile-friendly fallbacks (Move To modal if drag/drop isn’t usable)
+
+NON-DESTRUCTIVE RULES:
+- Do NOT break existing attachments/upload flows in other domains.
+- Reuse existing R2 uploader, presign/complete endpoints, uploadGuards.
+- Use createApiRouter + routeRegistry; add policy drift tests.
+- Preserve standardized API envelope (skipEnvelope only if required for compatibility).
+- Avoid heavy dependencies; prefer native drag events or existing libs already in repo.
+- No breaking API changes: add new endpoints; keep old documents endpoints working if they exist.
+
+DELIVERABLES:
+A) Data model: folders + documents (client-scoped)
+B) Backend API: folder CRUD + file list/search + move/rename/delete + download + upload
+C) Frontend UX: tree + grid/list + DnD upload + DnD move + bulk actions + breadcrumbs
+D) Performance: lazy-load folder contents, stable React Query keys, optimistic updates
+E) Tests: backend integration tests + policy drift tests
+F) Documentation: docs/features/client-documents.md + Docs Library update
+
+--------------------------------------------------------------------
+PHASE 0 — DISCOVERY (MUST DO FIRST)
+--------------------------------------------------------------------
+
+1) Locate current Client Profile → Documents UI and any existing API endpoints.
+2) Locate existing “attachments” table and decide reuse strategy:
+   - Prefer reusing existing attachments storage for file rows if it already supports:
+     entityType/entityId polymorphic linking
+   - Otherwise create a dedicated client_documents table that stores r2Key, etc.
+3) Confirm Cloudflare R2 pipeline:
+   - presign endpoint shape
+   - complete endpoint shape
+   - download endpoint shape
+   - delete endpoint shape
+4) Determine whether client documents should be visible in client portal:
+   - v1 default: tenant users only
+   - optional: portal visibility flag later (do not implement unless easy)
+
+Write findings + decisions into docs/features/client-documents.md (top section).
+
+--------------------------------------------------------------------
+PHASE 1 — DATA MODEL + MIGRATIONS
+--------------------------------------------------------------------
+
+Create tables (Drizzle + migration):
+
+1) client_document_folders
+- id (uuid)
+- tenantId
+- clientId
+- name
+- parentFolderId (nullable; self-ref)
+- sortOrder (int nullable)
+- createdByUserId
+- createdAt
+- updatedAt
+UNIQUE (tenantId, clientId, parentFolderId, name)
+INDEX  (tenantId, clientId)
+INDEX  (tenantId, clientId, parentFolderId)
+
+2) client_documents
+- id (uuid)
+- tenantId
+- clientId
+- folderId (nullable -> root)
+- filename
+- mimeType
+- sizeBytes
+- r2Key
+- checksum (nullable)
+- uploadedByUserId
+- createdAt
+- updatedAt
+INDEX (tenantId, clientId, folderId)
+INDEX (tenantId, clientId, createdAt)
+
+Optional (if needed for drag/drop ordering):
+- client_documents.sortOrder int nullable
+
+NOTE:
+- Do NOT store file blobs in DB.
+- If you already have an attachments table that stores r2Key + metadata, you may instead:
+  - create client_document_items table that links attachmentId to folderId/clientId
+Choose the approach that least disrupts existing architecture.
+
+--------------------------------------------------------------------
+PHASE 2 — BACKEND ROUTES (STANDARDIZED DOMAIN ROUTER)
+--------------------------------------------------------------------
+
+Create:
+server/http/domains/clientDocuments.router.ts
+Policy: authTenant
+Register via routeRegistry.
+
+Endpoints (new):
+
+Folders
+GET    /api/v1/clients/:clientId/documents/folders/tree
+POST   /api/v1/clients/:clientId/documents/folders
+PATCH  /api/v1/clients/:clientId/documents/folders/:folderId
+PATCH  /api/v1/clients/:clientId/documents/folders/:folderId/move
+DELETE /api/v1/clients/:clientId/documents/folders/:folderId
+
+Files
+GET    /api/v1/clients/:clientId/documents/files?folderId=&q=&sort=
+POST   /api/v1/clients/:clientId/documents/files/presign
+POST   /api/v1/clients/:clientId/documents/files/complete
+PATCH  /api/v1/clients/:clientId/documents/files/:fileId/rename
+PATCH  /api/v1/clients/:clientId/documents/files/:fileId/move
+DELETE /api/v1/clients/:clientId/documents/files/:fileId
+GET    /api/v1/clients/:clientId/documents/files/:fileId/download
+
+Bulk (optional v1 but recommended)
+POST   /api/v1/clients/:clientId/documents/bulk/move
+POST   /api/v1/clients/:clientId/documents/bulk/delete
+
+Rules:
+- All queries must enforce tenantId from context AND clientId belongs to tenant.
+- Folder/file move must validate destination folder belongs to same client and tenant.
+- Delete folder:
+  - v1: disallow delete if folder has children/files (return 409 with helpful message)
+  - optional: allow cascade delete with confirm flag
+
+Upload flow:
+- presign:
+  body: { folderId?, filename, mimeType, sizeBytes }
+  server validates filename via uploadGuards (sanitizeFilename, disallow dangerous ext)
+  returns { uploadUrl, r2Key, fields?, method }
+- complete:
+  body: { folderId?, r2Key, filename, mimeType, sizeBytes, checksum? }
+  creates client_documents row
+- download:
+  returns presigned download url and/or redirects
+
+Use Cache-Control: no-store for authenticated responses.
+
+--------------------------------------------------------------------
+PHASE 3 — SERVICES + REPOS (CLEAN LAYERING)
+--------------------------------------------------------------------
+
+Create feature module:
+server/features/client-documents/
+- clientDocuments.repo.ts
+- clientDocuments.service.ts
+- clientDocuments.types.ts
+- folderTree.ts (tree builder)
+
+Responsibilities:
+- repo: DB operations (tenantId+clientId always required)
+- service: validation, move rules, cascade checks, audit events
+- router: request validation + calling services
+
+Add audit logging events (reuse your audit system):
+- client_docs.folder_created
+- folder_renamed
+- folder_moved
+- folder_delete_attempted (esp if blocked)
+- file_uploaded
+- file_moved
+- file_renamed
+- file_deleted
+
+--------------------------------------------------------------------
+PHASE 4 — FRONTEND UX (DROPBOX-LIKE)
+--------------------------------------------------------------------
+
+Create/Update:
+client/src/features/clients/documents/ClientDocumentsPanel.tsx
+
+UI Layout:
+Left Sidebar:
+- Folder tree
+- “New Folder” button
+- Search input (filters within client)
+
+Main Panel:
+- Breadcrumbs (Root / Folder / Subfolder)
+- View toggle: List / Grid
+- Sort dropdown (Name, Newest, Oldest, Size)
+- Upload button + Dropzone overlay
+- Table/grid of files with:
+  - file icon/thumbnail
+  - name
+  - size
+  - uploadedBy
+  - createdAt
+  - actions menu (rename, move, download, delete)
+
+Drag & Drop behaviors:
+1) Upload:
+- dropping files anywhere in main panel uploads to CURRENT folder
+- show upload queue with progress
+- allow cancel/remove pending file
+- on completion, optimistic add to list
+
+2) Move file:
+- drag file row/card onto folder in tree
+- drag file onto breadcrumb segments (optional)
+- on drop -> call move endpoint, optimistic update
+
+3) Move folder (optional v1):
+- drag folder in tree onto another folder
+- prevent cycles (folder cannot be moved inside its descendants)
+- server validates
+
+Bulk actions:
+- multi-select checkboxes
+- bulk move (opens “Move To” folder picker)
+- bulk delete
+
+Mobile:
+- disable drag/drop move by default on small screens
+- provide “Move To…” action modal
+- dropzone still works via “Upload” button
+
+Performance:
+- React Query keys:
+  ['client-docs-folders', clientId]
+  ['client-docs-files', clientId, folderId, q, sort]
+- Lazy load:
+  - tree: fetch once; expand nodes client-side
+  - files: fetch per folder
+- Optimistic updates for rename/move/delete
+- invalidate only affected keys
+
+--------------------------------------------------------------------
+PHASE 5 — SEARCH
+--------------------------------------------------------------------
+
+Backend:
+- q param filters by filename ILIKE (and optionally mimeType)
+- optionally add full-text later (not in v1)
+
+UI:
+- Search filters current folder OR entire client (toggle)
+- Show “No results” empty state
+
+--------------------------------------------------------------------
+PHASE 6 — TESTS
+--------------------------------------------------------------------
+
+Backend integration tests (>=12):
+1) create folder (root)
+2) create nested folder
+3) folder unique name constraint per parent
+4) list folder tree
+5) presign + complete creates file row in correct folder
+6) list files in folder
+7) move file to another folder
+8) rename file
+9) delete file removes row and deletes R2 object (or queues delete if async)
+10) delete folder blocked when not empty (409)
+11) tenant isolation: cannot access other tenant’s folders/files
+12) client isolation: cannot access other client’s folders/files in same tenant
+
+Policy drift tests:
+- domain registered in registry
+- authTenant enforced
+
+Frontend:
+- If UI test infra exists: add one smoke test for “create folder then upload”
+- Else: add manual checklist in docs/features/client-documents.md
+
+--------------------------------------------------------------------
+PHASE 7 — DOCS + DOCS LIBRARY
+--------------------------------------------------------------------
+
+Create/Update:
+docs/features/client-documents.md
+Include:
+- architecture decisions (attachments reuse vs dedicated table)
+- endpoints list
+- drag/drop behaviors
+- mobile behavior differences
+- security model and scoping rules
+- troubleshooting (stuck uploads, permissions, blocked deletes)
+
+Update in-app Docs Library (Super Admin):
+- Add entry “Client Documents (Dropbox-style)”
+- Include: usage, permissions, upload rules, supported file types, audit events
+
+--------------------------------------------------------------------
+OUTPUT REQUIREMENTS
+--------------------------------------------------------------------
+
+When finished, output:
+- migrations added (tables + indexes)
+- endpoints created
+- UI components created/updated
+- tests added and passing
+- manual verification checklist
+- any follow-up recommendations (sharing links, portal visibility, version history)

@@ -32,7 +32,7 @@ const avatarUpload = multer({
 const requireAdmin: RequestHandler = (req, res, next) => {
   const user = req.user as Express.User | undefined;
   if (!user || (user.role !== "admin" && user.role !== "super_user")) {
-    throw AppError.forbidden("Admin access required");
+    return res.status(403).json({ ok: false, error: { code: "FORBIDDEN", message: "Admin access required", status: 403 } });
   }
   next();
 };
@@ -648,7 +648,11 @@ router.post("/v1/me/avatar", requireAuth, avatarUpload.single("file"), async (re
     const storageKey = generateAvatarKey(user.tenantId || null, user.id, req.file.originalname);
     const url = await uploadToS3(req.file.buffer, storageKey, mimeType);
 
-    await storage.updateUser(user.id, { avatarUrl: url });
+    const updatedUser = await storage.updateUser(user.id, { avatarUrl: url });
+
+    if (req.user && updatedUser) {
+      Object.assign(req.user, updatedUser);
+    }
 
     res.json({ url });
   } catch (error) {
@@ -660,7 +664,11 @@ router.delete("/v1/me/avatar", requireAuth, async (req, res) => {
   try {
     const user = req.user as any;
 
-    await storage.updateUser(user.id, { avatarUrl: null });
+    const updatedUser = await storage.updateUser(user.id, { avatarUrl: null });
+
+    if (req.user && updatedUser) {
+      Object.assign(req.user, updatedUser);
+    }
 
     res.json({ ok: true });
   } catch (error) {
