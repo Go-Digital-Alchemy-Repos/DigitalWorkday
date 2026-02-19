@@ -375,7 +375,7 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
           </TabsContent>
 
           <TabsContent value="notes" className="mt-4">
-            <ProjectNotesTab projectId={projectId} />
+            <ProjectNotesTab projectId={currentProject.id} />
           </TabsContent>
 
           <TabsContent value="insights" className="mt-4 space-y-4">
