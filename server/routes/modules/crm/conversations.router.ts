@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "../../../db";
-import { eq, and, desc, count, inArray, gte, isNull, ne, sql as dsql, isNotNull, lt, lte, or, ilike, exists } from "drizzle-orm";
+import { eq, and, desc, asc, count, inArray, gte, isNull, ne, sql as dsql, isNotNull, lt, lte, or, ilike, exists } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../../../lib/errors";
 import { getEffectiveTenantId } from "../../../middleware/tenantContext";
 import { requireAuth, requireAdmin } from "../../../auth";
@@ -9,12 +9,14 @@ import { clientMessageRateLimiter } from "../../../middleware/rateLimit";
 import {
   clientConversations,
   clientMessages,
+  clientConversationReads,
   clients,
   users,
   UserRole,
   ClientMessageVisibility,
   conversationSlaPolicies,
   ConversationPriority,
+  ConversationType,
   tenantSettings,
   DEFAULT_MESSAGE_PERMISSIONS,
   messagePermissionsSchema,
@@ -51,6 +53,140 @@ function checkPermission(perms: MessagePermissions, action: keyof MessagePermiss
   return false;
 }
 
+function buildSearchConditions(search: string, tenantId: string) {
+  const tsQuery = search.trim().split(/\s+/).filter(Boolean).map(w => w.replace(/[^\w]/g, '')).filter(Boolean).join(' & ');
+  if (!tsQuery) return null;
+  return or(
+    dsql`to_tsvector('english', ${clientConversations.subject}) @@ to_tsquery('english', ${tsQuery})`,
+    exists(
+      db.select({ val: dsql`1` })
+        .from(clientMessages)
+        .where(and(
+          eq(clientMessages.conversationId, clientConversations.id),
+          eq(clientMessages.tenantId, tenantId),
+          dsql`to_tsvector('english', ${clientMessages.bodyText}) @@ to_tsquery('english', ${tsQuery})`,
+        ))
+    ),
+    ilike(clientConversations.subject, `%${search}%`),
+    exists(
+      db.select({ val: dsql`1` })
+        .from(clientMessages)
+        .where(and(
+          eq(clientMessages.conversationId, clientConversations.id),
+          eq(clientMessages.tenantId, tenantId),
+          ilike(clientMessages.bodyText, `%${search}%`),
+        ))
+    )
+  );
+}
+
+function buildConversationConditions(params: {
+  clientId: string;
+  tenantId: string;
+  userId: string;
+  assignedFilter?: string;
+  status?: string;
+  priority?: string;
+  type?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  includeMerged?: boolean;
+  unreadOnly?: boolean;
+  search?: string;
+}) {
+  const conditions: any[] = [
+    eq(clientConversations.clientId, params.clientId),
+    eq(clientConversations.tenantId, params.tenantId),
+  ];
+
+  if (!params.includeMerged) conditions.push(isNull(clientConversations.mergedIntoId));
+
+  if (params.assignedFilter === "me") {
+    conditions.push(eq(clientConversations.assignedToUserId, params.userId));
+  } else if (params.assignedFilter === "unassigned") {
+    conditions.push(isNull(clientConversations.assignedToUserId));
+  } else if (params.assignedFilter && params.assignedFilter !== "all") {
+    conditions.push(eq(clientConversations.assignedToUserId, params.assignedFilter));
+  }
+
+  if (params.status === "open") {
+    conditions.push(isNull(clientConversations.closedAt));
+  } else if (params.status === "closed") {
+    conditions.push(isNotNull(clientConversations.closedAt));
+  }
+
+  if (params.priority && ["low", "normal", "high", "urgent"].includes(params.priority)) {
+    conditions.push(eq(clientConversations.priority, params.priority));
+  }
+
+  if (params.type && ["everyday", "service_request", "support_ticket"].includes(params.type)) {
+    conditions.push(eq(clientConversations.type, params.type));
+  }
+
+  if (params.dateFrom) {
+    const from = new Date(params.dateFrom);
+    if (!isNaN(from.getTime())) conditions.push(gte(clientConversations.createdAt, from));
+  }
+  if (params.dateTo) {
+    const to = new Date(params.dateTo);
+    if (!isNaN(to.getTime())) {
+      to.setHours(23, 59, 59, 999);
+      conditions.push(lte(clientConversations.createdAt, to));
+    }
+  }
+
+  if (params.unreadOnly) {
+    conditions.push(
+      or(
+        dsql`NOT EXISTS (
+          SELECT 1 FROM client_conversation_reads ccr
+          WHERE ccr.conversation_id = ${clientConversations.id}
+            AND ccr.user_id = ${params.userId}
+            AND ccr.tenant_id = ${params.tenantId}
+        )`,
+        dsql`EXISTS (
+          SELECT 1 FROM client_messages cm2
+          WHERE cm2.conversation_id = ${clientConversations.id}
+            AND cm2.created_at > (
+              SELECT ccr2.last_read_at FROM client_conversation_reads ccr2
+              WHERE ccr2.conversation_id = ${clientConversations.id}
+                AND ccr2.user_id = ${params.userId}
+                AND ccr2.tenant_id = ${params.tenantId}
+              LIMIT 1
+            )
+        )`
+      )
+    );
+  }
+
+  if (params.search) {
+    const searchCond = buildSearchConditions(params.search, params.tenantId);
+    if (searchCond) conditions.push(searchCond);
+  }
+
+  return conditions;
+}
+
+function getOrderBy(sort: string | undefined) {
+  switch (sort) {
+    case "oldest":
+      return asc(clientConversations.createdAt);
+    case "priority":
+      return dsql`CASE ${clientConversations.priority}
+        WHEN 'urgent' THEN 1
+        WHEN 'high' THEN 2
+        WHEN 'normal' THEN 3
+        WHEN 'low' THEN 4
+        ELSE 5
+      END`;
+    case "sla_breach":
+      return dsql`COALESCE(${clientConversations.firstResponseBreachedAt}, ${clientConversations.resolutionBreachedAt}, '2099-12-31'::timestamp) ASC`;
+    case "newest":
+    default:
+      return desc(clientConversations.updatedAt);
+  }
+}
+
 router.get("/crm/clients/:clientId/conversations", requireAuth, async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
@@ -65,89 +201,44 @@ router.get("/crm/clients/:clientId/conversations", requireAuth, async (req: Requ
     const search = (req.query.search as string || "").trim();
     const status = req.query.status as string | undefined;
     const priority = req.query.priority as string | undefined;
+    const type = req.query.type as string | undefined;
     const dateFrom = req.query.dateFrom as string | undefined;
     const dateTo = req.query.dateTo as string | undefined;
     const includeMerged = req.query.includeMerged === "true";
+    const unreadOnly = req.query.unreadOnly === "true";
+    const sort = req.query.sort as string | undefined;
+    const page = Math.max(1, parseInt(req.query.page as string) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit as string) || 50));
+    const offset = (page - 1) * limit;
 
-    const conditions: any[] = [
-      eq(clientConversations.clientId, clientId),
-      eq(clientConversations.tenantId, tenantId),
-    ];
+    const conditions = buildConversationConditions({
+      clientId, tenantId, userId, assignedFilter, status, priority, type,
+      dateFrom, dateTo, includeMerged, unreadOnly, search,
+    });
 
-    if (!includeMerged) conditions.push(isNull(clientConversations.mergedIntoId));
+    const orderBy = getOrderBy(sort);
 
-    if (assignedFilter === "me") {
-      conditions.push(eq(clientConversations.assignedToUserId, userId));
-    } else if (assignedFilter === "unassigned") {
-      conditions.push(isNull(clientConversations.assignedToUserId));
-    } else if (assignedFilter && assignedFilter !== "all") {
-      conditions.push(eq(clientConversations.assignedToUserId, assignedFilter));
-    }
+    const [results, totalResult] = await Promise.all([
+      db.select({
+        conversation: clientConversations,
+        creatorName: users.name,
+      })
+        .from(clientConversations)
+        .leftJoin(users, eq(clientConversations.createdByUserId, users.id))
+        .where(and(...conditions))
+        .orderBy(orderBy)
+        .limit(limit)
+        .offset(offset),
 
-    if (status === "open") {
-      conditions.push(isNull(clientConversations.closedAt));
-    } else if (status === "closed") {
-      conditions.push(isNotNull(clientConversations.closedAt));
-    }
+      db.select({ value: count() })
+        .from(clientConversations)
+        .where(and(...conditions)),
+    ]);
 
-    if (priority && ["low", "normal", "high", "urgent"].includes(priority)) {
-      conditions.push(eq(clientConversations.priority, priority));
-    }
-
-    if (dateFrom) {
-      const from = new Date(dateFrom);
-      if (!isNaN(from.getTime())) conditions.push(gte(clientConversations.createdAt, from));
-    }
-    if (dateTo) {
-      const to = new Date(dateTo);
-      if (!isNaN(to.getTime())) {
-        to.setHours(23, 59, 59, 999);
-        conditions.push(lte(clientConversations.createdAt, to));
-      }
-    }
-
-    if (search) {
-      const tsQuery = search.trim().split(/\s+/).filter(Boolean).map(w => w.replace(/[^\w]/g, '')).filter(Boolean).join(' & ');
-      if (tsQuery) {
-        conditions.push(
-          or(
-            dsql`to_tsvector('english', ${clientConversations.subject}) @@ to_tsquery('english', ${tsQuery})`,
-            exists(
-              db.select({ val: dsql`1` })
-                .from(clientMessages)
-                .where(and(
-                  eq(clientMessages.conversationId, clientConversations.id),
-                  eq(clientMessages.tenantId, tenantId),
-                  dsql`to_tsvector('english', ${clientMessages.bodyText}) @@ to_tsquery('english', ${tsQuery})`,
-                ))
-            ),
-            ilike(clientConversations.subject, `%${search}%`),
-            exists(
-              db.select({ val: dsql`1` })
-                .from(clientMessages)
-                .where(and(
-                  eq(clientMessages.conversationId, clientConversations.id),
-                  eq(clientMessages.tenantId, tenantId),
-                  ilike(clientMessages.bodyText, `%${search}%`),
-                ))
-            )
-          )
-        );
-      }
-    }
-
-    const results = await db.select({
-      conversation: clientConversations,
-      creatorName: users.name,
-    })
-      .from(clientConversations)
-      .leftJoin(users, eq(clientConversations.createdByUserId, users.id))
-      .where(and(...conditions))
-      .orderBy(desc(clientConversations.updatedAt));
-
+    const total = Number(totalResult[0]?.value || 0);
     const convoIds = results.map(r => r.conversation.id);
 
-    const [msgCounts, lastMsgs, assigneeRows] = await Promise.all([
+    const [msgCounts, lastMsgs, assigneeRows, readRows] = await Promise.all([
       convoIds.length > 0
         ? db.select({ conversationId: clientMessages.conversationId, value: count() })
             .from(clientMessages)
@@ -179,6 +270,19 @@ router.get("/crm/clients/:clientId/conversations", requireAuth, async (req: Requ
               .from(users)
               .where(and(inArray(users.id, assigneeUserIds), eq(users.tenantId, tenantId)));
           })()
+        : Promise.resolve([]),
+
+      convoIds.length > 0
+        ? db.select({
+            conversationId: clientConversationReads.conversationId,
+            lastReadAt: clientConversationReads.lastReadAt,
+          })
+            .from(clientConversationReads)
+            .where(and(
+              inArray(clientConversationReads.conversationId, convoIds),
+              eq(clientConversationReads.userId, userId),
+              eq(clientConversationReads.tenantId, tenantId),
+            ))
         : Promise.resolve([]),
     ]);
 
@@ -226,19 +330,98 @@ router.get("/crm/clients/:clientId/conversations", requireAuth, async (req: Requ
       authorName: r.author_name,
     }]));
     const assigneeMap = new Map((assigneeRows as any[]).map(r => [r.id, r.name]));
+    const readMap = new Map((readRows as any[]).map(r => [r.conversationId, r.lastReadAt]));
 
-    const convosWithMeta = results.map((r) => ({
-      ...r.conversation,
-      creatorName: r.creatorName || "Unknown",
-      assigneeName: r.conversation.assignedToUserId ? (assigneeMap.get(r.conversation.assignedToUserId) || null) : null,
-      messageCount: countMap.get(r.conversation.id) || 0,
-      lastMessage: lastMsgMap.get(r.conversation.id) || null,
-      ...(snippetMap[r.conversation.id] ? { matchingSnippet: snippetMap[r.conversation.id] } : {}),
-    }));
+    const convosWithMeta = results.map((r) => {
+      const lastMsg = lastMsgMap.get(r.conversation.id);
+      const lastReadAt = readMap.get(r.conversation.id);
+      const lastMsgTime = lastMsg?.createdAt ? new Date(lastMsg.createdAt) : null;
+      const hasUnread = lastMsgTime && (!lastReadAt || lastMsgTime > new Date(lastReadAt));
 
-    res.json(convosWithMeta);
+      return {
+        ...r.conversation,
+        creatorName: r.creatorName || "Unknown",
+        assigneeName: r.conversation.assignedToUserId ? (assigneeMap.get(r.conversation.assignedToUserId) || null) : null,
+        messageCount: countMap.get(r.conversation.id) || 0,
+        lastMessage: lastMsg || null,
+        hasUnread: !!hasUnread,
+        ...(snippetMap[r.conversation.id] ? { matchingSnippet: snippetMap[r.conversation.id] } : {}),
+      };
+    });
+
+    res.json({
+      conversations: convosWithMeta,
+      pagination: { page, limit, total, totalPages: Math.ceil(total / limit) },
+    });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/crm/clients/:clientId/conversations", req);
+  }
+});
+
+router.get("/crm/clients/:clientId/conversations/counts", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const { clientId } = req.params;
+    const client = await verifyClientTenancy(clientId, tenantId);
+    if (!client) return sendError(res, AppError.notFound("Client"), req);
+
+    const userId = getCurrentUserId(req);
+
+    const baseConditions = [
+      eq(clientConversations.clientId, clientId),
+      eq(clientConversations.tenantId, tenantId),
+      isNull(clientConversations.mergedIntoId),
+      isNull(clientConversations.closedAt),
+    ];
+
+    const [allOpen, assignedToMe, unassigned, unreadResult] = await Promise.all([
+      db.select({ value: count() }).from(clientConversations).where(and(...baseConditions)),
+      db.select({ value: count() }).from(clientConversations).where(and(
+        ...baseConditions,
+        eq(clientConversations.assignedToUserId, userId),
+      )),
+      db.select({ value: count() }).from(clientConversations).where(and(
+        ...baseConditions,
+        isNull(clientConversations.assignedToUserId),
+      )),
+      db.execute(dsql`
+        SELECT COUNT(*) as value FROM client_conversations cc
+        WHERE cc.client_id = ${clientId}
+          AND cc.tenant_id = ${tenantId}
+          AND cc.merged_into_id IS NULL
+          AND cc.closed_at IS NULL
+          AND (
+            NOT EXISTS (
+              SELECT 1 FROM client_conversation_reads ccr
+              WHERE ccr.conversation_id = cc.id
+                AND ccr.user_id = ${userId}
+                AND ccr.tenant_id = ${tenantId}
+            )
+            OR EXISTS (
+              SELECT 1 FROM client_messages cm
+              WHERE cm.conversation_id = cc.id
+                AND cm.created_at > (
+                  SELECT ccr2.last_read_at FROM client_conversation_reads ccr2
+                  WHERE ccr2.conversation_id = cc.id
+                    AND ccr2.user_id = ${userId}
+                    AND ccr2.tenant_id = ${tenantId}
+                  LIMIT 1
+                )
+            )
+          )
+      `),
+    ]);
+
+    res.json({
+      allOpen: Number(allOpen[0]?.value || 0),
+      assignedToMe: Number(assignedToMe[0]?.value || 0),
+      unassigned: Number(unassigned[0]?.value || 0),
+      unread: Number((unreadResult.rows as any[])[0]?.value || 0),
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/clients/:clientId/conversations/counts", req);
   }
 });
 
@@ -262,6 +445,7 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
       initialMessage: z.string().min(1),
       assignedToUserId: z.string().optional(),
       priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
+      type: z.enum(["everyday", "service_request", "support_ticket"]).optional().default("everyday"),
     });
 
     const data = validateBody(req.body, schema, res);
@@ -298,6 +482,7 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
       clientId,
       projectId: data.projectId || null,
       subject: data.subject,
+      type: data.type,
       priority: data.priority,
       createdByUserId: userId,
       assignedToUserId: assigneeId,
@@ -520,6 +705,47 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
     res.json({ conversation: { ...conversation, assigneeName, slaPolicy }, messages });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/crm/conversations/:conversationId/messages", req);
+  }
+});
+
+router.post("/crm/conversations/:conversationId/read", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const { conversationId } = req.params;
+    const userId = getCurrentUserId(req);
+
+    const [conversation] = await db.select({ id: clientConversations.id })
+      .from(clientConversations)
+      .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)))
+      .limit(1);
+
+    if (!conversation) return sendError(res, AppError.notFound("Conversation"), req);
+
+    const now = new Date();
+    const [existing] = await db.select({ id: clientConversationReads.id })
+      .from(clientConversationReads)
+      .where(and(
+        eq(clientConversationReads.conversationId, conversationId),
+        eq(clientConversationReads.userId, userId),
+        eq(clientConversationReads.tenantId, tenantId),
+      ))
+      .limit(1);
+
+    if (existing) {
+      await db.update(clientConversationReads)
+        .set({ lastReadAt: now })
+        .where(eq(clientConversationReads.id, existing.id));
+    } else {
+      await db.insert(clientConversationReads).values({
+        tenantId, conversationId, userId, lastReadAt: now,
+      });
+    }
+
+    res.json({ ok: true });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/crm/conversations/:conversationId/read", req);
   }
 });
 

@@ -89,7 +89,7 @@ import {
 import { RichTextEditor, RichTextViewer } from "@/components/ui/rich-text-editor";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
 import { RequestApprovalDialog } from "@/components/request-approval-dialog";
-import { ClipboardCheck, UserCheck, Eye, EyeOff, AlertTriangle, ShieldAlert, SlidersHorizontal, X, Search, XCircle, RotateCcw } from "lucide-react";
+import { ClipboardCheck, UserCheck, Eye, EyeOff, AlertTriangle, ShieldAlert, SlidersHorizontal, X, Search, XCircle, RotateCcw, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -1299,6 +1299,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
   const [newMessage, setNewMessage] = useState("");
   const [newAssignee, setNewAssignee] = useState<string>("__self__");
   const [newPriority, setNewPriority] = useState<string>("normal");
+  const [newType, setNewType] = useState<string>("everyday");
   const [replyText, setReplyText] = useState("");
   const [replyVisibility, setReplyVisibility] = useState<"public" | "internal">("public");
   const [convoSearch, setConvoSearch] = useState("");
@@ -1306,11 +1307,14 @@ function MessagesTab({ clientId }: { clientId: string }) {
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
   const [statusFilter, setStatusFilter] = useState<string>("open");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [sortBy, setSortBy] = useState<string>("newest");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
   const [showFilters, setShowFilters] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [mergeTargetId, setMergeTargetId] = useState<string>("");
+  const [page, setPage] = useState(1);
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -1318,15 +1322,20 @@ function MessagesTab({ clientId }: { clientId: string }) {
     return () => clearTimeout(timer);
   }, [convoSearch]);
 
+  useEffect(() => {
+    setPage(1);
+  }, [assignedFilter, statusFilter, priorityFilter, typeFilter, debouncedSearch, dateFrom, dateTo, sortBy]);
+
   const activeFilterCount = useMemo(() => {
     let c = 0;
     if (statusFilter !== "all") c++;
     if (priorityFilter !== "all") c++;
+    if (typeFilter !== "all") c++;
     if (dateFrom) c++;
     if (dateTo) c++;
     if (assignedFilter !== "all") c++;
     return c;
-  }, [statusFilter, priorityFilter, dateFrom, dateTo, assignedFilter]);
+  }, [statusFilter, priorityFilter, typeFilter, dateFrom, dateTo, assignedFilter]);
 
   const { data: tenantUsers = [] } = useQuery<any[]>({
     queryKey: ["/api/tenant/users"],
@@ -1336,21 +1345,51 @@ function MessagesTab({ clientId }: { clientId: string }) {
     tenantUsers.filter((u: any) => u.role !== "client"),
   [tenantUsers]);
 
-  const { data: conversations = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/crm/clients", clientId, "conversations", assignedFilter, debouncedSearch, statusFilter, priorityFilter, dateFrom, dateTo],
+  const { data: convoResponse, isLoading } = useQuery<{ conversations: any[]; pagination: { page: number; limit: number; total: number; totalPages: number } }>({
+    queryKey: ["/api/crm/clients", clientId, "conversations", assignedFilter, debouncedSearch, statusFilter, priorityFilter, typeFilter, sortBy, dateFrom, dateTo, page],
     queryFn: async () => {
       const params = new URLSearchParams();
       if (assignedFilter !== "all") params.set("assigned", assignedFilter);
       if (debouncedSearch) params.set("search", debouncedSearch);
       if (statusFilter !== "all") params.set("status", statusFilter);
       if (priorityFilter !== "all") params.set("priority", priorityFilter);
+      if (typeFilter !== "all") params.set("type", typeFilter);
+      if (sortBy !== "newest") params.set("sort", sortBy);
       if (dateFrom) params.set("dateFrom", dateFrom);
       if (dateTo) params.set("dateTo", dateTo);
+      params.set("page", String(page));
       const qs = params.toString();
       const res = await apiRequest("GET", `/api/crm/clients/${clientId}/conversations${qs ? `?${qs}` : ""}`);
       return res.json();
     },
   });
+
+  const conversations = convoResponse?.conversations || [];
+  const pagination = convoResponse?.pagination;
+
+  const { data: counts } = useQuery<{ allOpen: number; assignedToMe: number; unassigned: number; unread: number }>({
+    queryKey: ["/api/crm/clients", clientId, "conversations", "counts"],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/crm/clients/${clientId}/conversations/counts`);
+      return res.json();
+    },
+  });
+
+  const markReadMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      const res = await apiRequest("POST", `/api/crm/conversations/${conversationId}/read`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations", "counts"] });
+    },
+  });
+
+  const handleSelectConvo = (convoId: string) => {
+    setSelectedConvoId(convoId);
+    markReadMutation.mutate(convoId);
+  };
 
   const { data: threadData } = useQuery<any>({
     queryKey: ["/api/crm/conversations", selectedConvoId, "messages"],
@@ -1374,8 +1413,10 @@ function MessagesTab({ clientId }: { clientId: string }) {
       setNewMessage("");
       setNewAssignee("__self__");
       setNewPriority("normal");
+      setNewType("everyday");
       setSelectedConvoId(convo.id);
       queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations", "counts"] });
       toast({ title: "Conversation started" });
     },
     onError: (error: Error) => {
@@ -1501,7 +1542,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
 
   const handleCreateConvo = () => {
     if (!newSubject.trim() || !newMessage.trim()) return;
-    const payload: any = { subject: newSubject.trim(), initialMessage: newMessage.trim(), priority: newPriority };
+    const payload: any = { subject: newSubject.trim(), initialMessage: newMessage.trim(), priority: newPriority, type: newType };
     if (newAssignee && newAssignee !== "__self__") {
       payload.assignedToUserId = newAssignee;
     }
@@ -1844,11 +1885,11 @@ function MessagesTab({ clientId }: { clientId: string }) {
         }
       />
 
-      <div className="flex items-center gap-1" data-testid="convo-quick-filter-tabs">
+      <div className="flex items-center gap-1 flex-wrap" data-testid="convo-quick-filter-tabs">
         {[
-          { value: "all", label: "All Open", statusOverride: "open" },
-          { value: "me", label: "Assigned to Me", statusOverride: "open" },
-          { value: "unassigned", label: "Unassigned", statusOverride: "open" },
+          { value: "all", label: "All Open", statusOverride: "open", count: counts?.allOpen },
+          { value: "me", label: "Assigned to Me", statusOverride: "open", count: counts?.assignedToMe },
+          { value: "unassigned", label: "Unassigned", statusOverride: "open", count: counts?.unassigned },
         ].map((tab) => (
           <Button
             key={tab.value}
@@ -1862,8 +1903,27 @@ function MessagesTab({ clientId }: { clientId: string }) {
             data-testid={`button-quick-filter-${tab.value}`}
           >
             {tab.label}
+            {tab.count != null && tab.count > 0 && (
+              <Badge variant="outline" className="ml-1.5 text-xs">{tab.count}</Badge>
+            )}
           </Button>
         ))}
+        <div className="ml-auto flex items-center gap-2">
+          <Select value={sortBy} onValueChange={setSortBy}>
+            <SelectTrigger className="w-[130px]" data-testid="select-convo-sort">
+              <div className="flex items-center gap-1.5">
+                <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground" />
+                <SelectValue />
+              </div>
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest</SelectItem>
+              <SelectItem value="oldest">Oldest</SelectItem>
+              <SelectItem value="priority">Priority</SelectItem>
+              <SelectItem value="sla_breach">SLA Breach</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {showFilters && (
@@ -1905,6 +1965,17 @@ function MessagesTab({ clientId }: { clientId: string }) {
                   <SelectItem value="urgent">Urgent</SelectItem>
                 </SelectContent>
               </Select>
+              <Select value={typeFilter} onValueChange={setTypeFilter}>
+                <SelectTrigger className="w-[140px]" data-testid="select-convo-type-filter">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All types</SelectItem>
+                  <SelectItem value="everyday">Everyday</SelectItem>
+                  <SelectItem value="service_request">Service Request</SelectItem>
+                  <SelectItem value="support_ticket">Support Ticket</SelectItem>
+                </SelectContent>
+              </Select>
               <Input
                 type="date"
                 value={dateFrom}
@@ -1929,6 +2000,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
                     setAssignedFilter("all");
                     setStatusFilter("all");
                     setPriorityFilter("all");
+                    setTypeFilter("all");
                     setDateFrom("");
                     setDateTo("");
                   }}
@@ -1988,6 +2060,19 @@ function MessagesTab({ clientId }: { clientId: string }) {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex items-center gap-1.5 min-w-[130px]">
+                <MessageSquare className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Select value={newType} onValueChange={setNewType}>
+                  <SelectTrigger className="flex-1" data-testid="select-new-convo-type">
+                    <SelectValue placeholder="Type" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="everyday">Everyday</SelectItem>
+                    <SelectItem value="service_request">Service Request</SelectItem>
+                    <SelectItem value="support_ticket">Support Ticket</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex gap-2 ml-auto">
                 <Button variant="outline" size="sm" onClick={() => setShowNewConvo(false)} data-testid="button-cancel-new-convo">
                   Cancel
@@ -2016,36 +2101,42 @@ function MessagesTab({ clientId }: { clientId: string }) {
         />
       ) : (
         <div className="space-y-2">
-          {debouncedSearch && (
+          {(debouncedSearch || pagination) && (
             <p className="text-xs text-muted-foreground" data-testid="text-search-results-count">
-              {conversations.length} result{conversations.length !== 1 ? "s" : ""} for "{debouncedSearch}"
+              {pagination ? `${pagination.total} conversation${pagination.total !== 1 ? "s" : ""}` : ""}
+              {debouncedSearch ? ` matching "${debouncedSearch}"` : ""}
             </p>
           )}
           {conversations.map((c: any) => (
             <Card
               key={c.id}
               className="hover-elevate cursor-pointer"
-              onClick={() => setSelectedConvoId(c.id)}
+              onClick={() => handleSelectConvo(c.id)}
               data-testid={`convo-item-${c.id}`}
             >
               <CardContent className="p-3">
                 <div className="flex items-start justify-between gap-2">
                   <div className="flex items-start gap-2.5 min-w-0 flex-1">
-                    {c.assigneeName ? (
-                      <Avatar className="h-7 w-7 shrink-0 mt-0.5" data-testid={`avatar-assignee-${c.id}`}>
-                        <AvatarFallback className="text-xs">
-                          {c.assigneeName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
-                        </AvatarFallback>
-                      </Avatar>
-                    ) : (
-                      <Avatar className="h-7 w-7 shrink-0 mt-0.5 opacity-40" data-testid={`avatar-unassigned-${c.id}`}>
-                        <AvatarFallback className="text-xs">
-                          <UserCheck className="h-3.5 w-3.5" />
-                        </AvatarFallback>
-                      </Avatar>
-                    )}
+                    <div className="relative shrink-0 mt-0.5">
+                      {c.assigneeName ? (
+                        <Avatar className="h-7 w-7" data-testid={`avatar-assignee-${c.id}`}>
+                          <AvatarFallback className="text-xs">
+                            {c.assigneeName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
+                          </AvatarFallback>
+                        </Avatar>
+                      ) : (
+                        <Avatar className="h-7 w-7 opacity-40" data-testid={`avatar-unassigned-${c.id}`}>
+                          <AvatarFallback className="text-xs">
+                            <UserCheck className="h-3.5 w-3.5" />
+                          </AvatarFallback>
+                        </Avatar>
+                      )}
+                      {c.hasUnread && (
+                        <span className="absolute -top-0.5 -right-0.5 h-2.5 w-2.5 rounded-full bg-primary border-2 border-background" data-testid={`unread-dot-${c.id}`} />
+                      )}
+                    </div>
                     <div className="min-w-0 flex-1">
-                    <span className="font-medium text-sm">{c.subject}</span>
+                    <span className={`text-sm ${c.hasUnread ? "font-semibold" : "font-medium"}`}>{c.subject}</span>
                     {c.matchingSnippet ? (
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
                         <Search className="h-3 w-3 inline mr-0.5 align-text-bottom" />
@@ -2072,6 +2163,11 @@ function MessagesTab({ clientId }: { clientId: string }) {
                           SLA
                         </Badge>
                       )}
+                      {c.type && c.type !== "everyday" && (
+                        <Badge variant="outline" className="text-xs capitalize" data-testid={`type-badge-${c.id}`}>
+                          {c.type === "service_request" ? "Service" : c.type === "support_ticket" ? "Support" : c.type}
+                        </Badge>
+                      )}
                       {c.priority && c.priority !== "normal" && (
                         <Badge
                           variant={c.priority === "urgent" ? "destructive" : "outline"}
@@ -2088,6 +2184,33 @@ function MessagesTab({ clientId }: { clientId: string }) {
               </CardContent>
             </Card>
           ))}
+          {pagination && pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2" data-testid="convo-pagination">
+              <p className="text-xs text-muted-foreground">
+                Page {pagination.page} of {pagination.totalPages}
+              </p>
+              <div className="flex items-center gap-1">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page <= 1}
+                  onClick={() => setPage(p => Math.max(1, p - 1))}
+                  data-testid="button-prev-page"
+                >
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  disabled={page >= pagination.totalPages}
+                  onClick={() => setPage(p => p + 1)}
+                  data-testid="button-next-page"
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </Button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>

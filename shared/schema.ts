@@ -3157,12 +3157,19 @@ export const ConversationPriority = {
   URGENT: "urgent",
 } as const;
 
+export const ConversationType = {
+  EVERYDAY: "everyday",
+  SERVICE_REQUEST: "service_request",
+  SUPPORT_TICKET: "support_ticket",
+} as const;
+
 export const clientConversations = pgTable("client_conversations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
   clientId: varchar("client_id").references(() => clients.id).notNull(),
   projectId: varchar("project_id").references(() => projects.id),
   subject: text("subject").notNull(),
+  type: varchar("type", { length: 30 }).default("everyday").notNull(),
   priority: varchar("priority", { length: 20 }).default("normal").notNull(),
   createdByUserId: varchar("created_by_user_id").references(() => users.id).notNull(),
   assignedToUserId: varchar("assigned_to_user_id").references(() => users.id),
@@ -3180,6 +3187,7 @@ export const clientConversations = pgTable("client_conversations", {
   index("client_conversations_client_idx").on(table.clientId),
   index("client_conversations_project_idx").on(table.projectId),
   index("client_conversations_assigned_idx").on(table.assignedToUserId),
+  index("client_conversations_type_idx").on(table.tenantId, table.clientId, table.type),
   index("client_conversations_dup_detect_idx").on(table.tenantId, table.clientId, table.subject, table.createdAt),
   index("client_conversations_sla_check_idx").on(table.tenantId, table.closedAt, table.firstResponseAt),
 ]);
@@ -3228,6 +3236,19 @@ export const insertClientMessageSchema = createInsertSchema(clientMessages).omit
 
 export type ClientMessage = typeof clientMessages.$inferSelect;
 export type InsertClientMessage = z.infer<typeof insertClientMessageSchema>;
+
+export const clientConversationReads = pgTable("client_conversation_reads", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  conversationId: varchar("conversation_id").references(() => clientConversations.id, { onDelete: "cascade" }).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  lastReadAt: timestamp("last_read_at").defaultNow().notNull(),
+}, (table) => [
+  index("ccr_tenant_user_convo_idx").on(table.tenantId, table.userId, table.conversationId),
+  index("ccr_conversation_idx").on(table.conversationId),
+]);
+
+export type ClientConversationRead = typeof clientConversationReads.$inferSelect;
 
 // ============================================================
 // Client Message Templates (portal request templates)
