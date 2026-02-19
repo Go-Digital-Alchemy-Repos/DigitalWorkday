@@ -1,0 +1,411 @@
+REPLIT PROMPT SERIES — Client Workspace Migration (Phases 0–2)
+DigitalWorkday
+(Asset Library foundation + Beta UI, non-breaking)
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+MISSION:
+Implement Phases 0–2 of the safe migration:
+0) Inventory + safety rails + feature flags
+1) Unified Asset Library backend model + indexer (no UI changes)
+2) Asset Library (Beta) UI as parallel tab/view (legacy Documents/Files remain unchanged)
+
+HARD RULES (NON-DESTRUCTIVE):
+- Do NOT remove or rename existing routes, components, tables, or endpoints.
+- All new APIs must be registered via routeRegistry and created via createApiRouter.
+- Tenant isolation must be enforced in every query.
+- Portal visibility must be accounted for in the data model (even if portal UI is later).
+- Reuse existing Cloudflare R2 upload pipeline, presign, complete, download.
+- Reuse uploadGuards and file-type safety policies.
+- Add tests: policy drift + integration smoke.
+- Add docs: docs/migrations/client-workspace.md and docs/features/asset-library.md
+- Feature flags:
+  - CLIENT_WORKSPACE_V2 (UI scaffold only, no routing changes required yet)
+  - ASSET_LIBRARY_V2 (backend + beta UI)
+
+================================================================================
+PROMPT 0A — Inventory & Safety Rails (Docs + Flags + Guard Tests)
+================================================================================
+
+TASKS:
+1) Create feature flags:
+- server: server/config/featureFlags.ts
+- client: client/src/lib/featureFlags.ts
+Add flags:
+- ASSET_LIBRARY_V2 (default false)
+- CLIENT_WORKSPACE_V2 (default false)
+Ensure:
+- server reads from env + tenant settings if available
+- client reads from server-provided flags or safe defaults
+
+2) Inventory docs:
+Create docs/migrations/client-workspace.md with:
+- Current Client Detail entry points (drawer, routes)
+- Current 360 view entry points
+- Current Documents module components + routes
+- Current Files/attachments aggregations (where they exist)
+- Existing attachment systems (tasks/comments/messages/support/requests/chat)
+- Existing R2 upload pipeline references
+
+3) Add safety tests (policy drift / route governance):
+- Ensure any new routes are declared in routeRegistry
+- Ensure routeRegistry iteration is the only mounting mechanism
+- Add a placeholder policy drift test group for /api/v1/assets (will pass once routes exist)
+
+OUTPUT:
+- feature flags wired
+- migration doc created
+- tests added/passing
+
+================================================================================
+PROMPT 1A — DB Model: Unified Asset Library Tables (No UI Changes)
+================================================================================
+
+OBJECTIVE:
+Introduce a canonical Asset Library data model that can represent:
+- manual uploads (documents)
+- contextual attachments (from tasks/comments/messages/support/etc)
+…without breaking existing attachment systems.
+
+DB TABLES (Drizzle + migration):
+
+1) asset_folders
+- id (uuid)
+- tenantId
+- workspaceId (nullable)
+- clientId
+- parentFolderId (nullable, self-FK)
+- name (text)
+- path (text, optional cached path)
+- sortOrder (int, nullable)
+- createdByUserId (nullable)
+- createdAt
+- updatedAt
+Indexes:
+- (tenantId, clientId, parentFolderId)
+Unique:
+- (tenantId, clientId, parentFolderId, name)
+
+2) assets
+- id (uuid)
+- tenantId
+- workspaceId (nullable)
+- clientId
+- folderId (nullable FK asset_folders)
+- title (text)                      // display name
+- description (text, nullable)
+- mimeType (text)
+- sizeBytes (bigint)
+- r2Key (text)                      // canonical storage key
+- checksum (text, nullable)         // optional for dedupe
+- sourceType (enum/string):
+    manual | task | subtask | comment | message | support_ticket | work_order | chat | project | system
+- sourceId (text/uuid nullable)
+- sourceContextJson (jsonb nullable) // e.g., {taskId, commentId}
+- visibility (enum/string):
+    internal | client_visible
+- uploadedByType (tenant_user | portal_user | system)
+- uploadedByUserId (nullable)
+- uploadedByPortalUserId (nullable)
+- createdAt
+- updatedAt
+
+Indexes:
+- (tenantId, clientId, createdAt desc)
+- (tenantId, clientId, folderId)
+- (tenantId, clientId, sourceType, sourceId)
+- (tenantId, r2Key) unique
+
+NOTE:
+- Do NOT delete or migrate existing attachments tables yet.
+- This is additive.
+
+3) asset_links (optional but recommended for future-proofing)
+If your current attachments are polymorphic and you want multiple links:
+- id
+- tenantId
+- assetId
+- entityType
+- entityId
+- createdAt
+Unique(entityType, entityId, assetId)
+
+(If you already have a generic attachments linkage, reuse it and skip asset_links.)
+
+SCHEMA UPDATES:
+- Add Drizzle schema in shared/schema.ts
+- Add zod validation helpers in shared/validation (if exists)
+
+OUTPUT:
+- migrations added
+- schema compiled
+- indexes in place
+
+================================================================================
+PROMPT 1B — Backend Services: Asset Repo + Folder Repo (Read/Write)
+================================================================================
+
+OBJECTIVE:
+Build server-side repo/service layer for Assets, without changing existing modules.
+
+Create:
+server/features/assetLibrary/
+- asset.repo.ts
+- folder.repo.ts
+- asset.service.ts
+- asset.types.ts
+- asset.search.ts (simple search + filters)
+
+Service Methods (minimum):
+Folders:
+- listFolders({tenantId, clientId})
+- createFolder({tenantId, clientId, parentFolderId, name})
+- renameFolder({tenantId, folderId, name})
+- moveFolder({tenantId, folderId, newParentFolderId})
+- deleteFolder({tenantId, folderId})  // must validate empty or implement cascade rules
+
+Assets:
+- listAssets({tenantId, clientId, folderId?, q?, sourceType?, visibility?, cursor?})
+- getAsset({tenantId, assetId})
+- createAssetManualUpload({tenantId, clientId, folderId?, file metadata})
+- updateAssetMeta({tenantId, assetId, title?, folderId?, visibility?})
+- deleteAsset({tenantId, assetId}) // soft-delete preferred v1
+
+Dedupe foundations:
+- createAsset should check for existing (tenantId, r2Key) or (checksum) if present and reuse.
+
+OUTPUT:
+- service layer complete
+- no routes yet
+- type-safe boundaries
+
+================================================================================
+PROMPT 1C — Asset Indexer: Mirror Existing Attachments Into Assets (Non-breaking)
+================================================================================
+
+OBJECTIVE:
+Whenever an attachment is created anywhere in the app, ensure an Asset record exists for it.
+Also provide a backfill job for existing attachments.
+
+IMPLEMENTATION OPTIONS:
+A) Hook at attachment creation points in existing services (preferred)
+B) DB trigger (avoid)
+C) Nightly job only (not enough for UX)
+
+Do A + Backfill.
+
+TASKS:
+1) Find the existing attachment creation flows (tasks/comments/messages/support/chat/etc).
+2) Introduce a single helper:
+server/features/assetLibrary/assetIndexer.ts
+export ensureAssetForAttachment({
+  tenantId, clientId, workspaceId?, r2Key, mimeType, sizeBytes, title,
+  sourceType, sourceId, sourceContextJson, visibility, uploadedBy...
+})
+It should:
+- upsert asset by (tenantId, r2Key) unique
+- create asset_links if using that table (link to entity)
+- avoid duplicates
+
+3) Add backfill script:
+script/backfillAssetsFromAttachments.ts
+- paginates through existing attachment tables
+- creates assets + links
+- logs counts
+- safe to re-run (idempotent)
+
+4) Add a guarded admin-only endpoint to run backfill in dev:
+POST /api/v1/system/backfill/assets (superUser or admin only; OFF in prod unless env enabled)
+OR just document how to run script locally.
+
+OUTPUT:
+- indexer in place
+- backfill script in place
+- idempotency proven
+
+================================================================================
+PROMPT 1D — Backend APIs: /api/v1/assets (Read-only + Folder CRUD)
+================================================================================
+
+OBJECTIVE:
+Expose Asset Library APIs (tenant-only for now) without changing UI.
+
+Create router:
+server/http/domains/assets.router.ts
+
+Routes (authTenant):
+GET    /api/v1/assets?clientId=&folderId=&q=&sourceType=&visibility=&cursor=
+GET    /api/v1/assets/:assetId
+PATCH  /api/v1/assets/:assetId            (title, folderId, visibility)
+DELETE /api/v1/assets/:assetId            (soft delete)
+
+Folders:
+GET    /api/v1/assets/folders?clientId=
+POST   /api/v1/assets/folders             ({clientId, parentFolderId?, name})
+PATCH  /api/v1/assets/folders/:folderId   ({name?, parentFolderId?})
+DELETE /api/v1/assets/folders/:folderId
+
+Upload (manual uploads via Asset Library):
+Reuse existing R2 presign pipeline but create asset record on complete:
+POST /api/v1/assets/upload/presign
+Body: { clientId, folderId?, filename, mimeType, sizeBytes }
+- apply uploadGuards sanitizeFilename + unsafe extension checks
+
+POST /api/v1/assets/upload/complete
+Body: { clientId, folderId?, r2Key, filename, mimeType, sizeBytes, checksum? }
+- creates asset (sourceType=manual, visibility=internal by default)
+
+GET /api/v1/assets/:assetId/download
+- returns presigned download URL via existing attachment presign pattern
+
+SECURITY:
+- All queries require tenantId and must enforce client belongs to tenant.
+- Add visibility rule later for portal, but store visibility now.
+
+Route Registry:
+- register all routes in server/http/routeRegistry.ts
+
+TESTS:
+- policy drift tests ensure authTenant enforced
+- integration tests:
+  - listAssets requires auth
+  - tenant scoping enforced
+  - folder unique constraint within same parent
+  - upload guards applied
+  - complete creates asset
+  - download requires access
+
+OUTPUT:
+- new router
+- tests passing
+- docs stub docs/features/asset-library.md created/updated
+
+================================================================================
+PROMPT 2A — Frontend: Asset Library (Beta) UI as Parallel Tab/View
+================================================================================
+
+OBJECTIVE:
+Add a new “Asset Library (Beta)” entry point without replacing existing Documents/Files.
+This is a parallel UI so nothing breaks.
+
+ENTRY POINTS:
+A) Client Detail area:
+- Add a new tab: “Asset Library” with a small “Beta” pill when ASSET_LIBRARY_V2 enabled.
+- If feature flag OFF, hide tab entirely.
+
+B) 360 View:
+- Add optional link “Asset Library (Beta)” (view-only) when enabled.
+- Do not remove “Files” tab.
+
+UI REQUIREMENTS:
+- Folder tree (left)
+- Asset list/grid (center)
+- Preview/details panel (right)
+- Filters:
+  - search q
+  - sourceType
+  - visibility
+- Actions:
+  - create folder
+  - rename folder
+  - move folder (drag and drop optional later)
+  - upload files via dropzone into current folder
+  - open in context (if sourceType not manual and sourceContext present)
+
+IMPLEMENTATION DETAILS:
+- Use React Query with tenant-safe keys:
+  - ['assets','folders',clientId]
+  - ['assets','list',clientId,folderId,filters,cursor]
+- Use existing shadcn/ui components and patterns.
+- Use a modern dropzone component:
+  - Prefer existing file upload UI; if none, use react-dropzone (lightweight).
+- Upload flow:
+  - presign -> direct upload -> complete -> refresh list
+- Preview:
+  - images inline
+  - other docs show icon + download link
+  - lazy-load heavy previewers (PDF) for performance
+
+MOBILE:
+- Folder tree collapses into a drawer.
+- Preview becomes a modal.
+
+OUTPUT:
+- new components under client/src/features/assetLibrary/*
+- tab integrated
+- feature flag gating complete
+
+================================================================================
+PROMPT 2B — Parity & Quality: Audit Linkage + Basic UX
+================================================================================
+
+OBJECTIVE:
+Ensure the Asset Library Beta feels trustworthy without removing legacy.
+
+TASKS:
+1) In the asset list, show “Source” chips:
+- Manual Upload
+- Task Attachment
+- Message Attachment
+- Support Attachment
+- etc.
+
+2) “Open in context”:
+If asset.sourceContextJson includes:
+- taskId -> open task drawer
+- messageId -> open thread
+- ticketId -> open ticket
+Implement routing helpers without breaking existing routes.
+
+3) Basic Dedupe UX:
+- If upload completes and file already exists (same r2Key/checksum), show toast:
+  “File already exists — linked to this client.”
+
+4) Add a short “Beta Feedback” link (optional) and a checklist in docs/features/asset-library.md.
+
+OUTPUT:
+- improved UX
+- context linking works
+- docs updated
+
+================================================================================
+PROMPT 2C — Docs + Release Readiness for Phases 0–2
+================================================================================
+
+TASKS:
+1) Update:
+docs/migrations/client-workspace.md
+- mark phases 0–2 complete
+- note what is still legacy and unchanged
+
+2) Update/Write:
+docs/features/asset-library.md
+Include:
+- data model
+- APIs
+- feature flags
+- how indexing works
+- how to backfill
+- known limitations (no drag-drop move yet, portal view later)
+
+3) Update Super Admin Docs Library:
+- Add “Asset Library (Beta)” doc entry
+- Include runbook for backfill script
+
+4) Run:
+- npm run build
+- vitest (or relevant suite)
+- Ensure new tests pass
+Record in:
+docs/review/asset-library-phases0-2.md
+
+OUTPUT:
+- docs complete
+- tests/build status recorded
+- feature flags confirmed default OFF
+
+END OF SERIES
+================================================================================
+IMPORTANT:
+After these phases, legacy Documents and 360 Files remain operational and unchanged.
+Asset Library is additive + gated, enabling a safe rollout.
