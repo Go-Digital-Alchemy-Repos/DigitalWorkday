@@ -28,6 +28,8 @@ import {
   Sparkles,
   Loader2,
   FileStack,
+  RotateCcw,
+  Archive,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -207,6 +209,21 @@ export default function ProjectPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+    },
+  });
+
+  const restoreProjectMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("PATCH", `/api/projects/${projectId}`, { status: "active" });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      toast({ title: "Project restored", description: "This project is now active again." });
+    },
+    onError: () => {
+      toast({ title: "Failed to restore project", variant: "destructive" });
     },
   });
 
@@ -655,7 +672,15 @@ export default function ProjectPage() {
               {project.name.charAt(0).toUpperCase()}
             </div>
             <div className="min-w-0 flex-1">
-              <h1 className="text-base md:text-xl font-semibold truncate">{project.name}</h1>
+              <div className="flex items-center gap-2 flex-wrap">
+                <h1 className="text-base md:text-xl font-semibold truncate">{project.name}</h1>
+                {project.status === "archived" && (
+                  <Badge variant="secondary" className="text-xs shrink-0" data-testid="badge-project-archived">
+                    <Archive className="h-3 w-3 mr-1" />
+                    Archived
+                  </Badge>
+                )}
+              </div>
               {project.description && (
                 <div className="hidden md:block mt-1">
                   <RichTextRenderer
@@ -814,10 +839,26 @@ export default function ProjectPage() {
               </Popover>
             </div>
           </div>
-          <Button size="sm" onClick={() => handleAddTask()} data-testid="button-add-task">
-            <Plus className="h-4 w-4 md:mr-1" />
-            <span className="hidden md:inline">Add Task</span>
-          </Button>
+          {project.status === "archived" ? (
+            <Button
+              size="sm"
+              onClick={() => restoreProjectMutation.mutate()}
+              disabled={restoreProjectMutation.isPending}
+              data-testid="button-restore-project"
+            >
+              {restoreProjectMutation.isPending ? (
+                <Loader2 className="h-4 w-4 animate-spin md:mr-1" />
+              ) : (
+                <RotateCcw className="h-4 w-4 md:mr-1" />
+              )}
+              <span className="hidden md:inline">Restore Project</span>
+            </Button>
+          ) : (
+            <Button size="sm" onClick={() => handleAddTask()} data-testid="button-add-task">
+              <Plus className="h-4 w-4 md:mr-1" />
+              <span className="hidden md:inline">Add Task</span>
+            </Button>
+          )}
         </div>
       </div>
       <div className="flex-1 overflow-hidden">

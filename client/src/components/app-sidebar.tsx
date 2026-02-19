@@ -150,7 +150,7 @@ export function AppSidebar() {
             <CollapsibleContent>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {projects?.map((project) => (
+                  {projects?.filter((p) => p.status !== "archived").map((project) => (
                     <SidebarMenuItem key={project.id}>
                       <SidebarMenuButton
                         asChild
@@ -169,7 +169,7 @@ export function AppSidebar() {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
-                  {(!projects || projects.length === 0) && (
+                  {(!projects || projects.filter((p) => p.status !== "archived").length === 0) && (
                     <div className="px-3 py-2 text-xs text-muted-foreground">
                       No projects yet
                     </div>
