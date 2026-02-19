@@ -10,6 +10,12 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import { ClientDrawer } from "@/features/clients";
 import {
+  Sheet,
+  SheetContent,
+  SheetHeader,
+  SheetTitle,
+} from "@/components/ui/sheet";
+import {
   Plus,
   Building2,
   FolderKanban,
@@ -26,6 +32,13 @@ import {
   AlignJustify,
   AlignCenter,
   Tag,
+  AlertTriangle,
+  Clock,
+  Download,
+  ListChecks,
+  ExternalLink,
+  Users,
+  TrendingUp,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -33,7 +46,6 @@ import {
   PageHeader,
   DataToolbar,
   EmptyState,
-  LoadingState,
   ErrorState,
 } from "@/components/layout";
 import type { FilterConfig, SortOption } from "@/components/layout";
@@ -52,17 +64,42 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
+import { Separator } from "@/components/ui/separator";
 import { useLocalStorage, useSavedViews } from "@/hooks/use-local-storage";
 import type { SavedView } from "@/hooks/use-local-storage";
 import type { ClientWithContacts, Client } from "@shared/schema";
 import { cn } from "@/lib/utils";
+import { Link } from "wouter";
+import { formatDistanceToNow } from "date-fns";
 
 interface ClientWithHierarchy extends Client {
   depth: number;
   parentName?: string;
   contactCount: number;
   projectCount: number;
+  openTasksCount: number;
+  lastActivityAt: string | null;
+  needsAttention: boolean;
 }
+
+interface ClientSummary {
+  total: number;
+  active: number;
+  inactive: number;
+  prospect: number;
+  newThisMonth: number;
+  needsAttention: number;
+}
+
+type SegmentTab = "all" | "active" | "inactive" | "prospect" | "needs-attention";
+
+const SEGMENT_TABS: { value: SegmentTab; label: string }[] = [
+  { value: "all", label: "All" },
+  { value: "active", label: "Active" },
+  { value: "inactive", label: "Inactive" },
+  { value: "prospect", label: "Prospect" },
+  { value: "needs-attention", label: "Needs Attention" },
+];
 
 const STATUS_FILTERS: FilterConfig[] = [
   {
@@ -91,6 +128,8 @@ const SORT_OPTIONS: SortOption[] = [
   { value: "projects-asc", label: "Fewest projects" },
   { value: "contacts-desc", label: "Most contacts" },
   { value: "contacts-asc", label: "Fewest contacts" },
+  { value: "tasks-desc", label: "Most open tasks" },
+  { value: "tasks-asc", label: "Fewest open tasks" },
   { value: "newest", label: "Newest first" },
   { value: "oldest", label: "Oldest first" },
 ];
@@ -115,6 +154,80 @@ function getInitials(name: string) {
     .join("")
     .toUpperCase()
     .slice(0, 2);
+}
+
+function KPIStrip({ summary, isLoading }: { summary?: ClientSummary; isLoading: boolean }) {
+  const kpis = [
+    { label: "Total Clients", value: summary?.total ?? 0, icon: Building2, color: "text-foreground" },
+    { label: "Active", value: summary?.active ?? 0, icon: TrendingUp, color: "text-green-600 dark:text-green-400" },
+    { label: "New This Month", value: summary?.newThisMonth ?? 0, icon: Users, color: "text-blue-600 dark:text-blue-400" },
+    { label: "Needs Attention", value: summary?.needsAttention ?? 0, icon: AlertTriangle, color: "text-amber-600 dark:text-amber-400" },
+  ];
+
+  return (
+    <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4" data-testid="kpi-strip">
+      {kpis.map((kpi) => (
+        <Card key={kpi.label} data-testid={`kpi-${kpi.label.toLowerCase().replace(/\s+/g, "-")}`}>
+          <CardContent className="p-4">
+            <div className="flex items-center justify-between gap-2">
+              <div className="min-w-0">
+                <p className="text-xs text-muted-foreground truncate">{kpi.label}</p>
+                {isLoading ? (
+                  <Skeleton className="h-7 w-12 mt-1" />
+                ) : (
+                  <p className={cn("text-2xl font-semibold", kpi.color)}>{kpi.value}</p>
+                )}
+              </div>
+              <kpi.icon className={cn("h-5 w-5 shrink-0", kpi.color)} />
+            </div>
+          </CardContent>
+        </Card>
+      ))}
+    </div>
+  );
+}
+
+function SegmentTabs({
+  activeTab,
+  onTabChange,
+  summary,
+}: {
+  activeTab: SegmentTab;
+  onTabChange: (tab: SegmentTab) => void;
+  summary?: ClientSummary;
+}) {
+  const tabCounts: Record<SegmentTab, number | undefined> = {
+    all: summary?.total,
+    active: summary?.active,
+    inactive: summary?.inactive,
+    prospect: summary?.prospect,
+    "needs-attention": summary?.needsAttention,
+  };
+
+  return (
+    <div className="flex items-center gap-1 mb-4 overflow-x-auto pb-1" data-testid="segment-tabs">
+      {SEGMENT_TABS.map((tab) => (
+        <Button
+          key={tab.value}
+          variant={activeTab === tab.value ? "secondary" : "ghost"}
+          size="sm"
+          onClick={() => onTabChange(tab.value)}
+          className="shrink-0"
+          data-testid={`tab-${tab.value}`}
+        >
+          {tab.value === "needs-attention" && (
+            <AlertTriangle className="h-3.5 w-3.5 mr-1.5 text-amber-500" />
+          )}
+          {tab.label}
+          {tabCounts[tab.value] !== undefined && (
+            <span className="ml-1.5 text-xs text-muted-foreground">
+              {tabCounts[tab.value]}
+            </span>
+          )}
+        </Button>
+      ))}
+    </div>
+  );
 }
 
 function ClientGridCard({
@@ -188,9 +301,14 @@ function ClientGridCard({
                   )}
                 </div>
               </div>
-              <Badge className={getStatusColor(client.status)}>
-                {client.status}
-              </Badge>
+              <div className="flex items-center gap-1.5">
+                {client.needsAttention && (
+                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                )}
+                <Badge className={getStatusColor(client.status)}>
+                  {client.status}
+                </Badge>
+              </div>
             </div>
           </CardHeader>
           <CardContent className="pt-0">
@@ -203,7 +321,18 @@ function ClientGridCard({
                 <User className="h-3.5 w-3.5" />
                 <span>{client.contactCount} contacts</span>
               </div>
+              {client.openTasksCount > 0 && (
+                <div className="flex items-center gap-1">
+                  <ListChecks className="h-3.5 w-3.5" />
+                  <span>{client.openTasksCount} tasks</span>
+                </div>
+              )}
             </div>
+            {client.lastActivityAt && (
+              <p className="text-xs text-muted-foreground mt-1.5">
+                Last activity {formatDistanceToNow(new Date(client.lastActivityAt), { addSuffix: true })}
+              </p>
+            )}
             {client.industry && (
               <p className="text-xs text-muted-foreground mt-2 truncate">
                 {client.industry}
@@ -302,7 +431,10 @@ function ClientGroupCard({
                   )}
                 </div>
               </div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-1.5">
+                {parent.needsAttention && (
+                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                )}
                 <Badge className={getStatusColor(parent.status)}>
                   {parent.status}
                 </Badge>
@@ -382,6 +514,9 @@ function ClientGroupCard({
                 >
                   {child.companyName}
                 </span>
+                {child.needsAttention && (
+                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                )}
                 <Badge
                   className={cn(getStatusColor(child.status), "text-xs")}
                 >
@@ -497,15 +632,20 @@ function ClientTableRow({
             </AvatarFallback>
           </Avatar>
           <div className="flex-1 min-w-0">
-            <p
-              className={cn(
-                "font-medium truncate",
-                compact ? "text-sm" : "text-sm"
+            <div className="flex items-center gap-1.5">
+              <p
+                className={cn(
+                  "font-medium truncate",
+                  compact ? "text-sm" : "text-sm"
+                )}
+                data-testid={`text-client-name-${client.id}`}
+              >
+                {client.companyName}
+              </p>
+              {client.needsAttention && (
+                <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
               )}
-              data-testid={`text-client-name-${client.id}`}
-            >
-              {client.companyName}
-            </p>
+            </div>
             {!compact &&
               (client.parentName ? (
                 <p className="text-xs text-muted-foreground truncate">
@@ -537,23 +677,24 @@ function ClientTableRow({
           )}
         </div>
 
-        {!compact && client.tags && client.tags.length > 0 && (
-          <div className="hidden md:flex items-center gap-1 shrink-0 max-w-[160px]" data-testid={`tags-row-${client.id}`}>
-            {client.tags.slice(0, 2).map((tag) => (
-              <Badge key={tag} variant="outline" className="text-xs truncate max-w-[70px]" data-testid={`tag-row-${tag}-${client.id}`}>
-                {tag}
-              </Badge>
-            ))}
-            {client.tags.length > 2 && (
-              <span className="text-xs text-muted-foreground" data-testid={`tags-row-more-${client.id}`}>+{client.tags.length - 2}</span>
-            )}
-          </div>
-        )}
+        <div className="hidden lg:flex items-center gap-1 text-xs text-muted-foreground w-28 shrink-0 justify-end">
+          {client.lastActivityAt ? (
+            <span className="truncate">
+              {formatDistanceToNow(new Date(client.lastActivityAt), { addSuffix: true })}
+            </span>
+          ) : (
+            <span className="text-muted-foreground/50">No activity</span>
+          )}
+        </div>
 
-        <div className="hidden lg:flex items-center gap-4 text-sm text-muted-foreground w-40 shrink-0 justify-end">
+        <div className="hidden lg:flex items-center gap-4 text-sm text-muted-foreground w-32 shrink-0 justify-end">
           <div className="flex items-center gap-1">
             <FolderKanban className="h-3.5 w-3.5" />
             <span>{client.projectCount}</span>
+          </div>
+          <div className="flex items-center gap-1">
+            <ListChecks className="h-3.5 w-3.5" />
+            <span>{client.openTasksCount}</span>
           </div>
           <div className="flex items-center gap-1">
             <User className="h-3.5 w-3.5" />
@@ -583,7 +724,8 @@ function TableHeader({ compact }: { compact: boolean }) {
       <div className="flex-1">Client</div>
       <div className="hidden sm:block w-24 text-right">Status</div>
       <div className="hidden md:block w-24 text-right">Industry</div>
-      <div className="hidden lg:block w-40 text-right">Stats</div>
+      <div className="hidden lg:block w-28 text-right">Last Activity</div>
+      <div className="hidden lg:block w-32 text-right">Stats</div>
       {!compact && (
         <div className="hidden xl:block w-24 text-right">Contact</div>
       )}
@@ -595,17 +737,19 @@ function BulkActionBar({
   count,
   onClear,
   onBulkStatusChange,
+  onExportCsv,
 }: {
   count: number;
   onClear: () => void;
   onBulkStatusChange: (status: string) => void;
+  onExportCsv: () => void;
 }) {
   return (
     <div className="flex items-center gap-3 p-3 mb-4 rounded-md bg-primary/5 border border-primary/20">
       <span className="text-sm font-medium">
         {count} client{count !== 1 ? "s" : ""} selected
       </span>
-      <div className="flex items-center gap-2 ml-auto">
+      <div className="flex items-center gap-2 ml-auto flex-wrap">
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
             <Button variant="outline" size="sm" data-testid="button-bulk-status">
@@ -624,11 +768,168 @@ function BulkActionBar({
             </DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
+        <Button variant="outline" size="sm" onClick={onExportCsv} data-testid="button-export-selected-csv">
+          <Download className="h-3.5 w-3.5 mr-1.5" />
+          Export CSV
+        </Button>
         <Button variant="ghost" size="sm" onClick={onClear} data-testid="button-clear-selection">
           Clear
         </Button>
       </div>
     </div>
+  );
+}
+
+function ClientDetailSheet({
+  client,
+  open,
+  onOpenChange,
+}: {
+  client: ClientWithHierarchy | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+}) {
+  const [, navigate] = useLocation();
+
+  if (!client) return null;
+
+  return (
+    <Sheet open={open} onOpenChange={onOpenChange}>
+      <SheetContent className="w-full sm:max-w-lg overflow-y-auto" data-testid="sheet-client-detail">
+        <SheetHeader className="pb-4">
+          <div className="flex items-center gap-3">
+            <Avatar className="h-12 w-12">
+              <AvatarFallback className="bg-primary/10 text-primary text-lg">
+                {getInitials(client.companyName)}
+              </AvatarFallback>
+            </Avatar>
+            <div className="flex-1 min-w-0">
+              <SheetTitle className="text-lg truncate" data-testid="text-sheet-client-name">
+                {client.companyName}
+              </SheetTitle>
+              {client.displayName && (
+                <p className="text-sm text-muted-foreground truncate">{client.displayName}</p>
+              )}
+            </div>
+          </div>
+        </SheetHeader>
+
+        <div className="space-y-4">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Badge className={getStatusColor(client.status)}>{client.status}</Badge>
+            {client.needsAttention && (
+              <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-600">
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                Needs Attention
+              </Badge>
+            )}
+            {client.industry && (
+              <Badge variant="outline">{client.industry}</Badge>
+            )}
+          </div>
+
+          <Separator />
+
+          <div className="grid grid-cols-3 gap-3">
+            <Card>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-semibold">{client.projectCount}</p>
+                <p className="text-xs text-muted-foreground">Projects</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-semibold">{client.openTasksCount}</p>
+                <p className="text-xs text-muted-foreground">Open Tasks</p>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="p-3 text-center">
+                <p className="text-2xl font-semibold">{client.contactCount}</p>
+                <p className="text-xs text-muted-foreground">Contacts</p>
+              </CardContent>
+            </Card>
+          </div>
+
+          {client.lastActivityAt && (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground">
+              <Clock className="h-4 w-4" />
+              <span>Last activity {formatDistanceToNow(new Date(client.lastActivityAt), { addSuffix: true })}</span>
+            </div>
+          )}
+
+          <Separator />
+
+          <div className="space-y-2">
+            <p className="text-sm font-medium">Contact Information</p>
+            <div className="space-y-1.5">
+              {client.email && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Mail className="h-3.5 w-3.5" />
+                  <span className="truncate">{client.email}</span>
+                </div>
+              )}
+              {client.phone && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Phone className="h-3.5 w-3.5" />
+                  <span>{client.phone}</span>
+                </div>
+              )}
+              {client.website && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <Globe className="h-3.5 w-3.5" />
+                  <span className="truncate">{client.website}</span>
+                </div>
+              )}
+              {!client.email && !client.phone && !client.website && (
+                <p className="text-sm text-muted-foreground/50">No contact information</p>
+              )}
+            </div>
+          </div>
+
+          {client.tags && client.tags.length > 0 && (
+            <>
+              <Separator />
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Tags</p>
+                <div className="flex flex-wrap gap-1">
+                  {client.tags.map((tag) => (
+                    <Badge key={tag} variant="outline" className="text-xs">
+                      {tag}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            </>
+          )}
+
+          {client.notes && (
+            <>
+              <Separator />
+              <div className="space-y-2">
+                <p className="text-sm font-medium">Notes</p>
+                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{client.notes}</p>
+              </div>
+            </>
+          )}
+
+          <Separator />
+
+          <Button
+            variant="outline"
+            className="w-full"
+            onClick={() => {
+              onOpenChange(false);
+              navigate(`/clients/${client.id}`);
+            }}
+            data-testid="button-view-full-details"
+          >
+            <ExternalLink className="h-4 w-4 mr-2" />
+            View Full Details
+          </Button>
+        </div>
+      </SheetContent>
+    </Sheet>
   );
 }
 
@@ -696,12 +997,64 @@ function ClientListSkeleton({
   );
 }
 
+function exportClientsToCsv(clients: ClientWithHierarchy[]) {
+  const headers = [
+    "Company Name",
+    "Display Name",
+    "Status",
+    "Industry",
+    "Email",
+    "Phone",
+    "Website",
+    "Projects",
+    "Contacts",
+    "Open Tasks",
+    "Last Activity",
+    "Needs Attention",
+    "Tags",
+  ];
+
+  const rows = clients.map((c) => [
+    c.companyName,
+    c.displayName || "",
+    c.status,
+    c.industry || "",
+    c.email || "",
+    c.phone || "",
+    c.website || "",
+    String(c.projectCount),
+    String(c.contactCount),
+    String(c.openTasksCount),
+    c.lastActivityAt ? new Date(c.lastActivityAt).toLocaleDateString() : "",
+    c.needsAttention ? "Yes" : "No",
+    c.tags?.join("; ") || "",
+  ]);
+
+  const csvContent = [
+    headers.join(","),
+    ...rows.map((row) =>
+      row.map((val) => `"${val.replace(/"/g, '""')}"`).join(",")
+    ),
+  ].join("\n");
+
+  const blob = new Blob([csvContent], { type: "text/csv;charset=utf-8;" });
+  const url = URL.createObjectURL(blob);
+  const link = document.createElement("a");
+  link.href = url;
+  link.download = `clients-export-${new Date().toISOString().slice(0, 10)}.csv`;
+  link.click();
+  URL.revokeObjectURL(url);
+}
+
 export default function ClientsPage() {
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [saveViewOpen, setSaveViewOpen] = useState(false);
   const [newViewName, setNewViewName] = useState("");
+  const [activeSegment, setActiveSegment] = useState<SegmentTab>("all");
+  const [detailSheetClient, setDetailSheetClient] = useState<ClientWithHierarchy | null>(null);
+  const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const { toast } = useToast();
 
   const [viewMode, setViewMode] = useLocalStorage<"grid" | "table">(
@@ -729,6 +1082,10 @@ export default function ClientsPage() {
     refetch,
   } = useQuery<ClientWithHierarchy[]>({
     queryKey: ["/api/v1/clients/hierarchy/list"],
+  });
+
+  const { data: summary, isLoading: summaryLoading } = useQuery<ClientSummary>({
+    queryKey: ["/api/v1/clients/summary"],
   });
 
   const { data: clients } = useQuery<ClientWithContacts[]>({
@@ -850,6 +1207,9 @@ export default function ClientsPage() {
       queryClient.invalidateQueries({
         queryKey: ["/api/v1/clients/hierarchy/list"],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/v1/clients/summary"],
+      });
     },
   });
 
@@ -876,6 +1236,9 @@ export default function ClientsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       queryClient.invalidateQueries({
         queryKey: ["/api/v1/clients/hierarchy/list"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/v1/clients/summary"],
       });
     },
   });
@@ -950,10 +1313,33 @@ export default function ClientsPage() {
     toast,
   ]);
 
+  const handleOpenClientSheet = useCallback((clientId: string) => {
+    if (!hierarchyClients) return;
+    const found = hierarchyClients.find((c) => c.id === clientId);
+    if (found) {
+      setDetailSheetClient(found);
+      setDetailSheetOpen(true);
+    }
+  }, [hierarchyClients]);
+
+  const handleExportCsv = useCallback(() => {
+    if (!hierarchyClients) return;
+    if (selectedIds.size > 0) {
+      const selected = hierarchyClients.filter((c) => selectedIds.has(c.id));
+      exportClientsToCsv(selected);
+    }
+    toast({ title: "CSV exported" });
+  }, [hierarchyClients, selectedIds, toast]);
+
   const filteredAndSortedClients = useMemo(() => {
     if (!hierarchyClients) return [];
 
     let result = hierarchyClients.filter((client) => {
+      if (activeSegment === "active" && client.status !== "active") return false;
+      if (activeSegment === "inactive" && client.status !== "inactive") return false;
+      if (activeSegment === "prospect" && client.status !== "prospect") return false;
+      if (activeSegment === "needs-attention" && !client.needsAttention) return false;
+
       const matchesSearch =
         !searchQuery ||
         client.companyName.toLowerCase().includes(searchQuery.toLowerCase()) ||
@@ -994,6 +1380,10 @@ export default function ClientsPage() {
           return b.contactCount - a.contactCount;
         case "contacts-asc":
           return a.contactCount - b.contactCount;
+        case "tasks-desc":
+          return b.openTasksCount - a.openTasksCount;
+        case "tasks-asc":
+          return a.openTasksCount - b.openTasksCount;
         case "newest":
           return (
             new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
@@ -1008,7 +1398,7 @@ export default function ClientsPage() {
     });
 
     return result;
-  }, [hierarchyClients, searchQuery, filterValues, sortValue]);
+  }, [hierarchyClients, searchQuery, filterValues, sortValue, activeSegment]);
 
   const groupedClients = useMemo(() => {
     const groups: { parent: ClientWithHierarchy; children: ClientWithHierarchy[] }[] = [];
@@ -1066,6 +1456,7 @@ export default function ClientsPage() {
           subtitle="Manage your clients and their projects"
           icon={<Building2 className="h-6 w-6" />}
         />
+        <KPIStrip isLoading={true} />
         <ClientListSkeleton viewMode={viewMode} density={density} />
       </PageShell>
     );
@@ -1097,6 +1488,15 @@ export default function ClientsPage() {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <Button
+              variant="outline"
+              size="sm"
+              onClick={() => exportClientsToCsv(filteredAndSortedClients)}
+              data-testid="button-export-csv"
+            >
+              <Download className="h-4 w-4 mr-2" />
+              Export
+            </Button>
+            <Button
               onClick={() => setCreateDrawerOpen(true)}
               data-testid="button-add-client"
             >
@@ -1105,6 +1505,14 @@ export default function ClientsPage() {
             </Button>
           </div>
         }
+      />
+
+      <KPIStrip summary={summary} isLoading={summaryLoading} />
+
+      <SegmentTabs
+        activeTab={activeSegment}
+        onTabChange={setActiveSegment}
+        summary={summary}
       />
 
       <DataToolbar
@@ -1229,6 +1637,7 @@ export default function ClientsPage() {
           count={selectedIds.size}
           onClear={() => setSelectedIds(new Set())}
           onBulkStatusChange={handleBulkStatusChange}
+          onExportCsv={handleExportCsv}
         />
       )}
 
@@ -1243,7 +1652,7 @@ export default function ClientsPage() {
                 selectedIds={selectedIds}
                 onSelect={handleSelectClient}
                 showCheckbox={selectedIds.size > 0}
-                onOpenProfile={(id) => navigate(`/clients/${id}`)}
+                onOpenProfile={handleOpenClientSheet}
               />
             ))}
           </div>
@@ -1259,7 +1668,7 @@ export default function ClientsPage() {
                 onSelect={handleSelectClient}
                 showCheckbox={selectedIds.size > 0}
                 compact={density === "compact"}
-                onOpenProfile={(id) => navigate(`/clients/${id}`)}
+                onOpenProfile={handleOpenClientSheet}
               />
             ))}
           </Card>
@@ -1268,22 +1677,23 @@ export default function ClientsPage() {
         <EmptyState
           icon={<Building2 className="h-16 w-16" />}
           title={
-            hasActiveFilters || searchQuery
+            hasActiveFilters || searchQuery || activeSegment !== "all"
               ? "No matching clients"
               : "No clients yet"
           }
           description={
-            hasActiveFilters || searchQuery
+            hasActiveFilters || searchQuery || activeSegment !== "all"
               ? "Try adjusting your filters or search query."
               : "Start by adding your first client to organize projects and manage relationships."
           }
           action={
-            hasActiveFilters || searchQuery ? (
+            hasActiveFilters || searchQuery || activeSegment !== "all" ? (
               <Button
                 variant="outline"
                 onClick={() => {
                   handleClearFilters();
                   setSearchQuery("");
+                  setActiveSegment("all");
                 }}
                 data-testid="button-clear-all-filters"
               >
@@ -1301,6 +1711,12 @@ export default function ClientsPage() {
           }
         />
       )}
+
+      <ClientDetailSheet
+        client={detailSheetClient}
+        open={detailSheetOpen}
+        onOpenChange={setDetailSheetOpen}
+      />
 
       <ClientDrawer
         open={createDrawerOpen}

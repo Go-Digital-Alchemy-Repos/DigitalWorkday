@@ -291,7 +291,8 @@ export interface IStorage {
   // Tenant-scoped methods (Phase 2A)
   getClientByIdAndTenant(id: string, tenantId: string): Promise<Client | undefined>;
   getClientsByTenant(tenantId: string, workspaceId?: string): Promise<ClientWithContacts[]>;
-  getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number })[]>;
+  getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean })[]>;
+  getClientsSummaryByTenant(tenantId: string): Promise<{ total: number; active: number; inactive: number; prospect: number; newThisMonth: number; needsAttention: number }>;
   getChildClients(parentClientId: string): Promise<Client[]>;
   validateParentClient(parentClientId: string, tenantId: string): Promise<boolean>;
   createClientWithTenant(client: InsertClient, tenantId: string): Promise<Client>;
@@ -2203,8 +2204,7 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number })[]> {
-    // Get all clients for the tenant
+  async getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean })[]> {
     const allClients = await db.select()
       .from(clients)
       .where(eq(clients.tenantId, tenantId))
@@ -2214,8 +2214,8 @@ export class DatabaseStorage implements IStorage {
       return [];
     }
     
-    // Bulk fetch contact counts per client
     const clientIds = allClients.map(c => c.id);
+    
     const contactCounts = await db.select({
       clientId: clientContacts.clientId,
       count: sql<number>`count(*)::int`,
@@ -2226,7 +2226,6 @@ export class DatabaseStorage implements IStorage {
     
     const contactCountMap = new Map(contactCounts.map(c => [c.clientId, c.count]));
     
-    // Bulk fetch project counts per client
     const projectCounts = await db.select({
       clientId: projects.clientId,
       count: sql<number>`count(*)::int`,
@@ -2239,8 +2238,58 @@ export class DatabaseStorage implements IStorage {
       .groupBy(projects.clientId);
     
     const projectCountMap = new Map(projectCounts.map(p => [p.clientId!, p.count]));
-    
-    // Build parent->children map for O(1) child lookups
+
+    const openTaskCounts = await db.select({
+      clientId: projects.clientId,
+      count: sql<number>`count(*)::int`,
+    })
+      .from(tasks)
+      .innerJoin(projects, eq(tasks.projectId, projects.id))
+      .where(and(
+        inArray(projects.clientId, clientIds),
+        isNotNull(projects.clientId),
+        inArray(tasks.status, ['todo', 'in_progress'])
+      ))
+      .groupBy(projects.clientId);
+
+    const openTaskCountMap = new Map(openTaskCounts.map(t => [t.clientId!, t.count]));
+
+    const lastActivities = await db.select({
+      clientId: projects.clientId,
+      lastActivity: sql<string>`max(${activityLog.createdAt})`,
+    })
+      .from(activityLog)
+      .innerJoin(projects, and(
+        eq(activityLog.entityType, 'task'),
+        sql`${activityLog.entityId} IN (SELECT id FROM tasks WHERE project_id = ${projects.id})`
+      ))
+      .where(and(
+        inArray(projects.clientId, clientIds),
+        isNotNull(projects.clientId)
+      ))
+      .groupBy(projects.clientId);
+
+    const lastActivityMap = new Map(lastActivities.map(a => [a.clientId!, a.lastActivity]));
+
+    const overdueCounts = await db.select({
+      clientId: projects.clientId,
+      count: sql<number>`count(*)::int`,
+    })
+      .from(tasks)
+      .innerJoin(projects, eq(tasks.projectId, projects.id))
+      .where(and(
+        inArray(projects.clientId, clientIds),
+        isNotNull(projects.clientId),
+        inArray(tasks.status, ['todo', 'in_progress']),
+        sql`${tasks.dueDate} < now()`
+      ))
+      .groupBy(projects.clientId);
+
+    const overdueCountMap = new Map(overdueCounts.map(o => [o.clientId!, o.count]));
+
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
     const childrenMap = new Map<string | null, Client[]>();
     for (const client of allClients) {
       const parentId = client.parentClientId || null;
@@ -2250,37 +2299,104 @@ export class DatabaseStorage implements IStorage {
       childrenMap.get(parentId)!.push(client);
     }
     
-    // Build client map for parent name lookup
-    const clientMap = new Map(allClients.map(c => [c.id, c]));
-    
-    // Build hierarchy with depth calculation
-    type ClientWithHierarchy = Client & { depth: number; parentName?: string; contactCount: number; projectCount: number };
+    type ClientWithHierarchy = Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean };
     const result: ClientWithHierarchy[] = [];
     
-    // Non-recursive function to add client and its children
     const addWithChildren = (client: Client, depth: number, parentName?: string) => {
+      const lastActivity = lastActivityMap.get(client.id) || null;
+      const overdueCount = overdueCountMap.get(client.id) || 0;
+      const hasNoRecentActivity = !lastActivity || new Date(lastActivity) < thirtyDaysAgo;
+      const needsAttention = client.status === 'active' && (overdueCount > 0 || hasNoRecentActivity);
+
       result.push({ 
         ...client, 
         depth, 
         parentName,
         contactCount: contactCountMap.get(client.id) || 0,
         projectCount: projectCountMap.get(client.id) || 0,
+        openTasksCount: openTaskCountMap.get(client.id) || 0,
+        lastActivityAt: lastActivity,
+        needsAttention,
       });
       
-      // Get children from map
       const children = childrenMap.get(client.id) || [];
       for (const child of children) {
         addWithChildren(child, depth + 1, client.companyName);
       }
     };
     
-    // Process top-level clients first
     const topLevel = childrenMap.get(null) || [];
     for (const client of topLevel) {
       addWithChildren(client, 0);
     }
     
     return result;
+  }
+
+  async getClientsSummaryByTenant(tenantId: string): Promise<{ total: number; active: number; inactive: number; prospect: number; newThisMonth: number; needsAttention: number }> {
+    const allClients = await db.select()
+      .from(clients)
+      .where(eq(clients.tenantId, tenantId));
+
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const total = allClients.length;
+    const active = allClients.filter(c => c.status === 'active').length;
+    const inactive = allClients.filter(c => c.status === 'inactive').length;
+    const prospect = allClients.filter(c => c.status === 'prospect').length;
+    const newThisMonth = allClients.filter(c => new Date(c.createdAt) >= startOfMonth).length;
+
+    const activeClientIds = allClients.filter(c => c.status === 'active').map(c => c.id);
+    let needsAttentionCount = 0;
+
+    if (activeClientIds.length > 0) {
+      const overdueCounts = await db.select({
+        clientId: projects.clientId,
+        count: sql<number>`count(*)::int`,
+      })
+        .from(tasks)
+        .innerJoin(projects, eq(tasks.projectId, projects.id))
+        .where(and(
+          inArray(projects.clientId, activeClientIds),
+          isNotNull(projects.clientId),
+          inArray(tasks.status, ['todo', 'in_progress']),
+          sql`${tasks.dueDate} < now()`
+        ))
+        .groupBy(projects.clientId);
+
+      const overdueSet = new Set(overdueCounts.map(o => o.clientId!));
+
+      const lastActivities = await db.select({
+        clientId: projects.clientId,
+        lastActivity: sql<string>`max(${activityLog.createdAt})`,
+      })
+        .from(activityLog)
+        .innerJoin(projects, and(
+          eq(activityLog.entityType, 'task'),
+          sql`${activityLog.entityId} IN (SELECT id FROM tasks WHERE project_id = ${projects.id})`
+        ))
+        .where(and(
+          inArray(projects.clientId, activeClientIds),
+          isNotNull(projects.clientId)
+        ))
+        .groupBy(projects.clientId);
+
+      const lastActivityMap = new Map(lastActivities.map(a => [a.clientId!, a.lastActivity]));
+
+      for (const clientId of activeClientIds) {
+        const hasOverdue = overdueSet.has(clientId);
+        const lastAct = lastActivityMap.get(clientId);
+        const hasNoRecentActivity = !lastAct || new Date(lastAct) < thirtyDaysAgo;
+        if (hasOverdue || hasNoRecentActivity) {
+          needsAttentionCount++;
+        }
+      }
+    }
+
+    return { total, active, inactive, prospect, newThisMonth, needsAttention: needsAttentionCount };
   }
 
   async getChildClients(parentClientId: string): Promise<Client[]> {

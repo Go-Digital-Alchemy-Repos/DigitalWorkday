@@ -82,6 +82,19 @@ router.get("/hierarchy/list", async (req, res) => {
   }
 });
 
+router.get("/summary", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) {
+      throw AppError.tenantRequired();
+    }
+    const summary = await storage.getClientsSummaryByTenant(tenantId);
+    return res.json(summary);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /summary", req);
+  }
+});
+
 router.get("/:id", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
