@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useMemo } from "react";
 import { useRoute, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -288,6 +288,11 @@ export default function ClientDetailPage() {
     queryKey: ["/api/clients"],
     enabled: !!clientId,
   });
+
+  const childClients = useMemo(() => {
+    if (!clientId || !allClients.length) return [];
+    return allClients.filter((c) => c.parentClientId === clientId);
+  }, [allClients, clientId]);
 
   const { data: unassignedProjects = [] } = useQuery<Project[]>({
     queryKey: ["/api/projects/unassigned", projectSearchQuery],
@@ -751,7 +756,7 @@ export default function ClientDetailPage() {
                 Projects ({client.projects?.length || 0})
               </TabsTrigger>
               <TabsTrigger value="divisions" data-testid="tab-divisions">
-                Divisions ({divisions.length})
+                Divisions ({divisions.length + childClients.length})
               </TabsTrigger>
               <TabsTrigger value="portal" data-testid="tab-portal">
                 Portal Users
@@ -999,7 +1004,7 @@ export default function ClientDetailPage() {
                         <p className="text-xs text-muted-foreground">Contacts</p>
                       </div>
                       <div className="text-center p-4 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-semibold">{divisions.length}</p>
+                        <p className="text-2xl font-semibold">{divisions.length + childClients.length}</p>
                         <p className="text-xs text-muted-foreground">Divisions</p>
                       </div>
                     </CardContent>
@@ -1179,7 +1184,7 @@ export default function ClientDetailPage() {
                   </Card>
                 </div>
 
-                {divisions.length > 0 && (
+                {(divisions.length > 0 || childClients.length > 0) && (
                   <Card>
                     <CardHeader className="flex flex-row items-center justify-between gap-2">
                       <div>
@@ -1187,12 +1192,35 @@ export default function ClientDetailPage() {
                           <Layers className="h-4 w-4" />
                           Divisions
                         </CardTitle>
-                        <CardDescription>Organizational divisions within this client</CardDescription>
+                        <CardDescription>Subsidiary companies and organizational divisions</CardDescription>
                       </div>
-                      <Badge variant="secondary">{divisions.length}</Badge>
+                      <Badge variant="secondary">{divisions.length + childClients.length}</Badge>
                     </CardHeader>
                     <CardContent>
                       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        {childClients.map((child) => (
+                          <Card
+                            key={`child-${child.id}`}
+                            className="hover-elevate cursor-pointer"
+                            onClick={() => navigate(`/clients/${child.id}`)}
+                            data-testid={`subsidiary-card-${child.id}`}
+                          >
+                            <CardContent className="p-4">
+                              <div className="flex items-center gap-3">
+                                <Avatar className="h-8 w-8">
+                                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                    {child.companyName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
+                                  </AvatarFallback>
+                                </Avatar>
+                                <div className="flex-1 min-w-0">
+                                  <p className="font-medium truncate">{child.companyName}</p>
+                                  <p className="text-xs text-muted-foreground">Subsidiary company</p>
+                                </div>
+                                <Badge className="shrink-0">{child.status}</Badge>
+                              </div>
+                            </CardContent>
+                          </Card>
+                        ))}
                         {divisions.map((division) => (
                           <Card
                             key={division.id}
@@ -1511,54 +1539,98 @@ export default function ClientDetailPage() {
               </Button>
             </div>
 
-            {divisions.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {divisions.map((division) => (
-                  <Card
-                    key={division.id}
-                    className="cursor-pointer hover-elevate"
-                    onClick={() => {
-                      setEditingDivision(division);
-                      setDivisionMode("edit");
-                      setDivisionDrawerOpen(true);
-                    }}
-                    data-testid={`card-division-${division.id}`}
-                  >
-                    <CardHeader className="pb-2">
-                      <div className="flex items-center justify-between gap-2">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="h-3 w-3 rounded-sm shrink-0"
-                            style={{ backgroundColor: division.color || "#3B82F6" }}
-                          />
-                          <CardTitle className="text-base truncate">{division.name}</CardTitle>
+            {childClients.length > 0 && (
+              <div className="mb-6">
+                <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                  Subsidiary Companies ({childClients.length})
+                </p>
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {childClients.map((child) => (
+                    <Card
+                      key={`child-${child.id}`}
+                      className="cursor-pointer hover-elevate"
+                      onClick={() => navigate(`/clients/${child.id}`)}
+                      data-testid={`card-subsidiary-${child.id}`}
+                    >
+                      <CardContent className="p-4">
+                        <div className="flex items-center gap-3">
+                          <Avatar className="h-8 w-8">
+                            <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                              {child.companyName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
+                            </AvatarFallback>
+                          </Avatar>
+                          <div className="flex-1 min-w-0">
+                            <p className="font-medium truncate" data-testid={`text-subsidiary-name-${child.id}`}>
+                              {child.companyName}
+                            </p>
+                            <p className="text-xs text-muted-foreground">Subsidiary company</p>
+                          </div>
+                          <Badge className="shrink-0">{child.status}</Badge>
                         </div>
-                        {!division.isActive && (
-                          <Badge variant="outline" className="shrink-0">Inactive</Badge>
-                        )}
-                      </div>
-                    </CardHeader>
-                    <CardContent className="pt-0">
-                      {division.description && (
-                        <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
-                          {division.description}
-                        </p>
-                      )}
-                      <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                        <div className="flex items-center gap-1">
-                          <Users className="h-3.5 w-3.5" />
-                          <span>{division.memberCount} members</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <FolderKanban className="h-3.5 w-3.5" />
-                          <span>{division.projectCount} projects</span>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                ))}
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
               </div>
-            ) : (
+            )}
+
+            {divisions.length > 0 && (
+              <div>
+                {childClients.length > 0 && (
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-3">
+                    Organizational Divisions ({divisions.length})
+                  </p>
+                )}
+                <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+                  {divisions.map((division) => (
+                    <Card
+                      key={division.id}
+                      className="cursor-pointer hover-elevate"
+                      onClick={() => {
+                        setEditingDivision(division);
+                        setDivisionMode("edit");
+                        setDivisionDrawerOpen(true);
+                      }}
+                      data-testid={`card-division-${division.id}`}
+                    >
+                      <CardHeader className="pb-2">
+                        <div className="flex items-center justify-between gap-2">
+                          <div className="flex items-center gap-2">
+                            <div
+                              className="h-3 w-3 rounded-sm shrink-0"
+                              style={{ backgroundColor: division.color || "#3B82F6" }}
+                            />
+                            <CardTitle className="text-base truncate">{division.name}</CardTitle>
+                          </div>
+                          {!division.isActive && (
+                            <Badge variant="outline" className="shrink-0">Inactive</Badge>
+                          )}
+                        </div>
+                      </CardHeader>
+                      <CardContent className="pt-0">
+                        {division.description && (
+                          <p className="text-sm text-muted-foreground line-clamp-2 mb-3">
+                            {division.description}
+                          </p>
+                        )}
+                        <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                          <div className="flex items-center gap-1">
+                            <Users className="h-3.5 w-3.5" />
+                            <span>{division.memberCount} members</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <FolderKanban className="h-3.5 w-3.5" />
+                            <span>{division.projectCount} projects</span>
+                          </div>
+                        </div>
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {divisions.length === 0 && childClients.length === 0 && (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <Layers className="h-12 w-12 text-muted-foreground/50 mb-3" />
                 <p className="text-sm text-muted-foreground mb-4">No divisions created yet</p>
