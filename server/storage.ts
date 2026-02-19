@@ -145,6 +145,9 @@ export interface IStorage {
   removeProjectMember(projectId: string, userId: string): Promise<void>;
   setProjectMembers(projectId: string, userIds: string[]): Promise<void>;
   isProjectMember(projectId: string, userId: string): Promise<boolean>;
+  addAllTenantUsersToProject(projectId: string, tenantId: string, creatorId?: string): Promise<void>;
+  addUserToAllTenantProjects(userId: string, tenantId: string): Promise<void>;
+  backfillProjectMembership(tenantId: string): Promise<{ projectsProcessed: number; membershipsAdded: number }>;
   getProjectsForUser(userId: string, tenantId: string, workspaceId?: string, isAdmin?: boolean): Promise<Project[]>;
   hideProject(projectId: string, userId: string): Promise<void>;
   unhideProject(projectId: string, userId: string): Promise<void>;
@@ -744,29 +747,96 @@ export class DatabaseStorage implements IStorage {
     return !!member;
   }
 
-  async getProjectsForUser(userId: string, tenantId: string, _workspaceId?: string, _isAdmin?: boolean): Promise<Project[]> {
-    // All active projects in a tenant are visible to all tenant members by default
-    // Users can hide projects they don't want to see
-    
-    // Get the list of project IDs the user has hidden
-    const hidden = await db.select({ projectId: hiddenProjects.projectId })
-      .from(hiddenProjects)
-      .where(eq(hiddenProjects.userId, userId));
-    
-    const hiddenProjectIds = hidden.map(h => h.projectId);
-    
-    // Return all tenant projects except hidden ones
-    if (hiddenProjectIds.length > 0) {
-      return db.select().from(projects)
-        .where(and(
-          eq(projects.tenantId, tenantId),
-          notInArray(projects.id, hiddenProjectIds)
-        ))
-        .orderBy(desc(projects.createdAt));
+  async addAllTenantUsersToProject(projectId: string, tenantId: string, creatorId?: string): Promise<void> {
+    const tenantUsers = await db.select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.tenantId, tenantId), eq(users.isActive, true)));
+
+    if (tenantUsers.length === 0) return;
+
+    const values = tenantUsers.map(u => ({
+      projectId,
+      userId: u.id,
+      role: u.id === creatorId ? "owner" : "member",
+    }));
+
+    await db.insert(projectMembers)
+      .values(values)
+      .onConflictDoNothing();
+  }
+
+  async addUserToAllTenantProjects(userId: string, tenantId: string): Promise<void> {
+    const tenantProjects = await db.select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.tenantId, tenantId));
+
+    if (tenantProjects.length === 0) return;
+
+    const values = tenantProjects.map(p => ({
+      projectId: p.id,
+      userId,
+      role: "member",
+    }));
+
+    await db.insert(projectMembers)
+      .values(values)
+      .onConflictDoNothing();
+  }
+
+  async backfillProjectMembership(tenantId: string): Promise<{ projectsProcessed: number; membershipsAdded: number }> {
+    const tenantProjects = await db.select({ id: projects.id })
+      .from(projects)
+      .where(eq(projects.tenantId, tenantId));
+
+    const tenantUsers = await db.select({ id: users.id })
+      .from(users)
+      .where(and(eq(users.tenantId, tenantId), eq(users.isActive, true)));
+
+    if (tenantProjects.length === 0 || tenantUsers.length === 0) {
+      return { projectsProcessed: 0, membershipsAdded: 0 };
     }
-    
-    // No hidden projects, return all tenant projects
-    return db.select().from(projects)
+
+    let membershipsAdded = 0;
+    for (const project of tenantProjects) {
+      const values = tenantUsers.map(u => ({
+        projectId: project.id,
+        userId: u.id,
+        role: "member" as const,
+      }));
+
+      const result = await db.insert(projectMembers)
+        .values(values)
+        .onConflictDoNothing();
+
+      membershipsAdded += (result as any).rowCount || 0;
+    }
+
+    return { projectsProcessed: tenantProjects.length, membershipsAdded };
+  }
+
+  async getProjectsForUser(userId: string, tenantId: string, _workspaceId?: string, _isAdmin?: boolean): Promise<Project[]> {
+    return db.select({
+        id: projects.id,
+        tenantId: projects.tenantId,
+        workspaceId: projects.workspaceId,
+        teamId: projects.teamId,
+        clientId: projects.clientId,
+        divisionId: projects.divisionId,
+        name: projects.name,
+        description: projects.description,
+        visibility: projects.visibility,
+        status: projects.status,
+        color: projects.color,
+        budgetMinutes: projects.budgetMinutes,
+        createdBy: projects.createdBy,
+        createdAt: projects.createdAt,
+        updatedAt: projects.updatedAt,
+      })
+      .from(projects)
+      .innerJoin(projectMembers, and(
+        eq(projectMembers.projectId, projects.id),
+        eq(projectMembers.userId, userId),
+      ))
       .where(eq(projects.tenantId, tenantId))
       .orderBy(desc(projects.createdAt));
   }

@@ -115,6 +115,10 @@ tenantUsersRouter.post("/tenants/:tenantId/users", requireSuperUser, async (req,
       userId: newUser.id,
       role: data.role === "admin" ? "admin" : "member",
     }).onConflictDoNothing();
+
+    if (data.role !== "client") {
+      await storage.addUserToAllTenantProjects(newUser.id, tenantId);
+    }
     
     await recordTenantAuditEvent(
       tenantId,

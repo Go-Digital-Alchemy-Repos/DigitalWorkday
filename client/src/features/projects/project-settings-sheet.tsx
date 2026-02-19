@@ -227,44 +227,35 @@ export function ProjectSettingsSheet({
     },
   });
 
-  const { data: hiddenStatus } = useQuery<{ isHidden: boolean }>({
-    queryKey: [`/api/projects/${project.id}/hidden`],
-    enabled: open,
-  });
-
-  const hideProjectMutation = useMutation({
+  const leaveProjectMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", `/api/projects/${project.id}/hide`);
+      if (!user) throw new Error("Not authenticated");
+      return apiRequest("DELETE", `/api/projects/${project.id}/members/${user.userId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/projects/${project.id}/hidden`] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: [`/api/projects/${project.id}/members`] });
       toast({
-        title: "Project hidden",
-        description: "This project has been removed from your sidebar.",
+        title: "Left project",
+        description: "You have been removed from this project. An admin or team member can add you back.",
       });
       onOpenChange(false);
     },
     onError: () => {
       toast({
         title: "Error",
-        description: "Failed to hide project.",
+        description: "Failed to leave project.",
         variant: "destructive",
       });
     },
   });
 
-  const unhideProjectMutation = useMutation({
+  const _unusedUnhideMutation = useMutation({
     mutationFn: async () => {
       return apiRequest("DELETE", `/api/projects/${project.id}/hide`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: [`/api/projects/${project.id}/hidden`] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      toast({
-        title: "Project visible",
-        description: "This project is now visible in your sidebar.",
-      });
     },
     onError: () => {
       toast({
@@ -274,8 +265,6 @@ export function ProjectSettingsSheet({
       });
     },
   });
-
-  const isHidden = hiddenStatus?.isHidden ?? false;
 
   const currentClient = clients.find((c) => c.id === project.clientId);
   const isArchived = project.status === "archived";
@@ -621,58 +610,45 @@ export function ProjectSettingsSheet({
           <Separator />
 
           <div className="space-y-3">
-            <Label className="text-sm font-medium">Visibility</Label>
+            <Label className="text-sm font-medium">Membership</Label>
             <div className="p-3 rounded-lg bg-muted">
-              <div className="flex items-center justify-between">
+              <div className="flex items-center justify-between gap-2">
                 <div>
                   <p className="text-sm font-medium">
-                    {isHidden ? "Hidden from your view" : "Visible in your sidebar"}
+                    Leave this project
                   </p>
                   <p className="text-xs text-muted-foreground">
-                    {isHidden 
-                      ? "This project won't appear in your sidebar. You can still access it directly."
-                      : "Hide this project to remove it from your sidebar."}
+                    Remove yourself from this project. It will no longer appear in your account. Another team member or admin can add you back.
                   </p>
                 </div>
                 <AlertDialog>
                   <AlertDialogTrigger asChild>
                     <Button
-                      variant={isHidden ? "outline" : "secondary"}
+                      variant="secondary"
                       size="sm"
-                      disabled={hideProjectMutation.isPending || unhideProjectMutation.isPending}
-                      data-testid={isHidden ? "button-show-project" : "button-hide-project"}
+                      disabled={leaveProjectMutation.isPending}
+                      data-testid="button-leave-project"
                     >
-                      {isHidden ? (
-                        <>
-                          <Eye className="h-4 w-4 mr-1" />
-                          Show
-                        </>
-                      ) : (
-                        <>
-                          <LogOut className="h-4 w-4 mr-1" />
-                          Leave
-                        </>
-                      )}
+                      <LogOut className="h-4 w-4 mr-1" />
+                      Leave
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
                       <AlertDialogTitle>
-                        {isHidden ? "Show Project" : "Leave Project"}
+                        Leave Project
                       </AlertDialogTitle>
                       <AlertDialogDescription>
-                        {isHidden 
-                          ? "This project will appear in your sidebar again. You'll see updates and can work on tasks."
-                          : "This project will be hidden from your sidebar. You can still access it through direct links or the projects dashboard. Your work on this project will be preserved."}
+                        You will be removed from this project and it will no longer appear in your sidebar or project list. Your existing work (tasks, comments, time entries) will be preserved. To rejoin, another team member or admin will need to add you back.
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel data-testid="button-cancel-visibility">Cancel</AlertDialogCancel>
+                      <AlertDialogCancel data-testid="button-cancel-leave">Cancel</AlertDialogCancel>
                       <AlertDialogAction
-                        onClick={() => isHidden ? unhideProjectMutation.mutate() : hideProjectMutation.mutate()}
-                        data-testid="button-confirm-visibility"
+                        onClick={() => leaveProjectMutation.mutate()}
+                        data-testid="button-confirm-leave"
                       >
-                        {isHidden ? "Show Project" : "Leave Project"}
+                        Leave Project
                       </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>

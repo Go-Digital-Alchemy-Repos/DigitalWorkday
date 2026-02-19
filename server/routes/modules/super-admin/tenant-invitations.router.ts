@@ -254,6 +254,10 @@ tenantInvitationsRouter.post("/tenants/:tenantId/invitations/activate-all", requ
           userId: newUser.id,
           role: invitation.role === "admin" ? "admin" : "member",
         }).onConflictDoNothing();
+
+        if (invitation.role !== "client") {
+          await storage.addUserToAllTenantProjects(newUser.id, tenantId);
+        }
         
         // Mark invitation as accepted
         await db.update(invitations)

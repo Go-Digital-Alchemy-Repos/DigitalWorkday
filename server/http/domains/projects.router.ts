@@ -247,11 +247,14 @@ router.post("/projects", async (req: Request, res: Response) => {
       return sendError(res, AppError.badRequest("Tenant context required - user not associated with a tenant"), req);
     }
 
-    await storage.addProjectMember({ projectId: project.id, userId: creatorId, role: "owner" });
-    
-    for (const memberId of memberIds) {
-      if (memberId !== creatorId) {
-        await storage.addProjectMember({ projectId: project.id, userId: memberId, role: "member" });
+    if (tenantId) {
+      await storage.addAllTenantUsersToProject(project.id, tenantId, creatorId);
+    } else {
+      await storage.addProjectMember({ projectId: project.id, userId: creatorId, role: "owner" });
+      for (const memberId of memberIds) {
+        if (memberId !== creatorId) {
+          await storage.addProjectMember({ projectId: project.id, userId: memberId, role: "member" });
+        }
       }
     }
 
@@ -473,6 +476,37 @@ router.put("/projects/:projectId/members", async (req: Request, res: Response) =
     res.json(members);
   } catch (error) {
     return handleRouteError(res, error, "PUT /api/projects/:projectId/members", req);
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Project Membership Backfill (add all tenant users to all projects)
+// ---------------------------------------------------------------------------
+
+router.post("/projects/backfill-membership", async (req: Request, res: Response) => {
+  try {
+    if (!req.user) {
+      return sendError(res, AppError.unauthorized(), req);
+    }
+
+    const currentUser = req.user as any;
+    if (currentUser.role !== "admin") {
+      return sendError(res, AppError.forbidden("Only admins can backfill project membership"), req);
+    }
+
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) {
+      return sendError(res, AppError.tenantRequired("Tenant context required"), req);
+    }
+
+    const result = await storage.backfillProjectMembership(tenantId);
+    res.json({
+      success: true,
+      message: `Backfill complete: ${result.projectsProcessed} projects processed, ${result.membershipsAdded} memberships added`,
+      ...result,
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/projects/backfill-membership", req);
   }
 });
 

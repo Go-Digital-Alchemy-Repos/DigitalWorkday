@@ -126,6 +126,10 @@ router.post("/users", userCreateRateLimiter, requireAdmin, async (req, res) => {
       status: "active",
     });
 
+    if (role !== "client") {
+      await storage.addUserToAllTenantProjects(user.id, tenantId);
+    }
+
     if (teamIds && Array.isArray(teamIds)) {
       for (const teamId of teamIds) {
         await storage.addTeamMember({ teamId, userId: user.id });
