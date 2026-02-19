@@ -551,6 +551,8 @@ export const clients = pgTable("clients", {
   index("clients_status_idx").on(table.status),
   index("clients_tenant_idx").on(table.tenantId),
   index("clients_parent_idx").on(table.parentClientId),
+  index("clients_tenant_status_idx").on(table.tenantId, table.status),
+  index("clients_tenant_workspace_idx").on(table.tenantId, table.workspaceId),
 ]);
 
 /**
@@ -970,6 +972,9 @@ export const timeEntries = pgTable("time_entries", {
   index("time_entries_subtask_idx").on(table.subtaskId),
   index("time_entries_date_idx").on(table.startTime),
   index("time_entries_tenant_idx").on(table.tenantId),
+  index("time_entries_tenant_user_start_idx").on(table.tenantId, table.userId, table.startTime),
+  index("time_entries_tenant_project_start_idx").on(table.tenantId, table.projectId, table.startTime),
+  index("time_entries_tenant_client_idx").on(table.tenantId, table.clientId),
 ]);
 
 /**
@@ -1020,6 +1025,9 @@ export const projects = pgTable("projects", {
   index("projects_client_idx").on(table.clientId),
   index("projects_tenant_idx").on(table.tenantId),
   index("projects_division_idx").on(table.divisionId),
+  index("projects_tenant_status_idx").on(table.tenantId, table.status),
+  index("projects_tenant_client_idx").on(table.tenantId, table.clientId),
+  index("projects_tenant_created_at_idx").on(table.tenantId, table.createdAt),
 ]);
 
 // Project Members table
@@ -1225,6 +1233,7 @@ export const comments = pgTable("comments", {
 }, (table) => [
   index("comments_task_created").on(table.taskId, table.createdAt),
   index("comments_subtask_created").on(table.subtaskId, table.createdAt),
+  index("comments_user_idx").on(table.userId),
 ]);
 
 // Activity Log table
@@ -1241,6 +1250,8 @@ export const activityLog = pgTable("activity_log", {
   index("activity_log_entity_idx").on(table.entityType, table.entityId),
   index("activity_log_workspace_idx").on(table.workspaceId),
   index("activity_log_created_idx").on(table.createdAt),
+  index("activity_log_actor_idx").on(table.actorUserId),
+  index("activity_log_workspace_created_idx").on(table.workspaceId, table.createdAt),
 ]);
 
 // Notification type enum
@@ -1270,6 +1281,8 @@ export const notifications = pgTable("notifications", {
   index("notifications_user_idx").on(table.userId),
   index("notifications_tenant_idx").on(table.tenantId),
   index("notifications_created_idx").on(table.createdAt),
+  index("notifications_user_read_idx").on(table.userId, table.readAt),
+  index("notifications_tenant_user_idx").on(table.tenantId, table.userId),
 ]);
 
 // Notification preferences table
@@ -1315,6 +1328,7 @@ export const taskAttachments = pgTable("task_attachments", {
 }, (table) => [
   index("task_attachments_task").on(table.taskId),
   index("task_attachments_project").on(table.projectId),
+  index("task_attachments_uploader_idx").on(table.uploadedByUserId),
 ]);
 
 // =============================================================================
