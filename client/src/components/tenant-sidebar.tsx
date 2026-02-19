@@ -192,23 +192,33 @@ export function TenantSidebar() {
 
       <SidebarContent>
         <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              {mainNavItems.map((item) => (
-                <SidebarMenuItem key={item.title}>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location === item.url || (item.url !== "/" && location.startsWith(item.url))}
-                  >
-                    <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s/g, "-")}`}>
-                      <item.icon className="h-4 w-4" />
-                      <span>{item.title}</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              ))}
-            </SidebarMenu>
-          </SidebarGroupContent>
+          <Collapsible defaultOpen className="group/collapsible">
+            <CollapsibleTrigger asChild>
+              <SidebarGroupLabel className="cursor-pointer hover-elevate rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
+                <span className="ml-1">Navigation</span>
+              </SidebarGroupLabel>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  {mainNavItems.map((item) => (
+                    <SidebarMenuItem key={item.title}>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={location === item.url || (item.url !== "/" && location.startsWith(item.url))}
+                      >
+                        <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s/g, "-")}`}>
+                          <item.icon className="h-4 w-4" />
+                          <span>{item.title}</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  ))}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </CollapsibleContent>
+          </Collapsible>
         </SidebarGroup>
 
         <SidebarGroup>
@@ -378,77 +388,81 @@ export function TenantSidebar() {
           </Collapsible>
         </SidebarGroup>
 
-        {/* Team Manager - available to all tenant members */}
         <SidebarGroup>
-          <SidebarGroupContent>
-            <SidebarMenu>
-              <SidebarMenuItem>
-                <SidebarMenuButton
-                  asChild
-                  isActive={location === "/user-manager" || location.startsWith("/user-manager/")}
-                >
-                  <Link href="/user-manager" data-testid="link-user-manager">
-                    <UsersRound className="h-4 w-4" />
-                    <span>{isAdmin || isSuperUser ? "User Manager" : "Team Manager"}</span>
-                  </Link>
-                </SidebarMenuButton>
-              </SidebarMenuItem>
-            </SidebarMenu>
-          </SidebarGroupContent>
+          <Collapsible defaultOpen className="group/collapsible">
+            <CollapsibleTrigger asChild>
+              <SidebarGroupLabel className="cursor-pointer hover-elevate rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
+                <span className="ml-1">System Management</span>
+              </SidebarGroupLabel>
+            </CollapsibleTrigger>
+            <CollapsibleContent>
+              <SidebarGroupContent>
+                <SidebarMenu>
+                  <SidebarMenuItem>
+                    <SidebarMenuButton
+                      asChild
+                      isActive={location === "/user-manager" || location.startsWith("/user-manager/")}
+                    >
+                      <Link href="/user-manager" data-testid="link-user-manager">
+                        <UsersRound className="h-4 w-4" />
+                        <span>{isAdmin || isSuperUser ? "User Manager" : "Team Manager"}</span>
+                      </Link>
+                    </SidebarMenuButton>
+                  </SidebarMenuItem>
+                  {(isAdmin || isSuperUser) && (
+                    <>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={location.startsWith("/account")}
+                        >
+                          <Link href="/account" data-testid="link-account-settings">
+                            <UserCog className="h-4 w-4" />
+                            <span>Account</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={location === "/reports" || location.startsWith("/reports/")}
+                        >
+                          <Link href="/reports" data-testid="link-reports">
+                            <BarChart3 className="h-4 w-4" />
+                            <span>Reports</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={location === "/templates" || location.startsWith("/templates/")}
+                        >
+                          <Link href="/templates" data-testid="link-templates">
+                            <FileStack className="h-4 w-4" />
+                            <span>Templates</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={location.startsWith("/settings")}
+                        >
+                          <Link href="/settings" data-testid="link-global-settings">
+                            <Cog className="h-4 w-4" />
+                            <span>System Settings</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    </>
+                  )}
+                </SidebarMenu>
+              </SidebarGroupContent>
+            </CollapsibleContent>
+          </Collapsible>
         </SidebarGroup>
-
-        {(isAdmin || isSuperUser) && (
-          <SidebarGroup>
-            <SidebarGroupContent>
-              <SidebarMenu>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.startsWith("/account")}
-                  >
-                    <Link href="/account" data-testid="link-account-settings">
-                      <UserCog className="h-4 w-4" />
-                      <span>Account</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location === "/reports" || location.startsWith("/reports/")}
-                  >
-                    <Link href="/reports" data-testid="link-reports">
-                      <BarChart3 className="h-4 w-4" />
-                      <span>Reports</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location === "/templates" || location.startsWith("/templates/")}
-                  >
-                    <Link href="/templates" data-testid="link-templates">
-                      <FileStack className="h-4 w-4" />
-                      <span>Templates</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-                <SidebarMenuItem>
-                  <SidebarMenuButton
-                    asChild
-                    isActive={location.startsWith("/settings")}
-                  >
-                    <Link href="/settings" data-testid="link-global-settings">
-                      <Cog className="h-4 w-4" />
-                      <span>System Settings</span>
-                    </Link>
-                  </SidebarMenuButton>
-                </SidebarMenuItem>
-              </SidebarMenu>
-            </SidebarGroupContent>
-          </SidebarGroup>
-        )}
       </SidebarContent>
 
       <SidebarFooter className="border-t border-sidebar-border p-3">
