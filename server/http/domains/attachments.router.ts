@@ -50,7 +50,7 @@ router.get("/attachments/config", async (req, res) => {
       configured: storageStatus.configured,
       source: storageStatus.source,
       provider: storageStatus.provider,
-      maxFileSizeBytes: 0,
+      maxFileSizeBytes: 25 * 1024 * 1024,
       allowedMimeTypes: ALLOWED_MIME_TYPES,
     });
   } catch (error) {
