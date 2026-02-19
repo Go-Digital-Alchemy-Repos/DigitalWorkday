@@ -16,6 +16,8 @@ import {
   timeEntries,
   activityLog,
   comments,
+  clientConversations,
+  clientMessages,
   updateClientCrmSchema,
   UserRole,
   CrmClientStatus,
