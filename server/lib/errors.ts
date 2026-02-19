@@ -109,6 +109,20 @@ export class AppError extends Error {
   static rateLimited(message = "Too many requests"): AppError {
     return new AppError(429, "RATE_LIMITED", message);
   }
+
+  toJSON(requestId = "unknown"): StandardErrorEnvelope {
+    return {
+      error: {
+        code: this.code,
+        message: this.message,
+        status: this.statusCode,
+        requestId,
+        details: this.details,
+      },
+      message: this.message,
+      code: this.code,
+    };
+  }
 }
 
 /**
@@ -207,6 +221,8 @@ export function validateQuery<T>(
  * Standard error envelope structure.
  */
 export interface StandardErrorEnvelope {
+  ok?: false;
+  requestId?: string;
   error: {
     code: ErrorCode | string;
     message: string;
@@ -214,9 +230,9 @@ export interface StandardErrorEnvelope {
     requestId: string;
     details?: unknown;
   };
-  // Legacy compatibility fields (kept for backward compatibility)
   message?: string;
   code?: string;
+  details?: unknown;
 }
 
 /**
@@ -231,6 +247,8 @@ export function toErrorResponse(
 ): StandardErrorEnvelope {
   const requestId = req.requestId || "unknown";
   return {
+    ok: false as const,
+    requestId,
     error: {
       code,
       message: err.message,
@@ -238,7 +256,6 @@ export function toErrorResponse(
       requestId,
       details,
     },
-    // Legacy compatibility
     message: err.message,
     code,
   };
@@ -250,6 +267,8 @@ export function toErrorResponse(
 export function sendError(res: Response, error: AppError, req?: Request): Response {
   const requestId = req?.requestId || "unknown";
   return res.status(error.statusCode).json({
+    ok: false,
+    requestId,
     error: {
       code: error.code,
       message: error.message,
@@ -257,7 +276,6 @@ export function sendError(res: Response, error: AppError, req?: Request): Respon
       requestId,
       details: error.details,
     },
-    // Legacy compatibility fields
     message: error.message,
     code: error.code,
     details: error.details,
@@ -267,17 +285,46 @@ export function sendError(res: Response, error: AppError, req?: Request): Respon
 /**
  * Handles unknown errors in route handlers.
  * Logs the error and sends appropriate response.
+ * 
+ * Handles:
+ * - AppError → standard error envelope at correct HTTP status
+ * - ZodError → 400 VALIDATION_ERROR with field-level details
+ * - All other errors → 500 INTERNAL_ERROR (details in dev only)
  */
 export function handleRouteError(res: Response, error: unknown, context?: string, req?: Request): Response {
   if (error instanceof AppError) {
     return sendError(res, error, req);
   }
 
-  const message = error instanceof Error ? error.message : "Unknown error";
   const requestId = req?.requestId || "unknown";
+
+  if (error instanceof ZodError) {
+    const details = error.errors.map((e) => ({
+      path: e.path.join("."),
+      message: e.message,
+    }));
+    return res.status(400).json({
+      ok: false,
+      requestId,
+      error: {
+        code: "VALIDATION_ERROR",
+        message: "Validation failed",
+        status: 400,
+        requestId,
+        details,
+      },
+      message: "Validation failed",
+      code: "VALIDATION_ERROR",
+      details,
+    });
+  }
+
+  const message = error instanceof Error ? error.message : "Unknown error";
   console.error(`[RouteError]${context ? ` ${context}:` : ""} requestId=${requestId}`, error);
   
   return res.status(500).json({
+    ok: false,
+    requestId,
     error: {
       code: "INTERNAL_ERROR",
       message: "Internal server error",
@@ -285,7 +332,6 @@ export function handleRouteError(res: Response, error: unknown, context?: string
       requestId,
       details: process.env.NODE_ENV === "development" ? message : undefined,
     },
-    // Legacy compatibility
     message: "Internal server error",
     code: "INTERNAL_ERROR",
   });

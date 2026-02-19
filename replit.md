@@ -35,7 +35,7 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **User Experience**: Global command palette, keyboard shortcuts, dark mode, CSS-variable-based accent color theming, and Framer Motion animations. Implements mobile-first responsive design and consistent drawer UI.
 - **Modular Architecture**: API routes organized by domain via `routeRegistry` + `routerFactory` (migrated) and legacy aggregator. Centralized query key builders in `client/src/lib/queryKeys.ts`. See `docs/architecture/organization.md` for full details.
 - **Performance & Robustness**: Utilizes DB performance indexes, optimized React Query usage, list virtualization, error boundaries, and graceful shutdown mechanisms.
-- **Security Hardening**: Features tenancy enforcement, defense-in-depth tenant scoping, standardized API error handling, rate limiting on critical endpoints, CSRF protection, and secret redaction in logs.
+- **Security Hardening**: Features tenancy enforcement, defense-in-depth tenant scoping, standardized API error handling, rate limiting on critical endpoints, CSRF protection, and secret redaction in logs. API error envelope standardized with `ok`, `requestId`, `error.{code,message,status,requestId,details}` across all 5 emission points (errorHandler, sendError, handleRouteError, validateBody helper, validateBody middleware). ZodError caught by handleRouteError producing 400 VALIDATION_ERROR. See `docs/architecture/api-contracts.md`.
 - **Observability**: Implements request IDs for end-to-end correlation, structured request logging, and error logging to the database. Includes health endpoints for liveness and readiness checks.
 
 ## External Dependencies
