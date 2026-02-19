@@ -3181,6 +3181,35 @@ export type ClientMessage = typeof clientMessages.$inferSelect;
 export type InsertClientMessage = z.infer<typeof insertClientMessageSchema>;
 
 // ============================================================
+// Client Message Templates (portal request templates)
+// ============================================================
+export const clientMessageTemplates = pgTable("client_message_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  bodyText: text("body_text").default("").notNull(),
+  category: varchar("category", { length: 50 }).default("general").notNull(),
+  defaultMetadata: jsonb("default_metadata"),
+  isActive: boolean("is_active").default(true).notNull(),
+  sortOrder: integer("sort_order").default(0).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("client_msg_templates_tenant_idx").on(table.tenantId),
+  index("client_msg_templates_active_idx").on(table.tenantId, table.isActive),
+]);
+
+export const insertClientMessageTemplateSchema = createInsertSchema(clientMessageTemplates).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export type ClientMessageTemplate = typeof clientMessageTemplates.$inferSelect;
+export type InsertClientMessageTemplate = z.infer<typeof insertClientMessageTemplateSchema>;
+
+// ============================================================
 // Integration Entity Mapping (for Asana / external provider idempotency)
 // ============================================================
 export const integrationEntityMap = pgTable("integration_entity_map", {

@@ -14,13 +14,280 @@ import { Textarea } from "@/components/ui/textarea";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import {
   MessageSquare,
   ArrowLeft,
   Send,
   Clock,
   User,
   ChevronRight,
+  Plus,
+  FileText,
+  Loader2,
 } from "lucide-react";
+
+interface PortalTemplate {
+  id: string;
+  name: string;
+  subject: string;
+  bodyText: string;
+  category: string;
+  defaultMetadata: Record<string, unknown> | null;
+}
+
+interface PortalClient {
+  id: string;
+  companyName: string;
+  displayName: string | null;
+  accessLevel: string;
+}
+
+interface PortalDashboard {
+  clients: PortalClient[];
+  projects: unknown[];
+  tasks: unknown[];
+  upcomingDeadlines: unknown[];
+  recentActivity: unknown[];
+}
+
+function NewRequestDialog({
+  open,
+  onOpenChange,
+  onCreated,
+}: {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onCreated: (conversationId: string) => void;
+}) {
+  const { toast } = useToast();
+  const [step, setStep] = useState<"templates" | "compose">("templates");
+  const [selectedTemplate, setSelectedTemplate] = useState<PortalTemplate | null>(null);
+  const [subject, setSubject] = useState("");
+  const [message, setMessage] = useState("");
+  const [selectedClientId, setSelectedClientId] = useState<string>("");
+
+  const { data: templates = [], isLoading: templatesLoading } = useQuery<PortalTemplate[]>({
+    queryKey: ["/api/crm/portal/message-templates"],
+    enabled: open,
+  });
+
+  const { data: dashboard, isLoading: dashboardLoading, isError: dashboardError } = useQuery<PortalDashboard>({
+    queryKey: ["/api/portal/dashboard"],
+    enabled: open,
+  });
+
+  const clients = dashboard?.clients || [];
+
+  useEffect(() => {
+    if (clients.length === 1 && !selectedClientId) {
+      setSelectedClientId(clients[0].id);
+    }
+  }, [clients, selectedClientId]);
+
+  const createMutation = useMutation({
+    mutationFn: async (data: { clientId: string; subject: string; initialMessage: string; templateId?: string }) => {
+      const res = await apiRequest("POST", "/api/crm/portal/conversations", data);
+      return res.json();
+    },
+    onSuccess: (data: { id: string }) => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/portal/conversations"] });
+      toast({ title: "Request submitted" });
+      onOpenChange(false);
+      resetState();
+      onCreated(data.id);
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const resetState = () => {
+    setStep("templates");
+    setSelectedTemplate(null);
+    setSubject("");
+    setMessage("");
+    setSelectedClientId(clients.length === 1 ? clients[0]?.id || "" : "");
+  };
+
+  const handleSelectTemplate = (template: PortalTemplate) => {
+    setSelectedTemplate(template);
+    setSubject(template.subject);
+    setMessage(template.bodyText || "");
+    setStep("compose");
+  };
+
+  const handleBlankRequest = () => {
+    setSelectedTemplate(null);
+    setSubject("");
+    setMessage("");
+    setStep("compose");
+  };
+
+  const handleSubmit = () => {
+    if (!subject.trim() || !message.trim()) {
+      toast({ title: "Please fill in the subject and message", variant: "destructive" });
+      return;
+    }
+    if (!selectedClientId) {
+      toast({ title: "Please select a client account", variant: "destructive" });
+      return;
+    }
+    createMutation.mutate({
+      clientId: selectedClientId,
+      subject: subject.trim(),
+      initialMessage: message.trim(),
+      templateId: selectedTemplate?.id,
+    });
+  };
+
+  const handleOpenChange = (newOpen: boolean) => {
+    if (!newOpen) resetState();
+    onOpenChange(newOpen);
+  };
+
+  const isDataLoading = templatesLoading || dashboardLoading;
+
+  return (
+    <Dialog open={open} onOpenChange={handleOpenChange}>
+      <DialogContent className="max-w-lg">
+        <DialogHeader>
+          <DialogTitle>
+            {step === "templates" ? "Start a New Request" : "Compose Your Message"}
+          </DialogTitle>
+          <DialogDescription>
+            {step === "templates"
+              ? "Choose a template to get started, or start from scratch."
+              : selectedTemplate
+                ? `Using template: ${selectedTemplate.name}`
+                : "Write your message below."}
+          </DialogDescription>
+        </DialogHeader>
+
+        {dashboardError ? (
+          <div className="py-8 text-center">
+            <p className="text-sm text-destructive">Failed to load account data. Please try again.</p>
+          </div>
+        ) : step === "templates" ? (
+          <div className="space-y-2 py-2 max-h-[400px] overflow-y-auto">
+            {isDataLoading ? (
+              <div className="space-y-2">
+                {[1, 2, 3].map((i) => (
+                  <Skeleton key={i} className="h-16 w-full" />
+                ))}
+              </div>
+            ) : (
+              <>
+                {templates.map((template) => (
+                  <Card
+                    key={template.id}
+                    className="hover-elevate cursor-pointer"
+                    onClick={() => handleSelectTemplate(template)}
+                    data-testid={`template-option-${template.id}`}
+                  >
+                    <CardContent className="p-3">
+                      <div className="flex items-center gap-3">
+                        <FileText className="h-5 w-5 text-muted-foreground shrink-0" />
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium truncate">{template.name}</p>
+                          <p className="text-sm text-muted-foreground truncate">{template.subject}</p>
+                        </div>
+                        <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                      </div>
+                    </CardContent>
+                  </Card>
+                ))}
+
+                <Card
+                  className="hover-elevate cursor-pointer border-dashed"
+                  onClick={handleBlankRequest}
+                  data-testid="template-option-blank"
+                >
+                  <CardContent className="p-3">
+                    <div className="flex items-center gap-3">
+                      <Plus className="h-5 w-5 text-muted-foreground shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <p className="font-medium">Start from scratch</p>
+                        <p className="text-sm text-muted-foreground">Write a custom message</p>
+                      </div>
+                      <ChevronRight className="h-4 w-4 text-muted-foreground shrink-0" />
+                    </div>
+                  </CardContent>
+                </Card>
+              </>
+            )}
+          </div>
+        ) : (
+          <div className="space-y-4 py-2">
+            {clients.length > 1 && (
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Client Account</label>
+                <Select value={selectedClientId} onValueChange={setSelectedClientId}>
+                  <SelectTrigger data-testid="select-client-account">
+                    <SelectValue placeholder="Select a client account" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {clients.map((c) => (
+                      <SelectItem key={c.id} value={c.id}>
+                        {c.displayName || c.companyName}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            )}
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Subject</label>
+              <Input
+                value={subject}
+                onChange={(e) => setSubject(e.target.value)}
+                placeholder="What do you need help with?"
+                data-testid="input-new-request-subject"
+              />
+            </div>
+            <div className="space-y-2">
+              <label className="text-sm font-medium">Message</label>
+              <Textarea
+                value={message}
+                onChange={(e) => setMessage(e.target.value)}
+                placeholder="Describe your request..."
+                className="min-h-[120px] resize-none"
+                data-testid="input-new-request-message"
+              />
+            </div>
+          </div>
+        )}
+
+        <DialogFooter>
+          {step === "compose" && (
+            <Button variant="outline" onClick={() => setStep("templates")} data-testid="button-back-to-templates">
+              Back
+            </Button>
+          )}
+          {step === "compose" && (
+            <Button onClick={handleSubmit} disabled={createMutation.isPending} data-testid="button-submit-request">
+              {createMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Submit Request
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
 
 interface ConversationSummary {
   id: string;
@@ -286,6 +553,7 @@ function ConversationThread({
 export default function ClientPortalMessages() {
   const crmFlags = useCrmFlags();
   const [selectedConversationId, setSelectedConversationId] = useState<string | null>(null);
+  const [newRequestOpen, setNewRequestOpen] = useState(false);
 
   const { data: conversations = [], isLoading } = useQuery<ConversationSummary[]>({
     queryKey: ["/api/crm/portal/conversations"],
@@ -319,9 +587,15 @@ export default function ClientPortalMessages() {
 
   return (
     <div className="p-6 overflow-y-auto h-full">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold" data-testid="text-messages-title">Messages</h1>
-        <p className="text-muted-foreground">Communicate with your project team</p>
+      <div className="flex items-center justify-between gap-4 mb-6 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold" data-testid="text-messages-title">Messages</h1>
+          <p className="text-muted-foreground">Communicate with your project team</p>
+        </div>
+        <Button onClick={() => setNewRequestOpen(true)} data-testid="button-new-request">
+          <Plus className="h-4 w-4 mr-1" />
+          New Request
+        </Button>
       </div>
 
       {isLoading ? (
@@ -336,6 +610,12 @@ export default function ClientPortalMessages() {
           onSelect={setSelectedConversationId}
         />
       )}
+
+      <NewRequestDialog
+        open={newRequestOpen}
+        onOpenChange={setNewRequestOpen}
+        onCreated={(id) => setSelectedConversationId(id)}
+      />
     </div>
   );
 }

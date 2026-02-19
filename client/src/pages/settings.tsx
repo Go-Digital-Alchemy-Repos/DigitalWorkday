@@ -2,15 +2,17 @@ import { useLocation, useRoute, Redirect } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings as SettingsIcon, Puzzle, FileText, Mail, UserCircle } from "lucide-react";
+import { Settings as SettingsIcon, Puzzle, FileText, Mail, UserCircle, MessageSquare } from "lucide-react";
 import { ProfileTab } from "@/components/settings/profile-tab";
 import { IntegrationsTab } from "@/components/settings/integrations-tab";
 import { AgreementTab } from "@/components/settings/agreement-tab";
 import { EmailLogsTab } from "@/components/settings/email-logs-tab";
+import { MessagesTab } from "@/components/settings/messages-tab";
 
 const SETTINGS_TABS = [
   { id: "profile", label: "Profile", icon: UserCircle },
   { id: "integrations", label: "Integrations", icon: Puzzle },
+  { id: "messages", label: "Messages", icon: MessageSquare },
   { id: "email-logs", label: "Email Logs", icon: Mail },
   { id: "agreement", label: "Agreement", icon: FileText },
 ];
@@ -65,6 +67,10 @@ export default function SettingsPage() {
 
           <TabsContent value="integrations" className="mt-6">
             <IntegrationsTab />
+          </TabsContent>
+
+          <TabsContent value="messages" className="mt-6">
+            <MessagesTab />
           </TabsContent>
 
           <TabsContent value="email-logs" className="mt-6">
