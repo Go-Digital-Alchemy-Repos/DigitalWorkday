@@ -141,28 +141,23 @@ export function ClientDocumentsTab({ clientId }: ClientDocumentsTabProps) {
     setUploading(true);
 
     try {
-      const initResponse = await apiRequest("POST", `/api/clients/${clientId}/documents/upload`, {
-        fileName: selectedFile.name,
-        mimeType: selectedFile.type || "application/octet-stream",
-        fileSizeBytes: selectedFile.size,
-        displayName: displayName || selectedFile.name,
-        description: description || null,
+      const formData = new FormData();
+      formData.append("file", selectedFile);
+      formData.append("displayName", displayName || selectedFile.name);
+      if (description) {
+        formData.append("description", description);
+      }
+
+      const response = await fetch(`/api/clients/${clientId}/documents/upload`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
       });
 
-      const initData = await initResponse.json();
-      if (!initData.ok) throw new Error(initData.error?.message || "Failed to initiate upload");
-
-      const uploadResponse = await fetch(initData.uploadUrl, {
-        method: "PUT",
-        body: selectedFile,
-        headers: {
-          "Content-Type": selectedFile.type || "application/octet-stream",
-        },
-      });
-
-      if (!uploadResponse.ok) throw new Error("Failed to upload file to storage");
-
-      await apiRequest("POST", `/api/clients/${clientId}/documents/${initData.document.id}/complete`);
+      const data = await response.json();
+      if (!response.ok || !data.ok) {
+        throw new Error(data.error?.message || data.message || "Failed to upload document");
+      }
 
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "documents"] });
       setUploadDialogOpen(false);

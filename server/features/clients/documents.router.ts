@@ -1,5 +1,6 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
+import multer from "multer";
 import { db } from "../../db";
 import { 
   clientDocuments, 
@@ -10,8 +11,13 @@ import {
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { requireAuth } from "../../auth";
 import { requireTenantContext, TenantRequest } from "../../middleware/tenantContext";
-import { createPresignedUploadUrl, createPresignedDownloadUrl, deleteS3Object } from "../../s3";
+import { createPresignedUploadUrl, createPresignedDownloadUrl, deleteS3Object, uploadToS3 } from "../../s3";
 import { AppError, handleRouteError } from "../../lib/errors";
+
+const fileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
 
 const router = Router();
 
@@ -242,7 +248,7 @@ router.get("/:clientId/documents", requireAuth, requireTenantContext, async (req
   }
 });
 
-router.post("/:clientId/documents/upload", requireAuth, requireTenantContext, async (req: Request, res: Response) => {
+router.post("/:clientId/documents/upload", requireAuth, requireTenantContext, fileUpload.single("file"), async (req: Request, res: Response) => {
   const tenantReq = req as TenantRequest;
   const tenantId = tenantReq.tenant?.effectiveTenantId;
   const userId = (req.user as any)?.id;
@@ -253,7 +259,13 @@ router.post("/:clientId/documents/upload", requireAuth, requireTenantContext, as
   }
 
   try {
-    const data = initiateUploadSchema.parse(req.body);
+    if (!req.file) {
+      throw AppError.badRequest("No file provided");
+    }
+
+    const displayName = req.body.displayName || req.file.originalname;
+    const description = req.body.description || null;
+    const categoryId = req.body.categoryId || null;
 
     const client = await db.select().from(clients).where(
       and(eq(clients.id, clientId), eq(clients.tenantId, tenantId))
@@ -264,36 +276,35 @@ router.post("/:clientId/documents/upload", requireAuth, requireTenantContext, as
     }
 
     const timestamp = Date.now();
-    const safeFileName = data.fileName.replace(/[^a-zA-Z0-9._-]/g, "_");
+    const safeFileName = req.file.originalname.replace(/[^a-zA-Z0-9._-]/g, "_");
     const storageKey = `tenants/${tenantId}/clients/${clientId}/documents/${timestamp}-${safeFileName}`;
+    const mimeType = req.file.mimetype || "application/octet-stream";
+
+    await uploadToS3(req.file.buffer, storageKey, mimeType, tenantId);
 
     const [document] = await db.insert(clientDocuments)
       .values({
         tenantId,
         clientId,
-        categoryId: data.categoryId,
+        categoryId,
         uploadedByUserId: userId,
-        originalFileName: data.fileName,
-        displayName: data.displayName || data.fileName,
-        description: data.description,
-        mimeType: data.mimeType,
-        fileSizeBytes: data.fileSizeBytes,
+        originalFileName: req.file.originalname,
+        displayName,
+        description,
+        mimeType,
+        fileSizeBytes: req.file.size,
         storageKey,
-        uploadStatus: "pending",
+        uploadStatus: "complete",
         isClientUploaded: false,
       })
       .returning();
 
-    const presigned = await createPresignedUploadUrl(storageKey, data.mimeType);
-
     res.json({
       ok: true,
       document,
-      uploadUrl: presigned.url,
-      storageKey,
     });
   } catch (error: any) {
-    handleRouteError(res, error, "clientDocuments.initiateUpload", req);
+    handleRouteError(res, error, "clientDocuments.upload", req);
   }
 });
 
