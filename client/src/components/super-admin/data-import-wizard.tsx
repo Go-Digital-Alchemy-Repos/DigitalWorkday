@@ -158,6 +158,10 @@ export function DataImportWizard({ tenantId, tenantSlug, apiBasePath }: DataImpo
       setFields(data.fields);
       setStep("mapping");
     } catch (err: any) {
+      if (isJobLostError(err)) {
+        handleJobLost();
+        return;
+      }
       toast({ title: "Upload Failed", description: extractErrorMessage(err), variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -196,9 +200,27 @@ export function DataImportWizard({ tenantId, tenantSlug, apiBasePath }: DataImpo
       setStep("validate");
       await handleValidate();
     } catch (err: any) {
+      if (isJobLostError(err)) {
+        handleJobLost();
+        return;
+      }
       toast({ title: "Error", description: extractErrorMessage(err), variant: "destructive" });
       setIsLoading(false);
     }
+  };
+
+  const isJobLostError = (err: any): boolean => {
+    const msg = extractErrorMessage(err);
+    return msg.toLowerCase().includes("job not found") || msg.toLowerCase().includes("not found");
+  };
+
+  const handleJobLost = () => {
+    toast({
+      title: "Import session expired",
+      description: "The import session was lost (server may have restarted). Please start the import again.",
+      variant: "destructive",
+    });
+    reset();
   };
 
   const handleValidate = async () => {
@@ -209,6 +231,10 @@ export function DataImportWizard({ tenantId, tenantSlug, apiBasePath }: DataImpo
       const data = await res.json();
       setValidationSummary(data.summary);
     } catch (err: any) {
+      if (isJobLostError(err)) {
+        handleJobLost();
+        return;
+      }
       toast({ title: "Validation Failed", description: extractErrorMessage(err), variant: "destructive" });
     } finally {
       setIsLoading(false);
@@ -233,6 +259,10 @@ export function DataImportWizard({ tenantId, tenantSlug, apiBasePath }: DataImpo
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
     } catch (err: any) {
+      if (isJobLostError(err)) {
+        handleJobLost();
+        return;
+      }
       toast({ title: "Import Failed", description: extractErrorMessage(err), variant: "destructive" });
       setStep("validate");
     } finally {

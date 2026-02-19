@@ -1346,7 +1346,11 @@ export default function SuperAdminSettingsPage() {
   });
 
   const handleSaveBranding = () => {
-    updateSettingsMutation.mutate(brandingForm);
+    const data = { ...brandingForm };
+    if (data.supportEmail !== undefined && !data.supportEmail?.trim()) {
+      data.supportEmail = null;
+    }
+    updateSettingsMutation.mutate(data);
   };
 
   return (
@@ -1407,8 +1411,8 @@ export default function SuperAdminSettingsPage() {
                         <Input
                           id="defaultAppName"
                           placeholder="MyWorkDay"
-                          defaultValue={systemSettings?.defaultAppName || ""}
-                          onChange={(e) => setBrandingForm({ ...brandingForm, defaultAppName: e.target.value })}
+                          value={brandingForm.defaultAppName ?? systemSettings?.defaultAppName ?? ""}
+                          onChange={(e) => setBrandingForm(prev => ({ ...prev, defaultAppName: e.target.value }))}
                           data-testid="input-default-app-name"
                         />
                       </div>
@@ -1418,8 +1422,8 @@ export default function SuperAdminSettingsPage() {
                           id="supportEmail"
                           type="email"
                           placeholder="support@example.com"
-                          defaultValue={systemSettings?.supportEmail || ""}
-                          onChange={(e) => setBrandingForm({ ...brandingForm, supportEmail: e.target.value })}
+                          value={brandingForm.supportEmail ?? systemSettings?.supportEmail ?? ""}
+                          onChange={(e) => setBrandingForm(prev => ({ ...prev, supportEmail: e.target.value }))}
                           data-testid="input-support-email"
                         />
                       </div>
@@ -1427,16 +1431,16 @@ export default function SuperAdminSettingsPage() {
                     <div className="grid gap-4 md:grid-cols-2">
                       <ColorPicker
                         label="Primary Color"
-                        value={brandingForm.defaultPrimaryColor || systemSettings?.defaultPrimaryColor || "#83ba3b"}
+                        value={brandingForm.defaultPrimaryColor ?? systemSettings?.defaultPrimaryColor ?? "#83ba3b"}
                         defaultValue="#83ba3b"
-                        onChange={(value) => setBrandingForm({ ...brandingForm, defaultPrimaryColor: value })}
+                        onChange={(value) => setBrandingForm(prev => ({ ...prev, defaultPrimaryColor: value }))}
                         data-testid="input-primary-color"
                       />
                       <ColorPicker
                         label="Secondary Color"
-                        value={brandingForm.defaultSecondaryColor || systemSettings?.defaultSecondaryColor || "#64748B"}
+                        value={brandingForm.defaultSecondaryColor ?? systemSettings?.defaultSecondaryColor ?? "#64748B"}
                         defaultValue="#64748B"
-                        onChange={(value) => setBrandingForm({ ...brandingForm, defaultSecondaryColor: value })}
+                        onChange={(value) => setBrandingForm(prev => ({ ...prev, defaultSecondaryColor: value }))}
                         data-testid="input-secondary-color"
                       />
                     </div>
@@ -1452,8 +1456,8 @@ export default function SuperAdminSettingsPage() {
                           label="Default Logo"
                           description="Full logo for headers and login pages (max 2MB)"
                           valueUrl={brandingForm.defaultLogoUrl !== undefined ? brandingForm.defaultLogoUrl : systemSettings?.defaultLogoUrl}
-                          onUploaded={(fileUrl) => setBrandingForm({ ...brandingForm, defaultLogoUrl: fileUrl })}
-                          onRemoved={() => setBrandingForm({ ...brandingForm, defaultLogoUrl: null })}
+                          onUploaded={(fileUrl) => setBrandingForm(prev => ({ ...prev, defaultLogoUrl: fileUrl }))}
+                          onRemoved={() => setBrandingForm(prev => ({ ...prev, defaultLogoUrl: null }))}
                           enableCropping
                           cropShape="rect"
                           cropAspectRatio={4}
@@ -1463,8 +1467,8 @@ export default function SuperAdminSettingsPage() {
                           label="Default Icon"
                           description="Square icon for compact spaces (max 512KB)"
                           valueUrl={brandingForm.defaultIconUrl !== undefined ? brandingForm.defaultIconUrl : systemSettings?.defaultIconUrl}
-                          onUploaded={(fileUrl) => setBrandingForm({ ...brandingForm, defaultIconUrl: fileUrl })}
-                          onRemoved={() => setBrandingForm({ ...brandingForm, defaultIconUrl: null })}
+                          onUploaded={(fileUrl) => setBrandingForm(prev => ({ ...prev, defaultIconUrl: fileUrl }))}
+                          onRemoved={() => setBrandingForm(prev => ({ ...prev, defaultIconUrl: null }))}
                           enableCropping
                           cropShape="rect"
                           cropAspectRatio={1}
@@ -1474,8 +1478,8 @@ export default function SuperAdminSettingsPage() {
                           label="Default Favicon"
                           description="Browser tab icon (max 512KB)"
                           valueUrl={brandingForm.defaultFaviconUrl !== undefined ? brandingForm.defaultFaviconUrl : systemSettings?.defaultFaviconUrl}
-                          onUploaded={(fileUrl) => setBrandingForm({ ...brandingForm, defaultFaviconUrl: fileUrl })}
-                          onRemoved={() => setBrandingForm({ ...brandingForm, defaultFaviconUrl: null })}
+                          onUploaded={(fileUrl) => setBrandingForm(prev => ({ ...prev, defaultFaviconUrl: fileUrl }))}
+                          onRemoved={() => setBrandingForm(prev => ({ ...prev, defaultFaviconUrl: null }))}
                           enableCropping
                           cropShape="rect"
                           cropAspectRatio={1}
