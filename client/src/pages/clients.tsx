@@ -210,14 +210,14 @@ function ClientGridCard({
               </p>
             )}
             {client.tags && client.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="flex flex-wrap gap-1 mt-2" data-testid={`tags-client-${client.id}`}>
                 {client.tags.slice(0, 3).map((tag) => (
-                  <Badge key={tag} variant="outline" className="text-xs">
+                  <Badge key={tag} variant="outline" className="text-xs" data-testid={`tag-${tag}-${client.id}`}>
                     {tag}
                   </Badge>
                 ))}
                 {client.tags.length > 3 && (
-                  <span className="text-xs text-muted-foreground">+{client.tags.length - 3}</span>
+                  <span className="text-xs text-muted-foreground" data-testid={`tags-more-${client.id}`}>+{client.tags.length - 3}</span>
                 )}
               </div>
             )}
@@ -326,14 +326,14 @@ function ClientGroupCard({
               </p>
             )}
             {parent.tags && parent.tags.length > 0 && (
-              <div className="flex flex-wrap gap-1 mt-2">
+              <div className="flex flex-wrap gap-1 mt-2" data-testid={`tags-client-${parent.id}`}>
                 {parent.tags.slice(0, 3).map((tag) => (
-                  <Badge key={tag} variant="outline" className="text-xs">
+                  <Badge key={tag} variant="outline" className="text-xs" data-testid={`tag-${tag}-${parent.id}`}>
                     {tag}
                   </Badge>
                 ))}
                 {parent.tags.length > 3 && (
-                  <span className="text-xs text-muted-foreground">+{parent.tags.length - 3}</span>
+                  <span className="text-xs text-muted-foreground" data-testid={`tags-more-${parent.id}`}>+{parent.tags.length - 3}</span>
                 )}
               </div>
             )}
@@ -536,6 +536,19 @@ function ClientTableRow({
             <span className="text-xs text-muted-foreground/50">--</span>
           )}
         </div>
+
+        {!compact && client.tags && client.tags.length > 0 && (
+          <div className="hidden md:flex items-center gap-1 shrink-0 max-w-[160px]" data-testid={`tags-row-${client.id}`}>
+            {client.tags.slice(0, 2).map((tag) => (
+              <Badge key={tag} variant="outline" className="text-xs truncate max-w-[70px]" data-testid={`tag-row-${tag}-${client.id}`}>
+                {tag}
+              </Badge>
+            ))}
+            {client.tags.length > 2 && (
+              <span className="text-xs text-muted-foreground" data-testid={`tags-row-more-${client.id}`}>+{client.tags.length - 2}</span>
+            )}
+          </div>
+        )}
 
         <div className="hidden lg:flex items-center gap-4 text-sm text-muted-foreground w-40 shrink-0 justify-end">
           <div className="flex items-center gap-1">

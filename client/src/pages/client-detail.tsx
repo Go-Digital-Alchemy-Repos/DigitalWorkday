@@ -346,6 +346,7 @@ export default function ClientDetailPage() {
           primaryContactPhone: newData.primaryContactPhone || null,
           notes: newData.notes || null,
           parentClientId: newData.parentClientId || null,
+          tags: newData.tags || null,
         });
       }
       return { previousClient };
