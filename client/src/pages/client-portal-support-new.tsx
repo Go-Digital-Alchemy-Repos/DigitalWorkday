@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useLocation } from "wouter";
 import { Button } from "@/components/ui/button";
@@ -7,6 +7,8 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
+import { Separator } from "@/components/ui/separator";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
@@ -25,6 +27,21 @@ interface DashboardData {
   upcomingDeadlines: any[];
 }
 
+interface FormField {
+  key: string;
+  label: string;
+  type: "text" | "textarea" | "select" | "number" | "date" | "checkbox";
+  required?: boolean;
+  options?: string[];
+  placeholder?: string;
+}
+
+interface FormSchemaData {
+  id: string;
+  category: string;
+  schemaJson: FormField[];
+}
+
 export default function ClientPortalSupportNew() {
   const [, navigate] = useLocation();
   const { toast } = useToast();
@@ -35,17 +52,30 @@ export default function ClientPortalSupportNew() {
   const [category, setCategory] = useState("support");
   const [priority, setPriority] = useState("normal");
   const [clientId, setClientId] = useState("");
+  const [customFields, setCustomFields] = useState<Record<string, unknown>>({});
 
   const { data: dashboardData } = useQuery<DashboardData>({
     queryKey: ["/api/client-portal/dashboard"],
   });
 
+  const { data: formSchema } = useQuery<FormSchemaData | null>({
+    queryKey: ["/api/v1/portal/support/form-schemas", category],
+    enabled: !!category,
+  });
+
+  useEffect(() => {
+    setCustomFields({});
+  }, [category]);
+
   const clients = dashboardData?.clients || [];
+  const dynamicFields: FormField[] = formSchema?.schemaJson || [];
 
   const createMutation = useMutation({
     mutationFn: async () => {
       const selectedClient = clientId || (clients.length === 1 ? clients[0].id : "");
       if (!selectedClient) throw new Error("Please select a client");
+
+      const metadataJson = dynamicFields.length > 0 ? customFields : null;
 
       return apiRequest("POST", "/api/v1/portal/support/tickets", {
         clientId: selectedClient,
@@ -53,6 +83,7 @@ export default function ClientPortalSupportNew() {
         description: description || null,
         category,
         priority,
+        metadataJson,
       });
     },
     onSuccess: async (res) => {
@@ -69,7 +100,17 @@ export default function ClientPortalSupportNew() {
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
     if (!title.trim()) return;
+    for (const field of dynamicFields) {
+      if (field.required && (customFields[field.key] === undefined || customFields[field.key] === null || customFields[field.key] === "")) {
+        toast({ title: "Missing required field", description: `Please fill in "${field.label}"`, variant: "destructive" });
+        return;
+      }
+    }
     createMutation.mutate();
+  };
+
+  const updateCustomField = (key: string, value: unknown) => {
+    setCustomFields((prev) => ({ ...prev, [key]: value }));
   };
 
   const effectiveClientId = clientId || (clients.length === 1 ? clients[0].id : "");
@@ -158,6 +199,98 @@ export default function ClientPortalSupportNew() {
                   </Select>
                 </div>
               </div>
+
+              {dynamicFields.length > 0 && (
+                <>
+                  <Separator />
+                  <div className="space-y-4" data-testid="section-custom-fields">
+                    <Label className="text-sm font-medium">Additional Information</Label>
+                    {dynamicFields.map((field) => (
+                      <div key={field.key} className="space-y-2" data-testid={`custom-field-${field.key}`}>
+                        <Label htmlFor={`custom-${field.key}`} className="text-sm">
+                          {field.label}
+                          {field.required && <span className="text-destructive ml-0.5">*</span>}
+                        </Label>
+
+                        {field.type === "text" && (
+                          <Input
+                            id={`custom-${field.key}`}
+                            placeholder={field.placeholder || ""}
+                            value={(customFields[field.key] as string) || ""}
+                            onChange={(e) => updateCustomField(field.key, e.target.value)}
+                            required={field.required}
+                            data-testid={`input-custom-${field.key}`}
+                          />
+                        )}
+
+                        {field.type === "textarea" && (
+                          <Textarea
+                            id={`custom-${field.key}`}
+                            placeholder={field.placeholder || ""}
+                            value={(customFields[field.key] as string) || ""}
+                            onChange={(e) => updateCustomField(field.key, e.target.value)}
+                            className="min-h-[80px]"
+                            data-testid={`input-custom-${field.key}`}
+                          />
+                        )}
+
+                        {field.type === "number" && (
+                          <Input
+                            id={`custom-${field.key}`}
+                            type="number"
+                            placeholder={field.placeholder || ""}
+                            value={(customFields[field.key] as string) || ""}
+                            onChange={(e) => updateCustomField(field.key, e.target.value)}
+                            required={field.required}
+                            data-testid={`input-custom-${field.key}`}
+                          />
+                        )}
+
+                        {field.type === "date" && (
+                          <Input
+                            id={`custom-${field.key}`}
+                            type="date"
+                            value={(customFields[field.key] as string) || ""}
+                            onChange={(e) => updateCustomField(field.key, e.target.value)}
+                            required={field.required}
+                            data-testid={`input-custom-${field.key}`}
+                          />
+                        )}
+
+                        {field.type === "select" && field.options && (
+                          <Select
+                            value={(customFields[field.key] as string) || ""}
+                            onValueChange={(v) => updateCustomField(field.key, v)}
+                          >
+                            <SelectTrigger data-testid={`select-custom-${field.key}`}>
+                              <SelectValue placeholder={field.placeholder || "Select..."} />
+                            </SelectTrigger>
+                            <SelectContent>
+                              {field.options.map((opt) => (
+                                <SelectItem key={opt} value={opt}>{opt}</SelectItem>
+                              ))}
+                            </SelectContent>
+                          </Select>
+                        )}
+
+                        {field.type === "checkbox" && (
+                          <div className="flex items-center gap-2">
+                            <Switch
+                              id={`custom-${field.key}`}
+                              checked={!!customFields[field.key]}
+                              onCheckedChange={(c) => updateCustomField(field.key, c)}
+                              data-testid={`switch-custom-${field.key}`}
+                            />
+                            <Label htmlFor={`custom-${field.key}`} className="text-sm cursor-pointer">
+                              {field.placeholder || "Yes"}
+                            </Label>
+                          </div>
+                        )}
+                      </div>
+                    ))}
+                  </div>
+                </>
+              )}
 
               <div className="flex items-center justify-end gap-2 pt-2">
                 <Button type="button" variant="outline" onClick={() => navigate("/portal/support")} data-testid="button-cancel">

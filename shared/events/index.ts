@@ -823,6 +823,7 @@ export type ServerToClientEvents = {
   [SUPPORT_TICKET_EVENTS.UPDATED]: (payload: SupportTicketUpdatedPayload) => void;
   [SUPPORT_TICKET_EVENTS.MESSAGE_ADDED]: (payload: SupportTicketMessageAddedPayload) => void;
   [SUPPORT_TICKET_EVENTS.STATUS_CHANGED]: (payload: SupportTicketStatusChangedPayload) => void;
+  [SUPPORT_TICKET_EVENTS.SLA_BREACH]: (payload: SupportTicketSlaBreachPayload) => void;
 };
 
 // =============================================================================
@@ -834,6 +835,7 @@ export const SUPPORT_TICKET_EVENTS = {
   UPDATED: 'support_ticket:updated',
   MESSAGE_ADDED: 'support_ticket:messageAdded',
   STATUS_CHANGED: 'support_ticket:statusChanged',
+  SLA_BREACH: 'support_ticket:slaBreach',
 } as const;
 
 export interface SupportTicketCreatedPayload {
@@ -873,6 +875,14 @@ export interface SupportTicketStatusChangedPayload {
   tenantId: string;
   from: string;
   to: string;
+}
+
+export interface SupportTicketSlaBreachPayload {
+  ticketId: string;
+  tenantId: string;
+  breachType: 'first_response' | 'resolution';
+  policyId: string;
+  targetMinutes: number;
 }
 
 export type ClientToServerEvents = {

@@ -176,6 +176,13 @@
       "when": 1771486974506,
       "tag": "0024_polite_stick",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "7",
+      "when": 1771488616109,
+      "tag": "0025_black_wraith",
+      "breakpoints": true
     }
   ]
 }

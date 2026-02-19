@@ -83,6 +83,9 @@ import {
   type SupportCannedReply, type InsertSupportCannedReply,
   type SupportMacro, type InsertSupportMacro,
   supportCannedReplies, supportMacros,
+  type SlaPolicy, type InsertSlaPolicy,
+  type TicketFormSchema, type InsertTicketFormSchema,
+  supportSlaPolicies, supportTicketFormSchemas,
 } from "@shared/schema";
 import crypto from "crypto";
 import { db } from "./db";
@@ -557,6 +560,23 @@ export interface IStorage {
   createSupportMacro(macro: InsertSupportMacro): Promise<SupportMacro>;
   updateSupportMacro(id: string, tenantId: string, updates: Partial<InsertSupportMacro>): Promise<SupportMacro | undefined>;
   deleteSupportMacro(id: string, tenantId: string): Promise<boolean>;
+
+  // SLA Policies
+  getSlaPolicies(tenantId: string, workspaceId?: string | null): Promise<SlaPolicy[]>;
+  getSlaPolicy(id: string, tenantId: string): Promise<SlaPolicy | undefined>;
+  getApplicableSlaPolicy(tenantId: string, priority: string, category?: string | null, workspaceId?: string | null): Promise<SlaPolicy | undefined>;
+  createSlaPolicy(policy: InsertSlaPolicy): Promise<SlaPolicy>;
+  updateSlaPolicy(id: string, tenantId: string, updates: Partial<InsertSlaPolicy>): Promise<SlaPolicy | undefined>;
+  deleteSlaPolicy(id: string, tenantId: string): Promise<boolean>;
+  getOpenTicketsForSlaCheck(tenantId?: string): Promise<SupportTicket[]>;
+  setTicketFirstResponse(ticketId: string, tenantId: string, timestamp: Date): Promise<void>;
+  setTicketSlaBreached(ticketId: string, tenantId: string, field: 'firstResponseBreachedAt' | 'resolutionBreachedAt', timestamp: Date): Promise<void>;
+
+  // Ticket Form Schemas
+  getTicketFormSchemas(tenantId: string, workspaceId?: string | null): Promise<TicketFormSchema[]>;
+  getTicketFormSchema(tenantId: string, category: string, workspaceId?: string | null): Promise<TicketFormSchema | undefined>;
+  upsertTicketFormSchema(tenantId: string, category: string, schemaJson: unknown, workspaceId?: string | null): Promise<TicketFormSchema>;
+  deleteTicketFormSchema(id: string, tenantId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4983,6 +5003,127 @@ export class DatabaseStorage implements IStorage {
 
   async deleteSupportMacro(id: string, tenantId: string): Promise<boolean> {
     const result = await db.delete(supportMacros).where(and(eq(supportMacros.id, id), eq(supportMacros.tenantId, tenantId))).returning();
+    return result.length > 0;
+  }
+
+  // SLA Policies
+  async getSlaPolicies(tenantId: string, workspaceId?: string | null): Promise<SlaPolicy[]> {
+    const conditions = [eq(supportSlaPolicies.tenantId, tenantId)];
+    if (workspaceId) {
+      conditions.push(eq(supportSlaPolicies.workspaceId, workspaceId));
+    }
+    return db.select().from(supportSlaPolicies).where(and(...conditions)).orderBy(supportSlaPolicies.priority);
+  }
+
+  async getSlaPolicy(id: string, tenantId: string): Promise<SlaPolicy | undefined> {
+    const [policy] = await db.select().from(supportSlaPolicies).where(and(eq(supportSlaPolicies.id, id), eq(supportSlaPolicies.tenantId, tenantId)));
+    return policy || undefined;
+  }
+
+  async getApplicableSlaPolicy(tenantId: string, priority: string, category?: string | null, workspaceId?: string | null): Promise<SlaPolicy | undefined> {
+    // Try most specific first: workspace + category + priority
+    if (workspaceId && category) {
+      const [p] = await db.select().from(supportSlaPolicies).where(and(
+        eq(supportSlaPolicies.tenantId, tenantId),
+        eq(supportSlaPolicies.workspaceId, workspaceId),
+        eq(supportSlaPolicies.category, category),
+        eq(supportSlaPolicies.priority, priority)
+      ));
+      if (p) return p;
+    }
+    // Fallback: tenant + category + priority (no workspace)
+    if (category) {
+      const [p] = await db.select().from(supportSlaPolicies).where(and(
+        eq(supportSlaPolicies.tenantId, tenantId),
+        isNull(supportSlaPolicies.workspaceId),
+        eq(supportSlaPolicies.category, category),
+        eq(supportSlaPolicies.priority, priority)
+      ));
+      if (p) return p;
+    }
+    // Fallback: tenant + priority (no category, no workspace)
+    const [p] = await db.select().from(supportSlaPolicies).where(and(
+      eq(supportSlaPolicies.tenantId, tenantId),
+      isNull(supportSlaPolicies.workspaceId),
+      isNull(supportSlaPolicies.category),
+      eq(supportSlaPolicies.priority, priority)
+    ));
+    return p || undefined;
+  }
+
+  async createSlaPolicy(policy: InsertSlaPolicy): Promise<SlaPolicy> {
+    const [created] = await db.insert(supportSlaPolicies).values(policy).returning();
+    return created;
+  }
+
+  async updateSlaPolicy(id: string, tenantId: string, updates: Partial<InsertSlaPolicy>): Promise<SlaPolicy | undefined> {
+    const [updated] = await db.update(supportSlaPolicies).set({ ...updates, updatedAt: new Date() }).where(and(eq(supportSlaPolicies.id, id), eq(supportSlaPolicies.tenantId, tenantId))).returning();
+    return updated || undefined;
+  }
+
+  async deleteSlaPolicy(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(supportSlaPolicies).where(and(eq(supportSlaPolicies.id, id), eq(supportSlaPolicies.tenantId, tenantId))).returning();
+    return result.length > 0;
+  }
+
+  async getOpenTicketsForSlaCheck(tenantId?: string): Promise<SupportTicket[]> {
+    const conditions = [
+      sql`${supportTickets.status} IN ('open', 'in_progress', 'waiting_on_client')`,
+    ];
+    if (tenantId) {
+      conditions.push(eq(supportTickets.tenantId, tenantId));
+    }
+    return db.select().from(supportTickets).where(and(...conditions));
+  }
+
+  async setTicketFirstResponse(ticketId: string, tenantId: string, timestamp: Date): Promise<void> {
+    await db.update(supportTickets).set({ firstResponseAt: timestamp, updatedAt: new Date() }).where(and(eq(supportTickets.id, ticketId), eq(supportTickets.tenantId, tenantId)));
+  }
+
+  async setTicketSlaBreached(ticketId: string, tenantId: string, field: 'firstResponseBreachedAt' | 'resolutionBreachedAt', timestamp: Date): Promise<void> {
+    await db.update(supportTickets).set({ [field]: timestamp, updatedAt: new Date() }).where(and(eq(supportTickets.id, ticketId), eq(supportTickets.tenantId, tenantId)));
+  }
+
+  // Ticket Form Schemas
+  async getTicketFormSchemas(tenantId: string, workspaceId?: string | null): Promise<TicketFormSchema[]> {
+    const conditions = [eq(supportTicketFormSchemas.tenantId, tenantId)];
+    if (workspaceId) {
+      conditions.push(eq(supportTicketFormSchemas.workspaceId, workspaceId));
+    }
+    return db.select().from(supportTicketFormSchemas).where(and(...conditions)).orderBy(supportTicketFormSchemas.category);
+  }
+
+  async getTicketFormSchema(tenantId: string, category: string, workspaceId?: string | null): Promise<TicketFormSchema | undefined> {
+    const conditions = [
+      eq(supportTicketFormSchemas.tenantId, tenantId),
+      eq(supportTicketFormSchemas.category, category),
+    ];
+    if (workspaceId) {
+      conditions.push(eq(supportTicketFormSchemas.workspaceId, workspaceId));
+    } else {
+      conditions.push(isNull(supportTicketFormSchemas.workspaceId));
+    }
+    const [schema] = await db.select().from(supportTicketFormSchemas).where(and(...conditions));
+    return schema || undefined;
+  }
+
+  async upsertTicketFormSchema(tenantId: string, category: string, schemaJson: unknown, workspaceId?: string | null): Promise<TicketFormSchema> {
+    const existing = await this.getTicketFormSchema(tenantId, category, workspaceId);
+    if (existing) {
+      const [updated] = await db.update(supportTicketFormSchemas).set({ schemaJson, updatedAt: new Date() }).where(eq(supportTicketFormSchemas.id, existing.id)).returning();
+      return updated;
+    }
+    const [created] = await db.insert(supportTicketFormSchemas).values({
+      tenantId,
+      category,
+      schemaJson,
+      workspaceId: workspaceId || null,
+    }).returning();
+    return created;
+  }
+
+  async deleteTicketFormSchema(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(supportTicketFormSchemas).where(and(eq(supportTicketFormSchemas.id, id), eq(supportTicketFormSchemas.tenantId, tenantId))).returning();
     return result.length > 0;
   }
 }

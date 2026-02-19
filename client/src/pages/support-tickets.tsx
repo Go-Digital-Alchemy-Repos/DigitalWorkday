@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LifeBuoy, Search, Clock, User2, Building2, MessageSquareText } from "lucide-react";
+import { LifeBuoy, Search, Clock, User2, Building2, MessageSquareText, ShieldAlert, FileText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -22,6 +22,9 @@ interface SupportTicket {
   clientId: string | null;
   lastActivityAt: string;
   createdAt: string;
+  firstResponseAt: string | null;
+  firstResponseBreachedAt: string | null;
+  resolutionBreachedAt: string | null;
   client?: { id: string; companyName: string } | null;
   assignee?: { id: string; name: string | null; email: string } | null;
   createdByUser?: { id: string; name: string | null; email: string } | null;
@@ -109,11 +112,23 @@ export default function SupportTickets() {
             <h1 className="text-xl font-semibold" data-testid="text-support-console-title">Support Console</h1>
             <p className="text-sm text-muted-foreground">Manage client support tickets and work orders</p>
           </div>
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-2 flex-wrap">
             <Link href="/support/templates">
               <Button variant="outline" size="sm" data-testid="button-manage-templates">
                 <MessageSquareText className="h-4 w-4 mr-1" />
                 Templates
+              </Button>
+            </Link>
+            <Link href="/support/sla-policies">
+              <Button variant="outline" size="sm" data-testid="button-manage-sla">
+                <ShieldAlert className="h-4 w-4 mr-1" />
+                SLA Policies
+              </Button>
+            </Link>
+            <Link href="/support/form-schemas">
+              <Button variant="outline" size="sm" data-testid="button-manage-forms">
+                <FileText className="h-4 w-4 mr-1" />
+                Form Schemas
               </Button>
             </Link>
           </div>
@@ -205,6 +220,12 @@ export default function SupportTickets() {
                         {(ticket.priority === "high" || ticket.priority === "urgent") && (
                           <Badge variant="secondary" className={`text-xs shrink-0 ${priorityVariants[ticket.priority]}`}>
                             {priorityLabels[ticket.priority]}
+                          </Badge>
+                        )}
+                        {(ticket.firstResponseBreachedAt || ticket.resolutionBreachedAt) && (
+                          <Badge variant="destructive" className="text-xs shrink-0" data-testid={`badge-sla-breach-${ticket.id}`}>
+                            <ShieldAlert className="h-3 w-3 mr-0.5" />
+                            SLA Breached
                           </Badge>
                         )}
                       </div>

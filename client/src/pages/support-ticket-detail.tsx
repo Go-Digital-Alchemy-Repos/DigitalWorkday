@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
-import { ArrowLeft, Send, Clock, Building2, User2, Loader2, Eye, EyeOff, MessageSquareText, Zap, ChevronDown } from "lucide-react";
+import { ArrowLeft, Send, Clock, Building2, User2, Loader2, Eye, EyeOff, MessageSquareText, Zap, ChevronDown, ShieldAlert, CheckCircle2, AlertTriangle } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -51,6 +51,10 @@ interface TicketDetail {
   lastActivityAt: string;
   resolvedAt: string | null;
   closedAt: string | null;
+  firstResponseAt: string | null;
+  firstResponseBreachedAt: string | null;
+  resolutionBreachedAt: string | null;
+  metadataJson: Record<string, unknown> | null;
   client: { id: string; companyName: string } | null;
   assignee: { id: string; name: string | null; email: string } | null;
   createdByUser: { id: string; name: string | null; email: string } | null;
@@ -564,6 +568,68 @@ export default function SupportTicketDetail() {
                 )}
               </CardContent>
             </Card>
+
+            {(ticket.firstResponseAt || ticket.firstResponseBreachedAt || ticket.resolutionBreachedAt || ["open", "in_progress", "waiting_on_client"].includes(ticket.status)) && (
+              <Card data-testid="card-sla-status">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm flex items-center gap-1.5">
+                    <ShieldAlert className="h-4 w-4" />
+                    SLA Status
+                  </CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-3">
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">First Response</Label>
+                    {ticket.firstResponseBreachedAt ? (
+                      <div className="flex items-center gap-1.5 text-sm text-destructive" data-testid="text-sla-first-response-breached">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        Breached {formatDate(ticket.firstResponseBreachedAt)}
+                      </div>
+                    ) : ticket.firstResponseAt ? (
+                      <div className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400" data-testid="text-sla-first-response-met">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Met {formatDate(ticket.firstResponseAt)}
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground" data-testid="text-sla-first-response-pending">Pending</span>
+                    )}
+                  </div>
+
+                  <div className="space-y-1.5">
+                    <Label className="text-xs text-muted-foreground">Resolution</Label>
+                    {ticket.resolutionBreachedAt ? (
+                      <div className="flex items-center gap-1.5 text-sm text-destructive" data-testid="text-sla-resolution-breached">
+                        <AlertTriangle className="h-3.5 w-3.5" />
+                        Breached {formatDate(ticket.resolutionBreachedAt)}
+                      </div>
+                    ) : ticket.status === "resolved" || ticket.status === "closed" ? (
+                      <div className="flex items-center gap-1.5 text-sm text-green-600 dark:text-green-400" data-testid="text-sla-resolution-met">
+                        <CheckCircle2 className="h-3.5 w-3.5" />
+                        Resolved
+                      </div>
+                    ) : (
+                      <span className="text-sm text-muted-foreground" data-testid="text-sla-resolution-pending">In progress</span>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {ticket.metadataJson && Object.keys(ticket.metadataJson).length > 0 && (
+              <Card data-testid="card-request-details">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm">Request Details</CardTitle>
+                </CardHeader>
+                <CardContent className="space-y-2">
+                  {Object.entries(ticket.metadataJson).map(([key, value]) => (
+                    <div key={key} className="space-y-0.5">
+                      <Label className="text-xs text-muted-foreground capitalize">{key.replace(/_/g, " ")}</Label>
+                      <p className="text-sm" data-testid={`text-metadata-${key}`}>{String(value)}</p>
+                    </div>
+                  ))}
+                </CardContent>
+              </Card>
+            )}
 
             {ticket.events.length > 0 && (
               <Card>

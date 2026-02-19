@@ -15,6 +15,7 @@ const createTicketSchema = z.object({
   category: z.enum(["support", "work_order", "billing", "bug", "feature_request"]).optional().default("support"),
   assignedToUserId: z.string().optional().nullable(),
   dueAt: z.string().optional().nullable(),
+  metadataJson: z.record(z.any()).optional().nullable(),
 });
 
 const updateTicketSchema = z.object({
@@ -124,6 +125,18 @@ router.post("/tickets", async (req, res) => {
     const body = createTicketSchema.parse(req.body);
     const userId = req.user!.id;
 
+    if (body.metadataJson && body.category) {
+      const formSchema = await storage.getTicketFormSchema(tenantId, body.category);
+      if (formSchema) {
+        const fields = (formSchema.schemaJson as any)?.fields || [];
+        for (const field of fields) {
+          if (field.required && (body.metadataJson[field.name] === undefined || body.metadataJson[field.name] === null || body.metadataJson[field.name] === "")) {
+            throw AppError.badRequest(`Field "${field.label || field.name}" is required`);
+          }
+        }
+      }
+    }
+
     const ticket = await storage.createSupportTicket({
       tenantId,
       clientId: body.clientId || null,
@@ -136,6 +149,7 @@ router.post("/tickets", async (req, res) => {
       source: SupportTicketSource.TENANT,
       assignedToUserId: body.assignedToUserId || null,
       dueAt: body.dueAt ? new Date(body.dueAt) : null,
+      metadataJson: body.metadataJson ?? null,
     });
 
     await storage.createSupportTicketEvent({
@@ -252,6 +266,10 @@ router.post("/tickets/:id/messages", async (req, res) => {
       bodyText: body.bodyText,
       visibility: body.visibility,
     });
+
+    if (body.visibility === "public" && !ticket.firstResponseAt) {
+      await storage.setTicketFirstResponse(ticket.id, tenantId, new Date());
+    }
 
     res.status(201).json(message);
   } catch (error) {
@@ -499,6 +517,206 @@ router.post("/tickets/:ticketId/apply-macro", async (req, res) => {
     res.json({ ok: true, message, appliedActions });
   } catch (error) {
     return handleRouteError(res, error, "POST /api/v1/support/tickets/:ticketId/apply-macro", req);
+  }
+});
+
+// ============================================================
+// SLA Policies CRUD
+// ============================================================
+
+const slaPolicySchema = z.object({
+  priority: z.string(),
+  category: z.string().nullable().optional(),
+  workspaceId: z.string().nullable().optional(),
+  firstResponseMinutes: z.number().int().positive(),
+  resolutionMinutes: z.number().int().positive(),
+  escalationJson: z.any().optional(),
+});
+
+router.get("/sla-policies", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const policies = await storage.getSlaPolicies(tenantId, (req.query.workspaceId as string) || null);
+    res.json(policies);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/v1/support/sla-policies", req);
+  }
+});
+
+router.post("/sla-policies", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const body = slaPolicySchema.parse(req.body);
+    const policy = await storage.createSlaPolicy({
+      tenantId,
+      priority: body.priority,
+      category: body.category ?? null,
+      workspaceId: body.workspaceId ?? null,
+      firstResponseMinutes: body.firstResponseMinutes,
+      resolutionMinutes: body.resolutionMinutes,
+      escalationJson: body.escalationJson ?? {},
+    });
+    res.status(201).json(policy);
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/v1/support/sla-policies", req);
+  }
+});
+
+router.put("/sla-policies/:id", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const body = slaPolicySchema.partial().parse(req.body);
+    const updated = await storage.updateSlaPolicy(req.params.id, tenantId, body as any);
+    if (!updated) throw AppError.notFound("SLA policy");
+    res.json(updated);
+  } catch (error) {
+    return handleRouteError(res, error, "PUT /api/v1/support/sla-policies/:id", req);
+  }
+});
+
+router.delete("/sla-policies/:id", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const deleted = await storage.deleteSlaPolicy(req.params.id, tenantId);
+    if (!deleted) throw AppError.notFound("SLA policy");
+    res.json({ ok: true });
+  } catch (error) {
+    return handleRouteError(res, error, "DELETE /api/v1/support/sla-policies/:id", req);
+  }
+});
+
+// ============================================================
+// SLA Evaluator: check all open tickets for SLA breaches
+// ============================================================
+
+router.post("/sla-evaluate", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const results = await evaluateSlaPolicies(tenantId);
+    res.json({ ok: true, ...results });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/v1/support/sla-evaluate", req);
+  }
+});
+
+export async function evaluateSlaPolicies(tenantId?: string) {
+  const tickets = await storage.getOpenTicketsForSlaCheck(tenantId);
+  let firstResponseBreaches = 0;
+  let resolutionBreaches = 0;
+  const now = new Date();
+
+  for (const ticket of tickets) {
+    const policy = await storage.getApplicableSlaPolicy(
+      ticket.tenantId,
+      ticket.priority,
+      ticket.category,
+      null
+    );
+    if (!policy) continue;
+
+    const createdAt = new Date(ticket.createdAt);
+
+    // Check first response SLA
+    if (!ticket.firstResponseAt && !ticket.firstResponseBreachedAt) {
+      const deadlineMs = createdAt.getTime() + policy.firstResponseMinutes * 60_000;
+      if (now.getTime() > deadlineMs) {
+        await storage.setTicketSlaBreached(ticket.id, ticket.tenantId, 'firstResponseBreachedAt', now);
+        await storage.createSupportTicketEvent({
+          tenantId: ticket.tenantId,
+          ticketId: ticket.id,
+          actorType: 'system',
+          eventType: 'sla_breach',
+          payloadJson: { type: 'first_response', policyId: policy.id, deadlineMinutes: policy.firstResponseMinutes },
+        });
+        firstResponseBreaches++;
+      }
+    }
+
+    // Check resolution SLA
+    if (ticket.status !== 'resolved' && ticket.status !== 'closed' && !ticket.resolutionBreachedAt) {
+      const resDeadlineMs = createdAt.getTime() + policy.resolutionMinutes * 60_000;
+      if (now.getTime() > resDeadlineMs) {
+        await storage.setTicketSlaBreached(ticket.id, ticket.tenantId, 'resolutionBreachedAt', now);
+        await storage.createSupportTicketEvent({
+          tenantId: ticket.tenantId,
+          ticketId: ticket.id,
+          actorType: 'system',
+          eventType: 'sla_breach',
+          payloadJson: { type: 'resolution', policyId: policy.id, deadlineMinutes: policy.resolutionMinutes },
+        });
+        resolutionBreaches++;
+      }
+    }
+  }
+
+  return { checked: tickets.length, firstResponseBreaches, resolutionBreaches };
+}
+
+// ============================================================
+// Ticket Form Schemas CRUD
+// ============================================================
+
+const formSchemaBodySchema = z.object({
+  category: z.string(),
+  workspaceId: z.string().nullable().optional(),
+  schemaJson: z.array(z.object({
+    key: z.string(),
+    label: z.string(),
+    type: z.enum(["text", "textarea", "select", "number", "date", "checkbox"]),
+    required: z.boolean().optional(),
+    options: z.array(z.string()).optional(),
+    placeholder: z.string().optional(),
+  })),
+});
+
+router.get("/form-schemas", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const schemas = await storage.getTicketFormSchemas(tenantId, (req.query.workspaceId as string) || null);
+    res.json(schemas);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/v1/support/form-schemas", req);
+  }
+});
+
+router.get("/form-schemas/:category", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const schema = await storage.getTicketFormSchema(tenantId, req.params.category, (req.query.workspaceId as string) || null);
+    res.json(schema || null);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/v1/support/form-schemas/:category", req);
+  }
+});
+
+router.post("/form-schemas", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const body = formSchemaBodySchema.parse(req.body);
+    const schema = await storage.upsertTicketFormSchema(tenantId, body.category, body.schemaJson, body.workspaceId ?? null);
+    res.status(201).json(schema);
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/v1/support/form-schemas", req);
+  }
+});
+
+router.delete("/form-schemas/:id", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const deleted = await storage.deleteTicketFormSchema(req.params.id, tenantId);
+    if (!deleted) throw AppError.notFound("Form schema");
+    res.json({ ok: true });
+  } catch (error) {
+    return handleRouteError(res, error, "DELETE /api/v1/support/form-schemas/:id", req);
   }
 });
 

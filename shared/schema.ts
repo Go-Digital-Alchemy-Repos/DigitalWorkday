@@ -3305,6 +3305,7 @@ export const SupportTicketEventType = {
   REOPENED: "reopened",
   RESOLVED: "resolved",
   CLOSED: "closed",
+  SLA_BREACH: "sla_breach",
 } as const;
 
 export const supportTickets = pgTable("support_tickets", {
@@ -3323,6 +3324,10 @@ export const supportTickets = pgTable("support_tickets", {
   dueAt: timestamp("due_at"),
   resolvedAt: timestamp("resolved_at"),
   closedAt: timestamp("closed_at"),
+  firstResponseAt: timestamp("first_response_at"),
+  firstResponseBreachedAt: timestamp("first_response_breached_at"),
+  resolutionBreachedAt: timestamp("resolution_breached_at"),
+  metadataJson: jsonb("metadata_json"),
   lastActivityAt: timestamp("last_activity_at").defaultNow().notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -3339,6 +3344,9 @@ export const insertSupportTicketSchema = createInsertSchema(supportTickets).omit
   lastActivityAt: true,
   resolvedAt: true,
   closedAt: true,
+  firstResponseAt: true,
+  firstResponseBreachedAt: true,
+  resolutionBreachedAt: true,
 });
 export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
 export type SupportTicket = typeof supportTickets.$inferSelect;
@@ -3432,3 +3440,56 @@ export const insertSupportMacroSchema = createInsertSchema(supportMacros).omit({
 });
 export type InsertSupportMacro = z.infer<typeof insertSupportMacroSchema>;
 export type SupportMacro = typeof supportMacros.$inferSelect;
+
+// ============================================================
+// Support SLA Policies
+// ============================================================
+
+export const supportSlaPolicies = pgTable("support_sla_policies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
+  category: text("category"),
+  priority: text("priority").notNull(),
+  firstResponseMinutes: integer("first_response_minutes").notNull(),
+  resolutionMinutes: integer("resolution_minutes").notNull(),
+  escalationJson: jsonb("escalation_json").default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("support_sla_policies_tenant_ws_cat_pri_idx").on(table.tenantId, table.workspaceId, table.category, table.priority),
+  index("support_sla_policies_tenant_idx").on(table.tenantId),
+]);
+
+export const insertSlaPoilcySchema = createInsertSchema(supportSlaPolicies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSlaPolicy = z.infer<typeof insertSlaPoilcySchema>;
+export type SlaPolicy = typeof supportSlaPolicies.$inferSelect;
+
+// ============================================================
+// Support Ticket Form Schemas
+// ============================================================
+
+export const supportTicketFormSchemas = pgTable("support_ticket_form_schemas", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
+  category: text("category").notNull(),
+  schemaJson: jsonb("schema_json").notNull().default([]),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("support_ticket_form_schemas_tenant_ws_cat_idx").on(table.tenantId, table.workspaceId, table.category),
+  index("support_ticket_form_schemas_tenant_idx").on(table.tenantId),
+]);
+
+export const insertTicketFormSchemaSchema = createInsertSchema(supportTicketFormSchemas).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertTicketFormSchema = z.infer<typeof insertTicketFormSchemaSchema>;
+export type TicketFormSchema = typeof supportTicketFormSchemas.$inferSelect;

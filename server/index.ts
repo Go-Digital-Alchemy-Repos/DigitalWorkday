@@ -547,6 +547,22 @@ httpServer.listen(port, host, () => {
     }
   });
 
+  setImmediate(() => {
+    const SLA_CHECK_INTERVAL_MS = 5 * 60_000;
+    setInterval(async () => {
+      try {
+        const { evaluateSlaPolicies } = require("./http/domains/support.router");
+        const result = await evaluateSlaPolicies();
+        if (result.firstResponseBreaches > 0 || result.resolutionBreaches > 0) {
+          console.log(`[sla-evaluator] Checked ${result.checked} tickets: ${result.firstResponseBreaches} first-response breaches, ${result.resolutionBreaches} resolution breaches`);
+        }
+      } catch (err) {
+        console.error("[sla-evaluator] Error:", err);
+      }
+    }, SLA_CHECK_INTERVAL_MS);
+    console.log("[background] SLA evaluator scheduled (every 5 minutes)");
+  });
+
   setImmediate(async () => {
     try {
       logAppInfo();

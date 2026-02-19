@@ -55,6 +55,8 @@ const TeamDetailPage = lazy(() => import("@/pages/team-detail"));
 const SupportTickets = lazy(() => import("@/pages/support-tickets"));
 const SupportTicketDetail = lazy(() => import("@/pages/support-ticket-detail"));
 const SupportTemplates = lazy(() => import("@/pages/support-templates"));
+const SupportSlaPolicies = lazy(() => import("@/pages/support-sla-policies"));
+const SupportFormSchemas = lazy(() => import("@/pages/support-form-schemas"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 function TenantRouter() {
@@ -132,6 +134,12 @@ function TenantRouter() {
         </Route>
         <Route path="/support/templates">
           {() => <TenantRouteGuard component={SupportTemplates} />}
+        </Route>
+        <Route path="/support/sla-policies">
+          {() => <TenantRouteGuard component={SupportSlaPolicies} />}
+        </Route>
+        <Route path="/support/form-schemas">
+          {() => <TenantRouteGuard component={SupportFormSchemas} />}
         </Route>
         <Route path="/support/:id">
           {() => <TenantRouteGuard component={SupportTicketDetail} />}

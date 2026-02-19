@@ -23,6 +23,7 @@ const createTicketSchema = z.object({
   description: z.string().optional().nullable(),
   category: z.enum(["support", "work_order", "billing", "bug", "feature_request"]).optional().default("support"),
   priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
+  metadataJson: z.record(z.any()).optional().nullable(),
 });
 
 const addReplySchema = z.object({
@@ -115,6 +116,18 @@ router.post("/tickets", async (req, res) => {
       throw AppError.forbidden("You do not have access to this client");
     }
 
+    if (body.metadataJson && body.category) {
+      const formSchema = await storage.getTicketFormSchema(tenantId, body.category);
+      if (formSchema) {
+        const fields = (formSchema.schemaJson as any)?.fields || [];
+        for (const field of fields) {
+          if (field.required && (body.metadataJson[field.name] === undefined || body.metadataJson[field.name] === null || body.metadataJson[field.name] === "")) {
+            throw AppError.badRequest(`Field "${field.label || field.name}" is required`);
+          }
+        }
+      }
+    }
+
     const ticket = await storage.createSupportTicket({
       tenantId,
       clientId: body.clientId,
@@ -127,6 +140,7 @@ router.post("/tickets", async (req, res) => {
       source: SupportTicketSource.PORTAL,
       assignedToUserId: null,
       dueAt: null,
+      metadataJson: body.metadataJson ?? null,
     });
 
     await storage.createSupportTicketEvent({
@@ -197,6 +211,18 @@ router.post("/tickets/:id/messages", async (req, res) => {
     res.status(201).json(message);
   } catch (error) {
     return handleRouteError(res, error, "POST /api/v1/portal/support/tickets/:id/messages", req);
+  }
+});
+
+// Portal: get form schema for a category (so portal can render dynamic fields)
+router.get("/form-schemas/:category", async (req, res) => {
+  try {
+    const tenantId = req.user!.tenantId;
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const schema = await storage.getTicketFormSchema(tenantId, req.params.category);
+    res.json(schema || null);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/v1/portal/support/form-schemas/:category", req);
   }
 });
 
