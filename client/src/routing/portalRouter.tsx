@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route, Redirect } from "wouter";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
 import { ThemeToggle } from "@/components/theme-toggle";
@@ -9,42 +10,54 @@ import { SkipLink } from "@/components/skip-link";
 import { ClientPortalSidebar } from "@/components/client-portal-sidebar";
 import { ClientPortalMobileNav } from "@/components/client-portal-mobile-nav";
 import { useIsMobile } from "@/hooks/use-mobile";
-import ClientPortalDashboard from "@/pages/client-portal-dashboard";
-import ClientPortalProjects from "@/pages/client-portal-projects";
-import ClientPortalTasks from "@/pages/client-portal-tasks";
-import ClientPortalProjectDetail from "@/pages/client-portal-project-detail";
-import ClientPortalApprovals from "@/pages/client-portal-approvals";
-import ClientPortalMessages from "@/pages/client-portal-messages";
-import ChatPage from "@/pages/chat";
+import { Loader2 } from "lucide-react";
+
+const ClientPortalDashboard = lazy(() => import("@/pages/client-portal-dashboard"));
+const ClientPortalProjects = lazy(() => import("@/pages/client-portal-projects"));
+const ClientPortalTasks = lazy(() => import("@/pages/client-portal-tasks"));
+const ClientPortalProjectDetail = lazy(() => import("@/pages/client-portal-project-detail"));
+const ClientPortalApprovals = lazy(() => import("@/pages/client-portal-approvals"));
+const ClientPortalMessages = lazy(() => import("@/pages/client-portal-messages"));
+const ChatPage = lazy(() => import("@/pages/chat"));
+
+function RouteFallback() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 function ClientPortalRouter() {
   return (
-    <Switch>
-      <Route path="/portal">
-        {() => <ClientPortalRouteGuard component={ClientPortalDashboard} />}
-      </Route>
-      <Route path="/portal/projects">
-        {() => <ClientPortalRouteGuard component={ClientPortalProjects} />}
-      </Route>
-      <Route path="/portal/projects/:id">
-        {() => <ClientPortalRouteGuard component={ClientPortalProjectDetail} />}
-      </Route>
-      <Route path="/portal/tasks">
-        {() => <ClientPortalRouteGuard component={ClientPortalTasks} />}
-      </Route>
-      <Route path="/portal/approvals">
-        {() => <ClientPortalRouteGuard component={ClientPortalApprovals} />}
-      </Route>
-      <Route path="/portal/messages">
-        {() => <ClientPortalRouteGuard component={ClientPortalMessages} />}
-      </Route>
-      <Route path="/portal/chat">
-        {() => <ClientPortalRouteGuard component={ChatPage} />}
-      </Route>
-      <Route>
-        {() => <Redirect to="/portal" />}
-      </Route>
-    </Switch>
+    <Suspense fallback={<RouteFallback />}>
+      <Switch>
+        <Route path="/portal">
+          {() => <ClientPortalRouteGuard component={ClientPortalDashboard} />}
+        </Route>
+        <Route path="/portal/projects">
+          {() => <ClientPortalRouteGuard component={ClientPortalProjects} />}
+        </Route>
+        <Route path="/portal/projects/:id">
+          {() => <ClientPortalRouteGuard component={ClientPortalProjectDetail} />}
+        </Route>
+        <Route path="/portal/tasks">
+          {() => <ClientPortalRouteGuard component={ClientPortalTasks} />}
+        </Route>
+        <Route path="/portal/approvals">
+          {() => <ClientPortalRouteGuard component={ClientPortalApprovals} />}
+        </Route>
+        <Route path="/portal/messages">
+          {() => <ClientPortalRouteGuard component={ClientPortalMessages} />}
+        </Route>
+        <Route path="/portal/chat">
+          {() => <ClientPortalRouteGuard component={ChatPage} />}
+        </Route>
+        <Route>
+          {() => <Redirect to="/portal" />}
+        </Route>
+      </Switch>
+    </Suspense>
   );
 }
 

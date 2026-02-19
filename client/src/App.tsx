@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route, useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
@@ -13,47 +14,52 @@ import { TypingProvider } from "@/hooks/use-typing";
 import { FeaturesProvider } from "@/contexts/features-context";
 import { FeaturesBanner } from "@/components/features-banner";
 import { ProtectedRoute } from "@/routing/guards";
-import { TenantLayout } from "@/routing/tenantRouter";
-import { SuperLayout } from "@/routing/superRouter";
-import { ClientPortalLayout } from "@/routing/portalRouter";
-import LoginPage from "@/pages/login";
-import TenantOnboardingPage from "@/pages/tenant-onboarding";
-import AcceptTermsPage from "@/pages/accept-terms";
-import PlatformInvitePage from "@/pages/platform-invite";
-import AcceptInvitePage from "@/pages/accept-invite";
-import ForgotPasswordPage from "@/pages/forgot-password";
-import ResetPasswordPage from "@/pages/reset-password";
 import { Loader2 } from "lucide-react";
+
+const TenantLayout = lazy(() => import("@/routing/tenantRouter").then(m => ({ default: m.TenantLayout })));
+const SuperLayout = lazy(() => import("@/routing/superRouter").then(m => ({ default: m.SuperLayout })));
+const ClientPortalLayout = lazy(() => import("@/routing/portalRouter").then(m => ({ default: m.ClientPortalLayout })));
+const LoginPage = lazy(() => import("@/pages/login"));
+const TenantOnboardingPage = lazy(() => import("@/pages/tenant-onboarding"));
+const AcceptTermsPage = lazy(() => import("@/pages/accept-terms"));
+const PlatformInvitePage = lazy(() => import("@/pages/platform-invite"));
+const AcceptInvitePage = lazy(() => import("@/pages/accept-invite"));
+const ForgotPasswordPage = lazy(() => import("@/pages/forgot-password"));
+const ResetPasswordPage = lazy(() => import("@/pages/reset-password"));
 
 function AppLayout() {
   const { isAuthenticated, isLoading, user } = useAuth();
   const { appMode } = useAppMode();
   const [location] = useLocation();
 
+  const suspenseFallback = (
+    <div className="flex items-center justify-center h-screen">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  );
+
   if (location === "/login" || location === "/tenant-onboarding" || location === "/accept-terms" || location.startsWith("/auth/platform-invite") || location.startsWith("/accept-invite/") || location.startsWith("/auth/forgot-password") || location.startsWith("/auth/reset-password")) {
     return (
-      <Switch>
-        <Route path="/login" component={LoginPage} />
-        <Route path="/tenant-onboarding">
-          {() => <ProtectedRoute component={TenantOnboardingPage} />}
-        </Route>
-        <Route path="/accept-terms">
-          {() => <ProtectedRoute component={AcceptTermsPage} />}
-        </Route>
-        <Route path="/auth/platform-invite" component={PlatformInvitePage} />
-        <Route path="/accept-invite/:token" component={AcceptInvitePage} />
-        <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
-        <Route path="/auth/reset-password" component={ResetPasswordPage} />
-      </Switch>
+      <Suspense fallback={suspenseFallback}>
+        <Switch>
+          <Route path="/login" component={LoginPage} />
+          <Route path="/tenant-onboarding">
+            {() => <ProtectedRoute component={TenantOnboardingPage} />}
+          </Route>
+          <Route path="/accept-terms">
+            {() => <ProtectedRoute component={AcceptTermsPage} />}
+          </Route>
+          <Route path="/auth/platform-invite" component={PlatformInvitePage} />
+          <Route path="/accept-invite/:token" component={AcceptInvitePage} />
+          <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
+          <Route path="/auth/reset-password" component={ResetPasswordPage} />
+        </Switch>
+      </Suspense>
     );
   }
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-screen">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-      </div>
-    );
+    return suspenseFallback;
   }
 
   if (!isAuthenticated) {
@@ -69,7 +75,7 @@ function AppLayout() {
     if (!isPortalRoute) {
       return <Redirect to="/portal" />;
     }
-    return <ClientPortalLayout />;
+    return <Suspense fallback={suspenseFallback}><ClientPortalLayout /></Suspense>;
   }
 
   if (isPortalRoute && !isClientUser) {
@@ -80,14 +86,14 @@ function AppLayout() {
     if (!isSuperRoute) {
       return <Redirect to="/super-admin/dashboard" />;
     }
-    return <SuperLayout />;
+    return <Suspense fallback={suspenseFallback}><SuperLayout /></Suspense>;
   }
 
   if (isSuperRoute && (!isSuperUser || appMode === "tenant")) {
     return <Redirect to="/" />;
   }
 
-  return <TenantLayout />;
+  return <Suspense fallback={suspenseFallback}><TenantLayout /></Suspense>;
 }
 
 function UserImpersonationWrapper({ children }: { children: React.ReactNode }) {

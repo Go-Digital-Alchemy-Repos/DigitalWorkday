@@ -1,3 +1,4 @@
+import { lazy, Suspense } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -27,104 +28,117 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check } from "lucide-react";
+import { MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check, Loader2 } from "lucide-react";
 import { type Workspace } from "@shared/schema";
-import Home from "@/pages/home";
-import MyTasks from "@/pages/my-tasks";
-import ProjectsDashboard from "@/pages/projects-dashboard";
-import ProjectPage from "@/pages/project";
-import ClientsPage from "@/pages/clients";
-import ClientDetailPage from "@/pages/client-detail";
-import Client360Page from "@/pages/client-360";
-import CrmPipelinePage from "@/pages/crm-pipeline";
-import CrmFollowupsPage from "@/pages/crm-followups";
-import SettingsPage from "@/pages/settings";
-import AccountPage from "@/pages/account";
-import UserManagerPage from "@/pages/user-manager";
-import UserProfilePage from "@/pages/user-profile";
-import ChatPage from "@/pages/chat";
-import ReportsPage from "@/pages/reports";
-import TemplatesPage from "@/pages/templates";
-import CalendarPage from "@/pages/calendar";
-import MyTimePage from "@/pages/my-time";
-import MyCalendarPage from "@/pages/my-calendar";
-import TeamDetailPage from "@/pages/team-detail";
-import NotFound from "@/pages/not-found";
+
+const Home = lazy(() => import("@/pages/home"));
+const MyTasks = lazy(() => import("@/pages/my-tasks"));
+const ProjectsDashboard = lazy(() => import("@/pages/projects-dashboard"));
+const ProjectPage = lazy(() => import("@/pages/project"));
+const ClientsPage = lazy(() => import("@/pages/clients"));
+const ClientDetailPage = lazy(() => import("@/pages/client-detail"));
+const Client360Page = lazy(() => import("@/pages/client-360"));
+const CrmPipelinePage = lazy(() => import("@/pages/crm-pipeline"));
+const CrmFollowupsPage = lazy(() => import("@/pages/crm-followups"));
+const SettingsPage = lazy(() => import("@/pages/settings"));
+const AccountPage = lazy(() => import("@/pages/account"));
+const UserManagerPage = lazy(() => import("@/pages/user-manager"));
+const UserProfilePage = lazy(() => import("@/pages/user-profile"));
+const ChatPage = lazy(() => import("@/pages/chat"));
+const ReportsPage = lazy(() => import("@/pages/reports"));
+const TemplatesPage = lazy(() => import("@/pages/templates"));
+const CalendarPage = lazy(() => import("@/pages/calendar"));
+const MyTimePage = lazy(() => import("@/pages/my-time"));
+const MyCalendarPage = lazy(() => import("@/pages/my-calendar"));
+const TeamDetailPage = lazy(() => import("@/pages/team-detail"));
+const NotFound = lazy(() => import("@/pages/not-found"));
+
+function RouteFallback() {
+  return (
+    <div className="flex items-center justify-center h-full">
+      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+    </div>
+  );
+}
 
 function TenantRouter() {
   return (
-    <Switch>
-      <Route path="/">
-        {() => <TenantRouteGuard component={Home} />}
-      </Route>
-      <Route path="/my-tasks">
-        {() => <TenantRouteGuard component={MyTasks} />}
-      </Route>
-      <Route path="/projects">
-        {() => <TenantRouteGuard component={ProjectsDashboard} />}
-      </Route>
-      <Route path="/projects/:id">
-        {() => <TenantRouteGuard component={ProjectPage} />}
-      </Route>
-      <Route path="/clients">
-        {() => <TenantRouteGuard component={ClientsPage} />}
-      </Route>
-      <Route path="/clients/:id/360">
-        {() => <TenantRouteGuard component={Client360Page} />}
-      </Route>
-      <Route path="/clients/:id">
-        {() => <TenantRouteGuard component={ClientDetailPage} />}
-      </Route>
-      <Route path="/crm/pipeline">
-        {() => <TenantRouteGuard component={CrmPipelinePage} />}
-      </Route>
-      <Route path="/crm/followups">
-        {() => <TenantRouteGuard component={CrmFollowupsPage} />}
-      </Route>
-      <Route path="/time-tracking">
-        {() => <Redirect to={`/my-time${window.location.search}`} />}
-      </Route>
-      <Route path="/calendar">
-        {() => <TenantRouteGuard component={CalendarPage} />}
-      </Route>
-      <Route path="/my-time">
-        {() => <TenantRouteGuard component={MyTimePage} />}
-      </Route>
-      <Route path="/my-calendar">
-        {() => <TenantRouteGuard component={MyCalendarPage} />}
-      </Route>
-      <Route path="/chat">
-        {() => <TenantRouteGuard component={ChatPage} />}
-      </Route>
-      <Route path="/settings">
-        {() => <TenantRouteGuard component={SettingsPage} />}
-      </Route>
-      <Route path="/settings/:tab">
-        {() => <TenantRouteGuard component={SettingsPage} />}
-      </Route>
-      <Route path="/account">
-        {() => <TenantRouteGuard component={AccountPage} />}
-      </Route>
-      <Route path="/account/:tab">
-        {() => <TenantRouteGuard component={AccountPage} />}
-      </Route>
-      <Route path="/user-manager">
-        {() => <TenantRouteGuard component={UserManagerPage} />}
-      </Route>
-      <Route path="/reports">
-        {() => <TenantRouteGuard component={ReportsPage} />}
-      </Route>
-      <Route path="/templates">
-        {() => <TenantRouteGuard component={TemplatesPage} />}
-      </Route>
-      <Route path="/teams/:id">
-        {() => <TenantRouteGuard component={TeamDetailPage} />}
-      </Route>
-      <Route path="/profile">
-        {() => <ProtectedRoute component={UserProfilePage} />}
-      </Route>
-      <Route component={NotFound} />
-    </Switch>
+    <Suspense fallback={<RouteFallback />}>
+      <Switch>
+        <Route path="/">
+          {() => <TenantRouteGuard component={Home} />}
+        </Route>
+        <Route path="/my-tasks">
+          {() => <TenantRouteGuard component={MyTasks} />}
+        </Route>
+        <Route path="/projects">
+          {() => <TenantRouteGuard component={ProjectsDashboard} />}
+        </Route>
+        <Route path="/projects/:id">
+          {() => <TenantRouteGuard component={ProjectPage} />}
+        </Route>
+        <Route path="/clients">
+          {() => <TenantRouteGuard component={ClientsPage} />}
+        </Route>
+        <Route path="/clients/:id/360">
+          {() => <TenantRouteGuard component={Client360Page} />}
+        </Route>
+        <Route path="/clients/:id">
+          {() => <TenantRouteGuard component={ClientDetailPage} />}
+        </Route>
+        <Route path="/crm/pipeline">
+          {() => <TenantRouteGuard component={CrmPipelinePage} />}
+        </Route>
+        <Route path="/crm/followups">
+          {() => <TenantRouteGuard component={CrmFollowupsPage} />}
+        </Route>
+        <Route path="/time-tracking">
+          {() => <Redirect to={`/my-time${window.location.search}`} />}
+        </Route>
+        <Route path="/calendar">
+          {() => <TenantRouteGuard component={CalendarPage} />}
+        </Route>
+        <Route path="/my-time">
+          {() => <TenantRouteGuard component={MyTimePage} />}
+        </Route>
+        <Route path="/my-calendar">
+          {() => <TenantRouteGuard component={MyCalendarPage} />}
+        </Route>
+        <Route path="/chat">
+          {() => <TenantRouteGuard component={ChatPage} />}
+        </Route>
+        <Route path="/settings">
+          {() => <TenantRouteGuard component={SettingsPage} />}
+        </Route>
+        <Route path="/settings/:tab">
+          {() => <TenantRouteGuard component={SettingsPage} />}
+        </Route>
+        <Route path="/account">
+          {() => <TenantRouteGuard component={AccountPage} />}
+        </Route>
+        <Route path="/account/:tab">
+          {() => <TenantRouteGuard component={AccountPage} />}
+        </Route>
+        <Route path="/user-manager">
+          {() => <TenantRouteGuard component={UserManagerPage} />}
+        </Route>
+        <Route path="/reports">
+          {() => <TenantRouteGuard component={ReportsPage} />}
+        </Route>
+        <Route path="/templates">
+          {() => <TenantRouteGuard component={TemplatesPage} />}
+        </Route>
+        <Route path="/teams/:id">
+          {() => <TenantRouteGuard component={TeamDetailPage} />}
+        </Route>
+        <Route path="/profile">
+          {() => <ProtectedRoute component={UserProfilePage} />}
+        </Route>
+        <Route>
+          {() => <NotFound />}
+        </Route>
+      </Switch>
+    </Suspense>
   );
 }
 
