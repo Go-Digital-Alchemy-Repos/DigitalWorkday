@@ -17,6 +17,7 @@ import timeRouter from "./domains/time.router";
 import projectsRouter from "./domains/projects.router";
 import tasksRouter from "./domains/tasks.router";
 import subtasksRouter from "./domains/subtasks.router";
+import projectNotesRouter from "./domains/project-notes.router";
 
 interface DomainEntry {
   path: string;
@@ -124,6 +125,13 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "subtasks",
     description: "Subtasks: CRUD, move, assignees, tags, comments, full detail. Migrated from legacy routes/subtasks.router.ts (Prompt #13).",
+  },
+  {
+    path: "/api",
+    router: projectNotesRouter,
+    policy: "authTenant",
+    domain: "project-notes",
+    description: "Project notes: CRUD, categories, version history. Mirrors client notes feature for project-level note-taking.",
   },
 ];
 

@@ -36,11 +36,13 @@ import {
   Target,
   DollarSign,
   Pencil,
+  StickyNote,
 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
 import type { Project, Client, Team, TaskWithRelations } from "@shared/schema";
+import { ProjectNotesTab } from "@/components/project-notes-tab";
 
 interface ProjectAnalytics {
   projectId: string;
@@ -217,9 +219,10 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
         <Separator className="my-4" />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className={`grid w-full ${isSuperUser ? "grid-cols-5" : "grid-cols-4"}`}>
+          <TabsList className={`grid w-full ${isSuperUser ? "grid-cols-6" : "grid-cols-5"}`}>
             <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
             <TabsTrigger value="tasks" data-testid="tab-tasks">Tasks</TabsTrigger>
+            <TabsTrigger value="notes" data-testid="tab-notes">Notes</TabsTrigger>
             <TabsTrigger value="insights" data-testid="tab-insights">Insights</TabsTrigger>
             <TabsTrigger value="forecast" data-testid="tab-forecast">Forecast</TabsTrigger>
             {isSuperUser && (
@@ -369,6 +372,10 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
                 <p>No tasks in this project</p>
               </div>
             )}
+          </TabsContent>
+
+          <TabsContent value="notes" className="mt-4">
+            <ProjectNotesTab projectId={projectId} />
           </TabsContent>
 
           <TabsContent value="insights" className="mt-4 space-y-4">

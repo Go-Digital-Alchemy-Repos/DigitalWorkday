@@ -1,0 +1,334 @@
+You are Replit AI working in the MyWorkDay (Digital Workday) TypeScript monorepo.
+
+FEATURE:
+Build a Super Admin “Data Import Wizard” at:
+Super Admin → Tenants → {Tenant} → Data
+This wizard lets a super admin upload one or more import files and map the file columns to MyWorkDay fields even if column names differ.
+
+We must support importing:
+- Clients
+- Projects
+- Tasks (and subtasks if present)
+- Employees (tenant users)
+- Admins (tenant admins / platform admins depending on file)
+- Tracked Time (time entries)
+
+The wizard MUST:
+- accept CSV uploads (start with CSV; allow future XLSX easily)
+- preview rows
+- map columns → system fields using a mapping UI
+- validate and show errors/warnings before import
+- perform import with progress + results summary
+- be safe/idempotent where possible (no duplicate floods)
+
+NON-DESTRUCTIVE + SAFETY RULES:
+- Maintain tenancy isolation: all data written must be scoped to the selected tenant/workspace as required.
+- All actions must require superUser policy.
+- Prefer reusing existing models/services/endpoints.
+- If schema changes are needed for import jobs, keep them minimal and include Drizzle migration + tests.
+- Do NOT change existing public API URLs; add new super-admin-only endpoints under /api/v1/super (or existing super-admin namespace).
+- Do NOT allow arbitrary file execution. Only parse CSV text safely. Limit file size and row count.
+
+DELIVERABLES:
+1) UI Wizard (multi-step) under Super Admin Tenant Data page
+2) Backend import pipeline + validation engine
+3) Column mapping system per entity type
+4) Dry-run validation (no writes) + Import execution (writes)
+5) Import summary report (created/updated/skipped/failed) + downloadable error CSV
+6) Documentation: docs/admin/data-import-wizard.md
+7) Tests: backend integration tests (>=6) + policy checks
+
+-----------------------------------
+PHASE 0 — DISCOVERY + INVENTORY
+-----------------------------------
+
+1) Locate existing Super Admin Tenant → Data page and routing.
+2) Identify existing domain services for:
+   - clients
+   - projects
+   - tasks
+   - users/admins
+   - time entries
+3) Identify current uniqueness/lookup keys:
+   - users: email
+   - clients: (tenantId, name) and/or externalId if exists
+   - projects: (tenantId, name) + client relation
+   - tasks: (tenantId, projectId, title) and/or externalId
+   - time entries: (tenantId, userId, startTime, endTime) and/or externalId
+4) Check if “externalId” fields already exist anywhere. If present, use them to de-duplicate imports.
+
+-----------------------------------
+PHASE 1 — DATA IMPORT MODEL + JOBS
+-----------------------------------
+
+We need an import job concept to support preview, mapping, dry run, and execution.
+
+Preferred (if suitable tables already exist): store import jobs in an existing admin/system table or JSON store.
+
+If none exists, add minimal tables (Drizzle + migration):
+- import_jobs:
+  id, tenantId, createdByUserId, status (draft|validated|running|completed|failed),
+  createdAt, updatedAt,
+  entityType (clients|projects|tasks|users|admins|time_entries|mixed),
+  mappingJson (json),
+  statsJson (json),
+  errorFileKey (optional: R2 key for error CSV)
+- import_job_files:
+  id, jobId, filename, mime, size, rowCount, uploadedAt, storage (db|r2|tmp), rawCsvText (optional limited) or r2Key
+
+Do NOT store huge CSV text in DB. Use:
+- in-memory for draft preview OR
+- Cloudflare R2 for job files (recommended) with size limits.
+
+-----------------------------------
+PHASE 2 — WIZARD UX (SUPER ADMIN)
+-----------------------------------
+
+Create UI: Super Admin → Tenants → Tenant → Data → “Import Data” button opens wizard.
+
+Wizard steps:
+
+Step 1: Select Import Type
+- Clients
+- Projects
+- Tasks
+- Users (Employees)
+- Admins
+- Time Entries
+- “Mixed” (optional later; for now allow multiple runs)
+
+Step 2: Upload File (CSV)
+- drag/drop + browse
+- show detected columns
+- show sample rows (first 20)
+- validate file size (e.g. 25MB) and row limit (e.g. 50k; configurable)
+
+Step 3: Map Columns
+- For each required field, choose a source column
+- Optional fields can be mapped or ignored
+- Provide smart auto-suggestions (name matching / fuzzy)
+- Allow transformations:
+  - trim
+  - toLowerCase (emails)
+  - parse date/time
+  - number parsing
+  - enum mapping (e.g., role values)
+- Allow “Static value” mapping (e.g. workspaceId, default status)
+- Allow “Reference mapping”:
+  - Project → Client by clientName
+  - Task → Project by projectName (or default selected project)
+  - Time entry → User by email + Project/Task by name if present
+
+Step 4: Validate (Dry Run)
+- Run server-side validation with mapping applied
+- Show:
+  - counts: wouldCreate / wouldUpdate / wouldSkip / wouldFail
+  - top 50 errors with row numbers
+  - warnings (e.g. ambiguous client match)
+- Provide download of full error CSV (row + reason)
+
+Step 5: Import (Execute)
+- Start import job
+- Show progress (rows processed)
+- On completion show summary with links:
+  - “View import report”
+  - “Download errors CSV”
+  - “Go to Clients / Projects / Tasks / Time”
+
+Also add:
+- Import history list for the tenant (last 20 jobs)
+
+-----------------------------------
+PHASE 3 — BACKEND ENDPOINTS (SUPERUSER ONLY)
+-----------------------------------
+
+Add endpoints (auth: superUser; tenant selected via tenantId path param; also support X-Tenant-Id override semantics if already used):
+
+- POST /api/v1/super/tenants/:tenantId/imports/jobs
+  body: { entityType }
+  returns: { jobId }
+
+- POST /api/v1/super/tenants/:tenantId/imports/jobs/:jobId/upload
+  multipart file upload OR presigned upload to R2
+  returns: { columns: string[], sampleRows: any[] , rowCountEstimate }
+
+- PUT /api/v1/super/tenants/:tenantId/imports/jobs/:jobId/mapping
+  body: { mappingJson }
+  returns: { ok }
+
+- POST /api/v1/super/tenants/:tenantId/imports/jobs/:jobId/validate
+  returns: { summary, errorsPreview, warningsPreview, errorReportDownloadUrl? }
+
+- POST /api/v1/super/tenants/:tenantId/imports/jobs/:jobId/run
+  returns: { started: true }
+
+- GET /api/v1/super/tenants/:tenantId/imports/jobs/:jobId
+  returns: job status + stats
+
+- GET /api/v1/super/tenants/:tenantId/imports/jobs
+  returns: list (history)
+
+All routes must be registered via routeRegistry + createApiRouter and covered by policy drift tests.
+
+-----------------------------------
+PHASE 4 — IMPORT ENGINE (VALIDATE + EXECUTE)
+-----------------------------------
+
+Implement a single import engine with entity-specific adapters:
+
+server/imports/
+- importEngine.ts
+- parsers/csvParser.ts
+- mapping/applyMapping.ts
+- validators/
+- writers/
+- entityAdapters/
+    clients.adapter.ts
+    projects.adapter.ts
+    tasks.adapter.ts
+    users.adapter.ts
+    admins.adapter.ts
+    timeEntries.adapter.ts
+
+Common behaviors:
+- Parse CSV robustly (quoted commas/newlines).
+- Normalize headers (trim).
+- Map row → canonical DTO using mappingJson.
+- Validate required fields per entity.
+- Resolve references (clientName → clientId, userEmail → userId, etc.)
+- Dedupe rows in-file (avoid duplicates).
+- Idempotency:
+  - Prefer externalId if present in mapping.
+  - Else use safe natural keys:
+    - user: email
+    - client: name + parentClientName if applicable
+    - project: name + clientId
+    - task: title + projectId (+ optional externalId)
+    - time entry: userId + startTime + endTime (+ description hash)
+- Writes:
+  - Use existing services/repositories to create/update.
+  - Wrap execution in batches with transaction per batch (e.g., 200 rows).
+  - Collect errors per row; do not abort entire job unless catastrophic.
+
+Return import stats:
+- created, updated, skipped, failed
+- warningsCount
+- durations
+
+Produce error CSV (rowNumber, primaryKey, errorCode, message) and store in R2 (preferred) or as downloadable stream.
+
+-----------------------------------
+PHASE 5 — ENTITY FIELD DEFINITIONS + REQUIRED MAPPINGS
+-----------------------------------
+
+Define system field catalogs for mapping UI (front + back shared):
+
+shared/imports/fieldCatalog.ts
+
+For each entity, define:
+- required fields
+- optional fields
+- type (string, number, datetime, enum)
+- examples
+- resolver requirements
+
+Example (Time Entries):
+Required:
+- userEmail (or userId resolver)
+- startTime
+- endTime OR durationHours
+Optional:
+- description
+- billableHours
+- scope
+- clientName / projectName / taskName (if your time entries support linking)
+
+Also include a “suggest mapping” function:
+- exact match on normalized header
+- fuzzy match (client_name ↔ clientName)
+- common aliases list per field
+
+-----------------------------------
+PHASE 6 — SPECIAL HANDLING FOR YOUR CURRENT FILE FORMAT (TIME ENTRIES)
+-----------------------------------
+
+The uploaded time report CSV has columns:
+userEmail, clientName, billableHours, firstName, lastName, role, parentClientName, startTime, endTime, description, scope
+
+Implement an Import Template preset for “Time Report CSV” that auto-maps:
+- userEmail -> user.email resolver
+- clientName -> client.name resolver (create client if missing ONLY if policy allows; otherwise warn)
+- parentClientName -> client.parentName resolver (optional)
+- startTime/endTime -> time entry times (parse ISO / mixed formats)
+- billableHours -> time entry billableHours (or derived)
+- description -> time entry description
+- scope -> time entry scope (enum mapping if needed)
+- role -> ignored or used only to classify admin vs employee if importing users in a separate run
+
+Ensure parsing handles:
+- mixed datetime strings like "2026-01-28 2026-01-28T06:12:45.945Z" by extracting the ISO segment if present.
+
+Add validator warnings if:
+- endTime <= startTime
+- billableHours mismatches duration significantly (configurable tolerance)
+
+-----------------------------------
+PHASE 7 — UI INTEGRATION + SECURITY
+-----------------------------------
+
+- Only super admins can access this page and endpoints.
+- Log audit events:
+  - import job created
+  - validated
+  - executed
+  - completed/failed
+Include requestId, actorId, tenantId, entityType, counts.
+
+-----------------------------------
+PHASE 8 — TESTS
+-----------------------------------
+
+Add backend integration tests (>=6):
+1) superUser can create import job; non-superUser denied
+2) validate mapping errors when required field missing
+3) users import: creates user by email; second run updates without duplicates
+4) clients/projects import: resolves relationships correctly
+5) tasks import: links to project correctly; missing project produces error row
+6) time entries import: parses dates, creates entries, dedupes identical (user+start+end)
+
+Also add:
+- policy drift tests for new routes (superUser policy)
+- CSV parser unit tests for quoted newlines
+
+-----------------------------------
+PHASE 9 — DOCS
+-----------------------------------
+
+Create:
+docs/admin/data-import-wizard.md
+
+Include:
+- supported entities
+- file requirements
+- mapping rules
+- idempotency keys
+- error CSV format
+- security + audit logging
+- recommended import order:
+  1) Users (employees/admins)
+  2) Clients
+  3) Projects
+  4) Tasks
+  5) Time Entries
+
+-----------------------------------
+OUTPUT REQUIREMENTS
+-----------------------------------
+
+When finished, output:
+1) Files changed/added
+2) Endpoint list
+3) Field catalogs for each entity (required/optional)
+4) Idempotency strategy per entity
+5) Tests added + passing count
+6) Manual verification steps (wizard flow)
