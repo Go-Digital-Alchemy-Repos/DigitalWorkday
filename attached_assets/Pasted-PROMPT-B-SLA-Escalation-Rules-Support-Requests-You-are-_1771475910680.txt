@@ -1,0 +1,83 @@
+PROMPT B — SLA + Escalation Rules (Support & Requests)
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+FEATURE:
+Add SLA tracking and escalation for Support tickets to improve reliability and responsiveness.
+
+GOAL:
+- SLA rules per tenant (and optionally per workspace) based on priority/category:
+  - first response target (minutes/hours)
+  - resolution target (hours/days)
+- Track:
+  - firstResponseAt (timestamp of first PUBLIC staff reply)
+  - SLA breach flags (first response breached, resolution breached)
+- Escalations:
+  - notify watchers/assigned agent/tenant admins when breach occurs
+  - optional: auto-bump priority or reassign to a default escalation user
+
+NON-DESTRUCTIVE RULES:
+- Do NOT slow down primary ticket endpoints.
+- Run SLA checks in background (or scheduled interval) if possible.
+- Keep existing status model.
+
+DELIVERABLES:
+1) SLA configuration UI and storage
+2) SLA computation + breach detection
+3) Escalation notification rules
+4) Ticket list indicators (badges) + filters for breached tickets
+5) Tests + docs
+
+DATA MODEL:
+support_sla_policies
+- id
+- tenantId
+- workspaceId (nullable)
+- category (nullable = all)
+- priority
+- firstResponseMinutes
+- resolutionMinutes
+- escalationJson (json) // { notifyRoles: ["admin"], notifyUsers: [], bumpPriorityTo?, reassignToUserId? }
+- createdAt/updatedAt
+UNIQUE(tenantId, workspaceId, category, priority)
+
+Add columns to support_tickets:
+- firstResponseAt (nullable)
+- firstResponseBreachedAt (nullable)
+- resolutionBreachedAt (nullable)
+
+BACKEND:
+- Update message creation logic:
+  - when tenant_user posts a PUBLIC message and ticket.firstResponseAt is null -> set firstResponseAt
+- SLA evaluator:
+  - Implement a lightweight scheduled job (preferred if job infra exists) OR
+  - A periodic server interval (guarded, only in one instance) OR
+  - A manual endpoint called by cron
+Endpoint (super/admin only):
+POST /api/v1/support/sla/run
+Runs SLA evaluation for open tickets and applies escalation rules.
+
+UI:
+Support Settings:
+- “SLA Policies” page
+  - configure per priority (and category optional)
+Ticket List:
+- show SLA badge: “FR Breach” / “RES Breach”
+- filter: breached only
+Ticket Detail:
+- SLA panel: targets and time remaining/overdue
+
+Notifications:
+- on breach, notify assigned agent + tenant admins (configurable)
+- realtime event SUPPORT_TICKET.SLA_BREACH
+
+TESTS:
+- firstResponseAt set on first public tenant reply
+- breach computed correctly with mocked time
+- escalation triggers notifications/audit event
+- policy drift tests for sla endpoints
+
+DOCS:
+- docs/features/support-sla.md
+- Update Docs Library:
+  “Support: SLAs & Escalation”

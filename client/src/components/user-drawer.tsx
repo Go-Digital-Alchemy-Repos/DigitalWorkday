@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -62,6 +62,7 @@ export function UserDrawer({
   userClientIds = [],
 }: UserDrawerProps) {
   const [hasChanges, setHasChanges] = useState(false);
+  const prevOpenRef = useRef(false);
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
@@ -79,28 +80,33 @@ export function UserDrawer({
   const watchedRole = form.watch("role");
 
   useEffect(() => {
-    if (open && user && mode === "edit") {
-      form.reset({
-        firstName: user.firstName || "",
-        lastName: user.lastName || "",
-        email: user.email,
-        role: (user.role as "admin" | "employee" | "client") || "employee",
-        isActive: user.isActive ?? true,
-        teamIds: userTeamIds,
-        clientIds: userClientIds,
-      });
-    } else if (open && mode === "create") {
-      form.reset({
-        firstName: "",
-        lastName: "",
-        email: "",
-        role: "employee",
-        isActive: true,
-        teamIds: [],
-        clientIds: [],
-      });
+    const wasOpen = prevOpenRef.current;
+    prevOpenRef.current = open;
+
+    if (open && !wasOpen) {
+      if (user && mode === "edit") {
+        form.reset({
+          firstName: user.firstName || "",
+          lastName: user.lastName || "",
+          email: user.email,
+          role: (user.role as "admin" | "employee" | "client") || "employee",
+          isActive: user.isActive ?? true,
+          teamIds: userTeamIds,
+          clientIds: userClientIds,
+        });
+      } else if (mode === "create") {
+        form.reset({
+          firstName: "",
+          lastName: "",
+          email: "",
+          role: "employee",
+          isActive: true,
+          teamIds: [],
+          clientIds: [],
+        });
+      }
+      setHasChanges(false);
     }
-    setHasChanges(false);
   }, [open, user, mode, form, userTeamIds, userClientIds]);
 
   useEffect(() => {

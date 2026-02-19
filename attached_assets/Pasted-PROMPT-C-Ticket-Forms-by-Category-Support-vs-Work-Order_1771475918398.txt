@@ -1,0 +1,85 @@
+PROMPT C — Ticket Forms by Category (Support vs Work Order)
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+FEATURE:
+Category-specific ticket intake forms to improve quality of inbound requests and speed resolution.
+
+GOAL:
+- Support tickets and Work Orders should have different required fields and structured metadata.
+- Admins configure required fields per category per tenant (and optionally per workspace).
+- Client Portal create ticket UI dynamically changes fields based on category.
+- Tenant console shows structured fields in ticket detail and list columns.
+
+NON-DESTRUCTIVE RULES:
+- Keep tickets backwards compatible: existing tickets without metadata must still render.
+- Store extra fields in JSON to avoid heavy schema churn (unless you already have a flexible custom fields system).
+
+DATA MODEL:
+Add columns to support_tickets:
+- category (already exists)
+- metadataJson (jsonb nullable)
+
+Create table:
+support_ticket_form_schemas
+- id
+- tenantId
+- workspaceId (nullable)
+- category ("support"|"work_order"|...)
+- schemaJson (json) // list of fields with type, label, required, options, helpText
+- createdAt/updatedAt
+UNIQUE(tenantId, workspaceId, category)
+
+Field types:
+- text, textarea, select, multiselect, date, number, checkbox, fileHint
+Include common Work Order fields:
+- location/site
+- requestedDate
+- preferredTimeWindow
+- asset/equipment
+- urgency
+Support fields:
+- affectedArea (select)
+- browser/device
+- stepsToReproduce
+- expected vs actual
+- screenshotRequested (bool)
+
+BACKEND:
+Endpoints (authTenant):
+GET  /api/v1/support/forms
+PUT  /api/v1/support/forms/:category   // upsert schema
+
+Portal:
+GET  /api/v1/portal/support/forms      // fetch schema for portal tenant/client
+
+Ticket create endpoints:
+- validate metadataJson against configured schema:
+  - required fields present
+  - types correct
+- store metadataJson on ticket
+
+UI:
+Tenant Support Settings:
+- “Ticket Forms” editor
+  - add fields, reorder, mark required, set options
+Client Portal Create Ticket:
+- category picker
+- dynamic fields render based on schema
+- inline validation + friendly errors
+Tenant Ticket Detail:
+- show “Request Details” card rendering metadata fields
+Ticket List:
+- show key metadata columns for work orders (location, requested date) if present
+
+TESTS:
+- schema upsert and retrieval
+- portal sees correct schema
+- ticket create fails if required metadata missing
+- ticket create succeeds with valid metadata
+- backwards compatibility: tickets without metadata still render
+
+DOCS:
+- docs/features/support-ticket-forms.md
+- Update Docs Library:
+  “Support: Category Forms (Support vs Work Orders)”

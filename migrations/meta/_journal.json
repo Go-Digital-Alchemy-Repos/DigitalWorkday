@@ -134,6 +134,13 @@
       "when": 1771461189762,
       "tag": "0018_brave_firelord",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "7",
+      "when": 1771476123239,
+      "tag": "0019_slimy_luke_cage",
+      "breakpoints": true
     }
   ]
 }

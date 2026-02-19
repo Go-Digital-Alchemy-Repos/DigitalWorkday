@@ -1,0 +1,106 @@
+PROMPT A — Canned Replies + Macros (Support & Requests)
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+FEATURE:
+Add “Canned Replies” and “Macros” to the Tenant Support & Requests console so agents can respond faster and consistently.
+
+GOAL:
+- Canned Reply = reusable message template (text/rich text) usable in ticket replies.
+- Macro = a canned reply PLUS optional actions (set status, set priority, assign user, add/remove tags, set waiting_on_client, resolve).
+- Works in the ticket detail composer.
+- Supports both Public Reply and Internal Note templates.
+- Tenant-scoped. Optionally workspace-scoped (recommended: tenant-scoped; can filter by workspace).
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change ticket endpoints in breaking ways.
+- Use createApiRouter + routeRegistry and add policy drift tests.
+- Keep tenancy/workspace enforcement consistent.
+- Do NOT introduce heavy dependencies.
+
+DELIVERABLES:
+1) DB tables + migrations
+2) Backend CRUD endpoints
+3) UI:
+   - Manage Templates page in Support settings
+   - Insert canned reply button in composer
+   - Apply macro button in composer (with preview)
+4) Audit logs for macro application
+5) Tests + Docs Library update
+
+DATA MODEL:
+Create tables:
+
+support_canned_replies
+- id (uuid)
+- tenantId
+- workspaceId (nullable)
+- title
+- bodyRich (json/text)
+- visibility (public|internal)
+- createdByUserId
+- createdAt
+- updatedAt
+
+support_macros
+- id (uuid)
+- tenantId
+- workspaceId (nullable)
+- title
+- bodyRich (json/text)
+- visibility (public|internal)
+- actionsJson (json)  // { setStatus?, setPriority?, assignToUserId?, addTags?, removeTags?, setWaitingOnClient?, resolve? }
+- createdByUserId
+- createdAt
+- updatedAt
+
+Indexes:
+- (tenantId)
+- (tenantId, workspaceId)
+
+BACKEND ROUTES (authTenant):
+Base /api/v1/support
+
+Canned replies:
+GET    /canned-replies
+POST   /canned-replies
+PATCH  /canned-replies/:id
+DELETE /canned-replies/:id
+
+Macros:
+GET    /macros
+POST   /macros
+PATCH  /macros/:id
+DELETE /macros/:id
+
+Apply macro:
+POST /tickets/:ticketId/apply-macro
+Body: { macroId, mode: "public"|"internal" }
+Behavior:
+- inserts macro message into ticket (as a message) OR pre-fills composer (choose best UX; preferred: preview + confirm then post)
+- executes actions atomically:
+  - set status/priority/assignment/tags
+- emits realtime events + notifications as appropriate
+- logs support_ticket_events entry with macroId
+
+UI:
+- Support & Requests → Settings → “Canned Replies & Macros”
+  - list, create, edit, delete
+  - visibility toggle
+  - workspace filter if workspaceId supported
+- Ticket composer:
+  - “Insert Reply” dropdown
+  - “Apply Macro” dropdown
+  - preview modal before applying macro actions
+
+TESTS:
+- tenant admin can CRUD templates
+- non-admin cannot delete templates (if role rules apply)
+- apply macro creates message + applies actions
+- macro apply emits audit event
+- policy drift tests added
+
+DOCS:
+- docs/features/support-macros.md
+- Update Super Admin Docs Library entry:
+  “Support: Canned Replies & Macros”

@@ -1,0 +1,370 @@
+You are Replit AI working in the DigitalWorkday monorepo.
+
+FEATURE:
+Work Orders / Trouble Tickets System (Client Portal + Tenant Support Console)
+
+GOAL:
+Build a comprehensive ticketing/work-order system so Client Portal users can create and track requests, and Tenant users/admins can receive, manage, and respond to inbound tickets in a dedicated “Support & Requests” area.
+
+This must be multi-tenant and workspace-aware where applicable, with strong permissions, realtime updates, notifications, attachments, and a polished UX.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT break existing auth/tenant/client-portal role boundaries.
+- Keep tenant isolation and workspace scoping consistent with current architecture.
+- Reuse existing R2 attachment upload pipeline.
+- Reuse existing realtime socket infrastructure and notification system where possible.
+- Do NOT change existing API URLs; add new endpoints under /api/v1/...
+- Preserve standardized route registration (createApiRouter + routeRegistry) and add policy drift tests.
+- Add migrations carefully with backfill plan and verification scripts.
+
+DELIVERABLES:
+A) Data model (tickets, messages, status, assignments, SLA fields, tags, watchers, portal visibility)
+B) Backend APIs (client portal + tenant console)
+C) Realtime updates (new message, status changes, assignment changes)
+D) Notifications (in-app + optional email)
+E) Attachments for tickets and messages (R2)
+F) UI:
+   - Client Portal: prominent “Support” entry + ticket creation + ticket detail
+   - Tenant App: “Support & Requests” console with triage, filters, assignment, responses
+G) Documentation update (repo docs + in-app Docs Library)
+H) Tests (integration + policy drift)
+
+------------------------------------------------------------
+PHASE 0 — DISCOVERY
+------------------------------------------------------------
+
+1) Identify:
+- existing client portal navigation and routing modules
+- existing notification system and socket event conventions
+- existing attachments pipeline endpoints/hooks
+- existing user roles:
+  - tenant users (admin/employee)
+  - client portal users
+  - super admin
+- workspace model (if multi-workspace is in progress, ensure compatibility)
+
+2) Confirm whether you already have a “tickets” or “support” table; if so, extend rather than reinvent.
+
+------------------------------------------------------------
+PHASE 1 — DATA MODEL (DRIZZLE + MIGRATIONS)
+------------------------------------------------------------
+
+Add tables:
+
+1) support_tickets
+- id (uuid)
+- tenantId
+- workspaceId (nullable if you choose tenant-wide; recommended: include workspaceId and default to active workspace)
+- clientId (nullable if ticket not tied to a CRM client)
+- createdByUserId (nullable for client portal users if separate table)
+- createdByPortalUserId (nullable)
+- title
+- descriptionRich (json/text)  (store rich text; render safely)
+- status: (open | in_progress | waiting_on_client | resolved | closed)
+- priority: (low | normal | high | urgent)
+- category: (support | work_order | billing | bug | feature_request) (configurable later)
+- source: (portal | tenant | email) (email optional later)
+- assignedToUserId (nullable)
+- dueAt (nullable)
+- resolvedAt (nullable)
+- closedAt (nullable)
+- lastActivityAt
+- createdAt
+- updatedAt
+
+Indexes:
+- (tenantId, status, priority)
+- (tenantId, clientId, lastActivityAt)
+- (tenantId, assignedToUserId, status)
+- (tenantId, workspaceId, status)
+
+2) support_ticket_messages
+- id (uuid)
+- tenantId
+- ticketId
+- authorType (tenant_user | portal_user | system)
+- authorUserId (nullable)
+- authorPortalUserId (nullable)
+- bodyRich (json/text)
+- createdAt
+- updatedAt
+
+Indexes:
+- (tenantId, ticketId, createdAt)
+
+3) support_ticket_attachments (or reuse generic attachments relation model)
+Option A (preferred): reuse existing attachments table with polymorphic linking:
+- entityType = "support_ticket" | "support_ticket_message"
+- entityId = ticketId/messageId
+
+Option B: create ticket-specific link table:
+- id, tenantId, ticketId, messageId (nullable), attachmentId
+
+4) support_ticket_watchers
+- tenantId
+- ticketId
+- userId (tenant user)
+UNIQUE(ticketId, userId)
+
+5) support_ticket_events (audit trail)
+- id
+- tenantId
+- ticketId
+- actorType (tenant_user | portal_user | system)
+- actorUserId / actorPortalUserId
+- eventType (created | status_changed | assigned | priority_changed | category_changed | title_changed | merged | reopened)
+- payloadJson
+- createdAt
+
+Migrations:
+- Create tables
+- Backfill none required initially
+- Ensure foreign keys to tenants, clients, users where applicable
+
+------------------------------------------------------------
+PHASE 2 — PERMISSIONS + POLICY MODEL
+------------------------------------------------------------
+
+Define access rules:
+
+Client Portal users:
+- can create tickets for their client account (clientId locked to their portal identity)
+- can view ONLY tickets belonging to their clientId
+- can add messages/attachments to tickets they can view
+- cannot assign staff, change priority, or see internal-only notes
+
+Tenant users:
+- can view tickets for tenant (optionally filtered by workspace)
+- employees can respond; admins can assign/change status/priority/category
+- can mark messages as internal-only (not visible to client portal) — implement as message flag:
+  support_ticket_messages.visibility = (public | internal)
+
+Super admin:
+- can view across tenants (existing semantics) but should not be the day-to-day workflow
+
+Implement route guards:
+- authTenant for tenant console routes
+- authPortal (or existing portal auth policy) for client portal routes
+- Enforce tenantId + clientId scoping on every query
+
+------------------------------------------------------------
+PHASE 3 — BACKEND ROUTES (STANDARDIZED ROUTERS)
+------------------------------------------------------------
+
+Create new domain routers using createApiRouter + routeRegistry:
+
+A) Tenant Support Console API (authTenant)
+Base: /api/v1/support
+
+Endpoints:
+GET    /tickets                (filters: status, priority, category, assignedTo, clientId, search)
+POST   /tickets                (tenant user can create internal ticket)
+GET    /tickets/:ticketId
+PATCH  /tickets/:ticketId       (status, priority, category, assignment, title)
+POST   /tickets/:ticketId/messages
+GET    /tickets/:ticketId/messages
+POST   /tickets/:ticketId/watchers
+DELETE /tickets/:ticketId/watchers/:userId
+POST   /tickets/:ticketId/reopen
+POST   /tickets/:ticketId/resolve
+POST   /tickets/:ticketId/close
+
+Attachments (reuse existing pipeline; add endpoints if needed):
+POST /tickets/:ticketId/presign
+POST /tickets/:ticketId/complete
+GET  /tickets/:ticketId/attachments/:attachmentId/download
+DELETE /tickets/:ticketId/attachments/:attachmentId
+
+B) Client Portal API (authPortal / portal policy)
+Base: /api/v1/portal/support
+
+Endpoints:
+GET    /tickets                 (only for their clientId)
+POST   /tickets                 (create)
+GET    /tickets/:ticketId        (must belong to their clientId)
+POST   /tickets/:ticketId/messages (public visibility only)
+GET    /tickets/:ticketId/messages (only public)
+POST   /tickets/:ticketId/presign
+POST   /tickets/:ticketId/complete
+GET    /tickets/:ticketId/attachments/:attachmentId/download
+
+All routes must:
+- enforce tenantId
+- enforce clientId ownership for portal routes
+- log audit events into support_ticket_events
+
+------------------------------------------------------------
+PHASE 4 — REALTIME + NOTIFICATIONS
+------------------------------------------------------------
+
+Socket events:
+- SUPPORT_TICKET.CREATED
+- SUPPORT_TICKET.UPDATED (status/assignment/priority)
+- SUPPORT_TICKET.MESSAGE_CREATED
+
+Rooms:
+- tenant:{tenantId}:support
+- tenant:{tenantId}:support:ticket:{ticketId}
+- portal:{tenantId}:client:{clientId}:support
+- portal:{tenantId}:client:{clientId}:support:ticket:{ticketId}
+
+Emit events on:
+- ticket create
+- message create
+- status/assignment changes
+
+Notifications:
+- Tenant side:
+  - notify assigned agent on new ticket or new message
+  - notify watchers
+- Portal side:
+  - notify client portal user when staff replies or status changes to waiting_on_client/resolved
+
+If email notifications exist:
+- optional toggle for “Email client when staff replies” and “Email staff on new portal ticket”
+
+Add subtle sound hooks if your sound system exists (optional).
+
+------------------------------------------------------------
+PHASE 5 — UI: CLIENT PORTAL (PROMINENT)
+------------------------------------------------------------
+
+1) Navigation:
+- Add “Support” as a primary nav item in Client Portal (prominent).
+- Provide a badge count for “Waiting on you” / unread replies.
+
+2) Support List Page:
+- searchable list
+- filters: status (Open/Resolved), category
+- show last activity, status pill, assigned agent name (if allowed)
+- unread badge per ticket
+
+3) Create Ticket:
+- category selector (Support vs Work Order)
+- priority (optional or hidden for portal v1)
+- title
+- rich text description
+- attachments dropzone
+- submit creates ticket then opens detail
+
+4) Ticket Detail:
+- header: status + created date + ticket id
+- conversation thread (public messages only)
+- message composer with attachments
+- show “Waiting on client” banner when applicable
+
+------------------------------------------------------------
+PHASE 6 — UI: TENANT “SUPPORT & REQUESTS” CONSOLE
+------------------------------------------------------------
+
+Add a new top-level area for tenant users: “Support & Requests”.
+
+1) Inbox View:
+- queues:
+  - Unassigned
+  - Assigned to me
+  - Waiting on client
+  - Resolved (recent)
+- filters: status, priority, category, client, workspace, assigned
+- bulk actions: assign, set status, set priority
+
+2) Ticket Detail:
+- left: ticket metadata + client link + watchers + assignment + status controls
+- right: conversation thread
+- message composer:
+  - toggle Public reply vs Internal note
+  - attachments dropzone
+  - @mentions for tenant users (internal)
+- actions:
+  - mark waiting on client
+  - resolve
+  - close
+  - reopen
+
+3) SLA fields (optional v1):
+- show due date and overdue indicator
+
+4) Audit/Events panel:
+- show status changes/assignment events
+
+5) Unread tracking:
+- store per-user read state:
+  support_ticket_reads (tenantId, ticketId, userId, lastReadAt)
+  portal_ticket_reads (tenantId, ticketId, portalUserId, lastReadAt)
+- compute unread badge in list
+
+------------------------------------------------------------
+PHASE 7 — ATTACHMENTS (DROPZONE, R2, BUSINESS FILE TYPES)
+------------------------------------------------------------
+
+Implement dropzone attachments for:
+- ticket creation form
+- ticket message composer (portal + tenant)
+
+Allowed types:
+pdf, doc/docx, xls/xlsx, ppt/pptx, csv, txt, rtf,
+png/jpg/jpeg/webp/gif/svg,
+ai/eps/psd,
+zip
+Block executables (exe, bat, cmd, msi, sh, dmg, iso, apk)
+
+Use existing uploadGuards and attachments pipeline.
+Ensure attachments are linked to:
+- ticketId (for initial description)
+- messageId (for replies)
+
+------------------------------------------------------------
+PHASE 8 — TESTS
+------------------------------------------------------------
+
+Backend integration tests (>=14):
+- portal user can create ticket tied to their clientId
+- portal user cannot view another client’s ticket
+- tenant user can list and assign
+- tenant user can add internal note not visible to portal
+- portal user sees only public messages
+- status transitions enforce rules (e.g., resolved -> reopen)
+- attachments upload endpoints enforce access
+- unread counts behave correctly
+- socket join policies enforce auth + tenant + membership
+- policy drift tests for all new routes
+
+Frontend (if test infra exists):
+- smoke tests for create ticket and reply flows
+Otherwise provide a manual checklist.
+
+------------------------------------------------------------
+PHASE 9 — DOCS (REPO + IN-APP DOCS LIBRARY)
+------------------------------------------------------------
+
+Create/Update docs:
+- docs/features/support-tickets.md
+- docs/security/support-permissions.md
+- docs/realtime/support-events.md
+
+Update Super Admin Docs Library:
+- “Support & Requests (Work Orders / Trouble Tickets)”
+- “Portal Support Workflow”
+- “Ticket Status Model”
+- “Attachments + Security”
+- “Notifications + Sounds (if enabled)”
+
+Ensure each entry has:
+- purpose
+- key workflows
+- roles/permissions
+- screenshots placeholders
+- last updated timestamp
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+Return:
+1) Tables + migrations added
+2) Endpoint list (tenant + portal)
+3) Socket events + room naming
+4) UI pages/components created
+5) Tests added and pass counts
+6) Manual verification checklist (portal + tenant)
+7) Any follow-up items (email integration, SLA automation, macros, canned replies)

@@ -2439,6 +2439,12 @@ export const insertClientDocumentCategorySchema = createInsertSchema(clientDocum
   updatedAt: true,
 });
 
+export const insertClientDocumentFolderSchema = createInsertSchema(clientDocumentFolders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
 export const insertClientDocumentSchema = createInsertSchema(clientDocuments).omit({
   id: true,
   createdAt: true,
