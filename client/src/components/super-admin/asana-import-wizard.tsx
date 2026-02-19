@@ -37,6 +37,7 @@ import { SiAsana } from "react-icons/si";
 
 interface AsanaImportWizardProps {
   tenantId: string;
+  apiBasePath?: string;
 }
 
 type WizardStep = "connect" | "workspace" | "projects" | "assign" | "options" | "validate" | "execute" | "summary" | "history";
@@ -127,7 +128,8 @@ function CountRow({ label, counts }: { label: string; counts: { create: number; 
   );
 }
 
-export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
+export function AsanaImportWizard({ tenantId, apiBasePath }: AsanaImportWizardProps) {
+  const basePath = apiBasePath || `/api/v1/super/tenants/${tenantId}`;
   const { toast } = useToast();
   const [step, setStep] = useState<WizardStep>("connect");
   const [isLoading, setIsLoading] = useState(false);
@@ -172,11 +174,11 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
 
   async function checkConnection() {
     try {
-      const res = await fetch(`/api/v1/super/tenants/${tenantId}/asana/status`, { credentials: "include" });
+      const res = await fetch(`${basePath}/asana/status`, { credentials: "include" });
       const data = await res.json();
       setConnected(data.connected);
       if (data.connected) {
-        const testRes = await fetch(`/api/v1/super/tenants/${tenantId}/asana/test`, {
+        const testRes = await fetch(`${basePath}/asana/test`, {
           method: "POST",
           credentials: "include",
           headers: { "Content-Type": "application/json" },
@@ -193,7 +195,7 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
     if (!pat.trim()) return;
     setIsLoading(true);
     try {
-      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/asana/connect`, {
+      const res = await apiRequest("POST", `${basePath}/asana/connect`, {
         personalAccessToken: pat.trim(),
       });
       const data = await res.json();
@@ -211,7 +213,7 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
   async function handleDisconnect() {
     setIsLoading(true);
     try {
-      await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/asana/disconnect`);
+      await apiRequest("POST", `${basePath}/asana/disconnect`);
       setConnected(false);
       setConnectedUser(null);
       toast({ title: "Disconnected from Asana" });
@@ -225,18 +227,18 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
   async function loadWorkspaces() {
     setIsLoading(true);
     try {
-      const res = await fetch(`/api/v1/super/tenants/${tenantId}/asana/workspaces`, { credentials: "include" });
+      const res = await fetch(`${basePath}/asana/workspaces`, { credentials: "include" });
       const data = await res.json();
       setAsanaWorkspaces(data.workspaces || []);
 
-      const localRes = await fetch(`/api/v1/super/tenants/${tenantId}/asana/local-workspaces`, { credentials: "include" });
+      const localRes = await fetch(`${basePath}/asana/local-workspaces`, { credentials: "include" });
       const localData = await localRes.json();
       setLocalWorkspaces(localData.workspaces || []);
       if (localData.workspaces?.length > 0 && !targetWorkspaceId) {
         setTargetWorkspaceId(localData.workspaces[0].id);
       }
 
-      const clientRes = await fetch(`/api/v1/super/tenants/${tenantId}/asana/local-clients`, { credentials: "include" });
+      const clientRes = await fetch(`${basePath}/asana/local-clients`, { credentials: "include" });
       const clientData = await clientRes.json();
       setLocalClients(clientData.clients || []);
 
@@ -253,7 +255,7 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
     setIsLoading(true);
     try {
       const res = await fetch(
-        `/api/v1/super/tenants/${tenantId}/asana/workspaces/${selectedWorkspaceGid}/projects`,
+        `${basePath}/asana/workspaces/${selectedWorkspaceGid}/projects`,
         { credentials: "include" }
       );
       const data = await res.json();
@@ -271,7 +273,7 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
     setIsLoading(true);
     setValidationResult(null);
     try {
-      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/asana/validate`, buildPayload());
+      const res = await apiRequest("POST", `${basePath}/asana/validate`, buildPayload());
       const data = await res.json();
       setValidationResult(data);
       setStep("validate");
@@ -288,7 +290,7 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
     setExecutionPhase("Starting...");
     setExecutionResult(null);
     try {
-      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/asana/execute`, buildPayload());
+      const res = await apiRequest("POST", `${basePath}/asana/execute`, buildPayload());
       const data = await res.json();
       setRunId(data.runId);
       setStep("execute");
@@ -304,14 +306,19 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
   async function pollRunStatus(rid: string) {
     const poll = async () => {
       try {
-        const res = await fetch(`/api/v1/super/tenants/${tenantId}/asana/runs/${rid}`, { credentials: "include" });
+        const res = await fetch(`${basePath}/asana/runs/${rid}`, { credentials: "include" });
         const data = await res.json();
         setExecutionStatus(data.status);
         setExecutionPhase(data.phase || "");
         if (data.status === "completed" || data.status === "completed_with_errors" || data.status === "failed") {
           setExecutionResult({ counts: data.executionSummary, errors: data.errorLog });
           setStep("summary");
-          queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenantId] });
+          if (!apiBasePath) {
+            queryClient.invalidateQueries({ queryKey: ["/api/v1/super/tenants", tenantId] });
+          }
+          queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+          queryClient.invalidateQueries({ queryKey: ["/api/v1/clients"] });
           return;
         }
         setTimeout(poll, 2000);
@@ -324,7 +331,7 @@ export function AsanaImportWizard({ tenantId }: AsanaImportWizardProps) {
 
   async function loadHistory() {
     try {
-      const res = await fetch(`/api/v1/super/tenants/${tenantId}/asana/runs`, { credentials: "include" });
+      const res = await fetch(`${basePath}/asana/runs`, { credentials: "include" });
       const data = await res.json();
       setImportHistory(data.runs || []);
       setStep("history");

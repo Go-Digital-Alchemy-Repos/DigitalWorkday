@@ -22,6 +22,7 @@ import usersRouter from "./users.router";
 import crmRouter from "./crm.router";
 import workspacesRouter from "./workspaces.router";
 import teamsRouter from "./teams.router";
+import tenantDataRoutes from "./tenantData";
 
 const router = Router();
 
@@ -42,6 +43,7 @@ router.use("/v1/super/chat", superChatRoutes);
 router.use("/v1/super/status", systemStatusRoutes);
 router.use("/v1/tenant", tenantOnboardingRoutes);
 router.use("/v1/tenant", tenantBillingRoutes);
+router.use("/v1/tenant/data", tenantDataRoutes);
 router.use("/v1", projectsDashboardRoutes);
 router.use("/v1", workloadReportsRoutes);
 router.use("/v1", emailOutboxRoutes);

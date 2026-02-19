@@ -45,6 +45,7 @@ import {
 interface DataImportWizardProps {
   tenantId: string;
   tenantSlug: string;
+  apiBasePath?: string;
 }
 
 type WizardStep = "type" | "upload" | "mapping" | "validate" | "execute" | "summary";
@@ -86,7 +87,8 @@ function extractErrorMessage(error: any): string {
   return bodyText.length > 300 ? bodyText.slice(0, 300) + "..." : bodyText;
 }
 
-export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps) {
+export function DataImportWizard({ tenantId, tenantSlug, apiBasePath }: DataImportWizardProps) {
+  const basePath = apiBasePath || `/api/v1/super/tenants/${tenantId}`;
   const { toast } = useToast();
   const [step, setStep] = useState<WizardStep>("type");
   const [entityType, setEntityType] = useState<EntityType | null>(null);
@@ -126,7 +128,7 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
     setEntityType(type);
     setIsLoading(true);
     try {
-      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/import/jobs`, { entityType: type });
+      const res = await apiRequest("POST", `${basePath}/import/jobs`, { entityType: type });
       const data = await res.json();
       setJobId(data.job.id);
       setJob(data.job);
@@ -144,7 +146,7 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
     setIsLoading(true);
     try {
       const csvText = await file.text();
-      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/import/jobs/${jobId}/upload`, {
+      const res = await apiRequest("POST", `${basePath}/import/jobs/${jobId}/upload`, {
         csvText,
         fileName: file.name,
       });
@@ -190,7 +192,7 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
     if (!jobId) return;
     setIsLoading(true);
     try {
-      await apiRequest("PUT", `/api/v1/super/tenants/${tenantId}/import/jobs/${jobId}/mapping`, { mapping });
+      await apiRequest("PUT", `${basePath}/import/jobs/${jobId}/mapping`, { mapping });
       setStep("validate");
       await handleValidate();
     } catch (err: any) {
@@ -203,7 +205,7 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
     if (!jobId) return;
     setIsLoading(true);
     try {
-      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/import/jobs/${jobId}/validate`);
+      const res = await apiRequest("POST", `${basePath}/import/jobs/${jobId}/validate`);
       const data = await res.json();
       setValidationSummary(data.summary);
     } catch (err: any) {
@@ -219,15 +221,17 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
     setStep("execute");
     setProgress({ processed: 0, total: rowCount });
     try {
-      const res = await apiRequest("POST", `/api/v1/super/tenants/${tenantId}/import/jobs/${jobId}/run`, { autoCreateMissing });
+      const res = await apiRequest("POST", `${basePath}/import/jobs/${jobId}/run`, { autoCreateMissing });
       const data = await res.json();
       setImportSummary(data.summary);
       setProgress({ processed: rowCount, total: rowCount });
       setStep("summary");
 
-      queryClient.invalidateQueries({ queryKey: [`/api/v1/super/tenants/${tenantId}/clients`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/v1/super/tenants/${tenantId}/users`] });
-      queryClient.invalidateQueries({ queryKey: [`/api/v1/super/tenants/${tenantId}/projects`] });
+      queryClient.invalidateQueries({ queryKey: [`${basePath}/clients`] });
+      queryClient.invalidateQueries({ queryKey: [`${basePath}/users`] });
+      queryClient.invalidateQueries({ queryKey: [`${basePath}/projects`] });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
     } catch (err: any) {
       toast({ title: "Import Failed", description: extractErrorMessage(err), variant: "destructive" });
       setStep("validate");
@@ -238,11 +242,11 @@ export function DataImportWizard({ tenantId, tenantSlug }: DataImportWizardProps
 
   const handleDownloadErrors = () => {
     if (!jobId) return;
-    window.open(`/api/v1/super/tenants/${tenantId}/import/jobs/${jobId}/errors.csv`, "_blank");
+    window.open(`${basePath}/import/jobs/${jobId}/errors.csv`, "_blank");
   };
 
   if (showHistory) {
-    return <ImportHistory tenantId={tenantId} onClose={() => setShowHistory(false)} />;
+    return <ImportHistory tenantId={tenantId} apiBasePath={basePath} onClose={() => setShowHistory(false)} />;
   }
 
   return (
@@ -963,14 +967,15 @@ function StatCard({ label, value, variant }: { label: string; value: number; var
   );
 }
 
-function ImportHistory({ tenantId, onClose }: { tenantId: string; onClose: () => void }) {
+function ImportHistory({ tenantId, apiBasePath, onClose }: { tenantId: string; apiBasePath?: string; onClose: () => void }) {
+  const basePath = apiBasePath || `/api/v1/super/tenants/${tenantId}`;
   const [jobs, setJobs] = useState<ImportJobDTO[]>([]);
   const [isLoading, setIsLoading] = useState(true);
 
   useState(() => {
     (async () => {
       try {
-        const res = await fetch(`/api/v1/super/tenants/${tenantId}/import/jobs`, { credentials: "include" });
+        const res = await fetch(`${basePath}/import/jobs`, { credentials: "include" });
         if (res.ok) {
           const data = await res.json();
           setJobs(data.jobs || []);
