@@ -259,4 +259,247 @@ router.post("/tickets/:id/messages", async (req, res) => {
   }
 });
 
+// ============================================================
+// Canned Replies CRUD
+// ============================================================
+
+const cannedReplySchema = z.object({
+  title: z.string().min(1).max(200),
+  bodyText: z.string().min(1),
+  visibility: z.enum(["public", "internal"]).optional().default("public"),
+  workspaceId: z.string().optional().nullable(),
+});
+
+router.get("/canned-replies", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { workspaceId } = req.query;
+    const replies = await storage.getSupportCannedReplies(tenantId, workspaceId as string | undefined);
+    res.json(replies);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/v1/support/canned-replies", req);
+  }
+});
+
+router.post("/canned-replies", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const body = cannedReplySchema.parse(req.body);
+    const reply = await storage.createSupportCannedReply({
+      tenantId,
+      title: body.title,
+      bodyText: body.bodyText,
+      visibility: body.visibility,
+      workspaceId: body.workspaceId || null,
+      createdByUserId: req.user!.id,
+    });
+    res.status(201).json(reply);
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/v1/support/canned-replies", req);
+  }
+});
+
+router.patch("/canned-replies/:id", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const existing = await storage.getSupportCannedReply(req.params.id, tenantId);
+    if (!existing) throw AppError.notFound("Canned reply");
+    const body = cannedReplySchema.partial().parse(req.body);
+    const updated = await storage.updateSupportCannedReply(req.params.id, tenantId, body as any);
+    res.json(updated);
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /api/v1/support/canned-replies/:id", req);
+  }
+});
+
+router.delete("/canned-replies/:id", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const deleted = await storage.deleteSupportCannedReply(req.params.id, tenantId);
+    if (!deleted) throw AppError.notFound("Canned reply");
+    res.json({ ok: true });
+  } catch (error) {
+    return handleRouteError(res, error, "DELETE /api/v1/support/canned-replies/:id", req);
+  }
+});
+
+// ============================================================
+// Macros CRUD
+// ============================================================
+
+const macroSchema = z.object({
+  title: z.string().min(1).max(200),
+  bodyText: z.string().min(1),
+  visibility: z.enum(["public", "internal"]).optional().default("public"),
+  workspaceId: z.string().optional().nullable(),
+  actionsJson: z.object({
+    setStatus: z.enum(["open", "in_progress", "waiting_on_client", "resolved", "closed"]).optional(),
+    setPriority: z.enum(["low", "normal", "high", "urgent"]).optional(),
+    assignToUserId: z.string().optional().nullable(),
+  }).optional().default({}),
+});
+
+router.get("/macros", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { workspaceId } = req.query;
+    const macros = await storage.getSupportMacros(tenantId, workspaceId as string | undefined);
+    res.json(macros);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/v1/support/macros", req);
+  }
+});
+
+router.post("/macros", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const body = macroSchema.parse(req.body);
+    const macro = await storage.createSupportMacro({
+      tenantId,
+      title: body.title,
+      bodyText: body.bodyText,
+      visibility: body.visibility,
+      workspaceId: body.workspaceId || null,
+      actionsJson: body.actionsJson,
+      createdByUserId: req.user!.id,
+    });
+    res.status(201).json(macro);
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/v1/support/macros", req);
+  }
+});
+
+router.patch("/macros/:id", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const existing = await storage.getSupportMacro(req.params.id, tenantId);
+    if (!existing) throw AppError.notFound("Macro");
+    const body = macroSchema.partial().parse(req.body);
+    const updated = await storage.updateSupportMacro(req.params.id, tenantId, body as any);
+    res.json(updated);
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /api/v1/support/macros/:id", req);
+  }
+});
+
+router.delete("/macros/:id", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const deleted = await storage.deleteSupportMacro(req.params.id, tenantId);
+    if (!deleted) throw AppError.notFound("Macro");
+    res.json({ ok: true });
+  } catch (error) {
+    return handleRouteError(res, error, "DELETE /api/v1/support/macros/:id", req);
+  }
+});
+
+// ============================================================
+// Apply Macro to Ticket
+// ============================================================
+
+const applyMacroSchema = z.object({
+  macroId: z.string().min(1),
+  mode: z.enum(["public", "internal"]).optional().default("public"),
+});
+
+router.post("/tickets/:ticketId/apply-macro", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const userId = req.user!.id;
+
+    const ticket = await storage.getSupportTicket(req.params.ticketId);
+    if (!ticket || ticket.tenantId !== tenantId) {
+      throw AppError.notFound("Support ticket");
+    }
+
+    const body = applyMacroSchema.parse(req.body);
+    const macro = await storage.getSupportMacro(body.macroId, tenantId);
+    if (!macro) throw AppError.notFound("Macro");
+
+    const actions = (macro.actionsJson || {}) as Record<string, unknown>;
+    const appliedActions: string[] = [];
+
+    const message = await storage.createSupportTicketMessage({
+      tenantId,
+      ticketId: ticket.id,
+      authorType: SupportTicketAuthorType.TENANT_USER,
+      authorUserId: userId,
+      authorPortalUserId: null,
+      bodyText: macro.bodyText,
+      visibility: body.mode,
+    });
+    appliedActions.push("message_sent");
+
+    const ticketUpdates: Record<string, unknown> = {};
+
+    if (actions.setStatus && actions.setStatus !== ticket.status) {
+      ticketUpdates.status = actions.setStatus;
+      if (actions.setStatus === SupportTicketStatus.RESOLVED) ticketUpdates.resolvedAt = new Date();
+      if (actions.setStatus === SupportTicketStatus.CLOSED) ticketUpdates.closedAt = new Date();
+
+      await storage.createSupportTicketEvent({
+        tenantId,
+        ticketId: ticket.id,
+        actorType: SupportTicketAuthorType.TENANT_USER,
+        actorUserId: userId,
+        eventType: SupportTicketEventType.STATUS_CHANGED,
+        payloadJson: { from: ticket.status, to: actions.setStatus, macroId: macro.id, macroTitle: macro.title },
+      });
+      appliedActions.push("status_changed");
+    }
+
+    if (actions.setPriority && actions.setPriority !== ticket.priority) {
+      ticketUpdates.priority = actions.setPriority;
+      await storage.createSupportTicketEvent({
+        tenantId,
+        ticketId: ticket.id,
+        actorType: SupportTicketAuthorType.TENANT_USER,
+        actorUserId: userId,
+        eventType: SupportTicketEventType.PRIORITY_CHANGED,
+        payloadJson: { from: ticket.priority, to: actions.setPriority, macroId: macro.id, macroTitle: macro.title },
+      });
+      appliedActions.push("priority_changed");
+    }
+
+    if (actions.assignToUserId !== undefined && actions.assignToUserId !== ticket.assignedToUserId) {
+      ticketUpdates.assignedToUserId = actions.assignToUserId || null;
+      await storage.createSupportTicketEvent({
+        tenantId,
+        ticketId: ticket.id,
+        actorType: SupportTicketAuthorType.TENANT_USER,
+        actorUserId: userId,
+        eventType: SupportTicketEventType.ASSIGNED,
+        payloadJson: { from: ticket.assignedToUserId, to: actions.assignToUserId, macroId: macro.id, macroTitle: macro.title },
+      });
+      appliedActions.push("assigned");
+    }
+
+    if (Object.keys(ticketUpdates).length > 0) {
+      await storage.updateSupportTicket(ticket.id, tenantId, ticketUpdates as any);
+    }
+
+    await storage.createSupportTicketEvent({
+      tenantId,
+      ticketId: ticket.id,
+      actorType: SupportTicketAuthorType.TENANT_USER,
+      actorUserId: userId,
+      eventType: "macro_applied",
+      payloadJson: { macroId: macro.id, macroTitle: macro.title, actions: appliedActions },
+    });
+
+    res.json({ ok: true, message, appliedActions });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/v1/support/tickets/:ticketId/apply-macro", req);
+  }
+});
+
 export default router;

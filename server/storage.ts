@@ -80,6 +80,9 @@ import {
   type SupportTicketMessage, type InsertSupportTicketMessage,
   type SupportTicketEvent,
   supportTickets, supportTicketMessages, supportTicketEvents,
+  type SupportCannedReply, type InsertSupportCannedReply,
+  type SupportMacro, type InsertSupportMacro,
+  supportCannedReplies, supportMacros,
 } from "@shared/schema";
 import crypto from "crypto";
 import { db } from "./db";
@@ -542,6 +545,18 @@ export interface IStorage {
   createSupportTicketMessage(message: InsertSupportTicketMessage): Promise<SupportTicketMessage>;
   getSupportTicketEvents(ticketId: string, tenantId: string): Promise<SupportTicketEvent[]>;
   createSupportTicketEvent(event: { tenantId: string; ticketId: string; actorType: string; actorUserId?: string | null; actorPortalUserId?: string | null; eventType: string; payloadJson?: unknown }): Promise<SupportTicketEvent>;
+
+  getSupportCannedReplies(tenantId: string, workspaceId?: string | null): Promise<SupportCannedReply[]>;
+  getSupportCannedReply(id: string, tenantId: string): Promise<SupportCannedReply | undefined>;
+  createSupportCannedReply(reply: InsertSupportCannedReply): Promise<SupportCannedReply>;
+  updateSupportCannedReply(id: string, tenantId: string, updates: Partial<InsertSupportCannedReply>): Promise<SupportCannedReply | undefined>;
+  deleteSupportCannedReply(id: string, tenantId: string): Promise<boolean>;
+
+  getSupportMacros(tenantId: string, workspaceId?: string | null): Promise<SupportMacro[]>;
+  getSupportMacro(id: string, tenantId: string): Promise<SupportMacro | undefined>;
+  createSupportMacro(macro: InsertSupportMacro): Promise<SupportMacro>;
+  updateSupportMacro(id: string, tenantId: string, updates: Partial<InsertSupportMacro>): Promise<SupportMacro | undefined>;
+  deleteSupportMacro(id: string, tenantId: string): Promise<boolean>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4913,6 +4928,62 @@ export class DatabaseStorage implements IStorage {
       payloadJson: event.payloadJson || null,
     }).returning();
     return created;
+  }
+
+  async getSupportCannedReplies(tenantId: string, workspaceId?: string | null): Promise<SupportCannedReply[]> {
+    const conditions = [eq(supportCannedReplies.tenantId, tenantId)];
+    if (workspaceId) {
+      conditions.push(eq(supportCannedReplies.workspaceId, workspaceId));
+    }
+    return db.select().from(supportCannedReplies).where(and(...conditions)).orderBy(desc(supportCannedReplies.updatedAt));
+  }
+
+  async getSupportCannedReply(id: string, tenantId: string): Promise<SupportCannedReply | undefined> {
+    const [reply] = await db.select().from(supportCannedReplies).where(and(eq(supportCannedReplies.id, id), eq(supportCannedReplies.tenantId, tenantId)));
+    return reply || undefined;
+  }
+
+  async createSupportCannedReply(reply: InsertSupportCannedReply): Promise<SupportCannedReply> {
+    const [created] = await db.insert(supportCannedReplies).values(reply).returning();
+    return created;
+  }
+
+  async updateSupportCannedReply(id: string, tenantId: string, updates: Partial<InsertSupportCannedReply>): Promise<SupportCannedReply | undefined> {
+    const [updated] = await db.update(supportCannedReplies).set({ ...updates, updatedAt: new Date() }).where(and(eq(supportCannedReplies.id, id), eq(supportCannedReplies.tenantId, tenantId))).returning();
+    return updated || undefined;
+  }
+
+  async deleteSupportCannedReply(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(supportCannedReplies).where(and(eq(supportCannedReplies.id, id), eq(supportCannedReplies.tenantId, tenantId))).returning();
+    return result.length > 0;
+  }
+
+  async getSupportMacros(tenantId: string, workspaceId?: string | null): Promise<SupportMacro[]> {
+    const conditions = [eq(supportMacros.tenantId, tenantId)];
+    if (workspaceId) {
+      conditions.push(eq(supportMacros.workspaceId, workspaceId));
+    }
+    return db.select().from(supportMacros).where(and(...conditions)).orderBy(desc(supportMacros.updatedAt));
+  }
+
+  async getSupportMacro(id: string, tenantId: string): Promise<SupportMacro | undefined> {
+    const [macro] = await db.select().from(supportMacros).where(and(eq(supportMacros.id, id), eq(supportMacros.tenantId, tenantId)));
+    return macro || undefined;
+  }
+
+  async createSupportMacro(macro: InsertSupportMacro): Promise<SupportMacro> {
+    const [created] = await db.insert(supportMacros).values(macro).returning();
+    return created;
+  }
+
+  async updateSupportMacro(id: string, tenantId: string, updates: Partial<InsertSupportMacro>): Promise<SupportMacro | undefined> {
+    const [updated] = await db.update(supportMacros).set({ ...updates, updatedAt: new Date() }).where(and(eq(supportMacros.id, id), eq(supportMacros.tenantId, tenantId))).returning();
+    return updated || undefined;
+  }
+
+  async deleteSupportMacro(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(supportMacros).where(and(eq(supportMacros.id, id), eq(supportMacros.tenantId, tenantId))).returning();
+    return result.length > 0;
   }
 }
 

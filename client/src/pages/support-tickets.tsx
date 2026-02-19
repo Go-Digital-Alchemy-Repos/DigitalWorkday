@@ -6,7 +6,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { LifeBuoy, Search, Clock, User2, Building2 } from "lucide-react";
+import { LifeBuoy, Search, Clock, User2, Building2, MessageSquareText } from "lucide-react";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 
@@ -108,6 +108,14 @@ export default function SupportTickets() {
           <div>
             <h1 className="text-xl font-semibold" data-testid="text-support-console-title">Support Console</h1>
             <p className="text-sm text-muted-foreground">Manage client support tickets and work orders</p>
+          </div>
+          <div className="flex items-center gap-2">
+            <Link href="/support/templates">
+              <Button variant="outline" size="sm" data-testid="button-manage-templates">
+                <MessageSquareText className="h-4 w-4 mr-1" />
+                Templates
+              </Button>
+            </Link>
           </div>
           {data && (
             <span className="text-sm text-muted-foreground" data-testid="text-total-tickets">

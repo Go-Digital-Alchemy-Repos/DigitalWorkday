@@ -3381,3 +3381,54 @@ export const supportTicketEvents = pgTable("support_ticket_events", {
 ]);
 
 export type SupportTicketEvent = typeof supportTicketEvents.$inferSelect;
+
+// ============================================================
+// Support Canned Replies & Macros
+// ============================================================
+
+export const supportCannedReplies = pgTable("support_canned_replies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
+  title: text("title").notNull(),
+  bodyText: text("body_text").notNull(),
+  visibility: text("visibility").notNull().default("public"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("support_canned_replies_tenant_idx").on(table.tenantId),
+  index("support_canned_replies_tenant_workspace_idx").on(table.tenantId, table.workspaceId),
+]);
+
+export const insertSupportCannedReplySchema = createInsertSchema(supportCannedReplies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSupportCannedReply = z.infer<typeof insertSupportCannedReplySchema>;
+export type SupportCannedReply = typeof supportCannedReplies.$inferSelect;
+
+export const supportMacros = pgTable("support_macros", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
+  title: text("title").notNull(),
+  bodyText: text("body_text").notNull(),
+  visibility: text("visibility").notNull().default("public"),
+  actionsJson: jsonb("actions_json").default({}),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("support_macros_tenant_idx").on(table.tenantId),
+  index("support_macros_tenant_workspace_idx").on(table.tenantId, table.workspaceId),
+]);
+
+export const insertSupportMacroSchema = createInsertSchema(supportMacros).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSupportMacro = z.infer<typeof insertSupportMacroSchema>;
+export type SupportMacro = typeof supportMacros.$inferSelect;

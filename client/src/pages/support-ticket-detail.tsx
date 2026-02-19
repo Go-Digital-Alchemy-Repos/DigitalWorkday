@@ -10,7 +10,9 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Separator } from "@/components/ui/separator";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
-import { ArrowLeft, Send, Clock, Building2, User2, Loader2, Eye, EyeOff } from "lucide-react";
+import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger, DropdownMenuSeparator, DropdownMenuLabel } from "@/components/ui/dropdown-menu";
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription } from "@/components/ui/dialog";
+import { ArrowLeft, Send, Clock, Building2, User2, Loader2, Eye, EyeOff, MessageSquareText, Zap, ChevronDown } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest } from "@/lib/queryClient";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -55,6 +57,27 @@ interface TicketDetail {
   createdByPortalUser: { id: string; name: string | null; email: string } | null;
   messages: TicketMessage[];
   events: TicketEvent[];
+}
+
+interface CannedReply {
+  id: string;
+  title: string;
+  bodyText: string;
+  visibility: string;
+}
+
+interface MacroActions {
+  setStatus?: string;
+  setPriority?: string;
+  assignToUserId?: string | null;
+}
+
+interface Macro {
+  id: string;
+  title: string;
+  bodyText: string;
+  visibility: string;
+  actionsJson: MacroActions;
 }
 
 const statusLabels: Record<string, string> = {
@@ -109,6 +132,33 @@ export default function SupportTicketDetail() {
   const { user } = useAuth();
   const [replyText, setReplyText] = useState("");
   const [isInternal, setIsInternal] = useState(false);
+  const [macroPreview, setMacroPreview] = useState<Macro | null>(null);
+
+  const { data: cannedReplies = [] } = useQuery<CannedReply[]>({
+    queryKey: ["/api/v1/support/canned-replies"],
+  });
+
+  const { data: macros = [] } = useQuery<Macro[]>({
+    queryKey: ["/api/v1/support/macros"],
+  });
+
+  const applyMacroMutation = useMutation({
+    mutationFn: async (macro: Macro) => {
+      return apiRequest("POST", `/api/v1/support/tickets/${params.id}/apply-macro`, {
+        macroId: macro.id,
+        mode: isInternal ? "internal" : "public",
+      });
+    },
+    onSuccess: () => {
+      setMacroPreview(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/tickets", params.id] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/support/tickets"] });
+      toast({ title: "Macro applied" });
+    },
+    onError: (error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
 
   const { data: ticket, isLoading } = useQuery<TicketDetail>({
     queryKey: ["/api/v1/support/tickets", params.id],
@@ -288,7 +338,7 @@ export default function SupportTicketDetail() {
               <>
                 <Separator />
                 <form onSubmit={handleReply} className="space-y-3" data-testid="form-reply">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
                     <div className="flex items-center gap-2">
                       <Switch
                         id="internal"
@@ -300,6 +350,65 @@ export default function SupportTicketDetail() {
                         {isInternal ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                         {isInternal ? "Internal note" : "Public reply"}
                       </Label>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      {cannedReplies.length > 0 && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" data-testid="button-insert-reply">
+                              <MessageSquareText className="h-3.5 w-3.5 mr-1" />
+                              Insert Reply
+                              <ChevronDown className="h-3 w-3 ml-1" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-64">
+                            <DropdownMenuLabel>Canned Replies</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {cannedReplies.map((r) => (
+                              <DropdownMenuItem
+                                key={r.id}
+                                onClick={() => {
+                                  setReplyText((prev) => prev ? prev + "\n" + r.bodyText : r.bodyText);
+                                  if (r.visibility === "internal") setIsInternal(true);
+                                }}
+                                data-testid={`menu-insert-reply-${r.id}`}
+                              >
+                                <div className="flex flex-col gap-0.5 w-full">
+                                  <span className="text-sm font-medium truncate">{r.title}</span>
+                                  <span className="text-xs text-muted-foreground line-clamp-1">{r.bodyText}</span>
+                                </div>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
+                      {macros.length > 0 && (
+                        <DropdownMenu>
+                          <DropdownMenuTrigger asChild>
+                            <Button variant="outline" size="sm" data-testid="button-apply-macro">
+                              <Zap className="h-3.5 w-3.5 mr-1" />
+                              Apply Macro
+                              <ChevronDown className="h-3 w-3 ml-1" />
+                            </Button>
+                          </DropdownMenuTrigger>
+                          <DropdownMenuContent align="end" className="w-64">
+                            <DropdownMenuLabel>Macros</DropdownMenuLabel>
+                            <DropdownMenuSeparator />
+                            {macros.map((m) => (
+                              <DropdownMenuItem
+                                key={m.id}
+                                onClick={() => setMacroPreview(m)}
+                                data-testid={`menu-apply-macro-${m.id}`}
+                              >
+                                <div className="flex flex-col gap-0.5 w-full">
+                                  <span className="text-sm font-medium truncate">{m.title}</span>
+                                  <span className="text-xs text-muted-foreground line-clamp-1">{m.bodyText}</span>
+                                </div>
+                              </DropdownMenuItem>
+                            ))}
+                          </DropdownMenuContent>
+                        </DropdownMenu>
+                      )}
                     </div>
                   </div>
                   <Textarea
@@ -318,6 +427,49 @@ export default function SupportTicketDetail() {
                 </form>
               </>
             )}
+
+            <Dialog open={!!macroPreview} onOpenChange={(open) => { if (!open) setMacroPreview(null); }}>
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Apply Macro: {macroPreview?.title}</DialogTitle>
+                  <DialogDescription>Review the macro actions before applying.</DialogDescription>
+                </DialogHeader>
+                {macroPreview && (
+                  <div className="space-y-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-xs text-muted-foreground">Message</Label>
+                      <div className="rounded-md border p-3 text-sm whitespace-pre-wrap bg-muted/30">{macroPreview.bodyText}</div>
+                    </div>
+                    {macroPreview.actionsJson && Object.keys(macroPreview.actionsJson).length > 0 && (
+                      <div className="space-y-1.5">
+                        <Label className="text-xs text-muted-foreground">Actions</Label>
+                        <div className="flex flex-col gap-1">
+                          {macroPreview.actionsJson.setStatus && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <Badge variant="outline" className="text-xs">Status</Badge>
+                              <span>{statusLabels[macroPreview.actionsJson.setStatus] || macroPreview.actionsJson.setStatus}</span>
+                            </div>
+                          )}
+                          {macroPreview.actionsJson.setPriority && (
+                            <div className="flex items-center gap-2 text-sm">
+                              <Badge variant="outline" className="text-xs">Priority</Badge>
+                              <span>{priorityLabels[macroPreview.actionsJson.setPriority] || macroPreview.actionsJson.setPriority}</span>
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    )}
+                    <DialogFooter>
+                      <Button variant="outline" onClick={() => setMacroPreview(null)} data-testid="button-cancel-macro">Cancel</Button>
+                      <Button onClick={() => applyMacroMutation.mutate(macroPreview)} disabled={applyMacroMutation.isPending} data-testid="button-confirm-macro">
+                        {applyMacroMutation.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+                        Apply Macro
+                      </Button>
+                    </DialogFooter>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
           </div>
 
           <div className="space-y-4">

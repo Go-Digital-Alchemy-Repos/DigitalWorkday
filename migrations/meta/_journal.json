@@ -169,6 +169,13 @@
       "when": 1771485246137,
       "tag": "0023_polite_sprite",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "7",
+      "when": 1771486974506,
+      "tag": "0024_polite_stick",
+      "breakpoints": true
     }
   ]
 }
