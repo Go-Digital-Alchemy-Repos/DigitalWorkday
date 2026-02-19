@@ -10,6 +10,7 @@ import { WorkspacesTab } from "@/components/settings/workspaces-tab";
 import { BillingTab } from "@/components/settings/billing-tab";
 import { WorkloadTab } from "@/components/settings/workload-tab";
 import { DataTab } from "@/components/settings/data-tab";
+import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
 export default function AccountPage() {
   const [location, setLocation] = useLocation();
@@ -19,11 +20,7 @@ export default function AccountPage() {
   const isSuperUser = user?.role === "super_user";
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!isAdmin && !isSuperUser) {

@@ -8,7 +8,7 @@ import { NotificationCenter } from "@/components/notification-center";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { SuperRouteGuard } from "./guards";
 import { SkipLink } from "@/components/skip-link";
-import { Loader2 } from "lucide-react";
+import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
 const SuperAdminPage = lazy(() => import("@/pages/super-admin"));
 const SuperAdminDashboardPage = lazy(() => import("@/pages/super-admin-dashboard"));
@@ -20,17 +20,9 @@ const SuperChatMonitoringPage = lazy(() => import("@/pages/super-chat-monitoring
 const SuperAdminUsersPage = lazy(() => import("@/pages/super-admin-users"));
 const UserProfilePage = lazy(() => import("@/pages/user-profile"));
 
-function RouteFallback() {
-  return (
-    <div className="flex items-center justify-center h-full">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
-  );
-}
-
 function SuperAdminRouter() {
   return (
-    <Suspense fallback={<RouteFallback />}>
+    <Suspense fallback={<PageSkeleton />}>
       <Switch>
         <Route path="/super-admin/dashboard">
           {() => <SuperRouteGuard component={SuperAdminDashboardPage} />}

@@ -3,6 +3,7 @@ import { Redirect } from "wouter";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { UsersRound } from "lucide-react";
 import { TeamTab } from "@/components/settings/team-tab";
+import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
 export default function UserManagerPage() {
   const { user, isLoading } = useAuth();
@@ -13,11 +14,7 @@ export default function UserManagerPage() {
   const isTenantMember = isAdmin || isEmployee || isSuperUser;
 
   if (isLoading) {
-    return (
-      <div className="flex items-center justify-center h-full">
-        <div className="animate-spin h-8 w-8 border-2 border-primary border-t-transparent rounded-full" />
-      </div>
-    );
+    return <PageSkeleton />;
   }
 
   if (!isTenantMember) {

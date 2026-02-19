@@ -14,7 +14,7 @@ import { TypingProvider } from "@/hooks/use-typing";
 import { FeaturesProvider } from "@/contexts/features-context";
 import { FeaturesBanner } from "@/components/features-banner";
 import { ProtectedRoute } from "@/routing/guards";
-import { Loader2 } from "lucide-react";
+import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
 const TenantLayout = lazy(() => import("@/routing/tenantRouter").then(m => ({ default: m.TenantLayout })));
 const SuperLayout = lazy(() => import("@/routing/superRouter").then(m => ({ default: m.SuperLayout })));
@@ -32,11 +32,7 @@ function AppLayout() {
   const { appMode } = useAppMode();
   const [location] = useLocation();
 
-  const suspenseFallback = (
-    <div className="flex items-center justify-center h-screen">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
-  );
+  const suspenseFallback = <PageSkeleton />;
 
   if (location === "/login" || location === "/tenant-onboarding" || location === "/accept-terms" || location.startsWith("/auth/platform-invite") || location.startsWith("/accept-invite/") || location.startsWith("/auth/forgot-password") || location.startsWith("/auth/reset-password")) {
     return (

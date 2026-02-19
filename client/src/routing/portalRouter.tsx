@@ -10,7 +10,7 @@ import { SkipLink } from "@/components/skip-link";
 import { ClientPortalSidebar } from "@/components/client-portal-sidebar";
 import { ClientPortalMobileNav } from "@/components/client-portal-mobile-nav";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Loader2 } from "lucide-react";
+import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
 const ClientPortalDashboard = lazy(() => import("@/pages/client-portal-dashboard"));
 const ClientPortalProjects = lazy(() => import("@/pages/client-portal-projects"));
@@ -20,17 +20,9 @@ const ClientPortalApprovals = lazy(() => import("@/pages/client-portal-approvals
 const ClientPortalMessages = lazy(() => import("@/pages/client-portal-messages"));
 const ChatPage = lazy(() => import("@/pages/chat"));
 
-function RouteFallback() {
-  return (
-    <div className="flex items-center justify-center h-full">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
-  );
-}
-
 function ClientPortalRouter() {
   return (
-    <Suspense fallback={<RouteFallback />}>
+    <Suspense fallback={<PageSkeleton />}>
       <Switch>
         <Route path="/portal">
           {() => <ClientPortalRouteGuard component={ClientPortalDashboard} />}

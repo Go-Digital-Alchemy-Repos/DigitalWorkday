@@ -28,8 +28,9 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check, Loader2 } from "lucide-react";
+import { MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check } from "lucide-react";
 import { type Workspace } from "@shared/schema";
+import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
 const Home = lazy(() => import("@/pages/home"));
 const MyTasks = lazy(() => import("@/pages/my-tasks"));
@@ -53,17 +54,9 @@ const MyCalendarPage = lazy(() => import("@/pages/my-calendar"));
 const TeamDetailPage = lazy(() => import("@/pages/team-detail"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
-function RouteFallback() {
-  return (
-    <div className="flex items-center justify-center h-full">
-      <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-    </div>
-  );
-}
-
 function TenantRouter() {
   return (
-    <Suspense fallback={<RouteFallback />}>
+    <Suspense fallback={<PageSkeleton />}>
       <Switch>
         <Route path="/">
           {() => <TenantRouteGuard component={Home} />}
