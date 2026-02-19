@@ -76,6 +76,7 @@ export function BrandingTab() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/branding"] });
       toast({ title: "Branding settings saved successfully" });
     },
     onError: () => {

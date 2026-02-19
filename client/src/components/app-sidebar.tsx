@@ -2,6 +2,7 @@ import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useAnyCrmEnabled } from "@/hooks/use-crm-flags";
+import { useTenantTheme } from "@/lib/tenant-theme-loader";
 import {
   Home,
   FolderKanban,
@@ -64,6 +65,7 @@ export function AppSidebar() {
   const [location] = useLocation();
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const { user } = useAuth();
+  const { appName, logoUrl } = useTenantTheme();
   const isAdmin = user?.role === "admin";
   const isSuperUser = user?.role === "super_user";
   const crmEnabled = useAnyCrmEnabled();
@@ -98,9 +100,9 @@ export function AppSidebar() {
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
         <div className="flex items-center gap-3">
-          <img src={appLogo} alt="Digital Workday" className="h-8 w-8" />
-          <span className="text-lg font-semibold text-sidebar-foreground">
-            MyWorkDay
+          <img src={logoUrl || appLogo} alt={appName} className="h-8 w-8" />
+          <span className="text-lg font-semibold text-sidebar-foreground" data-testid="text-app-name">
+            {appName}
           </span>
         </div>
       </SidebarHeader>

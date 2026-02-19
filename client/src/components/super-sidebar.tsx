@@ -1,5 +1,6 @@
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { useTenantTheme } from "@/lib/tenant-theme-loader";
 import {
   Building2,
   Wrench,
@@ -39,6 +40,7 @@ const superAdminNavItems = [
 export function SuperSidebar() {
   const [location] = useLocation();
   const { user } = useAuth();
+  const { appName, logoUrl } = useTenantTheme();
 
   const isActive = (url: string, exact: boolean) => {
     if (exact) return location === url;
@@ -49,10 +51,10 @@ export function SuperSidebar() {
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
         <div className="flex items-center gap-3">
-          <img src={appLogo} alt="Digital Workday" className="h-8 w-8" />
+          <img src={logoUrl || appLogo} alt={appName} className="h-8 w-8" />
           <div className="flex flex-col">
-            <span className="text-lg font-semibold text-sidebar-foreground">
-              MyWorkDay
+            <span className="text-lg font-semibold text-sidebar-foreground" data-testid="text-app-name">
+              {appName}
             </span>
             <span className="text-xs text-amber-600 dark:text-amber-400 font-medium">
               Super Admin

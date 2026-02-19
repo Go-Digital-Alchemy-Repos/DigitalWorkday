@@ -1,6 +1,7 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { useTenantTheme } from "@/lib/tenant-theme-loader";
 import {
   Home,
   FolderKanban,
@@ -66,6 +67,7 @@ export function TenantSidebar() {
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
   const { user } = useAuth();
   const { toast } = useToast();
+  const { appName, logoUrl } = useTenantTheme();
   const isAdmin = user?.role === "admin";
   const isSuperUser = user?.role === "super_user";
 
@@ -161,9 +163,9 @@ export function TenantSidebar() {
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
         <div className="flex items-center gap-3">
-          <img src={appLogo} alt="Digital Workday" className="h-8 w-8" />
-          <span className="text-lg font-semibold text-sidebar-foreground">
-            MyWorkDay
+          <img src={logoUrl || appLogo} alt={appName} className="h-8 w-8" />
+          <span className="text-lg font-semibold text-sidebar-foreground" data-testid="text-app-name">
+            {appName}
           </span>
         </div>
       </SidebarHeader>
