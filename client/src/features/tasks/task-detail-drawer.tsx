@@ -1205,7 +1205,7 @@ export function TaskDetailDrawer({
           <Separator />
 
           <div 
-            className="p-3 sm:p-4 bg-[#c2dfff4d] dark:bg-[hsl(var(--section-comments))] border border-[#adc6e6] dark:border-[hsl(var(--section-comments-border))]"
+            className="p-3 sm:p-4 dark:bg-[hsl(var(--section-comments))] border border-[#adc6e6] dark:border-[hsl(var(--section-comments-border))] bg-[#ebf4fc4d]"
             style={{ borderRadius: "10px" }}
           >
             <CommentThread
@@ -1225,7 +1225,7 @@ export function TaskDetailDrawer({
           <Separator />
 
           <div 
-            className="p-3 sm:p-4 bg-[#ffbb734d] dark:bg-[hsl(var(--section-time))] border border-[#f5ac5b] dark:border-[hsl(var(--section-time-border))]"
+            className="p-3 sm:p-4 dark:bg-[hsl(var(--section-time))] border border-[#f5ac5b] dark:border-[hsl(var(--section-time-border))] bg-[#f7ebe44d]"
             style={{ borderRadius: "10px" }}
           >
             <div className="space-y-3">
