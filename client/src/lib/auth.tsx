@@ -2,6 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { useLocation } from "wouter";
 import { type User, UserRole } from "@shared/schema";
 import { clearActingAsState, setSuperUserFlag, queryClient } from "./queryClient";
+import { prefetchPostLogin, resetPrefetchState } from "./prefetch";
 
 interface UserImpersonationData {
   isImpersonating: boolean;
@@ -59,10 +60,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         }
         
         setUser(data.user);
-        // Set user impersonation state from session
         setUserImpersonation(data.impersonation || null);
-        // Set super user flag when session is restored
         setSuperUserFlag(data.user?.role === UserRole.SUPER_USER);
+        prefetchPostLogin(data.user?.role);
       } else {
         console.log("[Auth] /api/auth/me failed:", response.status);
         setUser(null);
@@ -130,10 +130,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         credentials: "include",
       });
     } finally {
-      // Clear acting tenant state to prevent it from being used by next user
       clearActingAsState();
-      // Clear all cached query data to prevent data leakage between users
       queryClient.clear();
+      resetPrefetchState();
       setUser(null);
       setUserImpersonation(null);
       setLocation("/login");

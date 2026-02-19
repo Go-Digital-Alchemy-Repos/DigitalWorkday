@@ -10,6 +10,7 @@ import { Loader2, LogIn, UserPlus, Shield, Eye, EyeOff } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
 import { Separator } from "@/components/ui/separator";
 import { UserRole } from "@shared/schema";
+import { prefetchPostLogin } from "@/lib/prefetch";
 
 interface BootstrapStatus {
   bootstrapRequired: boolean;
@@ -113,11 +114,11 @@ export default function LoginPage() {
     setIsSubmitting(false);
 
     if (result.success) {
+      prefetchPostLogin(result.user?.role);
       toast({
         title: "Welcome back!",
         description: "You have been logged in successfully",
       });
-      // Super users go to admin dashboard, tenant users land on "My Work" (my-tasks)
       const isSuperUser = result.user?.role === UserRole.SUPER_USER;
       setLocation(isSuperUser ? "/super-admin/dashboard" : "/my-tasks");
     } else {
