@@ -228,6 +228,11 @@ router.put("/integrations/r2", requireSuperUser, async (req: Request, res: Respo
       ? `https://${data.accountId}.r2.cloudflarestorage.com`
       : undefined;
     
+    let publicUrl = data.publicUrl;
+    if (publicUrl && /\.r2\.cloudflarestorage\.com/i.test(publicUrl)) {
+      publicUrl = undefined;
+    }
+    
     const result = await tenantIntegrationService.upsertIntegration(null, "r2", {
       publicConfig: {
         bucketName: data.bucketName,
@@ -235,7 +240,7 @@ router.put("/integrations/r2", requireSuperUser, async (req: Request, res: Respo
         accountId: data.accountId,
         endpoint,
         keyPrefixTemplate: data.keyPrefixTemplate,
-        publicUrl: data.publicUrl,
+        publicUrl,
       },
       secretConfig: {
         accessKeyId: data.accessKeyId,

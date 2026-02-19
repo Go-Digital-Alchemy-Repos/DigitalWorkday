@@ -145,11 +145,25 @@ function isValidS3Config(publicConfig: S3PublicConfig | null, secretConfig: S3Se
 /**
  * Build S3Config from integration config (R2 only)
  */
+function isR2ApiEndpoint(url: string): boolean {
+  return /\.r2\.cloudflarestorage\.com/i.test(url);
+}
+
 function buildConfigFromIntegration(
   publicConfig: S3PublicConfig,
   secretConfig: S3SecretConfig,
   provider: "r2"
 ): S3Config {
+  let publicUrl = publicConfig.publicUrl;
+  if (!publicUrl || isR2ApiEndpoint(publicUrl)) {
+    const envPublicUrl = process.env.CF_R2_PUBLIC_URL?.trim();
+    if (envPublicUrl) {
+      publicUrl = envPublicUrl;
+    } else if (publicUrl && isR2ApiEndpoint(publicUrl)) {
+      publicUrl = undefined;
+    }
+  }
+
   return {
     bucketName: publicConfig.bucketName,
     region: publicConfig.region || "auto",
@@ -157,7 +171,7 @@ function buildConfigFromIntegration(
     secretAccessKey: secretConfig.secretAccessKey!,
     keyPrefixTemplate: publicConfig.keyPrefixTemplate,
     endpoint: publicConfig.endpoint,
-    publicUrl: publicConfig.publicUrl,
+    publicUrl,
     provider,
   };
 }
