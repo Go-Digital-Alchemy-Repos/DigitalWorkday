@@ -50,19 +50,26 @@ router.get("/tickets", async (req, res) => {
       offset: offset ? parseInt(offset as string) : undefined,
     });
 
-    const enrichedTickets = await Promise.all(
-      result.tickets.map(async (t) => {
-        const [client, assignee] = await Promise.all([
-          t.clientId ? storage.getClient(t.clientId) : null,
-          t.assignedToUserId ? storage.getUser(t.assignedToUserId) : null,
-        ]);
-        return {
-          ...t,
-          client: client ? { id: client.id, companyName: client.companyName } : null,
-          assignee: assignee ? { id: assignee.id, name: assignee.name, email: assignee.email } : null,
-        };
-      })
-    );
+    const clientIds = [...new Set(result.tickets.map(t => t.clientId).filter(Boolean))] as string[];
+    const userIds = [...new Set(result.tickets.map(t => t.assignedToUserId).filter(Boolean))] as string[];
+
+    const [clientsList, usersList] = await Promise.all([
+      clientIds.length > 0 ? storage.getClientsByIds(clientIds) : [],
+      userIds.length > 0 ? storage.getUsersByIds(userIds) : [],
+    ]);
+
+    const clientsMap = new Map(clientsList.map(c => [c.id, c]));
+    const usersMap = new Map(usersList.map(u => [u.id, u]));
+
+    const enrichedTickets = result.tickets.map((t) => {
+      const client = t.clientId ? clientsMap.get(t.clientId) : null;
+      const assignee = t.assignedToUserId ? usersMap.get(t.assignedToUserId) : null;
+      return {
+        ...t,
+        client: client ? { id: client.id, companyName: client.companyName } : null,
+        assignee: assignee ? { id: assignee.id, name: assignee.name, email: assignee.email } : null,
+      };
+    });
 
     res.json({ tickets: enrichedTickets, total: result.total });
   } catch (error) {
@@ -89,19 +96,22 @@ router.get("/tickets/:id", async (req, res) => {
       ticket.clientId ? storage.getClient(ticket.clientId) : null,
     ]);
 
-    const messagesWithAuthors = await Promise.all(
-      messages.map(async (m) => {
-        const author = m.authorUserId ? await storage.getUser(m.authorUserId) : m.authorPortalUserId ? await storage.getUser(m.authorPortalUserId) : null;
-        return { ...m, author: author ? { id: author.id, name: author.name, email: author.email } : null };
-      })
-    );
+    const allUserIds = new Set<string>();
+    messages.forEach(m => { if (m.authorUserId) allUserIds.add(m.authorUserId); if (m.authorPortalUserId) allUserIds.add(m.authorPortalUserId); });
+    events.forEach(e => { if (e.actorUserId) allUserIds.add(e.actorUserId); });
+    const allUsers = allUserIds.size > 0 ? await storage.getUsersByIds([...allUserIds]) : [];
+    const allUsersMap = new Map(allUsers.map(u => [u.id, u]));
 
-    const eventsWithActors = await Promise.all(
-      events.map(async (e) => {
-        const actor = e.actorUserId ? await storage.getUser(e.actorUserId) : null;
-        return { ...e, actor: actor ? { id: actor.id, name: actor.name, email: actor.email } : null };
-      })
-    );
+    const messagesWithAuthors = messages.map((m) => {
+      const authorId = m.authorUserId || m.authorPortalUserId;
+      const author = authorId ? allUsersMap.get(authorId) : null;
+      return { ...m, author: author ? { id: author.id, name: author.name, email: author.email } : null };
+    });
+
+    const eventsWithActors = events.map((e) => {
+      const actor = e.actorUserId ? allUsersMap.get(e.actorUserId) : null;
+      return { ...e, actor: actor ? { id: actor.id, name: actor.name, email: actor.email } : null };
+    });
 
     res.json({
       ...ticket,
@@ -232,12 +242,16 @@ router.get("/tickets/:id/messages", async (req, res) => {
     }
 
     const messages = await storage.getSupportTicketMessages(ticket.id, tenantId, true);
-    const messagesWithAuthors = await Promise.all(
-      messages.map(async (m) => {
-        const author = m.authorUserId ? await storage.getUser(m.authorUserId) : m.authorPortalUserId ? await storage.getUser(m.authorPortalUserId) : null;
-        return { ...m, author: author ? { id: author.id, name: author.name, email: author.email } : null };
-      })
-    );
+    const authorIds = new Set<string>();
+    messages.forEach(m => { if (m.authorUserId) authorIds.add(m.authorUserId); if (m.authorPortalUserId) authorIds.add(m.authorPortalUserId); });
+    const authors = authorIds.size > 0 ? await storage.getUsersByIds([...authorIds]) : [];
+    const authorsMap = new Map(authors.map(u => [u.id, u]));
+
+    const messagesWithAuthors = messages.map((m) => {
+      const authorId = m.authorUserId || m.authorPortalUserId;
+      const author = authorId ? authorsMap.get(authorId) : null;
+      return { ...m, author: author ? { id: author.id, name: author.name, email: author.email } : null };
+    });
     res.json(messagesWithAuthors);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/v1/support/tickets/:id/messages", req);

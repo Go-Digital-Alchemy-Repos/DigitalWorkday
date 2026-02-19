@@ -32,6 +32,11 @@ export class ClientsRepository {
     return client || undefined;
   }
 
+  async getClientsByIds(ids: string[]): Promise<Client[]> {
+    if (ids.length === 0) return [];
+    return db.select().from(clients).where(inArray(clients.id, ids));
+  }
+
   async getClientWithContacts(id: string): Promise<ClientWithContacts | undefined> {
     const client = await this.getClient(id);
     if (!client) return undefined;

@@ -117,6 +117,13 @@ export type ProjectActivityItem = {
 };
 import { eq, and, desc, asc, inArray, notInArray, gte, lte, gt, isNull, isNotNull, sql, ilike, or } from "drizzle-orm";
 import { encryptValue, decryptValue } from "./lib/encryption";
+import { SupportRepository } from "./storage/support.repo";
+import { ChatRepository } from "./storage/chat.repo";
+import { NotificationsRepository } from "./storage/notifications.repo";
+
+const supportRepo = new SupportRepository();
+const chatRepo = new ChatRepository();
+const notificationsRepo = new NotificationsRepository();
 
 export interface IStorage {
   getUser(id: string): Promise<User | undefined>;
@@ -240,6 +247,7 @@ export interface IStorage {
   
   // Client (CRM) methods
   getClient(id: string): Promise<Client | undefined>;
+  getClientsByIds(ids: string[]): Promise<Client[]>;
   getClientWithContacts(id: string): Promise<ClientWithContacts | undefined>;
   getClientsByWorkspace(workspaceId: string): Promise<ClientWithContacts[]>;
   createClient(client: InsertClient): Promise<Client>;
@@ -1783,6 +1791,10 @@ export class DatabaseStorage implements IStorage {
   async getClient(id: string): Promise<Client | undefined> {
     const [client] = await db.select().from(clients).where(eq(clients.id, id));
     return client || undefined;
+  }
+
+  async getClientsByIds(ids: string[]): Promise<Client[]> {
+    return clientsRepo.getClientsByIds(ids);
   }
 
   async getClientWithContacts(id: string): Promise<ClientWithContacts | undefined> {
@@ -3542,360 +3554,107 @@ export class DatabaseStorage implements IStorage {
   }
 
   // =============================================================================
-  // CHAT - CHANNELS
+  // CHAT - Delegated to ChatRepository
   // =============================================================================
 
   async getChatChannel(id: string): Promise<ChatChannel | undefined> {
-    const [channel] = await db.select().from(chatChannels).where(eq(chatChannels.id, id));
-    return channel || undefined;
+    return chatRepo.getChatChannel(id);
   }
 
   async getChatChannelsByTenant(tenantId: string): Promise<ChatChannel[]> {
-    return db.select().from(chatChannels).where(eq(chatChannels.tenantId, tenantId)).orderBy(asc(chatChannels.name));
+    return chatRepo.getChatChannelsByTenant(tenantId);
   }
 
   async createChatChannel(channel: InsertChatChannel): Promise<ChatChannel> {
-    const [newChannel] = await db.insert(chatChannels).values(channel).returning();
-    return newChannel;
+    return chatRepo.createChatChannel(channel);
   }
 
   async updateChatChannel(id: string, channel: Partial<InsertChatChannel>): Promise<ChatChannel | undefined> {
-    const [updated] = await db.update(chatChannels).set(channel).where(eq(chatChannels.id, id)).returning();
-    return updated || undefined;
+    return chatRepo.updateChatChannel(id, channel);
   }
 
   async deleteChatChannel(id: string): Promise<void> {
-    await db.delete(chatMessages).where(eq(chatMessages.channelId, id));
-    await db.delete(chatChannelMembers).where(eq(chatChannelMembers.channelId, id));
-    await db.delete(chatChannels).where(eq(chatChannels.id, id));
+    return chatRepo.deleteChatChannel(id);
   }
 
-  // =============================================================================
-  // CHAT - CHANNEL MEMBERS
-  // =============================================================================
-
   async getChatChannelMember(channelId: string, userId: string): Promise<ChatChannelMember | undefined> {
-    const [member] = await db.select().from(chatChannelMembers).where(
-      and(eq(chatChannelMembers.channelId, channelId), eq(chatChannelMembers.userId, userId))
-    );
-    return member || undefined;
+    return chatRepo.getChatChannelMember(channelId, userId);
   }
 
   async getChatChannelMembers(channelId: string): Promise<(ChatChannelMember & { user: User })[]> {
-    const members = await db.select().from(chatChannelMembers).where(eq(chatChannelMembers.channelId, channelId));
-    if (members.length === 0) return [];
-
-    const userIds = members.map(m => m.userId);
-    const userRows = await db.select().from(users).where(inArray(users.id, userIds));
-    const userMap = new Map(userRows.map(u => [u.id, u]));
-
-    return members.map(m => ({
-      ...m,
-      user: userMap.get(m.userId)!,
-    })).filter(m => m.user);
+    return chatRepo.getChatChannelMembers(channelId);
   }
 
   async getUserChatChannels(tenantId: string, userId: string): Promise<(ChatChannelMember & { channel: ChatChannel })[]> {
-    const memberships = await db.select().from(chatChannelMembers).where(
-      and(eq(chatChannelMembers.tenantId, tenantId), eq(chatChannelMembers.userId, userId))
-    );
-    if (memberships.length === 0) return [];
-
-    const channelIds = memberships.map(m => m.channelId);
-    const channelRows = await db.select().from(chatChannels).where(inArray(chatChannels.id, channelIds));
-    const channelMap = new Map(channelRows.map(c => [c.id, c]));
-
-    return memberships.map(m => ({
-      ...m,
-      channel: channelMap.get(m.channelId)!,
-    })).filter(m => m.channel);
+    return chatRepo.getUserChatChannels(tenantId, userId);
   }
 
   async addChatChannelMember(member: InsertChatChannelMember): Promise<ChatChannelMember> {
-    const [newMember] = await db.insert(chatChannelMembers).values(member).returning();
-    return newMember;
+    return chatRepo.addChatChannelMember(member);
   }
 
   async removeChatChannelMember(channelId: string, userId: string): Promise<void> {
-    await db.delete(chatChannelMembers).where(
-      and(eq(chatChannelMembers.channelId, channelId), eq(chatChannelMembers.userId, userId))
-    );
+    return chatRepo.removeChatChannelMember(channelId, userId);
   }
 
   async validateChatRoomAccess(targetType: 'channel' | 'dm', targetId: string, userId: string, tenantId: string): Promise<boolean> {
-    if (targetType === 'channel') {
-      const channel = await this.getChatChannel(targetId);
-      if (!channel || channel.tenantId !== tenantId) return false;
-      if (!channel.isPrivate) return true; // Public channels are accessible to all tenant users
-      const member = await this.getChatChannelMember(targetId, userId);
-      return !!member;
-    } else {
-      const thread = await this.getChatDmThread(targetId);
-      if (!thread || thread.tenantId !== tenantId) return false;
-      const members = await db.select().from(chatDmMembers).where(
-        and(eq(chatDmMembers.dmThreadId, targetId), eq(chatDmMembers.userId, userId))
-      );
-      return members.length > 0;
-    }
+    return chatRepo.validateChatRoomAccess(targetType, targetId, userId, tenantId);
   }
 
-  // =============================================================================
-  // CHAT - DM THREADS
-  // =============================================================================
-
   async getChatDmThread(id: string): Promise<ChatDmThread | undefined> {
-    const [thread] = await db.select().from(chatDmThreads).where(eq(chatDmThreads.id, id));
-    return thread || undefined;
+    return chatRepo.getChatDmThread(id);
   }
 
   async getChatDmThreadByMembers(tenantId: string, userIds: string[]): Promise<ChatDmThread | undefined> {
-    if (userIds.length < 2) return undefined;
-
-    const sortedUserIds = [...userIds].sort();
-    const threads = await db.select().from(chatDmThreads).where(eq(chatDmThreads.tenantId, tenantId));
-
-    for (const thread of threads) {
-      const members = await db.select().from(chatDmMembers).where(eq(chatDmMembers.dmThreadId, thread.id));
-      const memberUserIds = members.map(m => m.userId).sort();
-      
-      if (memberUserIds.length === sortedUserIds.length && memberUserIds.every((id, i) => id === sortedUserIds[i])) {
-        return thread;
-      }
-    }
-    return undefined;
+    return chatRepo.getChatDmThreadByMembers(tenantId, userIds);
   }
 
   async getUserChatDmThreads(tenantId: string, userId: string): Promise<(ChatDmThread & { members: (ChatDmMember & { user: User })[] })[]> {
-    const memberships = await db.select().from(chatDmMembers).where(
-      and(eq(chatDmMembers.tenantId, tenantId), eq(chatDmMembers.userId, userId))
-    );
-    if (memberships.length === 0) return [];
-
-    const threadIds = memberships.map(m => m.dmThreadId);
-    const threads = await db.select().from(chatDmThreads).where(inArray(chatDmThreads.id, threadIds));
-
-    const allMembers = await db.select().from(chatDmMembers).where(inArray(chatDmMembers.dmThreadId, threadIds));
-    const allUserIds = [...new Set(allMembers.map(m => m.userId))];
-    const userRows = await db.select().from(users).where(inArray(users.id, allUserIds));
-    const userMap = new Map(userRows.map(u => [u.id, u]));
-
-    return threads.map(thread => ({
-      ...thread,
-      members: allMembers
-        .filter(m => m.dmThreadId === thread.id)
-        .map(m => ({ ...m, user: userMap.get(m.userId)! }))
-        .filter(m => m.user),
-    }));
+    return chatRepo.getUserChatDmThreads(tenantId, userId);
   }
 
   async getChatDmParticipants(dmThreadId: string): Promise<ChatDmMember[]> {
-    return await db.select().from(chatDmMembers).where(eq(chatDmMembers.dmThreadId, dmThreadId));
+    return chatRepo.getChatDmParticipants(dmThreadId);
   }
 
   async createChatDmThread(thread: InsertChatDmThread, memberUserIds: string[]): Promise<ChatDmThread> {
-    const [newThread] = await db.insert(chatDmThreads).values(thread).returning();
-    
-    for (const userId of memberUserIds) {
-      await db.insert(chatDmMembers).values({
-        tenantId: thread.tenantId,
-        dmThreadId: newThread.id,
-        userId,
-      });
-    }
-    
-    return newThread;
+    return chatRepo.createChatDmThread(thread, memberUserIds);
   }
 
-  // =============================================================================
-  // CHAT - MESSAGES
-  // =============================================================================
-
   async getChatMessage(id: string): Promise<ChatMessage | undefined> {
-    const [message] = await db.select().from(chatMessages).where(eq(chatMessages.id, id));
-    return message || undefined;
+    return chatRepo.getChatMessage(id);
   }
 
   async getChatMessages(targetType: 'channel' | 'dm', targetId: string, limit = 50, before?: Date, after?: Date): Promise<(ChatMessage & { author: User })[]> {
-    const targetColumn = targetType === 'channel' ? chatMessages.channelId : chatMessages.dmThreadId;
-    
-    // Build conditions array
-    const conditions: SQL[] = [eq(targetColumn, targetId), isNull(chatMessages.deletedAt)];
-    if (before) {
-      conditions.push(lte(chatMessages.createdAt, before));
-    }
-    if (after) {
-      conditions.push(gte(chatMessages.createdAt, after));
-    }
-
-    const messages = await db.select()
-      .from(chatMessages)
-      .where(and(...conditions))
-      .orderBy(desc(chatMessages.createdAt))
-      .limit(limit);
-      
-    if (messages.length === 0) return [];
-
-    const authorIds = [...new Set(messages.map(m => m.authorUserId))];
-    const authorRows = await db.select().from(users).where(inArray(users.id, authorIds));
-    const authorMap = new Map(authorRows.map(u => [u.id, u]));
-
-    return messages
-      .map(m => ({ ...m, author: authorMap.get(m.authorUserId)! }))
-      .filter(m => m.author)
-      .reverse();
+    return chatRepo.getChatMessages(targetType, targetId, limit, before, after);
   }
 
   async getFirstUnreadMessageId(targetType: 'channel' | 'dm', targetId: string, userId: string): Promise<string | null> {
-    // Get the user's last read message for this conversation
-    const readRecord = targetType === 'channel' 
-      ? await this.getChatReadForChannel(userId, targetId)
-      : await this.getChatReadForDm(userId, targetId);
-    
-    if (!readRecord?.lastReadMessageId) {
-      // No read record - first message in conversation is the first unread
-      const targetColumn = targetType === 'channel' ? chatMessages.channelId : chatMessages.dmThreadId;
-      const [firstMsg] = await db.select({ id: chatMessages.id })
-        .from(chatMessages)
-        .where(and(
-          eq(targetColumn, targetId),
-          isNull(chatMessages.deletedAt),
-          isNull(chatMessages.parentMessageId) // Only main messages, not thread replies
-        ))
-        .orderBy(chatMessages.createdAt)
-        .limit(1);
-      return firstMsg?.id || null;
-    }
-
-    // Get the timestamp of the last read message
-    const [lastReadMsg] = await db.select({ createdAt: chatMessages.createdAt })
-      .from(chatMessages)
-      .where(eq(chatMessages.id, readRecord.lastReadMessageId));
-
-    if (!lastReadMsg) return null;
-
-    // Find the first message after the last read message
-    const targetColumn = targetType === 'channel' ? chatMessages.channelId : chatMessages.dmThreadId;
-    const [firstUnread] = await db.select({ id: chatMessages.id })
-      .from(chatMessages)
-      .where(and(
-        eq(targetColumn, targetId),
-        gt(chatMessages.createdAt, lastReadMsg.createdAt),
-        isNull(chatMessages.deletedAt),
-        isNull(chatMessages.parentMessageId) // Only main messages, not thread replies
-      ))
-      .orderBy(chatMessages.createdAt)
-      .limit(1);
-
-    return firstUnread?.id || null;
+    return chatRepo.getFirstUnreadMessageId(targetType, targetId, userId);
   }
 
   async createChatMessage(message: InsertChatMessage): Promise<ChatMessage> {
-    const [newMessage] = await db.insert(chatMessages).values(message).returning();
-    return newMessage;
+    return chatRepo.createChatMessage(message);
   }
 
   async updateChatMessage(id: string, updates: Partial<InsertChatMessage>): Promise<ChatMessage | undefined> {
-    const [updated] = await db.update(chatMessages).set({
-      ...updates,
-      editedAt: new Date(),
-    }).where(eq(chatMessages.id, id)).returning();
-    return updated || undefined;
+    return chatRepo.updateChatMessage(id, updates);
   }
 
   async deleteChatMessage(id: string): Promise<void> {
-    await db.update(chatMessages).set({ deletedAt: new Date() }).where(eq(chatMessages.id, id));
+    return chatRepo.deleteChatMessage(id);
   }
 
-  // Chat Thread Methods
   async getThreadReplies(parentMessageId: string, limit = 100): Promise<(ChatMessage & { author: User })[]> {
-    const replies = await db.select().from(chatMessages)
-      .where(and(
-        eq(chatMessages.parentMessageId, parentMessageId),
-        isNull(chatMessages.deletedAt)
-      ))
-      .orderBy(asc(chatMessages.createdAt))
-      .limit(limit);
-
-    if (replies.length === 0) return [];
-
-    const authorIds = [...new Set(replies.map(m => m.authorUserId))];
-    const authorRows = await db.select().from(users).where(inArray(users.id, authorIds));
-    const authorMap = new Map(authorRows.map(u => [u.id, u]));
-
-    return replies
-      .map(m => ({ ...m, author: authorMap.get(m.authorUserId)! }))
-      .filter(m => m.author);
+    return chatRepo.getThreadReplies(parentMessageId, limit);
   }
 
   async getThreadReplyCount(parentMessageId: string): Promise<number> {
-    const result = await db.select({ count: sql<number>`count(*)` })
-      .from(chatMessages)
-      .where(and(
-        eq(chatMessages.parentMessageId, parentMessageId),
-        isNull(chatMessages.deletedAt)
-      ));
-    return Number(result[0]?.count || 0);
+    return chatRepo.getThreadReplyCount(parentMessageId);
   }
 
   async getThreadSummariesForConversation(targetType: 'channel' | 'dm', targetId: string): Promise<Map<string, { replyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null }>> {
-    // Get all parent message IDs that have replies in this conversation
-    const summaries = new Map<string, { replyCount: number; lastReplyAt: Date | null; lastReplyAuthorId: string | null }>();
-
-    // Subquery to get parent messages in this conversation
-    const parentIdsQuery = targetType === 'channel'
-      ? await db.select({ id: chatMessages.id })
-          .from(chatMessages)
-          .where(and(
-            eq(chatMessages.channelId, targetId),
-            isNull(chatMessages.parentMessageId),
-            isNull(chatMessages.deletedAt)
-          ))
-      : await db.select({ id: chatMessages.id })
-          .from(chatMessages)
-          .where(and(
-            eq(chatMessages.dmThreadId, targetId),
-            isNull(chatMessages.parentMessageId),
-            isNull(chatMessages.deletedAt)
-          ));
-
-    const parentIds = parentIdsQuery.map(p => p.id);
-    if (parentIds.length === 0) return summaries;
-
-    // Get reply counts and last reply info for each parent
-    const replyStats = await db.select({
-      parentMessageId: chatMessages.parentMessageId,
-      count: sql<number>`count(*)`,
-      lastReplyAt: sql<Date>`max(${chatMessages.createdAt})`,
-    })
-      .from(chatMessages)
-      .where(and(
-        inArray(chatMessages.parentMessageId, parentIds),
-        isNull(chatMessages.deletedAt)
-      ))
-      .groupBy(chatMessages.parentMessageId);
-
-    // Get the last reply author for each parent
-    for (const stat of replyStats) {
-      if (!stat.parentMessageId) continue;
-      
-      // Get the last reply to find the author
-      const [lastReply] = await db.select({ authorUserId: chatMessages.authorUserId })
-        .from(chatMessages)
-        .where(and(
-          eq(chatMessages.parentMessageId, stat.parentMessageId),
-          isNull(chatMessages.deletedAt)
-        ))
-        .orderBy(desc(chatMessages.createdAt))
-        .limit(1);
-
-      summaries.set(stat.parentMessageId, {
-        replyCount: Number(stat.count),
-        lastReplyAt: stat.lastReplyAt,
-        lastReplyAuthorId: lastReply?.authorUserId || null,
-      });
-    }
-
-    return summaries;
+    return chatRepo.getThreadSummariesForConversation(targetType, targetId);
   }
 
   async searchChatMessages(tenantId: string, userId: string, options: {
@@ -3906,229 +3665,47 @@ export class DatabaseStorage implements IStorage {
     limit?: number;
     offset?: number;
   }): Promise<{ messages: any[]; total: number }> {
-    const { query, channelId, dmThreadId, fromUserId, limit = 50, offset = 0 } = options;
-    
-    const accessibleChannelIds = (await this.getUserChatChannels(tenantId, userId)).map(m => m.channelId);
-    const accessibleDmIds = (await this.getUserChatDmThreads(tenantId, userId)).map(dm => dm.id);
-
-    const conditions = [
-      eq(chatMessages.tenantId, tenantId),
-      isNull(chatMessages.deletedAt),
-      isNull(chatMessages.archivedAt),
-      ilike(chatMessages.body, `%${query}%`),
-    ];
-
-    if (channelId) {
-      if (!accessibleChannelIds.includes(channelId)) {
-        return { messages: [], total: 0 };
-      }
-      conditions.push(eq(chatMessages.channelId, channelId));
-    } else if (dmThreadId) {
-      if (!accessibleDmIds.includes(dmThreadId)) {
-        return { messages: [], total: 0 };
-      }
-      conditions.push(eq(chatMessages.dmThreadId, dmThreadId));
-    } else {
-      const accessConditions = [];
-      if (accessibleChannelIds.length > 0) {
-        accessConditions.push(inArray(chatMessages.channelId, accessibleChannelIds));
-      }
-      if (accessibleDmIds.length > 0) {
-        accessConditions.push(inArray(chatMessages.dmThreadId, accessibleDmIds));
-      }
-      if (accessConditions.length > 0) {
-        conditions.push(or(...accessConditions)!);
-      } else {
-        return { messages: [], total: 0 };
-      }
-    }
-
-    if (fromUserId) {
-      conditions.push(eq(chatMessages.authorUserId, fromUserId));
-    }
-
-    const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(chatMessages)
-      .where(and(...conditions));
-
-    const messages = await db.select({
-      id: chatMessages.id,
-      body: chatMessages.body,
-      createdAt: chatMessages.createdAt,
-      editedAt: chatMessages.editedAt,
-      channelId: chatMessages.channelId,
-      dmThreadId: chatMessages.dmThreadId,
-      authorId: chatMessages.authorUserId,
-      authorEmail: users.email,
-      authorFirstName: users.firstName,
-      authorLastName: users.lastName,
-      channelName: chatChannels.name,
-    })
-    .from(chatMessages)
-    .leftJoin(users, eq(chatMessages.authorUserId, users.id))
-    .leftJoin(chatChannels, eq(chatMessages.channelId, chatChannels.id))
-    .where(and(...conditions))
-    .orderBy(desc(chatMessages.createdAt))
-    .limit(limit)
-    .offset(offset);
-
-    return {
-      messages: messages.map(m => ({
-        id: m.id,
-        body: m.body,
-        createdAt: m.createdAt,
-        editedAt: m.editedAt,
-        channelId: m.channelId,
-        dmThreadId: m.dmThreadId,
-        channelName: m.channelName,
-        author: {
-          id: m.authorId,
-          email: m.authorEmail,
-          displayName: `${m.authorFirstName || ""} ${m.authorLastName || ""}`.trim() || m.authorEmail,
-        },
-      })),
-      total: countResult?.count || 0,
-    };
+    return chatRepo.searchChatMessages(tenantId, userId, options);
   }
 
-  // Chat - Attachments
   async createChatAttachment(attachment: InsertChatAttachment): Promise<ChatAttachment> {
-    const [newAttachment] = await db.insert(chatAttachments).values(attachment).returning();
-    return newAttachment;
+    return chatRepo.createChatAttachment(attachment);
   }
 
   async getChatAttachmentsByMessageId(messageId: string): Promise<ChatAttachment[]> {
-    return db.select().from(chatAttachments).where(eq(chatAttachments.messageId, messageId));
+    return chatRepo.getChatAttachmentsByMessageId(messageId);
   }
 
   async getChatAttachment(id: string): Promise<ChatAttachment | undefined> {
-    const [attachment] = await db.select().from(chatAttachments).where(eq(chatAttachments.id, id));
-    return attachment || undefined;
+    return chatRepo.getChatAttachment(id);
   }
 
   async getChatAttachmentsByTenantAndIds(tenantId: string, ids: string[]): Promise<ChatAttachment[]> {
-    if (ids.length === 0) return [];
-    return db.select().from(chatAttachments).where(
-      and(eq(chatAttachments.tenantId, tenantId), inArray(chatAttachments.id, ids))
-    );
+    return chatRepo.getChatAttachmentsByTenantAndIds(tenantId, ids);
   }
 
   async linkChatAttachmentsToMessage(messageId: string, attachmentIds: string[]): Promise<void> {
-    if (attachmentIds.length === 0) return;
-    await db.update(chatAttachments)
-      .set({ messageId })
-      .where(inArray(chatAttachments.id, attachmentIds));
+    return chatRepo.linkChatAttachmentsToMessage(messageId, attachmentIds);
   }
 
-  // Chat - Read Tracking
   async upsertChatRead(tenantId: string, userId: string, targetType: "channel" | "dm", targetId: string, lastReadMessageId: string): Promise<{ lastReadAt: Date }> {
-    const lastReadAt = new Date();
-    if (targetType === "channel") {
-      await db.insert(chatReads)
-        .values({
-          tenantId,
-          userId,
-          channelId: targetId,
-          lastReadMessageId,
-          lastReadAt,
-        })
-        .onConflictDoUpdate({
-          target: [chatReads.userId, chatReads.channelId],
-          set: {
-            lastReadMessageId,
-            lastReadAt,
-          },
-        });
-    } else {
-      await db.insert(chatReads)
-        .values({
-          tenantId,
-          userId,
-          dmThreadId: targetId,
-          lastReadMessageId,
-          lastReadAt,
-        })
-        .onConflictDoUpdate({
-          target: [chatReads.userId, chatReads.dmThreadId],
-          set: {
-            lastReadMessageId,
-            lastReadAt,
-          },
-        });
-    }
-    return { lastReadAt };
+    return chatRepo.upsertChatRead(tenantId, userId, targetType, targetId, lastReadMessageId);
   }
 
   async getChatReadForChannel(userId: string, channelId: string): Promise<{ lastReadMessageId: string | null } | undefined> {
-    const [read] = await db.select({ lastReadMessageId: chatReads.lastReadMessageId })
-      .from(chatReads)
-      .where(and(eq(chatReads.userId, userId), eq(chatReads.channelId, channelId)));
-    return read;
+    return chatRepo.getChatReadForChannel(userId, channelId);
   }
 
   async getChatReadForDm(userId: string, dmThreadId: string): Promise<{ lastReadMessageId: string | null } | undefined> {
-    const [read] = await db.select({ lastReadMessageId: chatReads.lastReadMessageId })
-      .from(chatReads)
-      .where(and(eq(chatReads.userId, userId), eq(chatReads.dmThreadId, dmThreadId)));
-    return read;
+    return chatRepo.getChatReadForDm(userId, dmThreadId);
   }
 
   async getUnreadCountForChannel(userId: string, channelId: string): Promise<number> {
-    const readRecord = await this.getChatReadForChannel(userId, channelId);
-    
-    if (!readRecord?.lastReadMessageId) {
-      // No read record - count all messages in channel
-      const [result] = await db.select({ count: sql<number>`count(*)::int` })
-        .from(chatMessages)
-        .where(and(eq(chatMessages.channelId, channelId), isNull(chatMessages.deletedAt)));
-      return result?.count ?? 0;
-    }
-
-    // Get the timestamp of the last read message
-    const [lastReadMsg] = await db.select({ createdAt: chatMessages.createdAt })
-      .from(chatMessages)
-      .where(eq(chatMessages.id, readRecord.lastReadMessageId));
-
-    if (!lastReadMsg) return 0;
-
-    // Count messages after the last read message
-    const [result] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(chatMessages)
-      .where(and(
-        eq(chatMessages.channelId, channelId),
-        isNull(chatMessages.deletedAt),
-        gt(chatMessages.createdAt, lastReadMsg.createdAt)
-      ));
-    return result?.count ?? 0;
+    return chatRepo.getUnreadCountForChannel(userId, channelId);
   }
 
   async getUnreadCountForDm(userId: string, dmThreadId: string): Promise<number> {
-    const readRecord = await this.getChatReadForDm(userId, dmThreadId);
-    
-    if (!readRecord?.lastReadMessageId) {
-      // No read record - count all messages in thread
-      const [result] = await db.select({ count: sql<number>`count(*)::int` })
-        .from(chatMessages)
-        .where(and(eq(chatMessages.dmThreadId, dmThreadId), isNull(chatMessages.deletedAt)));
-      return result?.count ?? 0;
-    }
-
-    // Get the timestamp of the last read message
-    const [lastReadMsg] = await db.select({ createdAt: chatMessages.createdAt })
-      .from(chatMessages)
-      .where(eq(chatMessages.id, readRecord.lastReadMessageId));
-
-    if (!lastReadMsg) return 0;
-
-    // Count messages after the last read message
-    const [result] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(chatMessages)
-      .where(and(
-        eq(chatMessages.dmThreadId, dmThreadId),
-        isNull(chatMessages.deletedAt),
-        gt(chatMessages.createdAt, lastReadMsg.createdAt)
-      ));
-    return result?.count ?? 0;
+    return chatRepo.getUnreadCountForDm(userId, dmThreadId);
   }
 
   async getUsersByIds(userIds: string[]): Promise<User[]> {
@@ -4137,170 +3714,16 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getUnreadCountsForChannels(userId: string, channelIds: string[]): Promise<Map<string, number>> {
-    const result = new Map<string, number>();
-    if (channelIds.length === 0) return result;
-
-    const readRecords = await db.select({
-      channelId: chatReads.channelId,
-      lastReadMessageId: chatReads.lastReadMessageId,
-    })
-      .from(chatReads)
-      .where(and(eq(chatReads.userId, userId), inArray(chatReads.channelId, channelIds)));
-
-    const readMap = new Map<string, string | null>();
-    for (const r of readRecords) {
-      if (r.channelId) readMap.set(r.channelId, r.lastReadMessageId);
-    }
-
-    const channelsWithNoRead = channelIds.filter(id => !readMap.has(id));
-    const channelsWithRead = channelIds.filter(id => readMap.has(id) && readMap.get(id));
-
-    if (channelsWithNoRead.length > 0) {
-      const counts = await db.select({
-        channelId: chatMessages.channelId,
-        count: sql<number>`count(*)::int`,
-      })
-        .from(chatMessages)
-        .where(and(
-          inArray(chatMessages.channelId, channelsWithNoRead),
-          isNull(chatMessages.deletedAt)
-        ))
-        .groupBy(chatMessages.channelId);
-
-      for (const c of counts) {
-        if (c.channelId) result.set(c.channelId, c.count);
-      }
-    }
-
-    if (channelsWithRead.length > 0) {
-      const lastReadMsgIds = channelsWithRead.map(id => readMap.get(id)!);
-      const lastReadMsgs = await db.select({
-        id: chatMessages.id,
-        createdAt: chatMessages.createdAt,
-      })
-        .from(chatMessages)
-        .where(inArray(chatMessages.id, lastReadMsgIds));
-
-      const msgTimestamps = new Map<string, Date>();
-      for (const m of lastReadMsgs) {
-        msgTimestamps.set(m.id, m.createdAt);
-      }
-
-      for (const channelId of channelsWithRead) {
-        const lastReadMsgId = readMap.get(channelId)!;
-        const lastReadAt = msgTimestamps.get(lastReadMsgId);
-        if (!lastReadAt) {
-          result.set(channelId, 0);
-          continue;
-        }
-        const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
-          .from(chatMessages)
-          .where(and(
-            eq(chatMessages.channelId, channelId),
-            isNull(chatMessages.deletedAt),
-            gt(chatMessages.createdAt, lastReadAt)
-          ));
-        result.set(channelId, countResult?.count ?? 0);
-      }
-    }
-
-    for (const id of channelIds) {
-      if (!result.has(id)) result.set(id, 0);
-    }
-
-    return result;
+    return chatRepo.getUnreadCountsForChannels(userId, channelIds);
   }
 
   async getUnreadCountsForDmThreads(userId: string, threadIds: string[]): Promise<Map<string, number>> {
-    const result = new Map<string, number>();
-    if (threadIds.length === 0) return result;
-
-    const readRecords = await db.select({
-      dmThreadId: chatReads.dmThreadId,
-      lastReadMessageId: chatReads.lastReadMessageId,
-    })
-      .from(chatReads)
-      .where(and(eq(chatReads.userId, userId), inArray(chatReads.dmThreadId, threadIds)));
-
-    const readMap = new Map<string, string | null>();
-    for (const r of readRecords) {
-      if (r.dmThreadId) readMap.set(r.dmThreadId, r.lastReadMessageId);
-    }
-
-    const threadsWithNoRead = threadIds.filter(id => !readMap.has(id));
-    const threadsWithRead = threadIds.filter(id => readMap.has(id) && readMap.get(id));
-
-    if (threadsWithNoRead.length > 0) {
-      const counts = await db.select({
-        dmThreadId: chatMessages.dmThreadId,
-        count: sql<number>`count(*)::int`,
-      })
-        .from(chatMessages)
-        .where(and(
-          inArray(chatMessages.dmThreadId, threadsWithNoRead),
-          isNull(chatMessages.deletedAt)
-        ))
-        .groupBy(chatMessages.dmThreadId);
-
-      for (const c of counts) {
-        if (c.dmThreadId) result.set(c.dmThreadId, c.count);
-      }
-    }
-
-    if (threadsWithRead.length > 0) {
-      const lastReadMsgIds = threadsWithRead.map(id => readMap.get(id)!);
-      const lastReadMsgs = await db.select({
-        id: chatMessages.id,
-        createdAt: chatMessages.createdAt,
-      })
-        .from(chatMessages)
-        .where(inArray(chatMessages.id, lastReadMsgIds));
-
-      const msgTimestamps = new Map<string, Date>();
-      for (const m of lastReadMsgs) {
-        msgTimestamps.set(m.id, m.createdAt);
-      }
-
-      for (const threadId of threadsWithRead) {
-        const lastReadMsgId = readMap.get(threadId)!;
-        const lastReadAt = msgTimestamps.get(lastReadMsgId);
-        if (!lastReadAt) {
-          result.set(threadId, 0);
-          continue;
-        }
-        const [countResult] = await db.select({ count: sql<number>`count(*)::int` })
-          .from(chatMessages)
-          .where(and(
-            eq(chatMessages.dmThreadId, threadId),
-            isNull(chatMessages.deletedAt),
-            gt(chatMessages.createdAt, lastReadAt)
-          ));
-        result.set(threadId, countResult?.count ?? 0);
-      }
-    }
-
-    for (const id of threadIds) {
-      if (!result.has(id)) result.set(id, 0);
-    }
-
-    return result;
+    return chatRepo.getUnreadCountsForDmThreads(userId, threadIds);
   }
 
   async getConversationReadReceipts(targetType: "channel" | "dm", targetId: string, tenantId: string): Promise<Array<{ userId: string; lastReadMessageId: string | null; lastReadAt: Date }>> {
-    const col = targetType === "channel" ? chatReads.channelId : chatReads.dmThreadId;
-    const rows = await db.select({
-      userId: chatReads.userId,
-      lastReadMessageId: chatReads.lastReadMessageId,
-      lastReadAt: chatReads.lastReadAt,
-    })
-      .from(chatReads)
-      .where(and(eq(col, targetId), eq(chatReads.tenantId, tenantId)));
-    return rows;
+    return chatRepo.getConversationReadReceipts(targetType, targetId, tenantId);
   }
-
-  // =============================================================================
-  // Chat - Diagnostics (Super Admin)
-  // =============================================================================
 
   async getChatDiagnostics(): Promise<{
     nullTenantCounts: {
@@ -4314,100 +3737,23 @@ export class DatabaseStorage implements IStorage {
     orphanedChannels: number;
     underMemberedDmThreads: number;
   }> {
-    // Count rows with null tenantId in chat tables
-    // Note: Schema requires tenantId NOT NULL, so these counts should be 0
-    // This is for detecting data corruption or migration issues
-    
-    const [channelsNull] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(chatChannels)
-      .where(isNull(chatChannels.tenantId));
-    
-    const [channelMembersNull] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(chatChannelMembers)
-      .where(isNull(chatChannelMembers.tenantId));
-    
-    const [dmThreadsNull] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(chatDmThreads)
-      .where(isNull(chatDmThreads.tenantId));
-    
-    const [dmMembersNull] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(chatDmMembers)
-      .where(isNull(chatDmMembers.tenantId));
-    
-    const [messagesNull] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(chatMessages)
-      .where(isNull(chatMessages.tenantId));
-    
-    const [attachmentsNull] = await db.select({ count: sql<number>`count(*)::int` })
-      .from(chatAttachments)
-      .where(isNull(chatAttachments.tenantId));
-
-    // Count channels without any members
-    const orphanedChannelsResult = await db.execute(sql`
-      SELECT COUNT(*)::int as count FROM chat_channels c
-      WHERE NOT EXISTS (SELECT 1 FROM chat_channel_members m WHERE m.channel_id = c.id)
-    `);
-    const orphanedChannels = (orphanedChannelsResult.rows[0] as any)?.count ?? 0;
-
-    // Count DM threads with fewer than 2 members
-    const underMemberedResult = await db.execute(sql`
-      SELECT COUNT(*)::int as count FROM (
-        SELECT dm.id, COUNT(m.id) as member_count
-        FROM chat_dm_threads dm
-        LEFT JOIN chat_dm_members m ON m.dm_thread_id = dm.id
-        GROUP BY dm.id
-        HAVING COUNT(m.id) < 2
-      ) sub
-    `);
-    const underMemberedDmThreads = (underMemberedResult.rows[0] as any)?.count ?? 0;
-
-    return {
-      nullTenantCounts: {
-        channels: channelsNull?.count ?? 0,
-        channelMembers: channelMembersNull?.count ?? 0,
-        dmThreads: dmThreadsNull?.count ?? 0,
-        dmMembers: dmMembersNull?.count ?? 0,
-        messages: messagesNull?.count ?? 0,
-        attachments: attachmentsNull?.count ?? 0,
-      },
-      orphanedChannels,
-      underMemberedDmThreads,
-    };
+    return chatRepo.getChatDiagnostics();
   }
 
-  // =============================================================================
-  // Chat - Export Jobs (Super Admin)
-  // =============================================================================
-
   async createChatExportJob(job: InsertChatExportJob): Promise<ChatExportJob> {
-    const [exportJob] = await db.insert(chatExportJobs).values(job).returning();
-    return exportJob;
+    return chatRepo.createChatExportJob(job);
   }
 
   async getChatExportJob(id: string): Promise<ChatExportJob | undefined> {
-    const [exportJob] = await db.select().from(chatExportJobs).where(eq(chatExportJobs.id, id));
-    return exportJob || undefined;
+    return chatRepo.getChatExportJob(id);
   }
 
   async updateChatExportJob(id: string, updates: Partial<InsertChatExportJob>): Promise<ChatExportJob | undefined> {
-    const [updated] = await db.update(chatExportJobs)
-      .set({ ...updates, updatedAt: new Date() })
-      .where(eq(chatExportJobs.id, id))
-      .returning();
-    return updated || undefined;
+    return chatRepo.updateChatExportJob(id, updates);
   }
 
   async listChatExportJobs(filters?: { status?: string; limit?: number }): Promise<ChatExportJob[]> {
-    let query = db.select().from(chatExportJobs).orderBy(desc(chatExportJobs.createdAt));
-    
-    if (filters?.status) {
-      query = query.where(eq(chatExportJobs.status, filters.status)) as any;
-    }
-    
-    const limit = filters?.limit || 20;
-    query = query.limit(limit) as any;
-    
-    return query;
+    return chatRepo.listChatExportJobs(filters);
   }
 
   // =============================================================================
@@ -4542,220 +3888,43 @@ export class DatabaseStorage implements IStorage {
   }
 
   // =============================================================================
-  // NOTIFICATIONS
+  // NOTIFICATIONS (delegated to NotificationsRepository)
   // =============================================================================
 
   async createNotification(notification: InsertNotification): Promise<Notification> {
-    const [created] = await db.insert(notifications).values(notification).returning();
-    return created;
+    return notificationsRepo.createNotification(notification);
   }
 
   async getNotificationsByUser(userId: string, tenantId: string | null, options?: { unreadOnly?: boolean; limit?: number; offset?: number }): Promise<Notification[]> {
-    const { unreadOnly = false, limit = 50, offset = 0 } = options || {};
-    
-    try {
-      const conditions = [eq(notifications.userId, userId)];
-      
-      // Tenant scoping: include notifications where tenantId matches OR is null (system notifications)
-      if (tenantId) {
-        conditions.push(
-          sql`(${notifications.tenantId} = ${tenantId} OR ${notifications.tenantId} IS NULL)`
-        );
-      }
-      
-      if (unreadOnly) {
-        conditions.push(isNull(notifications.readAt));
-      }
-      
-      return db.select()
-        .from(notifications)
-        .where(and(...conditions))
-        .orderBy(desc(notifications.createdAt))
-        .limit(limit)
-        .offset(offset);
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      // Handle missing table or column (production migration issue)
-      if (message.includes("does not exist") || message.includes("column") && message.includes("not")) {
-        console.warn("[storage] notifications query failed (schema issue) - returning empty array:", message);
-        return [];
-      }
-      throw error;
-    }
+    return notificationsRepo.getNotificationsByUser(userId, tenantId, options);
   }
 
   async getUnreadNotificationCount(userId: string, tenantId: string | null): Promise<number> {
-    try {
-      const conditions = [
-        eq(notifications.userId, userId),
-        isNull(notifications.readAt)
-      ];
-      
-      // Tenant scoping: include notifications where tenantId matches OR is null
-      if (tenantId) {
-        conditions.push(
-          sql`(${notifications.tenantId} = ${tenantId} OR ${notifications.tenantId} IS NULL)`
-        );
-      }
-      
-      const [result] = await db.select({ count: sql<number>`count(*)::int` })
-        .from(notifications)
-        .where(and(...conditions));
-      return result?.count ?? 0;
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("does not exist") || message.includes("column") && message.includes("not")) {
-        console.warn("[storage] unread count query failed (schema issue) - returning 0:", message);
-        return 0;
-      }
-      throw error;
-    }
+    return notificationsRepo.getUnreadNotificationCount(userId, tenantId);
   }
 
   async markNotificationRead(id: string, userId: string, tenantId: string | null): Promise<Notification | undefined> {
-    try {
-      const conditions = [
-        eq(notifications.id, id),
-        eq(notifications.userId, userId)
-      ];
-      
-      // Tenant scoping for security
-      if (tenantId) {
-        conditions.push(
-          sql`(${notifications.tenantId} = ${tenantId} OR ${notifications.tenantId} IS NULL)`
-        );
-      }
-      
-      const [updated] = await db.update(notifications)
-        .set({ readAt: new Date() })
-        .where(and(...conditions))
-        .returning();
-      return updated || undefined;
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("does not exist") || message.includes("column") && message.includes("not")) {
-        console.warn("[storage] markNotificationRead failed (schema issue):", message);
-        return undefined;
-      }
-      throw error;
-    }
+    return notificationsRepo.markNotificationRead(id, userId, tenantId);
   }
 
   async markAllNotificationsRead(userId: string, tenantId: string | null): Promise<void> {
-    try {
-      const conditions = [
-        eq(notifications.userId, userId),
-        isNull(notifications.readAt)
-      ];
-      
-      // Tenant scoping
-      if (tenantId) {
-        conditions.push(
-          sql`(${notifications.tenantId} = ${tenantId} OR ${notifications.tenantId} IS NULL)`
-        );
-      }
-      
-      await db.update(notifications)
-        .set({ readAt: new Date() })
-        .where(and(...conditions));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("does not exist") || message.includes("column") && message.includes("not")) {
-        console.warn("[storage] markAllNotificationsRead failed (schema issue):", message);
-        return;
-      }
-      throw error;
-    }
+    return notificationsRepo.markAllNotificationsRead(userId, tenantId);
   }
 
   async deleteNotification(id: string, userId: string, tenantId: string | null): Promise<void> {
-    try {
-      const conditions = [
-        eq(notifications.id, id),
-        eq(notifications.userId, userId)
-      ];
-      
-      // Tenant scoping for security
-      if (tenantId) {
-        conditions.push(
-          sql`(${notifications.tenantId} = ${tenantId} OR ${notifications.tenantId} IS NULL)`
-        );
-      }
-    
-      await db.delete(notifications)
-        .where(and(...conditions));
-    } catch (error: unknown) {
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("does not exist") || message.includes("column") && message.includes("not")) {
-        console.warn("[storage] deleteNotification failed (schema issue):", message);
-        return;
-      }
-      throw error;
-    }
+    return notificationsRepo.deleteNotification(id, userId, tenantId);
   }
 
   // =============================================================================
-  // NOTIFICATION PREFERENCES
+  // NOTIFICATION PREFERENCES (delegated to NotificationsRepository)
   // =============================================================================
 
   async getNotificationPreferences(userId: string): Promise<NotificationPreferences | undefined> {
-    try {
-      const [prefs] = await db.select()
-        .from(notificationPreferences)
-        .where(eq(notificationPreferences.userId, userId));
-      return prefs || undefined;
-    } catch (error: unknown) {
-      // Handle case where table doesn't exist in production (migration not run)
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("relation") && message.includes("does not exist")) {
-        console.warn("[storage] notification_preferences table does not exist - returning undefined");
-        return undefined;
-      }
-      throw error;
-    }
+    return notificationsRepo.getNotificationPreferences(userId);
   }
 
   async upsertNotificationPreferences(userId: string, prefs: Partial<InsertNotificationPreferences>): Promise<NotificationPreferences> {
-    try {
-      const existing = await this.getNotificationPreferences(userId);
-      
-      if (existing) {
-        const [updated] = await db.update(notificationPreferences)
-          .set({ ...prefs, updatedAt: new Date() })
-          .where(eq(notificationPreferences.userId, userId))
-          .returning();
-        return updated;
-      }
-      
-      const [created] = await db.insert(notificationPreferences)
-        .values({ userId, ...prefs })
-        .returning();
-      return created;
-    } catch (error: unknown) {
-      // Handle case where table doesn't exist in production (migration not run)
-      const message = error instanceof Error ? error.message : String(error);
-      if (message.includes("relation") && message.includes("does not exist")) {
-        console.warn("[storage] notification_preferences table does not exist - returning defaults");
-        // Return a synthetic default preferences object
-        return {
-          id: "default",
-          tenantId: prefs.tenantId || null,
-          userId,
-          taskDeadline: true,
-          taskAssigned: true,
-          taskCompleted: true,
-          commentAdded: true,
-          commentMention: true,
-          projectUpdate: true,
-          projectMemberAdded: true,
-          taskStatusChanged: true,
-          emailEnabled: false,
-          createdAt: new Date(),
-          updatedAt: new Date(),
-        };
-      }
-      throw error;
-    }
+    return notificationsRepo.upsertNotificationPreferences(userId, prefs);
   }
 
   async invalidateUserSessions(userId: string, exceptSessionId?: string): Promise<void> {
@@ -4813,48 +3982,18 @@ export class DatabaseStorage implements IStorage {
   }
 
   // ============================================================
-  // Support Tickets
+  // Support Tickets (delegated to SupportRepository)
   // ============================================================
 
   async getSupportTicket(id: string): Promise<SupportTicket | undefined> {
-    const [ticket] = await db.select().from(supportTickets).where(eq(supportTickets.id, id));
-    return ticket || undefined;
+    return supportRepo.getSupportTicket(id);
   }
 
   async getSupportTicketsByTenant(
     tenantId: string,
     filters?: { status?: string; priority?: string; category?: string; search?: string; clientId?: string; assignedToUserId?: string; limit?: number; offset?: number }
   ): Promise<{ tickets: SupportTicket[]; total: number }> {
-    const conditions = [eq(supportTickets.tenantId, tenantId)];
-    if (filters?.status) {
-      const statuses = filters.status.split(",").map(s => s.trim());
-      if (statuses.length === 1) {
-        conditions.push(eq(supportTickets.status, statuses[0]));
-      } else {
-        conditions.push(inArray(supportTickets.status, statuses));
-      }
-    }
-    if (filters?.priority) conditions.push(eq(supportTickets.priority, filters.priority));
-    if (filters?.category) conditions.push(eq(supportTickets.category, filters.category));
-    if (filters?.clientId) conditions.push(eq(supportTickets.clientId, filters.clientId));
-    if (filters?.assignedToUserId) conditions.push(eq(supportTickets.assignedToUserId, filters.assignedToUserId));
-    if (filters?.search) {
-      conditions.push(ilike(supportTickets.title, `%${filters.search}%`));
-    }
-
-    const whereClause = and(...conditions);
-    const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(supportTickets).where(whereClause);
-    const total = Number(countResult?.count || 0);
-
-    const tickets = await db
-      .select()
-      .from(supportTickets)
-      .where(whereClause)
-      .orderBy(desc(supportTickets.lastActivityAt))
-      .limit(filters?.limit || 50)
-      .offset(filters?.offset || 0);
-
-    return { tickets, total };
+    return supportRepo.getSupportTicketsByTenant(tenantId, filters);
   }
 
   async getSupportTicketsByClient(
@@ -4862,71 +4001,27 @@ export class DatabaseStorage implements IStorage {
     clientId: string,
     filters?: { status?: string; limit?: number; offset?: number }
   ): Promise<{ tickets: SupportTicket[]; total: number }> {
-    const conditions = [
-      eq(supportTickets.tenantId, tenantId),
-      eq(supportTickets.clientId, clientId),
-    ];
-    if (filters?.status) conditions.push(eq(supportTickets.status, filters.status));
-
-    const whereClause = and(...conditions);
-    const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(supportTickets).where(whereClause);
-    const total = Number(countResult?.count || 0);
-
-    const tickets = await db
-      .select()
-      .from(supportTickets)
-      .where(whereClause)
-      .orderBy(desc(supportTickets.lastActivityAt))
-      .limit(filters?.limit || 50)
-      .offset(filters?.offset || 0);
-
-    return { tickets, total };
+    return supportRepo.getSupportTicketsByClient(tenantId, clientId, filters);
   }
 
   async createSupportTicket(ticket: InsertSupportTicket): Promise<SupportTicket> {
-    const [created] = await db.insert(supportTickets).values(ticket).returning();
-    return created;
+    return supportRepo.createSupportTicket(ticket);
   }
 
   async updateSupportTicket(id: string, tenantId: string, updates: Partial<InsertSupportTicket>): Promise<SupportTicket | undefined> {
-    const [updated] = await db
-      .update(supportTickets)
-      .set({ ...updates, updatedAt: new Date(), lastActivityAt: new Date() })
-      .where(and(eq(supportTickets.id, id), eq(supportTickets.tenantId, tenantId)))
-      .returning();
-    return updated || undefined;
+    return supportRepo.updateSupportTicket(id, tenantId, updates);
   }
 
   async getSupportTicketMessages(ticketId: string, tenantId: string, includeInternal?: boolean): Promise<SupportTicketMessage[]> {
-    const conditions = [
-      eq(supportTicketMessages.ticketId, ticketId),
-      eq(supportTicketMessages.tenantId, tenantId),
-    ];
-    if (!includeInternal) {
-      conditions.push(eq(supportTicketMessages.visibility, "public"));
-    }
-    return db
-      .select()
-      .from(supportTicketMessages)
-      .where(and(...conditions))
-      .orderBy(asc(supportTicketMessages.createdAt));
+    return supportRepo.getSupportTicketMessages(ticketId, tenantId, includeInternal);
   }
 
   async createSupportTicketMessage(message: InsertSupportTicketMessage): Promise<SupportTicketMessage> {
-    const [created] = await db.insert(supportTicketMessages).values(message).returning();
-    await db
-      .update(supportTickets)
-      .set({ lastActivityAt: new Date(), updatedAt: new Date() })
-      .where(eq(supportTickets.id, message.ticketId));
-    return created;
+    return supportRepo.createSupportTicketMessage(message);
   }
 
   async getSupportTicketEvents(ticketId: string, tenantId: string): Promise<SupportTicketEvent[]> {
-    return db
-      .select()
-      .from(supportTicketEvents)
-      .where(and(eq(supportTicketEvents.ticketId, ticketId), eq(supportTicketEvents.tenantId, tenantId)))
-      .orderBy(asc(supportTicketEvents.createdAt));
+    return supportRepo.getSupportTicketEvents(ticketId, tenantId);
   }
 
   async createSupportTicketEvent(event: {
@@ -4938,193 +4033,99 @@ export class DatabaseStorage implements IStorage {
     eventType: string;
     payloadJson?: unknown;
   }): Promise<SupportTicketEvent> {
-    const [created] = await db.insert(supportTicketEvents).values({
-      tenantId: event.tenantId,
-      ticketId: event.ticketId,
-      actorType: event.actorType,
-      actorUserId: event.actorUserId || null,
-      actorPortalUserId: event.actorPortalUserId || null,
-      eventType: event.eventType,
-      payloadJson: event.payloadJson || null,
-    }).returning();
-    return created;
+    return supportRepo.createSupportTicketEvent(event);
   }
 
   async getSupportCannedReplies(tenantId: string, workspaceId?: string | null): Promise<SupportCannedReply[]> {
-    const conditions = [eq(supportCannedReplies.tenantId, tenantId)];
-    if (workspaceId) {
-      conditions.push(eq(supportCannedReplies.workspaceId, workspaceId));
-    }
-    return db.select().from(supportCannedReplies).where(and(...conditions)).orderBy(desc(supportCannedReplies.updatedAt));
+    return supportRepo.getSupportCannedReplies(tenantId, workspaceId);
   }
 
   async getSupportCannedReply(id: string, tenantId: string): Promise<SupportCannedReply | undefined> {
-    const [reply] = await db.select().from(supportCannedReplies).where(and(eq(supportCannedReplies.id, id), eq(supportCannedReplies.tenantId, tenantId)));
-    return reply || undefined;
+    return supportRepo.getSupportCannedReply(id, tenantId);
   }
 
   async createSupportCannedReply(reply: InsertSupportCannedReply): Promise<SupportCannedReply> {
-    const [created] = await db.insert(supportCannedReplies).values(reply).returning();
-    return created;
+    return supportRepo.createSupportCannedReply(reply);
   }
 
   async updateSupportCannedReply(id: string, tenantId: string, updates: Partial<InsertSupportCannedReply>): Promise<SupportCannedReply | undefined> {
-    const [updated] = await db.update(supportCannedReplies).set({ ...updates, updatedAt: new Date() }).where(and(eq(supportCannedReplies.id, id), eq(supportCannedReplies.tenantId, tenantId))).returning();
-    return updated || undefined;
+    return supportRepo.updateSupportCannedReply(id, tenantId, updates);
   }
 
   async deleteSupportCannedReply(id: string, tenantId: string): Promise<boolean> {
-    const result = await db.delete(supportCannedReplies).where(and(eq(supportCannedReplies.id, id), eq(supportCannedReplies.tenantId, tenantId))).returning();
-    return result.length > 0;
+    return supportRepo.deleteSupportCannedReply(id, tenantId);
   }
 
   async getSupportMacros(tenantId: string, workspaceId?: string | null): Promise<SupportMacro[]> {
-    const conditions = [eq(supportMacros.tenantId, tenantId)];
-    if (workspaceId) {
-      conditions.push(eq(supportMacros.workspaceId, workspaceId));
-    }
-    return db.select().from(supportMacros).where(and(...conditions)).orderBy(desc(supportMacros.updatedAt));
+    return supportRepo.getSupportMacros(tenantId, workspaceId);
   }
 
   async getSupportMacro(id: string, tenantId: string): Promise<SupportMacro | undefined> {
-    const [macro] = await db.select().from(supportMacros).where(and(eq(supportMacros.id, id), eq(supportMacros.tenantId, tenantId)));
-    return macro || undefined;
+    return supportRepo.getSupportMacro(id, tenantId);
   }
 
   async createSupportMacro(macro: InsertSupportMacro): Promise<SupportMacro> {
-    const [created] = await db.insert(supportMacros).values(macro).returning();
-    return created;
+    return supportRepo.createSupportMacro(macro);
   }
 
   async updateSupportMacro(id: string, tenantId: string, updates: Partial<InsertSupportMacro>): Promise<SupportMacro | undefined> {
-    const [updated] = await db.update(supportMacros).set({ ...updates, updatedAt: new Date() }).where(and(eq(supportMacros.id, id), eq(supportMacros.tenantId, tenantId))).returning();
-    return updated || undefined;
+    return supportRepo.updateSupportMacro(id, tenantId, updates);
   }
 
   async deleteSupportMacro(id: string, tenantId: string): Promise<boolean> {
-    const result = await db.delete(supportMacros).where(and(eq(supportMacros.id, id), eq(supportMacros.tenantId, tenantId))).returning();
-    return result.length > 0;
+    return supportRepo.deleteSupportMacro(id, tenantId);
   }
 
-  // SLA Policies
   async getSlaPolicies(tenantId: string, workspaceId?: string | null): Promise<SlaPolicy[]> {
-    const conditions = [eq(supportSlaPolicies.tenantId, tenantId)];
-    if (workspaceId) {
-      conditions.push(eq(supportSlaPolicies.workspaceId, workspaceId));
-    }
-    return db.select().from(supportSlaPolicies).where(and(...conditions)).orderBy(supportSlaPolicies.priority);
+    return supportRepo.getSlaPolicies(tenantId, workspaceId);
   }
 
   async getSlaPolicy(id: string, tenantId: string): Promise<SlaPolicy | undefined> {
-    const [policy] = await db.select().from(supportSlaPolicies).where(and(eq(supportSlaPolicies.id, id), eq(supportSlaPolicies.tenantId, tenantId)));
-    return policy || undefined;
+    return supportRepo.getSlaPolicy(id, tenantId);
   }
 
   async getApplicableSlaPolicy(tenantId: string, priority: string, category?: string | null, workspaceId?: string | null): Promise<SlaPolicy | undefined> {
-    // Try most specific first: workspace + category + priority
-    if (workspaceId && category) {
-      const [p] = await db.select().from(supportSlaPolicies).where(and(
-        eq(supportSlaPolicies.tenantId, tenantId),
-        eq(supportSlaPolicies.workspaceId, workspaceId),
-        eq(supportSlaPolicies.category, category),
-        eq(supportSlaPolicies.priority, priority)
-      ));
-      if (p) return p;
-    }
-    // Fallback: tenant + category + priority (no workspace)
-    if (category) {
-      const [p] = await db.select().from(supportSlaPolicies).where(and(
-        eq(supportSlaPolicies.tenantId, tenantId),
-        isNull(supportSlaPolicies.workspaceId),
-        eq(supportSlaPolicies.category, category),
-        eq(supportSlaPolicies.priority, priority)
-      ));
-      if (p) return p;
-    }
-    // Fallback: tenant + priority (no category, no workspace)
-    const [p] = await db.select().from(supportSlaPolicies).where(and(
-      eq(supportSlaPolicies.tenantId, tenantId),
-      isNull(supportSlaPolicies.workspaceId),
-      isNull(supportSlaPolicies.category),
-      eq(supportSlaPolicies.priority, priority)
-    ));
-    return p || undefined;
+    return supportRepo.getApplicableSlaPolicy(tenantId, priority, category, workspaceId);
   }
 
   async createSlaPolicy(policy: InsertSlaPolicy): Promise<SlaPolicy> {
-    const [created] = await db.insert(supportSlaPolicies).values(policy).returning();
-    return created;
+    return supportRepo.createSlaPolicy(policy);
   }
 
   async updateSlaPolicy(id: string, tenantId: string, updates: Partial<InsertSlaPolicy>): Promise<SlaPolicy | undefined> {
-    const [updated] = await db.update(supportSlaPolicies).set({ ...updates, updatedAt: new Date() }).where(and(eq(supportSlaPolicies.id, id), eq(supportSlaPolicies.tenantId, tenantId))).returning();
-    return updated || undefined;
+    return supportRepo.updateSlaPolicy(id, tenantId, updates);
   }
 
   async deleteSlaPolicy(id: string, tenantId: string): Promise<boolean> {
-    const result = await db.delete(supportSlaPolicies).where(and(eq(supportSlaPolicies.id, id), eq(supportSlaPolicies.tenantId, tenantId))).returning();
-    return result.length > 0;
+    return supportRepo.deleteSlaPolicy(id, tenantId);
   }
 
   async getOpenTicketsForSlaCheck(tenantId?: string): Promise<SupportTicket[]> {
-    const conditions = [
-      sql`${supportTickets.status} IN ('open', 'in_progress', 'waiting_on_client')`,
-    ];
-    if (tenantId) {
-      conditions.push(eq(supportTickets.tenantId, tenantId));
-    }
-    return db.select().from(supportTickets).where(and(...conditions));
+    return supportRepo.getOpenTicketsForSlaCheck(tenantId);
   }
 
   async setTicketFirstResponse(ticketId: string, tenantId: string, timestamp: Date): Promise<void> {
-    await db.update(supportTickets).set({ firstResponseAt: timestamp, updatedAt: new Date() }).where(and(eq(supportTickets.id, ticketId), eq(supportTickets.tenantId, tenantId)));
+    return supportRepo.setTicketFirstResponse(ticketId, tenantId, timestamp);
   }
 
   async setTicketSlaBreached(ticketId: string, tenantId: string, field: 'firstResponseBreachedAt' | 'resolutionBreachedAt', timestamp: Date): Promise<void> {
-    await db.update(supportTickets).set({ [field]: timestamp, updatedAt: new Date() }).where(and(eq(supportTickets.id, ticketId), eq(supportTickets.tenantId, tenantId)));
+    return supportRepo.setTicketSlaBreached(ticketId, tenantId, field, timestamp);
   }
 
-  // Ticket Form Schemas
   async getTicketFormSchemas(tenantId: string, workspaceId?: string | null): Promise<TicketFormSchema[]> {
-    const conditions = [eq(supportTicketFormSchemas.tenantId, tenantId)];
-    if (workspaceId) {
-      conditions.push(eq(supportTicketFormSchemas.workspaceId, workspaceId));
-    }
-    return db.select().from(supportTicketFormSchemas).where(and(...conditions)).orderBy(supportTicketFormSchemas.category);
+    return supportRepo.getTicketFormSchemas(tenantId, workspaceId);
   }
 
   async getTicketFormSchema(tenantId: string, category: string, workspaceId?: string | null): Promise<TicketFormSchema | undefined> {
-    const conditions = [
-      eq(supportTicketFormSchemas.tenantId, tenantId),
-      eq(supportTicketFormSchemas.category, category),
-    ];
-    if (workspaceId) {
-      conditions.push(eq(supportTicketFormSchemas.workspaceId, workspaceId));
-    } else {
-      conditions.push(isNull(supportTicketFormSchemas.workspaceId));
-    }
-    const [schema] = await db.select().from(supportTicketFormSchemas).where(and(...conditions));
-    return schema || undefined;
+    return supportRepo.getTicketFormSchema(tenantId, category, workspaceId);
   }
 
   async upsertTicketFormSchema(tenantId: string, category: string, schemaJson: unknown, workspaceId?: string | null): Promise<TicketFormSchema> {
-    const existing = await this.getTicketFormSchema(tenantId, category, workspaceId);
-    if (existing) {
-      const [updated] = await db.update(supportTicketFormSchemas).set({ schemaJson, updatedAt: new Date() }).where(eq(supportTicketFormSchemas.id, existing.id)).returning();
-      return updated;
-    }
-    const [created] = await db.insert(supportTicketFormSchemas).values({
-      tenantId,
-      category,
-      schemaJson,
-      workspaceId: workspaceId || null,
-    }).returning();
-    return created;
+    return supportRepo.upsertTicketFormSchema(tenantId, category, schemaJson, workspaceId);
   }
 
   async deleteTicketFormSchema(id: string, tenantId: string): Promise<boolean> {
-    const result = await db.delete(supportTicketFormSchemas).where(and(eq(supportTicketFormSchemas.id, id), eq(supportTicketFormSchemas.tenantId, tenantId))).returning();
-    return result.length > 0;
+    return supportRepo.deleteTicketFormSchema(id, tenantId);
   }
 }
 
