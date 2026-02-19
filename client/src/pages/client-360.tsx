@@ -89,7 +89,7 @@ import {
 import { RichTextEditor, RichTextViewer } from "@/components/ui/rich-text-editor";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
 import { RequestApprovalDialog } from "@/components/request-approval-dialog";
-import { ClipboardCheck, UserCheck } from "lucide-react";
+import { ClipboardCheck, UserCheck, Eye, EyeOff } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -1281,6 +1281,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
   const [newMessage, setNewMessage] = useState("");
   const [newAssignee, setNewAssignee] = useState<string>("__self__");
   const [replyText, setReplyText] = useState("");
+  const [replyVisibility, setReplyVisibility] = useState<"public" | "internal">("public");
   const [convoSearch, setConvoSearch] = useState("");
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
   const messagesEndRef = useRef<HTMLDivElement>(null);
@@ -1342,8 +1343,8 @@ function MessagesTab({ clientId }: { clientId: string }) {
   });
 
   const replyMutation = useMutation({
-    mutationFn: async (bodyText: string) => {
-      const res = await apiRequest("POST", `/api/crm/conversations/${selectedConvoId}/messages`, { bodyText });
+    mutationFn: async ({ bodyText, visibility }: { bodyText: string; visibility: "public" | "internal" }) => {
+      const res = await apiRequest("POST", `/api/crm/conversations/${selectedConvoId}/messages`, { bodyText, visibility });
       return res.json();
     },
     onSuccess: () => {
@@ -1378,7 +1379,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
   const handleSendReply = () => {
     const trimmed = replyText.trim();
     if (!trimmed) return;
-    replyMutation.mutate(trimmed);
+    replyMutation.mutate({ bodyText: trimmed, visibility: replyVisibility });
   };
 
   const handleCreateConvo = () => {
@@ -1435,46 +1436,89 @@ function MessagesTab({ clientId }: { clientId: string }) {
         </div>
 
         <div className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1" data-testid="internal-messages-list">
-          {messages.map((msg: any) => (
-            <div key={msg.id} className="flex gap-2" data-testid={`int-message-${msg.id}`}>
-              <Avatar className="h-7 w-7 shrink-0">
-                <AvatarFallback className={`text-xs ${msg.authorRole !== "client" ? "bg-primary/10" : "bg-muted"}`}>
-                  {msg.authorName ? msg.authorName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) : "?"}
-                </AvatarFallback>
-              </Avatar>
-              <div className="min-w-0 flex-1">
-                <div className="flex items-center gap-2 flex-wrap">
-                  <span className="text-xs font-medium">{msg.authorName || "Unknown"}</span>
-                  {msg.authorRole === "client" && <Badge variant="outline" className="text-xs">Client</Badge>}
-                  <span className="text-xs text-muted-foreground">
-                    {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
-                  </span>
+          {messages.map((msg: any) => {
+            const isInternal = msg.visibility === "internal";
+            return (
+              <div
+                key={msg.id}
+                className={`flex gap-2 ${isInternal ? "rounded-md border border-amber-500/30 bg-amber-500/5 p-2" : ""}`}
+                data-testid={`int-message-${msg.id}`}
+              >
+                <Avatar className="h-7 w-7 shrink-0">
+                  <AvatarFallback className={`text-xs ${isInternal ? "bg-amber-500/15" : msg.authorRole !== "client" ? "bg-primary/10" : "bg-muted"}`}>
+                    {msg.authorName ? msg.authorName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2) : "?"}
+                  </AvatarFallback>
+                </Avatar>
+                <div className="min-w-0 flex-1">
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <span className="text-xs font-medium">{msg.authorName || "Unknown"}</span>
+                    {isInternal && (
+                      <Badge variant="outline" className="text-xs border-amber-500/40 text-amber-600 dark:text-amber-400">
+                        <EyeOff className="h-3 w-3 mr-0.5" />
+                        Internal
+                      </Badge>
+                    )}
+                    {msg.authorRole === "client" && <Badge variant="outline" className="text-xs">Client</Badge>}
+                    <span className="text-xs text-muted-foreground">
+                      {formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}
+                    </span>
+                  </div>
+                  <p className="text-sm mt-0.5 whitespace-pre-wrap">{msg.bodyText}</p>
                 </div>
-                <p className="text-sm mt-0.5 whitespace-pre-wrap">{msg.bodyText}</p>
               </div>
-            </div>
-          ))}
+            );
+          })}
           <div ref={messagesEndRef} />
         </div>
 
         {!isClosed && (
-          <div className="flex gap-2 items-end border-t pt-3">
-            <Input
-              value={replyText}
-              onChange={(e) => setReplyText(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }}
-              placeholder="Type a message..."
-              data-testid="input-internal-reply"
-            />
-            <Button
-              onClick={handleSendReply}
-              disabled={!replyText.trim() || replyMutation.isPending}
-              size="icon"
-              aria-label="Send reply"
-              data-testid="button-send-internal-reply"
-            >
-              <Send className="h-4 w-4" />
-            </Button>
+          <div className={`border-t pt-3 space-y-2 ${replyVisibility === "internal" ? "border-amber-500/30" : ""}`}>
+            <div className="flex items-center gap-2">
+              <Button
+                variant={replyVisibility === "public" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setReplyVisibility("public")}
+                data-testid="button-reply-public"
+              >
+                <Eye className="h-3.5 w-3.5 mr-1" />
+                Public Reply
+              </Button>
+              <Button
+                variant={replyVisibility === "internal" ? "default" : "outline"}
+                size="sm"
+                onClick={() => setReplyVisibility("internal")}
+                className={replyVisibility === "internal" ? "bg-amber-600 hover:bg-amber-700 border-amber-600" : ""}
+                data-testid="button-reply-internal"
+              >
+                <EyeOff className="h-3.5 w-3.5 mr-1" />
+                Internal Note
+              </Button>
+            </div>
+            {replyVisibility === "internal" && (
+              <p className="text-xs text-amber-600 dark:text-amber-400">
+                This note is only visible to your team. The client will not see it.
+              </p>
+            )}
+            <div className="flex gap-2 items-end">
+              <Input
+                value={replyText}
+                onChange={(e) => setReplyText(e.target.value)}
+                onKeyDown={(e) => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); handleSendReply(); } }}
+                placeholder={replyVisibility === "internal" ? "Write an internal note..." : "Type a message..."}
+                className={replyVisibility === "internal" ? "border-amber-500/30" : ""}
+                data-testid="input-internal-reply"
+              />
+              <Button
+                onClick={handleSendReply}
+                disabled={!replyText.trim() || replyMutation.isPending}
+                size="icon"
+                aria-label={replyVisibility === "internal" ? "Add internal note" : "Send reply"}
+                className={replyVisibility === "internal" ? "bg-amber-600 hover:bg-amber-700" : ""}
+                data-testid="button-send-internal-reply"
+              >
+                <Send className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
         )}
       </div>

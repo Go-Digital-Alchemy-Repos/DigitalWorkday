@@ -12,6 +12,7 @@ import {
   clients,
   users,
   UserRole,
+  ClientMessageVisibility,
 } from "@shared/schema";
 import { getCurrentUserId } from "../../helpers";
 import { verifyClientTenancy } from "./crm.helpers";
@@ -322,20 +323,29 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
       assigneeName = assignee?.name || null;
     }
 
-    const messages = await db.select({
+    const isClientUser = user.role === UserRole.CLIENT;
+
+    let messagesQuery = db.select({
       id: clientMessages.id,
       conversationId: clientMessages.conversationId,
       authorUserId: clientMessages.authorUserId,
       bodyText: clientMessages.bodyText,
       bodyRich: clientMessages.bodyRich,
+      visibility: clientMessages.visibility,
       createdAt: clientMessages.createdAt,
       authorName: users.name,
       authorRole: users.role,
     })
       .from(clientMessages)
       .leftJoin(users, eq(clientMessages.authorUserId, users.id))
-      .where(eq(clientMessages.conversationId, conversationId))
+      .where(
+        isClientUser
+          ? and(eq(clientMessages.conversationId, conversationId), eq(clientMessages.visibility, ClientMessageVisibility.PUBLIC))
+          : eq(clientMessages.conversationId, conversationId)
+      )
       .orderBy(clientMessages.createdAt);
+
+    const messages = await messagesQuery;
 
     res.json({ conversation: { ...conversation, assigneeName }, messages });
   } catch (error) {
@@ -373,6 +383,7 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
     const schema = z.object({
       bodyText: z.string().min(1),
       bodyRich: z.string().optional(),
+      visibility: z.enum(["public", "internal"]).optional().default("public"),
     });
 
     const data = validateBody(req.body, schema, res);
@@ -380,20 +391,25 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
 
     const userId = getCurrentUserId(req);
 
+    if (data.visibility === "internal" && user.role === UserRole.CLIENT) {
+      return sendError(res, AppError.forbidden("Client users cannot post internal notes"), req);
+    }
+
     const [message] = await db.insert(clientMessages).values({
       tenantId,
       conversationId,
       authorUserId: userId,
       bodyText: data.bodyText,
       bodyRich: data.bodyRich || null,
+      visibility: data.visibility,
     }).returning();
 
     await db.update(clientConversations)
       .set({ updatedAt: new Date() })
       .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)));
 
-    if (conversation.assignedToUserId && conversation.assignedToUserId !== userId) {
-      emitToUser(conversation.assignedToUserId, CLIENT_CONVERSATION_EVENTS.MESSAGE_ADDED, {
+    if (data.visibility === "internal") {
+      emitToTenant(tenantId, CLIENT_CONVERSATION_EVENTS.INTERNAL_NOTE_ADDED, {
         conversationId,
         tenantId,
         clientId: conversation.clientId,
@@ -402,6 +418,18 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
         authorUserId: userId,
         messageId: message.id,
       });
+    } else {
+      if (conversation.assignedToUserId && conversation.assignedToUserId !== userId) {
+        emitToUser(conversation.assignedToUserId, CLIENT_CONVERSATION_EVENTS.MESSAGE_ADDED, {
+          conversationId,
+          tenantId,
+          clientId: conversation.clientId,
+          subject: conversation.subject,
+          assignedToUserId: conversation.assignedToUserId,
+          authorUserId: userId,
+          messageId: message.id,
+        });
+      }
     }
 
     res.status(201).json(message);
@@ -442,9 +470,14 @@ router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: R
       .orderBy(desc(clientConversations.updatedAt));
 
     const convosWithMeta = await Promise.all(results.map(async (r) => {
+      const publicOnly = and(
+        eq(clientMessages.conversationId, r.conversation.id),
+        eq(clientMessages.visibility, ClientMessageVisibility.PUBLIC)
+      );
+
       const [msgCount] = await db.select({ value: count() })
         .from(clientMessages)
-        .where(eq(clientMessages.conversationId, r.conversation.id));
+        .where(publicOnly);
 
       const [lastMsg] = await db.select({
         bodyText: clientMessages.bodyText,
@@ -453,7 +486,7 @@ router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: R
       })
         .from(clientMessages)
         .leftJoin(users, eq(clientMessages.authorUserId, users.id))
-        .where(eq(clientMessages.conversationId, r.conversation.id))
+        .where(publicOnly)
         .orderBy(desc(clientMessages.createdAt))
         .limit(1);
 

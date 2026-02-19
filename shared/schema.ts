@@ -3151,6 +3151,11 @@ export const insertClientConversationSchema = createInsertSchema(clientConversat
 export type ClientConversation = typeof clientConversations.$inferSelect;
 export type InsertClientConversation = z.infer<typeof insertClientConversationSchema>;
 
+export const ClientMessageVisibility = {
+  PUBLIC: "public",
+  INTERNAL: "internal",
+} as const;
+
 export const clientMessages = pgTable("client_messages", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
@@ -3158,11 +3163,13 @@ export const clientMessages = pgTable("client_messages", {
   authorUserId: varchar("author_user_id").references(() => users.id).notNull(),
   bodyText: text("body_text").notNull(),
   bodyRich: text("body_rich"),
+  visibility: varchar("visibility", { length: 20 }).default("public").notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   index("client_messages_tenant_idx").on(table.tenantId),
   index("client_messages_conversation_idx").on(table.conversationId),
   index("client_messages_created_idx").on(table.createdAt),
+  index("client_messages_visibility_idx").on(table.visibility),
 ]);
 
 export const insertClientMessageSchema = createInsertSchema(clientMessages).omit({

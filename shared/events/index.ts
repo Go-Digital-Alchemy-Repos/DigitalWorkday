@@ -905,6 +905,7 @@ export type ClientToServerEvents = {
   // Client conversation events
   [CLIENT_CONVERSATION_EVENTS.ASSIGNED]: (payload: ClientConversationAssignedPayload) => void;
   [CLIENT_CONVERSATION_EVENTS.MESSAGE_ADDED]: (payload: ClientConversationMessagePayload) => void;
+  [CLIENT_CONVERSATION_EVENTS.INTERNAL_NOTE_ADDED]: (payload: ClientConversationMessagePayload) => void;
 };
 
 // =============================================================================
@@ -914,6 +915,7 @@ export type ClientToServerEvents = {
 export const CLIENT_CONVERSATION_EVENTS = {
   ASSIGNED: 'client_conversation:assigned',
   MESSAGE_ADDED: 'client_conversation:messageAdded',
+  INTERNAL_NOTE_ADDED: 'client_conversation:internalNoteAdded',
 } as const;
 
 export interface ClientConversationAssignedPayload {
