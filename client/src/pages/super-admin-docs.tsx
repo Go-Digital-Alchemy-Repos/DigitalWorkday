@@ -339,7 +339,7 @@ export default function SuperAdminDocs() {
   };
 
   if (authLoading) {
-    return <PageSkeleton />;
+    return <PageSkeleton variant="compact" />;
   }
 
   if (!user || user.role !== "super_user") {

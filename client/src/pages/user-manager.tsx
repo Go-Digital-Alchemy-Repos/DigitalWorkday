@@ -14,7 +14,7 @@ export default function UserManagerPage() {
   const isTenantMember = isAdmin || isEmployee || isSuperUser;
 
   if (isLoading) {
-    return <PageSkeleton />;
+    return <PageSkeleton variant="compact" />;
   }
 
   if (!isTenantMember) {

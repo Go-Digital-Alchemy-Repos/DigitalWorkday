@@ -1,6 +1,18 @@
 import { Skeleton } from "@/components/ui/skeleton";
 
-export function PageSkeleton() {
+type PageSkeletonVariant = "standard" | "compact" | "dashboard";
+
+interface PageSkeletonProps {
+  variant?: PageSkeletonVariant;
+}
+
+export function PageSkeleton({ variant = "standard" }: PageSkeletonProps) {
+  if (variant === "compact") return <CompactLayout />;
+  if (variant === "dashboard") return <DashboardLayout />;
+  return <StandardLayout />;
+}
+
+function StandardLayout() {
   return (
     <div className="p-6 space-y-6 animate-in fade-in-50 duration-300" data-testid="page-skeleton">
       <div className="flex items-center justify-between">
@@ -36,9 +48,9 @@ export function PageSkeleton() {
   );
 }
 
-export function CompactPageSkeleton() {
+function CompactLayout() {
   return (
-    <div className="p-6 space-y-4 animate-in fade-in-50 duration-300" data-testid="compact-page-skeleton">
+    <div className="p-6 space-y-4 animate-in fade-in-50 duration-300" data-testid="page-skeleton-compact">
       <div className="flex items-center justify-between">
         <Skeleton className="h-6 w-36" />
         <Skeleton className="h-9 w-24 rounded-md" />
@@ -59,9 +71,9 @@ export function CompactPageSkeleton() {
   );
 }
 
-export function DashboardSkeleton() {
+function DashboardLayout() {
   return (
-    <div className="p-6 space-y-6 animate-in fade-in-50 duration-300" data-testid="dashboard-skeleton">
+    <div className="p-6 space-y-6 animate-in fade-in-50 duration-300" data-testid="page-skeleton-dashboard">
       <div className="space-y-2">
         <Skeleton className="h-8 w-56" />
         <Skeleton className="h-4 w-72" />

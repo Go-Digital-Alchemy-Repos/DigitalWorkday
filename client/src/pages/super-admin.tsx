@@ -421,7 +421,7 @@ export default function SuperAdminPage() {
   };
 
   if (isLoading) {
-    return <PageSkeleton />;
+    return <PageSkeleton variant="dashboard" />;
   }
 
   return (

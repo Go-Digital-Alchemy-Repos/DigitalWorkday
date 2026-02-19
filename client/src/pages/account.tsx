@@ -20,7 +20,7 @@ export default function AccountPage() {
   const isSuperUser = user?.role === "super_user";
 
   if (isLoading) {
-    return <PageSkeleton />;
+    return <PageSkeleton variant="compact" />;
   }
 
   if (!isAdmin && !isSuperUser) {
