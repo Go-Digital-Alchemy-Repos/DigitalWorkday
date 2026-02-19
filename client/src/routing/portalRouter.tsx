@@ -5,6 +5,7 @@ import { UserMenu } from "@/components/user-menu";
 import { NotificationCenter } from "@/components/notification-center";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { ClientPortalRouteGuard } from "./guards";
+import { SkipLink } from "@/components/skip-link";
 import { ClientPortalSidebar } from "@/components/client-portal-sidebar";
 import { ClientPortalMobileNav } from "@/components/client-portal-mobile-nav";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -56,6 +57,7 @@ export function ClientPortalLayout() {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
+      <SkipLink />
       <div className="flex h-screen w-full">
         <ClientPortalSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
@@ -69,7 +71,7 @@ export function ClientPortalLayout() {
               <UserMenu />
             </div>
           </header>
-          <main className={`flex-1 overflow-hidden ${isMobile ? "pb-16" : ""}`}>
+          <main id="main-content" className={`flex-1 overflow-hidden ${isMobile ? "pb-16" : ""}`}>
             <ErrorBoundary>
               <ClientPortalRouter />
             </ErrorBoundary>

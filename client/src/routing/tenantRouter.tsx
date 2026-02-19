@@ -19,6 +19,7 @@ import { TaskDrawerProvider } from "@/lib/task-drawer-context";
 import { GlobalActiveTimer, MobileActiveTimerBar } from "@/features/timer";
 import { useTheme } from "@/lib/theme-provider";
 import { TenantRouteGuard, ProtectedRoute } from "./guards";
+import { SkipLink } from "@/components/skip-link";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -238,6 +239,7 @@ export function TenantLayout() {
             onNewProject={() => setLocation("/projects")}
             onStartTimer={() => setLocation("/my-time")}
           />
+          <SkipLink />
           <div className={`flex flex-col h-screen w-full ${isImpersonating ? "ring-2 ring-amber-500 ring-inset" : ""}`}>
             <ImpersonationBanner />
             <div className="flex flex-1 overflow-hidden">
@@ -265,7 +267,7 @@ export function TenantLayout() {
                     <UserMenu />
                   </div>
                 </header>
-                <main className={`flex-1 overflow-hidden ${hasActiveTimer ? "pb-28" : isMobile ? "pb-16" : ""}`}>
+                <main id="main-content" className={`flex-1 overflow-hidden ${hasActiveTimer ? "pb-28" : isMobile ? "pb-16" : ""}`}>
                   <ErrorBoundary>
                     <TenantRouter />
                   </ErrorBoundary>

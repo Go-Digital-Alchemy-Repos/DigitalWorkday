@@ -252,8 +252,12 @@ export function S3Dropzone({
       )}
 
       <div
+        role={displayUrl ? "group" : "button"}
+        tabIndex={disabled || isUploading ? -1 : 0}
+        aria-label={`${label}. ${displayUrl ? "File uploaded. Click to replace" : "Drag and drop or press Enter to upload"}`}
+        aria-disabled={disabled || isUploading}
         className={cn(
-          "relative border-2 border-dashed rounded-lg transition-colors",
+          "relative border-2 border-dashed rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
           isDragging && "border-primary bg-primary/5",
           !isDragging && !error && "border-border hover:border-muted-foreground/50",
           error && "border-destructive bg-destructive/5",
@@ -265,6 +269,12 @@ export function S3Dropzone({
         onDragOver={handleDragOver}
         onDrop={handleDrop}
         onClick={handleClick}
+        onKeyDown={(e) => {
+          if ((e.key === "Enter" || e.key === " ") && !disabled && !isUploading) {
+            e.preventDefault();
+            handleClick();
+          }
+        }}
         data-testid={`dropzone-${category}`}
       >
         <input
@@ -305,6 +315,7 @@ export function S3Dropzone({
                 type="button"
                 variant="ghost"
                 size="icon"
+                aria-label={`Remove ${label}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleRemove();
@@ -318,7 +329,7 @@ export function S3Dropzone({
           </div>
         ) : displayUrl ? (
           <div className="p-4 flex items-center gap-4">
-            <FileText className="h-10 w-10 text-muted-foreground shrink-0" />
+            <FileText className="h-10 w-10 text-muted-foreground shrink-0" aria-hidden="true" />
             <div className="flex-1 min-w-0">
               <p className="text-sm truncate">{displayUrl.split("/").pop()}</p>
             </div>
@@ -327,6 +338,7 @@ export function S3Dropzone({
                 type="button"
                 variant="ghost"
                 size="icon"
+                aria-label={`Remove ${label}`}
                 onClick={(e) => {
                   e.stopPropagation();
                   handleRemove();

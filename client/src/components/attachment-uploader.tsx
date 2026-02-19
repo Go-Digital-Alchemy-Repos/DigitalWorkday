@@ -341,7 +341,10 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
       </div>
       <div className="space-y-3">
         <div
-          className={`border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer ${
+          role="button"
+          tabIndex={0}
+          aria-label="Attachments. Drag and drop or press Enter to upload files"
+          className={`border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
             isDragOver 
               ? "border-primary bg-primary/5" 
               : "border-muted-foreground/20 hover:border-muted-foreground/40"
@@ -351,6 +354,12 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
           onDragLeave={handleDragLeave}
           onDragEnter={handleDragEnter}
           onClick={() => fileInputRef.current?.click()}
+          onKeyDown={(e) => {
+            if (e.key === "Enter" || e.key === " ") {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
           data-testid="dropzone-attachments"
         >
           <input

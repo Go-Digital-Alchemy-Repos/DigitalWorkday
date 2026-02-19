@@ -184,6 +184,7 @@ export function FileDropzone({
                 type="button"
                 variant="ghost"
                 size="icon"
+                aria-label="Remove image"
                 onClick={handleRemove}
                 disabled={disabled || isUploading || isRemoving}
                 data-testid="button-remove-image"
@@ -199,12 +200,22 @@ export function FileDropzone({
         </div>
       ) : (
         <div
+          role="button"
+          tabIndex={disabled || isUploading ? -1 : 0}
+          aria-label={`${label}. Drag and drop or press Enter to upload`}
+          aria-disabled={disabled || isUploading}
           onClick={() => !disabled && !isUploading && fileInputRef.current?.click()}
+          onKeyDown={(e) => {
+            if ((e.key === "Enter" || e.key === " ") && !disabled && !isUploading) {
+              e.preventDefault();
+              fileInputRef.current?.click();
+            }
+          }}
           onDragOver={handleDragOver}
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={cn(
-            "flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed rounded-md cursor-pointer transition-colors",
+            "flex flex-col items-center justify-center gap-2 p-6 border-2 border-dashed rounded-md cursor-pointer transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
             isDragging && "border-primary bg-primary/5",
             !isDragging && "border-muted-foreground/25 hover:border-muted-foreground/50",
             (disabled || isUploading) && "opacity-50 cursor-not-allowed"

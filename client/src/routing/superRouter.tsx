@@ -6,6 +6,7 @@ import { UserMenu } from "@/components/user-menu";
 import { NotificationCenter } from "@/components/notification-center";
 import { ErrorBoundary } from "@/components/error-boundary";
 import { SuperRouteGuard } from "./guards";
+import { SkipLink } from "@/components/skip-link";
 import SuperAdminPage from "@/pages/super-admin";
 import SuperAdminDashboardPage from "@/pages/super-admin-dashboard";
 import SuperAdminSettingsPage from "@/pages/super-admin-settings";
@@ -67,6 +68,7 @@ export function SuperLayout() {
 
   return (
     <SidebarProvider style={style as React.CSSProperties}>
+      <SkipLink />
       <div className="flex h-screen w-full">
         <SuperSidebar />
         <div className="flex flex-col flex-1 overflow-hidden">
@@ -78,7 +80,7 @@ export function SuperLayout() {
               <UserMenu />
             </div>
           </header>
-          <main className="flex-1 overflow-hidden">
+          <main id="main-content" className="flex-1 overflow-hidden">
             <ErrorBoundary>
               <SuperAdminRouter />
             </ErrorBoundary>
