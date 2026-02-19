@@ -316,7 +316,7 @@ function SubtaskListInner({
             return (
               <div
                 key={subtask.id}
-                className="group flex items-center gap-2 py-1.5 px-2 rounded-md hover-elevate"
+                className="group flex items-center gap-2 py-1.5 px-2 rounded-md bg-muted/40 hover-elevate"
                 data-testid={`subtask-item-${subtask.id}`}
               >
                 <GripVertical className="h-3.5 w-3.5 text-muted-foreground opacity-0 group-hover:opacity-100 cursor-grab flex-shrink-0" />
