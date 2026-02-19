@@ -31,6 +31,21 @@ interface SubtaskListProps {
   onSubtaskClick?: (subtask: Subtask) => void;
 }
 
+function extractPlainText(doc: unknown): string {
+  if (!doc || typeof doc !== "object") return "";
+  const root = doc as { content?: Array<{ content?: Array<{ text?: string }> }> };
+  if (!root.content) return "";
+  const parts: string[] = [];
+  for (const block of root.content) {
+    if (block.content) {
+      for (const inline of block.content) {
+        if (inline.text) parts.push(inline.text);
+      }
+    }
+  }
+  return parts.join(" ").trim();
+}
+
 function getInitials(name: string): string {
   return name
     .split(" ")
@@ -342,11 +357,8 @@ function SubtaskListInner({
                     data-testid={`input-edit-subtask-${subtask.id}`}
                   />
                 ) : (
-                  <span
-                    className={cn(
-                      "flex-1 text-sm cursor-pointer min-w-0 truncate hover:text-primary transition-colors",
-                      subtask.completed && "line-through text-muted-foreground"
-                    )}
+                  <div
+                    className="flex-1 min-w-0 cursor-pointer hover:text-primary transition-colors"
                     onClick={() => onSubtaskClick?.(subtask)}
                     onDoubleClick={(e) => {
                       e.stopPropagation();
@@ -354,8 +366,23 @@ function SubtaskListInner({
                     }}
                     title="Click to view details, double-click to edit title"
                   >
-                    {subtask.title}
-                  </span>
+                    <span
+                      className={cn(
+                        "text-sm truncate block",
+                        subtask.completed && "line-through text-muted-foreground"
+                      )}
+                    >
+                      {subtask.title}
+                    </span>
+                    {subtask.description && (() => {
+                      const plain = extractPlainText(subtask.description);
+                      return plain ? (
+                        <span className="text-xs text-muted-foreground truncate block" data-testid={`subtask-description-preview-${subtask.id}`}>
+                          {plain}
+                        </span>
+                      ) : null;
+                    })()}
+                  </div>
                 )}
 
                 <Popover>
