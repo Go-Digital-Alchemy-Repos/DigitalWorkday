@@ -1,0 +1,283 @@
+import { Switch, Route, Redirect, useLocation } from "wouter";
+import { useQuery } from "@tanstack/react-query";
+import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
+import { TenantSidebar } from "@/components/tenant-sidebar";
+import { ImpersonationBanner } from "@/components/impersonation-banner";
+import { TenantContextGate } from "@/components/tenant-context-gate";
+import { ThemeToggle } from "@/components/theme-toggle";
+import { UserMenu } from "@/components/user-menu";
+import { NotificationCenter } from "@/components/notification-center";
+import { CommandPalette } from "@/components/command-palette";
+import { ErrorBoundary } from "@/components/error-boundary";
+import { MobileNavBar } from "@/components/mobile-nav-bar";
+import { useAppMode } from "@/hooks/useAppMode";
+import { useIsMobile } from "@/hooks/use-mobile";
+import { useChatDrawer } from "@/contexts/chat-drawer-context";
+import { ChatDrawerProvider } from "@/contexts/chat-drawer-context";
+import { GlobalChatDrawer } from "@/components/global-chat-drawer";
+import { TaskDrawerProvider } from "@/lib/task-drawer-context";
+import { GlobalActiveTimer, MobileActiveTimerBar } from "@/features/timer";
+import { useTheme } from "@/lib/theme-provider";
+import { TenantRouteGuard, ProtectedRoute } from "./guards";
+import { Button } from "@/components/ui/button";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
+import { MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check } from "lucide-react";
+import { type Workspace } from "@shared/schema";
+import Home from "@/pages/home";
+import MyTasks from "@/pages/my-tasks";
+import ProjectsDashboard from "@/pages/projects-dashboard";
+import ProjectPage from "@/pages/project";
+import ClientsPage from "@/pages/clients";
+import ClientDetailPage from "@/pages/client-detail";
+import Client360Page from "@/pages/client-360";
+import CrmPipelinePage from "@/pages/crm-pipeline";
+import CrmFollowupsPage from "@/pages/crm-followups";
+import SettingsPage from "@/pages/settings";
+import AccountPage from "@/pages/account";
+import UserManagerPage from "@/pages/user-manager";
+import UserProfilePage from "@/pages/user-profile";
+import ChatPage from "@/pages/chat";
+import ReportsPage from "@/pages/reports";
+import TemplatesPage from "@/pages/templates";
+import CalendarPage from "@/pages/calendar";
+import MyTimePage from "@/pages/my-time";
+import MyCalendarPage from "@/pages/my-calendar";
+import TeamDetailPage from "@/pages/team-detail";
+import NotFound from "@/pages/not-found";
+
+function TenantRouter() {
+  return (
+    <Switch>
+      <Route path="/">
+        {() => <TenantRouteGuard component={Home} />}
+      </Route>
+      <Route path="/my-tasks">
+        {() => <TenantRouteGuard component={MyTasks} />}
+      </Route>
+      <Route path="/projects">
+        {() => <TenantRouteGuard component={ProjectsDashboard} />}
+      </Route>
+      <Route path="/projects/:id">
+        {() => <TenantRouteGuard component={ProjectPage} />}
+      </Route>
+      <Route path="/clients">
+        {() => <TenantRouteGuard component={ClientsPage} />}
+      </Route>
+      <Route path="/clients/:id/360">
+        {() => <TenantRouteGuard component={Client360Page} />}
+      </Route>
+      <Route path="/clients/:id">
+        {() => <TenantRouteGuard component={ClientDetailPage} />}
+      </Route>
+      <Route path="/crm/pipeline">
+        {() => <TenantRouteGuard component={CrmPipelinePage} />}
+      </Route>
+      <Route path="/crm/followups">
+        {() => <TenantRouteGuard component={CrmFollowupsPage} />}
+      </Route>
+      <Route path="/time-tracking">
+        {() => <Redirect to={`/my-time${window.location.search}`} />}
+      </Route>
+      <Route path="/calendar">
+        {() => <TenantRouteGuard component={CalendarPage} />}
+      </Route>
+      <Route path="/my-time">
+        {() => <TenantRouteGuard component={MyTimePage} />}
+      </Route>
+      <Route path="/my-calendar">
+        {() => <TenantRouteGuard component={MyCalendarPage} />}
+      </Route>
+      <Route path="/chat">
+        {() => <TenantRouteGuard component={ChatPage} />}
+      </Route>
+      <Route path="/settings">
+        {() => <TenantRouteGuard component={SettingsPage} />}
+      </Route>
+      <Route path="/settings/:tab">
+        {() => <TenantRouteGuard component={SettingsPage} />}
+      </Route>
+      <Route path="/account">
+        {() => <TenantRouteGuard component={AccountPage} />}
+      </Route>
+      <Route path="/account/:tab">
+        {() => <TenantRouteGuard component={AccountPage} />}
+      </Route>
+      <Route path="/user-manager">
+        {() => <TenantRouteGuard component={UserManagerPage} />}
+      </Route>
+      <Route path="/reports">
+        {() => <TenantRouteGuard component={ReportsPage} />}
+      </Route>
+      <Route path="/templates">
+        {() => <TenantRouteGuard component={TemplatesPage} />}
+      </Route>
+      <Route path="/teams/:id">
+        {() => <TenantRouteGuard component={TeamDetailPage} />}
+      </Route>
+      <Route path="/profile">
+        {() => <ProtectedRoute component={UserProfilePage} />}
+      </Route>
+      <Route component={NotFound} />
+    </Switch>
+  );
+}
+
+function ChatToggleButton() {
+  const { toggleDrawer } = useChatDrawer();
+  return (
+    <Button
+      variant="ghost"
+      size="icon"
+      onClick={toggleDrawer}
+      data-testid="button-open-chat"
+      title="Open Chat"
+    >
+      <MessageCircle className="h-4 w-4" />
+    </Button>
+  );
+}
+
+function MobileHeaderMenu() {
+  const { toggleDrawer } = useChatDrawer();
+  const { mode, setMode, resolvedTheme } = useTheme();
+  const { data: workspace } = useQuery<Workspace>({
+    queryKey: ["/api/workspaces/current"],
+  });
+  
+  return (
+    <div className="flex items-center gap-1">
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="sm" className="h-9 gap-2 px-2" data-testid="button-workspace-switcher">
+            <Building2 className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs font-medium max-w-[80px] truncate">
+              {workspace?.name || "Workspace"}
+            </span>
+            <ChevronDown className="h-3 w-3 text-muted-foreground" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end" className="w-[200px]">
+          <DropdownMenuItem className="flex justify-between items-center">
+            <div className="flex items-center gap-2">
+              <Building2 className="h-4 w-4" />
+              <span className="truncate">{workspace?.name || "Default Workspace"}</span>
+            </div>
+            <Check className="h-4 w-4 text-primary" />
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
+            <MoreVertical className="h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          <DropdownMenuItem onClick={toggleDrawer} data-testid="menu-item-chat">
+            <MessageCircle className="h-4 w-4 mr-2" />
+            Chat
+          </DropdownMenuItem>
+          <DropdownMenuItem 
+            onClick={() => {
+              if (mode === "system") {
+                setMode(resolvedTheme === "dark" ? "light" : "dark");
+              } else {
+                setMode(mode === "dark" ? "light" : "dark");
+              }
+            }}
+            data-testid="menu-item-theme"
+          >
+            {resolvedTheme === "dark" ? (
+              <>
+                <Sun className="h-4 w-4 mr-2" />
+                Light mode
+              </>
+            ) : (
+              <>
+                <Moon className="h-4 w-4 mr-2" />
+                Dark mode
+              </>
+            )}
+          </DropdownMenuItem>
+        </DropdownMenuContent>
+      </DropdownMenu>
+    </div>
+  );
+}
+
+export function TenantLayout() {
+  const { isImpersonating } = useAppMode();
+  const [, setLocation] = useLocation();
+  const isMobile = useIsMobile();
+  const { data: activeTimerData } = useQuery<{ id: string } | null>({
+    queryKey: ["/api/timer/current"],
+    enabled: isMobile,
+    staleTime: 30000,
+  });
+  const hasActiveTimer = isMobile && !!activeTimerData;
+  
+  const style = {
+    "--sidebar-width": "16rem",
+    "--sidebar-width-icon": "3rem",
+  };
+
+  return (
+    <TaskDrawerProvider>
+      <ChatDrawerProvider>
+        <SidebarProvider style={style as React.CSSProperties}>
+          <TenantContextGate>
+          <CommandPalette
+            onNewTask={() => setLocation("/my-tasks")}
+            onNewProject={() => setLocation("/projects")}
+            onStartTimer={() => setLocation("/my-time")}
+          />
+          <div className={`flex flex-col h-screen w-full ${isImpersonating ? "ring-2 ring-amber-500 ring-inset" : ""}`}>
+            <ImpersonationBanner />
+            <div className="flex flex-1 overflow-hidden">
+              <TenantSidebar />
+              <div className="flex flex-col flex-1 overflow-hidden">
+                <header className={`flex items-center justify-between h-12 px-2 md:px-4 border-b shrink-0 ${isImpersonating ? "border-amber-400 bg-amber-50/30 dark:bg-amber-900/10" : "border-border bg-background"}`}>
+                  <div className="flex items-center gap-1 md:gap-2">
+                    <SidebarTrigger data-testid="button-sidebar-toggle" className="hidden md:flex" />
+                    {isImpersonating && (
+                      <span className="text-xs font-medium text-amber-700 dark:text-amber-400 bg-amber-100 dark:bg-amber-900/50 px-2 py-0.5 rounded hidden md:inline" data-testid="badge-impersonating">
+                        TENANT IMPERSONATION
+                      </span>
+                    )}
+                  </div>
+                  <div className="flex items-center gap-1 md:gap-2">
+                    <GlobalActiveTimer />
+                    <div className="hidden md:flex items-center gap-1">
+                      <ChatToggleButton />
+                    </div>
+                    <NotificationCenter />
+                    <ThemeToggle className="hidden md:flex" />
+                    <div className="md:hidden">
+                      <MobileHeaderMenu />
+                    </div>
+                    <UserMenu />
+                  </div>
+                </header>
+                <main className={`flex-1 overflow-hidden ${hasActiveTimer ? "pb-28" : isMobile ? "pb-16" : ""}`}>
+                  <ErrorBoundary>
+                    <TenantRouter />
+                  </ErrorBoundary>
+                </main>
+              </div>
+            </div>
+          </div>
+          {isMobile && <MobileActiveTimerBar />}
+          {isMobile && <MobileNavBar />}
+          <GlobalChatDrawer />
+          </TenantContextGate>
+        </SidebarProvider>
+      </ChatDrawerProvider>
+    </TaskDrawerProvider>
+  );
+}
