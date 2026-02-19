@@ -1245,7 +1245,7 @@ export function TaskDetailDrawer({
                           setTimerDrawerOpen(true);
                         }
                       }}
-                      className="h-8 border border-[#d97d26] text-white bg-[#f7902f] hover:bg-[#e67e22]"
+                      className="h-8 border border-[#d97d26] text-white hover:bg-[#e67e22] bg-[#ff8614ed]"
                       data-testid="button-timer-start"
                     >
                       <Play className="h-3.5 w-3.5 mr-1.5" />
