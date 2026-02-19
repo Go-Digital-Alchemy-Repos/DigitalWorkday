@@ -16,7 +16,6 @@ const BLOCKED_EXTENSIONS = new Set([
   "com", "scr", "pif", "vbs", "js", "ws", "wsf",
 ]);
 
-const MAX_FILE_SIZE = 25 * 1024 * 1024;
 const MAX_FILES = 10;
 const MAX_CONCURRENT = 2;
 
@@ -55,34 +54,51 @@ export function useAttachmentUploadQueue({
     );
 
     try {
-      const presignRes = await apiRequest(
-        "POST",
-        `/api/projects/${projectId}/tasks/${taskId}/attachments/presign`,
-        {
-          fileName: next.file.name,
-          mimeType: next.file.type || "application/octet-stream",
-          fileSizeBytes: next.file.size,
-        }
-      );
+      let presignRes: Response;
+      try {
+        presignRes = await apiRequest(
+          "POST",
+          `/api/projects/${projectId}/tasks/${taskId}/attachments/presign`,
+          {
+            fileName: next.file.name,
+            mimeType: next.file.type || "application/octet-stream",
+            fileSizeBytes: next.file.size,
+          }
+        );
+      } catch (e: any) {
+        throw new Error(e.message || "Failed to prepare upload");
+      }
       const { attachment, upload } = await presignRes.json();
 
-      const s3Res = await fetch(upload.url, {
-        method: upload.method,
-        headers: upload.headers,
-        body: next.file,
-      });
+      let s3Res: Response;
+      try {
+        s3Res = await fetch(upload.url, {
+          method: upload.method,
+          headers: upload.headers,
+          body: next.file,
+        });
+      } catch (e: any) {
+        throw new Error("Network error uploading file. Please check your connection and try again.");
+      }
 
-      if (!s3Res.ok) throw new Error("Upload to storage failed");
+      if (!s3Res.ok) {
+        const statusText = s3Res.statusText || `status ${s3Res.status}`;
+        throw new Error(`Storage upload failed (${statusText}). Please try again.`);
+      }
 
       setUploads((prev) =>
         prev.map((u) => (u.id === next.id ? { ...u, status: "completing" as UploadStatus } : u))
       );
 
-      await apiRequest(
-        "POST",
-        `/api/projects/${projectId}/tasks/${taskId}/attachments/${attachment.id}/complete`,
-        {}
-      );
+      try {
+        await apiRequest(
+          "POST",
+          `/api/projects/${projectId}/tasks/${taskId}/attachments/${attachment.id}/complete`,
+          {}
+        );
+      } catch (e: any) {
+        throw new Error(e.message || "Failed to confirm upload");
+      }
 
       const updatedItem = queueRef.current.find((u) => u.id === next.id);
       if (updatedItem) {
@@ -131,10 +147,6 @@ export function useAttachmentUploadQueue({
         const ext = getExtension(file.name);
         if (BLOCKED_EXTENSIONS.has(ext)) {
           onValidationError?.(`"${file.name}" is a blocked file type.`);
-          continue;
-        }
-        if (file.size > MAX_FILE_SIZE) {
-          onValidationError?.(`"${file.name}" exceeds the 25 MB size limit.`);
           continue;
         }
         accepted.push({

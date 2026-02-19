@@ -12,7 +12,6 @@ import {
   createPresignedDownloadUrl,
   deleteS3Object,
   checkObjectExists,
-  MAX_FILE_SIZE_BYTES,
   ALLOWED_MIME_TYPES,
 } from "../../s3";
 import { getStorageStatus } from "../../storage/getStorageProvider";
@@ -30,7 +29,7 @@ const router = createApiRouter({
 const presignRequestSchema = z.object({
   fileName: z.string().min(1).max(255),
   mimeType: z.string().min(1),
-  fileSizeBytes: z.number().positive().max(MAX_FILE_SIZE_BYTES),
+  fileSizeBytes: z.number().positive(),
 });
 
 router.get("/attachments/config", async (req, res) => {
@@ -44,7 +43,7 @@ router.get("/attachments/config", async (req, res) => {
       configured: storageStatus.configured,
       source: storageStatus.source,
       provider: storageStatus.provider,
-      maxFileSizeBytes: MAX_FILE_SIZE_BYTES,
+      maxFileSizeBytes: 0,
       allowedMimeTypes: ALLOWED_MIME_TYPES,
     });
   } catch (error) {
@@ -74,7 +73,6 @@ router.get(
 router.post(
   "/projects/:projectId/tasks/:taskId/attachments/presign",
   validateUploadRequest({
-    maxBytes: MAX_FILE_SIZE_BYTES,
     allowedMimeTypes: ALLOWED_MIME_TYPES,
   }),
   async (req, res) => {

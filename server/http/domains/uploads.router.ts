@@ -30,9 +30,6 @@ const router = createApiRouter({
 
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: {
-    fileSize: 25 * 1024 * 1024,
-  },
 });
 
 const presignRequestSchema = z.object({
@@ -71,7 +68,6 @@ router.post(
     filenameField: "filename",
     mimeTypeField: "contentType",
     sizeField: "size",
-    maxBytes: 25 * 1024 * 1024,
   }),
   async (req: Request, res: Response) => {
     try {

@@ -43,7 +43,7 @@ const BLOCKED_EXTENSIONS = new Set([
   "com", "scr", "pif", "vbs", "vbe", "js", "jse", "wsf", "wsh",
 ]);
 
-const MAX_FILE_SIZE_BYTES = 25 * 1024 * 1024; // 25MB
+const MAX_FILE_SIZE_BYTES = 0; // No file size limit
 const PRESIGN_EXPIRES_SECONDS = parseInt(process.env.R2_PRESIGN_EXPIRES_SECONDS || "300", 10);
 const DOWNLOAD_EXPIRES_SECONDS = parseInt(process.env.R2_DOWNLOAD_EXPIRES_SECONDS || "300", 10);
 
@@ -110,12 +110,7 @@ export function validateFile(mimeType: string, fileSizeBytes: number, fileName?:
     };
   }
   
-  if (fileSizeBytes > MAX_FILE_SIZE_BYTES) {
-    return { 
-      valid: false, 
-      error: `File size exceeds maximum allowed size of ${MAX_FILE_SIZE_BYTES / (1024 * 1024)}MB` 
-    };
-  }
+  // No file size limit enforced
   
   return { valid: true };
 }

@@ -417,7 +417,9 @@ export function CommentThread({
                       )}
                       {upload.status === "error" && (
                         <>
-                          <span className="text-destructive shrink-0" title={upload.error}>Failed</span>
+                          <span className="text-destructive shrink-0 truncate max-w-[140px]" title={upload.error}>
+                            {upload.error || "Failed"}
+                          </span>
                           <Button
                             size="icon"
                             variant="ghost"
