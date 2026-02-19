@@ -1314,13 +1314,8 @@ export default function ClientsPage() {
   ]);
 
   const handleOpenClientSheet = useCallback((clientId: string) => {
-    if (!hierarchyClients) return;
-    const found = hierarchyClients.find((c) => c.id === clientId);
-    if (found) {
-      setDetailSheetClient(found);
-      setDetailSheetOpen(true);
-    }
-  }, [hierarchyClients]);
+    navigate(`/clients/${clientId}`);
+  }, [navigate]);
 
   const handleExportCsv = useCallback(() => {
     if (!hierarchyClients) return;
