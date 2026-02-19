@@ -4,7 +4,7 @@ import { db } from "../../../db";
 import { eq, and, desc, count, inArray, gte, isNull, ne, sql as dsql, isNotNull, lt, lte, or, ilike, exists } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../../../lib/errors";
 import { getEffectiveTenantId } from "../../../middleware/tenantContext";
-import { requireAuth } from "../../../auth";
+import { requireAuth, requireAdmin } from "../../../auth";
 import { clientMessageRateLimiter } from "../../../middleware/rateLimit";
 import {
   clientConversations,
@@ -1117,6 +1117,190 @@ router.patch("/crm/conversations/:conversationId/priority", requireAuth, async (
     res.json(updated);
   } catch (error) {
     return handleRouteError(res, error, "PATCH /api/crm/conversations/:conversationId/priority", req);
+  }
+});
+
+// =============================================================================
+// MESSAGES REPORTING DASHBOARD
+// =============================================================================
+
+router.get("/crm/messages/reports", requireAuth, requireAdmin, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const daysBack = Math.min(parseInt(req.query.days as string) || 30, 365);
+    const since = new Date();
+    since.setDate(since.getDate() - daysBack);
+
+    const baseConditions = [
+      eq(clientConversations.tenantId, tenantId),
+      isNull(clientConversations.mergedIntoId),
+    ];
+    const periodConditions = [
+      ...baseConditions,
+      gte(clientConversations.createdAt, since),
+    ];
+
+    const [
+      avgResponseResult,
+      avgResolutionResult,
+      openByPriorityResult,
+      overdueResult,
+      volumeByClientResult,
+      dailyTrendResult,
+      totalCountResult,
+      openCountResult,
+      closedCountResult,
+    ] = await Promise.all([
+      db.execute(dsql`
+        SELECT
+          AVG(EXTRACT(EPOCH FROM (first_response_at - created_at))) as avg_first_response_seconds,
+          COUNT(*) as responded_count
+        FROM client_conversations
+        WHERE tenant_id = ${tenantId}
+          AND merged_into_id IS NULL
+          AND first_response_at IS NOT NULL
+          AND created_at >= ${since}
+      `),
+
+      db.execute(dsql`
+        SELECT
+          AVG(EXTRACT(EPOCH FROM (closed_at - created_at))) as avg_resolution_seconds,
+          COUNT(*) as resolved_count
+        FROM client_conversations
+        WHERE tenant_id = ${tenantId}
+          AND merged_into_id IS NULL
+          AND closed_at IS NOT NULL
+          AND created_at >= ${since}
+      `),
+
+      db.select({
+        priority: clientConversations.priority,
+        count: count(),
+      })
+        .from(clientConversations)
+        .where(and(
+          ...baseConditions,
+          isNull(clientConversations.closedAt),
+        ))
+        .groupBy(clientConversations.priority),
+
+      db.select({ count: count() })
+        .from(clientConversations)
+        .where(and(
+          ...baseConditions,
+          isNull(clientConversations.closedAt),
+          or(
+            isNotNull(clientConversations.firstResponseBreachedAt),
+            isNotNull(clientConversations.resolutionBreachedAt),
+          ),
+        )),
+
+      db.execute(dsql`
+        SELECT
+          c.id as client_id,
+          c.name as client_name,
+          COUNT(cc.id) as conversation_count,
+          COUNT(CASE WHEN cc.closed_at IS NULL THEN 1 END) as open_count,
+          COUNT(CASE WHEN cc.closed_at IS NOT NULL THEN 1 END) as closed_count
+        FROM clients c
+        LEFT JOIN client_conversations cc ON cc.client_id = c.id
+          AND cc.tenant_id = ${tenantId}
+          AND cc.merged_into_id IS NULL
+          AND cc.created_at >= ${since}
+        WHERE c.tenant_id = ${tenantId}
+        GROUP BY c.id, c.name
+        HAVING COUNT(cc.id) > 0
+        ORDER BY conversation_count DESC
+        LIMIT 20
+      `),
+
+      db.execute(dsql`
+        SELECT
+          to_char(date_trunc('day', cc.created_at), 'YYYY-MM-DD') as day,
+          COUNT(*) as created_count,
+          COUNT(CASE WHEN cc.first_response_at IS NOT NULL THEN 1 END) as responded_count,
+          AVG(CASE WHEN cc.first_response_at IS NOT NULL
+            THEN EXTRACT(EPOCH FROM (cc.first_response_at - cc.created_at))
+            ELSE NULL END) as avg_response_seconds,
+          COUNT(CASE WHEN cc.closed_at IS NOT NULL THEN 1 END) as resolved_count
+        FROM client_conversations cc
+        WHERE cc.tenant_id = ${tenantId}
+          AND cc.merged_into_id IS NULL
+          AND cc.created_at >= ${since}
+        GROUP BY day
+        ORDER BY day ASC
+      `),
+
+      db.select({ count: count() })
+        .from(clientConversations)
+        .where(and(...periodConditions)),
+
+      db.select({ count: count() })
+        .from(clientConversations)
+        .where(and(...periodConditions, isNull(clientConversations.closedAt))),
+
+      db.select({ count: count() })
+        .from(clientConversations)
+        .where(and(...periodConditions, isNotNull(clientConversations.closedAt))),
+    ]);
+
+    const avgRow = avgResponseResult.rows[0] as any;
+    const resRow = avgResolutionResult.rows[0] as any;
+
+    const avgFirstResponseMinutes = avgRow?.avg_first_response_seconds
+      ? Math.round(Number(avgRow.avg_first_response_seconds) / 60)
+      : null;
+    const avgResolutionMinutes = resRow?.avg_resolution_seconds
+      ? Math.round(Number(resRow.avg_resolution_seconds) / 60)
+      : null;
+
+    const openByPriority = Object.fromEntries(
+      ["low", "normal", "high", "urgent"].map(p => [
+        p,
+        openByPriorityResult.find(r => r.priority === p)?.count || 0,
+      ])
+    );
+
+    const overdueCount = overdueResult[0]?.count || 0;
+
+    const volumeByClient = (volumeByClientResult.rows as any[]).map(r => ({
+      clientId: r.client_id,
+      clientName: r.client_name,
+      total: Number(r.conversation_count),
+      open: Number(r.open_count),
+      closed: Number(r.closed_count),
+    }));
+
+    const dailyTrend = (dailyTrendResult.rows as any[]).map(r => ({
+      date: r.day,
+      created: Number(r.created_count),
+      responded: Number(r.responded_count),
+      resolved: Number(r.resolved_count),
+      avgResponseMinutes: r.avg_response_seconds
+        ? Math.round(Number(r.avg_response_seconds) / 60)
+        : null,
+    }));
+
+    res.json({
+      period: { days: daysBack, since: since.toISOString() },
+      summary: {
+        total: totalCountResult[0]?.count || 0,
+        open: openCountResult[0]?.count || 0,
+        closed: closedCountResult[0]?.count || 0,
+        overdue: overdueCount,
+        avgFirstResponseMinutes,
+        avgResolutionMinutes,
+        respondedCount: Number(avgRow?.responded_count || 0),
+        resolvedCount: Number(resRow?.resolved_count || 0),
+      },
+      openByPriority,
+      volumeByClient,
+      dailyTrend,
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/messages/reports", req);
   }
 });
 

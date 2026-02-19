@@ -1,9 +1,10 @@
-import { useState } from "react";
+import { useState, lazy, Suspense } from "react";
 import { useAuth } from "@/lib/auth";
 import { Redirect } from "wouter";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
+import { Skeleton } from "@/components/ui/skeleton";
 import { 
   BarChart3, 
   Clock, 
@@ -12,11 +13,14 @@ import {
   ArrowLeft,
   FileText,
   Calendar,
-  Target
+  Target,
+  MessageSquare,
 } from "lucide-react";
 import { ReportsTab } from "@/components/settings/reports-tab";
 
-type ReportView = "landing" | "workload" | "time" | "projects";
+const MessagesReports = lazy(() => import("@/components/reports/messages-reports"));
+
+type ReportView = "landing" | "workload" | "time" | "projects" | "messages";
 
 interface ReportCardProps {
   icon: React.ReactNode;
@@ -89,6 +93,13 @@ export default function ReportsPage() {
       view: "projects" as ReportView,
       color: "bg-purple-500",
     },
+    {
+      icon: <MessageSquare className="h-6 w-6 text-white" />,
+      title: "Messages",
+      description: "Response times, resolution rates, overdue threads, and conversation volume by client",
+      view: "messages" as ReportView,
+      color: "bg-amber-500",
+    },
   ];
 
   if (currentView === "landing") {
@@ -107,7 +118,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 mb-8">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
             {reportCategories.map((category) => (
               <ReportCard
                 key={category.title}
@@ -146,7 +157,15 @@ export default function ReportsPage() {
       case "workload": return "Workload Reports";
       case "time": return "Time Tracking Reports";
       case "projects": return "Project Analytics";
+      case "messages": return "Messages Reports";
       default: return "Reports";
+    }
+  };
+
+  const getViewDescription = () => {
+    switch (currentView) {
+      case "messages": return "Response times, SLA compliance, and conversation analytics";
+      default: return "Detailed analytics and exportable reports";
     }
   };
 
@@ -163,17 +182,42 @@ export default function ReportsPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            <BarChart3 className="h-5 w-5 text-primary" />
+            {currentView === "messages" ? (
+              <MessageSquare className="h-5 w-5 text-primary" />
+            ) : (
+              <BarChart3 className="h-5 w-5 text-primary" />
+            )}
           </div>
           <div>
             <h1 className="text-2xl font-bold">{getViewTitle()}</h1>
             <p className="text-muted-foreground text-sm">
-              Detailed analytics and exportable reports
+              {getViewDescription()}
             </p>
           </div>
         </div>
 
-        <ReportsTab defaultTab={currentView === "workload" ? "workload" : currentView === "time" ? "time" : undefined} />
+        {currentView === "messages" ? (
+          <Suspense
+            fallback={
+              <div className="space-y-4">
+                <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
+                  {Array.from({ length: 6 }).map((_, i) => (
+                    <Card key={i}>
+                      <CardContent className="p-4">
+                        <Skeleton className="h-3 w-20 mb-2" />
+                        <Skeleton className="h-7 w-16" />
+                      </CardContent>
+                    </Card>
+                  ))}
+                </div>
+              </div>
+            }
+          >
+            <MessagesReports />
+          </Suspense>
+        ) : (
+          <ReportsTab defaultTab={currentView === "workload" ? "workload" : currentView === "time" ? "time" : undefined} />
+        )}
       </div>
     </ScrollArea>
   );
