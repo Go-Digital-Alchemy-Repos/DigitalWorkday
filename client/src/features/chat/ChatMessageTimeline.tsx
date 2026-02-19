@@ -956,6 +956,7 @@ export function ChatMessageTimeline({
             size="icon"
             onClick={scrollToBottom}
             className="shadow-lg rounded-full h-10 w-10"
+            aria-label="Scroll to bottom"
             data-testid="button-scroll-to-bottom"
           >
             <ChevronDown className="h-5 w-5" />

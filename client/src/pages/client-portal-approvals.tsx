@@ -97,6 +97,7 @@ function ApprovalCard({
             variant="ghost"
             size="icon"
             onClick={() => setExpanded(!expanded)}
+            aria-label="Toggle details"
             data-testid={`button-toggle-${approval.id}`}
           >
             {expanded ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}

@@ -719,6 +719,7 @@ export default function ProjectPage() {
                 size="icon"
                 className="md:hidden"
                 onClick={() => setTimerDrawerOpen(true)}
+                aria-label="Start timer"
                 data-testid="button-start-timer-project-mobile"
               >
                 <Play className="h-4 w-4" />
@@ -738,6 +739,7 @@ export default function ProjectPage() {
                 size="icon"
                 className="md:hidden"
                 onClick={() => setAiPlannerOpen(true)}
+                aria-label="AI planner"
                 data-testid="button-ai-planner-mobile"
               >
                 <Sparkles className="h-4 w-4" />
@@ -756,6 +758,7 @@ export default function ProjectPage() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setMembersOpen(true)}
+                aria-label="Project members"
                 data-testid="button-project-members"
                 className="hidden md:flex"
               >
@@ -765,6 +768,7 @@ export default function ProjectPage() {
                 variant="ghost"
                 size="icon"
                 onClick={() => setActivityOpen(true)}
+                aria-label="Project activity"
                 data-testid="button-project-activity"
                 className="hidden md:flex"
               >
@@ -774,6 +778,7 @@ export default function ProjectPage() {
                 variant="ghost" 
                 size="icon" 
                 onClick={() => setSettingsOpen(true)}
+                aria-label="Project settings"
                 data-testid="button-project-settings"
               >
                 <Settings className="h-4 w-4" />
@@ -783,6 +788,7 @@ export default function ProjectPage() {
                   <Button 
                     variant="ghost" 
                     size="icon"
+                    aria-label="Apply template"
                     title="Apply Template"
                     data-testid="button-apply-template"
                   >

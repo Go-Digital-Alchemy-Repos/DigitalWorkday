@@ -503,6 +503,7 @@ export default function SuperAdminPage() {
                           size="icon"
                           variant="ghost"
                           onClick={(e) => e.stopPropagation()}
+                          aria-label="Tenant options"
                           data-testid={`button-actions-tenant-${tenant.id}`}
                         >
                           <MoreHorizontal className="h-4 w-4" />
@@ -666,7 +667,7 @@ export default function SuperAdminPage() {
                     className="text-xs"
                     data-testid="input-invite-url"
                   />
-                  <Button size="icon" variant="outline" onClick={copyInviteUrl} data-testid="button-copy-invite-url">
+                  <Button size="icon" variant="outline" aria-label="Copy invite URL" onClick={copyInviteUrl} data-testid="button-copy-invite-url">
                     <Copy className="h-4 w-4" />
                   </Button>
                 </div>

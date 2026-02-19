@@ -1529,6 +1529,7 @@ export default function ClientsPage() {
                 size="icon"
                 className="rounded-r-none"
                 onClick={() => setDensity("comfortable")}
+                aria-label="Comfortable view"
                 data-testid="button-density-comfortable"
                 title="Comfortable"
               >
@@ -1539,6 +1540,7 @@ export default function ClientsPage() {
                 size="icon"
                 className="rounded-l-none"
                 onClick={() => setDensity("compact")}
+                aria-label="Compact view"
                 data-testid="button-density-compact"
                 title="Compact"
               >
@@ -1552,6 +1554,7 @@ export default function ClientsPage() {
                 size="icon"
                 className="rounded-r-none"
                 onClick={() => setViewMode("grid")}
+                aria-label="Grid view"
                 data-testid="button-view-grid"
               >
                 <LayoutGrid className="h-4 w-4" />
@@ -1561,6 +1564,7 @@ export default function ClientsPage() {
                 size="icon"
                 className="rounded-l-none"
                 onClick={() => setViewMode("table")}
+                aria-label="Table view"
                 data-testid="button-view-table"
               >
                 <Rows3 className="h-4 w-4" />
@@ -1572,6 +1576,7 @@ export default function ClientsPage() {
                 <Button
                   variant="outline"
                   size="icon"
+                  aria-label="Saved views"
                   data-testid="button-saved-views"
                   title="Saved views"
                 >
@@ -1598,6 +1603,7 @@ export default function ClientsPage() {
                           variant="ghost"
                           size="icon"
                           className="h-6 w-6 shrink-0"
+                          aria-label="Delete view"
                           onClick={(e) => {
                             e.stopPropagation();
                             deleteView(view.id);

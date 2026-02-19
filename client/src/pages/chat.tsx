@@ -1841,6 +1841,7 @@ export default function ChatPage() {
                     size="icon"
                     variant="ghost"
                     onClick={handleMobileBack}
+                    aria-label="Go back"
                     data-testid="button-chat-back"
                   >
                     <ArrowLeft className="h-5 w-5" />
@@ -2066,6 +2067,7 @@ export default function ChatPage() {
                     size="icon"
                     variant="ghost"
                     onClick={() => setQuoteReply(null)}
+                    aria-label="Cancel quote"
                     data-testid="button-cancel-quote"
                   >
                     <X className="h-4 w-4" />
@@ -2107,6 +2109,7 @@ export default function ChatPage() {
                           size="icon"
                           variant="ghost"
                           onClick={() => removePendingAttachment(attachment.id)}
+                          aria-label="Remove attachment"
                           data-testid={`remove-attachment-${attachment.id}`}
                         >
                           <X className="h-4 w-4" />
@@ -2554,6 +2557,7 @@ export default function ChatPage() {
                           size="icon"
                           className="h-6 w-6"
                           onClick={() => setRemoveMemberConfirmUserId(member.userId)}
+                          aria-label="Remove member"
                           data-testid={`remove-member-${member.userId}`}
                         >
                           <X className="h-4 w-4" />

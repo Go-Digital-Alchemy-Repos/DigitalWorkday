@@ -522,6 +522,7 @@ export default function SuperAdminDocs() {
                     variant="ghost"
                     size="icon"
                     onClick={() => setSelectedDoc(null)}
+                    aria-label="Go back"
                     data-testid="button-back-to-list"
                   >
                     <ArrowLeft className="h-4 w-4" />

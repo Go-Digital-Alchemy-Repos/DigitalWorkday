@@ -565,7 +565,7 @@ export default function ClientDetailPage() {
       <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-border shrink-0">
         <div className="flex items-center gap-4">
           <Link href="/clients">
-            <Button variant="ghost" size="icon" data-testid="button-back-to-clients">
+            <Button variant="ghost" size="icon" aria-label="Go back" data-testid="button-back-to-clients">
               <ArrowLeft className="h-4 w-4" />
             </Button>
           </Link>
@@ -1461,6 +1461,7 @@ export default function ClientDetailPage() {
                               setEditingContact(contact);
                               setEditContactOpen(true);
                             }}
+                            aria-label="Edit contact"
                             data-testid={`button-edit-contact-${contact.id}`}
                           >
                             <Pencil className="h-4 w-4 text-muted-foreground" />
@@ -1470,6 +1471,7 @@ export default function ClientDetailPage() {
                             size="icon"
                             className="h-8 w-8"
                             onClick={() => deleteContactMutation.mutate(contact.id)}
+                            aria-label="Delete contact"
                             data-testid={`button-delete-contact-${contact.id}`}
                           >
                             <Trash2 className="h-4 w-4 text-muted-foreground" />

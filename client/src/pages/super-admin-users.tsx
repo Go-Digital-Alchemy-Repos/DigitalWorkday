@@ -826,7 +826,7 @@ export default function SuperAdminUsers() {
                           {getAdminStatusBadge(admin)}
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button size="icon" variant="ghost" onClick={(e) => e.stopPropagation()} data-testid={`button-admin-actions-${admin.id}`}>
+                              <Button size="icon" variant="ghost" aria-label="Admin options" onClick={(e) => e.stopPropagation()} data-testid={`button-admin-actions-${admin.id}`}>
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -1264,6 +1264,7 @@ export default function SuperAdminUsers() {
                           <Button 
                             size="icon" 
                             variant="ghost"
+                            aria-label="Copy invite link"
                             onClick={() => {
                               navigator.clipboard.writeText(generatedAppUserInviteUrl);
                               toast({ title: "Link copied to clipboard" });
@@ -1453,6 +1454,7 @@ export default function SuperAdminUsers() {
                   variant="ghost"
                   size="icon"
                   className="absolute right-0 top-0 h-full"
+                  aria-label="Toggle password visibility"
                   onClick={() => setShowAppUserPassword(!showAppUserPassword)}
                   data-testid="button-toggle-app-user-password"
                 >
@@ -1943,6 +1945,7 @@ export default function SuperAdminUsers() {
                       variant="ghost"
                       size="icon"
                       className="absolute right-0 top-0 h-full"
+                      aria-label="Toggle password visibility"
                       onClick={() => setShowPassword(!showPassword)}
                       data-testid="button-toggle-password"
                     >
@@ -2006,6 +2009,7 @@ export default function SuperAdminUsers() {
                       <Button 
                         size="icon" 
                         variant="outline" 
+                        aria-label="Copy reset link"
                         onClick={() => {
                           navigator.clipboard.writeText(generatedResetUrl);
                           toast({ title: "Link copied to clipboard" });
@@ -2073,7 +2077,7 @@ export default function SuperAdminUsers() {
                 className="text-sm"
                 data-testid="input-invite-url"
               />
-              <Button size="icon" variant="outline" onClick={handleCopyInviteLink} data-testid="button-copy-link">
+              <Button size="icon" variant="outline" aria-label="Copy invite link" onClick={handleCopyInviteLink} data-testid="button-copy-link">
                 <Copy className="h-4 w-4" />
               </Button>
             </div>
@@ -2274,6 +2278,7 @@ export default function SuperAdminUsers() {
                   <Button 
                     size="icon" 
                     variant="outline" 
+                    aria-label="Copy reset link"
                     onClick={() => {
                       navigator.clipboard.writeText(generatedAppUserResetUrl);
                       toast({ title: "Link copied to clipboard" });

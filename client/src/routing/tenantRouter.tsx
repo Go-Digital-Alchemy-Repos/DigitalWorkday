@@ -134,6 +134,7 @@ function ChatToggleButton() {
       variant="ghost"
       size="icon"
       onClick={toggleDrawer}
+      aria-label="Open chat"
       data-testid="button-open-chat"
       title="Open Chat"
     >
@@ -174,7 +175,7 @@ function MobileHeaderMenu() {
 
       <DropdownMenu>
         <DropdownMenuTrigger asChild>
-          <Button variant="ghost" size="icon" data-testid="button-mobile-menu">
+          <Button variant="ghost" size="icon" aria-label="More options" data-testid="button-mobile-menu">
             <MoreVertical className="h-4 w-4" />
           </Button>
         </DropdownMenuTrigger>

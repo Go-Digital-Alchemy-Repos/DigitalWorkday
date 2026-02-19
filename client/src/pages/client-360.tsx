@@ -572,7 +572,7 @@ function ContactsTab({ clientId }: { clientId: string }) {
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" data-testid={`button-contact-menu-${contact.id}`}>
+                      <Button variant="ghost" size="icon" aria-label="Contact options" data-testid={`button-contact-menu-${contact.id}`}>
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -891,7 +891,7 @@ function NotesTab({ clientId }: { clientId: string }) {
 
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" data-testid={`button-note-menu-${note.id}`}>
+                      <Button variant="ghost" size="icon" aria-label="Note options" data-testid={`button-note-menu-${note.id}`}>
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -1206,7 +1206,7 @@ function FilesTab({ clientId }: { clientId: string }) {
                   </Badge>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
-                      <Button size="icon" variant="ghost" data-testid={`file-actions-${file.id}`}>
+                      <Button size="icon" variant="ghost" aria-label="File options" data-testid={`file-actions-${file.id}`}>
                         <MoreHorizontal className="h-4 w-4" />
                       </Button>
                     </DropdownMenuTrigger>
@@ -1359,7 +1359,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
     return (
       <div className="flex flex-col h-[500px]">
         <div className="flex items-center gap-3 mb-4 flex-wrap">
-          <Button variant="ghost" size="icon" onClick={() => setSelectedConvoId(null)} data-testid="button-back-convo-list">
+          <Button variant="ghost" size="icon" aria-label="Go back" onClick={() => setSelectedConvoId(null)} data-testid="button-back-convo-list">
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div className="min-w-0 flex-1">
@@ -1407,6 +1407,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
               onClick={handleSendReply}
               disabled={!replyText.trim() || replyMutation.isPending}
               size="icon"
+              aria-label="Send reply"
               data-testid="button-send-internal-reply"
             >
               <Send className="h-4 w-4" />

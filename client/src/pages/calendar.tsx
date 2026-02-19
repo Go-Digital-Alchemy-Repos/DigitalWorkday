@@ -313,13 +313,13 @@ export default function CalendarPage() {
             <h1 className="md:text-lg font-semibold text-[24px]">Team Calendar</h1>
           </div>
           <div className="flex items-center gap-1 md:hidden">
-            <Button variant="outline" size="icon" onClick={handlePrev} data-testid="button-calendar-prev-mobile">
+            <Button variant="outline" size="icon" aria-label="Previous" onClick={handlePrev} data-testid="button-calendar-prev-mobile">
               <ChevronLeft className="h-4 w-4" />
             </Button>
             <Button variant="outline" size="sm" onClick={handleToday} data-testid="button-calendar-today-mobile">
               Today
             </Button>
-            <Button variant="outline" size="icon" onClick={handleNext} data-testid="button-calendar-next-mobile">
+            <Button variant="outline" size="icon" aria-label="Next" onClick={handleNext} data-testid="button-calendar-next-mobile">
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>

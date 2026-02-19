@@ -163,7 +163,7 @@ export default function TeamDetailPage() {
   return (
     <div className="container mx-auto p-6 max-w-4xl">
       <div className="flex items-center gap-4 mb-6">
-        <Button variant="ghost" size="icon" onClick={() => navigate("/settings/teams")} data-testid="button-back-teams">
+        <Button variant="ghost" size="icon" aria-label="Go back" onClick={() => navigate("/settings/teams")} data-testid="button-back-teams">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="flex-1">
@@ -241,7 +241,7 @@ export default function TeamDetailPage() {
                       <TableCell>
                         <DropdownMenu>
                           <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" data-testid={`button-member-menu-${member.userId}`}>
+                            <Button variant="ghost" size="icon" aria-label="Member options" data-testid={`button-member-menu-${member.userId}`}>
                               <MoreHorizontal className="h-4 w-4" />
                             </Button>
                           </DropdownMenuTrigger>

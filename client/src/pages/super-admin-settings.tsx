@@ -397,7 +397,7 @@ function AgreementsManagementTab({
                     )}
                     <DropdownMenu>
                       <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" data-testid={`button-agreement-actions-${agreement.id}`}>
+                        <Button variant="ghost" size="icon" aria-label="Agreement options" data-testid={`button-agreement-actions-${agreement.id}`}>
                           <MoreHorizontal className="h-4 w-4" />
                         </Button>
                       </DropdownMenuTrigger>
@@ -835,6 +835,7 @@ function AIIntegrationTab() {
                     variant="ghost"
                     size="icon"
                     className="absolute right-2 top-1/2 -translate-y-1/2 h-7 w-7"
+                    aria-label="Toggle API key visibility"
                     onClick={() => setShowApiKey(!showApiKey)}
                   >
                     {showApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -1692,6 +1693,7 @@ export default function SuperAdminSettingsPage() {
                               variant="ghost"
                               size="icon"
                               className="absolute right-0 top-0 h-full"
+                              aria-label="Toggle API key visibility"
                               onClick={() => setShowMailgunApiKey(!showMailgunApiKey)}
                             >
                               {showMailgunApiKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -1704,6 +1706,7 @@ export default function SuperAdminSettingsPage() {
                               size="icon"
                               onClick={() => clearMailgunSecretMutation.mutate("apiKey")}
                               disabled={clearMailgunSecretMutation.isPending}
+                              aria-label="Clear API key"
                               title="Clear API Key"
                               data-testid="button-clear-mailgun-api-key"
                             >
@@ -1735,6 +1738,7 @@ export default function SuperAdminSettingsPage() {
                               variant="ghost"
                               size="icon"
                               className="absolute right-0 top-0 h-full"
+                              aria-label="Toggle signing key visibility"
                               onClick={() => setShowMailgunSigningKey(!showMailgunSigningKey)}
                             >
                               {showMailgunSigningKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -1747,6 +1751,7 @@ export default function SuperAdminSettingsPage() {
                               size="icon"
                               onClick={() => clearMailgunSecretMutation.mutate("signingKey")}
                               disabled={clearMailgunSecretMutation.isPending}
+                              aria-label="Clear signing key"
                               title="Clear Signing Key"
                               data-testid="button-clear-mailgun-signing-key"
                             >
@@ -1947,6 +1952,7 @@ export default function SuperAdminSettingsPage() {
                               type="button"
                               variant="outline"
                               size="icon"
+                              aria-label="Toggle access key visibility"
                               onClick={() => setShowR2AccessKey(!showR2AccessKey)}
                             >
                               {showR2AccessKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -1978,6 +1984,7 @@ export default function SuperAdminSettingsPage() {
                               type="button"
                               variant="outline"
                               size="icon"
+                              aria-label="Toggle secret key visibility"
                               onClick={() => setShowR2SecretKey(!showR2SecretKey)}
                             >
                               {showR2SecretKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -2104,6 +2111,7 @@ export default function SuperAdminSettingsPage() {
                               variant="ghost"
                               size="icon"
                               className="absolute right-0 top-0 h-full"
+                              aria-label="Toggle secret key visibility"
                               onClick={() => setShowStripeSecretKey(!showStripeSecretKey)}
                             >
                               {showStripeSecretKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -2116,6 +2124,7 @@ export default function SuperAdminSettingsPage() {
                               size="icon"
                               onClick={() => clearStripeSecretMutation.mutate("secretKey")}
                               disabled={clearStripeSecretMutation.isPending}
+                              aria-label="Clear secret key"
                               title="Clear Secret Key"
                               data-testid="button-clear-stripe-secret-key"
                             >
@@ -2147,6 +2156,7 @@ export default function SuperAdminSettingsPage() {
                               variant="ghost"
                               size="icon"
                               className="absolute right-0 top-0 h-full"
+                              aria-label="Toggle webhook secret visibility"
                               onClick={() => setShowStripeWebhookSecret(!showStripeWebhookSecret)}
                             >
                               {showStripeWebhookSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
@@ -2159,6 +2169,7 @@ export default function SuperAdminSettingsPage() {
                               size="icon"
                               onClick={() => clearStripeSecretMutation.mutate("webhookSecret")}
                               disabled={clearStripeSecretMutation.isPending}
+                              aria-label="Clear webhook secret"
                               title="Clear Webhook Secret"
                               data-testid="button-clear-stripe-webhook-secret"
                             >
@@ -2300,6 +2311,7 @@ export default function SuperAdminSettingsPage() {
                                   type="button"
                                   variant="outline"
                                   size="icon"
+                                  aria-label="Copy redirect URI"
                                   onClick={() => {
                                     navigator.clipboard.writeText(ssoGoogleForm.redirectUri);
                                     toast({ title: "Copied to clipboard" });
@@ -2330,6 +2342,7 @@ export default function SuperAdminSettingsPage() {
                                   variant="ghost"
                                   size="icon"
                                   className="absolute right-0 top-0 h-full"
+                                  aria-label="Toggle client secret visibility"
                                   onClick={() => setShowGoogleClientSecret(!showGoogleClientSecret)}
                                 >
                                   {showGoogleClientSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}

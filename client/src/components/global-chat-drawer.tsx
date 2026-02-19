@@ -807,6 +807,7 @@ export function GlobalChatDrawer() {
                           size="icon"
                           variant="ghost"
                           className="h-4 w-4"
+                          aria-label="Remove attachment"
                           onClick={() => removePendingAttachment(attachment.id)}
                         >
                           <X className="h-2 w-2" />
@@ -844,6 +845,7 @@ export function GlobalChatDrawer() {
                       variant="ghost"
                       onClick={() => fileInputRef.current?.click()}
                       disabled={isUploading || sendMessageMutation.isPending}
+                      aria-label="Attach file"
                       data-testid="drawer-button-attach"
                     >
                       {isUploading ? (
@@ -859,6 +861,7 @@ export function GlobalChatDrawer() {
                           size="icon"
                           variant="ghost"
                           disabled={sendMessageMutation.isPending}
+                          aria-label="Emoji"
                           data-testid="drawer-button-emoji"
                         >
                           <Smile className="h-4 w-4" />

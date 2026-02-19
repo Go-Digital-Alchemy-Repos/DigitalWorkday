@@ -199,7 +199,7 @@ function ConversationThread({
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center gap-3 mb-4 flex-wrap">
-        <Button variant="ghost" size="icon" onClick={onBack} data-testid="button-back-to-conversations">
+        <Button variant="ghost" size="icon" aria-label="Go back" onClick={onBack} data-testid="button-back-to-conversations">
           <ArrowLeft className="h-4 w-4" />
         </Button>
         <div className="min-w-0 flex-1">
@@ -267,6 +267,7 @@ function ConversationThread({
             onClick={handleSend}
             disabled={!replyText.trim() || sendMutation.isPending}
             size="icon"
+            aria-label="Send message"
             data-testid="button-send-reply"
           >
             <Send className="h-4 w-4" />

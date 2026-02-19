@@ -127,6 +127,7 @@ export function ChatContextPanel({
               variant="ghost"
               size="icon"
               onClick={onToggle}
+              aria-label="Close panel"
               data-testid="button-close-context-panel"
             >
               <X className="h-4 w-4" />
@@ -166,6 +167,7 @@ export function ChatContextPanel({
                         variant="ghost"
                         size="icon"
                         className="h-6 w-6"
+                        aria-label="View project"
                         asChild
                       >
                         <a

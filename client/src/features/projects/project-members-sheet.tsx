@@ -175,6 +175,7 @@ export function ProjectMembersSheet({
                         size="icon"
                         onClick={() => removeMemberMutation.mutate(member.userId)}
                         disabled={removeMemberMutation.isPending}
+                        aria-label="Remove member"
                         data-testid={`button-remove-member-${member.userId}`}
                       >
                         <X className="h-4 w-4" />
@@ -245,6 +246,7 @@ export function ProjectMembersSheet({
                         variant="ghost"
                         size="icon"
                         disabled={addMemberMutation.isPending}
+                        aria-label="Add member"
                         data-testid={`button-add-member-${user.id}`}
                       >
                         <UserPlus className="h-4 w-4" />

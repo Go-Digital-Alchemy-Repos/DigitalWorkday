@@ -211,6 +211,7 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
             variant="ghost"
             size="icon"
             onClick={onAddTask}
+            aria-label="Add task"
             data-testid={`button-add-${section.id}-task`}
           >
             <Plus className="h-4 w-4" />

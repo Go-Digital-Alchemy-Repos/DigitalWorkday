@@ -128,6 +128,7 @@ export function ThreadPanel({
           variant="ghost"
           size="icon"
           onClick={onClose}
+          aria-label="Close thread"
           data-testid="button-close-thread"
         >
           <X className="h-4 w-4" />
@@ -231,6 +232,7 @@ export function ThreadPanel({
             disabled={!replyInput.trim() || sendReplyMutation.isPending}
             size="icon"
             className="self-end"
+            aria-label="Send reply"
             data-testid="button-send-thread-reply"
           >
             {sendReplyMutation.isPending ? (

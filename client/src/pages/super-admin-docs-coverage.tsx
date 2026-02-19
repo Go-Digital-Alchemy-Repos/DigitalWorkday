@@ -310,7 +310,7 @@ export default function SuperAdminDocsCoverage() {
                       </Badge>
                       {d.hasDoc && (
                         <Link href="/super-admin/docs" data-testid={`link-view-doc-${d.domain}`}>
-                          <Button variant="ghost" size="icon" data-testid={`button-view-doc-${d.domain}`}>
+                          <Button variant="ghost" size="icon" aria-label="View documentation" data-testid={`button-view-doc-${d.domain}`}>
                             <ExternalLink className="h-4 w-4" />
                           </Button>
                         </Link>
@@ -355,7 +355,7 @@ export default function SuperAdminDocsCoverage() {
                       )}
                       {d.exists && (
                         <Link href="/super-admin/docs" data-testid={`link-view-functional-${d.id}`}>
-                          <Button variant="ghost" size="icon" data-testid={`button-view-functional-${d.id}`}>
+                          <Button variant="ghost" size="icon" aria-label="View documentation" data-testid={`button-view-functional-${d.id}`}>
                             <ExternalLink className="h-4 w-4" />
                           </Button>
                         </Link>
