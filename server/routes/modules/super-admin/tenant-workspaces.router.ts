@@ -6,6 +6,7 @@ import { workspaces } from '@shared/schema';
 import { eq, and } from 'drizzle-orm';
 import { z } from 'zod';
 import { recordTenantAuditEvent } from '../../superAdmin';
+import { deleteWorkspaceCascade } from '../../../utils/workspaceDeletion';
 
 export const tenantWorkspacesRouter = Router();
 
@@ -123,7 +124,7 @@ tenantWorkspacesRouter.delete("/tenants/:tenantId/workspaces/:workspaceId", requ
       return res.status(404).json({ error: "Workspace not found" });
     }
 
-    await db.delete(workspaces).where(eq(workspaces.id, workspaceId));
+    const { deletedCounts } = await deleteWorkspaceCascade(workspaceId);
 
     const superUser = req.user!;
     await recordTenantAuditEvent(
@@ -131,7 +132,7 @@ tenantWorkspacesRouter.delete("/tenants/:tenantId/workspaces/:workspaceId", requ
       "workspace_deleted",
       `Workspace "${existingWorkspace.name}" deleted by super admin`,
       superUser?.id,
-      { workspaceId, workspaceName: existingWorkspace.name }
+      { workspaceId, workspaceName: existingWorkspace.name, deletedCounts }
     );
 
     res.json({ success: true, message: "Workspace deleted successfully" });

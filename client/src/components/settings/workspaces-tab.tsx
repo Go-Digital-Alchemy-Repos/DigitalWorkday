@@ -24,7 +24,17 @@ import {
   DialogTitle,
   DialogTrigger,
 } from "@/components/ui/dialog";
-import { Plus, Building2, Calendar, MoreHorizontal, Edit, Archive } from "lucide-react";
+import { Plus, Building2, Calendar, MoreHorizontal, Edit, Trash2 } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -38,6 +48,7 @@ export function WorkspacesTab() {
   const [editOpen, setEditOpen] = useState(false);
   const [editingWorkspace, setEditingWorkspace] = useState<Workspace | null>(null);
   const [editForm, setEditForm] = useState({ name: "" });
+  const [deleteTarget, setDeleteTarget] = useState<Workspace | null>(null);
   const { toast } = useToast();
 
   const { data: currentWorkspace } = useQuery<Workspace>({
@@ -75,6 +86,21 @@ export function WorkspacesTab() {
     },
     onError: () => {
       toast({ title: "Failed to update workspace", variant: "destructive" });
+    },
+  });
+
+  const deleteWorkspaceMutation = useMutation({
+    mutationFn: async (id: string) => {
+      return apiRequest("DELETE", `/api/workspaces/${id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/workspaces/current"] });
+      setDeleteTarget(null);
+      toast({ title: "Workspace deleted successfully" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to delete workspace", description: error.message, variant: "destructive" });
     },
   });
 
@@ -180,9 +206,13 @@ export function WorkspacesTab() {
                           <Edit className="h-4 w-4 mr-2" />
                           Edit
                         </DropdownMenuItem>
-                        <DropdownMenuItem className="text-destructive">
-                          <Archive className="h-4 w-4 mr-2" />
-                          Archive
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={() => setDeleteTarget(workspace)}
+                          data-testid={`button-delete-workspace-${workspace.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
                         </DropdownMenuItem>
                       </DropdownMenuContent>
                     </DropdownMenu>
@@ -211,6 +241,28 @@ export function WorkspacesTab() {
           )}
         </CardContent>
       </Card>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Workspace</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{deleteTarget?.name}"? This will permanently remove all projects, tasks, clients, teams, and other data within this workspace. This action cannot be undone.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-workspace">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteTarget && deleteWorkspaceMutation.mutate(deleteTarget.id)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              disabled={deleteWorkspaceMutation.isPending}
+              data-testid="button-confirm-delete-workspace"
+            >
+              {deleteWorkspaceMutation.isPending ? "Deleting..." : "Delete Workspace"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <Sheet open={editOpen} onOpenChange={setEditOpen}>
         <SheetContent className="sm:max-w-[400px]">

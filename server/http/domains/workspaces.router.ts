@@ -102,6 +102,33 @@ router.patch("/workspaces/:id", async (req, res) => {
   }
 });
 
+router.delete("/workspaces/:id", async (req, res) => {
+  try {
+    const user = req.user as any;
+    if (!user || (user.role !== "admin" && user.role !== "super_user")) {
+      return sendError(res, AppError.forbidden("Only admins can delete workspaces"), req);
+    }
+
+    const workspace = await storage.getWorkspace(req.params.id);
+    if (!workspace) {
+      return sendError(res, AppError.notFound("Workspace"), req);
+    }
+
+    if (workspace.tenantId !== user.tenantId) {
+      return sendError(res, AppError.forbidden("Workspace belongs to a different tenant"), req);
+    }
+
+    const { deleteWorkspaceCascade } = await import("../../utils/workspaceDeletion");
+    const { deletedCounts } = await deleteWorkspaceCascade(req.params.id);
+
+    console.log(`[workspace] Workspace "${workspace.name}" (${req.params.id}) deleted by user ${user.id}`, deletedCounts);
+
+    res.json({ success: true, message: "Workspace deleted successfully" });
+  } catch (error) {
+    return handleRouteError(res, error, "DELETE /api/workspaces/:id", req);
+  }
+});
+
 router.get("/workspaces", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
