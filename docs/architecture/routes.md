@@ -146,6 +146,9 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
 | flags | `/api` | `authTenant` | `server/http/domains/flags.router.ts` | #7 | Feb 2026 |
 | uploads | `/api/v1/uploads` | `authTenant` | `server/http/domains/uploads.router.ts` | #7 | Feb 2026 |
 | chat | `/api/v1/chat` | `authTenant` | `server/http/domains/chat.router.ts` | #8 | Feb 2026 |
+| workspaces | `/api` | `authTenant` | `server/http/domains/workspaces.router.ts` | #14 | Feb 2026 |
+| teams | `/api` | `authTenant` | `server/http/domains/teams.router.ts` | #14 | Feb 2026 |
+| workload-reports | `/api/v1` | `authTenant` | `server/http/domains/workload-reports.router.ts` | #14 | Feb 2026 |
 
 ### Presence Domain Migration Notes (Prompt #5)
 - **1 endpoint** migrated: GET `/v1/presence` (query all or specific user presence)
@@ -257,7 +260,39 @@ Run: `npx vitest run server/tests/policy/ server/tests/integration/`
 - **Policy drift tests**: 15 tests in `server/tests/subtasks-router-policy.test.ts` (14 auth rejection + 1 factory metadata).
 - **Integration tests**: 32 tests in `server/tests/integration/subtasksRoutes.test.ts` covering auth rejection (live 8 + mini app 6), tenant enforcement (4 tests), behavior assertions (7 tests: not-found → 404, validation → 400), route matching (6 tests), and registry metadata.
 - **Tasks/Subtasks migration complete**: All 36 original endpoints from legacy `tasks.router.ts` now migrated (22 tasks + 14 subtasks).
-- **Next**: Remaining legacy domains — workspaces, teams, users, clients, CRM, search, super-admin, or shift to Track B/C/D.
+- **Next**: Remaining legacy domains — users, clients, CRM, search, super-admin, or shift to Track B/C/D.
+
+### Workspaces Domain Migration Notes (Prompt #14)
+- **8 endpoints** migrated from `server/routes/workspaces.router.ts`:
+  - GET `/workspaces` (list by user), GET `/workspaces/current`, GET `/workspaces/:id`, POST `/workspaces`, PATCH `/workspaces/:id`
+  - GET `/workspaces/:workspaceId/members`, POST `/workspaces/:workspaceId/members`, GET `/workspace-members`
+- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
+- **Tenancy-aware**: Uses `getCurrentUserId()` for workspace listing, `getCurrentWorkspaceIdAsync()` for current workspace, `getCurrentWorkspaceId()` for workspace-members.
+- **Key behaviors preserved**: Workspace creation auto-adds creator as "owner" member. ZodError handling for POST/members body validation.
+- **Policy drift tests**: 9 tests in `server/tests/workspaces-router-policy.test.ts` (8 auth rejection + 1 factory metadata).
+- **Integration tests**: 13 tests in `server/tests/integration/workspacesRoutes.test.ts` covering auth rejection, tenant enforcement, route matching, and factory metadata.
+
+### Teams Domain Migration Notes (Prompt #14)
+- **8 endpoints** migrated from `server/routes/teams.router.ts`:
+  - GET `/teams`, GET `/teams/:id`, POST `/teams`, PATCH `/teams/:id`, DELETE `/teams/:id`
+  - GET `/teams/:teamId/members`, POST `/teams/:teamId/members`, DELETE `/teams/:teamId/members/:userId`
+- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
+- **Tenancy-aware**: Uses `getEffectiveTenantId()` with super-user fallback for team listing and creation. Per-team tenant validation on get/update/delete.
+- **Key behaviors preserved**: Team creation injects `tenantId` and `createdBy`. ZodError handling for POST/PATCH body validation. Team not-found returns 404. Delete validates team belongs to tenant.
+- **Policy drift tests**: 9 tests in `server/tests/teams-router-policy.test.ts` (8 auth rejection + 1 factory metadata).
+- **Integration tests**: 13 tests in `server/tests/integration/teamsRoutes.test.ts` covering auth rejection, tenant enforcement, behavior assertions (404 for nonexistent), route matching, and factory metadata.
+
+### Workload Reports Domain Migration Notes (Prompt #14)
+- **6 endpoints** migrated from `server/routes/workloadReports.ts`:
+  - GET `/workload/tasks-by-employee`, GET `/workload/employee/:userId/tasks`, GET `/workload/unassigned`
+  - GET `/workload/by-status`, GET `/workload/by-priority`, GET `/workload/summary`
+- **Mount path**: `/api/v1` — preserves legacy URL structure (`router.use("/v1", workloadReportsRoutes)`).
+- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
+- **Admin-only enforcement**: All 6 endpoints check `isAdmin(req)` and throw `AppError.forbidden("Admin access required")` for non-admin users.
+- **Tenancy-aware**: Uses `getEffectiveTenantId()` with super-user fallback for all queries. Cross-references tenant-scoped projects for task filtering.
+- **Key behaviors preserved**: `tasks-by-employee` aggregates per-user task stats, `employee/:userId/tasks` validates user tenant ownership, `summary` combines all metrics (total tasks, active projects, team members, completion rates).
+- **Policy drift tests**: 7 tests in `server/tests/workload-reports-router-policy.test.ts` (6 auth rejection + 1 factory metadata).
+- **Integration tests**: 16 tests in `server/tests/integration/workloadReportsRoutes.test.ts` covering auth rejection, admin-only enforcement (5 endpoints × 403), route matching, and factory metadata.
 
 ### Time Domain Migration Notes (Prompt #10)
 - **18 endpoints** migrated from two legacy files:
@@ -345,8 +380,11 @@ To migrate the next domain (Prompt #3):
 12. `/api` tasks — task CRUD, assignees, watchers, personal tasks/sections, move, child tasks (DONE - Prompt #12, 22 endpoints)
 13. `/api` subtasks — subtask CRUD, move, assignees, tags, comments (DONE - Prompt #13, 14 endpoints)
     - Task-tag linkage (POST/DELETE `/tasks/:taskId/tags`) already in tags.router.ts — no separate taskTags router needed
-14. `/api` — remaining legacy domains: workspaces, teams, users, clients, CRM, search (NEXT)
-15. `/api/v1/super` — super admin (large, many sub-routers)
+14. `/api` workspaces — workspace CRUD, members, current workspace (DONE - Prompt #14, 8 endpoints)
+    `/api` teams — team CRUD, members (DONE - Prompt #14, 8 endpoints)
+    `/api/v1` workload-reports — workload analytics, admin-only (DONE - Prompt #14, 6 endpoints)
+15. `/api` — remaining legacy domains: users, clients, CRM, search (NEXT)
+16. `/api/v1/super` — super admin (large, many sub-routers)
 
 ### Known Risks
 

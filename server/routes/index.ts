@@ -8,7 +8,7 @@ import tenantOnboardingRoutes from "./tenantOnboarding";
 import tenantBillingRoutes from "./tenantBilling";
 import tenancyHealthRoutes from "./tenancyHealth";
 import projectsDashboardRoutes from "./projectsDashboard";
-import workloadReportsRoutes from "./workloadReports";
+// [MIGRATED Prompt #14] workloadReportsRoutes → server/http/domains/workload-reports.router.ts
 import emailOutboxRoutes from "./emailOutbox";
 import systemStatusRoutes from "./systemStatus";
 import chatRetentionRoutes from "./chatRetention";
@@ -20,14 +20,14 @@ import { searchRouter } from "./modules/search/search.router";
 import clientsRouter from "./clients.router";
 import usersRouter from "./users.router";
 import crmRouter from "./crm.router";
-import workspacesRouter from "./workspaces.router";
-import teamsRouter from "./teams.router";
+// [MIGRATED Prompt #14] workspacesRouter → server/http/domains/workspaces.router.ts
+// [MIGRATED Prompt #14] teamsRouter → server/http/domains/teams.router.ts
 import tenantDataRoutes from "./tenantData";
 
 const router = Router();
 
-router.use(workspacesRouter);
-router.use(teamsRouter);
+// [MIGRATED] workspacesRouter — now mounted via routeRegistry
+// [MIGRATED] teamsRouter — now mounted via routeRegistry
 router.use(usersRouter);
 router.use(crmRouter);
 router.use(clientsRouter);
@@ -45,7 +45,7 @@ router.use("/v1/tenant", tenantOnboardingRoutes);
 router.use("/v1/tenant", tenantBillingRoutes);
 router.use("/v1/tenant/data", tenantDataRoutes);
 router.use("/v1", projectsDashboardRoutes);
-router.use("/v1", workloadReportsRoutes);
+// [MIGRATED] workloadReportsRoutes — now mounted via routeRegistry
 router.use("/v1", emailOutboxRoutes);
 router.use("/v1", chatRetentionRoutes);
 router.use(tenancyHealthRoutes);

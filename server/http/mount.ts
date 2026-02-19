@@ -18,6 +18,9 @@ import projectsRouter from "./domains/projects.router";
 import tasksRouter from "./domains/tasks.router";
 import subtasksRouter from "./domains/subtasks.router";
 import projectNotesRouter from "./domains/project-notes.router";
+import workspacesRouter from "./domains/workspaces.router";
+import teamsRouter from "./domains/teams.router";
+import workloadReportsRouter from "./domains/workload-reports.router";
 
 interface DomainEntry {
   path: string;
@@ -132,6 +135,27 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "project-notes",
     description: "Project notes: CRUD, categories, version history. Mirrors client notes feature for project-level note-taking.",
+  },
+  {
+    path: "/api",
+    router: workspacesRouter,
+    policy: "authTenant",
+    domain: "workspaces",
+    description: "Workspaces: CRUD, members, current workspace. Migrated from legacy routes/workspaces.router.ts (Prompt #14).",
+  },
+  {
+    path: "/api",
+    router: teamsRouter,
+    policy: "authTenant",
+    domain: "teams",
+    description: "Teams: CRUD, members, tenant-scoped. Migrated from legacy routes/teams.router.ts (Prompt #14).",
+  },
+  {
+    path: "/api/v1",
+    router: workloadReportsRouter,
+    policy: "authTenant",
+    domain: "workload-reports",
+    description: "Workload reports: tasks-by-employee, unassigned, by-status, by-priority, summary. Migrated from legacy routes/workloadReports.ts (Prompt #14).",
   },
 ];
 
