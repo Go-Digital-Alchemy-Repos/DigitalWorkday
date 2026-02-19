@@ -24,7 +24,7 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X } from "lucide-react";
-import { ProjectDetailDrawer, ProjectDrawer } from "@/features/projects";
+import { ProjectDrawer } from "@/features/projects";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { AccessInfoBanner } from "@/components/access-info-banner";
@@ -32,6 +32,7 @@ import { PageShell, PageHeader, EmptyState, LoadingState, ErrorState } from "@/c
 import type { Project, Client, Team, ClientDivision } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 import { format } from "date-fns";
+import { useLocation } from "wouter";
 
 interface ProjectWithCounts extends Project {
   openTaskCount?: number;
@@ -63,8 +64,6 @@ export default function ProjectsDashboard() {
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [divisionFilter, setDivisionFilter] = useState<string>("all");
   const [teamFilter, setTeamFilter] = useState<string>("all");
-  const [selectedProject, setSelectedProject] = useState<ProjectWithCounts | null>(null);
-  const [drawerOpen, setDrawerOpen] = useState(false);
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [editProjectOpen, setEditProjectOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectWithCounts | null>(null);
@@ -151,12 +150,6 @@ export default function ProjectsDashboard() {
     },
   });
 
-  const handleEditProject = (project: ProjectWithCounts) => {
-    setEditingProject(project);
-    setDrawerOpen(false);
-    setEditProjectOpen(true);
-  };
-
   const handleUpdateProject = async (data: any) => {
     if (!editingProject) return;
     await updateProjectMutation.mutateAsync({ projectId: editingProject.id, data });
@@ -205,9 +198,10 @@ export default function ProjectsDashboard() {
     });
   }, [projects, searchQuery, statusFilter, clientFilter, divisionFilter, teamFilter]);
 
+  const [, navigate] = useLocation();
+
   const handleRowClick = (project: ProjectWithCounts) => {
-    setSelectedProject(project);
-    setDrawerOpen(true);
+    navigate(`/projects/${project.id}`);
   };
 
   const getClientName = (clientId: string | null) => {
@@ -616,13 +610,6 @@ export default function ProjectsDashboard() {
         <div className="mt-4 text-sm text-muted-foreground">
           Showing {filteredProjects.length} of {projects?.length || 0} projects
         </div>
-
-      <ProjectDetailDrawer
-        project={selectedProject}
-        open={drawerOpen}
-        onOpenChange={setDrawerOpen}
-        onEdit={handleEditProject}
-      />
 
       <ProjectDrawer
         open={editProjectOpen}
