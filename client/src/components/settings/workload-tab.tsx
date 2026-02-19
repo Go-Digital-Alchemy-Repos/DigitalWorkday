@@ -38,7 +38,7 @@ import {
   User,
   ListTodo
 } from "lucide-react";
-import { TaskDetailDrawer } from "@/features/tasks";
+import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { StatusBadge } from "@/components/status-badge";
 import { PriorityBadge } from "@/components/priority-badge";
 import { format } from "date-fns";

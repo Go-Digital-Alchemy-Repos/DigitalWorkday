@@ -12,7 +12,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { TaskSelectorWithCreate } from "@/features/tasks";
+import { TaskSelectorWithCreate } from "@/features/tasks/task-selector-with-create";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2 } from "lucide-react";
 import { RichTextEditor } from "@/components/richtext";

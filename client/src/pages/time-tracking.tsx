@@ -60,7 +60,7 @@ import {
 import { Separator } from "@/components/ui/separator";
 import { useToast } from "@/hooks/use-toast";
 import { TaskSelectorWithCreate } from "@/features/tasks/task-selector-with-create";
-import { StartTimerDrawer } from "@/features/timer";
+import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { RichTextEditor } from "@/components/richtext";
 

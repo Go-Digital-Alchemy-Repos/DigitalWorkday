@@ -1,6 +1,6 @@
 import { createContext, useContext, useState, useCallback, ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { TaskDetailDrawer } from "@/features/tasks";
+import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import type { TaskWithRelations } from "@shared/schema";
 
 interface TaskDrawerContextType {

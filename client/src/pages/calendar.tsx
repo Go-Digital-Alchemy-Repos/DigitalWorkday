@@ -33,7 +33,7 @@ import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { TaskDetailDrawer } from "@/features/tasks";
+import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { FullScreenDrawer } from "@/components/ui/full-screen-drawer";
 import type { TaskWithRelations, TimeEntryWithRelations, Client, Project, User } from "@shared/schema";
 

@@ -17,7 +17,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
-import { TaskDetailDrawer } from "@/features/tasks";
+import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { FullScreenDrawer } from "@/components/ui/full-screen-drawer";
 import { Link } from "wouter";
 import type { TaskWithRelations, TimeEntryWithRelations } from "@shared/schema";

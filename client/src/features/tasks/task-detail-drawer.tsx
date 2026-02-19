@@ -35,7 +35,7 @@ import { MultiSelectAssignees } from "@/components/multi-select-assignees";
 import { MultiSelectWatchers } from "@/components/multi-select-watchers";
 import { format } from "date-fns";
 import { Badge } from "@/components/ui/badge";
-import { StartTimerDrawer } from "@/features/timer";
+import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import { useToast } from "@/hooks/use-toast";
 import { DrawerActionBar } from "@/components/layout/drawer-action-bar";
 import { FormFieldWrapper, DatePickerWithChips, PrioritySelector, StatusSelector, type PriorityLevel, type TaskStatus } from "@/components/forms";
