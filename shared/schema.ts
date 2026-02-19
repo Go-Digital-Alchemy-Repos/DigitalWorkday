@@ -2394,6 +2394,22 @@ export const insertClientNoteAttachmentSchema = createInsertSchema(clientNoteAtt
   createdAt: true,
 });
 
+export const insertProjectNoteCategorySchema = createInsertSchema(projectNoteCategories).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProjectNoteSchema = createInsertSchema(projectNotes).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const insertProjectNoteVersionSchema = createInsertSchema(projectNoteVersions).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertClientDocumentCategorySchema = createInsertSchema(clientDocumentCategories).omit({
   id: true,
   createdAt: true,
@@ -2679,6 +2695,22 @@ export type ClientNoteWithAuthor = ClientNote & {
   lastEditedBy?: User;
   categoryObj?: ClientNoteCategory;
   attachments?: ClientNoteAttachment[];
+};
+
+// Project Notes Types
+export type ProjectNoteCategory = typeof projectNoteCategories.$inferSelect;
+export type InsertProjectNoteCategory = z.infer<typeof insertProjectNoteCategorySchema>;
+
+export type ProjectNote = typeof projectNotes.$inferSelect;
+export type InsertProjectNote = z.infer<typeof insertProjectNoteSchema>;
+
+export type ProjectNoteVersion = typeof projectNoteVersions.$inferSelect;
+export type InsertProjectNoteVersion = z.infer<typeof insertProjectNoteVersionSchema>;
+
+export type ProjectNoteWithAuthor = ProjectNote & {
+  author?: User;
+  lastEditedBy?: User;
+  categoryObj?: ProjectNoteCategory;
 };
 
 export type ClientDocumentWithUser = ClientDocument & {
