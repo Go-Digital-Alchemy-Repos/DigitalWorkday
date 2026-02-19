@@ -42,9 +42,9 @@ const STATUS_ICONS = {
 } as const;
 
 const STATUS_COLORS = {
-  sent: "bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300",
-  failed: "bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300",
-  queued: "bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300",
+  sent: "bg-success/10 text-success dark:bg-success/15",
+  failed: "bg-destructive/10 text-destructive dark:bg-destructive/15",
+  queued: "bg-warning/10 text-warning dark:bg-warning/15",
 } as const;
 
 const MESSAGE_TYPE_LABELS: Record<string, string> = {

@@ -301,14 +301,16 @@ export function TenantSidebar() {
                   </SidebarMenu>
                 </div>
                 {hasMoreProjects && (
-                  <button
+                  <Button
+                    variant="ghost"
+                    size="sm"
                     onClick={() => setProjectsLimit(prev => prev + PROJECTS_PAGE_SIZE)}
-                    className="flex items-center gap-1.5 w-full px-3 py-1.5 text-xs text-muted-foreground hover-elevate rounded-md mt-1"
+                    className="flex items-center gap-1.5 w-full justify-start text-xs text-muted-foreground mt-1"
                     data-testid="button-load-more-projects"
                   >
                     <ChevronsDown className="h-3 w-3" />
                     <span>Load More ({sortedProjects.length - projectsLimit} remaining)</span>
-                  </button>
+                  </Button>
                 )}
               </SidebarGroupContent>
             </CollapsibleContent>

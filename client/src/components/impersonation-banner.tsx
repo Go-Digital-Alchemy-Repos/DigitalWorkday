@@ -98,7 +98,7 @@ export function ImpersonationBanner({ userImpersonation }: ImpersonationBannerPr
   if (userImpersonation?.isImpersonating) {
     return (
       <div 
-        className="sticky top-0 z-50 flex items-center justify-between gap-4 bg-orange-500 dark:bg-orange-600 px-4 py-2 text-white shadow-md"
+        className="sticky top-0 z-50 flex items-center justify-between gap-4 bg-destructive px-4 py-2 text-destructive-foreground shadow-md"
         data-testid="user-impersonation-banner"
       >
         <div className="flex items-center gap-3">
@@ -106,9 +106,9 @@ export function ImpersonationBanner({ userImpersonation }: ImpersonationBannerPr
           <div className="flex items-center gap-2 text-sm font-medium">
             <span>Impersonating User:</span>
             <span className="font-semibold">{userImpersonation.impersonatedUser.email}</span>
-            <span className="text-orange-200">({userImpersonation.impersonatedUser.role})</span>
+            <span className="opacity-75">({userImpersonation.impersonatedUser.role})</span>
           </div>
-          <div className="flex items-center gap-2 border-l border-orange-400 pl-4">
+          <div className="flex items-center gap-2 border-l border-destructive-foreground/30 pl-4">
             <Building2 className="h-4 w-4" />
             <span>Tenant:</span>
             <span className="font-semibold">{userImpersonation.impersonatedTenant.name}</span>
@@ -119,7 +119,6 @@ export function ImpersonationBanner({ userImpersonation }: ImpersonationBannerPr
           size="sm"
           onClick={handleExitUserImpersonation}
           disabled={isExitingUserImpersonation}
-          className="bg-white text-orange-600 hover:bg-orange-50"
           data-testid="button-exit-user-impersonation"
         >
           {isExitingUserImpersonation ? (
@@ -143,7 +142,7 @@ export function ImpersonationBanner({ userImpersonation }: ImpersonationBannerPr
 
   return (
     <div 
-      className="sticky top-0 z-50 flex items-center justify-between gap-4 bg-amber-500 dark:bg-amber-600 px-4 py-2 text-amber-950 dark:text-amber-50 shadow-md"
+      className="sticky top-0 z-50 flex items-center justify-between gap-4 bg-warning px-4 py-2 text-warning-foreground shadow-md"
       data-testid="impersonation-banner"
     >
       <div className="flex items-center gap-3">
@@ -159,7 +158,7 @@ export function ImpersonationBanner({ userImpersonation }: ImpersonationBannerPr
           variant="outline"
           size="sm"
           onClick={handleOpenTenantSettings}
-          className="bg-white/20 border-amber-700 text-amber-950 dark:text-amber-50 hover:bg-white/30"
+          className="bg-warning-foreground/10 border-warning-foreground/30 text-warning-foreground"
           data-testid="button-open-tenant-settings"
         >
           <Settings className="h-4 w-4 mr-1" />
@@ -170,7 +169,7 @@ export function ImpersonationBanner({ userImpersonation }: ImpersonationBannerPr
           size="sm"
           onClick={handleExitTenantImpersonation}
           disabled={isExiting}
-          className="bg-white/20 border-amber-700 text-amber-950 dark:text-amber-50 hover:bg-white/30"
+          className="bg-warning-foreground/10 border-warning-foreground/30 text-warning-foreground"
           data-testid="button-exit-impersonation"
         >
           {isExiting ? (

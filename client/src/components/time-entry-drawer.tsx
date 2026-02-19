@@ -290,14 +290,11 @@ export function TimeEntryDrawer({
 
         <div>
           <Label>Scope</Label>
-          <div className="flex rounded-lg border overflow-hidden mt-2" data-testid="toggle-scope">
-            <button
+          <div className="flex gap-2 mt-2" data-testid="toggle-scope">
+            <Button
               type="button"
-              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                scope === "in_scope"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted hover:bg-muted/80"
-              }`}
+              variant={scope === "in_scope" ? "default" : "outline"}
+              className="flex-1 toggle-elevate"
               onClick={() => {
                 setScope("in_scope");
                 handleFieldChange();
@@ -305,14 +302,11 @@ export function TimeEntryDrawer({
               data-testid="button-scope-in"
             >
               In Scope (Unbillable)
-            </button>
-            <button
+            </Button>
+            <Button
               type="button"
-              className={`flex-1 px-4 py-2 text-sm font-medium transition-colors ${
-                scope === "out_of_scope"
-                  ? "bg-primary text-primary-foreground"
-                  : "bg-muted hover:bg-muted/80"
-              }`}
+              variant={scope === "out_of_scope" ? "default" : "outline"}
+              className="flex-1 toggle-elevate"
               onClick={() => {
                 setScope("out_of_scope");
                 handleFieldChange();
@@ -320,7 +314,7 @@ export function TimeEntryDrawer({
               data-testid="button-scope-out"
             >
               Out of Scope (Billable)
-            </button>
+            </Button>
           </div>
         </div>
 

@@ -127,11 +127,11 @@ const DEFAULT_CATEGORIES = [
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
-  general: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-  project: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  feedback: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
-  meeting: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
-  requirement: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+  general: "bg-muted text-muted-foreground",
+  project: "bg-info/10 text-info dark:bg-info/15",
+  feedback: "bg-warning/10 text-warning dark:bg-warning/15",
+  meeting: "bg-accent text-accent-foreground",
+  requirement: "bg-success/10 text-success dark:bg-success/15",
 };
 
 const COLOR_OPTIONS = [
