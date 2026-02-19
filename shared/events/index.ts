@@ -525,6 +525,7 @@ export const CHAT_EVENTS = {
   NEW_MESSAGE: 'chat:newMessage',
   MESSAGE_UPDATED: 'chat:messageUpdated',
   MESSAGE_DELETED: 'chat:messageDeleted',
+  MESSAGE_REACTION: 'chat:messageReaction',
   CHANNEL_CREATED: 'chat:channelCreated',
   MEMBER_JOINED: 'chat:memberJoined',
   MEMBER_LEFT: 'chat:memberLeft',
@@ -582,6 +583,21 @@ export interface ChatMessageDeletedPayload {
   targetType: 'channel' | 'dm';
   targetId: string;
   messageId: string;
+  deletedByUserId: string;
+}
+
+export interface ChatMessageReactionPayload {
+  targetType: 'channel' | 'dm';
+  targetId: string;
+  messageId: string;
+  userId: string;
+  emoji: string;
+  action: 'add' | 'remove';
+  user?: {
+    id: string;
+    name: string;
+    avatarUrl: string | null;
+  };
 }
 
 export interface ChatChannelCreatedPayload {
@@ -800,6 +816,7 @@ export type ServerToClientEvents = {
   [CHAT_EVENTS.NEW_MESSAGE]: (payload: ChatNewMessagePayload) => void;
   [CHAT_EVENTS.MESSAGE_UPDATED]: (payload: ChatMessageUpdatedPayload) => void;
   [CHAT_EVENTS.MESSAGE_DELETED]: (payload: ChatMessageDeletedPayload) => void;
+  [CHAT_EVENTS.MESSAGE_REACTION]: (payload: ChatMessageReactionPayload) => void;
   [CHAT_EVENTS.CHANNEL_CREATED]: (payload: ChatChannelCreatedPayload) => void;
   [CHAT_EVENTS.MEMBER_JOINED]: (payload: ChatMemberJoinedPayload) => void;
   [CHAT_EVENTS.MEMBER_LEFT]: (payload: ChatMemberLeftPayload) => void;

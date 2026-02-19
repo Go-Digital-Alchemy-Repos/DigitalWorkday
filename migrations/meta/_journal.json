@@ -232,6 +232,13 @@
       "when": 1771541400000,
       "tag": "0032_advanced_conversation_filters",
       "breakpoints": true
+    },
+    {
+      "idx": 33,
+      "version": "7",
+      "when": 1771545600000,
+      "tag": "0033_chat_reactions_and_audit",
+      "breakpoints": true
     }
   ]
 }

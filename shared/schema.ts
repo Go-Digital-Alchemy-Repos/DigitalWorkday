@@ -1620,11 +1620,12 @@ export const chatMessages = pgTable("chat_messages", {
   dmThreadId: varchar("dm_thread_id").references(() => chatDmThreads.id),
   authorUserId: varchar("author_user_id").references(() => users.id).notNull(),
   body: text("body").notNull(),
-  parentMessageId: varchar("parent_message_id"), // For threaded replies - nullable, self-referencing (one level only)
+  parentMessageId: varchar("parent_message_id"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   editedAt: timestamp("edited_at"),
   deletedAt: timestamp("deleted_at"),
-  archivedAt: timestamp("archived_at"), // Soft archive for retention policy
+  deletedByUserId: varchar("deleted_by_user_id").references(() => users.id),
+  archivedAt: timestamp("archived_at"),
 }, (table) => [
   index("chat_messages_tenant_idx").on(table.tenantId),
   index("chat_messages_channel_idx").on(table.channelId),
@@ -1634,7 +1635,19 @@ export const chatMessages = pgTable("chat_messages", {
   index("chat_messages_archived_idx").on(table.archivedAt),
   index("chat_messages_tenant_channel_created_idx").on(table.tenantId, table.channelId, table.createdAt),
   index("chat_messages_tenant_dm_created_idx").on(table.tenantId, table.dmThreadId, table.createdAt),
-  index("chat_messages_parent_idx").on(table.parentMessageId), // For thread replies lookup
+  index("chat_messages_parent_idx").on(table.parentMessageId),
+]);
+
+export const chatMessageReactions = pgTable("chat_message_reactions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  messageId: varchar("message_id").references(() => chatMessages.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  emoji: varchar("emoji", { length: 32 }).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("chat_message_reactions_unique").on(table.messageId, table.userId, table.emoji),
+  index("chat_message_reactions_tenant_message_idx").on(table.tenantId, table.messageId),
 ]);
 
 /**
@@ -2929,6 +2942,8 @@ export type InsertChatMessage = z.infer<typeof insertChatMessageSchema>;
 
 export type ChatAttachment = typeof chatAttachments.$inferSelect;
 export type InsertChatAttachment = z.infer<typeof insertChatAttachmentSchema>;
+
+export type ChatMessageReaction = typeof chatMessageReactions.$inferSelect;
 
 // Chat extended types
 export type ChatChannelWithMembers = ChatChannel & {

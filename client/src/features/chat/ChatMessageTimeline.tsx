@@ -58,6 +58,12 @@ export interface ChatMessage {
     mimeType: string;
     sizeBytes: number;
   }>;
+  reactions?: Array<{
+    id: string;
+    emoji: string;
+    userId: string;
+    user: { id: string; name: string | null; avatarUrl: string | null };
+  }>;
   _tempId?: string;
   _status?: "pending" | "sent" | "failed";
 }
@@ -90,6 +96,8 @@ interface ChatMessageTimelineProps {
   renderMessageBody?: (body: string) => React.ReactNode;
   getFileIcon?: (mimeType: string) => React.ComponentType<{ className?: string }>;
   formatFileSize?: (bytes: number) => string;
+  onAddReaction?: (messageId: string, emoji: string) => void;
+  onRemoveReaction?: (messageId: string, emoji: string) => void;
   isDm?: boolean;
   className?: string;
 }
@@ -184,6 +192,8 @@ interface MessageGroup {
 }
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
+const EDIT_WINDOW_MS = 5 * 60 * 1000;
+const QUICK_REACTIONS = ["\u{1F44D}", "\u2764\uFE0F", "\u{1F602}", "\u{1F62E}", "\u{1F622}", "\u{1F389}"];
 
 function groupMessages(messages: ChatMessage[], _firstUnreadMessageId?: string | null): MessageGroup[] {
   const groups: MessageGroup[] = [];
@@ -277,6 +287,8 @@ export function ChatMessageTimeline({
   renderMessageBody,
   getFileIcon,
   formatFileSize,
+  onAddReaction,
+  onRemoveReaction,
   isDm = false,
   className,
 }: ChatMessageTimelineProps) {
@@ -472,7 +484,9 @@ export function ChatMessageTimeline({
                 const isDeleted = !!message.deletedAt;
                 const isOwnMessage = message.authorUserId === currentUserId;
                 const isEditing = editingMessageId === message.id;
-                const canEdit = isOwnMessage && !isDeleted && !message._status;
+                const elapsed = Date.now() - new Date(message.createdAt).getTime();
+                const withinEditWindow = elapsed <= EDIT_WINDOW_MS;
+                const canEdit = isOwnMessage && !isDeleted && !message._status && withinEditWindow;
                 const canDelete = (isOwnMessage || isTenantAdmin) && !isDeleted && !message._status;
                 const isPending = message._status === "pending";
                 const isFailed = message._status === "failed";
@@ -678,85 +692,140 @@ export function ChatMessageTimeline({
                           </div>
 
                           {!isDeleted && !isEditing && !isMobile && (
-                            <DropdownMenu>
-                              <DropdownMenuTrigger asChild>
-                                <Button
-                                  variant="ghost"
-                                  size="icon"
-                                  className="h-6 w-6 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0"
-                                  aria-label="Message actions"
-                                  data-testid={`message-menu-${message.id}`}
+                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                              {QUICK_REACTIONS.slice(0, 4).map(emoji => (
+                                <button
+                                  key={emoji}
+                                  type="button"
+                                  className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted/80 text-sm cursor-pointer transition-colors"
+                                  onClick={() => onAddReaction?.(message.id, emoji)}
+                                  data-testid={`quick-react-${message.id}-${emoji}`}
                                 >
-                                  <MoreHorizontal className="h-4 w-4" />
-                                </Button>
-                              </DropdownMenuTrigger>
-                              <DropdownMenuContent align="end">
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    if (onCopyMessage) {
-                                      onCopyMessage(message.body);
-                                    } else {
-                                      navigator.clipboard.writeText(message.body);
-                                    }
-                                  }}
-                                  data-testid={`message-copy-${message.id}`}
-                                >
-                                  <Copy className="h-4 w-4 mr-2" />
-                                  Copy text
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => {
-                                    const authorName = message.author?.name || message.author?.email || "Unknown";
-                                    onQuoteReply?.(authorName, message.body);
-                                  }}
-                                  data-testid={`message-quote-${message.id}`}
-                                >
-                                  <Quote className="h-4 w-4 mr-2" />
-                                  Quote reply
-                                </DropdownMenuItem>
-                                <DropdownMenuItem
-                                  onClick={() => onCreateTaskFromMessage?.(message)}
-                                  data-testid={`message-create-task-${message.id}`}
-                                >
-                                  <ListTodo className="h-4 w-4 mr-2" />
-                                  Create task
-                                </DropdownMenuItem>
-                                {onOpenThread && !message.parentMessageId && (
-                                  <DropdownMenuItem
-                                    onClick={() => onOpenThread(message.id)}
-                                    data-testid={`message-thread-${message.id}`}
+                                  {emoji}
+                                </button>
+                              ))}
+                              <DropdownMenu>
+                                <DropdownMenuTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-6 w-6 flex-shrink-0"
+                                    aria-label="Message actions"
+                                    data-testid={`message-menu-${message.id}`}
                                   >
-                                    <MessagesSquare className="h-4 w-4 mr-2" />
-                                    Reply in thread
-                                  </DropdownMenuItem>
-                                )}
-                                {canEdit && (
+                                    <MoreHorizontal className="h-4 w-4" />
+                                  </Button>
+                                </DropdownMenuTrigger>
+                                <DropdownMenuContent align="end">
                                   <DropdownMenuItem
                                     onClick={() => {
-                                      setEditingMessageId(message.id);
-                                      setEditingBody(message.body);
+                                      if (onCopyMessage) {
+                                        onCopyMessage(message.body);
+                                      } else {
+                                        navigator.clipboard.writeText(message.body);
+                                      }
                                     }}
-                                    data-testid={`message-edit-${message.id}`}
+                                    data-testid={`message-copy-${message.id}`}
                                   >
-                                    <Pencil className="h-4 w-4 mr-2" />
-                                    Edit
+                                    <Copy className="h-4 w-4 mr-2" />
+                                    Copy text
                                   </DropdownMenuItem>
-                                )}
-                                {canDelete && (
                                   <DropdownMenuItem
-                                    onClick={() => onDeleteMessage?.(message.id)}
-                                    className="text-destructive focus:text-destructive"
-                                    data-testid={`message-delete-${message.id}`}
+                                    onClick={() => {
+                                      const authorName = message.author?.name || message.author?.email || "Unknown";
+                                      onQuoteReply?.(authorName, message.body);
+                                    }}
+                                    data-testid={`message-quote-${message.id}`}
                                   >
-                                    <Trash2 className="h-4 w-4 mr-2" />
-                                    Delete
+                                    <Quote className="h-4 w-4 mr-2" />
+                                    Quote reply
                                   </DropdownMenuItem>
-                                )}
-                              </DropdownMenuContent>
-                            </DropdownMenu>
+                                  <DropdownMenuItem
+                                    onClick={() => onCreateTaskFromMessage?.(message)}
+                                    data-testid={`message-create-task-${message.id}`}
+                                  >
+                                    <ListTodo className="h-4 w-4 mr-2" />
+                                    Create task
+                                  </DropdownMenuItem>
+                                  {onOpenThread && !message.parentMessageId && (
+                                    <DropdownMenuItem
+                                      onClick={() => onOpenThread(message.id)}
+                                      data-testid={`message-thread-${message.id}`}
+                                    >
+                                      <MessagesSquare className="h-4 w-4 mr-2" />
+                                      Reply in thread
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canEdit && (
+                                    <DropdownMenuItem
+                                      onClick={() => {
+                                        setEditingMessageId(message.id);
+                                        setEditingBody(message.body);
+                                      }}
+                                      data-testid={`message-edit-${message.id}`}
+                                    >
+                                      <Pencil className="h-4 w-4 mr-2" />
+                                      Edit
+                                    </DropdownMenuItem>
+                                  )}
+                                  {canDelete && (
+                                    <DropdownMenuItem
+                                      onClick={() => onDeleteMessage?.(message.id)}
+                                      className="text-destructive focus:text-destructive"
+                                      data-testid={`message-delete-${message.id}`}
+                                    >
+                                      <Trash2 className="h-4 w-4 mr-2" />
+                                      Delete
+                                    </DropdownMenuItem>
+                                  )}
+                                </DropdownMenuContent>
+                              </DropdownMenu>
+                            </div>
                           )}
                         </div>
                       </div>
+
+                      {message.reactions && message.reactions.length > 0 && !isDeleted && (
+                        <div className={`flex flex-wrap gap-1 mt-1 ${isOwnMessage ? "justify-end" : ""}`} data-testid={`reactions-${message.id}`}>
+                          {Object.entries(
+                            message.reactions.reduce((acc, r) => {
+                              if (!acc[r.emoji]) acc[r.emoji] = [];
+                              acc[r.emoji].push(r);
+                              return acc;
+                            }, {} as Record<string, typeof message.reactions>)
+                          ).map(([emoji, reactors]) => {
+                            const hasReacted = reactors.some(r => r.userId === currentUserId);
+                            return (
+                              <Tooltip key={emoji}>
+                                <TooltipTrigger asChild>
+                                  <button
+                                    type="button"
+                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs cursor-pointer transition-colors ${
+                                      hasReacted
+                                        ? "bg-primary/15 border border-primary/30"
+                                        : "bg-muted/80 border border-transparent hover:border-border"
+                                    }`}
+                                    onClick={() => {
+                                      if (hasReacted) {
+                                        onRemoveReaction?.(message.id, emoji);
+                                      } else {
+                                        onAddReaction?.(message.id, emoji);
+                                      }
+                                    }}
+                                    data-testid={`reaction-${message.id}-${emoji}`}
+                                  >
+                                    <span>{emoji}</span>
+                                    <span className="text-muted-foreground font-medium">{reactors.length}</span>
+                                  </button>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <span>{reactors.map(r => r.user?.name || 'Unknown').join(', ')}</span>
+                                </TooltipContent>
+                              </Tooltip>
+                            );
+                          })}
+                        </div>
+                      )}
 
                       {isLongPressed && isMobile && !isDeleted && !isEditing && (
                         <div
@@ -859,6 +928,8 @@ export function ChatMessageTimeline({
       onOpenThread,
       onDeleteMessage,
       onEditMessage,
+      onAddReaction,
+      onRemoveReaction,
       threadSummaries,
       renderMessageBody,
       getFileIcon,

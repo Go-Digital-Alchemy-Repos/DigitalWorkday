@@ -93,7 +93,7 @@ import {
 } from "@/components/ui/popover";
 import { Badge } from "@/components/ui/badge";
 import { PresenceIndicator, AvatarPresenceIndicator } from "@/components/ui/presence-indicator";
-import { CHAT_EVENTS, CHAT_ROOM_EVENTS, ChatNewMessagePayload, ChatMessageUpdatedPayload, ChatMessageDeletedPayload, ChatMemberJoinedPayload, ChatMemberLeftPayload, ChatMemberAddedPayload, ChatMemberRemovedPayload, ChatConversationReadPayload } from "@shared/events";
+import { CHAT_EVENTS, CHAT_ROOM_EVENTS, ChatNewMessagePayload, ChatMessageUpdatedPayload, ChatMessageDeletedPayload, ChatMessageReactionPayload, ChatMemberJoinedPayload, ChatMemberLeftPayload, ChatMemberAddedPayload, ChatMemberRemovedPayload, ChatConversationReadPayload } from "@shared/events";
 
 interface ChatChannel {
   id: string;
@@ -1258,8 +1258,29 @@ export default function ChatPage() {
       }
     };
 
-    // Handle conversation read - update unread counts when current user reads a conversation
-    // Also track when other users read DMs for "Seen" indicator
+    const handleMessageReaction = (payload: ChatMessageReactionPayload) => {
+      const currentTargetId = selectedChannel?.id ?? selectedDm?.id;
+      if (payload.targetId !== currentTargetId) return;
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== payload.messageId) return msg;
+          const existing = (msg as any).reactions || [];
+          if (payload.action === 'add') {
+            if (existing.some((r: any) => r.userId === payload.userId && r.emoji === payload.emoji)) return msg;
+            return {
+              ...msg,
+              reactions: [...existing, { id: `socket-${Date.now()}`, emoji: payload.emoji, userId: payload.userId, user: payload.user || { id: payload.userId, name: 'Unknown', avatarUrl: null } }],
+            };
+          } else {
+            return {
+              ...msg,
+              reactions: existing.filter((r: any) => !(r.userId === payload.userId && r.emoji === payload.emoji)),
+            };
+          }
+        })
+      );
+    };
+
     const handleConversationRead = (payload: ChatConversationReadPayload) => {
       if (payload.userId === user?.id) {
         // Current user read - update unread counts
@@ -1297,6 +1318,7 @@ export default function ChatPage() {
     socket.on(CHAT_EVENTS.NEW_MESSAGE as any, handleNewMessage as any);
     socket.on(CHAT_EVENTS.MESSAGE_UPDATED as any, handleMessageUpdated as any);
     socket.on(CHAT_EVENTS.MESSAGE_DELETED as any, handleMessageDeleted as any);
+    socket.on(CHAT_EVENTS.MESSAGE_REACTION as any, handleMessageReaction as any);
     socket.on(CHAT_EVENTS.MEMBER_JOINED as any, handleMemberJoined as any);
     socket.on(CHAT_EVENTS.MEMBER_LEFT as any, handleMemberLeft as any);
     socket.on(CHAT_EVENTS.MEMBER_ADDED as any, handleMemberAdded as any);
@@ -1307,6 +1329,7 @@ export default function ChatPage() {
       socket.off(CHAT_EVENTS.NEW_MESSAGE as any, handleNewMessage as any);
       socket.off(CHAT_EVENTS.MESSAGE_UPDATED as any, handleMessageUpdated as any);
       socket.off(CHAT_EVENTS.MESSAGE_DELETED as any, handleMessageDeleted as any);
+      socket.off(CHAT_EVENTS.MESSAGE_REACTION as any, handleMessageReaction as any);
       socket.off(CHAT_EVENTS.MEMBER_JOINED as any, handleMemberJoined as any);
       socket.off(CHAT_EVENTS.MEMBER_LEFT as any, handleMemberLeft as any);
       socket.off(CHAT_EVENTS.MEMBER_ADDED as any, handleMemberAdded as any);
@@ -1505,6 +1528,50 @@ export default function ChatPage() {
         description: requestId ? `${error.message} (Request ID: ${requestId})` : error.message,
         variant: "destructive",
       });
+    },
+  });
+
+  const addReactionMutation = useMutation({
+    mutationFn: async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
+      const res = await apiRequest("POST", `/api/v1/chat/messages/${messageId}/reactions`, { emoji });
+      return res.json();
+    },
+    onMutate: ({ messageId, emoji }) => {
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== messageId) return msg;
+          const existing = (msg as any).reactions || [];
+          if (existing.some((r: any) => r.userId === user?.id && r.emoji === emoji)) return msg;
+          return {
+            ...msg,
+            reactions: [...existing, { id: 'optimistic', emoji, userId: user?.id, user: { id: user?.id, name: user?.name || '', avatarUrl: user?.avatarUrl || null } }],
+          };
+        })
+      );
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to add reaction", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const removeReactionMutation = useMutation({
+    mutationFn: async ({ messageId, emoji }: { messageId: string; emoji: string }) => {
+      return apiRequest("DELETE", `/api/v1/chat/messages/${messageId}/reactions/${encodeURIComponent(emoji)}`);
+    },
+    onMutate: ({ messageId, emoji }) => {
+      setMessages((prev) =>
+        prev.map((msg) => {
+          if (msg.id !== messageId) return msg;
+          const existing = (msg as any).reactions || [];
+          return {
+            ...msg,
+            reactions: existing.filter((r: any) => !(r.userId === user?.id && r.emoji === emoji)),
+          };
+        })
+      );
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to remove reaction", description: error.message, variant: "destructive" });
     },
   });
 
@@ -1970,6 +2037,8 @@ export default function ChatPage() {
               isLoadingMore={false}
               onEditMessage={(messageId, body) => editMessageMutation.mutate({ messageId, body })}
               onDeleteMessage={(messageId) => deleteMessageMutation.mutate(messageId)}
+              onAddReaction={(messageId, emoji) => addReactionMutation.mutate({ messageId, emoji })}
+              onRemoveReaction={(messageId, emoji) => removeReactionMutation.mutate({ messageId, emoji })}
               onRetryMessage={retryFailedMessage}
               onRemoveFailedMessage={removeFailedMessage}
               onCopyMessage={handleCopyMessage}

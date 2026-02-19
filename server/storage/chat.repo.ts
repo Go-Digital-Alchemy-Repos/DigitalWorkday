@@ -7,10 +7,12 @@ import {
   type ChatMessage, type InsertChatMessage,
   type ChatAttachment, type InsertChatAttachment,
   type ChatExportJob, type InsertChatExportJob,
+  type ChatMessageReaction,
   users,
   chatChannels, chatChannelMembers,
   chatDmThreads, chatDmMembers,
   chatMessages, chatAttachments, chatReads, chatExportJobs,
+  chatMessageReactions,
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, asc, inArray, gte, lte, gt, isNull, sql, ilike, or, type SQL } from "drizzle-orm";
@@ -175,10 +177,10 @@ export class ChatRepository {
     return message || undefined;
   }
 
-  async getChatMessages(targetType: 'channel' | 'dm', targetId: string, limit = 50, before?: Date, after?: Date): Promise<(ChatMessage & { author: User })[]> {
+  async getChatMessages(targetType: 'channel' | 'dm', targetId: string, limit = 50, before?: Date, after?: Date): Promise<(ChatMessage & { author: User; reactions?: (ChatMessageReaction & { user: Pick<User, 'id' | 'name' | 'avatarUrl'> })[] })[]> {
     const targetColumn = targetType === 'channel' ? chatMessages.channelId : chatMessages.dmThreadId;
     
-    const conditions: SQL[] = [eq(targetColumn, targetId), isNull(chatMessages.deletedAt)];
+    const conditions: SQL[] = [eq(targetColumn, targetId)];
     if (before) {
       conditions.push(lte(chatMessages.createdAt, before));
     }
@@ -198,8 +200,15 @@ export class ChatRepository {
     const authorRows = await db.select().from(users).where(inArray(users.id, authorIds));
     const authorMap = new Map(authorRows.map(u => [u.id, u]));
 
+    const messageIds = messages.map(m => m.id);
+    const reactionsMap = await this.getReactionsForMessages(messageIds);
+
     return messages
-      .map(m => ({ ...m, author: authorMap.get(m.authorUserId)! }))
+      .map(m => ({
+        ...m,
+        author: authorMap.get(m.authorUserId)!,
+        reactions: reactionsMap.get(m.id) || [],
+      }))
       .filter(m => m.author)
       .reverse();
   }
@@ -257,8 +266,88 @@ export class ChatRepository {
     return updated || undefined;
   }
 
-  async deleteChatMessage(id: string): Promise<void> {
-    await db.update(chatMessages).set({ deletedAt: new Date() }).where(eq(chatMessages.id, id));
+  async deleteChatMessage(id: string, deletedByUserId?: string): Promise<void> {
+    await db.update(chatMessages).set({
+      deletedAt: new Date(),
+      deletedByUserId: deletedByUserId || null,
+      body: "[Message deleted]",
+    }).where(eq(chatMessages.id, id));
+  }
+
+  async addReaction(tenantId: string, messageId: string, userId: string, emoji: string): Promise<ChatMessageReaction> {
+    const [reaction] = await db.insert(chatMessageReactions).values({
+      tenantId,
+      messageId,
+      userId,
+      emoji,
+    }).onConflictDoNothing().returning();
+    if (!reaction) {
+      const [existing] = await db.select().from(chatMessageReactions).where(
+        and(
+          eq(chatMessageReactions.messageId, messageId),
+          eq(chatMessageReactions.userId, userId),
+          eq(chatMessageReactions.emoji, emoji),
+        )
+      );
+      return existing;
+    }
+    return reaction;
+  }
+
+  async removeReaction(tenantId: string, messageId: string, userId: string, emoji: string): Promise<boolean> {
+    const result = await db.delete(chatMessageReactions).where(
+      and(
+        eq(chatMessageReactions.tenantId, tenantId),
+        eq(chatMessageReactions.messageId, messageId),
+        eq(chatMessageReactions.userId, userId),
+        eq(chatMessageReactions.emoji, emoji),
+      )
+    ).returning();
+    return result.length > 0;
+  }
+
+  async getReactionsForMessage(messageId: string): Promise<(ChatMessageReaction & { user: Pick<User, 'id' | 'name' | 'avatarUrl'> })[]> {
+    const reactions = await db.select().from(chatMessageReactions)
+      .where(eq(chatMessageReactions.messageId, messageId))
+      .orderBy(asc(chatMessageReactions.createdAt));
+    if (reactions.length === 0) return [];
+    const userIds = [...new Set(reactions.map(r => r.userId))];
+    const userRows = await db.select({
+      id: users.id,
+      name: users.name,
+      avatarUrl: users.avatarUrl,
+    }).from(users).where(inArray(users.id, userIds));
+    const userMap = new Map(userRows.map(u => [u.id, u]));
+    return reactions.map(r => ({
+      ...r,
+      user: userMap.get(r.userId) || { id: r.userId, name: 'Unknown', avatarUrl: null },
+    }));
+  }
+
+  async getReactionsForMessages(messageIds: string[]): Promise<Map<string, (ChatMessageReaction & { user: Pick<User, 'id' | 'name' | 'avatarUrl'> })[]>> {
+    if (messageIds.length === 0) return new Map();
+    const reactions = await db.select().from(chatMessageReactions)
+      .where(inArray(chatMessageReactions.messageId, messageIds))
+      .orderBy(asc(chatMessageReactions.createdAt));
+    if (reactions.length === 0) return new Map();
+    const userIds = [...new Set(reactions.map(r => r.userId))];
+    const userRows = await db.select({
+      id: users.id,
+      name: users.name,
+      avatarUrl: users.avatarUrl,
+    }).from(users).where(inArray(users.id, userIds));
+    const userMap = new Map(userRows.map(u => [u.id, u]));
+    const result = new Map<string, (ChatMessageReaction & { user: Pick<User, 'id' | 'name' | 'avatarUrl'> })[]>();
+    for (const r of reactions) {
+      const enriched = {
+        ...r,
+        user: userMap.get(r.userId) || { id: r.userId, name: 'Unknown', avatarUrl: null },
+      };
+      const arr = result.get(r.messageId) || [];
+      arr.push(enriched);
+      result.set(r.messageId, arr);
+    }
+    return result;
   }
 
   async getThreadReplies(parentMessageId: string, limit = 100): Promise<(ChatMessage & { author: User })[]> {

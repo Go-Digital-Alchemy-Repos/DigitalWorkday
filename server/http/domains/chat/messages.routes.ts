@@ -13,6 +13,13 @@ import { PutObjectCommand } from "@aws-sdk/client-s3";
 import { db } from "../../../db";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { getCurrentTenantId, sendMessageSchema, markReadSchema, upload } from "./shared";
+import { z } from "zod";
+
+const EDIT_WINDOW_MS = 5 * 60 * 1000;
+
+const reactionSchema = z.object({
+  emoji: z.string().min(1).max(32),
+});
 
 const router = Router();
 
@@ -118,6 +125,15 @@ router.patch(
       throw AppError.forbidden("Can only edit your own messages");
     }
 
+    if (message.deletedAt) {
+      throw AppError.badRequest("Cannot edit a deleted message");
+    }
+
+    const elapsed = Date.now() - new Date(message.createdAt).getTime();
+    if (elapsed > EDIT_WINDOW_MS) {
+      throw AppError.forbidden("Edit window has expired. Messages can only be edited within 5 minutes of sending.");
+    }
+
     const updated = await storage.updateChatMessage(req.params.messageId, {
       body: req.body.body,
     });
@@ -154,11 +170,15 @@ router.delete(
       throw AppError.notFound("Message not found");
     }
 
+    if (message.deletedAt) {
+      throw AppError.badRequest("Message already deleted");
+    }
+
     if (message.authorUserId !== userId) {
       throw AppError.forbidden("Can only delete your own messages");
     }
 
-    await storage.deleteChatMessage(req.params.messageId);
+    await storage.deleteChatMessage(req.params.messageId, userId);
 
     const targetType = message.channelId ? "channel" : "dm";
     const targetId = message.channelId || message.dmThreadId!;
@@ -167,6 +187,7 @@ router.delete(
       targetType,
       targetId,
       messageId: message.id,
+      deletedByUserId: userId,
     };
     
     if (message.channelId) {
@@ -176,6 +197,105 @@ router.delete(
     }
 
     res.json({ message: "Message deleted" });
+  })
+);
+
+router.get(
+  "/messages/:messageId/reactions",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const message = await storage.getChatMessage(req.params.messageId);
+    if (!message || message.tenantId !== tenantId) {
+      throw AppError.notFound("Message not found");
+    }
+
+    const reactions = await storage.getReactionsForMessage(req.params.messageId);
+    res.json(reactions);
+  })
+);
+
+router.post(
+  "/messages/:messageId/reactions",
+  validateBody(reactionSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const message = await storage.getChatMessage(req.params.messageId);
+    if (!message || message.tenantId !== tenantId) {
+      throw AppError.notFound("Message not found");
+    }
+
+    if (message.deletedAt) {
+      throw AppError.badRequest("Cannot react to a deleted message");
+    }
+
+    const reaction = await storage.addReaction(tenantId, req.params.messageId, userId, req.body.emoji);
+    const user = await storage.getUser(userId);
+
+    const targetType = message.channelId ? "channel" : "dm";
+    const targetId = message.channelId || message.dmThreadId!;
+
+    const reactionPayload = {
+      targetType,
+      targetId,
+      messageId: message.id,
+      userId,
+      emoji: req.body.emoji,
+      action: "add" as const,
+      user: user ? { id: user.id, name: user.name || '', avatarUrl: user.avatarUrl } : undefined,
+    };
+
+    if (message.channelId) {
+      emitToChatChannel(message.channelId, CHAT_EVENTS.MESSAGE_REACTION, reactionPayload);
+    } else if (message.dmThreadId) {
+      emitToChatDm(message.dmThreadId, CHAT_EVENTS.MESSAGE_REACTION, reactionPayload);
+    }
+
+    res.status(201).json(reaction);
+  })
+);
+
+router.delete(
+  "/messages/:messageId/reactions/:emoji",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const message = await storage.getChatMessage(req.params.messageId);
+    if (!message || message.tenantId !== tenantId) {
+      throw AppError.notFound("Message not found");
+    }
+
+    const emoji = decodeURIComponent(req.params.emoji);
+    const removed = await storage.removeReaction(tenantId, req.params.messageId, userId, emoji);
+    if (!removed) {
+      throw AppError.notFound("Reaction not found");
+    }
+
+    const targetType = message.channelId ? "channel" : "dm";
+    const targetId = message.channelId || message.dmThreadId!;
+
+    const reactionPayload = {
+      targetType,
+      targetId,
+      messageId: message.id,
+      userId,
+      emoji,
+      action: "remove" as const,
+    };
+
+    if (message.channelId) {
+      emitToChatChannel(message.channelId, CHAT_EVENTS.MESSAGE_REACTION, reactionPayload);
+    } else if (message.dmThreadId) {
+      emitToChatDm(message.dmThreadId, CHAT_EVENTS.MESSAGE_REACTION, reactionPayload);
+    }
+
+    res.json({ success: true });
   })
 );
 

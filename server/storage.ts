@@ -458,7 +458,11 @@ export interface IStorage {
   getFirstUnreadMessageId(targetType: 'channel' | 'dm', targetId: string, userId: string): Promise<string | null>;
   createChatMessage(message: InsertChatMessage): Promise<ChatMessage>;
   updateChatMessage(id: string, updates: Partial<InsertChatMessage>): Promise<ChatMessage | undefined>;
-  deleteChatMessage(id: string): Promise<void>;
+  deleteChatMessage(id: string, deletedByUserId?: string): Promise<void>;
+  addReaction(tenantId: string, messageId: string, userId: string, emoji: string): Promise<any>;
+  removeReaction(tenantId: string, messageId: string, userId: string, emoji: string): Promise<boolean>;
+  getReactionsForMessage(messageId: string): Promise<any[]>;
+  getReactionsForMessages(messageIds: string[]): Promise<Map<string, any[]>>;
   searchChatMessages(tenantId: string, userId: string, options: {
     query: string;
     channelId?: string;
@@ -3646,8 +3650,24 @@ export class DatabaseStorage implements IStorage {
     return chatRepo.updateChatMessage(id, updates);
   }
 
-  async deleteChatMessage(id: string): Promise<void> {
-    return chatRepo.deleteChatMessage(id);
+  async deleteChatMessage(id: string, deletedByUserId?: string): Promise<void> {
+    return chatRepo.deleteChatMessage(id, deletedByUserId);
+  }
+
+  async addReaction(tenantId: string, messageId: string, userId: string, emoji: string) {
+    return chatRepo.addReaction(tenantId, messageId, userId, emoji);
+  }
+
+  async removeReaction(tenantId: string, messageId: string, userId: string, emoji: string) {
+    return chatRepo.removeReaction(tenantId, messageId, userId, emoji);
+  }
+
+  async getReactionsForMessage(messageId: string) {
+    return chatRepo.getReactionsForMessage(messageId);
+  }
+
+  async getReactionsForMessages(messageIds: string[]) {
+    return chatRepo.getReactionsForMessages(messageIds);
   }
 
   async getThreadReplies(parentMessageId: string, limit = 100): Promise<(ChatMessage & { author: User })[]> {

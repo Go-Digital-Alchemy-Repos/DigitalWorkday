@@ -1,0 +1,156 @@
+You are working in an existing full-stack React app that uses Tailwind CSS and shadcn/ui components located at:
+client/src/components/ui/*
+
+Goal:
+Perform a non-destructive, visually stunning “premium reskin” by upgrading the design system (tokens, surfaces, typography, depth, motion) and updating shadcn/ui component classNames WITHOUT changing component APIs or breaking imports. Existing screens should automatically look better, with a custom designed feel beyond “default shadcn.”
+
+Hard rules:
+- Do NOT change component names, exports, import paths, or prop signatures.
+- Do NOT require refactors across the app.
+- Keep shadcn token compatibility (background/foreground, primary, secondary, border, ring, etc.)
+- Prefer editing className strings + CSS variables; avoid large file churn.
+- Ensure light + dark mode both look premium.
+- Add “Status Chips” (CRM-friendly) and “Card Specular Highlight” styling.
+
+Phase 0 — Locate global CSS & config safely (no assumptions)
+1) Find the global CSS entrypoint used by the client (Tailwind directives + theme variables). Search in this order:
+   - client/src/index.css
+   - client/src/globals.css
+   - client/src/styles/globals.css
+   - client/src/app.css
+   - client/src/main.tsx / main.jsx for the CSS import path
+2) Confirm where Tailwind config is:
+   - tailwind.config.(js|cjs|ts)
+3) Confirm shadcn config patterns:
+   - whether the project uses the standard CSS variables approach (hsl(var(--token)))
+4) Confirm utilities location:
+   - cn() helper typically in client/src/lib/utils.ts
+5) Create a quick component inventory under client/src/components/ui to identify frequently used primitives:
+   Button, Card, Badge, Input, Textarea, Select, Dialog, Tabs, Tooltip, Avatar, Sidebar (if present)
+
+Phase 1 — Theme tokens (non-destructive, compatible)
+In the discovered global CSS file:
+1) Keep existing shadcn variables in :root and .dark:
+   --background, --foreground, --card, --card-foreground, --popover, --popover-foreground,
+   --primary, --primary-foreground, --secondary, --secondary-foreground,
+   --muted, --muted-foreground, --accent, --accent-foreground,
+   --destructive, --destructive-foreground,
+   --border, --input, --ring, --radius
+2) Add premium tokens without removing old ones:
+   --surface-0, --surface-1, --surface-2
+   --border-subtle, --border-strong
+   --shadow-soft, --shadow-medium, --shadow-float (as box-shadow strings)
+   --ring-soft, --ring-strong
+   --noise-opacity (very subtle, like 0.02–0.04)
+   --specular (a subtle highlight color used by Card)
+3) Add subtle background treatment (tasteful, not loud):
+   - Light mode: very soft gradient + optional faint noise overlay
+   - Dark mode: slightly richer gradient + optional faint noise overlay
+   - Implement noise WITHOUT external assets (use repeating-radial-gradient or similar at very low opacity)
+4) Improve global typography defaults:
+   - enable font smoothing + text rendering
+   - set consistent default line-height
+   - add font-feature-settings for Inter (liga, calt)
+   - add a utility class for tabular numbers (e.g., .tabular-nums { font-variant-numeric: tabular-nums; })
+5) Keep tokens compatible with Tailwind usage like: bg-background, text-foreground, border-border, ring-ring.
+
+Phase 2 — Add reusable “surface & depth” utilities
+In the same global CSS file (prefer @layer utilities) OR a new imported file:
+Create small utilities (must work in light & dark):
+- .bg-surface-0 { background: hsl(var(--surface-0)); }
+- .bg-surface-1 { background: hsl(var(--surface-1)); }
+- .bg-surface-2 { background: hsl(var(--surface-2)); }
+- .border-subtle { border-color: hsl(var(--border-subtle)); }
+- .border-strong { border-color: hsl(var(--border-strong)); }
+- .shadow-soft { box-shadow: var(--shadow-soft); }
+- .shadow-float { box-shadow: var(--shadow-float); }
+- .ring-soft { --tw-ring-color: hsl(var(--ring-soft)); }
+- .ring-strong { --tw-ring-color: hsl(var(--ring-strong)); }
+
+Phase 3 — Card Specular Highlight (the premium trick)
+Update client/src/components/ui/card.tsx (className only; do not change exports):
+1) Ensure Card uses a layered surface:
+   - base: bg-surface-1 (or bg-card if that’s the pattern)
+   - subtle border: border-subtle
+   - shadow-soft by default
+2) Add a “specular highlight” across the top edge:
+   - Use a pseudo-element if feasible (before:)
+   - Example intent: a thin 1px highlight line at the top that’s slightly brighter than the border
+   - Keep it subtle in light and dark
+3) For interactive cards (if a Card is clickable), add a hover state:
+   - slight translateY(-1px) or shadow-float on hover
+   - transition-shadow/transform 150–220ms
+4) Do not force hover-lift on every card if it breaks layouts; use a class like “card-interactive” utility or apply hover styles when Card has a “group” wrapper. If uncertain, keep hover effect subtle and safe.
+
+Phase 4 — Upgrade core shadcn components (className only, no API changes)
+Update these files in client/src/components/ui with premium styling while preserving variants:
+- button.tsx:
+  - refine hover/active (subtle lift on hover, press on active)
+  - improve focus-visible ring using ring-soft/strong
+  - intentional disabled styling
+- badge.tsx:
+  - refine badge shape, border, and contrast; make it feel designed
+- input.tsx and textarea.tsx:
+  - improve focus ring, subtle inset, better placeholder colors
+- select.tsx / popover content:
+  - premium surfaces for dropdown, shadow-soft, nicer item hover
+- dialog.tsx:
+  - overlay polish (optional slight blur if available), improved animation, spacing
+- tabs.tsx:
+  - premium tabs (pill or underline), smooth active indicator
+- tooltip.tsx:
+  - improved surface, subtle shadow, better typography
+- avatar.tsx:
+  - subtle outline or ring
+- sidebar.tsx (if present):
+  - active pill, spacing rhythm, section headers, subtle hover backgrounds
+
+General styling rules:
+- Use layered surfaces (not flat gray)
+- Use 1–2 radii levels consistently
+- Use transitions broadly (colors/shadow/transform 150–220ms)
+- Maintain accessible contrast
+
+Phase 5 — Add “Status Chips” (CRM-ready, reusable)
+Implement Status Chips in a non-destructive way using the existing Badge component:
+1) Create a small helper that maps statuses to badge variants + classes WITHOUT changing Badge API:
+   - Create: client/src/components/ui/status-chip.tsx (new file)
+   - Export: StatusChip component that takes:
+     - status: string (or union if types exist)
+     - optional size
+     - optional className
+   - Internally render <Badge> with:
+     - subtle tinted background + border + text color based on status
+2) Default statuses (include but allow custom strings):
+   - Lead, Prospect, Active, Won, Lost, Paused, Archived
+3) Make chips look premium:
+   - pill shape, subtle border, slightly translucent background
+   - consistent icon option (optional) using lucide (tiny dot or circle) but keep optional
+4) Ensure both light/dark look good and contrast remains readable.
+
+Phase 6 — Motion polish
+1) Ensure tailwindcss-animate is applied where relevant (dialog/popover/tabs).
+2) Add consistent transition utilities to interactive elements.
+3) Do NOT introduce framer-motion unless it’s already installed; keep it CSS-based otherwise.
+
+Phase 7 — Design System QA page/route
+Create an internal “Design System” page that renders:
+- Buttons (all variants/sizes)
+- Badges and StatusChip examples
+- Inputs/Textareas/Selects
+- Cards (static + interactive card demo with specular highlight)
+- Tabs
+- Dialog demo
+- Tooltip demo
+- Sidebar mock section if sidebar exists
+
+Routing:
+- If TanStack Router/React Router exists, add a route /design-system
+- If routing is not obvious, add a temporary link from an existing dev/admin area
+- Keep it simple and safe.
+
+Phase 8 — Safety checks
+- Run lint/typecheck/build
+- Fix any cn()/class merge issues
+- Ensure no breaking changes to component exports or imports
+- Summarize changed files and what visual system improvements were applied.
