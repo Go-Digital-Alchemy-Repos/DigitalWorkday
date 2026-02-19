@@ -1544,30 +1544,95 @@ export default function ClientDetailPage() {
             </div>
 
             {client.projects && client.projects.length > 0 ? (
-              <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-                {client.projects.map((project) => (
-                  <Link key={project.id} href={`/projects/${project.id}`}>
-                    <Card className="cursor-pointer hover-elevate" data-testid={`card-project-${project.id}`}>
-                      <CardHeader className="pb-2">
-                        <div className="flex items-center gap-2">
-                          <div
-                            className="h-3 w-3 rounded-sm"
-                            style={{ backgroundColor: project.color || "#3B82F6" }}
-                          />
-                          <CardTitle className="text-base">{project.name}</CardTitle>
+              (() => {
+                const activeProjects = client.projects.filter((p: any) => p.status !== "archived");
+                const archivedProjects = client.projects.filter((p: any) => p.status === "archived");
+                return (
+                  <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <h3 className="text-sm font-medium">Active Projects</h3>
+                        <Badge variant="secondary" className="text-xs">{activeProjects.length}</Badge>
+                      </div>
+                      {activeProjects.length > 0 ? (
+                        <div className="space-y-3">
+                          {activeProjects.map((project: any) => (
+                            <Link key={project.id} href={`/projects/${project.id}`}>
+                              <Card className="cursor-pointer hover-elevate" data-testid={`card-project-${project.id}`}>
+                                <CardHeader className="pb-2">
+                                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <div className="flex items-center gap-2">
+                                      <div
+                                        className="h-3 w-3 rounded-sm shrink-0"
+                                        style={{ backgroundColor: project.color || "#3B82F6" }}
+                                      />
+                                      <CardTitle className="text-base">{project.name}</CardTitle>
+                                    </div>
+                                    <Badge variant="outline" className="text-xs capitalize shrink-0">{project.status || "active"}</Badge>
+                                  </div>
+                                </CardHeader>
+                                <CardContent>
+                                  {project.description && (
+                                    <p className="text-sm text-muted-foreground line-clamp-2">
+                                      {getPreviewText(project.description)}
+                                    </p>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            </Link>
+                          ))}
                         </div>
-                      </CardHeader>
-                      <CardContent>
-                        {project.description && (
-                          <p className="text-sm text-muted-foreground line-clamp-2">
-                            {getPreviewText(project.description)}
-                          </p>
-                        )}
-                      </CardContent>
-                    </Card>
-                  </Link>
-                ))}
-              </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-8 text-center border border-dashed rounded-md">
+                          <FolderKanban className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                          <p className="text-sm text-muted-foreground">No active projects</p>
+                        </div>
+                      )}
+                    </div>
+
+                    <div>
+                      <div className="flex items-center gap-2 mb-3">
+                        <h3 className="text-sm font-medium text-muted-foreground">Archived Projects</h3>
+                        <Badge variant="secondary" className="text-xs">{archivedProjects.length}</Badge>
+                      </div>
+                      {archivedProjects.length > 0 ? (
+                        <div className="space-y-3">
+                          {archivedProjects.map((project: any) => (
+                            <Link key={project.id} href={`/projects/${project.id}`}>
+                              <Card className="cursor-pointer hover-elevate opacity-75" data-testid={`card-project-${project.id}`}>
+                                <CardHeader className="pb-2">
+                                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                                    <div className="flex items-center gap-2">
+                                      <div
+                                        className="h-3 w-3 rounded-sm shrink-0"
+                                        style={{ backgroundColor: project.color || "#3B82F6" }}
+                                      />
+                                      <CardTitle className="text-base">{project.name}</CardTitle>
+                                    </div>
+                                    <Badge variant="outline" className="text-xs capitalize shrink-0">archived</Badge>
+                                  </div>
+                                </CardHeader>
+                                <CardContent>
+                                  {project.description && (
+                                    <p className="text-sm text-muted-foreground line-clamp-2">
+                                      {getPreviewText(project.description)}
+                                    </p>
+                                  )}
+                                </CardContent>
+                              </Card>
+                            </Link>
+                          ))}
+                        </div>
+                      ) : (
+                        <div className="flex flex-col items-center justify-center py-8 text-center border border-dashed rounded-md">
+                          <FolderKanban className="h-8 w-8 text-muted-foreground/50 mb-2" />
+                          <p className="text-sm text-muted-foreground">No archived projects</p>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+                );
+              })()
             ) : (
               <div className="flex flex-col items-center justify-center py-12 text-center">
                 <FolderKanban className="h-12 w-12 text-muted-foreground/50 mb-3" />
