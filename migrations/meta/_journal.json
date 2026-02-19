@@ -148,6 +148,13 @@
       "when": 1771476462551,
       "tag": "0020_bizarre_vulture",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "7",
+      "when": 1771483265447,
+      "tag": "0021_tranquil_dragon_man",
+      "breakpoints": true
     }
   ]
 }

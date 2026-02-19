@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
 import { useRoute, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -50,6 +50,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { Checkbox } from "@/components/ui/checkbox";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -81,6 +82,7 @@ import {
   GitBranch,
   X,
   Tag,
+  UserPlus,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
@@ -129,6 +131,12 @@ const updateClientSchema = z.object({
   state: z.string().optional(),
   postalCode: z.string().optional(),
   country: z.string().optional(),
+  mailingAddressLine1: z.string().optional(),
+  mailingAddressLine2: z.string().optional(),
+  mailingCity: z.string().optional(),
+  mailingState: z.string().optional(),
+  mailingPostalCode: z.string().optional(),
+  mailingCountry: z.string().optional(),
   primaryContactName: z.string().optional(),
   primaryContactEmail: z.string().optional(),
   primaryContactPhone: z.string().optional(),
@@ -271,6 +279,8 @@ export default function ClientDetailPage() {
   const [editingDivision, setEditingDivision] = useState<ClientDivision | null>(null);
   const [divisionMode, setDivisionMode] = useState<"create" | "edit">("create");
   const [deleteClientOpen, setDeleteClientOpen] = useState(false);
+  const [mailingSameAsPhysical, setMailingSameAsPhysical] = useState(true);
+  const [portalInviteContact, setPortalInviteContact] = useState<ClientContact | null>(null);
 
   const { user } = useAuth();
   const crmFlags = useCrmFlags();
@@ -291,6 +301,13 @@ export default function ClientDetailPage() {
     queryKey: ["/api/clients"],
     enabled: !!clientId,
   });
+
+  useEffect(() => {
+    if (client) {
+      const hasMailingData = !!(client.mailingAddressLine1 || client.mailingCity || client.mailingState || client.mailingPostalCode || client.mailingCountry);
+      setMailingSameAsPhysical(!hasMailingData);
+    }
+  }, [client?.id, client?.mailingAddressLine1, client?.mailingCity, client?.mailingState, client?.mailingPostalCode, client?.mailingCountry]);
 
   const childClients = useMemo(() => {
     if (!clientId || !allClients.length) return [];
@@ -341,6 +358,12 @@ export default function ClientDetailPage() {
           state: newData.state || null,
           postalCode: newData.postalCode || null,
           country: newData.country || null,
+          mailingAddressLine1: newData.mailingAddressLine1 || null,
+          mailingAddressLine2: newData.mailingAddressLine2 || null,
+          mailingCity: newData.mailingCity || null,
+          mailingState: newData.mailingState || null,
+          mailingPostalCode: newData.mailingPostalCode || null,
+          mailingCountry: newData.mailingCountry || null,
           primaryContactName: newData.primaryContactName || null,
           primaryContactEmail: newData.primaryContactEmail || null,
           primaryContactPhone: newData.primaryContactPhone || null,
@@ -430,6 +453,31 @@ export default function ClientDetailPage() {
     },
   });
 
+  const portalInviteMutation = useMutation({
+    mutationFn: async (contact: ClientContact) => {
+      const res = await apiRequest("POST", `/api/clients/${clientId}/users/invite`, {
+        email: contact.email,
+        firstName: contact.firstName,
+        lastName: contact.lastName || "",
+        accessLevel: "viewer",
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      toast({ title: "Portal invitation sent", description: "The contact has been invited to the client portal." });
+      setPortalInviteContact(null);
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to send invitation", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const { data: portalUsers = [], isSuccess: portalUsersLoaded } = useQuery<Array<{ userId: string; user: { email: string } }>>({
+    queryKey: ["/api/clients", clientId, "users"],
+    enabled: !!clientId,
+  });
+
   const contactForm = useForm<CreateContactForm>({
     resolver: zodResolver(createContactSchema),
     defaultValues: {
@@ -464,6 +512,12 @@ export default function ClientDetailPage() {
       state: client.state || "",
       postalCode: client.postalCode || "",
       country: client.country || "",
+      mailingAddressLine1: client.mailingAddressLine1 || "",
+      mailingAddressLine2: client.mailingAddressLine2 || "",
+      mailingCity: client.mailingCity || "",
+      mailingState: client.mailingState || "",
+      mailingPostalCode: client.mailingPostalCode || "",
+      mailingCountry: client.mailingCountry || "",
       primaryContactName: client.primaryContactName || "",
       primaryContactEmail: client.primaryContactEmail || "",
       primaryContactPhone: client.primaryContactPhone || "",
@@ -1073,9 +1127,9 @@ export default function ClientDetailPage() {
                     <CardHeader>
                       <CardTitle className="text-base flex items-center gap-2">
                         <MapPin className="h-4 w-4" />
-                        Address
+                        Physical Address
                       </CardTitle>
-                      <CardDescription>Company location and mailing address</CardDescription>
+                      <CardDescription>Primary company location</CardDescription>
                     </CardHeader>
                     <CardContent className="space-y-4">
                       <FormField
@@ -1240,6 +1294,125 @@ export default function ClientDetailPage() {
                     </CardContent>
                   </Card>
                 </div>
+
+                <Card>
+                  <CardHeader>
+                    <div className="flex items-center justify-between gap-4">
+                      <div>
+                        <CardTitle className="text-base flex items-center gap-2">
+                          <Mail className="h-4 w-4" />
+                          Mailing Address
+                        </CardTitle>
+                        <CardDescription>Separate mailing address if different from physical location</CardDescription>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <Checkbox
+                          id="mailing-same"
+                          checked={mailingSameAsPhysical}
+                          onCheckedChange={(checked) => {
+                            setMailingSameAsPhysical(!!checked);
+                            if (checked) {
+                              clientForm.setValue("mailingAddressLine1", "", { shouldDirty: true });
+                              clientForm.setValue("mailingAddressLine2", "", { shouldDirty: true });
+                              clientForm.setValue("mailingCity", "", { shouldDirty: true });
+                              clientForm.setValue("mailingState", "", { shouldDirty: true });
+                              clientForm.setValue("mailingPostalCode", "", { shouldDirty: true });
+                              clientForm.setValue("mailingCountry", "", { shouldDirty: true });
+                            }
+                          }}
+                          data-testid="checkbox-mailing-same"
+                        />
+                        <label htmlFor="mailing-same" className="text-sm text-muted-foreground cursor-pointer select-none">
+                          Same as physical address
+                        </label>
+                      </div>
+                    </div>
+                  </CardHeader>
+                  {!mailingSameAsPhysical && (
+                    <CardContent className="space-y-4">
+                      <FormField
+                        control={clientForm.control}
+                        name="mailingAddressLine1"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Address Line 1</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Mailing street address" data-testid="input-mailing-address-1" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={clientForm.control}
+                        name="mailingAddressLine2"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel>Address Line 2</FormLabel>
+                            <FormControl>
+                              <Input {...field} placeholder="Suite, P.O. Box, etc." data-testid="input-mailing-address-2" />
+                            </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <div className="grid grid-cols-2 gap-4">
+                        <FormField
+                          control={clientForm.control}
+                          name="mailingCity"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>City</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="City" data-testid="input-mailing-city" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={clientForm.control}
+                          name="mailingState"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>State / Province</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="State" data-testid="input-mailing-state" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={clientForm.control}
+                          name="mailingPostalCode"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Postal Code</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="ZIP / Postal code" data-testid="input-mailing-postal-code" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                        <FormField
+                          control={clientForm.control}
+                          name="mailingCountry"
+                          render={({ field }) => (
+                            <FormItem>
+                              <FormLabel>Country</FormLabel>
+                              <FormControl>
+                                <Input {...field} placeholder="Country" data-testid="input-mailing-country" />
+                              </FormControl>
+                              <FormMessage />
+                            </FormItem>
+                          )}
+                        />
+                      </div>
+                    </CardContent>
+                  )}
+                </Card>
 
                 {(divisions.length > 0 || childClients.length > 0) && (
                   <Card>
@@ -1493,6 +1666,23 @@ export default function ClientDetailPage() {
                             <span>{contact.phone}</span>
                           </div>
                         )}
+                        {contact.email && portalUsersLoaded && !portalUsers.some((pu: any) => pu.user?.email === contact.email) && (
+                          <Button
+                            variant="outline"
+                            size="sm"
+                            className="mt-2"
+                            onClick={() => setPortalInviteContact(contact)}
+                            data-testid={`button-invite-portal-${contact.id}`}
+                          >
+                            <UserPlus className="h-3.5 w-3.5 mr-1.5" />
+                            Invite to Portal
+                          </Button>
+                        )}
+                        {contact.email && portalUsersLoaded && portalUsers.some((pu: any) => pu.user?.email === contact.email) && (
+                          <Badge variant="secondary" className="mt-2">
+                            Portal User
+                          </Badge>
+                        )}
                       </div>
                     </CardContent>
                   </Card>
@@ -1508,6 +1698,50 @@ export default function ClientDetailPage() {
                 </Button>
               </div>
             )}
+
+            <Dialog
+              open={!!portalInviteContact}
+              onOpenChange={(open) => { if (!open) setPortalInviteContact(null); }}
+            >
+              <DialogContent>
+                <DialogHeader>
+                  <DialogTitle>Invite to Client Portal</DialogTitle>
+                </DialogHeader>
+                {portalInviteContact && (
+                  <div className="space-y-4">
+                    <p className="text-sm text-muted-foreground">
+                      Send a portal invitation to <span className="font-medium text-foreground">{portalInviteContact.firstName} {portalInviteContact.lastName}</span> at{" "}
+                      <span className="font-medium text-foreground">{portalInviteContact.email}</span>?
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      They will receive an email with a link to set up their portal account and will be able to view project updates, approve deliverables, and communicate with your team.
+                    </p>
+                    <div className="flex justify-end gap-2">
+                      <Button variant="outline" onClick={() => setPortalInviteContact(null)} data-testid="button-cancel-invite">
+                        Cancel
+                      </Button>
+                      <Button
+                        onClick={() => portalInviteMutation.mutate(portalInviteContact)}
+                        disabled={portalInviteMutation.isPending}
+                        data-testid="button-confirm-invite"
+                      >
+                        {portalInviteMutation.isPending ? (
+                          <>
+                            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                            Sending...
+                          </>
+                        ) : (
+                          <>
+                            <Send className="h-4 w-4 mr-2" />
+                            Send Invitation
+                          </>
+                        )}
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </DialogContent>
+            </Dialog>
 
             <Dialog 
               open={editContactOpen} 
