@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from "react";
+import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Button } from "@/components/ui/button";
@@ -7,7 +8,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
-import { ClientDrawer, ClientProfileDrawer } from "@/features/clients";
+import { ClientDrawer } from "@/features/clients";
 import {
   Plus,
   Building2,
@@ -483,7 +484,7 @@ export default function ClientsPage() {
     "name-asc"
   );
   const { views, saveView, deleteView } = useSavedViews("clients-saved-views");
-  const [profileDrawerClientId, setProfileDrawerClientId] = useState<string | null>(null);
+  const [, navigate] = useLocation();
 
   const {
     data: hierarchyClients,
@@ -935,7 +936,7 @@ export default function ClientsPage() {
                 isSelected={selectedIds.has(client.id)}
                 onSelect={handleSelectClient}
                 showCheckbox={selectedIds.size > 0}
-                onOpenProfile={setProfileDrawerClientId}
+                onOpenProfile={(id) => navigate(`/clients/${id}`)}
               />
             ))}
           </div>
@@ -950,7 +951,7 @@ export default function ClientsPage() {
                 onSelect={handleSelectClient}
                 showCheckbox={selectedIds.size > 0}
                 compact={density === "compact"}
-                onOpenProfile={setProfileDrawerClientId}
+                onOpenProfile={(id) => navigate(`/clients/${id}`)}
               />
             ))}
           </Card>
@@ -992,12 +993,6 @@ export default function ClientsPage() {
           }
         />
       )}
-
-      <ClientProfileDrawer
-        open={!!profileDrawerClientId}
-        onOpenChange={(open) => { if (!open) setProfileDrawerClientId(null); }}
-        clientId={profileDrawerClientId}
-      />
 
       <ClientDrawer
         open={createDrawerOpen}
