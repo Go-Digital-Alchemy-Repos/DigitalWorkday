@@ -16,19 +16,35 @@ interface RowResult {
 interface TenantLookups {
   tenantId: string;
   workspaceId: string;
-  usersByEmail: Map<string, { id: string; email: string; role: string }>;
+  usersByEmail: Map<string, { id: string; email: string; role: string; name?: string | null; firstName?: string | null; lastName?: string | null }>;
+  usersByName: Map<string, { id: string; email: string; role: string; name?: string | null; firstName?: string | null; lastName?: string | null }>;
   clientsByName: Map<string, { id: string; companyName: string; parentClientId: string | null }>;
   projectsByName: Map<string, { id: string; name: string; clientId: string | null }>;
   tasksByKey: Map<string, { id: string; title: string; projectId: string | null }>;
+  tasksByTitle: Map<string, { id: string; title: string; projectId: string | null }>;
+  existingTimeEntryKeys: Set<string>;
 }
 
 async function buildLookups(tenantId: string): Promise<TenantLookups> {
   const requestId = undefined;
   const workspaceId = await storage.getPrimaryWorkspaceIdOrFail(tenantId, requestId);
 
-  const tenantUsers = await db.select({ id: users.id, email: users.email, role: users.role })
-    .from(users).where(eq(users.tenantId, tenantId));
+  const tenantUsers = await db.select({
+    id: users.id, email: users.email, role: users.role,
+    name: users.name, firstName: users.firstName, lastName: users.lastName,
+  }).from(users).where(eq(users.tenantId, tenantId));
   const usersByEmail = new Map(tenantUsers.map(u => [u.email.toLowerCase(), u]));
+
+  const usersByName = new Map<string, typeof tenantUsers[0]>();
+  for (const u of tenantUsers) {
+    const fullName = u.name?.trim() || [u.firstName, u.lastName].filter(Boolean).join(" ");
+    if (fullName) {
+      usersByName.set(fullName.toLowerCase(), u);
+    }
+    if (u.firstName && u.lastName) {
+      usersByName.set(`${u.firstName} ${u.lastName}`.toLowerCase(), u);
+    }
+  }
 
   const tenantClients = await db.select({ id: clients.id, companyName: clients.companyName, parentClientId: clients.parentClientId })
     .from(clients).where(eq(clients.tenantId, tenantId));
@@ -42,7 +58,28 @@ async function buildLookups(tenantId: string): Promise<TenantLookups> {
     .from(tasks).where(eq(tasks.tenantId, tenantId));
   const tasksByKey = new Map(tenantTasks.map(t => [`${(t.projectId || "none")}::${t.title.toLowerCase()}`, t]));
 
-  return { tenantId, workspaceId, usersByEmail, clientsByName, projectsByName, tasksByKey };
+  const tasksByTitle = new Map<string, typeof tenantTasks[0]>();
+  for (const t of tenantTasks) {
+    const key = t.title.toLowerCase();
+    if (!tasksByTitle.has(key)) {
+      tasksByTitle.set(key, t);
+    }
+  }
+
+  const existingEntries = await db.select({
+    userId: timeEntries.userId,
+    startTime: timeEntries.startTime,
+    endTime: timeEntries.endTime,
+    durationSeconds: timeEntries.durationSeconds,
+  }).from(timeEntries).where(eq(timeEntries.tenantId, tenantId));
+  const existingTimeEntryKeys = new Set(
+    existingEntries.map(e => {
+      const endStr = e.endTime ? e.endTime.toISOString() : "none";
+      return `${e.userId}::${e.startTime.toISOString()}::${endStr}::${e.durationSeconds}`;
+    })
+  );
+
+  return { tenantId, workspaceId, usersByEmail, usersByName, clientsByName, projectsByName, tasksByKey, tasksByTitle, existingTimeEntryKeys };
 }
 
 export async function validateJob(job: ImportJob): Promise<ValidationSummary> {
@@ -136,8 +173,11 @@ function collectMissingDeps(
 
   if (entityType === "time_entries") {
     const userEmail = mapped.userEmail?.trim();
-    if (userEmail && !lookups.usersByEmail.has(userEmail.toLowerCase())) {
-      const key = userEmail.toLowerCase();
+    const userName = mapped.userName?.trim();
+    const userResolved = (userEmail && lookups.usersByEmail.has(userEmail.toLowerCase()))
+      || (userName && lookups.usersByName.has(userName.toLowerCase()));
+    if (!userResolved) {
+      const key = (userEmail || userName || "unknown").toLowerCase();
       if (!missingUsers.has(key)) missingUsers.set(key, []);
       missingUsers.get(key)!.push(rowNum);
     }
@@ -227,21 +267,67 @@ function validateUser(m: Record<string, string>, row: number, lookups: TenantLoo
   return { action: "create" };
 }
 
-function validateTimeEntry(m: Record<string, string>, row: number, lookups: TenantLookups): RowResult {
-  if (!m.userEmail?.trim()) return { action: "skip", error: { row, field: "userEmail", code: "REQUIRED", message: "User email is required" } };
-  const user = lookups.usersByEmail.get(m.userEmail.trim().toLowerCase());
-  if (!user) return { action: "create", error: { row, field: "userEmail", code: "USER_NOT_FOUND", message: `User "${m.userEmail}" not found` } };
+function resolveUserForTimeEntry(m: Record<string, string>, lookups: TenantLookups) {
+  const userEmail = m.userEmail?.trim().toLowerCase();
+  if (userEmail) {
+    const user = lookups.usersByEmail.get(userEmail);
+    if (user) return user;
+  }
+  const userName = m.userName?.trim().toLowerCase();
+  if (userName) {
+    const user = lookups.usersByName.get(userName);
+    if (user) return user;
+  }
+  return null;
+}
 
-  if (!m.startTime?.trim()) return { action: "skip", error: { row, field: "startTime", code: "REQUIRED", message: "Start time is required" } };
-  const startDate = new Date(m.startTime);
-  if (isNaN(startDate.getTime())) return { action: "skip", error: { row, field: "startTime", code: "INVALID_DATE", message: `Invalid start time: "${m.startTime}"` } };
+function computeDurationSeconds(m: Record<string, string>, startTime: Date, endTime: Date | null): number {
+  if (endTime) {
+    return Math.round((endTime.getTime() - startTime.getTime()) / 1000);
+  }
+  if (m.durationMinutes?.trim()) {
+    const mins = parseFloat(m.durationMinutes);
+    if (!isNaN(mins)) return Math.round(mins * 60);
+  }
+  if (m.durationHours?.trim()) {
+    const hours = parseFloat(m.durationHours);
+    if (!isNaN(hours)) return Math.round(hours * 3600);
+  }
+  return 0;
+}
+
+function validateTimeEntry(m: Record<string, string>, row: number, lookups: TenantLookups): RowResult {
+  const userEmail = m.userEmail?.trim();
+  const userName = m.userName?.trim();
+  if (!userEmail && !userName) return { action: "skip", error: { row, field: "userEmail", code: "REQUIRED", message: "User email or user name is required" } };
+
+  const user = resolveUserForTimeEntry(m, lookups);
+  if (!user) return { action: "create", error: { row, field: userEmail ? "userEmail" : "userName", code: "USER_NOT_FOUND", message: `User "${userEmail || userName}" not found` } };
+
+  const startRaw = m.startTime?.trim() || m.date?.trim();
+  if (!startRaw) return { action: "skip", error: { row, field: "startTime", code: "REQUIRED", message: "Start time or date is required" } };
+  const startDate = new Date(startRaw);
+  if (isNaN(startDate.getTime())) return { action: "skip", error: { row, field: "startTime", code: "INVALID_DATE", message: `Invalid start time: "${startRaw}"` } };
+
+  let endTime: Date | null = null;
+  if (m.endTime?.trim()) {
+    endTime = new Date(m.endTime);
+    if (isNaN(endTime.getTime())) endTime = null;
+  }
 
   let warning: ValidationWarning | undefined;
-  if (m.endTime?.trim()) {
-    const endDate = new Date(m.endTime);
-    if (!isNaN(endDate.getTime()) && endDate <= startDate) {
-      warning = { row, field: "endTime", code: "END_BEFORE_START", message: "End time is before or equal to start time" };
-    }
+  if (endTime && endTime <= startDate) {
+    warning = { row, field: "endTime", code: "END_BEFORE_START", message: "End time is before or equal to start time" };
+  }
+
+  const durationSeconds = computeDurationSeconds(m, startDate, endTime);
+  if (!endTime && durationSeconds > 0) {
+    endTime = new Date(startDate.getTime() + durationSeconds * 1000);
+  }
+  const endStr = endTime ? endTime.toISOString() : "none";
+  const dedupKey = `${user.id}::${startDate.toISOString()}::${endStr}::${durationSeconds}`;
+  if (lookups.existingTimeEntryKeys.has(dedupKey)) {
+    return { action: "skip" };
   }
 
   return { action: "create", warning };
@@ -460,7 +546,7 @@ function getPrimaryKeyForRow(entityType: EntityType, mapped: Record<string, stri
     case "tasks": return mapped.title || "";
     case "users":
     case "admins": return mapped.email || "";
-    case "time_entries": return `${mapped.userEmail || ""}@${mapped.startTime || ""}`;
+    case "time_entries": return `${mapped.userEmail || mapped.userName || ""}@${mapped.startTime || ""}`;
     default: return "";
   }
 }
@@ -670,19 +756,19 @@ async function importUser(m: Record<string, string>, row: number, lookups: Tenan
 }
 
 async function importTimeEntry(m: Record<string, string>, row: number, lookups: TenantLookups): Promise<RowResult> {
-  const userEmail = m.userEmail?.trim().toLowerCase();
-  if (!userEmail) return { action: "skip", error: { row, field: "userEmail", code: "REQUIRED", message: "User email is required" } };
+  const user = resolveUserForTimeEntry(m, lookups);
+  if (!user) {
+    const identifier = m.userEmail?.trim() || m.userName?.trim();
+    return { action: "skip", error: { row, field: "userEmail", code: "USER_NOT_FOUND", message: `User "${identifier}" not found` } };
+  }
 
-  const user = lookups.usersByEmail.get(userEmail);
-  if (!user) return { action: "skip", error: { row, field: "userEmail", code: "USER_NOT_FOUND", message: `User "${userEmail}" not found` } };
+  const startRaw = m.startTime?.trim() || m.date?.trim();
+  if (!startRaw) return { action: "skip", error: { row, field: "startTime", code: "REQUIRED", message: "Start time or date is required" } };
 
-  if (!m.startTime?.trim()) return { action: "skip", error: { row, field: "startTime", code: "REQUIRED", message: "Start time is required" } };
-
-  const startTime = new Date(m.startTime);
+  const startTime = new Date(startRaw);
   if (isNaN(startTime.getTime())) return { action: "skip", error: { row, field: "startTime", code: "INVALID_DATE", message: `Invalid start time` } };
 
   let endTime: Date | null = null;
-  let durationSeconds = 0;
 
   if (m.endTime?.trim()) {
     endTime = new Date(m.endTime);
@@ -692,14 +778,16 @@ async function importTimeEntry(m: Record<string, string>, row: number, lookups: 
     }
   }
 
-  if (endTime) {
-    durationSeconds = Math.round((endTime.getTime() - startTime.getTime()) / 1000);
-  } else if (m.durationHours?.trim()) {
-    const hours = parseFloat(m.durationHours);
-    if (!isNaN(hours)) {
-      durationSeconds = Math.round(hours * 3600);
-      endTime = new Date(startTime.getTime() + durationSeconds * 1000);
-    }
+  const durationSeconds = computeDurationSeconds(m, startTime, endTime);
+
+  if (!endTime && durationSeconds > 0) {
+    endTime = new Date(startTime.getTime() + durationSeconds * 1000);
+  }
+
+  const endStr = endTime ? endTime.toISOString() : "none";
+  const dedupKey = `${user.id}::${startTime.toISOString()}::${endStr}::${durationSeconds}`;
+  if (lookups.existingTimeEntryKeys.has(dedupKey)) {
+    return { action: "skip" };
   }
 
   let clientId: string | null = null;
@@ -724,14 +812,29 @@ async function importTimeEntry(m: Record<string, string>, row: number, lookups: 
   }
 
   let taskId: string | null = null;
-  if (m.taskTitle?.trim() && projectId) {
-    const key = `${projectId}::${m.taskTitle.trim().toLowerCase()}`;
-    const task = lookups.tasksByKey.get(key);
-    if (task) taskId = task.id;
+  if (m.taskTitle?.trim()) {
+    if (projectId) {
+      const key = `${projectId}::${m.taskTitle.trim().toLowerCase()}`;
+      const task = lookups.tasksByKey.get(key);
+      if (task) taskId = task.id;
+    }
+    if (!taskId) {
+      const task = lookups.tasksByTitle.get(m.taskTitle.trim().toLowerCase());
+      if (task) taskId = task.id;
+    }
   }
 
   const scope = m.scope?.trim().toLowerCase();
-  const entryScope = (scope === "internal" || scope === "out_of_scope") ? scope : "in_scope";
+  let entryScope: string;
+  if (scope === "internal" || scope === "out_of_scope") {
+    entryScope = scope;
+  } else if (scope === "true" || scope === "yes") {
+    entryScope = "in_scope";
+  } else if (scope === "false" || scope === "no") {
+    entryScope = "out_of_scope";
+  } else {
+    entryScope = "in_scope";
+  }
 
   await db.insert(timeEntries).values({
     tenantId: lookups.tenantId,
@@ -745,8 +848,10 @@ async function importTimeEntry(m: Record<string, string>, row: number, lookups: 
     startTime,
     endTime,
     durationSeconds,
-    isManual: m.isManual?.trim().toLowerCase() === "true" || true,
+    isManual: m.isManual?.trim() ? m.isManual.trim().toLowerCase() === "true" : true,
   });
+
+  lookups.existingTimeEntryKeys.add(dedupKey);
 
   return { action: "create" };
 }

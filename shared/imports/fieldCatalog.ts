@@ -80,11 +80,13 @@ export const ADMIN_FIELDS: FieldDefinition[] = [
 ];
 
 export const TIME_ENTRY_FIELDS: FieldDefinition[] = [
-  { key: "userEmail", label: "User Email", type: "email", required: true, aliases: ["user_email", "email", "user", "employee_email"], examples: ["john@company.com"], isResolver: true },
-  { key: "startTime", label: "Start Time", type: "datetime", required: true, aliases: ["start_time", "start", "date", "startDate", "start_date", "entry_date"], examples: ["2026-01-28T09:00:00Z"] },
+  { key: "userEmail", label: "User Email", type: "email", required: false, aliases: ["user_email", "email", "employee_email"], examples: ["john@company.com"], isResolver: true },
+  { key: "userName", label: "User Name", type: "string", required: false, aliases: ["user_name", "employee_name", "employee", "full_name", "fullName", "name"], examples: ["John Doe"], isResolver: true },
+  { key: "startTime", label: "Start Time", type: "datetime", required: true, aliases: ["start_time", "start", "startDate", "start_date", "entry_date"], examples: ["2026-01-28T09:00:00Z"] },
   { key: "endTime", label: "End Time", type: "datetime", required: false, aliases: ["end_time", "end", "endDate", "end_date"], examples: ["2026-01-28T17:00:00Z"] },
-  { key: "durationHours", label: "Duration (hours)", type: "number", required: false, aliases: ["duration_hours", "hours", "billableHours", "billable_hours", "duration"], examples: ["8"] },
-  { key: "description", label: "Description", type: "string", required: false, aliases: ["desc", "notes", "task", "work_description"], examples: ["Client meeting"] },
+  { key: "durationMinutes", label: "Duration (Minutes)", type: "number", required: false, aliases: ["duration_minutes", "minutes", "duration(minutes)", "durationminutes", "total_minutes"], examples: ["120"] },
+  { key: "durationHours", label: "Duration (Hours)", type: "number", required: false, aliases: ["duration_hours", "hours", "billableHours", "billable_hours", "duration", "total_hours"], examples: ["8"] },
+  { key: "description", label: "Description", type: "string", required: false, aliases: ["desc", "notes", "work_description"], examples: ["Client meeting"] },
   { key: "scope", label: "Scope", type: "enum", required: false, aliases: ["billable_scope", "entry_scope", "billable"], enumValues: ["in_scope", "out_of_scope", "internal"], examples: ["in_scope"] },
   { key: "clientName", label: "Client Name", type: "string", required: false, aliases: ["client_name", "client", "company", "companyName"], examples: ["Acme Corp"], isResolver: true },
   { key: "projectName", label: "Project Name", type: "string", required: false, aliases: ["project_name", "project"], examples: ["Website Redesign"], isResolver: true },
@@ -94,6 +96,7 @@ export const TIME_ENTRY_FIELDS: FieldDefinition[] = [
   { key: "lastName", label: "Last Name", type: "string", required: false, aliases: ["last_name", "last", "family_name", "surname"], examples: ["Doe"] },
   { key: "role", label: "Role", type: "enum", required: false, aliases: ["user_role", "employee_role"], enumValues: ["employee", "admin", "manager", "contractor"], examples: ["employee"] },
   { key: "parentClientName", label: "Parent Client", type: "string", required: false, aliases: ["parent_client", "parent_company", "parent", "parentClient", "parent_client_name", "parentClientName", "division_of", "divisionOf", "client_group", "clientGroup"], examples: ["Parent Corp"], isResolver: true },
+  { key: "date", label: "Date", type: "datetime", required: false, aliases: ["entry_date", "day", "work_date"], examples: ["2026-01-28"] },
 ];
 
 export const ENTITY_FIELD_MAP: Record<EntityType, FieldDefinition[]> = {
