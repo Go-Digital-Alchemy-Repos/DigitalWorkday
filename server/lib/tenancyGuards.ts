@@ -14,6 +14,8 @@
  * in development and throw in test mode to catch issues early.
  */
 
+import { getTenancyEnforcementMode } from "../middleware/tenancyEnforcement";
+
 const isDevelopment = process.env.NODE_ENV !== "production";
 const isTest = process.env.NODE_ENV === "test";
 const GUARD_MODE = process.env.TENANCY_GUARD_MODE || "warn"; // "warn" | "throw" | "off"
@@ -84,12 +86,83 @@ export function assertTenantIdOnInsert(
 ): void {
   if (!payload.tenantId) {
     const message = `Missing tenant_id in insert to ${tableName}`;
+    const mode = getTenancyEnforcementMode();
+
+    if (mode === "strict") {
+      throw new Error(`[TenancyGuard:STRICT] ${message}. Blocked: strict mode forbids tenant-less writes.`);
+    }
+
     guardViolation(message, { requestId, table: tableName });
     
-    // Always throw in test mode to catch regressions early
     if (isTest) {
       throw new Error(`[TenancyGuard] ${message}`);
     }
+  }
+}
+
+export const TENANT_OWNED_TABLES = [
+  "projects",
+  "tasks",
+  "clients",
+  "time_entries",
+  "active_timers",
+  "comments",
+  "subtasks",
+  "task_attachments",
+  "chat_channels",
+  "chat_messages",
+  "chat_dm_threads",
+  "activity_log",
+  "sections",
+  "tags",
+] as const;
+
+export function assertTenantScopedRead(
+  entityTenantId: string | null | undefined,
+  expectedTenantId: string,
+  entityType: string,
+  entityId: string,
+  requestId?: string
+): void {
+  if (!entityTenantId) {
+    const mode = getTenancyEnforcementMode();
+    const message = `${entityType}:${entityId} has NULL tenantId — data integrity issue`;
+    if (mode === "strict") {
+      throw new Error(`[TenancyGuard:STRICT] ${message}`);
+    }
+    guardViolation(message, { requestId, entityType, entityId });
+    return;
+  }
+
+  if (entityTenantId !== expectedTenantId) {
+    throw new Error(
+      `[TenancyGuard] Cross-tenant read blocked: ${entityType}:${entityId} belongs to tenant ${entityTenantId}, not ${expectedTenantId}`
+    );
+  }
+}
+
+export function assertTenantScopedWrite(
+  payload: Record<string, unknown>,
+  expectedTenantId: string,
+  tableName: string,
+  requestId?: string
+): void {
+  const payloadTenantId = payload.tenantId as string | undefined;
+
+  if (!payloadTenantId) {
+    const mode = getTenancyEnforcementMode();
+    const message = `Write to ${tableName} without tenantId`;
+    if (mode === "strict") {
+      throw new Error(`[TenancyGuard:STRICT] ${message}. Blocked.`);
+    }
+    guardViolation(message, { requestId, table: tableName });
+    return;
+  }
+
+  if (payloadTenantId !== expectedTenantId) {
+    throw new Error(
+      `[TenancyGuard] Cross-tenant write blocked: payload tenantId ${payloadTenantId} does not match expected ${expectedTenantId} for ${tableName}`
+    );
   }
 }
 
@@ -244,10 +317,13 @@ export function assertTenantScopedRoom(
 export default {
   requireTenantContext,
   assertTenantIdOnInsert,
+  assertTenantScopedRead,
+  assertTenantScopedWrite,
   assertNoClientTenantId,
   warnIfWorkspaceVisibility,
   assertTenantOwnership,
   logStorageOperation,
   assertChatMembership,
   assertTenantScopedRoom,
+  TENANT_OWNED_TABLES,
 };
