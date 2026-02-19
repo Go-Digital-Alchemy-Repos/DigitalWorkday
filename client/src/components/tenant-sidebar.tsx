@@ -1,4 +1,4 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useTenantTheme } from "@/lib/tenant-theme-loader";
@@ -23,7 +23,25 @@ import {
   FileStack,
   ChevronsDown,
   Pin,
+  GripVertical,
 } from "lucide-react";
+import {
+  DndContext,
+  closestCenter,
+  KeyboardSensor,
+  PointerSensor,
+  useSensor,
+  useSensors,
+  type DragEndEvent,
+} from "@dnd-kit/core";
+import {
+  arrayMove,
+  SortableContext,
+  sortableKeyboardCoordinates,
+  useSortable,
+  verticalListSortingStrategy,
+} from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
 import appLogo from "@assets/Symbol_1767994625714.png";
 import {
   Sidebar,
@@ -51,6 +69,86 @@ import { TeamDrawer } from "@/features/teams";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import type { Project, Team, Workspace, Client, ClientDivision } from "@shared/schema";
+
+interface UiPreferences {
+  sidebarProjectOrder?: string[] | null;
+}
+
+interface SortableProjectItemProps {
+  project: Project;
+  isActive: boolean;
+  clientName: string | null;
+  divisionName: string | null;
+}
+
+function SortableProjectItem({ project, isActive, clientName, divisionName }: SortableProjectItemProps) {
+  const {
+    attributes,
+    listeners,
+    setNodeRef,
+    transform,
+    transition,
+    isDragging,
+  } = useSortable({ id: project.id });
+
+  const style: React.CSSProperties = {
+    transform: CSS.Transform.toString(transform),
+    transition,
+    opacity: isDragging ? 0.5 : 1,
+  };
+
+  return (
+    <li
+      ref={setNodeRef}
+      style={style}
+      data-slot="sidebar-menu-item"
+      data-sidebar="menu-item"
+      className="group/menu-item relative flex items-center"
+    >
+      <span
+        className="flex items-center justify-center shrink-0 cursor-grab active:cursor-grabbing text-muted-foreground/0 group-hover/menu-item:text-muted-foreground transition-colors touch-none px-0.5 py-1"
+        aria-label="Drag to reorder"
+        data-testid={`drag-handle-project-${project.id}`}
+        {...attributes}
+        {...listeners}
+      >
+        <GripVertical className="h-3 w-3" />
+      </span>
+      <SidebarMenuButton
+        asChild
+        isActive={isActive}
+        className="flex-1"
+      >
+        <Link
+          href={`/projects/${project.id}`}
+          data-testid={`link-project-${project.id}`}
+        >
+          <div className="flex items-center gap-2 min-w-0 flex-1">
+            <div
+              className="h-3 w-3 rounded-sm shrink-0"
+              style={{ backgroundColor: project.color || "#3B82F6" }}
+            />
+            <span className="truncate flex-1">{project.name}</span>
+            {(clientName || divisionName) && (
+              <div className="flex items-center gap-1 shrink-0">
+                {clientName && (
+                  <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-client-${project.id}`}>
+                    {clientName.length > 10 ? clientName.slice(0, 10) + "\u2026" : clientName}
+                  </Badge>
+                )}
+                {divisionName && (
+                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-division-${project.id}`}>
+                    {divisionName.length > 8 ? divisionName.slice(0, 8) + "\u2026" : divisionName}
+                  </Badge>
+                )}
+              </div>
+            )}
+          </div>
+        </Link>
+      </SidebarMenuButton>
+    </li>
+  );
+}
 
 const mainNavItems = [
   { title: "Home", url: "/", icon: Home },
@@ -124,28 +222,129 @@ export function TenantSidebar() {
     return division?.name || null;
   };
 
-  const sortedProjects = useMemo(() => {
+  const { data: uiPrefs } = useQuery<UiPreferences>({
+    queryKey: ["/api/users/me/ui-preferences"],
+  });
+
+  const saveOrderMutation = useMutation({
+    mutationFn: async (order: string[]) => {
+      return apiRequest("PATCH", "/api/users/me/ui-preferences", {
+        sidebarProjectOrder: order,
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/users/me/ui-preferences"] });
+    },
+  });
+
+  const stickyProjects = useMemo(() => {
     if (!projects) return [];
     return [...projects]
-      .filter((p) => p.status !== "archived")
+      .filter((p) => p.status !== "archived" && p.stickyAt)
       .sort((a, b) => {
-        const aSticky = a.stickyAt ? new Date(a.stickyAt).getTime() : 0;
-        const bSticky = b.stickyAt ? new Date(b.stickyAt).getTime() : 0;
-        if (aSticky && !bSticky) return -1;
-        if (!aSticky && bSticky) return 1;
-        if (aSticky && bSticky) return aSticky - bSticky;
+        const aTime = a.stickyAt ? new Date(a.stickyAt).getTime() : 0;
+        const bTime = b.stickyAt ? new Date(b.stickyAt).getTime() : 0;
+        return aTime - bTime;
+      });
+  }, [projects]);
+
+  const nonStickyProjects = useMemo(() => {
+    if (!projects) return [];
+    const savedOrder = uiPrefs?.sidebarProjectOrder;
+    const nonSticky = [...projects].filter((p) => p.status !== "archived" && !p.stickyAt);
+
+    if (savedOrder && savedOrder.length > 0) {
+      const orderMap = new Map(savedOrder.map((id, idx) => [id, idx]));
+      const ordered: Project[] = [];
+      const unordered: Project[] = [];
+
+      for (const p of nonSticky) {
+        if (orderMap.has(p.id)) {
+          ordered.push(p);
+        } else {
+          unordered.push(p);
+        }
+      }
+
+      ordered.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
+      unordered.sort((a, b) => {
         const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
         const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
         return dateB - dateA;
       });
-  }, [projects]);
 
-  const visibleProjects = useMemo(
-    () => sortedProjects.slice(0, projectsLimit),
-    [sortedProjects, projectsLimit]
+      return [...ordered, ...unordered];
+    }
+
+    return nonSticky.sort((a, b) => {
+      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
+      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+      return dateB - dateA;
+    });
+  }, [projects, uiPrefs?.sidebarProjectOrder]);
+
+  const allSortedProjects = useMemo(
+    () => [...stickyProjects, ...nonStickyProjects],
+    [stickyProjects, nonStickyProjects]
   );
 
-  const hasMoreProjects = sortedProjects.length > projectsLimit;
+  const visibleProjects = useMemo(
+    () => allSortedProjects.slice(0, projectsLimit),
+    [allSortedProjects, projectsLimit]
+  );
+
+  const hasMoreProjects = allSortedProjects.length > projectsLimit;
+
+  const visibleStickyProjects = useMemo(
+    () => visibleProjects.filter((p) => p.stickyAt),
+    [visibleProjects]
+  );
+  const visibleNonStickyProjects = useMemo(
+    () => visibleProjects.filter((p) => !p.stickyAt),
+    [visibleProjects]
+  );
+
+  const nonStickyIds = useMemo(
+    () => visibleNonStickyProjects.map((p) => p.id),
+    [visibleNonStickyProjects]
+  );
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, { activationConstraint: { distance: 5 } }),
+    useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
+  );
+
+  const handleDragEnd = useCallback(
+    (event: DragEndEvent) => {
+      const { active, over } = event;
+      if (!over || active.id === over.id) return;
+
+      const visibleIds = visibleNonStickyProjects.map((p) => p.id);
+      const oldVisibleIndex = visibleIds.indexOf(active.id as string);
+      const newVisibleIndex = visibleIds.indexOf(over.id as string);
+      if (oldVisibleIndex === -1 || newVisibleIndex === -1) return;
+
+      const reorderedVisible = arrayMove(visibleIds, oldVisibleIndex, newVisibleIndex);
+      const hiddenIds = nonStickyProjects
+        .filter((p) => !visibleIds.includes(p.id))
+        .map((p) => p.id);
+      const newOrder = [...reorderedVisible, ...hiddenIds];
+
+      const previousPrefs = queryClient.getQueryData<UiPreferences>(["/api/users/me/ui-preferences"]);
+
+      queryClient.setQueryData<UiPreferences>(["/api/users/me/ui-preferences"], (prev) => ({
+        ...prev,
+        sidebarProjectOrder: newOrder,
+      }));
+
+      saveOrderMutation.mutate(newOrder, {
+        onError: () => {
+          queryClient.setQueryData(["/api/users/me/ui-preferences"], previousPrefs);
+        },
+      });
+    },
+    [visibleNonStickyProjects, nonStickyProjects, saveOrderMutation]
+  );
 
   const createProjectMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -251,7 +450,7 @@ export function TenantSidebar() {
               <SidebarGroupContent>
                 <div className={visibleProjects.length > 10 ? "max-h-[360px] overflow-y-auto" : ""}>
                   <SidebarMenu>
-                    {visibleProjects.map((project) => {
+                    {visibleStickyProjects.map((project) => {
                       const clientName = getClientName(project.clientId);
                       const divisionName = getDivisionName(project.divisionId);
                       return (
@@ -269,20 +468,18 @@ export function TenantSidebar() {
                                   className="h-3 w-3 rounded-sm shrink-0"
                                   style={{ backgroundColor: project.color || "#3B82F6" }}
                                 />
-                                <span className={`truncate flex-1${project.stickyAt ? " font-semibold" : ""}`}>{project.name}</span>
-                                {project.stickyAt && (
-                                  <Pin className="h-3 w-3 shrink-0 text-muted-foreground" data-testid={`icon-pinned-${project.id}`} />
-                                )}
+                                <span className="truncate flex-1 font-semibold">{project.name}</span>
+                                <Pin className="h-3 w-3 shrink-0 text-muted-foreground" data-testid={`icon-pinned-${project.id}`} />
                                 {(clientName || divisionName) && (
                                   <div className="flex items-center gap-1 shrink-0">
                                     {clientName && (
                                       <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-client-${project.id}`}>
-                                        {clientName.length > 10 ? clientName.slice(0, 10) + "…" : clientName}
+                                        {clientName.length > 10 ? clientName.slice(0, 10) + "\u2026" : clientName}
                                       </Badge>
                                     )}
                                     {divisionName && (
                                       <Badge variant="outline" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-division-${project.id}`}>
-                                        {divisionName.length > 8 ? divisionName.slice(0, 8) + "…" : divisionName}
+                                        {divisionName.length > 8 ? divisionName.slice(0, 8) + "\u2026" : divisionName}
                                       </Badge>
                                     )}
                                   </div>
@@ -293,12 +490,34 @@ export function TenantSidebar() {
                         </SidebarMenuItem>
                       );
                     })}
-                    {(!projects || projects.length === 0) && (
-                      <div className="px-3 py-2 text-xs text-muted-foreground">
-                        No projects yet
-                      </div>
-                    )}
                   </SidebarMenu>
+                  <DndContext
+                    sensors={sensors}
+                    collisionDetection={closestCenter}
+                    onDragEnd={handleDragEnd}
+                  >
+                    <SortableContext
+                      items={nonStickyIds}
+                      strategy={verticalListSortingStrategy}
+                    >
+                      <SidebarMenu>
+                        {visibleNonStickyProjects.map((project) => (
+                          <SortableProjectItem
+                            key={project.id}
+                            project={project}
+                            isActive={location === `/projects/${project.id}`}
+                            clientName={getClientName(project.clientId)}
+                            divisionName={getDivisionName(project.divisionId)}
+                          />
+                        ))}
+                      </SidebarMenu>
+                    </SortableContext>
+                  </DndContext>
+                  {(!projects || projects.length === 0) && (
+                    <div className="px-3 py-2 text-xs text-muted-foreground">
+                      No projects yet
+                    </div>
+                  )}
                 </div>
                 {hasMoreProjects && (
                   <Button
@@ -309,7 +528,7 @@ export function TenantSidebar() {
                     data-testid="button-load-more-projects"
                   >
                     <ChevronsDown className="h-3 w-3" />
-                    <span>Load More ({sortedProjects.length - projectsLimit} remaining)</span>
+                    <span>Load More ({allSortedProjects.length - projectsLimit} remaining)</span>
                   </Button>
                 )}
               </SidebarGroupContent>

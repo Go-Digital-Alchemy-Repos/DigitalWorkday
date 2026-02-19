@@ -280,6 +280,7 @@ router.get("/users/me/ui-preferences", requireAuth, async (req, res) => {
       themeMode: prefs?.themeMode ?? null,
       themePackId: prefs?.themePackId ?? prefs?.themeMode ?? null,
       themeAccent: prefs?.themeAccent ?? null,
+      sidebarProjectOrder: prefs?.sidebarProjectOrder ?? null,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/users/me/ui-preferences", req);
@@ -290,6 +291,7 @@ const uiPreferencesSchema = z.object({
   themeMode: z.string().max(32).nullable().optional(),
   themePackId: z.string().max(32).nullable().optional(),
   themeAccent: z.string().max(32).nullable().optional(),
+  sidebarProjectOrder: z.array(z.string()).nullable().optional(),
 });
 
 router.patch("/users/me/ui-preferences", requireAuth, async (req, res) => {
@@ -307,6 +309,7 @@ router.patch("/users/me/ui-preferences", requireAuth, async (req, res) => {
       themeMode: prefs.themeMode,
       themePackId: prefs.themePackId,
       themeAccent: prefs.themeAccent,
+      sidebarProjectOrder: prefs.sidebarProjectOrder,
     });
   } catch (error) {
     return handleRouteError(res, error, "PATCH /api/users/me/ui-preferences", req);
