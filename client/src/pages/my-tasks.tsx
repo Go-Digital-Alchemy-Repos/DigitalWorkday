@@ -178,7 +178,10 @@ interface TaskSectionListProps {
   supportsAddTask?: boolean;
 }
 
+const SECTION_INITIAL_SHOW = 20;
+
 function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChange, onDueDateChange, localOrder, onDragEnd, onAddTask, supportsAddTask = false }: TaskSectionListProps) {
+  const [showAll, setShowAll] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -197,6 +200,10 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
     });
     return ordered;
   }, [section.tasks, localOrder]);
+
+  const hasMore = orderedTasks.length > SECTION_INITIAL_SHOW;
+  const visibleTasks = showAll || !hasMore ? orderedTasks : orderedTasks.slice(0, SECTION_INITIAL_SHOW);
+  const hiddenCount = orderedTasks.length - SECTION_INITIAL_SHOW;
 
   return (
     <Collapsible defaultOpen={section.defaultOpen}>
@@ -227,9 +234,9 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
             collisionDetection={closestCenter}
             onDragEnd={(e) => onDragEnd(e, section.id)}
           >
-            <SortableContext items={orderedTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
+            <SortableContext items={visibleTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
               <div className="border border-border rounded-lg overflow-hidden mt-2">
-                {orderedTasks.map((task) => (
+                {visibleTasks.map((task) => (
                   <SortableTaskCard
                     key={task.id}
                     task={task}
@@ -243,6 +250,28 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
                 ))}
               </div>
             </SortableContext>
+            {hasMore && !showAll && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full mt-2 text-muted-foreground"
+                onClick={() => setShowAll(true)}
+                data-testid={`button-show-all-${section.id}`}
+              >
+                Show {hiddenCount} more tasks
+              </Button>
+            )}
+            {hasMore && showAll && (
+              <Button
+                variant="ghost"
+                size="sm"
+                className="w-full mt-2 text-muted-foreground"
+                onClick={() => setShowAll(false)}
+                data-testid={`button-show-less-${section.id}`}
+              >
+                Show fewer tasks
+              </Button>
+            )}
           </DndContext>
         ) : (
           <div className="border border-border border-dashed rounded-lg mt-2 px-4 py-6 text-center text-sm text-muted-foreground">

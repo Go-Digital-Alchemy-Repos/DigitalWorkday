@@ -63,6 +63,7 @@ import { TaskSelectorWithCreate } from "@/features/tasks/task-selector-with-crea
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import { format, startOfWeek, endOfWeek, startOfMonth, endOfMonth, parseISO } from "date-fns";
 import { RichTextEditor } from "@/components/richtext";
+import { GroupedVirtuoso } from "react-virtuoso";
 
 type ActiveTimer = {
   id: string;
@@ -1482,6 +1483,114 @@ const TimeEntriesList = memo(function TimeEntriesList() {
     return { groupedEntries: grouped, sortedDates: sorted };
   }, [entries]);
 
+  const VIRTUALIZE_THRESHOLD = 30;
+  const totalEntryCount = entries.length;
+  const useVirtualized = totalEntryCount > VIRTUALIZE_THRESHOLD;
+
+  const { groupCounts, flatEntries, dayTotals } = useMemo(() => {
+    if (!useVirtualized) return { groupCounts: [] as number[], flatEntries: [] as TimeEntry[], dayTotals: [] as number[] };
+    const counts: number[] = [];
+    const flat: TimeEntry[] = [];
+    const totals: number[] = [];
+    for (const date of sortedDates) {
+      const dayEntries = groupedEntries[date];
+      counts.push(dayEntries.length);
+      totals.push(dayEntries.reduce((sum, e) => sum + e.durationSeconds, 0));
+      flat.push(...dayEntries);
+    }
+    return { groupCounts: counts, flatEntries: flat, dayTotals: totals };
+  }, [useVirtualized, sortedDates, groupedEntries]);
+
+  const renderGroupHeader = useCallback((index: number) => {
+    const date = sortedDates[index];
+    const total = dayTotals[index];
+    return (
+      <div className="flex items-center justify-between py-2 pt-4 first:pt-0 bg-card" data-testid={`time-group-${date}`}>
+        <h3 className="text-sm font-medium text-muted-foreground">
+          {format(parseISO(date), "EEEE, MMMM d")}
+        </h3>
+        <Badge variant="secondary">{formatDurationShort(total)}</Badge>
+      </div>
+    );
+  }, [sortedDates, dayTotals]);
+
+  const renderEntry = useCallback((index: number) => {
+    const entry = flatEntries[index];
+    if (!entry) return null;
+    return (
+      <div
+        className="flex flex-col sm:flex-row sm:items-center justify-between p-3 rounded-lg bg-muted/50 hover-elevate gap-2 mb-2"
+        data-testid={`time-entry-${entry.id}`}
+      >
+        <div className="flex-1 min-w-0">
+          <div className="flex items-center gap-2 mb-1 flex-wrap">
+            <p className="text-sm font-medium truncate">
+              {entry.title || entry.description || "No title"}
+            </p>
+            <Badge
+              variant={entry.scope === "out_of_scope" ? "default" : "secondary"}
+              className="text-xs"
+            >
+              {entry.scope === "out_of_scope" ? "Billable" : "Unbillable"}
+            </Badge>
+            {entry.isManual && (
+              <Badge variant="outline" className="text-xs">Manual</Badge>
+            )}
+          </div>
+          <div className="flex items-center gap-2 text-xs text-muted-foreground flex-wrap">
+            {entry.client && (
+              <span>{entry.client.displayName || entry.client.companyName}</span>
+            )}
+            {entry.client && entry.project && <span>·</span>}
+            {entry.project && <span>{entry.project.name}</span>}
+            {entry.task && (
+              <>
+                <span>·</span>
+                <span>{entry.task.title}</span>
+              </>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center justify-between sm:justify-end gap-3 shrink-0">
+          <div className="text-left sm:text-right">
+            <p className="text-sm tabular-nums font-medium">
+              {formatDurationShort(entry.durationSeconds)}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {format(parseISO(entry.startTime), "h:mm a")}
+              {entry.endTime && ` - ${format(parseISO(entry.endTime), "h:mm a")}`}
+            </p>
+          </div>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="ghost" size="icon" aria-label="Time entry options" data-testid={`button-entry-menu-${entry.id}`}>
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem
+                onClick={() => setEditEntry(entry)}
+                data-testid={`button-edit-entry-${entry.id}`}
+              >
+                <Edit2 className="h-4 w-4 mr-2" />
+                Edit
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => deleteMutation.mutate(entry.id)}
+                className="text-destructive"
+                data-testid={`button-delete-entry-${entry.id}`}
+              >
+                <Trash2 className="h-4 w-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+    );
+  }, [flatEntries, deleteMutation, setEditEntry]);
+
   return (
     <>
       <Card>
@@ -1517,14 +1626,21 @@ const TimeEntriesList = memo(function TimeEntriesList() {
               <Clock className="h-12 w-12 text-muted-foreground/50 mx-auto mb-4" />
               <p className="text-muted-foreground">No time entries found for this period</p>
             </div>
+          ) : useVirtualized ? (
+            <GroupedVirtuoso
+              style={{ height: "min(60vh, 600px)" }}
+              groupCounts={groupCounts}
+              groupContent={renderGroupHeader}
+              itemContent={renderEntry}
+              overscan={200}
+            />
           ) : (
             <div className="space-y-6">
               {sortedDates.map((date) => {
                 const dayEntries = groupedEntries[date];
                 const dayTotal = dayEntries.reduce((sum, e) => sum + e.durationSeconds, 0);
-                
                 return (
-                  <div key={date}>
+                  <div key={date} data-testid={`time-group-${date}`}>
                     <div className="flex items-center justify-between mb-3">
                       <h3 className="text-sm font-medium text-muted-foreground">
                         {format(parseISO(date), "EEEE, MMMM d")}
@@ -1543,7 +1659,7 @@ const TimeEntriesList = memo(function TimeEntriesList() {
                               <p className="text-sm font-medium truncate">
                                 {entry.title || entry.description || "No title"}
                               </p>
-                              <Badge 
+                              <Badge
                                 variant={entry.scope === "out_of_scope" ? "default" : "secondary"}
                                 className="text-xs"
                               >

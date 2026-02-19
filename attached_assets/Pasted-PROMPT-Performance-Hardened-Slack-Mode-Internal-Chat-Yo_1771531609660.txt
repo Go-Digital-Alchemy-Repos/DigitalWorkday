@@ -1,0 +1,132 @@
+PROMPT — 🧠 Performance-Hardened Slack Mode (Internal Chat)
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE:
+Harden the internal Chat system for high-scale performance, low-latency rendering, and stable multi-tenant realtime behavior. This is performance-focused, not feature-focused.
+
+SCOPE:
+Internal tenant chat only.
+Do NOT touch client portal messaging.
+Do NOT break existing chat features.
+
+====================================================
+PHASE 1 — Message List Performance & Rendering
+====================================================
+
+1) Virtualized Timeline (if not already fully implemented)
+- Use react-virtual (or existing virtualization lib).
+- Render windowed message list.
+- Maintain scroll anchoring on:
+  - new messages
+  - loading older messages
+- Implement:
+  - “Load older messages” pagination (cursor-based)
+  - Preserve scroll position when prepending messages
+- Memoize:
+  - MessageRow component (React.memo)
+  - Derived grouping logic (date headers, author grouping)
+- Ensure no re-render of entire list on:
+  - typing events
+  - presence updates
+  - reaction updates (update only affected message row)
+
+2) Reduce React Reconciliation Pressure
+- Move heavy computed utilities outside component bodies.
+- Replace inline arrow callbacks in mapped lists with stable callbacks.
+- Avoid passing large objects through props.
+- Split ChatPage into:
+  - ChatLayout
+  - MessageList
+  - Composer
+  - Sidebar
+  - ThreadDrawer
+
+====================================================
+PHASE 2 — Socket Optimization
+====================================================
+
+1) Throttle High-Frequency Events
+- Typing events:
+  - throttle emit (500ms)
+  - auto-expire typing after 3s inactivity
+- Read receipts:
+  - batch updates (emit once per scroll idle)
+- Presence:
+  - avoid emitting full user list repeatedly
+
+2) Room Hygiene
+- Ensure sockets:
+  - leave rooms on channel switch
+  - clean up listeners on unmount
+  - no duplicate listeners
+- Add debug guard:
+  - if same event handler registered twice, log warning in dev
+
+3) Reconnection Strategy
+- On reconnect:
+  - refetch only active channel messages
+  - do not refetch entire channel list unless stale
+- Add exponential backoff
+
+====================================================
+PHASE 3 — DB Query Hardening
+====================================================
+
+1) Ensure indexes:
+- chat_messages(tenantId, channelId, createdAt)
+- chat_messages(parentMessageId)
+- chat_message_reads(messageId, userId)
+- chat_message_reactions(messageId)
+
+2) Remove N+1:
+- Batch user lookups for message authors
+- Batch reaction aggregation
+- Batch read-status aggregation
+
+3) Add query timing (optional)
+- If CHAT_PERF_LOG=1, log:
+  - message fetch duration
+  - reaction aggregation duration
+
+====================================================
+PHASE 4 — Chunk & Bundle Stability
+====================================================
+
+1) Ensure:
+- Chat core route is lean.
+- Emoji picker, file previewer, rich editor lazy-loaded.
+2) Confirm chat route chunk size post-build.
+3) Document in docs/performance/chat.md:
+- current chunk size
+- message fetch performance
+- socket event throughput expectations
+
+====================================================
+PHASE 5 — Telemetry (Lightweight)
+====================================================
+
+Add optional performance sampling:
+- Measure:
+  - Time to first message render
+  - Time to interactive in chat
+- Enable only if CHAT_TELEMETRY=1
+- No PII stored.
+
+====================================================
+TESTS
+====================================================
+
+- Large message history scroll test
+- Reconnect stability test
+- No duplicate message rendering
+- Reaction update does not re-render full list
+
+====================================================
+OUTPUT
+====================================================
+
+- Files modified
+- Before/after metrics (if measurable)
+- Indexes added
+- Docs updated

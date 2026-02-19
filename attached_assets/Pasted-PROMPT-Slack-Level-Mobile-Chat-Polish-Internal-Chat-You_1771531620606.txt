@@ -1,0 +1,120 @@
+PROMPT — 📱 Slack-Level Mobile Chat Polish (Internal Chat)
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE:
+Upgrade internal chat mobile UX to feel Slack-native on iOS and Android while remaining performant.
+
+SCOPE:
+Internal chat only.
+Do NOT alter client portal messaging.
+
+====================================================
+PHASE 1 — Layout & Navigation
+====================================================
+
+1) Mobile Chat Layout Refactor
+- On mobile:
+  - Full-screen chat view
+  - Channel list slides in from left (drawer)
+  - Thread replies slide in from right
+- Ensure:
+  - Clean back navigation
+  - No layout overlap with bottom nav
+- Add swipe gestures (optional if low risk)
+
+2) Sticky Composer
+- Composer fixed above keyboard
+- Ensure:
+  - Keyboard-safe spacing
+  - No input jump
+- Use safe-area insets for iOS.
+
+====================================================
+PHASE 2 — Touch-Optimized Interactions
+====================================================
+
+1) Long-Press Menu
+- On message:
+  - React
+  - Reply in thread
+  - Edit
+  - Delete
+  - Pin
+- Use mobile-friendly action sheet.
+
+2) Bigger Tap Targets
+- Increase avatar + reaction hit area
+- Ensure min 44px height for interactive elements.
+
+3) Swipe-to-Reply (optional)
+- Swipe right on message → open thread reply.
+
+====================================================
+PHASE 3 — Mobile Reactions & Presence
+====================================================
+
+1) Reaction UX:
+- Tap message → reaction bar pops up.
+- Emoji selection grid responsive.
+
+2) Typing Indicator:
+- Fixed subtle indicator above composer.
+
+3) Unread Divider:
+- “New Messages” divider when opening channel.
+
+====================================================
+PHASE 4 — File Handling on Mobile
+====================================================
+
+1) Mobile Upload UX:
+- Attachment button in composer.
+- Support:
+  - camera capture
+  - photo library
+  - file picker
+- Show upload progress inline.
+
+2) Preview Behavior:
+- Full-screen image viewer.
+- PDF open in native viewer.
+
+====================================================
+PHASE 5 — Performance Safety
+====================================================
+
+1) Avoid heavy DOM reflows.
+2) Ensure virtualization works on mobile.
+3) Avoid keyboard reflow flicker.
+4) Confirm no layout thrash on rotation.
+
+====================================================
+PHASE 6 — Visual Polish
+====================================================
+
+1) Subtle:
+- Bubble spacing refinement
+- Timestamp fade
+- Avatar stack for group channels
+2) Dark Mode:
+- Ensure mobile chat colors align with updated theme packs.
+- Improve contrast for bubbles and reactions.
+
+====================================================
+TESTS
+====================================================
+
+- iOS Safari keyboard test
+- Android Chrome keyboard test
+- Scroll test (1000 messages)
+- Orientation change stability
+
+====================================================
+OUTPUT
+====================================================
+
+- Components added/updated
+- Mobile-specific CSS adjustments
+- Screens tested (list)
+- Docs updated in docs/UX/chat-mobile.md
