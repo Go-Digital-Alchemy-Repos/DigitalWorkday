@@ -3123,15 +3123,26 @@ export type UpdateApprovalStatus = z.infer<typeof updateApprovalStatusSchema>;
 // ============================================================
 // Client Messaging (client-safe communication)
 // ============================================================
+export const ConversationPriority = {
+  LOW: "low",
+  NORMAL: "normal",
+  HIGH: "high",
+  URGENT: "urgent",
+} as const;
+
 export const clientConversations = pgTable("client_conversations", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
   clientId: varchar("client_id").references(() => clients.id).notNull(),
   projectId: varchar("project_id").references(() => projects.id),
   subject: text("subject").notNull(),
+  priority: varchar("priority", { length: 20 }).default("normal").notNull(),
   createdByUserId: varchar("created_by_user_id").references(() => users.id).notNull(),
   assignedToUserId: varchar("assigned_to_user_id").references(() => users.id),
   closedAt: timestamp("closed_at"),
+  firstResponseAt: timestamp("first_response_at"),
+  firstResponseBreachedAt: timestamp("first_response_breached_at"),
+  resolutionBreachedAt: timestamp("resolution_breached_at"),
   mergedIntoId: varchar("merged_into_id"),
   mergedAt: timestamp("merged_at"),
   mergedByUserId: varchar("merged_by_user_id").references(() => users.id),
@@ -3143,6 +3154,7 @@ export const clientConversations = pgTable("client_conversations", {
   index("client_conversations_project_idx").on(table.projectId),
   index("client_conversations_assigned_idx").on(table.assignedToUserId),
   index("client_conversations_dup_detect_idx").on(table.tenantId, table.clientId, table.subject, table.createdAt),
+  index("client_conversations_sla_check_idx").on(table.tenantId, table.closedAt, table.firstResponseAt),
 ]);
 
 export const insertClientConversationSchema = createInsertSchema(clientConversations).omit({
@@ -3150,6 +3162,9 @@ export const insertClientConversationSchema = createInsertSchema(clientConversat
   createdAt: true,
   updatedAt: true,
   closedAt: true,
+  firstResponseAt: true,
+  firstResponseBreachedAt: true,
+  resolutionBreachedAt: true,
   mergedIntoId: true,
   mergedAt: true,
   mergedByUserId: true,
@@ -3545,3 +3560,29 @@ export const insertTicketFormSchemaSchema = createInsertSchema(supportTicketForm
 });
 export type InsertTicketFormSchema = z.infer<typeof insertTicketFormSchemaSchema>;
 export type TicketFormSchema = typeof supportTicketFormSchemas.$inferSelect;
+
+// ============================================================
+// Conversation SLA Policies
+// ============================================================
+
+export const conversationSlaPolicies = pgTable("conversation_sla_policies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  priority: varchar("priority", { length: 20 }).notNull(),
+  firstResponseMinutes: integer("first_response_minutes").notNull(),
+  resolutionMinutes: integer("resolution_minutes").notNull(),
+  escalationJson: jsonb("escalation_json").default({}),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("conversation_sla_policies_tenant_pri_idx").on(table.tenantId, table.priority),
+  index("conversation_sla_policies_tenant_idx").on(table.tenantId),
+]);
+
+export const insertConversationSlaPolicySchema = createInsertSchema(conversationSlaPolicies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertConversationSlaPolicy = z.infer<typeof insertConversationSlaPolicySchema>;
+export type ConversationSlaPolicy = typeof conversationSlaPolicies.$inferSelect;

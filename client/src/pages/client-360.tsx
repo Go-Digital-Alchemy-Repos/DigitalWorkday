@@ -89,7 +89,7 @@ import {
 import { RichTextEditor, RichTextViewer } from "@/components/ui/rich-text-editor";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
 import { RequestApprovalDialog } from "@/components/request-approval-dialog";
-import { ClipboardCheck, UserCheck, Eye, EyeOff } from "lucide-react";
+import { ClipboardCheck, UserCheck, Eye, EyeOff, AlertTriangle, ShieldAlert } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -1283,6 +1283,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
   const [newSubject, setNewSubject] = useState("");
   const [newMessage, setNewMessage] = useState("");
   const [newAssignee, setNewAssignee] = useState<string>("__self__");
+  const [newPriority, setNewPriority] = useState<string>("normal");
   const [replyText, setReplyText] = useState("");
   const [replyVisibility, setReplyVisibility] = useState<"public" | "internal">("public");
   const [convoSearch, setConvoSearch] = useState("");
@@ -1329,7 +1330,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
   });
 
   const createMutation = useMutation({
-    mutationFn: async (data: { subject: string; initialMessage: string; assignedToUserId?: string }) => {
+    mutationFn: async (data: { subject: string; initialMessage: string; assignedToUserId?: string; priority?: string }) => {
       const res = await apiRequest("POST", `/api/crm/clients/${clientId}/conversations`, data);
       return res.json();
     },
@@ -1338,6 +1339,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
       setNewSubject("");
       setNewMessage("");
       setNewAssignee("__self__");
+      setNewPriority("normal");
       setSelectedConvoId(convo.id);
       queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
       toast({ title: "Conversation started" });
@@ -1371,6 +1373,20 @@ function MessagesTab({ clientId }: { clientId: string }) {
       queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", selectedConvoId, "messages"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
       toast({ title: "Assignee updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const priorityMutation = useMutation({
+    mutationFn: async ({ conversationId, priority }: { conversationId: string; priority: string }) => {
+      const res = await apiRequest("PATCH", `/api/crm/conversations/${conversationId}/priority`, { priority });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", selectedConvoId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
@@ -1421,7 +1437,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
 
   const handleCreateConvo = () => {
     if (!newSubject.trim() || !newMessage.trim()) return;
-    const payload: any = { subject: newSubject.trim(), initialMessage: newMessage.trim() };
+    const payload: any = { subject: newSubject.trim(), initialMessage: newMessage.trim(), priority: newPriority };
     if (newAssignee && newAssignee !== "__self__") {
       payload.assignedToUserId = newAssignee;
     }
@@ -1445,7 +1461,26 @@ function MessagesTab({ clientId }: { clientId: string }) {
               {messages.length} message{messages.length !== 1 ? "s" : ""}
             </p>
           </div>
-          <div className="flex items-center gap-2 shrink-0">
+          <div className="flex items-center gap-2 shrink-0 flex-wrap">
+            <Select
+              value={convo?.priority || "normal"}
+              onValueChange={(val) => {
+                priorityMutation.mutate({ conversationId: selectedConvoId!, priority: val });
+              }}
+            >
+              <SelectTrigger className="w-[110px]" data-testid="select-convo-priority">
+                <div className="flex items-center gap-1.5">
+                  <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" />
+                  <SelectValue />
+                </div>
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="normal">Normal</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="urgent">Urgent</SelectItem>
+              </SelectContent>
+            </Select>
             <Select
               value={convo?.assignedToUserId || "__none__"}
               onValueChange={(val) => {
@@ -1489,6 +1524,29 @@ function MessagesTab({ clientId }: { clientId: string }) {
             {isClosed && <Badge variant="secondary">Closed</Badge>}
           </div>
         </div>
+
+        {convo?.slaPolicy && !isClosed && (convo?.firstResponseBreachedAt || convo?.resolutionBreachedAt || !convo?.firstResponseAt) && (
+          <div className="flex items-center gap-2 mb-3 flex-wrap" data-testid="sla-status-bar">
+            {convo.firstResponseBreachedAt && (
+              <Badge variant="destructive" className="text-xs">
+                <ShieldAlert className="h-3 w-3 mr-1" />
+                First Response SLA Breached
+              </Badge>
+            )}
+            {convo.resolutionBreachedAt && (
+              <Badge variant="destructive" className="text-xs">
+                <ShieldAlert className="h-3 w-3 mr-1" />
+                Resolution SLA Breached
+              </Badge>
+            )}
+            {!convo.firstResponseAt && !convo.firstResponseBreachedAt && convo.slaPolicy && (
+              <Badge variant="outline" className="text-xs">
+                <Clock className="h-3 w-3 mr-1" />
+                First response due in {convo.slaPolicy.firstResponseMinutes}m
+              </Badge>
+            )}
+          </div>
+        )}
 
         <AlertDialog open={showMergeDialog} onOpenChange={setShowMergeDialog}>
           <AlertDialogContent>
@@ -1718,6 +1776,20 @@ function MessagesTab({ clientId }: { clientId: string }) {
                   </SelectContent>
                 </Select>
               </div>
+              <div className="flex items-center gap-1.5 min-w-[130px]">
+                <AlertTriangle className="h-4 w-4 text-muted-foreground shrink-0" />
+                <Select value={newPriority} onValueChange={setNewPriority}>
+                  <SelectTrigger className="flex-1" data-testid="select-new-convo-priority">
+                    <SelectValue placeholder="Priority" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="low">Low</SelectItem>
+                    <SelectItem value="normal">Normal</SelectItem>
+                    <SelectItem value="high">High</SelectItem>
+                    <SelectItem value="urgent">Urgent</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
               <div className="flex gap-2 ml-auto">
                 <Button variant="outline" size="sm" onClick={() => setShowNewConvo(false)} data-testid="button-cancel-new-convo">
                   Cancel
@@ -1774,7 +1846,22 @@ function MessagesTab({ clientId }: { clientId: string }) {
                     <span className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(c.updatedAt), { addSuffix: true })}
                     </span>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {(c.firstResponseBreachedAt || c.resolutionBreachedAt) && (
+                        <Badge variant="destructive" className="text-xs" data-testid={`sla-breach-badge-${c.id}`}>
+                          <ShieldAlert className="h-3 w-3 mr-0.5" />
+                          SLA
+                        </Badge>
+                      )}
+                      {c.priority && c.priority !== "normal" && (
+                        <Badge
+                          variant={c.priority === "urgent" ? "destructive" : "outline"}
+                          className="text-xs capitalize"
+                          data-testid={`priority-badge-${c.id}`}
+                        >
+                          {c.priority}
+                        </Badge>
+                      )}
                       {c.assigneeName && (
                         <Badge variant="outline" className="text-xs">
                           <UserCheck className="h-3 w-3 mr-0.5" />

@@ -601,6 +601,15 @@ httpServer.listen(port, host, () => {
       } catch (err) {
         console.error("[sla-evaluator] Error:", err);
       }
+      try {
+        const { evaluateConversationSla } = require("./routes/modules/crm/conversations.router");
+        const result = await evaluateConversationSla();
+        if (result.firstResponseBreaches > 0 || result.resolutionBreaches > 0) {
+          console.log(`[conversation-sla] Checked ${result.checked} conversations: ${result.firstResponseBreaches} first-response breaches, ${result.resolutionBreaches} resolution breaches`);
+        }
+      } catch (err) {
+        console.error("[conversation-sla] Error:", err);
+      }
     }, SLA_CHECK_INTERVAL_MS);
     console.log("[background] SLA evaluator scheduled (every 5 minutes)");
   });

@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "../../../db";
-import { eq, and, desc, count, inArray, gte, isNull, ne, sql as dsql } from "drizzle-orm";
+import { eq, and, desc, count, inArray, gte, isNull, ne, sql as dsql, isNotNull, lt } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../../../lib/errors";
 import { getEffectiveTenantId } from "../../../middleware/tenantContext";
 import { requireAuth } from "../../../auth";
@@ -13,6 +13,8 @@ import {
   users,
   UserRole,
   ClientMessageVisibility,
+  conversationSlaPolicies,
+  ConversationPriority,
 } from "@shared/schema";
 import { getCurrentUserId } from "../../helpers";
 import { verifyClientTenancy } from "./crm.helpers";
@@ -118,6 +120,7 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
       projectId: z.string().optional(),
       initialMessage: z.string().min(1),
       assignedToUserId: z.string().optional(),
+      priority: z.enum(["low", "normal", "high", "urgent"]).optional().default("normal"),
     });
 
     const data = validateBody(req.body, schema, res);
@@ -145,6 +148,7 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
       clientId,
       projectId: data.projectId || null,
       subject: data.subject,
+      priority: data.priority,
       createdByUserId: userId,
       assignedToUserId: assigneeId,
     }).returning();
@@ -349,7 +353,19 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
 
     const messages = await messagesQuery;
 
-    res.json({ conversation: { ...conversation, assigneeName }, messages });
+    let slaPolicy = null;
+    if (user.role !== UserRole.CLIENT) {
+      const [policy] = await db.select()
+        .from(conversationSlaPolicies)
+        .where(and(
+          eq(conversationSlaPolicies.tenantId, tenantId),
+          eq(conversationSlaPolicies.priority, conversation.priority),
+        ))
+        .limit(1);
+      slaPolicy = policy || null;
+    }
+
+    res.json({ conversation: { ...conversation, assigneeName, slaPolicy }, messages });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/crm/conversations/:conversationId/messages", req);
   }
@@ -406,8 +422,14 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
       visibility: data.visibility,
     }).returning();
 
+    const updateFields: Record<string, any> = { updatedAt: new Date() };
+
+    if (data.visibility === "public" && user.role !== UserRole.CLIENT && !conversation.firstResponseAt) {
+      updateFields.firstResponseAt = new Date();
+    }
+
     await db.update(clientConversations)
-      .set({ updatedAt: new Date() })
+      .set(updateFields)
       .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)));
 
     if (data.visibility === "internal") {
@@ -717,6 +739,268 @@ router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: R
     res.json(convosWithMeta);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/crm/portal/conversations", req);
+  }
+});
+
+// ============================================================
+// Conversation SLA Policy CRUD
+// ============================================================
+
+router.get("/crm/conversation-sla-policies", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const policies = await db.select()
+      .from(conversationSlaPolicies)
+      .where(eq(conversationSlaPolicies.tenantId, tenantId))
+      .orderBy(conversationSlaPolicies.priority);
+
+    res.json(policies);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/conversation-sla-policies", req);
+  }
+});
+
+router.post("/crm/conversation-sla-policies", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+      return sendError(res, AppError.forbidden("Only admins can manage SLA policies"), req);
+    }
+
+    const schema = z.object({
+      priority: z.enum(["low", "normal", "high", "urgent"]),
+      firstResponseMinutes: z.number().int().positive(),
+      resolutionMinutes: z.number().int().positive(),
+      escalationJson: z.record(z.unknown()).optional(),
+    });
+
+    const data = validateBody(req.body, schema, res);
+    if (!data) return;
+
+    const existing = await db.select({ id: conversationSlaPolicies.id })
+      .from(conversationSlaPolicies)
+      .where(and(eq(conversationSlaPolicies.tenantId, tenantId), eq(conversationSlaPolicies.priority, data.priority)))
+      .limit(1);
+
+    if (existing.length > 0) {
+      return sendError(res, AppError.badRequest(`SLA policy for priority "${data.priority}" already exists`), req);
+    }
+
+    const [policy] = await db.insert(conversationSlaPolicies).values({
+      tenantId,
+      priority: data.priority,
+      firstResponseMinutes: data.firstResponseMinutes,
+      resolutionMinutes: data.resolutionMinutes,
+      escalationJson: data.escalationJson || {},
+    }).returning();
+
+    res.status(201).json(policy);
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/crm/conversation-sla-policies", req);
+  }
+});
+
+router.patch("/crm/conversation-sla-policies/:policyId", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+      return sendError(res, AppError.forbidden("Only admins can manage SLA policies"), req);
+    }
+
+    const { policyId } = req.params;
+    const schema = z.object({
+      firstResponseMinutes: z.number().int().positive().optional(),
+      resolutionMinutes: z.number().int().positive().optional(),
+      escalationJson: z.record(z.unknown()).optional(),
+    });
+
+    const data = validateBody(req.body, schema, res);
+    if (!data) return;
+
+    const [updated] = await db.update(conversationSlaPolicies)
+      .set({ ...data, updatedAt: new Date() })
+      .where(and(eq(conversationSlaPolicies.id, policyId), eq(conversationSlaPolicies.tenantId, tenantId)))
+      .returning();
+
+    if (!updated) return sendError(res, AppError.notFound("SLA Policy"), req);
+    res.json(updated);
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /api/crm/conversation-sla-policies/:policyId", req);
+  }
+});
+
+router.delete("/crm/conversation-sla-policies/:policyId", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+      return sendError(res, AppError.forbidden("Only admins can manage SLA policies"), req);
+    }
+
+    const { policyId } = req.params;
+    const [deleted] = await db.delete(conversationSlaPolicies)
+      .where(and(eq(conversationSlaPolicies.id, policyId), eq(conversationSlaPolicies.tenantId, tenantId)))
+      .returning();
+
+    if (!deleted) return sendError(res, AppError.notFound("SLA Policy"), req);
+    res.json({ ok: true });
+  } catch (error) {
+    return handleRouteError(res, error, "DELETE /api/crm/conversation-sla-policies/:policyId", req);
+  }
+});
+
+// ============================================================
+// Conversation SLA Evaluator
+// ============================================================
+
+export async function evaluateConversationSla(tenantId?: string) {
+  const tenantFilter = tenantId
+    ? and(isNull(clientConversations.closedAt), isNull(clientConversations.mergedIntoId), eq(clientConversations.tenantId, tenantId))
+    : and(isNull(clientConversations.closedAt), isNull(clientConversations.mergedIntoId));
+
+  const openConversations = await db.select()
+    .from(clientConversations)
+    .where(tenantFilter);
+
+  let firstResponseBreaches = 0;
+  let resolutionBreaches = 0;
+  const now = new Date();
+
+  for (const convo of openConversations) {
+    const [policy] = await db.select()
+      .from(conversationSlaPolicies)
+      .where(and(
+        eq(conversationSlaPolicies.tenantId, convo.tenantId),
+        eq(conversationSlaPolicies.priority, convo.priority),
+      ))
+      .limit(1);
+
+    if (!policy) continue;
+
+    const createdAt = new Date(convo.createdAt);
+
+    if (!convo.firstResponseAt && !convo.firstResponseBreachedAt) {
+      const deadlineMs = createdAt.getTime() + policy.firstResponseMinutes * 60_000;
+      if (now.getTime() > deadlineMs) {
+        await db.update(clientConversations)
+          .set({ firstResponseBreachedAt: now })
+          .where(eq(clientConversations.id, convo.id));
+        firstResponseBreaches++;
+
+        if (convo.assignedToUserId) {
+          try {
+            const notification = await storage.createNotification({
+              tenantId: convo.tenantId,
+              userId: convo.assignedToUserId,
+              type: "task_assigned",
+              title: "SLA Breach: First Response",
+              message: `Conversation "${convo.subject}" has breached the first response SLA (${policy.firstResponseMinutes} min)`,
+              payloadJson: { conversationId: convo.id, clientId: convo.clientId, slaType: "first_response" } as any,
+            });
+            emitNotificationNew(convo.assignedToUserId, {
+              id: notification.id,
+              tenantId: notification.tenantId,
+              userId: notification.userId,
+              type: notification.type,
+              title: notification.title,
+              message: notification.message,
+              payloadJson: notification.payloadJson,
+              readAt: notification.readAt,
+              createdAt: notification.createdAt,
+            });
+          } catch {}
+        }
+      }
+    }
+
+    if (!convo.resolutionBreachedAt) {
+      const resDeadlineMs = createdAt.getTime() + policy.resolutionMinutes * 60_000;
+      if (now.getTime() > resDeadlineMs) {
+        await db.update(clientConversations)
+          .set({ resolutionBreachedAt: now })
+          .where(eq(clientConversations.id, convo.id));
+        resolutionBreaches++;
+
+        if (convo.assignedToUserId) {
+          try {
+            const notification = await storage.createNotification({
+              tenantId: convo.tenantId,
+              userId: convo.assignedToUserId,
+              type: "task_assigned",
+              title: "SLA Breach: Resolution Time",
+              message: `Conversation "${convo.subject}" has breached the resolution SLA (${policy.resolutionMinutes} min)`,
+              payloadJson: { conversationId: convo.id, clientId: convo.clientId, slaType: "resolution" } as any,
+            });
+            emitNotificationNew(convo.assignedToUserId, {
+              id: notification.id,
+              tenantId: notification.tenantId,
+              userId: notification.userId,
+              type: notification.type,
+              title: notification.title,
+              message: notification.message,
+              payloadJson: notification.payloadJson,
+              readAt: notification.readAt,
+              createdAt: notification.createdAt,
+            });
+          } catch {}
+        }
+      }
+    }
+  }
+
+  return { checked: openConversations.length, firstResponseBreaches, resolutionBreaches };
+}
+
+// Manual trigger for SLA evaluation
+router.post("/crm/conversation-sla-evaluate", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+    const results = await evaluateConversationSla(tenantId);
+    res.json(results);
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/crm/conversation-sla-evaluate", req);
+  }
+});
+
+// Update priority on a conversation
+router.patch("/crm/conversations/:conversationId/priority", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    if (user.role === UserRole.CLIENT) {
+      return sendError(res, AppError.forbidden("Clients cannot change priority"), req);
+    }
+
+    const { conversationId } = req.params;
+    const schema = z.object({
+      priority: z.enum(["low", "normal", "high", "urgent"]),
+    });
+
+    const data = validateBody(req.body, schema, res);
+    if (!data) return;
+
+    const [updated] = await db.update(clientConversations)
+      .set({ priority: data.priority, updatedAt: new Date() })
+      .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)))
+      .returning();
+
+    if (!updated) return sendError(res, AppError.notFound("Conversation"), req);
+    res.json(updated);
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /api/crm/conversations/:conversationId/priority", req);
   }
 });
 
