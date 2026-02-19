@@ -1,4 +1,4 @@
-import { useState, useRef, useEffect, useMemo } from "react";
+import { useState, useRef, useEffect, useMemo, useCallback } from "react";
 import { useRoute, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -89,7 +89,7 @@ import {
 import { RichTextEditor, RichTextViewer } from "@/components/ui/rich-text-editor";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
 import { RequestApprovalDialog } from "@/components/request-approval-dialog";
-import { ClipboardCheck, UserCheck, Eye, EyeOff, AlertTriangle, ShieldAlert } from "lucide-react";
+import { ClipboardCheck, UserCheck, Eye, EyeOff, AlertTriangle, ShieldAlert, SlidersHorizontal, X, Search } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -1287,10 +1287,31 @@ function MessagesTab({ clientId }: { clientId: string }) {
   const [replyText, setReplyText] = useState("");
   const [replyVisibility, setReplyVisibility] = useState<"public" | "internal">("public");
   const [convoSearch, setConvoSearch] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [priorityFilter, setPriorityFilter] = useState<string>("all");
+  const [dateFrom, setDateFrom] = useState<string>("");
+  const [dateTo, setDateTo] = useState<string>("");
+  const [showFilters, setShowFilters] = useState(false);
   const [showMergeDialog, setShowMergeDialog] = useState(false);
   const [mergeTargetId, setMergeTargetId] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(convoSearch), 300);
+    return () => clearTimeout(timer);
+  }, [convoSearch]);
+
+  const activeFilterCount = useMemo(() => {
+    let c = 0;
+    if (statusFilter !== "all") c++;
+    if (priorityFilter !== "all") c++;
+    if (dateFrom) c++;
+    if (dateTo) c++;
+    if (assignedFilter !== "all") c++;
+    return c;
+  }, [statusFilter, priorityFilter, dateFrom, dateTo, assignedFilter]);
 
   const { data: tenantUsers = [] } = useQuery<any[]>({
     queryKey: ["/api/tenant/users"],
@@ -1301,22 +1322,20 @@ function MessagesTab({ clientId }: { clientId: string }) {
   [tenantUsers]);
 
   const { data: conversations = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/crm/clients", clientId, "conversations", assignedFilter],
+    queryKey: ["/api/crm/clients", clientId, "conversations", assignedFilter, debouncedSearch, statusFilter, priorityFilter, dateFrom, dateTo],
     queryFn: async () => {
-      const params = assignedFilter !== "all" ? `?assigned=${assignedFilter}` : "";
-      const res = await apiRequest("GET", `/api/crm/clients/${clientId}/conversations${params}`);
+      const params = new URLSearchParams();
+      if (assignedFilter !== "all") params.set("assigned", assignedFilter);
+      if (debouncedSearch) params.set("search", debouncedSearch);
+      if (statusFilter !== "all") params.set("status", statusFilter);
+      if (priorityFilter !== "all") params.set("priority", priorityFilter);
+      if (dateFrom) params.set("dateFrom", dateFrom);
+      if (dateTo) params.set("dateTo", dateTo);
+      const qs = params.toString();
+      const res = await apiRequest("GET", `/api/crm/clients/${clientId}/conversations${qs ? `?${qs}` : ""}`);
       return res.json();
     },
   });
-
-  const filteredConversations = useMemo(() => {
-    if (!convoSearch) return conversations;
-    const q = convoSearch.toLowerCase();
-    return conversations.filter((c: any) =>
-      c.subject?.toLowerCase().includes(q) ||
-      c.lastMessage?.bodyText?.toLowerCase().includes(q)
-    );
-  }, [conversations, convoSearch]);
 
   const { data: threadData } = useQuery<any>({
     queryKey: ["/api/crm/conversations", selectedConvoId, "messages"],
@@ -1724,19 +1743,22 @@ function MessagesTab({ clientId }: { clientId: string }) {
       <DataToolbar
         searchValue={convoSearch}
         onSearchChange={setConvoSearch}
-        searchPlaceholder="Search conversations..."
+        searchPlaceholder="Search subject & messages..."
         actions={
           <div className="flex items-center gap-2 flex-wrap">
-            <Select value={assignedFilter} onValueChange={setAssignedFilter}>
-              <SelectTrigger className="w-[140px]" data-testid="select-convo-filter">
-                <SelectValue />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All threads</SelectItem>
-                <SelectItem value="me">Assigned to me</SelectItem>
-                <SelectItem value="unassigned">Unassigned</SelectItem>
-              </SelectContent>
-            </Select>
+            <Button
+              variant={showFilters ? "secondary" : "outline"}
+              size="sm"
+              onClick={() => setShowFilters(!showFilters)}
+              data-testid="button-toggle-filters"
+              className="toggle-elevate"
+            >
+              <SlidersHorizontal className="h-4 w-4 mr-1" />
+              Filters
+              {activeFilterCount > 0 && (
+                <Badge variant="default" className="ml-1">{activeFilterCount}</Badge>
+              )}
+            </Button>
             <Button size="sm" onClick={() => setShowNewConvo(true)} data-testid="button-new-conversation">
               <Plus className="h-4 w-4 mr-1" />
               New Conversation
@@ -1744,6 +1766,83 @@ function MessagesTab({ clientId }: { clientId: string }) {
           </div>
         }
       />
+
+      {showFilters && (
+        <Card>
+          <CardContent className="p-3">
+            <div className="flex items-center gap-2 flex-wrap">
+              <Select value={assignedFilter} onValueChange={setAssignedFilter}>
+                <SelectTrigger className="w-[150px]" data-testid="select-convo-assigned-filter">
+                  <SelectValue placeholder="Assignee" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All assignees</SelectItem>
+                  <SelectItem value="me">Assigned to me</SelectItem>
+                  <SelectItem value="unassigned">Unassigned</SelectItem>
+                  {staffUsers.map((u: any) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[120px]" data-testid="select-convo-status-filter">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All statuses</SelectItem>
+                  <SelectItem value="open">Open</SelectItem>
+                  <SelectItem value="closed">Closed</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={priorityFilter} onValueChange={setPriorityFilter}>
+                <SelectTrigger className="w-[120px]" data-testid="select-convo-priority-filter">
+                  <SelectValue placeholder="Priority" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">All priorities</SelectItem>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="w-[140px]"
+                placeholder="From date"
+                data-testid="input-date-from"
+              />
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="w-[140px]"
+                placeholder="To date"
+                data-testid="input-date-to"
+              />
+              {activeFilterCount > 0 && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setAssignedFilter("all");
+                    setStatusFilter("all");
+                    setPriorityFilter("all");
+                    setDateFrom("");
+                    setDateTo("");
+                  }}
+                  data-testid="button-clear-filters"
+                >
+                  <X className="h-4 w-4 mr-1" />
+                  Clear
+                </Button>
+              )}
+            </div>
+          </CardContent>
+        </Card>
+      )}
 
       {showNewConvo && (
         <Card>
@@ -1812,20 +1911,18 @@ function MessagesTab({ clientId }: { clientId: string }) {
       {conversations.length === 0 && !showNewConvo ? (
         <EmptyState
           icon={<MessageSquare className="h-10 w-10" />}
-          title="No Conversations"
-          description="Start a conversation with this client."
+          title={(debouncedSearch || activeFilterCount > 0) ? "No matching conversations" : "No Conversations"}
+          description={(debouncedSearch || activeFilterCount > 0) ? "Try adjusting your search or filters." : "Start a conversation with this client."}
           size="md"
-        />
-      ) : filteredConversations.length === 0 && !showNewConvo ? (
-        <EmptyState
-          icon={<MessageSquare className="h-10 w-10" />}
-          title="No matching conversations"
-          description="Try a different search term."
-          size="sm"
         />
       ) : (
         <div className="space-y-2">
-          {filteredConversations.map((c: any) => (
+          {debouncedSearch && (
+            <p className="text-xs text-muted-foreground" data-testid="text-search-results-count">
+              {conversations.length} result{conversations.length !== 1 ? "s" : ""} for "{debouncedSearch}"
+            </p>
+          )}
+          {conversations.map((c: any) => (
             <Card
               key={c.id}
               className="hover-elevate cursor-pointer"
@@ -1836,17 +1933,25 @@ function MessagesTab({ clientId }: { clientId: string }) {
                 <div className="flex items-start justify-between gap-2">
                   <div className="min-w-0 flex-1">
                     <span className="font-medium text-sm">{c.subject}</span>
-                    {c.lastMessage && (
+                    {c.matchingSnippet ? (
+                      <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                        <Search className="h-3 w-3 inline mr-0.5 align-text-bottom" />
+                        {c.matchingSnippet}
+                      </p>
+                    ) : c.lastMessage ? (
                       <p className="text-xs text-muted-foreground truncate mt-0.5">
                         {c.lastMessage.authorName}: {c.lastMessage.bodyText}
                       </p>
-                    )}
+                    ) : null}
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <span className="text-xs text-muted-foreground">
                       {formatDistanceToNow(new Date(c.updatedAt), { addSuffix: true })}
                     </span>
                     <div className="flex items-center gap-1.5 flex-wrap justify-end">
+                      {c.closedAt && (
+                        <Badge variant="secondary" className="text-xs">Closed</Badge>
+                      )}
                       {(c.firstResponseBreachedAt || c.resolutionBreachedAt) && (
                         <Badge variant="destructive" className="text-xs" data-testid={`sla-breach-badge-${c.id}`}>
                           <ShieldAlert className="h-3 w-3 mr-0.5" />

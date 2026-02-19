@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "../../../db";
-import { eq, and, desc, count, inArray, gte, isNull, ne, sql as dsql, isNotNull, lt } from "drizzle-orm";
+import { eq, and, desc, count, inArray, gte, isNull, ne, sql as dsql, isNotNull, lt, lte, or, ilike, exists } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../../../lib/errors";
 import { getEffectiveTenantId } from "../../../middleware/tenantContext";
 import { requireAuth } from "../../../auth";
@@ -35,15 +35,81 @@ router.get("/crm/clients/:clientId/conversations", requireAuth, async (req: Requ
     const client = await verifyClientTenancy(clientId, tenantId);
     if (!client) return sendError(res, AppError.notFound("Client"), req);
 
-    const assignedFilter = req.query.assigned as string | undefined;
     const userId = getCurrentUserId(req);
-
+    const assignedFilter = req.query.assigned as string | undefined;
+    const search = (req.query.search as string || "").trim();
+    const status = req.query.status as string | undefined;
+    const priority = req.query.priority as string | undefined;
+    const dateFrom = req.query.dateFrom as string | undefined;
+    const dateTo = req.query.dateTo as string | undefined;
     const includeMerged = req.query.includeMerged === "true";
-    let whereCondition = and(
+
+    const conditions: any[] = [
       eq(clientConversations.clientId, clientId),
       eq(clientConversations.tenantId, tenantId),
-      ...(includeMerged ? [] : [isNull(clientConversations.mergedIntoId)])
-    );
+    ];
+
+    if (!includeMerged) conditions.push(isNull(clientConversations.mergedIntoId));
+
+    if (assignedFilter === "me") {
+      conditions.push(eq(clientConversations.assignedToUserId, userId));
+    } else if (assignedFilter === "unassigned") {
+      conditions.push(isNull(clientConversations.assignedToUserId));
+    } else if (assignedFilter && assignedFilter !== "all") {
+      conditions.push(eq(clientConversations.assignedToUserId, assignedFilter));
+    }
+
+    if (status === "open") {
+      conditions.push(isNull(clientConversations.closedAt));
+    } else if (status === "closed") {
+      conditions.push(isNotNull(clientConversations.closedAt));
+    }
+
+    if (priority && ["low", "normal", "high", "urgent"].includes(priority)) {
+      conditions.push(eq(clientConversations.priority, priority));
+    }
+
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      if (!isNaN(from.getTime())) conditions.push(gte(clientConversations.createdAt, from));
+    }
+    if (dateTo) {
+      const to = new Date(dateTo);
+      if (!isNaN(to.getTime())) {
+        to.setHours(23, 59, 59, 999);
+        conditions.push(lte(clientConversations.createdAt, to));
+      }
+    }
+
+    if (search) {
+      const tsQuery = search.trim().split(/\s+/).filter(Boolean).map(w => w.replace(/[^\w]/g, '')).filter(Boolean).join(' & ');
+      if (tsQuery) {
+        conditions.push(
+          or(
+            dsql`to_tsvector('english', ${clientConversations.subject}) @@ to_tsquery('english', ${tsQuery})`,
+            exists(
+              db.select({ val: dsql`1` })
+                .from(clientMessages)
+                .where(and(
+                  eq(clientMessages.conversationId, clientConversations.id),
+                  eq(clientMessages.tenantId, tenantId),
+                  dsql`to_tsvector('english', ${clientMessages.bodyText}) @@ to_tsquery('english', ${tsQuery})`,
+                ))
+            ),
+            ilike(clientConversations.subject, `%${search}%`),
+            exists(
+              db.select({ val: dsql`1` })
+                .from(clientMessages)
+                .where(and(
+                  eq(clientMessages.conversationId, clientConversations.id),
+                  eq(clientMessages.tenantId, tenantId),
+                  ilike(clientMessages.bodyText, `%${search}%`),
+                ))
+            )
+          )
+        );
+      }
+    }
 
     const results = await db.select({
       conversation: clientConversations,
@@ -51,51 +117,101 @@ router.get("/crm/clients/:clientId/conversations", requireAuth, async (req: Requ
     })
       .from(clientConversations)
       .leftJoin(users, eq(clientConversations.createdByUserId, users.id))
-      .where(whereCondition)
+      .where(and(...conditions))
       .orderBy(desc(clientConversations.updatedAt));
 
-    const convosWithMeta = await Promise.all(results.map(async (r) => {
-      const [msgCount] = await db.select({ value: count() })
-        .from(clientMessages)
-        .where(eq(clientMessages.conversationId, r.conversation.id));
+    const convoIds = results.map(r => r.conversation.id);
 
-      const [lastMsg] = await db.select({
-        bodyText: clientMessages.bodyText,
-        createdAt: clientMessages.createdAt,
-        authorName: users.name,
-      })
-        .from(clientMessages)
-        .leftJoin(users, eq(clientMessages.authorUserId, users.id))
-        .where(eq(clientMessages.conversationId, r.conversation.id))
-        .orderBy(desc(clientMessages.createdAt))
-        .limit(1);
+    const [msgCounts, lastMsgs, assigneeRows] = await Promise.all([
+      convoIds.length > 0
+        ? db.select({ conversationId: clientMessages.conversationId, value: count() })
+            .from(clientMessages)
+            .where(inArray(clientMessages.conversationId, convoIds))
+            .groupBy(clientMessages.conversationId)
+        : Promise.resolve([]),
 
-      let assigneeName: string | null = null;
-      if (r.conversation.assignedToUserId) {
-        const [assignee] = await db.select({ name: users.name })
-          .from(users)
-          .where(and(eq(users.id, r.conversation.assignedToUserId), eq(users.tenantId, tenantId)))
-          .limit(1);
-        assigneeName = assignee?.name || null;
+      convoIds.length > 0
+        ? db.execute(dsql`
+            SELECT DISTINCT ON (cm.conversation_id)
+              cm.conversation_id,
+              cm.body_text,
+              cm.created_at,
+              u.name as author_name
+            FROM client_messages cm
+            LEFT JOIN users u ON cm.author_user_id = u.id
+            WHERE cm.conversation_id = ANY(${convoIds})
+            ORDER BY cm.conversation_id, cm.created_at DESC
+          `)
+        : Promise.resolve({ rows: [] }),
+
+      convoIds.length > 0
+        ? (() => {
+            const assigneeUserIds = results
+              .map(r => r.conversation.assignedToUserId)
+              .filter((id): id is string => !!id);
+            if (assigneeUserIds.length === 0) return Promise.resolve([]);
+            return db.select({ id: users.id, name: users.name })
+              .from(users)
+              .where(and(inArray(users.id, assigneeUserIds), eq(users.tenantId, tenantId)));
+          })()
+        : Promise.resolve([]),
+    ]);
+
+    let snippetMap: Record<string, string> = {};
+    if (search && convoIds.length > 0) {
+      const tsQuery = search.trim().split(/\s+/).filter(Boolean).map(w => w.replace(/[^\w]/g, '')).filter(Boolean).join(' & ');
+      if (tsQuery) {
+        try {
+          const snippetResults = await db.execute(dsql`
+            SELECT DISTINCT ON (cm.conversation_id)
+              cm.conversation_id,
+              ts_headline('english', cm.body_text, to_tsquery('english', ${tsQuery}),
+                'MaxWords=20, MinWords=10, StartSel=, StopSel=') as snippet
+            FROM client_messages cm
+            WHERE cm.conversation_id = ANY(${convoIds})
+              AND cm.tenant_id = ${tenantId}
+              AND to_tsvector('english', cm.body_text) @@ to_tsquery('english', ${tsQuery})
+            ORDER BY cm.conversation_id, cm.created_at ASC
+          `);
+          for (const row of snippetResults.rows as any[]) {
+            snippetMap[row.conversation_id] = row.snippet;
+          }
+        } catch {
+          const fallbackResults = await db.execute(dsql`
+            SELECT DISTINCT ON (cm.conversation_id)
+              cm.conversation_id,
+              substring(cm.body_text from 1 for 120) as snippet
+            FROM client_messages cm
+            WHERE cm.conversation_id = ANY(${convoIds})
+              AND cm.tenant_id = ${tenantId}
+              AND cm.body_text ILIKE ${'%' + search + '%'}
+            ORDER BY cm.conversation_id, cm.created_at ASC
+          `);
+          for (const row of fallbackResults.rows as any[]) {
+            snippetMap[row.conversation_id] = row.snippet;
+          }
+        }
       }
-
-      return {
-        ...r.conversation,
-        creatorName: r.creatorName || "Unknown",
-        assigneeName,
-        messageCount: msgCount?.value || 0,
-        lastMessage: lastMsg || null,
-      };
-    }));
-
-    let filtered = convosWithMeta;
-    if (assignedFilter === "me") {
-      filtered = convosWithMeta.filter(c => c.assignedToUserId === userId);
-    } else if (assignedFilter === "unassigned") {
-      filtered = convosWithMeta.filter(c => !c.assignedToUserId);
     }
 
-    res.json(filtered);
+    const countMap = new Map((msgCounts as any[]).map(r => [r.conversationId, Number(r.value)]));
+    const lastMsgMap = new Map((lastMsgs.rows as any[]).map(r => [r.conversation_id, {
+      bodyText: r.body_text,
+      createdAt: r.created_at,
+      authorName: r.author_name,
+    }]));
+    const assigneeMap = new Map((assigneeRows as any[]).map(r => [r.id, r.name]));
+
+    const convosWithMeta = results.map((r) => ({
+      ...r.conversation,
+      creatorName: r.creatorName || "Unknown",
+      assigneeName: r.conversation.assignedToUserId ? (assigneeMap.get(r.conversation.assignedToUserId) || null) : null,
+      messageCount: countMap.get(r.conversation.id) || 0,
+      lastMessage: lastMsgMap.get(r.conversation.id) || null,
+      ...(snippetMap[r.conversation.id] ? { matchingSnippet: snippetMap[r.conversation.id] } : {}),
+    }));
+
+    res.json(convosWithMeta);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/crm/clients/:clientId/conversations", req);
   }
