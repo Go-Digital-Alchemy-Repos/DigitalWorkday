@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { z } from "zod";
+import multer from "multer";
 import { createApiRouter } from "../routerFactory";
 import { storage } from "../../storage";
 import { AppError, handleRouteError } from "../../lib/errors";
@@ -12,6 +13,7 @@ import {
   createPresignedDownloadUrl,
   deleteS3Object,
   checkObjectExists,
+  uploadToS3,
   ALLOWED_MIME_TYPES,
 } from "../../s3";
 import { getStorageStatus } from "../../storage/getStorageProvider";
@@ -19,7 +21,12 @@ import {
   emitAttachmentAdded,
   emitAttachmentDeleted,
 } from "../../realtime/events";
-import { validateUploadRequest } from "../middleware/uploadGuards";
+import { validateUploadRequest, isFilenameUnsafe } from "../middleware/uploadGuards";
+
+const fileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 200 * 1024 * 1024 },
+});
 
 const router = createApiRouter({
   policy: "authTenant",
@@ -132,6 +139,89 @@ router.post(
       });
     } catch (error) {
       return handleRouteError(res, error, "POST /api/projects/:projectId/tasks/:taskId/attachments/presign", req);
+    }
+  },
+);
+
+router.post(
+  "/projects/:projectId/tasks/:taskId/attachments/upload",
+  fileUpload.single("file"),
+  async (req, res) => {
+    try {
+      const { projectId, taskId } = req.params;
+
+      if (!isS3Configured()) {
+        throw new AppError(503, "INTERNAL_ERROR", "File storage is not configured.");
+      }
+
+      const file = (req as any).file;
+      if (!file) {
+        throw AppError.badRequest("No file provided");
+      }
+
+      const task = await storage.getTask(taskId);
+      if (!task || task.projectId !== projectId) {
+        throw AppError.notFound("Task");
+      }
+
+      const mimeType = file.mimetype || "application/octet-stream";
+      const fileName = file.originalname || "untitled";
+      const fileSizeBytes = file.size;
+
+      const validation = validateFile(mimeType, fileSizeBytes, fileName);
+      if (!validation.valid) {
+        throw AppError.badRequest(validation.error || "Invalid file");
+      }
+
+      if (isFilenameUnsafe(fileName)) {
+        throw AppError.badRequest("File type not allowed for security reasons");
+      }
+
+      const tempId = crypto.randomUUID();
+      const storageKey = generateStorageKey(projectId, taskId, tempId, fileName);
+
+      await uploadToS3(file.buffer, storageKey, mimeType);
+
+      const attachment = await storage.createTaskAttachment({
+        taskId,
+        projectId,
+        uploadedByUserId: getCurrentUserId(req),
+        originalFileName: fileName,
+        mimeType,
+        fileSizeBytes,
+        storageKey,
+        uploadStatus: "complete",
+      });
+
+      emitAttachmentAdded(
+        {
+          id: attachment.id,
+          fileName: attachment.originalFileName,
+          fileType: attachment.mimeType,
+          fileSize: attachment.fileSizeBytes,
+          storageKey: attachment.storageKey,
+          taskId: attachment.taskId,
+          subtaskId: null,
+          uploadedBy: attachment.uploadedByUserId,
+          createdAt: attachment.createdAt!,
+        },
+        taskId,
+        null,
+        projectId,
+      );
+
+      res.status(201).json({
+        attachment: {
+          id: attachment.id,
+          originalFileName: attachment.originalFileName,
+          mimeType: attachment.mimeType,
+          fileSizeBytes: attachment.fileSizeBytes,
+          uploadStatus: attachment.uploadStatus,
+          createdAt: attachment.createdAt,
+        },
+      });
+    } catch (error) {
+      return handleRouteError(res, error, "POST /api/projects/:projectId/tasks/:taskId/attachments/upload", req);
     }
   },
 );

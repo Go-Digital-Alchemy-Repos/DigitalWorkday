@@ -27,7 +27,7 @@ interface AttachmentUploaderProps {
 interface UploadingFile {
   id: string;
   name: string;
-  status: "uploading" | "completing" | "error";
+  status: "uploading" | "error";
   error?: string;
 }
 
@@ -161,39 +161,30 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
     }]);
 
     try {
-      const { file: processedFile, mimeType } = await compressImageIfNeeded(file);
+      const { file: processedFile } = await compressImageIfNeeded(file);
       
-      const presignResponse = await apiRequest(
-        "POST",
-        `/api/projects/${projectId}/tasks/${taskId}/attachments/presign`,
+      const formData = new FormData();
+      formData.append("file", processedFile);
+
+      const uploadResponse = await fetch(
+        `/api/projects/${projectId}/tasks/${taskId}/attachments/upload`,
         {
-          fileName: processedFile.name,
-          mimeType: mimeType || "application/octet-stream",
-          fileSizeBytes: processedFile.size,
+          method: "POST",
+          body: formData,
+          credentials: "include",
         }
       );
 
-      const { attachment, upload } = await presignResponse.json();
-
-      const s3Response = await fetch(upload.url, {
-        method: upload.method,
-        headers: upload.headers,
-        body: processedFile,
-      });
-
-      if (!s3Response.ok) {
-        throw new Error("Failed to upload file to storage");
+      if (!uploadResponse.ok) {
+        let errorMsg = "Failed to upload file";
+        try {
+          const errBody = await uploadResponse.json();
+          if (errBody.message) errorMsg = errBody.message;
+        } catch {}
+        throw new Error(errorMsg);
       }
 
-      setUploadingFiles(prev => 
-        prev.map(f => f.id === uploadId ? { ...f, status: "completing" } : f)
-      );
-
-      await apiRequest(
-        "POST",
-        `/api/projects/${projectId}/tasks/${taskId}/attachments/${attachment.id}/complete`,
-        {}
-      );
+      const { attachment } = await uploadResponse.json();
 
       setUploadingFiles(prev => prev.filter(f => f.id !== uploadId));
       
@@ -396,9 +387,6 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
                 <span className="text-sm truncate flex-1">{file.name}</span>
                 {file.status === "uploading" && (
                   <span className="text-xs text-muted-foreground">Uploading...</span>
-                )}
-                {file.status === "completing" && (
-                  <span className="text-xs text-muted-foreground">Completing...</span>
                 )}
                 {file.status === "error" && (
                   <>

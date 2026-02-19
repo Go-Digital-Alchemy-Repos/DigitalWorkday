@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef } from "react";
-import { apiRequest } from "@/lib/queryClient";
 
 export type UploadStatus = "queued" | "uploading" | "completing" | "complete" | "error";
 
@@ -54,51 +53,33 @@ export function useAttachmentUploadQueue({
     );
 
     try {
-      let presignRes: Response;
+      const formData = new FormData();
+      formData.append("file", next.file);
+
+      let uploadRes: Response;
       try {
-        presignRes = await apiRequest(
-          "POST",
-          `/api/projects/${projectId}/tasks/${taskId}/attachments/presign`,
+        uploadRes = await fetch(
+          `/api/projects/${projectId}/tasks/${taskId}/attachments/upload`,
           {
-            fileName: next.file.name,
-            mimeType: next.file.type || "application/octet-stream",
-            fileSizeBytes: next.file.size,
+            method: "POST",
+            body: formData,
+            credentials: "include",
           }
         );
-      } catch (e: any) {
-        throw new Error(e.message || "Failed to prepare upload");
-      }
-      const { attachment, upload } = await presignRes.json();
-
-      let s3Res: Response;
-      try {
-        s3Res = await fetch(upload.url, {
-          method: upload.method,
-          headers: upload.headers,
-          body: next.file,
-        });
       } catch (e: any) {
         throw new Error("Network error uploading file. Please check your connection and try again.");
       }
 
-      if (!s3Res.ok) {
-        const statusText = s3Res.statusText || `status ${s3Res.status}`;
-        throw new Error(`Storage upload failed (${statusText}). Please try again.`);
+      if (!uploadRes.ok) {
+        let errorMsg = `Upload failed (${uploadRes.status})`;
+        try {
+          const errBody = await uploadRes.json();
+          if (errBody.message) errorMsg = errBody.message;
+        } catch {}
+        throw new Error(errorMsg);
       }
 
-      setUploads((prev) =>
-        prev.map((u) => (u.id === next.id ? { ...u, status: "completing" as UploadStatus } : u))
-      );
-
-      try {
-        await apiRequest(
-          "POST",
-          `/api/projects/${projectId}/tasks/${taskId}/attachments/${attachment.id}/complete`,
-          {}
-        );
-      } catch (e: any) {
-        throw new Error(e.message || "Failed to confirm upload");
-      }
+      const { attachment } = await uploadRes.json();
 
       const updatedItem = queueRef.current.find((u) => u.id === next.id);
       if (updatedItem) {
