@@ -8,7 +8,7 @@ import { eq, and, isNull, sql } from "drizzle-orm";
 import { handleRouteError, AppError } from "../lib/errors";
 import { requireAuth } from "../auth";
 import { userCreateRateLimiter, inviteCreateRateLimiter } from "../middleware/rateLimit";
-import { getCurrentUserId, getCurrentWorkspaceId } from "./helpers";
+import { getCurrentUserId, getCurrentWorkspaceId, getCurrentWorkspaceIdAsync } from "./helpers";
 import { deleteFromStorageByUrl } from "../services/uploads/s3UploadService";
 import {
   isS3Configured,
@@ -50,7 +50,7 @@ router.get("/users", async (req, res) => {
       return res.json([]);
     }
 
-    const workspaceId = getCurrentWorkspaceId(req);
+    const workspaceId = await getCurrentWorkspaceIdAsync(req);
     let result = await storage.getUsersByWorkspace(workspaceId);
 
     if (result.length === 0) {
@@ -108,6 +108,8 @@ router.post("/users", userCreateRateLimiter, requireAdmin, async (req, res) => {
       throw AppError.tenantRequired("Tenant context required to create users");
     }
 
+    const resolvedWorkspaceId = await getCurrentWorkspaceIdAsync(req);
+
     const user = await storage.createUserWithTenant({
       email,
       firstName,
@@ -120,7 +122,7 @@ router.post("/users", userCreateRateLimiter, requireAdmin, async (req, res) => {
     });
 
     await storage.addWorkspaceMember({
-      workspaceId: getCurrentWorkspaceId(req),
+      workspaceId: resolvedWorkspaceId,
       userId: user.id,
       role: role === "admin" ? "admin" : "member",
       status: "active",
@@ -139,7 +141,7 @@ router.post("/users", userCreateRateLimiter, requireAdmin, async (req, res) => {
     if (role === "client" && clientIds && Array.isArray(clientIds)) {
       for (const clientId of clientIds) {
         await storage.addClientUserAccess({
-          workspaceId: getCurrentWorkspaceId(req),
+          workspaceId: resolvedWorkspaceId,
           clientId,
           userId: user.id,
           accessLevel: "viewer",
@@ -444,7 +446,7 @@ router.post("/users/:id/deactivate", requireAdmin, async (req, res) => {
 router.get("/invitations", requireAdmin, async (req, res) => {
   try {
     const invitations = await storage.getInvitationsByWorkspace(
-      getCurrentWorkspaceId(req),
+      await getCurrentWorkspaceIdAsync(req),
     );
     res.json(invitations);
   } catch (error) {
@@ -464,7 +466,7 @@ router.post("/invitations", inviteCreateRateLimiter, requireAdmin, async (req, r
       role: (role || "employee") as "admin" | "employee" | "client",
       tokenHash: token,
       expiresAt,
-      workspaceId: getCurrentWorkspaceId(req),
+      workspaceId: await getCurrentWorkspaceIdAsync(req),
       createdByUserId: getCurrentUserId(req),
       status: "pending",
     });
@@ -502,7 +504,7 @@ router.post("/invitations/for-user", requireAdmin, async (req, res) => {
       role: (user.role || "employee") as "admin" | "employee" | "client",
       tokenHash: token,
       expiresAt,
-      workspaceId: getCurrentWorkspaceId(req),
+      workspaceId: await getCurrentWorkspaceIdAsync(req),
       createdByUserId: getCurrentUserId(req),
       status: "pending",
     });
@@ -523,7 +525,7 @@ router.post("/invitations/for-user", requireAdmin, async (req, res) => {
 // ============================================
 
 router.get("/settings/mailgun", requireAdmin, async (req, res) => {
-  const workspaceId = getCurrentWorkspaceId(req);
+  const workspaceId = await getCurrentWorkspaceIdAsync(req);
   const userId = getCurrentUserId(req);
   console.log(`[mailgun] GET route hit - userId=${userId} workspaceId=${workspaceId}`);
 
@@ -560,7 +562,7 @@ router.get("/settings/mailgun", requireAdmin, async (req, res) => {
 });
 
 router.put("/settings/mailgun", requireAdmin, async (req, res) => {
-  const workspaceId = getCurrentWorkspaceId(req);
+  const workspaceId = await getCurrentWorkspaceIdAsync(req);
   const userId = getCurrentUserId(req);
   console.log(`[mailgun] PUT route hit - userId=${userId} workspaceId=${workspaceId}`);
 
@@ -607,7 +609,7 @@ router.put("/settings/mailgun", requireAdmin, async (req, res) => {
 });
 
 router.post("/settings/mailgun/test", requireAdmin, async (req, res) => {
-  const workspaceId = getCurrentWorkspaceId(req);
+  const workspaceId = await getCurrentWorkspaceIdAsync(req);
   console.log(`[mailgun] TEST route hit - workspaceId=${workspaceId}`);
 
   try {

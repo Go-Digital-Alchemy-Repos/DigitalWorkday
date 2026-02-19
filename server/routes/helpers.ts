@@ -5,14 +5,11 @@
  * These were extracted from routes.ts to enable modular routing.
  */
 import type { Request } from "express";
-import { db } from "../db";
-import { eq, and } from "drizzle-orm";
-import { workspaces, UserRole } from "@shared/schema";
+import { UserRole } from "@shared/schema";
 import { getEffectiveTenantId } from "../middleware/tenantContext";
+import { warmWorkspaceCache, getWorkspaceFromCache } from "../lib/workspaceCache";
 
-// Cache for tenant primary workspaces to avoid repeated DB lookups
-const tenantWorkspaceCache = new Map<string, { workspaceId: string; expiry: number }>();
-const WORKSPACE_CACHE_TTL = 60000; // 1 minute
+export { warmWorkspaceCache };
 
 export async function getCurrentWorkspaceIdAsync(req: Request): Promise<string> {
   const tenantId = req.tenant?.effectiveTenantId || req.user?.tenantId;
@@ -21,35 +18,11 @@ export async function getCurrentWorkspaceIdAsync(req: Request): Promise<string> 
     return "demo-workspace-id";
   }
   
-  const cached = tenantWorkspaceCache.get(tenantId);
-  if (cached && cached.expiry > Date.now()) {
-    return cached.workspaceId;
-  }
+  await warmWorkspaceCache(tenantId);
   
-  const [primaryWorkspace] = await db.select()
-    .from(workspaces)
-    .where(and(eq(workspaces.tenantId, tenantId), eq(workspaces.isPrimary, true)))
-    .limit(1);
-  
-  if (primaryWorkspace) {
-    tenantWorkspaceCache.set(tenantId, {
-      workspaceId: primaryWorkspace.id,
-      expiry: Date.now() + WORKSPACE_CACHE_TTL
-    });
-    return primaryWorkspace.id;
-  }
-  
-  const [anyWorkspace] = await db.select()
-    .from(workspaces)
-    .where(eq(workspaces.tenantId, tenantId))
-    .limit(1);
-  
-  if (anyWorkspace) {
-    tenantWorkspaceCache.set(tenantId, {
-      workspaceId: anyWorkspace.id,
-      expiry: Date.now() + WORKSPACE_CACHE_TTL
-    });
-    return anyWorkspace.id;
+  const cached = getWorkspaceFromCache(tenantId);
+  if (cached) {
+    return cached;
   }
   
   console.warn(`[getCurrentWorkspaceIdAsync] No workspace found for tenant ${tenantId}`);
@@ -63,12 +36,12 @@ export function getCurrentWorkspaceId(req: Request): string {
     return "demo-workspace-id";
   }
   
-  const cached = tenantWorkspaceCache.get(tenantId);
-  if (cached && cached.expiry > Date.now()) {
-    return cached.workspaceId;
+  const cached = getWorkspaceFromCache(tenantId);
+  if (cached) {
+    return cached;
   }
   
-  getCurrentWorkspaceIdAsync(req).catch(() => {});
+  warmWorkspaceCache(tenantId).catch(() => {});
   return "demo-workspace-id";
 }
 

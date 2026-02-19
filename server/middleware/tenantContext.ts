@@ -18,6 +18,7 @@ import { db } from "../db";
 import { tenants } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { AppError } from "../lib/errors";
+import { warmWorkspaceCache } from "../lib/workspaceCache";
 
 const TENANT_DEBUG = process.env.TENANT_CONTEXT_DEBUG === "true";
 
@@ -94,6 +95,11 @@ export async function tenantContextMiddleware(req: Request, res: Response, next:
       userId: user.id,
       tenantId: user.tenantId
     });
+  }
+
+  const effectiveTenant = req.tenant?.effectiveTenantId;
+  if (effectiveTenant) {
+    warmWorkspaceCache(effectiveTenant).catch(() => {});
   }
 
   next();

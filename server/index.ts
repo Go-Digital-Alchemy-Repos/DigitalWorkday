@@ -21,6 +21,7 @@ import { logMigrationStatus } from "./scripts/migration-status";
 import { ensureSchemaReady, getLastSchemaCheck } from "./startup/schemaReadiness";
 import { logAppInfo } from "./startup/appInfo";
 import { logNullTenantIdWarnings } from "./startup/tenantIdHealthCheck";
+import { repairDemoWorkspaceMembers } from "./startup/repairWorkspaceMembers";
 import { storage } from "./storage";
 
 export const app = express();
@@ -580,6 +581,9 @@ httpServer.listen(port, host, () => {
       
       // Check for NULL tenantId values (logs warnings, doesn't crash)
       await logNullTenantIdWarnings();
+      
+      // Repair workspace members stuck on "demo-workspace-id"
+      await repairDemoWorkspaceMembers();
       
       // Bootstrap admin user if not exists (for production first run)
       try {
