@@ -10,6 +10,7 @@ import {
   Building2,
   FileBox,
   ClipboardCheck,
+  LifeBuoy,
 } from "lucide-react";
 import appLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -141,6 +142,17 @@ export function ClientPortalSidebar() {
                   </SidebarMenuButton>
                 </SidebarMenuItem>
               )}
+              <SidebarMenuItem>
+                <SidebarMenuButton
+                  asChild
+                  isActive={isActiveRoute("/portal/support")}
+                >
+                  <Link href="/portal/support" data-testid="nav-portal-support">
+                    <LifeBuoy className="h-4 w-4" />
+                    <span>Support</span>
+                  </Link>
+                </SidebarMenuButton>
+              </SidebarMenuItem>
             </SidebarMenu>
           </SidebarGroupContent>
         </SidebarGroup>

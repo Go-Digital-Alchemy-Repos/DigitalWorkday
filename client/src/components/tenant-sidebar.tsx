@@ -24,6 +24,7 @@ import {
   ChevronsDown,
   Pin,
   GripVertical,
+  LifeBuoy,
 } from "lucide-react";
 import {
   DndContext,
@@ -159,6 +160,7 @@ const mainNavItems = [
   { title: "Clients", url: "/clients", icon: Briefcase },
   { title: "Team Calendar", url: "/calendar", icon: CalendarDays },
   { title: "Chat", url: "/chat", icon: MessageCircle },
+  { title: "Support", url: "/support", icon: LifeBuoy },
 ];
 
 export function TenantSidebar() {

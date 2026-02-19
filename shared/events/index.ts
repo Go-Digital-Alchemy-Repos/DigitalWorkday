@@ -818,7 +818,62 @@ export type ServerToClientEvents = {
   // Presence events
   [PRESENCE_EVENTS.UPDATE]: (payload: PresenceUpdatePayload) => void;
   [PRESENCE_EVENTS.BULK_UPDATE]: (payload: PresenceBulkUpdatePayload) => void;
+  // Support ticket events
+  [SUPPORT_TICKET_EVENTS.CREATED]: (payload: SupportTicketCreatedPayload) => void;
+  [SUPPORT_TICKET_EVENTS.UPDATED]: (payload: SupportTicketUpdatedPayload) => void;
+  [SUPPORT_TICKET_EVENTS.MESSAGE_ADDED]: (payload: SupportTicketMessageAddedPayload) => void;
+  [SUPPORT_TICKET_EVENTS.STATUS_CHANGED]: (payload: SupportTicketStatusChangedPayload) => void;
 };
+
+// =============================================================================
+// SUPPORT TICKET EVENTS
+// =============================================================================
+
+export const SUPPORT_TICKET_EVENTS = {
+  CREATED: 'support_ticket:created',
+  UPDATED: 'support_ticket:updated',
+  MESSAGE_ADDED: 'support_ticket:messageAdded',
+  STATUS_CHANGED: 'support_ticket:statusChanged',
+} as const;
+
+export interface SupportTicketCreatedPayload {
+  ticket: {
+    id: string;
+    tenantId: string;
+    clientId: string | null;
+    title: string;
+    status: string;
+    priority: string;
+    category: string;
+    source: string;
+    createdAt: Date;
+  };
+}
+
+export interface SupportTicketUpdatedPayload {
+  ticketId: string;
+  tenantId: string;
+  updates: Record<string, unknown>;
+}
+
+export interface SupportTicketMessageAddedPayload {
+  ticketId: string;
+  tenantId: string;
+  message: {
+    id: string;
+    authorType: string;
+    bodyText: string;
+    visibility: string;
+    createdAt: Date;
+  };
+}
+
+export interface SupportTicketStatusChangedPayload {
+  ticketId: string;
+  tenantId: string;
+  from: string;
+  to: string;
+}
 
 export type ClientToServerEvents = {
   [ROOM_EVENTS.JOIN_PROJECT]: (payload: JoinProjectPayload) => void;

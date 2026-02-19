@@ -162,6 +162,13 @@
       "when": 1771484458909,
       "tag": "0022_brainy_proemial_gods",
       "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "7",
+      "when": 1771485246137,
+      "tag": "0023_polite_sprite",
+      "breakpoints": true
     }
   ]
 }

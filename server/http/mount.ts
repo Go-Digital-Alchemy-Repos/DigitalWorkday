@@ -22,6 +22,7 @@ import workspacesRouter from "./domains/workspaces.router";
 import teamsRouter from "./domains/teams.router";
 import workloadReportsRouter from "./domains/workload-reports.router";
 import { jobsRouter } from "../jobs/jobs.router";
+import supportRouter from "./domains/support.router";
 
 interface DomainEntry {
   path: string;
@@ -164,6 +165,13 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "jobs",
     description: "Background job queue: list, get, cancel jobs, queue stats.",
+  },
+  {
+    path: "/api/v1/support",
+    router: supportRouter,
+    policy: "authTenant",
+    domain: "support",
+    description: "Support tickets: CRUD, messages, status transitions, assignment. Tenant console endpoints.",
   },
 ];
 

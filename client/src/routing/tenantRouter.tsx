@@ -52,6 +52,8 @@ const CalendarPage = lazy(() => import("@/pages/calendar"));
 const MyTimePage = lazy(() => import("@/pages/my-time"));
 const MyCalendarPage = lazy(() => import("@/pages/my-calendar"));
 const TeamDetailPage = lazy(() => import("@/pages/team-detail"));
+const SupportTickets = lazy(() => import("@/pages/support-tickets"));
+const SupportTicketDetail = lazy(() => import("@/pages/support-ticket-detail"));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 function TenantRouter() {
@@ -123,6 +125,12 @@ function TenantRouter() {
         </Route>
         <Route path="/teams/:id">
           {() => <TenantRouteGuard component={TeamDetailPage} />}
+        </Route>
+        <Route path="/support">
+          {() => <TenantRouteGuard component={SupportTickets} />}
+        </Route>
+        <Route path="/support/:id">
+          {() => <TenantRouteGuard component={SupportTicketDetail} />}
         </Route>
         <Route path="/profile">
           {() => <ProtectedRoute component={UserProfilePage} />}

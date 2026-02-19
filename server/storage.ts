@@ -76,6 +76,10 @@ import {
   userUiPreferences,
   UserRole,
   type CommentMention, type InsertCommentMention,
+  type SupportTicket, type InsertSupportTicket,
+  type SupportTicketMessage, type InsertSupportTicketMessage,
+  type SupportTicketEvent,
+  supportTickets, supportTicketMessages, supportTicketEvents,
 } from "@shared/schema";
 import crypto from "crypto";
 import { db } from "./db";
@@ -527,6 +531,17 @@ export interface IStorage {
   // User UI Preferences
   getUserUiPreferences(userId: string): Promise<UserUiPreferences | undefined>;
   upsertUserUiPreferences(userId: string, tenantId: string | null, prefs: { themeMode?: string | null; themePackId?: string | null; themeAccent?: string | null; sidebarProjectOrder?: string[] | null }): Promise<UserUiPreferences>;
+
+  // Support Tickets
+  getSupportTicket(id: string): Promise<SupportTicket | undefined>;
+  getSupportTicketsByTenant(tenantId: string, filters?: { status?: string; priority?: string; category?: string; search?: string; clientId?: string; assignedToUserId?: string; limit?: number; offset?: number }): Promise<{ tickets: SupportTicket[]; total: number }>;
+  getSupportTicketsByClient(tenantId: string, clientId: string, filters?: { status?: string; limit?: number; offset?: number }): Promise<{ tickets: SupportTicket[]; total: number }>;
+  createSupportTicket(ticket: InsertSupportTicket): Promise<SupportTicket>;
+  updateSupportTicket(id: string, tenantId: string, updates: Partial<InsertSupportTicket>): Promise<SupportTicket | undefined>;
+  getSupportTicketMessages(ticketId: string, tenantId: string, includeInternal?: boolean): Promise<SupportTicketMessage[]>;
+  createSupportTicketMessage(message: InsertSupportTicketMessage): Promise<SupportTicketMessage>;
+  getSupportTicketEvents(ticketId: string, tenantId: string): Promise<SupportTicketEvent[]>;
+  createSupportTicketEvent(event: { tenantId: string; ticketId: string; actorType: string; actorUserId?: string | null; actorPortalUserId?: string | null; eventType: string; payloadJson?: unknown }): Promise<SupportTicketEvent>;
 }
 
 export class DatabaseStorage implements IStorage {
@@ -4760,6 +4775,144 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return result;
+  }
+
+  // ============================================================
+  // Support Tickets
+  // ============================================================
+
+  async getSupportTicket(id: string): Promise<SupportTicket | undefined> {
+    const [ticket] = await db.select().from(supportTickets).where(eq(supportTickets.id, id));
+    return ticket || undefined;
+  }
+
+  async getSupportTicketsByTenant(
+    tenantId: string,
+    filters?: { status?: string; priority?: string; category?: string; search?: string; clientId?: string; assignedToUserId?: string; limit?: number; offset?: number }
+  ): Promise<{ tickets: SupportTicket[]; total: number }> {
+    const conditions = [eq(supportTickets.tenantId, tenantId)];
+    if (filters?.status) {
+      const statuses = filters.status.split(",").map(s => s.trim());
+      if (statuses.length === 1) {
+        conditions.push(eq(supportTickets.status, statuses[0]));
+      } else {
+        conditions.push(inArray(supportTickets.status, statuses));
+      }
+    }
+    if (filters?.priority) conditions.push(eq(supportTickets.priority, filters.priority));
+    if (filters?.category) conditions.push(eq(supportTickets.category, filters.category));
+    if (filters?.clientId) conditions.push(eq(supportTickets.clientId, filters.clientId));
+    if (filters?.assignedToUserId) conditions.push(eq(supportTickets.assignedToUserId, filters.assignedToUserId));
+    if (filters?.search) {
+      conditions.push(ilike(supportTickets.title, `%${filters.search}%`));
+    }
+
+    const whereClause = and(...conditions);
+    const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(supportTickets).where(whereClause);
+    const total = Number(countResult?.count || 0);
+
+    const tickets = await db
+      .select()
+      .from(supportTickets)
+      .where(whereClause)
+      .orderBy(desc(supportTickets.lastActivityAt))
+      .limit(filters?.limit || 50)
+      .offset(filters?.offset || 0);
+
+    return { tickets, total };
+  }
+
+  async getSupportTicketsByClient(
+    tenantId: string,
+    clientId: string,
+    filters?: { status?: string; limit?: number; offset?: number }
+  ): Promise<{ tickets: SupportTicket[]; total: number }> {
+    const conditions = [
+      eq(supportTickets.tenantId, tenantId),
+      eq(supportTickets.clientId, clientId),
+    ];
+    if (filters?.status) conditions.push(eq(supportTickets.status, filters.status));
+
+    const whereClause = and(...conditions);
+    const [countResult] = await db.select({ count: sql<number>`count(*)` }).from(supportTickets).where(whereClause);
+    const total = Number(countResult?.count || 0);
+
+    const tickets = await db
+      .select()
+      .from(supportTickets)
+      .where(whereClause)
+      .orderBy(desc(supportTickets.lastActivityAt))
+      .limit(filters?.limit || 50)
+      .offset(filters?.offset || 0);
+
+    return { tickets, total };
+  }
+
+  async createSupportTicket(ticket: InsertSupportTicket): Promise<SupportTicket> {
+    const [created] = await db.insert(supportTickets).values(ticket).returning();
+    return created;
+  }
+
+  async updateSupportTicket(id: string, tenantId: string, updates: Partial<InsertSupportTicket>): Promise<SupportTicket | undefined> {
+    const [updated] = await db
+      .update(supportTickets)
+      .set({ ...updates, updatedAt: new Date(), lastActivityAt: new Date() })
+      .where(and(eq(supportTickets.id, id), eq(supportTickets.tenantId, tenantId)))
+      .returning();
+    return updated || undefined;
+  }
+
+  async getSupportTicketMessages(ticketId: string, tenantId: string, includeInternal?: boolean): Promise<SupportTicketMessage[]> {
+    const conditions = [
+      eq(supportTicketMessages.ticketId, ticketId),
+      eq(supportTicketMessages.tenantId, tenantId),
+    ];
+    if (!includeInternal) {
+      conditions.push(eq(supportTicketMessages.visibility, "public"));
+    }
+    return db
+      .select()
+      .from(supportTicketMessages)
+      .where(and(...conditions))
+      .orderBy(asc(supportTicketMessages.createdAt));
+  }
+
+  async createSupportTicketMessage(message: InsertSupportTicketMessage): Promise<SupportTicketMessage> {
+    const [created] = await db.insert(supportTicketMessages).values(message).returning();
+    await db
+      .update(supportTickets)
+      .set({ lastActivityAt: new Date(), updatedAt: new Date() })
+      .where(eq(supportTickets.id, message.ticketId));
+    return created;
+  }
+
+  async getSupportTicketEvents(ticketId: string, tenantId: string): Promise<SupportTicketEvent[]> {
+    return db
+      .select()
+      .from(supportTicketEvents)
+      .where(and(eq(supportTicketEvents.ticketId, ticketId), eq(supportTicketEvents.tenantId, tenantId)))
+      .orderBy(asc(supportTicketEvents.createdAt));
+  }
+
+  async createSupportTicketEvent(event: {
+    tenantId: string;
+    ticketId: string;
+    actorType: string;
+    actorUserId?: string | null;
+    actorPortalUserId?: string | null;
+    eventType: string;
+    payloadJson?: unknown;
+  }): Promise<SupportTicketEvent> {
+    const [created] = await db.insert(supportTicketEvents).values({
+      tenantId: event.tenantId,
+      ticketId: event.ticketId,
+      actorType: event.actorType,
+      actorUserId: event.actorUserId || null,
+      actorPortalUserId: event.actorPortalUserId || null,
+      eventType: event.eventType,
+      payloadJson: event.payloadJson || null,
+    }).returning();
+    return created;
   }
 }
 

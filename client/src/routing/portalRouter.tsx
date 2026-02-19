@@ -19,6 +19,9 @@ const ClientPortalProjectDetail = lazy(() => import("@/pages/client-portal-proje
 const ClientPortalApprovals = lazy(() => import("@/pages/client-portal-approvals"));
 const ClientPortalMessages = lazy(() => import("@/pages/client-portal-messages"));
 const ChatPage = lazy(() => import("@/pages/chat"));
+const ClientPortalSupport = lazy(() => import("@/pages/client-portal-support"));
+const ClientPortalSupportNew = lazy(() => import("@/pages/client-portal-support-new"));
+const ClientPortalSupportDetail = lazy(() => import("@/pages/client-portal-support-detail"));
 
 function ClientPortalRouter() {
   return (
@@ -44,6 +47,15 @@ function ClientPortalRouter() {
         </Route>
         <Route path="/portal/chat">
           {() => <ClientPortalRouteGuard component={ChatPage} />}
+        </Route>
+        <Route path="/portal/support">
+          {() => <ClientPortalRouteGuard component={ClientPortalSupport} />}
+        </Route>
+        <Route path="/portal/support/new">
+          {() => <ClientPortalRouteGuard component={ClientPortalSupportNew} />}
+        </Route>
+        <Route path="/portal/support/:id">
+          {() => <ClientPortalRouteGuard component={ClientPortalSupportDetail} />}
         </Route>
         <Route>
           {() => <Redirect to="/portal" />}

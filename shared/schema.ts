@@ -3251,3 +3251,133 @@ export const asanaImportRuns = pgTable("asana_import_runs", {
   index("asana_import_runs_tenant_idx").on(table.tenantId),
   index("asana_import_runs_status_idx").on(table.status),
 ]);
+
+// ============================================================
+// Support Tickets (Work Orders / Trouble Tickets)
+// ============================================================
+
+export const SupportTicketStatus = {
+  OPEN: "open",
+  IN_PROGRESS: "in_progress",
+  WAITING_ON_CLIENT: "waiting_on_client",
+  RESOLVED: "resolved",
+  CLOSED: "closed",
+} as const;
+
+export const SupportTicketPriority = {
+  LOW: "low",
+  NORMAL: "normal",
+  HIGH: "high",
+  URGENT: "urgent",
+} as const;
+
+export const SupportTicketCategory = {
+  SUPPORT: "support",
+  WORK_ORDER: "work_order",
+  BILLING: "billing",
+  BUG: "bug",
+  FEATURE_REQUEST: "feature_request",
+} as const;
+
+export const SupportTicketSource = {
+  PORTAL: "portal",
+  TENANT: "tenant",
+} as const;
+
+export const SupportTicketAuthorType = {
+  TENANT_USER: "tenant_user",
+  PORTAL_USER: "portal_user",
+  SYSTEM: "system",
+} as const;
+
+export const SupportTicketMessageVisibility = {
+  PUBLIC: "public",
+  INTERNAL: "internal",
+} as const;
+
+export const SupportTicketEventType = {
+  CREATED: "created",
+  STATUS_CHANGED: "status_changed",
+  ASSIGNED: "assigned",
+  PRIORITY_CHANGED: "priority_changed",
+  CATEGORY_CHANGED: "category_changed",
+  TITLE_CHANGED: "title_changed",
+  REOPENED: "reopened",
+  RESOLVED: "resolved",
+  CLOSED: "closed",
+} as const;
+
+export const supportTickets = pgTable("support_tickets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  clientId: varchar("client_id").references(() => clients.id),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdByPortalUserId: varchar("created_by_portal_user_id").references(() => users.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  status: text("status").notNull().default("open"),
+  priority: text("priority").notNull().default("normal"),
+  category: text("category").notNull().default("support"),
+  source: text("source").notNull().default("tenant"),
+  assignedToUserId: varchar("assigned_to_user_id").references(() => users.id),
+  dueAt: timestamp("due_at"),
+  resolvedAt: timestamp("resolved_at"),
+  closedAt: timestamp("closed_at"),
+  lastActivityAt: timestamp("last_activity_at").defaultNow().notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("support_tickets_tenant_status_idx").on(table.tenantId, table.status, table.priority),
+  index("support_tickets_tenant_client_idx").on(table.tenantId, table.clientId),
+  index("support_tickets_tenant_assigned_idx").on(table.tenantId, table.assignedToUserId),
+]);
+
+export const insertSupportTicketSchema = createInsertSchema(supportTickets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastActivityAt: true,
+  resolvedAt: true,
+  closedAt: true,
+});
+export type InsertSupportTicket = z.infer<typeof insertSupportTicketSchema>;
+export type SupportTicket = typeof supportTickets.$inferSelect;
+
+export const supportTicketMessages = pgTable("support_ticket_messages", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  ticketId: varchar("ticket_id").references(() => supportTickets.id, { onDelete: "cascade" }).notNull(),
+  authorType: text("author_type").notNull().default("tenant_user"),
+  authorUserId: varchar("author_user_id").references(() => users.id),
+  authorPortalUserId: varchar("author_portal_user_id").references(() => users.id),
+  bodyText: text("body_text").notNull(),
+  visibility: text("visibility").notNull().default("public"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("support_ticket_messages_ticket_idx").on(table.ticketId, table.createdAt),
+]);
+
+export const insertSupportTicketMessageSchema = createInsertSchema(supportTicketMessages).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertSupportTicketMessage = z.infer<typeof insertSupportTicketMessageSchema>;
+export type SupportTicketMessage = typeof supportTicketMessages.$inferSelect;
+
+export const supportTicketEvents = pgTable("support_ticket_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  ticketId: varchar("ticket_id").references(() => supportTickets.id, { onDelete: "cascade" }).notNull(),
+  actorType: text("actor_type").notNull(),
+  actorUserId: varchar("actor_user_id").references(() => users.id),
+  actorPortalUserId: varchar("actor_portal_user_id").references(() => users.id),
+  eventType: text("event_type").notNull(),
+  payloadJson: jsonb("payload_json"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("support_ticket_events_ticket_idx").on(table.ticketId, table.createdAt),
+]);
+
+export type SupportTicketEvent = typeof supportTicketEvents.$inferSelect;
