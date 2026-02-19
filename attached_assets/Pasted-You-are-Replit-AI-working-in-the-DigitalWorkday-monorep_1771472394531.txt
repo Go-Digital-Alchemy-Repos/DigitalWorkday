@@ -1,0 +1,247 @@
+You are Replit AI working in the DigitalWorkday monorepo.
+
+FEATURE:
+Upgrade the Client Profile → Documents area into a full folder-based document management system with modern UX similar to Dropbox/Google Drive.
+
+This must remain fully tenant-scoped and use Cloudflare R2 for storage.
+
+GOAL:
+Transform Documents into a structured system with:
+- Folder hierarchy (nested folders)
+- Drag & drop upload directly onto the page
+- Drag & drop files between folders
+- Inline folder creation
+- Rename, move, delete for files and folders
+- Bulk selection
+- Search within client documents
+- Secure tenant-scoped access
+- Mobile-compatible interaction model
+
+NON-DESTRUCTIVE RULES:
+- Do NOT break existing attachment or upload infrastructure.
+- Reuse existing R2 upload pipeline (presign → upload → complete).
+- Maintain strict tenant scoping.
+- Maintain audit logging for file/folder changes.
+- Do NOT introduce heavy dependencies.
+- No breaking API changes.
+
+----------------------------------------
+PHASE 1 — DATA MODEL EXTENSION
+----------------------------------------
+
+Extend document storage to support folders.
+
+If documents currently exist without folder structure, add:
+
+TABLE: client_document_folders
+- id (uuid)
+- tenantId
+- clientId
+- name
+- parentFolderId (nullable, self-reference)
+- createdByUserId
+- createdAt
+- updatedAt
+
+UNIQUE:
+(tenantId, clientId, parentFolderId, name)
+
+TABLE: client_documents (if not already structured)
+Ensure fields include:
+- id
+- tenantId
+- clientId
+- folderId (nullable root)
+- filename
+- mimeType
+- sizeBytes
+- r2Key
+- uploadedByUserId
+- createdAt
+- updatedAt
+
+Add indexes:
+- (tenantId, clientId)
+- (tenantId, clientId, folderId)
+
+DO NOT store file blobs in DB.
+
+----------------------------------------
+PHASE 2 — BACKEND API (ROUTE FACTORY PATTERN)
+----------------------------------------
+
+Create new domain:
+server/http/domains/clientDocuments.router.ts
+
+Endpoints (authTenant policy):
+
+GET    /api/v1/clients/:clientId/documents/tree
+GET    /api/v1/clients/:clientId/documents?folderId=
+POST   /api/v1/clients/:clientId/documents/folders
+PATCH  /api/v1/clients/:clientId/documents/folders/:folderId
+DELETE /api/v1/clients/:clientId/documents/folders/:folderId
+
+POST   /api/v1/clients/:clientId/documents/presign
+POST   /api/v1/clients/:clientId/documents/complete
+
+PATCH  /api/v1/clients/:clientId/documents/:documentId/move
+PATCH  /api/v1/clients/:clientId/documents/:documentId/rename
+DELETE /api/v1/clients/:clientId/documents/:documentId
+
+GET    /api/v1/clients/:clientId/documents/:documentId/download
+
+All must:
+- enforce tenantId from context
+- verify client belongs to tenant
+- prevent cross-client access
+- return standardized envelope
+
+Add integration tests:
+- folder creation
+- nested folder creation
+- move file between folders
+- tenant isolation test
+
+----------------------------------------
+PHASE 3 — DRAG & DROP UX
+----------------------------------------
+
+Frontend location:
+client/src/features/clients/components/ClientDocuments.tsx
+
+Upgrade to include:
+
+1) Folder Tree Sidebar
+- Collapsible tree
+- Root folder
+- Breadcrumb navigation
+- Right-click context menu (desktop)
+
+2) Main Document Grid/List View
+- Toggle grid/list
+- Sort by name/date/size
+- Multi-select via checkbox
+- Drag selection support (optional)
+
+3) Drag & Drop Upload
+- Dropzone across main area
+- Shows upload progress
+- Supports multi-file upload
+- Uses existing upload queue hook
+- Files auto-placed into current folder
+
+4) Drag & Drop Move
+- Drag files onto folders in tree
+- Drag between folders in grid view
+- Visual highlight when hovering
+- On drop → PATCH move endpoint
+
+5) Inline Create Folder
+- “New Folder” button
+- Inline editable folder name
+- Enter to save, Escape to cancel
+
+6) Rename
+- Inline rename (like Drive)
+- Enter to save
+- Validates uniqueness within folder
+
+7) Delete
+- Confirm modal
+- Prevent deleting folder if contains children (or implement cascade delete option with warning)
+
+8) Search
+- Search bar filters within current client
+- Backend supports search by filename (ILIKE)
+
+----------------------------------------
+PHASE 4 — PERFORMANCE
+----------------------------------------
+
+- Lazy load folder contents
+- Do NOT load entire tree if not necessary
+- Use React Query with stable keys:
+  ['client-documents', clientId, folderId]
+- Optimistic UI for move/rename/delete
+
+----------------------------------------
+PHASE 5 — MOBILE UX
+----------------------------------------
+
+- Long press opens action sheet
+- Drag & drop disabled on small screens → fallback to “Move To” modal
+- Large tap targets
+- Sticky upload progress panel
+
+----------------------------------------
+PHASE 6 — SECURITY + AUDIT
+----------------------------------------
+
+Add audit log entries for:
+- folder created
+- folder renamed
+- folder deleted
+- file uploaded
+- file moved
+- file deleted
+
+Include:
+tenantId
+clientId
+userId
+documentId/folderId
+
+----------------------------------------
+PHASE 7 — POLISH FEATURES (HIGH VALUE)
+----------------------------------------
+
+If feasible in this pass:
+
+- Show file icons by MIME type
+- Show image previews for images
+- Show file size formatting
+- Show uploader name + timestamp
+- Show breadcrumb navigation
+
+----------------------------------------
+PHASE 8 — TESTS
+----------------------------------------
+
+Backend integration tests >= 8:
+- create folder
+- nested folder
+- move file
+- rename folder
+- delete folder
+- delete file
+- tenant isolation
+- client isolation
+
+Frontend:
+- minimal smoke test for folder creation flow OR manual checklist
+
+----------------------------------------
+PHASE 9 — DOCUMENTATION
+----------------------------------------
+
+Create:
+docs/features/client-documents.md
+
+Include:
+- folder hierarchy model
+- API endpoints
+- move semantics
+- mobile behavior differences
+- security constraints
+- performance considerations
+
+----------------------------------------
+OUTPUT REQUIREMENTS
+----------------------------------------
+
+Return:
+- files added/modified
+- new DB tables/migrations
+- endpoints created
+- tests added + passing
+- manual verification checklist

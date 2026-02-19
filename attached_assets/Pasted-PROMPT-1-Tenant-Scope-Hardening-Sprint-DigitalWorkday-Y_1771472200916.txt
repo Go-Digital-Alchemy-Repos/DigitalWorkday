@@ -1,0 +1,43 @@
+PROMPT 1 — Tenant Scope Hardening Sprint (DigitalWorkday)
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE (P0):
+Make “tenantId always present + always enforced” mechanically true for tenant data domains.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change DB schema in this sprint (unless unavoidable for safety; if needed, propose minimal + migration).
+- Do NOT weaken superUser override semantics; keep audit visibility.
+- Do NOT change public API URLs.
+- Do NOT break existing behavior in tenancy=off/soft. Improvements should activate in strict mode.
+
+DELIVERABLES:
+1) A tenant-scoped repository pattern enforced in strict mode.
+2) A CI-style static check to prevent unscoped queries in tenant domains.
+3) A runtime guardrail in strict mode that detects and blocks tenant-less writes.
+4) A backfill/verification plan document for NULL tenantId rows.
+5) Tests: add/extend integration tests proving cross-tenant access is blocked.
+
+STEPS:
+A) Inventory tenant-sensitive tables/domains: clients, projects, tasks, subtasks, comments, time_entries, attachments, chat.
+B) Identify any query paths that do not include tenant scope (missing tenantId where clause, joins that can bypass).
+C) Implement a tenant-scoped repository interface:
+   - Require tenantId in all repository methods for tenant data domains.
+   - In strict mode, forbid any “global” repository methods for those domains.
+D) Add strict-mode runtime assertions:
+   - requireTenantIdForCreate must fire for any INSERT into tenant-scoped tables.
+   - Add logging for X-Tenant-Id override usage (super admin).
+E) Add a “forbidden unscoped query” lint/CI check:
+   - simple approach: ripgrep patterns for known unscoped repository methods, or
+   - a lightweight ESLint rule if existing infra supports it.
+F) Tests:
+   - add cross-tenant negative tests for at least: projects, tasks, time entries.
+G) Docs:
+   - docs/security/tenant-hardening.md
+   - include backfill plan and verification SQL snippets (read-only).
+
+OUTPUT:
+- files changed
+- new strict mode invariants
+- tests added/passing
+- exact CI check command and what it flags

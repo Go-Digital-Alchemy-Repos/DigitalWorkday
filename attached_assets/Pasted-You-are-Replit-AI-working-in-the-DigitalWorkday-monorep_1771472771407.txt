@@ -1,0 +1,255 @@
+You are Replit AI working in the DigitalWorkday monorepo.
+
+MISSION:
+Perform a developer-efficiency + performance + organization refactor sprint:
+1) Identify “prohibitively long” and cumbersome files (routes/controllers/services/components)
+2) Break them into feature/table/domain modules with consistent conventions
+3) Improve performance where obvious (N+1 queries, redundant fetches, heavy render churn)
+4) Strengthen supportability: clear layering (router → service → repo), consistent query keys, consistent error/validation patterns
+5) Finish with a complete top-to-bottom documentation review and update the in-app Docs Library in Super Admin.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT change external API URLs or response shapes unless fixing a confirmed bug (must be documented).
+- Do NOT change DB schema in this sprint.
+- Do NOT remove features.
+- Preserve tenancy/security policies and routeRegistry conventions.
+- Prefer small, safe refactors with tests.
+- Any moved files must preserve imports and avoid circular deps.
+
+DELIVERABLES:
+A) “Oversized File Audit” report:
+   docs/review/oversized-file-audit.md
+   including file paths, line counts, what they do, and recommended split plan.
+
+B) Refactor implementation:
+   - Split top offenders into smaller modules (routes + services + repos)
+   - Enforce one convention per area (naming + folder layout)
+   - Reduce complexity without behavior changes
+
+C) Performance improvements:
+   - Fix clear N+1 patterns
+   - Reduce duplicate queries
+   - Add memoization where safe
+   - Add minimal profiling hooks (guarded env flag)
+
+D) Tests:
+   - Ensure test suite passes (or improves pass rate)
+   - Add regression tests for any high-risk refactors (routes mount, policy drift, key CRUD flows)
+
+E) Documentation:
+   - Update repo docs (docs/*) to reflect new structure
+   - Update “Docs Library” inside Super Admin (complete top-to-bottom update)
+
+------------------------------------------------------------
+PHASE 0 — BASELINE CHECKS (NO CODE CHANGES)
+------------------------------------------------------------
+
+1) Run and record:
+- typecheck
+- lint (if present)
+- vitest tests
+- production build (client/server)
+
+Log results and timings into:
+docs/review/oversized-file-audit.md (top section)
+
+------------------------------------------------------------
+PHASE 1 — OVERSIZED FILE SCAN + PRIORITIZATION
+------------------------------------------------------------
+
+1) Scan repo for largest TS/TSX files by line count:
+- server/**/*.ts
+- client/src/**/*.tsx
+- shared/**/*.ts
+
+Create a ranked table of top ~30 largest files with:
+- path
+- line count
+- category (route/service/repo/component/utility)
+- risk (low/med/high)
+- recommended split target
+
+Define “prohibitively long”:
+- server routes/controllers > 400 lines
+- services > 350 lines
+- repos > 300 lines
+- react pages/components > 400 lines
+(Adjust if repo norms differ.)
+
+2) Choose top 8–12 files to refactor THIS sprint:
+Priority order:
+- route aggregators and massive route files
+- services doing too much
+- components with heavy logic and large render bodies
+
+------------------------------------------------------------
+PHASE 2 — SERVER ORGANIZATION IMPROVEMENTS (ROUTES FIRST)
+------------------------------------------------------------
+
+Objective: make backend developer-friendly and consistent.
+
+1) Routes:
+- Enforce createApiRouter + routeRegistry for all migrated domains.
+- For legacy routes still present:
+  - split into domain modules under server/routes/domains/*
+  - keep legacy mounting but make modules smaller and clearer
+  - ensure no double-mounting
+
+2) Folder layout (target):
+server/
+  http/
+    domains/            (new-style createApiRouter routers)
+    middleware/
+    routeRegistry.ts
+    routerFactory.ts
+    mount.ts
+  features/
+    <domain>/
+      <domain>.service.ts
+      <domain>.repo.ts
+      <domain>.types.ts
+  routes/
+    domains/            (legacy domain routers if any remain)
+    index.ts            (thin aggregator)
+
+3) For each oversized route file:
+- Split by domain and/or resource:
+  - tasks.router.ts: tasks core, subtasks, watchers, tags, comments, attachments
+  - clients.router.ts: clients core, contacts, divisions, documents
+- Extract business logic to services, DB to repos
+- Ensure consistent request validation + response envelopes per existing conventions
+- Keep route paths identical.
+
+4) Add/extend policy drift tests to guarantee:
+- every mount comes from registry (where applicable)
+- every router has a declared policy
+- webhook/public endpoints remain public only
+
+------------------------------------------------------------
+PHASE 3 — FRONTEND ORGANIZATION IMPROVEMENTS
+------------------------------------------------------------
+
+Objective: reduce component bloat and improve maintainability.
+
+1) Identify oversized TSX files (pages, drawers, chat, tasks).
+2) Split:
+- move hooks into client/src/features/<domain>/hooks/*
+- move pure UI components into components/*
+- move domain logic into services/utils per feature
+
+3) Standardize React Query keys:
+- centralize per domain:
+  client/src/lib/queryKeys/<domain>.ts
+- replace ad-hoc string keys across code
+
+4) Performance quick wins (only if measurable):
+- memoize row components in lists (tasks, chat messages, time entries)
+- move heavy derived computations outside component bodies
+- remove redundant refetches and ensure invalidate targets correct keys
+
+Add PERF flags:
+- CLIENT_PERF_LOG=1 prints render timing for key pages/drawers
+- API_PERF_LOG=1 prints request timings for key endpoints
+
+Guard these logs behind env flags so production stays clean.
+
+------------------------------------------------------------
+PHASE 4 — PERFORMANCE / DB EFFICIENCY PASS
+------------------------------------------------------------
+
+1) Search for known N+1 patterns:
+- per-row lookups in loops
+- fetching user/profile per item
+- unread counts per conversation
+- attachments per comment/task
+
+2) Fix by:
+- batching queries (IN (...) sets)
+- joining where safe
+- caching stable lookups
+- adding composite indexes ONLY if they already exist or are safe without schema changes (if index change is needed, document for next sprint)
+
+3) Document before/after:
+- endpoints affected
+- query counts reduced
+- any noticeable latency changes
+
+------------------------------------------------------------
+PHASE 5 — CLEANUP + CONSISTENCY
+------------------------------------------------------------
+
+1) Remove dead code safely:
+- unused imports
+- unused exports
+- files proven unreferenced (ripgrep + build proof)
+Do NOT delete anything uncertain.
+
+2) Enforce conventions:
+- naming: *.router.ts, *.service.ts, *.repo.ts
+- barrels only where helpful (avoid massive index.ts barrels)
+- avoid circular dependencies
+
+3) Update docs:
+- docs/ARCHITECTURE_OVERVIEW.md if structure changed
+- docs/TESTING.md if test factory changed
+- docs/KNOWN_ISSUES.md if resolved items addressed
+- docs/architecture/routes.md if mounts moved
+
+------------------------------------------------------------
+PHASE 6 — TOP-TO-BOTTOM DOCS LIBRARY UPDATE (SUPER ADMIN)
+------------------------------------------------------------
+
+1) Locate the in-app Docs Library in Super Admin:
+- where docs are stored (DB table or markdown files)
+- how docs are rendered/edited
+
+2) Perform a complete review:
+- identify outdated docs (routes, mobile, theme packs, attachments, chat)
+- update or rewrite entries to match current behavior and architecture
+
+3) Add/Update Docs Library entries (minimum set):
+- System Architecture (current)
+- Route Architecture + Registry Convention
+- Tenancy + Security Model
+- Theme Packs
+- Mobile UX Foundation
+- Attachments (R2 pipeline)
+- Comments + Mention system (current state)
+- Testing + CI Guidance
+- Deployment / Release Checklist
+
+4) Ensure Docs Library is:
+- searchable
+- categorized
+- consistent formatting
+- includes “Last updated” metadata
+
+------------------------------------------------------------
+PHASE 7 — FINAL VERIFICATION
+------------------------------------------------------------
+
+1) Re-run:
+- typecheck
+- lint
+- tests
+- production build
+
+2) Create final report:
+docs/review/refactor-sprint-report.md
+Include:
+- files split + before/after line counts
+- performance wins
+- any risks or follow-ups
+- docs library entries updated list
+
+------------------------------------------------------------
+OUTPUT REQUIREMENTS
+------------------------------------------------------------
+
+Return:
+1) Oversized file audit table (top 30)
+2) List of refactors completed (with before/after LOC)
+3) Performance fixes made (with evidence)
+4) Tests passing summary
+5) Docs Library entries updated (titles + categories)
+6) Any follow-ups recommended with priority labels (P0/P1/P2)

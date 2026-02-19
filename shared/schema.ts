@@ -990,6 +990,7 @@ export const projects = pgTable("projects", {
   status: text("status").notNull().default("active"),
   color: text("color").default("#3B82F6"),
   budgetMinutes: integer("budget_minutes"), // Optional project budget in minutes for workload forecasting
+  stickyAt: timestamp("sticky_at"),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -2888,7 +2889,12 @@ export interface ChatExportOutputLocation {
 
 export const updateWorkspaceSchema = insertWorkspaceSchema.partial();
 export const updateTeamSchema = insertTeamSchema.partial();
-export const updateProjectSchema = insertProjectSchema.partial();
+export const updateProjectSchema = insertProjectSchema.partial().extend({
+  stickyAt: z.union([z.string().datetime(), z.null()]).optional().transform((val) => {
+    if (val === null || val === undefined) return val;
+    return new Date(val);
+  }),
+});
 export const updateSectionSchema = insertSectionSchema.partial();
 export const updateTaskSchema = insertTaskSchema.partial();
 export const updateSubtaskSchema = insertSubtaskSchema.partial();

@@ -22,6 +22,7 @@ import {
   CalendarDays,
   FileStack,
   ChevronsDown,
+  Pin,
 } from "lucide-react";
 import appLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -128,6 +129,11 @@ export function TenantSidebar() {
     return [...projects]
       .filter((p) => p.status !== "archived")
       .sort((a, b) => {
+        const aSticky = a.stickyAt ? new Date(a.stickyAt).getTime() : 0;
+        const bSticky = b.stickyAt ? new Date(b.stickyAt).getTime() : 0;
+        if (aSticky && !bSticky) return -1;
+        if (!aSticky && bSticky) return 1;
+        if (aSticky && bSticky) return aSticky - bSticky;
         const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
         const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
         return dateB - dateA;
@@ -264,6 +270,9 @@ export function TenantSidebar() {
                                   style={{ backgroundColor: project.color || "#3B82F6" }}
                                 />
                                 <span className="truncate flex-1">{project.name}</span>
+                                {project.stickyAt && (
+                                  <Pin className="h-3 w-3 shrink-0 text-muted-foreground" data-testid={`icon-pinned-${project.id}`} />
+                                )}
                                 {(clientName || divisionName) && (
                                   <div className="flex items-center gap-1 shrink-0">
                                     {clientName && (

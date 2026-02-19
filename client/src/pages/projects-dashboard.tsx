@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X } from "lucide-react";
+import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X, Pin } from "lucide-react";
 import { ProjectDrawer } from "@/features/projects";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -178,24 +178,33 @@ export default function ProjectsDashboard() {
   const filteredProjects = useMemo(() => {
     if (!projects) return [];
     
-    return projects.filter((project) => {
-      const matchesSearch = !searchQuery || 
-        project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-        toPlainText(project.description).toLowerCase().includes(searchQuery.toLowerCase());
-      
-      const isArchived = project.status === "archived";
-      const matchesStatus = statusFilter === "all" || 
-        (statusFilter === "active" && !isArchived) ||
-        (statusFilter === "archived" && isArchived);
-      
-      const matchesClient = clientFilter === "all" || project.clientId === clientFilter;
-      
-      const matchesDivision = divisionFilter === "all" || project.divisionId === divisionFilter;
-      
-      const matchesTeam = teamFilter === "all" || project.teamId === teamFilter;
-      
-      return matchesSearch && matchesStatus && matchesClient && matchesDivision && matchesTeam;
-    });
+    return projects
+      .filter((project) => {
+        const matchesSearch = !searchQuery || 
+          project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          toPlainText(project.description).toLowerCase().includes(searchQuery.toLowerCase());
+        
+        const isArchived = project.status === "archived";
+        const matchesStatus = statusFilter === "all" || 
+          (statusFilter === "active" && !isArchived) ||
+          (statusFilter === "archived" && isArchived);
+        
+        const matchesClient = clientFilter === "all" || project.clientId === clientFilter;
+        
+        const matchesDivision = divisionFilter === "all" || project.divisionId === divisionFilter;
+        
+        const matchesTeam = teamFilter === "all" || project.teamId === teamFilter;
+        
+        return matchesSearch && matchesStatus && matchesClient && matchesDivision && matchesTeam;
+      })
+      .sort((a, b) => {
+        const aSticky = a.stickyAt ? new Date(a.stickyAt).getTime() : 0;
+        const bSticky = b.stickyAt ? new Date(b.stickyAt).getTime() : 0;
+        if (aSticky && !bSticky) return -1;
+        if (!aSticky && bSticky) return 1;
+        if (aSticky && bSticky) return aSticky - bSticky;
+        return 0;
+      });
   }, [projects, searchQuery, statusFilter, clientFilter, divisionFilter, teamFilter]);
 
   const [, navigate] = useLocation();
@@ -417,6 +426,9 @@ export default function ProjectsDashboard() {
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 mb-1">
                             <h3 className="font-medium truncate">{project.name}</h3>
+                            {project.stickyAt && (
+                              <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
+                            )}
                             <Badge variant={project.status === "archived" ? "secondary" : "default"} className="shrink-0">
                               {project.status === "archived" ? "Archived" : "Active"}
                             </Badge>
@@ -507,6 +519,9 @@ export default function ProjectsDashboard() {
                           className="h-3 w-3 rounded-sm shrink-0"
                           style={{ backgroundColor: project.color || "#3B82F6" }}
                         />
+                        {project.stickyAt && (
+                          <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
+                        )}
                         <div className="min-w-0">
                           <div className="font-medium truncate">{project.name}</div>
                           {project.description && (

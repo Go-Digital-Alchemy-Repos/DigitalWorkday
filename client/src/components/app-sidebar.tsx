@@ -26,6 +26,7 @@ import {
   ContactRound,
   Columns3,
   CalendarClock,
+  Pin,
 } from "lucide-react";
 import appLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -150,7 +151,16 @@ export function AppSidebar() {
             <CollapsibleContent>
               <SidebarGroupContent>
                 <SidebarMenu>
-                  {projects?.filter((p) => p.status !== "archived").map((project) => (
+                  {projects?.filter((p) => p.status !== "archived")
+                    .sort((a, b) => {
+                      const aSticky = a.stickyAt ? new Date(a.stickyAt).getTime() : 0;
+                      const bSticky = b.stickyAt ? new Date(b.stickyAt).getTime() : 0;
+                      if (aSticky && !bSticky) return -1;
+                      if (!aSticky && bSticky) return 1;
+                      if (aSticky && bSticky) return aSticky - bSticky;
+                      return 0;
+                    })
+                    .map((project) => (
                     <SidebarMenuItem key={project.id}>
                       <SidebarMenuButton
                         asChild
@@ -165,6 +175,9 @@ export function AppSidebar() {
                             style={{ backgroundColor: project.color || "#3B82F6" }}
                           />
                           <span className="truncate">{project.name}</span>
+                          {project.stickyAt && (
+                            <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          )}
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

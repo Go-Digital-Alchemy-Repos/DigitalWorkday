@@ -45,7 +45,7 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { Building2, X, Archive, RotateCcw, Search, LogOut, Eye } from "lucide-react";
+import { Building2, X, Archive, RotateCcw, Search, LogOut, Eye, Pin } from "lucide-react";
 import type { Project, ClientWithContacts, Team } from "@shared/schema";
 
 const PROJECT_COLORS = [
@@ -222,6 +222,46 @@ export function ProjectSettingsSheet({
       toast({
         title: "Error",
         description: "Failed to update project status.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const toggleStickyMutation = useMutation({
+    mutationFn: async () => {
+      const newStickyAt = project.stickyAt ? null : new Date().toISOString();
+      const res = await apiRequest("PATCH", `/api/projects/${project.id}`, { stickyAt: newStickyAt });
+      return await res.json();
+    },
+    onSuccess: (updatedProject) => {
+      queryClient.setQueryData<Project[]>(["/api/projects"], (old) => {
+        if (!old) return old;
+        return old.map((p) =>
+          p.id === project.id ? { ...p, ...updatedProject } : p,
+        );
+      });
+      queryClient.setQueryData<Project>(["/api/projects", project.id], (old) =>
+        old ? { ...old, ...updatedProject } : old,
+      );
+      queryClient.setQueryData<any[]>(["/api/v1/projects", { includeCounts: true }], (old) => {
+        if (!old) return old;
+        return old.map((p: any) =>
+          p.id === project.id ? { ...p, ...updatedProject } : p,
+        );
+      });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      toast({
+        title: updatedProject.stickyAt ? "Project pinned" : "Project unpinned",
+        description: updatedProject.stickyAt
+          ? "This project will appear at the top of your project lists."
+          : "This project has been unpinned.",
+      });
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to update sticky status.",
         variant: "destructive",
       });
     },
@@ -537,6 +577,36 @@ export function ProjectSettingsSheet({
                   </Select>
                 </div>
               )}
+            </div>
+          </div>
+
+          <Separator />
+
+          <div className="space-y-3">
+            <Label className="text-sm font-medium">Pin Project</Label>
+            <div className="p-3 rounded-lg bg-muted">
+              <div className="flex items-center justify-between gap-2">
+                <div>
+                  <p className="text-sm font-medium">
+                    {project.stickyAt ? "Pinned" : "Not Pinned"}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    {project.stickyAt
+                      ? "This project is pinned to the top of all project lists."
+                      : "Pin this project to keep it at the top of the sidebar and project lists."}
+                  </p>
+                </div>
+                <Button
+                  variant={project.stickyAt ? "default" : "secondary"}
+                  size="sm"
+                  disabled={toggleStickyMutation.isPending}
+                  onClick={() => toggleStickyMutation.mutate()}
+                  data-testid="button-toggle-sticky"
+                >
+                  <Pin className="h-4 w-4 mr-1" />
+                  {project.stickyAt ? "Unpin" : "Pin"}
+                </Button>
+              </div>
             </div>
           </div>
 
