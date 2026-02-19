@@ -25,6 +25,7 @@ import {
   Globe,
   AlignJustify,
   AlignCenter,
+  Tag,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -208,6 +209,18 @@ function ClientGridCard({
                 {client.industry}
               </p>
             )}
+            {client.tags && client.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {client.tags.slice(0, 3).map((tag) => (
+                  <Badge key={tag} variant="outline" className="text-xs">
+                    {tag}
+                  </Badge>
+                ))}
+                {client.tags.length > 3 && (
+                  <span className="text-xs text-muted-foreground">+{client.tags.length - 3}</span>
+                )}
+              </div>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -311,6 +324,18 @@ function ClientGroupCard({
               <p className="text-xs text-muted-foreground mt-2 truncate">
                 {parent.industry}
               </p>
+            )}
+            {parent.tags && parent.tags.length > 0 && (
+              <div className="flex flex-wrap gap-1 mt-2">
+                {parent.tags.slice(0, 3).map((tag) => (
+                  <Badge key={tag} variant="outline" className="text-xs">
+                    {tag}
+                  </Badge>
+                ))}
+                {parent.tags.length > 3 && (
+                  <span className="text-xs text-muted-foreground">+{parent.tags.length - 3}</span>
+                )}
+              </div>
             )}
           </CardContent>
         </div>
@@ -706,6 +731,15 @@ export default function ClientsPage() {
     return Array.from(set).sort();
   }, [hierarchyClients]);
 
+  const allTags = useMemo(() => {
+    if (!hierarchyClients) return [];
+    const set = new Set<string>();
+    hierarchyClients.forEach((c) => {
+      if (c.tags) c.tags.forEach((t) => set.add(t));
+    });
+    return Array.from(set).sort();
+  }, [hierarchyClients]);
+
   const dynamicFilters = useMemo((): FilterConfig[] => {
     return [
       STATUS_FILTERS[0],
@@ -717,8 +751,20 @@ export default function ClientsPage() {
           ...industries.map((ind) => ({ value: ind, label: ind })),
         ],
       },
+      ...(allTags.length > 0
+        ? [
+            {
+              key: "tag",
+              label: "Tag",
+              options: [
+                { value: "all", label: "All tags" },
+                ...allTags.map((tag) => ({ value: tag, label: tag })),
+              ],
+            },
+          ]
+        : []),
     ];
-  }, [industries]);
+  }, [industries, allTags]);
 
   const createClientMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -913,7 +959,12 @@ export default function ClientsPage() {
         filterValues.industry === "all" ||
         client.industry === filterValues.industry;
 
-      return matchesSearch && matchesStatus && matchesIndustry;
+      const matchesTag =
+        !filterValues.tag ||
+        filterValues.tag === "all" ||
+        (client.tags && client.tags.includes(filterValues.tag));
+
+      return matchesSearch && matchesStatus && matchesIndustry && matchesTag;
     });
 
     result.sort((a, b) => {

@@ -79,6 +79,8 @@ import {
   Loader2,
   ArrowRight,
   GitBranch,
+  X,
+  Tag,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
@@ -132,6 +134,7 @@ const updateClientSchema = z.object({
   primaryContactPhone: z.string().optional(),
   notes: z.string().optional(),
   parentClientId: z.string().nullable().optional(),
+  tags: z.array(z.string()).optional(),
 });
 
 type UpdateClientForm = z.infer<typeof updateClientSchema>;
@@ -465,6 +468,7 @@ export default function ClientDetailPage() {
       primaryContactPhone: client.primaryContactPhone || "",
       notes: client.notes || "",
       parentClientId: client.parentClientId || null,
+      tags: client.tags || [],
     } : undefined,
   });
 
@@ -983,6 +987,58 @@ export default function ClientDetailPage() {
                             <FormControl>
                               <Textarea {...field} placeholder="Brief description of the company" rows={3} data-testid="input-description" />
                             </FormControl>
+                            <FormMessage />
+                          </FormItem>
+                        )}
+                      />
+                      <FormField
+                        control={clientForm.control}
+                        name="tags"
+                        render={({ field }) => (
+                          <FormItem>
+                            <FormLabel className="flex items-center gap-1.5">
+                              <Tag className="h-3.5 w-3.5" />
+                              Tags
+                            </FormLabel>
+                            <div className="space-y-2">
+                              {(field.value || []).length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {(field.value || []).map((tag, idx) => (
+                                    <Badge key={`${tag}-${idx}`} variant="secondary" className="gap-1">
+                                      {tag}
+                                      <button
+                                        type="button"
+                                        onClick={() => {
+                                          const updated = (field.value || []).filter((_, i) => i !== idx);
+                                          field.onChange(updated);
+                                        }}
+                                        className="ml-0.5 rounded-full"
+                                        data-testid={`button-remove-tag-${idx}`}
+                                      >
+                                        <X className="h-3 w-3" />
+                                      </button>
+                                    </Badge>
+                                  ))}
+                                </div>
+                              )}
+                              <FormControl>
+                                <Input
+                                  placeholder="Type a tag and press Enter"
+                                  data-testid="input-client-tag"
+                                  onKeyDown={(e) => {
+                                    if (e.key === "Enter") {
+                                      e.preventDefault();
+                                      const input = e.currentTarget;
+                                      const val = input.value.trim();
+                                      if (val && !(field.value || []).includes(val)) {
+                                        field.onChange([...(field.value || []), val]);
+                                        input.value = "";
+                                      }
+                                    }
+                                  }}
+                                />
+                              </FormControl>
+                            </div>
                             <FormMessage />
                           </FormItem>
                         )}

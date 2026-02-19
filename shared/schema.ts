@@ -543,6 +543,7 @@ export const clients = pgTable("clients", {
   primaryContactPhone: text("primary_contact_phone"),
   status: text("status").notNull().default("active"),
   notes: text("notes"),
+  tags: text("tags").array(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
