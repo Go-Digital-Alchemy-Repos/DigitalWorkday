@@ -1,8 +1,14 @@
 // Mobile UX Phase 3B improvements applied here
-import { useState, useRef, useEffect, useCallback, useMemo } from "react";
+import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, ApiError } from "@/lib/queryClient";
-import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanel, ChatContextPanelToggle } from "@/features/chat";
+import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanelToggle } from "@/features/chat";
+
+const LazyChatContextPanel = lazy(() =>
+  import("@/features/chat/ChatContextPanel").then((mod) => ({
+    default: mod.ChatContextPanel,
+  }))
+);
 import { useAuth } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { useIsMobile } from "@/hooks/use-mobile";
@@ -2235,16 +2241,24 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* Context Panel - Right Side */}
-      {(selectedChannel || selectedDm) && (
-        <ChatContextPanel
-          selectedChannel={selectedChannel}
-          selectedDm={selectedDm}
-          currentUserId={user?.id}
-          channelMembers={channelMembers}
-          isOpen={contextPanelOpen}
-          onToggle={() => setContextPanelOpen(false)}
-        />
+      {/* Context Panel - Right Side (lazy-loaded) */}
+      {(selectedChannel || selectedDm) && contextPanelOpen && (
+        <Suspense
+          fallback={
+            <div className="w-72 border-l bg-background flex items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          }
+        >
+          <LazyChatContextPanel
+            selectedChannel={selectedChannel}
+            selectedDm={selectedDm}
+            currentUserId={user?.id}
+            channelMembers={channelMembers}
+            isOpen={contextPanelOpen}
+            onToggle={() => setContextPanelOpen(false)}
+          />
+        </Suspense>
       )}
 
       <Dialog open={createChannelOpen} onOpenChange={setCreateChannelOpen}>

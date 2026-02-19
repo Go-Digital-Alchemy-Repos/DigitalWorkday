@@ -1,5 +1,4 @@
 export { useChatUrlState, type SelectedConversation, type ConversationType } from "./ChatLayout";
 export { ConversationListPanel, type ChatChannel, type ChatDmThread } from "./ConversationListPanel";
-export { ChatContextPanel, ChatContextPanelToggle } from "./ChatContextPanel";
+export { ChatContextPanelToggle } from "./ChatContextPanelToggle";
 export { ChatMessageTimeline, type ChatMessage, type ThreadSummary } from "./ChatMessageTimeline";
-export { ThreadPanel } from "./ThreadPanel";

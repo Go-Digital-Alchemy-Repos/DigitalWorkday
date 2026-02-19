@@ -70,7 +70,8 @@ Corresponding unused UI component files (`carousel.tsx`, `input-otp.tsx`, `resiz
 | `super-admin` | 191 | 40 | Super admin tenant management |
 | `super-admin-status` | 93 | 18 | System status page |
 | `client-detail` | 85 | 17 | Client detail CRM page |
-| `chat` | 79 | 21 | Chat page (tiptap, emoji picker, socket) |
+| `chat` | 75 | 20 | Chat page (socket, message timeline, composer) |
+| `ChatContextPanel` | 7 | 2 | Channel/DM info sidebar (lazy) |
 | `super-admin-settings` | 64 | 13 | Super admin settings |
 | `project` | 58 | 16 | Project detail page |
 | `asana-import-wizard` | 57 | 13 | Import wizard |
@@ -129,7 +130,33 @@ The emoji picker (`emoji-picker-react`, 34 MB on disk) was previously imported e
 - `client/src/components/chat-message-input.tsx` (removed direct `emoji-picker-react` import)
 - `client/src/components/global-chat-drawer.tsx` (removed direct `emoji-picker-react` import, removed unused `Popover`, `Smile`, `useTheme` imports)
 
-**Result:** Emoji picker module evaluation is deferred until user interaction. Chat route chunk remains at ~79 kB (20 kB gzip); the emoji library code in the shared deps chunk is only instantiated on demand.
+**Result:** Emoji picker module evaluation is deferred until user interaction. Chat route chunk reduced from ~79 kB to ~75 kB (20 kB gzip); the emoji library (308 kB) loads only on demand.
+
+### ChatContextPanel (lazy-loaded sidebar)
+
+The `ChatContextPanel` (channel/DM info sidebar) was previously bundled into the chat chunk despite only rendering when the user clicks the info toggle. It has been:
+
+1. **Extracted** — `ChatContextPanelToggle` (tiny button) moved to its own file so it stays in the chat chunk. The full `ChatContextPanel` is in a separate file.
+2. **Lazy-loaded** — `chat.tsx` uses `React.lazy(() => import("@/features/chat/ChatContextPanel"))` with a Suspense spinner fallback.
+3. **Dead code removed** — Unused `ThreadPanel` export removed from the chat barrel, preventing it from being pulled into the chat chunk.
+
+**Files changed:**
+- `client/src/features/chat/ChatContextPanelToggle.tsx` (new — tiny toggle button)
+- `client/src/features/chat/ChatContextPanel.tsx` (toggle removed, ChevronLeft import removed)
+- `client/src/features/chat/index.ts` (barrel updated: toggle from new file, ChatContextPanel removed, ThreadPanel removed)
+- `client/src/pages/chat.tsx` (lazy import for ChatContextPanel, Suspense wrapper with spinner fallback)
+
+**Result:**
+
+| Chunk | Before | After |
+|---|---|---|
+| `chat` | 78.97 kB (20.41 kB gzip) | 74.68 kB (19.86 kB gzip) |
+| `ChatContextPanel` (new, lazy) | — | 6.73 kB (2.05 kB gzip) |
+| `emoji-picker-react` (lazy) | 308.55 kB (74.73 kB gzip) | 308.55 kB (74.74 kB gzip) |
+
+### No rich text in chat
+
+The chat composer uses a plain `<Textarea>` wrapped by `ChatMessageInput`. There is no tiptap/rich-text editor in the chat flow — tiptap is only used in comment threads and notes elsewhere. No further "progressive enhancement" split is needed.
 
 **Regression checklist:**
 - Message send works without opening emoji picker
@@ -137,12 +164,14 @@ The emoji picker (`emoji-picker-react`, 34 MB on disk) was previously imported e
 - Selected emoji inserts at cursor position
 - Mobile composer still works
 - Global chat drawer emoji works identically
+- Context panel opens with brief spinner on first load, then instantly on subsequent toggles
+- Context panel toggle button remains always visible when panel is closed
 
 ---
 
 ## Future Optimisation Opportunities
 
 1. **Manual vendor chunks** — If `vite.config.ts` modification is permitted, `manualChunks` can group vendor libraries (recharts, fullcalendar, tiptap, dnd-kit) into dedicated cacheable chunks that persist across deploys.
-2. **Prefetching** — Add `<link rel="prefetch">` hints for likely next-page chunks (e.g., prefetch the Home chunk after login completes).
+2. **Prefetching** — Predictive prefetch after login/session-restore is implemented (see `docs/performance/prefetch.md`). Further `<link rel="prefetch">` hints could be added for route chunks based on heuristics.
 3. **Icon library** — `react-icons` (83 MB on disk) is tree-shaken, but auditing for unused icon imports could further reduce bundle size.
 4. **CSS splitting** — The CSS is currently a single 148 kB file; CSS modules or route-level CSS splitting could improve first-paint metrics.
