@@ -174,7 +174,7 @@ export function AppSidebar() {
                             className="h-3 w-3 rounded-sm"
                             style={{ backgroundColor: project.color || "#3B82F6" }}
                           />
-                          <span className="truncate">{project.name}</span>
+                          <span className={`truncate${project.stickyAt ? " font-semibold" : ""}`}>{project.name}</span>
                           {project.stickyAt && (
                             <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
                           )}

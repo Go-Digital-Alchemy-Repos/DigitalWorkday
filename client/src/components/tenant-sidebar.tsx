@@ -269,7 +269,7 @@ export function TenantSidebar() {
                                   className="h-3 w-3 rounded-sm shrink-0"
                                   style={{ backgroundColor: project.color || "#3B82F6" }}
                                 />
-                                <span className="truncate flex-1">{project.name}</span>
+                                <span className={`truncate flex-1${project.stickyAt ? " font-semibold" : ""}`}>{project.name}</span>
                                 {project.stickyAt && (
                                   <Pin className="h-3 w-3 shrink-0 text-muted-foreground" data-testid={`icon-pinned-${project.id}`} />
                                 )}
