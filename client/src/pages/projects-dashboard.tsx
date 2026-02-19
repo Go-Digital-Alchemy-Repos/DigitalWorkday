@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, DollarSign, Plus, X } from "lucide-react";
+import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X } from "lucide-react";
 import { ProjectDetailDrawer, ProjectDrawer } from "@/features/projects";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -57,20 +57,9 @@ interface ProjectAnalyticsSummary {
   }>;
 }
 
-interface ForecastSummary {
-  perProject: Array<{
-    projectId: string;
-    trackedMinutesTotal: number;
-    taskEstimateMinutes: number;
-    budgetMinutes: number | null;
-    overBudget: boolean | null;
-    remainingEstimateMinutes: number | null;
-  }>;
-}
-
 export default function ProjectsDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("active");
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [divisionFilter, setDivisionFilter] = useState<string>("all");
   const [teamFilter, setTeamFilter] = useState<string>("all");
@@ -105,11 +94,6 @@ export default function ProjectsDashboard() {
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery<ProjectAnalyticsSummary>({
     queryKey: ["/api/v1/projects/analytics/summary"],
-    staleTime: 30000,
-  });
-
-  const { data: forecastSummary } = useQuery<ForecastSummary>({
-    queryKey: ["/api/v1/projects/forecast/summary"],
     staleTime: 30000,
   });
 
@@ -183,21 +167,16 @@ export default function ProjectsDashboard() {
     return analytics.perProject.find(p => p.projectId === projectId);
   };
 
-  const getProjectForecast = (projectId: string) => {
-    if (!forecastSummary?.perProject) return null;
-    return forecastSummary.perProject.find(p => p.projectId === projectId);
-  };
-
   const handleClientFilterChange = (newClientId: string) => {
     setClientFilter(newClientId);
     setDivisionFilter("all");
   };
 
-  const hasActiveFilters = searchQuery || statusFilter !== "all" || clientFilter !== "all" || divisionFilter !== "all" || teamFilter !== "all";
+  const hasActiveFilters = searchQuery || statusFilter !== "active" || clientFilter !== "all" || divisionFilter !== "all" || teamFilter !== "all";
 
   const handleClearFilters = () => {
     setSearchQuery("");
-    setStatusFilter("all");
+    setStatusFilter("active");
     setClientFilter("all");
     setDivisionFilter("all");
     setTeamFilter("all");
@@ -235,12 +214,6 @@ export default function ProjectsDashboard() {
     if (!clientId || !clients) return "-";
     const client = clients.find(c => c.id === clientId);
     return client?.companyName || "-";
-  };
-
-  const getTeamName = (teamId: string | null) => {
-    if (!teamId || !teams) return "-";
-    const team = teams.find(t => t.id === teamId);
-    return team?.name || "-";
   };
 
   if (projectsError) {
@@ -413,12 +386,12 @@ export default function ProjectsDashboard() {
             icon={<FolderKanban className="h-12 w-12" />}
             title="No projects found"
             description={
-              searchQuery || statusFilter !== "all" || clientFilter !== "all" || divisionFilter !== "all" || teamFilter !== "all"
+              hasActiveFilters
                 ? "Try adjusting your filters"
                 : "Create your first project to get started"
             }
             action={
-              !(searchQuery || statusFilter !== "all" || clientFilter !== "all" || divisionFilter !== "all" || teamFilter !== "all") && (
+              !hasActiveFilters && (
                 <Button onClick={() => setCreateProjectOpen(true)} data-testid="button-add-first-project">
                   <Plus className="h-4 w-4 mr-2" />
                   Create Project
@@ -498,7 +471,6 @@ export default function ProjectsDashboard() {
                 <TableRow>
                   <TableHead className="w-[250px]">Project Name</TableHead>
                   <TableHead>Client</TableHead>
-                  <TableHead>Team</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-center">
                     <div className="flex items-center justify-center gap-1">
@@ -519,12 +491,6 @@ export default function ProjectsDashboard() {
                     </div>
                   </TableHead>
                   <TableHead className="w-[100px]">Progress</TableHead>
-                  <TableHead className="text-center">
-                    <div className="flex items-center justify-center gap-1">
-                      <DollarSign className="h-3.5 w-3.5" />
-                      Budget
-                    </div>
-                  </TableHead>
                   <TableHead>
                     <div className="flex items-center gap-1">
                       <Calendar className="h-3.5 w-3.5" />
@@ -558,12 +524,6 @@ export default function ProjectsDashboard() {
                       </div>
                     </TableCell>
                     <TableCell>{getClientName(project.clientId)}</TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-1">
-                        <Users className="h-3.5 w-3.5 text-muted-foreground" />
-                        <span>{getTeamName(project.teamId)}</span>
-                      </div>
-                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Badge variant={project.status === "archived" ? "secondary" : "default"}>
@@ -620,40 +580,6 @@ export default function ProjectsDashboard() {
                             </TooltipTrigger>
                             <TooltipContent>
                               {stats.completedTasks} of {stats.openTasks + stats.completedTasks} tasks completed
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })()}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {(() => {
-                        const forecast = getProjectForecast(project.id);
-                        if (!forecast) return <span className="text-muted-foreground">-</span>;
-                        if (forecast.budgetMinutes === null) {
-                          return <span className="text-muted-foreground">No budget</span>;
-                        }
-                        if (forecast.overBudget) {
-                          return (
-                            <Tooltip>
-                              <TooltipTrigger>
-                                <Badge variant="destructive" className="text-xs">Over</Badge>
-                              </TooltipTrigger>
-                              <TooltipContent>
-                                {Math.floor(forecast.trackedMinutesTotal / 60)}h / {Math.floor(forecast.budgetMinutes / 60)}h tracked
-                              </TooltipContent>
-                            </Tooltip>
-                          );
-                        }
-                        const percent = Math.round((forecast.trackedMinutesTotal / forecast.budgetMinutes) * 100);
-                        return (
-                          <Tooltip>
-                            <TooltipTrigger>
-                              <span className={`text-xs ${percent >= 80 ? "text-orange-500 dark:text-orange-400 font-medium" : "text-muted-foreground"}`}>
-                                {percent}%
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {Math.floor(forecast.trackedMinutesTotal / 60)}h / {Math.floor(forecast.budgetMinutes / 60)}h tracked
                             </TooltipContent>
                           </Tooltip>
                         );

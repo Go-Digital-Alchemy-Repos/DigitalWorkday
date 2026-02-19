@@ -1,0 +1,278 @@
+NON-DESTRUCTIVE REPLIT MEGA-PROMPT
+Project: Digital Workday (React + Express)
+Goal: Redesign the Clients page to be dramatically more usable, faster to scan, and more “premium SaaS” while preserving existing behavior and minimizing risk.
+
+============================================================
+0) NON-DESTRUCTIVE RULES (MUST FOLLOW)
+============================================================
+- Do NOT remove existing functionality.
+- Do NOT delete existing routes/components; prefer adding new components and gradually wiring them in.
+- Keep existing API contracts working. If you introduce new endpoints, keep old ones intact.
+- Use feature flags / progressive enhancement where possible (e.g., CLIENTS_PAGE_V2=true).
+- Maintain tenant scoping and authorization everywhere.
+- Add tests where feasible; do not break build or typecheck.
+- Add/update documentation in the Admin Docs Library (or project docs) describing new UI patterns and endpoints.
+
+============================================================
+1) DISCOVERY / AUDIT FIRST
+============================================================
+1. Locate the current Clients page route and components:
+   - Identify the React route/page component (e.g., /clients).
+   - Identify data fetching layer (tRPC/REST/React Query).
+   - Identify the server endpoint(s) used for listing clients, searching, paging, etc.
+2. Identify the current UI: “large list of client cards”.
+3. Determine existing client fields available (name, status, owner, lastContactAt, openTasksCount, revenue, tags, createdAt, updatedAt, etc.).
+4. Confirm multi-tenant scoping and required filters (tenantId, role permissions).
+5. Inventory any existing “client detail” page/drawer patterns that can be reused.
+
+Output a short plan BEFORE making code changes:
+- Files to be added/modified
+- Proposed route/component structure
+- Any new DB fields or derived fields (if needed)
+- Any new endpoints (if needed)
+
+============================================================
+2) NEW CLIENTS PAGE V2 (UI/UX)
+============================================================
+Implement an upgraded Clients page using a “hybrid” approach:
+- Default view: Compact Table View for power users
+- Optional view: Card/Grid View for visual browsing
+- Provide a view toggle: [Table View] [Card View]
+- Save the user’s chosen view preference (per-user) so it persists.
+
+Create a new page component (do NOT replace old immediately):
+- ClientsPageV2 (behind feature flag CLIENTS_PAGE_V2)
+- If flag enabled, route /clients uses V2; otherwise use existing page.
+
+------------------------------------------------------------
+2A) Sticky Top Control Bar (must be sticky while scrolling)
+------------------------------------------------------------
+Add a sticky header bar above the list with:
+- Search input (debounced; instant results)
+- Filters:
+  - Status (multi-select or dropdown)
+  - Owner / Assigned rep dropdown
+  - “Needs Follow Up” / “Needs Attention” toggle
+  - Optional: Industry/Tag filter if tags exist
+- Sort dropdown (e.g., Last Contact, Name, Created, Revenue)
+- “+ Add Client” primary button
+- View toggle (Table/Card)
+
+UX:
+- Search should be keyboard focused quickly (Cmd/Ctrl+K optional)
+- Debounce search ~250–400ms
+- Filters should be “chips” that show active filters and allow quick clear
+- Add a “Clear filters” button when filters are active
+
+------------------------------------------------------------
+2B) Segmentation Tabs (reduce overwhelm)
+------------------------------------------------------------
+Add tabs above the results list:
+- All
+- My Clients
+- Active
+- Inactive
+- Needs Follow Up
+- VIP (if a VIP tag/flag exists; otherwise hide)
+
+Tabs should set common filters without user thinking.
+Keep tabs optional and non-breaking; if fields are missing, hide the tab.
+
+------------------------------------------------------------
+2C) At-a-glance KPI Row (small but premium)
+------------------------------------------------------------
+Add a slim KPI strip above the list:
+- Total Clients
+- Active
+- New This Month
+- At Risk / Needs Attention
+- Revenue This Month (only if revenue data exists; otherwise omit)
+
+These can be derived from existing data or from a new lightweight summary endpoint.
+Do not make this expensive; cache or compute efficiently.
+
+------------------------------------------------------------
+2D) Table View (Default)
+------------------------------------------------------------
+Implement a table with:
+- Columns (initial suggestion):
+  - Client (name + small secondary line like industry/tag)
+  - Status badge
+  - Owner (avatar/name)
+  - Last Contact
+  - Open Tasks count
+  - Revenue / LTV (optional)
+  - Needs Attention indicator
+  - Quick actions (row actions menu)
+
+Features:
+- Row click opens client details in a RIGHT-SIDE DRAWER (not a full page nav) if possible.
+- Columns should be responsive; on mobile show a condensed “stacked row” layout.
+- Add pagination or infinite scroll (whichever is consistent with current patterns).
+- If client list can be large (>500), use virtualization (e.g., react-virtual) in table view.
+
+------------------------------------------------------------
+2E) Card/Grid View (Optional Toggle)
+------------------------------------------------------------
+Implement a card grid:
+- Compact uniform-height cards
+- Card layout:
+  Top row:
+    - Client name (bold)
+    - Status badge
+    - Owner avatar
+  Middle:
+    - Last contact
+    - Open tasks
+    - Revenue (optional)
+  Bottom:
+    - Quick actions icons (Call, Email, Add Note, Start Timer) if those actions exist
+- Cards should have subtle hover elevation and feel “premium”
+- Keep spacing clean; avoid walls of text
+
+------------------------------------------------------------
+2F) “Needs Attention” Logic + Visual Indicators
+------------------------------------------------------------
+Add a small indicator (dot/badge) for clients needing attention.
+Rules should be configurable and safe defaults:
+- Needs attention if:
+  - Last contact older than N days (default 30)
+  - OR has overdue tasks > 0
+  - OR has unpaid invoices (only if invoicing exists)
+  - OR has open support tickets (only if support exists)
+If some signals do not exist, ignore them.
+
+UI:
+- Show a small red/amber dot or badge + tooltip “Needs attention”
+- Add a filter toggle to show only “Needs attention” clients
+
+Implementation guidance:
+- Prefer computing this in the server query (derived field) to keep UI simple.
+- If DB schema changes are too risky now, compute derived flags at query time.
+
+------------------------------------------------------------
+2G) Bulk Actions (Major UX win)
+------------------------------------------------------------
+Add multi-select support:
+- Checkboxes in table view rows
+- Bulk action bar appears when selection > 0:
+  - Assign Owner/Rep
+  - Change Status
+  - Export (CSV)
+  - Add Tag
+  - Delete (if permitted; include confirm modal)
+
+All bulk actions must enforce tenant scope + role permissions.
+
+------------------------------------------------------------
+2H) Right-side Client Detail Drawer (Modern UX)
+------------------------------------------------------------
+When clicking a row/card:
+- Open a slide-over drawer on the right
+- Drawer tabs:
+  - Overview
+  - Activity
+  - Tasks
+  - Notes
+  - Files
+  - Time Logged (if exists)
+- Drawer should load fast; show skeleton states
+- Keep existing client detail page intact; drawer can reuse existing detail components where possible
+
+------------------------------------------------------------
+2I) Saved Views / Preferences (Premium feature)
+------------------------------------------------------------
+Persist per-user:
+- View mode (table/card)
+- Sort choice
+- Visible columns (optional if quick to implement)
+- Last used filters (optional)
+
+Store in:
+- user_preferences table OR existing user settings store
+- Ensure preferences are tenant-safe and user-specific
+
+============================================================
+3) SERVER/API IMPROVEMENTS (NON-BREAKING)
+============================================================
+If existing list endpoint is limited, add a new endpoint (keep old intact):
+- GET /api/clients (or tRPC) supports:
+  - q (search)
+  - status[]
+  - ownerId
+  - needsAttention boolean
+  - tab (All/My/Active/Inactive/NeedsFollowUp/VIP)
+  - sort (name/lastContact/revenue/created)
+  - direction
+  - page/limit OR cursor
+
+Return:
+- clients[]
+- pagination info
+- optionally summary counts for KPI strip (or make a separate /api/clients/summary)
+
+Add indexes if necessary for search/sort (non-destructive migrations):
+- tenantId + name
+- tenantId + status
+- tenantId + ownerId
+- tenantId + lastContactAt
+(Only if missing and safe.)
+
+Ensure:
+- strict tenant scoping in query
+- authorization checks
+
+============================================================
+4) MOBILE AND RESPONSIVE POLISH (MANDATORY)
+============================================================
+- Sticky header should collapse gracefully on small screens.
+- Table view should become “stacked rows” on mobile.
+- Card view should become single column on mobile.
+- Ensure tap targets are large enough.
+- Add skeleton loaders for list and drawer.
+
+============================================================
+5) VISUAL POLISH (PREMIUM FEEL)
+============================================================
+Using Tailwind + shadcn/ui:
+- Use consistent spacing (8px scale)
+- Soft shadows and hover transitions
+- Rounded corners (xl/2xl)
+- Muted secondary text, strong headings
+- Lucide icons for quick actions and subtle UI cues
+- Use consistent badge styling for statuses
+- No harsh borders; prefer subtle separators
+
+============================================================
+6) TESTING + QUALITY GATES
+============================================================
+Before finishing:
+- Run typecheck
+- Run unit tests (vitest) if present; update/repair as needed
+- Validate that /clients works with CLIENTS_PAGE_V2 on and off
+- Verify tenant scoping (no cross-tenant access)
+- Verify performance with large client lists (virtualization if needed)
+
+============================================================
+7) DOCS UPDATE
+============================================================
+Update the internal Docs Library / documentation:
+- Clients Page V2 overview
+- Filters/tabs/view modes
+- Needs Attention logic and how to adjust thresholds
+- Bulk actions and permissions
+- Drawer behavior and component structure
+- Any new endpoints and query params
+- How user preferences are stored
+
+============================================================
+8) DELIVERABLES
+============================================================
+When you finish, output:
+1) What files changed/added (bulleted list)
+2) How to enable the new page (feature flag)
+3) New endpoints added (if any)
+4) Any migrations added (if any)
+5) How to extend tabs/filters in the future
+
+Now proceed with the audit plan, then implement Clients Page V2 as described.
