@@ -1,0 +1,207 @@
+PROMPT — Client Pipeline Automation Rules (Auto-move Stage on Project Milestones)
+DigitalWorkday
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE:
+Add Automation Rules that can automatically update a Client’s Stage when certain project milestones or events occur.
+
+SCOPE:
+- Tenant-scoped.
+- Admin-configurable rules (employees can trigger events but cannot edit rules unless permitted).
+- Non-destructive: does not remove manual stage editing.
+- Safety: never move stage “backwards” unless rule explicitly allows it.
+- Audit everything.
+
+DEFAULT STAGES:
+Lead, Proposal, Content Strategy, Design, Development, Final Testing, Active Maintenance
+
+DELIVERABLES:
+1) Data model for automation rules
+2) Rule evaluator service
+3) Event hooks from project/task/milestones
+4) Admin UI to manage rules
+5) Tests + docs
+
+===========================================================
+PHASE 1 — DATA MODEL
+===========================================================
+
+Create table: client_stage_automation_rules
+- id (uuid)
+- tenantId
+- workspaceId (nullable)
+- name (text)
+- isEnabled (boolean)
+- triggerType (enum):
+  - project_created
+  - project_status_changed
+  - project_section_created
+  - project_milestone_reached
+  - task_completed
+  - all_tasks_in_section_completed
+  - project_marked_complete
+  - project_moved_to_maintenance
+  - invoice_paid (future)
+- triggerConfigJson (jsonb) // per trigger details
+- conditionJson (jsonb)     // optional additional conditions
+- actionJson (jsonb)        // must include toStage
+- allowBackward (boolean default false)
+- allowSkipStages (boolean default true)
+- createdByUserId
+- createdAt
+- updatedAt
+
+Indexes:
+- (tenantId, isEnabled)
+- (tenantId, workspaceId, isEnabled)
+
+Audit table (or reuse existing audit/events):
+client_stage_automation_events
+- id
+- tenantId
+- ruleId
+- clientId
+- projectId (nullable)
+- triggerType
+- payloadJson
+- outcome (applied | skipped | failed)
+- reason (text nullable)
+- createdAt
+
+===========================================================
+PHASE 2 — TRIGGERS (MILESTONES & PROJECT EVENTS)
+===========================================================
+
+Define milestones/events (use what exists today; if milestones don’t exist, emulate via sections/tasks):
+
+SUPPORTED TRIGGER CONFIG EXAMPLES:
+1) project_created:
+  { anyProject: true } OR { projectType: "website" }
+
+2) project_status_changed:
+  { from: "planning", to: "in_progress" }
+
+3) task_completed:
+  { taskTag: "design" } OR { sectionName: "Design" } OR { projectId? }
+
+4) all_tasks_in_section_completed:
+  { sectionName: "Design" }
+
+5) project_marked_complete:
+  { any: true }
+
+6) project_moved_to_maintenance:
+  { statusTo: "maintenance" } OR { tag: "maintenance" }
+
+Hook points (server):
+- When project created
+- When project status changed
+- When task completed
+- When section completion computed
+- When project marked complete
+- When project maintenance flag/status set
+
+Implement an internal event emitter (or reuse existing outbox/notification system):
+server/features/automation/automationBus.ts
+emitAutomationEvent({ tenantId, workspaceId?, clientId, projectId?, type, payload })
+
+===========================================================
+PHASE 3 — RULE EVALUATOR SERVICE
+===========================================================
+
+Create:
+server/features/automation/clientStageAutomation.service.ts
+
+Core:
+evaluateClientStageAutomations(event):
+- Load enabled rules for tenant/workspace matching event type
+- For each rule:
+  - Validate client exists and belongs to tenant
+  - Evaluate conditionJson (optional):
+    - client stage currently in [..]
+    - project has tag
+    - only apply if client has at least N projects
+    - only apply if project matches criteria
+  - Determine target toStage from actionJson
+  - Apply stage change if allowed:
+    - If same stage -> skip
+    - If target is “earlier” than current and allowBackward=false -> skip
+  - Update client.stage
+  - Insert stage history row (client_stage_history)
+  - Log automation event and audit record
+  - Emit realtime update for client UI
+
+Stage ordering:
+Define canonical order array and compare indexes.
+
+===========================================================
+PHASE 4 — ADMIN UI: Manage Rules
+===========================================================
+
+Location:
+Tenant Admin → Settings → CRM / Pipeline → “Automation Rules”
+
+UI:
+- Rule list: name, trigger, target stage, enabled toggle
+- Create/Edit wizard:
+  1) Select Trigger Type
+  2) Configure trigger details (dynamic form)
+  3) Optional conditions (client stage filter, project filter)
+  4) Select target stage
+  5) Guard options: allowBackward, allowSkipStages
+- “Test Rule” button:
+  - runs evaluation against a selected client/project sample (dry run)
+- Activity feed: last 50 automation events
+
+Permissions:
+- Admins manage rules
+- Employees can view only (default)
+
+===========================================================
+PHASE 5 — API ROUTES
+===========================================================
+
+Create router:
+server/http/domains/automation.router.ts (authTenant)
+
+Admin routes:
+GET    /api/v1/automation/client-stage-rules
+POST   /api/v1/automation/client-stage-rules
+PATCH  /api/v1/automation/client-stage-rules/:id
+DELETE /api/v1/automation/client-stage-rules/:id
+POST   /api/v1/automation/client-stage-rules/:id/dry-run  (admin only)
+GET    /api/v1/automation/client-stage-events?cursor=
+
+Security:
+- Only tenant admins can CRUD.
+- Tenant scoping required.
+
+===========================================================
+PHASE 6 — TESTS
+===========================================================
+
+Integration tests:
+- Rule applies on task_completed → updates client stage
+- Rule does not move backward unless allowBackward
+- Wrong tenant event does nothing
+- Disabled rule does nothing
+- Dry-run does not persist changes
+
+Policy drift tests:
+- automation routes authTenant + admin-only enforcement
+
+===========================================================
+PHASE 7 — DOCS
+===========================================================
+
+Add:
+docs/features/client-pipeline-automation.md
+
+Update Docs Library:
+- “Client Pipeline Automation Rules”
+
+OUTPUT:
+- migrations, services, routes, UI
+- tests passing
+- docs updated

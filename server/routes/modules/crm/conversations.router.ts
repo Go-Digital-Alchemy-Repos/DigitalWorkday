@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "../../../db";
-import { eq, and, desc, count, inArray } from "drizzle-orm";
+import { eq, and, desc, count, inArray, gte, isNull, ne, sql as dsql } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../../../lib/errors";
 import { getEffectiveTenantId } from "../../../middleware/tenantContext";
 import { requireAuth } from "../../../auth";
@@ -36,9 +36,11 @@ router.get("/crm/clients/:clientId/conversations", requireAuth, async (req: Requ
     const assignedFilter = req.query.assigned as string | undefined;
     const userId = getCurrentUserId(req);
 
+    const includeMerged = req.query.includeMerged === "true";
     let whereCondition = and(
       eq(clientConversations.clientId, clientId),
-      eq(clientConversations.tenantId, tenantId)
+      eq(clientConversations.tenantId, tenantId),
+      ...(includeMerged ? [] : [isNull(clientConversations.mergedIntoId)])
     );
 
     const results = await db.select({
@@ -438,6 +440,218 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
   }
 });
 
+router.post("/crm/conversations/:conversationId/merge", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+      return sendError(res, AppError.forbidden("Only admins can merge conversations"), req);
+    }
+
+    const { conversationId } = req.params;
+    const schema = z.object({
+      targetConversationId: z.string().min(1),
+    });
+    const data = validateBody(req.body, schema, res);
+    if (!data) return;
+
+    if (conversationId === data.targetConversationId) {
+      return sendError(res, AppError.badRequest("Cannot merge a conversation with itself"), req);
+    }
+
+    const [primary] = await db.select()
+      .from(clientConversations)
+      .where(and(eq(clientConversations.id, data.targetConversationId), eq(clientConversations.tenantId, tenantId)))
+      .limit(1);
+
+    const [secondary] = await db.select()
+      .from(clientConversations)
+      .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)))
+      .limit(1);
+
+    if (!primary || !secondary) {
+      return sendError(res, AppError.notFound("Conversation"), req);
+    }
+
+    if (primary.clientId !== secondary.clientId) {
+      return sendError(res, AppError.badRequest("Cannot merge conversations from different clients"), req);
+    }
+
+    if (primary.mergedIntoId) {
+      return sendError(res, AppError.badRequest("Target conversation has already been merged into another thread"), req);
+    }
+
+    if (secondary.mergedIntoId) {
+      return sendError(res, AppError.badRequest("This conversation has already been merged"), req);
+    }
+
+    const userId = getCurrentUserId(req);
+    const [actorUser] = await db.select({ name: users.name })
+      .from(users)
+      .where(eq(users.id, userId))
+      .limit(1);
+    const actorName = actorUser?.name || "Unknown";
+    const now = new Date();
+
+    await db.transaction(async (tx) => {
+      await tx.update(clientMessages)
+        .set({ conversationId: primary.id })
+        .where(eq(clientMessages.conversationId, secondary.id));
+
+      await tx.update(clientConversations)
+        .set({
+          mergedIntoId: primary.id,
+          mergedAt: now,
+          mergedByUserId: userId,
+          closedAt: now,
+          updatedAt: now,
+        })
+        .where(eq(clientConversations.id, secondary.id));
+
+      await tx.insert(clientMessages).values({
+        tenantId,
+        conversationId: primary.id,
+        authorUserId: userId,
+        bodyText: `[Thread Merged] "${secondary.subject}" was merged into this conversation by ${actorName}.`,
+        visibility: "internal",
+      });
+
+      await tx.update(clientConversations)
+        .set({ updatedAt: now })
+        .where(eq(clientConversations.id, primary.id));
+    });
+
+    const [msgCount] = await db.select({ value: count() })
+      .from(clientMessages)
+      .where(eq(clientMessages.conversationId, primary.id));
+
+    emitToTenant(tenantId, CLIENT_CONVERSATION_EVENTS.MERGED, {
+      primaryConversationId: primary.id,
+      secondaryConversationId: secondary.id,
+      tenantId,
+      clientId: primary.clientId,
+      mergedByUserId: userId,
+    });
+
+    res.json({
+      primaryId: primary.id,
+      secondaryId: secondary.id,
+      messagesMerged: msgCount?.value || 0,
+      message: `Conversation "${secondary.subject}" merged into "${primary.subject}"`,
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/crm/conversations/:conversationId/merge", req);
+  }
+});
+
+router.get("/crm/conversations/:conversationId/duplicates", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    if (user.role === UserRole.CLIENT) {
+      return sendError(res, AppError.forbidden("Clients cannot check duplicates"), req);
+    }
+
+    const { conversationId } = req.params;
+
+    const [conversation] = await db.select()
+      .from(clientConversations)
+      .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)))
+      .limit(1);
+
+    if (!conversation) return sendError(res, AppError.notFound("Conversation"), req);
+
+    const fiveMinAgo = new Date(conversation.createdAt.getTime() - 5 * 60 * 1000);
+    const fiveMinAfter = new Date(conversation.createdAt.getTime() + 5 * 60 * 1000);
+
+    const duplicates = await db.select({
+      id: clientConversations.id,
+      subject: clientConversations.subject,
+      createdAt: clientConversations.createdAt,
+      closedAt: clientConversations.closedAt,
+      mergedIntoId: clientConversations.mergedIntoId,
+    })
+      .from(clientConversations)
+      .where(
+        and(
+          eq(clientConversations.tenantId, tenantId),
+          eq(clientConversations.clientId, conversation.clientId),
+          ne(clientConversations.id, conversationId),
+          isNull(clientConversations.mergedIntoId),
+          dsql`lower(${clientConversations.subject}) = lower(${conversation.subject})`,
+          gte(clientConversations.createdAt, fiveMinAgo),
+          dsql`${clientConversations.createdAt} <= ${fiveMinAfter}`
+        )
+      )
+      .orderBy(desc(clientConversations.createdAt));
+
+    res.json(duplicates);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/conversations/:conversationId/duplicates", req);
+  }
+});
+
+router.get("/crm/clients/:clientId/conversations/merge-candidates", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    if (user.role === UserRole.CLIENT) {
+      return sendError(res, AppError.forbidden("Clients cannot merge conversations"), req);
+    }
+
+    const { clientId } = req.params;
+    const excludeId = req.query.exclude as string | undefined;
+
+    const client = await verifyClientTenancy(clientId, tenantId);
+    if (!client) return sendError(res, AppError.notFound("Client"), req);
+
+    let condition = and(
+      eq(clientConversations.clientId, clientId),
+      eq(clientConversations.tenantId, tenantId),
+      isNull(clientConversations.mergedIntoId),
+      isNull(clientConversations.closedAt),
+    );
+
+    const results = await db.select({
+      id: clientConversations.id,
+      subject: clientConversations.subject,
+      status: clientConversations.status,
+      createdAt: clientConversations.createdAt,
+      updatedAt: clientConversations.updatedAt,
+      assignedToUserId: clientConversations.assignedToUserId,
+    })
+      .from(clientConversations)
+      .where(condition)
+      .orderBy(desc(clientConversations.updatedAt));
+
+    const filtered = excludeId ? results.filter(r => r.id !== excludeId) : results;
+
+    const withMeta = await Promise.all(filtered.map(async (c) => {
+      const [msgCount] = await db.select({ value: count() })
+        .from(clientMessages)
+        .where(eq(clientMessages.conversationId, c.id));
+      const [lastMsg] = await db.select({
+        createdAt: clientMessages.createdAt,
+      })
+        .from(clientMessages)
+        .where(eq(clientMessages.conversationId, c.id))
+        .orderBy(desc(clientMessages.createdAt))
+        .limit(1);
+      return { ...c, messageCount: msgCount?.value || 0, lastMessage: lastMsg || null };
+    }));
+
+    res.json(withMeta);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/clients/:clientId/conversations/merge-candidates", req);
+  }
+});
+
 router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
@@ -464,7 +678,8 @@ router.get("/crm/portal/conversations", requireAuth, async (req: Request, res: R
       .where(
         and(
           eq(clientConversations.tenantId, tenantId),
-          inArray(clientConversations.clientId, clientIds)
+          inArray(clientConversations.clientId, clientIds),
+          isNull(clientConversations.mergedIntoId)
         )
       )
       .orderBy(desc(clientConversations.updatedAt));

@@ -3132,6 +3132,9 @@ export const clientConversations = pgTable("client_conversations", {
   createdByUserId: varchar("created_by_user_id").references(() => users.id).notNull(),
   assignedToUserId: varchar("assigned_to_user_id").references(() => users.id),
   closedAt: timestamp("closed_at"),
+  mergedIntoId: varchar("merged_into_id"),
+  mergedAt: timestamp("merged_at"),
+  mergedByUserId: varchar("merged_by_user_id").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -3139,6 +3142,7 @@ export const clientConversations = pgTable("client_conversations", {
   index("client_conversations_client_idx").on(table.clientId),
   index("client_conversations_project_idx").on(table.projectId),
   index("client_conversations_assigned_idx").on(table.assignedToUserId),
+  index("client_conversations_dup_detect_idx").on(table.tenantId, table.clientId, table.subject, table.createdAt),
 ]);
 
 export const insertClientConversationSchema = createInsertSchema(clientConversations).omit({
@@ -3146,6 +3150,9 @@ export const insertClientConversationSchema = createInsertSchema(clientConversat
   createdAt: true,
   updatedAt: true,
   closedAt: true,
+  mergedIntoId: true,
+  mergedAt: true,
+  mergedByUserId: true,
 });
 
 export type ClientConversation = typeof clientConversations.$inferSelect;

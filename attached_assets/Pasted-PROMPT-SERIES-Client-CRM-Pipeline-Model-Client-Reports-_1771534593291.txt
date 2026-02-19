@@ -1,0 +1,274 @@
+PROMPT SERIES — Client CRM Pipeline Model + Client Reports
+DigitalWorkday
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE:
+Expand the Client CRM model to introduce a Pipeline (Stage) system and an Admin-only Client Reports dashboard.
+
+CORE CONCEPT:
+- Replace “Client Status” with “Client Stage”
+- Stage = where the client is in the delivery lifecycle
+- Default stage on client creation: Lead
+- Stage can be changed anytime by tenant admin or employee
+- Admin-only reporting dashboard: “Client Reports”
+- Visualizations on Clients page showing projects by stage
+
+STAGES (default system stages):
+1) Lead
+2) Proposal
+3) Content Strategy
+4) Design
+5) Development
+6) Final Testing
+7) Active Maintenance
+
+NON-DESTRUCTIVE RULES:
+- Do NOT break existing client CRUD.
+- Migrate old status field to stage safely.
+- Preserve tenant scoping.
+- Use createApiRouter + routeRegistry.
+- Add policy drift + integration tests.
+- All reporting endpoints admin-only.
+- Performance-safe (add indexes as needed).
+
+DELIVERABLES:
+A) DB changes (client_stage model)
+B) Stage migration from old status
+C) Stage management API
+D) Clients page visualization upgrades
+E) Admin-only Client Reports dashboard
+F) Tests + docs
+
+===========================================================
+PROMPT 1 — DATA MODEL: Introduce Client Stage (Pipeline)
+===========================================================
+
+OBJECTIVE:
+Replace/upgrade client “status” into structured “stage” model.
+
+STEP 1 — DB Changes
+
+Option A (Simple, recommended v1):
+Modify clients table:
+- Rename status → stage (if safe)
+OR
+- Add new column:
+  clients.stage (varchar or enum)
+Default: 'Lead'
+NOT NULL
+
+Add index:
+- (tenantId, stage)
+
+STEP 2 — Migration
+- If clients.status exists:
+  - Map existing values to new stage values
+  - If unmapped → default to Lead
+- Remove or deprecate old status field in code
+- Keep backward compatibility temporarily if needed
+
+STEP 3 — Validation
+Allowed stages:
+- Lead
+- Proposal
+- Content Strategy
+- Design
+- Development
+- Final Testing
+- Active Maintenance
+
+Implement:
+- server/features/clients/clientStages.ts
+Export:
+- STAGES constant
+- validateStage(value)
+
+===========================================================
+PROMPT 2 — API: Stage Management
+===========================================================
+
+OBJECTIVE:
+Add ability to update client stage.
+
+ROUTES:
+
+PATCH /api/v1/clients/:clientId/stage
+Body: { stage }
+
+Rules:
+- Tenant admin or employee allowed
+- Must validate stage
+- Update updatedAt
+- Emit activity event: client.stage_changed
+
+Add optional bulk update:
+POST /api/v1/clients/stage/bulk
+
+Tests:
+- Cannot update across tenant
+- Invalid stage rejected
+- Activity log created
+
+===========================================================
+PROMPT 3 — Clients Page Visualization Upgrade
+===========================================================
+
+OBJECTIVE:
+Upgrade Clients area to include pipeline visualization and high-level metrics.
+
+UI ADDITIONS:
+
+1) Pipeline Overview Section (Top of Clients Page)
+- Horizontal stage bar:
+  Lead → Proposal → Content Strategy → Design → Development → Final Testing → Active Maintenance
+- Each stage displays:
+  - Count of clients
+  - Optional total project value (if available)
+
+2) Stage Cards / Stat Boxes
+- Box per stage:
+  - Client count
+  - Projects count (optional)
+  - Quick filter link
+
+3) Filter Tabs:
+- All
+- Lead
+- Proposal
+- etc.
+
+4) Optional Kanban View (stretch, v2):
+- Drag client between stages
+- PATCH stage on drop
+
+DATA:
+GET /api/v1/clients/stats/stage-summary
+Returns:
+{
+  stage: string,
+  clientCount: number,
+  projectCount: number
+}[]
+
+Add optimized query (group by stage).
+
+Ensure index usage on clients.stage.
+
+===========================================================
+PROMPT 4 — Client Reports (Admin-Only)
+===========================================================
+
+OBJECTIVE:
+Add new Admin-only report section: Client Reports.
+
+NAVIGATION:
+Super Admin / Tenant Admin:
+Reports → Client Reports
+
+ROUTE:
+GET /api/v1/reports/clients
+Admin only.
+
+REPORT METRICS:
+1) Clients by Stage
+2) Projects by Client Stage
+3) Revenue by Stage (if revenue exists)
+4) Average time in stage (if timestamps available)
+5) Stage transition history (optional v2)
+6) Clients added this month
+7) Active Maintenance count
+
+ENDPOINTS:
+
+GET /api/v1/reports/clients/overview
+GET /api/v1/reports/clients/stage-breakdown
+GET /api/v1/reports/clients/project-distribution
+
+Add proper DB grouping queries with tenantId scoping.
+
+===========================================================
+PROMPT 5 — Stage History (Optional but Recommended)
+===========================================================
+
+OBJECTIVE:
+Track how long clients remain in each stage.
+
+DB:
+client_stage_history
+- id
+- tenantId
+- clientId
+- fromStage
+- toStage
+- changedByUserId
+- changedAt
+
+On stage update:
+- Insert history row.
+
+This enables:
+- Average time in stage
+- Funnel velocity reporting
+
+===========================================================
+PROMPT 6 — Performance & Index Hardening
+===========================================================
+
+Add indexes:
+- clients(tenantId, stage)
+- projects(tenantId, clientId)
+- projects(tenantId, stage?) if project-level stage later
+- client_stage_history(tenantId, clientId)
+
+Verify explain plans for:
+- stage summary query
+- report queries
+
+Add note to docs/performance/db-indexes.md
+
+===========================================================
+PROMPT 7 — Permissions & Security
+===========================================================
+
+Rules:
+- Employees can update stage.
+- Admin-only:
+  - Client Reports dashboard.
+  - Bulk stage update.
+- Portal users:
+  - Cannot see or modify stage.
+
+Add policy drift tests for:
+- reports route admin-only
+- stage update authTenant enforced
+
+===========================================================
+PROMPT 8 — Documentation
+===========================================================
+
+Update docs/features/client-pipeline.md:
+
+Include:
+- What “Stage” means
+- Stage definitions
+- How to change stage
+- Reporting metrics
+- Security rules
+
+Update Super Admin Docs Library:
+- “Client Pipeline Model”
+- “Client Reports”
+
+===========================================================
+OUTPUT REQUIREMENTS
+===========================================================
+
+Return:
+- migrations created
+- APIs added
+- components updated
+- reports implemented
+- tests added and passing
+- docs updated
+- any recommended future upgrades (kanban drag, automation rules, SLA per stage)

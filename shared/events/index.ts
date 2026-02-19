@@ -906,6 +906,7 @@ export type ClientToServerEvents = {
   [CLIENT_CONVERSATION_EVENTS.ASSIGNED]: (payload: ClientConversationAssignedPayload) => void;
   [CLIENT_CONVERSATION_EVENTS.MESSAGE_ADDED]: (payload: ClientConversationMessagePayload) => void;
   [CLIENT_CONVERSATION_EVENTS.INTERNAL_NOTE_ADDED]: (payload: ClientConversationMessagePayload) => void;
+  [CLIENT_CONVERSATION_EVENTS.MERGED]: (payload: ClientConversationMergedPayload) => void;
 };
 
 // =============================================================================
@@ -916,6 +917,7 @@ export const CLIENT_CONVERSATION_EVENTS = {
   ASSIGNED: 'client_conversation:assigned',
   MESSAGE_ADDED: 'client_conversation:messageAdded',
   INTERNAL_NOTE_ADDED: 'client_conversation:internalNoteAdded',
+  MERGED: 'client_conversation:merged',
 } as const;
 
 export interface ClientConversationAssignedPayload {
@@ -935,4 +937,12 @@ export interface ClientConversationMessagePayload {
   assignedToUserId: string | null;
   authorUserId: string;
   messageId: string;
+}
+
+export interface ClientConversationMergedPayload {
+  primaryConversationId: string;
+  secondaryConversationId: string;
+  tenantId: string;
+  clientId: string;
+  mergedByUserId: string;
 }

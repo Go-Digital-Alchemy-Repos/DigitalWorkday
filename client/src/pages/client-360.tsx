@@ -98,6 +98,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { ClientReportsTab } from "@/components/client-reports-tab";
+import { useAuth } from "@/lib/auth";
 
 interface CrmSummary {
   client: {
@@ -1275,6 +1276,8 @@ interface ApprovalItem {
 
 function MessagesTab({ clientId }: { clientId: string }) {
   const { toast } = useToast();
+  const { user: authUser } = useAuth();
+  const isAdmin = authUser?.role === "admin" || authUser?.role === "super_user";
   const [selectedConvoId, setSelectedConvoId] = useState<string | null>(null);
   const [showNewConvo, setShowNewConvo] = useState(false);
   const [newSubject, setNewSubject] = useState("");
@@ -1284,6 +1287,8 @@ function MessagesTab({ clientId }: { clientId: string }) {
   const [replyVisibility, setReplyVisibility] = useState<"public" | "internal">("public");
   const [convoSearch, setConvoSearch] = useState("");
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
+  const [showMergeDialog, setShowMergeDialog] = useState(false);
+  const [mergeTargetId, setMergeTargetId] = useState<string>("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
 
   const { data: tenantUsers = [] } = useQuery<any[]>({
@@ -1372,6 +1377,38 @@ function MessagesTab({ clientId }: { clientId: string }) {
     },
   });
 
+  const { data: mergeCandidates = [] } = useQuery<any[]>({
+    queryKey: ["/api/crm/clients", clientId, "conversations/merge-candidates", selectedConvoId],
+    queryFn: async () => {
+      const res = await apiRequest("GET", `/api/crm/clients/${clientId}/conversations/merge-candidates?exclude=${selectedConvoId}`);
+      return res.json();
+    },
+    enabled: !!selectedConvoId && showMergeDialog,
+  });
+
+  const mergeMutation = useMutation({
+    mutationFn: async ({ conversationId, targetConversationId }: { conversationId: string; targetConversationId: string }) => {
+      const res = await apiRequest("POST", `/api/crm/conversations/${conversationId}/merge`, { targetConversationId });
+      return res.json();
+    },
+    onSuccess: (data: any) => {
+      setShowMergeDialog(false);
+      setMergeTargetId("");
+      setSelectedConvoId(data.primaryId);
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", data.primaryId, "messages"] });
+      toast({ title: "Threads merged", description: data.message });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Merge failed", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleMerge = () => {
+    if (!selectedConvoId || !mergeTargetId) return;
+    mergeMutation.mutate({ conversationId: selectedConvoId, targetConversationId: mergeTargetId });
+  };
+
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
   }, [threadData?.messages]);
@@ -1431,13 +1468,104 @@ function MessagesTab({ clientId }: { clientId: string }) {
                 ))}
               </SelectContent>
             </Select>
+            {!isClosed && isAdmin && (
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button variant="ghost" size="icon" data-testid="button-convo-actions">
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem
+                    onClick={() => { setMergeTargetId(""); setShowMergeDialog(true); }}
+                    data-testid="button-merge-conversation"
+                  >
+                    <MessageSquare className="h-4 w-4 mr-2" />
+                    Merge With...
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
+            )}
             {isClosed && <Badge variant="secondary">Closed</Badge>}
           </div>
         </div>
 
+        <AlertDialog open={showMergeDialog} onOpenChange={setShowMergeDialog}>
+          <AlertDialogContent>
+            <AlertDialogHeader>
+              <AlertDialogTitle>Merge Conversation</AlertDialogTitle>
+              <AlertDialogDescription>
+                Select a conversation to merge into this one. All messages from the selected conversation will be moved here, and the other conversation will be closed.
+              </AlertDialogDescription>
+            </AlertDialogHeader>
+            <div className="py-4 space-y-2 max-h-[300px] overflow-y-auto">
+              {mergeCandidates.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-4">No other open conversations available to merge.</p>
+              ) : (
+                mergeCandidates.map((c: any) => (
+                  <div
+                    key={c.id}
+                    className={`flex items-center gap-3 p-3 rounded-md cursor-pointer border transition-colors ${
+                      mergeTargetId === c.id
+                        ? "border-primary bg-primary/5"
+                        : "border-transparent hover-elevate"
+                    }`}
+                    onClick={() => setMergeTargetId(c.id)}
+                    data-testid={`merge-candidate-${c.id}`}
+                  >
+                    <input
+                      type="radio"
+                      checked={mergeTargetId === c.id}
+                      onChange={() => setMergeTargetId(c.id)}
+                      className="accent-primary"
+                    />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-sm font-medium truncate">{c.subject}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {c.messageCount} message{c.messageCount !== 1 ? "s" : ""} &middot; {c.status}
+                        {c.lastMessage?.createdAt && (
+                          <> &middot; Last activity {formatDistanceToNow(new Date(c.lastMessage.createdAt), { addSuffix: true })}</>
+                        )}
+                      </p>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+            <AlertDialogFooter>
+              <AlertDialogCancel data-testid="button-cancel-merge">Cancel</AlertDialogCancel>
+              <AlertDialogAction
+                onClick={handleMerge}
+                disabled={!mergeTargetId || mergeMutation.isPending}
+                data-testid="button-confirm-merge"
+              >
+                {mergeMutation.isPending ? (
+                  <><Loader2 className="h-4 w-4 mr-2 animate-spin" /> Merging...</>
+                ) : (
+                  "Merge Conversations"
+                )}
+              </AlertDialogAction>
+            </AlertDialogFooter>
+          </AlertDialogContent>
+        </AlertDialog>
+
         <div className="flex-1 overflow-y-auto space-y-3 mb-3 pr-1" data-testid="internal-messages-list">
           {messages.map((msg: any) => {
             const isInternal = msg.visibility === "internal";
+            const isMergeSystem = msg.bodyText?.startsWith("[Thread Merged]");
+            if (isMergeSystem) {
+              return (
+                <div
+                  key={msg.id}
+                  className="flex items-center gap-2 py-1.5 px-3 rounded-md bg-muted/50 text-xs text-muted-foreground"
+                  data-testid={`int-message-${msg.id}`}
+                >
+                  <MessageSquare className="h-3.5 w-3.5 shrink-0" />
+                  <span>{msg.bodyText}</span>
+                  <span className="ml-auto shrink-0">{formatDistanceToNow(new Date(msg.createdAt), { addSuffix: true })}</span>
+                </div>
+              );
+            }
             return (
               <div
                 key={msg.id}
