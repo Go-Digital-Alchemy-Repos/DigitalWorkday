@@ -537,10 +537,18 @@ httpServer.listen(port, host, () => {
   // BACKGROUND TASKS: Run AFTER app is marked ready (non-blocking)
   // ============================================================================
   
-  // Run background diagnostics without blocking the app
   setImmediate(async () => {
     try {
-      // Log app version and configuration
+      const { registerAllHandlers, startJobQueue } = await import("./jobs");
+      registerAllHandlers();
+      startJobQueue();
+    } catch (jobErr) {
+      console.error("[background] Job queue startup failed:", jobErr);
+    }
+  });
+
+  setImmediate(async () => {
+    try {
       logAppInfo();
       
       // Migration status logging
@@ -597,29 +605,38 @@ async function gracefulShutdown(signal: string) {
   forceTimer.unref();
 
   try {
-    console.log("[shutdown] 1/3  Closing HTTP server (stop accepting connections)...");
+    console.log("[shutdown] 1/4  Stopping job queue...");
+    try {
+      const { stopJobQueue } = await import("./jobs");
+      await stopJobQueue();
+      console.log("[shutdown] 1/4  Job queue stopped");
+    } catch {
+      console.log("[shutdown] 1/4  Job queue was not initialised — skipped");
+    }
+
+    console.log("[shutdown] 2/4  Closing HTTP server (stop accepting connections)...");
     await new Promise<void>((resolve, reject) => {
       httpServer.close((err) => (err ? reject(err) : resolve()));
     });
-    console.log("[shutdown] 1/3  HTTP server closed");
+    console.log("[shutdown] 2/4  HTTP server closed");
 
-    console.log("[shutdown] 2/3  Closing Socket.IO...");
+    console.log("[shutdown] 3/4  Closing Socket.IO...");
     try {
       const { getIO } = await import("./realtime/socket");
       const io = getIO();
       await new Promise<void>((resolve) => io.close(() => resolve()));
-      console.log("[shutdown] 2/3  Socket.IO closed");
+      console.log("[shutdown] 3/4  Socket.IO closed");
     } catch {
-      console.log("[shutdown] 2/3  Socket.IO was not initialised — skipped");
+      console.log("[shutdown] 3/4  Socket.IO was not initialised — skipped");
     }
 
-    console.log("[shutdown] 3/3  Draining database pool...");
+    console.log("[shutdown] 4/4  Draining database pool...");
     try {
       const { pool } = await import("./db");
       await pool.end();
-      console.log("[shutdown] 3/3  Database pool drained");
+      console.log("[shutdown] 4/4  Database pool drained");
     } catch {
-      console.log("[shutdown] 3/3  Database pool was not initialised — skipped");
+      console.log("[shutdown] 4/4  Database pool was not initialised — skipped");
     }
 
     console.log("[shutdown] Graceful shutdown complete");

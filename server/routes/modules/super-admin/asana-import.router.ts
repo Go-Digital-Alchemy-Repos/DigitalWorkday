@@ -8,6 +8,7 @@ import { db } from "../../../db";
 import { asanaImportRuns, workspaces } from "@shared/schema";
 import { eq, and, desc } from "drizzle-orm";
 import { z } from "zod";
+import { enqueueJob } from "../../../jobs";
 
 export const asanaImportRouter = Router();
 
@@ -174,41 +175,22 @@ asanaImportRouter.post("/tenants/:tenantId/asana/execute", requireSuperUser, asy
       startedAt: new Date(),
     }).returning();
 
-    res.json({ runId: run.id, status: "running" });
-
-    const client = await AsanaClient.fromTenant(tenantId);
-    const pipeline = new AsanaImportPipeline(
+    const jobId = await enqueueJob({
       tenantId,
-      parsed.targetWorkspaceId,
-      actorUserId,
-      parsed.options as AsanaImportOptions,
-      client
-    );
+      userId: actorUserId,
+      type: "asana_import",
+      payload: {
+        tenantId,
+        asanaWorkspaceGid: parsed.asanaWorkspaceGid,
+        asanaWorkspaceName: parsed.asanaWorkspaceName || null,
+        projectGids: parsed.projectGids,
+        targetWorkspaceId: parsed.targetWorkspaceId,
+        options: parsed.options,
+        asanaRunId: run.id,
+      },
+    });
 
-    try {
-      const result = await pipeline.execute(
-        parsed.asanaWorkspaceGid,
-        parsed.projectGids,
-        async (phase: string) => {
-          await db.update(asanaImportRuns).set({ phase }).where(eq(asanaImportRuns.id, run.id));
-        }
-      );
-
-      await db.update(asanaImportRuns).set({
-        status: result.errors.length > 0 ? "completed_with_errors" : "completed",
-        phase: "Done",
-        executionSummary: result.counts,
-        errorLog: result.errors.length > 0 ? result.errors : null,
-        completedAt: new Date(),
-      }).where(eq(asanaImportRuns.id, run.id));
-    } catch (err: any) {
-      await db.update(asanaImportRuns).set({
-        status: "failed",
-        phase: "Error",
-        errorLog: [{ entityType: "system", asanaGid: "", name: "", message: err.message }],
-        completedAt: new Date(),
-      }).where(eq(asanaImportRuns.id, run.id));
-    }
+    res.json({ runId: run.id, jobId, status: "running" });
   } catch (error: any) {
     console.error("[asana] Execute error:", error);
     res.status(400).json({ error: error.message });

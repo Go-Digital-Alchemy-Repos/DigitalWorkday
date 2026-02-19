@@ -3179,6 +3179,48 @@ export const integrationEntityMap = pgTable("integration_entity_map", {
 export type IntegrationEntityMapRow = typeof integrationEntityMap.$inferSelect;
 
 // ============================================================
+// Background Jobs (generic job queue)
+// ============================================================
+export const BackgroundJobType = {
+  ASANA_IMPORT: "asana_import",
+  CSV_IMPORT: "csv_import",
+  BULK_TASKS_IMPORT: "bulk_tasks_import",
+  AI_GENERATION: "ai_generation",
+} as const;
+
+export const BackgroundJobStatus = {
+  PENDING: "pending",
+  RUNNING: "running",
+  COMPLETED: "completed",
+  FAILED: "failed",
+  CANCELLED: "cancelled",
+} as const;
+
+export const backgroundJobs = pgTable("background_jobs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id).notNull(),
+  type: text("type").notNull(),
+  status: text("status").notNull().default("pending"),
+  payload: jsonb("payload").notNull().default({}),
+  result: jsonb("result"),
+  error: text("error"),
+  progress: jsonb("progress"),
+  attempts: integer("attempts").notNull().default(0),
+  maxAttempts: integer("max_attempts").notNull().default(1),
+  lockedAt: timestamp("locked_at"),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("bg_jobs_tenant_idx").on(table.tenantId),
+  index("bg_jobs_status_idx").on(table.status),
+  index("bg_jobs_type_status_idx").on(table.type, table.status),
+  index("bg_jobs_created_at_idx").on(table.createdAt),
+]);
+
+// ============================================================
 // Asana Import Runs (history tracking)
 // ============================================================
 export const asanaImportRuns = pgTable("asana_import_runs", {

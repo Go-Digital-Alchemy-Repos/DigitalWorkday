@@ -21,6 +21,7 @@ import projectNotesRouter from "./domains/project-notes.router";
 import workspacesRouter from "./domains/workspaces.router";
 import teamsRouter from "./domains/teams.router";
 import workloadReportsRouter from "./domains/workload-reports.router";
+import { jobsRouter } from "../jobs/jobs.router";
 
 interface DomainEntry {
   path: string;
@@ -156,6 +157,13 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "workload-reports",
     description: "Workload reports: tasks-by-employee, unassigned, by-status, by-priority, summary. Migrated from legacy routes/workloadReports.ts (Prompt #14).",
+  },
+  {
+    path: "/api",
+    router: jobsRouter,
+    policy: "authTenant",
+    domain: "jobs",
+    description: "Background job queue: list, get, cancel jobs, queue stats.",
   },
 ];
 
