@@ -8,6 +8,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { useToast } from "@/hooks/use-toast";
 import { UserDrawer } from "@/components/user-drawer";
 import { TeamDrawer } from "@/features/teams";
+import { UserProfilePanel } from "@/components/settings/user-profile-panel";
 import {
   Table,
   TableBody,
@@ -97,6 +98,10 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
   // Delete team confirmation state
   const [deleteTeamDialogOpen, setDeleteTeamDialogOpen] = useState(false);
   const [teamToDelete, setTeamToDelete] = useState<Team | null>(null);
+
+  // User profile panel state
+  const [profilePanelOpen, setProfilePanelOpen] = useState(false);
+  const [profilePanelUser, setProfilePanelUser] = useState<User | null>(null);
 
   const { toast } = useToast();
 
@@ -451,7 +456,15 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
                     const hasPassword = hasUserAcceptedInvite(user);
                     
                     return (
-                      <TableRow key={user.id} data-testid={`row-user-${user.id}`}>
+                      <TableRow
+                        key={user.id}
+                        data-testid={`row-user-${user.id}`}
+                        className="cursor-pointer hover-elevate"
+                        onClick={() => {
+                          setProfilePanelUser(user);
+                          setProfilePanelOpen(true);
+                        }}
+                      >
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8">
@@ -483,10 +496,10 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell onClick={(e) => e.stopPropagation()}>
                           <DropdownMenu>
                             <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-8 w-8">
+                              <Button variant="ghost" size="icon">
                                 <MoreHorizontal className="h-4 w-4" />
                               </Button>
                             </DropdownMenuTrigger>
@@ -799,6 +812,16 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      <UserProfilePanel
+        open={profilePanelOpen}
+        onClose={() => {
+          setProfilePanelOpen(false);
+          setProfilePanelUser(null);
+        }}
+        user={profilePanelUser}
+        invitations={invitations}
+      />
     </div>
   );
 }

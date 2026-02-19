@@ -20,7 +20,14 @@ import {
   tenantAgreements,
   tenantAgreementAcceptances,
   AgreementStatus,
+  users,
+  invitations,
+  passwordResetTokens,
+  activityLog,
+  taskAssignees,
+  comments,
 } from "@shared/schema";
+import { cleanupUserReferences } from "../utils/userDeletion";
 
 const router = Router();
 
@@ -436,6 +443,154 @@ router.post("/users/:id/deactivate", requireAdmin, async (req, res) => {
     res.json({ message: "User deactivated successfully", user: updatedUser });
   } catch (error) {
     return handleRouteError(res, error, "POST /api/users/:id/deactivate", req);
+  }
+});
+
+// ============================================
+// DELETE USER (Admin Only - inactive users only)
+// ============================================
+
+router.delete("/users/:id", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUser = req.user as any;
+    const tenantId = req.tenant?.effectiveTenantId || currentUser?.tenantId;
+
+    if (!tenantId) throw AppError.tenantRequired();
+
+    if (id === currentUser.id) {
+      throw AppError.badRequest("You cannot delete your own account");
+    }
+
+    const targetUser = await storage.getUserByIdAndTenant(id, tenantId);
+    if (!targetUser) throw AppError.notFound("User not found in your organization");
+
+    if (targetUser.isActive) {
+      throw AppError.badRequest("Cannot delete active user. Deactivate the user first.");
+    }
+
+    if (targetUser.role === "admin") {
+      const [adminCount] = await db
+        .select({ count: sql<number>`count(*)::int` })
+        .from(users)
+        .where(and(eq(users.tenantId, tenantId), eq(users.role, "admin")));
+      if ((adminCount?.count || 0) <= 1) {
+        throw AppError.badRequest("Cannot delete the last admin user in the organization");
+      }
+    }
+
+    await db.transaction(async (tx) => {
+      await cleanupUserReferences(tx, id, currentUser.id);
+      await tx.delete(invitations).where(eq(invitations.email, targetUser.email));
+      await tx.delete(users).where(and(eq(users.id, id), eq(users.tenantId, tenantId)));
+    });
+
+    console.log(`[routes] Tenant admin ${currentUser.email} deleted user ${targetUser.email}`);
+
+    res.json({
+      message: `User ${targetUser.email} has been permanently deleted`,
+      deletedUser: { id, email: targetUser.email },
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "DELETE /api/users/:id", req);
+  }
+});
+
+// ============================================
+// GENERATE PASSWORD RESET LINK (Admin Only)
+// ============================================
+
+router.post("/users/:id/generate-reset-link", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUser = req.user as any;
+    const tenantId = req.tenant?.effectiveTenantId || currentUser?.tenantId;
+
+    if (!tenantId) throw AppError.tenantRequired();
+
+    const targetUser = await storage.getUserByIdAndTenant(id, tenantId);
+    if (!targetUser) throw AppError.notFound("User not found in your organization");
+
+    await db
+      .update(passwordResetTokens)
+      .set({ usedAt: new Date() })
+      .where(and(
+        eq(passwordResetTokens.userId, targetUser.id),
+        isNull(passwordResetTokens.usedAt)
+      ));
+
+    const token = crypto.randomBytes(32).toString("hex");
+    const tokenHash = crypto.createHash("sha256").update(token).digest("hex");
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000);
+
+    await db.insert(passwordResetTokens).values({
+      userId: targetUser.id,
+      tokenHash,
+      expiresAt,
+      createdByUserId: currentUser.id,
+    });
+
+    const appPublicUrl = process.env.APP_PUBLIC_URL;
+    const baseUrl = appPublicUrl || `${req.protocol}://${req.get("host")}`;
+    const resetUrl = `${baseUrl}/auth/reset-password?token=${token}`;
+
+    console.log(`[routes] Tenant admin ${currentUser.email} generated reset link for user ${targetUser.email}`);
+
+    res.json({
+      resetUrl,
+      expiresAt: expiresAt.toISOString(),
+      message: "Password reset link generated. The link expires in 24 hours.",
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/users/:id/generate-reset-link", req);
+  }
+});
+
+// ============================================
+// ACTIVITY SUMMARY (Admin Only)
+// ============================================
+
+router.get("/users/:id/activity-summary", requireAdmin, async (req, res) => {
+  try {
+    const { id } = req.params;
+    const currentUser = req.user as any;
+    const tenantId = req.tenant?.effectiveTenantId || currentUser?.tenantId;
+
+    if (!tenantId) throw AppError.tenantRequired();
+
+    const targetUser = await storage.getUserByIdAndTenant(id, tenantId);
+    if (!targetUser) throw AppError.notFound("User not found in your organization");
+
+    const thirtyDaysAgo = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+
+    const [actionsResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(activityLog)
+      .where(and(
+        eq(activityLog.actorUserId, id),
+        sql`${activityLog.createdAt} >= ${thirtyDaysAgo}`
+      ));
+
+    const [tasksResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(taskAssignees)
+      .where(and(
+        eq(taskAssignees.userId, id),
+        eq(taskAssignees.tenantId, tenantId)
+      ));
+
+    const [commentsResult] = await db
+      .select({ count: sql<number>`count(*)::int` })
+      .from(comments)
+      .where(eq(comments.userId, id));
+
+    res.json({
+      actions30d: actionsResult?.count || 0,
+      tasksAssigned: tasksResult?.count || 0,
+      comments: commentsResult?.count || 0,
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/users/:id/activity-summary", req);
   }
 });
 
