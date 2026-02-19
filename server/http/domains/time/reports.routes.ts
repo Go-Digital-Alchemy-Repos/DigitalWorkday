@@ -8,11 +8,13 @@ import {
   addTenancyWarningHeader,
   getCurrentWorkspaceId,
 } from "./shared";
+import { perfLog } from "../../../lib/queryDebug";
 
 const router = Router();
 
 router.get("/time-entries/report/summary", async (req, res) => {
   try {
+    const t0 = Date.now();
     const tenantId = getEffectiveTenantId(req);
     const workspaceId = getCurrentWorkspaceId(req);
     const { startDate, endDate, groupBy } = req.query;
@@ -83,7 +85,7 @@ router.get("/time-entries/report/summary", async (req, res) => {
       }
     }
 
-    res.json({
+    const result = {
       totalSeconds,
       inScopeSeconds,
       outOfScopeSeconds,
@@ -97,7 +99,9 @@ router.get("/time-entries/report/summary", async (req, res) => {
         ...data,
       })),
       byUser: Object.entries(byUser).map(([id, data]) => ({ id, ...data })),
-    });
+    };
+    perfLog("GET /time-entries/report/summary", `${entries.length} entries aggregated in ${Date.now() - t0}ms (batched)`);
+    res.json(result);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/time-entries/report/summary", req);
   }

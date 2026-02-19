@@ -15,11 +15,13 @@ import {
   emitTimeEntryUpdated,
   emitTimeEntryDeleted,
 } from "./shared";
+import { perfLog } from "../../../lib/queryDebug";
 
 const router = Router();
 
 router.get("/time-entries", async (req, res) => {
   try {
+    const t0 = Date.now();
     const tenantId = getEffectiveTenantId(req);
     const workspaceId = getCurrentWorkspaceId(req);
     const { userId, clientId, projectId, taskId, scope, startDate, endDate } = req.query;
@@ -42,6 +44,7 @@ router.get("/time-entries", async (req, res) => {
         addTenancyWarningHeader(res, "Results include entries with legacy null tenantId");
       }
     }
+    perfLog("GET /time-entries", `${entries.length} entries in ${Date.now() - t0}ms (batched)`);
     res.json(entries);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/time-entries", req);

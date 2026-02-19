@@ -9,6 +9,45 @@ import { db } from "../db";
 import { eq, and, desc, gte, lte, inArray } from "drizzle-orm";
 import { assertInsertHasTenantId } from "../lib/errors";
 
+function collectUniqueIds(entries: TimeEntry[], field: keyof TimeEntry): string[] {
+  const ids = new Set<string>();
+  for (const e of entries) {
+    const val = e[field];
+    if (typeof val === "string" && val) ids.add(val);
+  }
+  return Array.from(ids);
+}
+
+async function batchEnrichEntries(entries: TimeEntry[]): Promise<TimeEntryWithRelations[]> {
+  if (entries.length === 0) return [];
+
+  const userIds = collectUniqueIds(entries, "userId");
+  const clientIds = collectUniqueIds(entries, "clientId");
+  const projectIds = collectUniqueIds(entries, "projectId");
+  const taskIds = collectUniqueIds(entries, "taskId");
+
+  const [userList, clientList, projectList, taskList] = await Promise.all([
+    userIds.length > 0 ? db.select().from(users).where(inArray(users.id, userIds)) : [],
+    clientIds.length > 0 ? db.select().from(clients).where(inArray(clients.id, clientIds)) : [],
+    projectIds.length > 0 ? db.select().from(projects).where(inArray(projects.id, projectIds)) : [],
+    taskIds.length > 0 ? db.select().from(tasks).where(inArray(tasks.id, taskIds)) : [],
+  ]);
+
+  const userMap = new Map(userList.map(u => [u.id, u]));
+  const clientMap = new Map(clientList.map(c => [c.id, c]));
+  const projectMap = new Map(projectList.map(p => [p.id, p]));
+  const taskMap = new Map(taskList.map(t => [t.id, t]));
+
+  return entries.map(entry => {
+    const enriched: TimeEntryWithRelations = { ...entry };
+    if (entry.userId) enriched.user = userMap.get(entry.userId);
+    if (entry.clientId) enriched.client = clientMap.get(entry.clientId);
+    if (entry.projectId) enriched.project = projectMap.get(entry.projectId);
+    if (entry.taskId) enriched.task = taskMap.get(entry.taskId);
+    return enriched;
+  });
+}
+
 export class TimeTrackingRepository {
   async getTimeEntry(id: string): Promise<TimeEntry | undefined> {
     const [entry] = await db.select().from(timeEntries).where(eq(timeEntries.id, id));
@@ -53,31 +92,7 @@ export class TimeTrackingRepository {
       .where(and(...conditions))
       .orderBy(desc(timeEntries.startTime));
 
-    const result: TimeEntryWithRelations[] = [];
-    for (const entry of entries) {
-      const enriched: TimeEntryWithRelations = { ...entry };
-      
-      if (entry.userId) {
-        const [user] = await db.select().from(users).where(eq(users.id, entry.userId));
-        if (user) enriched.user = user;
-      }
-      if (entry.clientId) {
-        const [client] = await db.select().from(clients).where(eq(clients.id, entry.clientId));
-        if (client) enriched.client = client;
-      }
-      if (entry.projectId) {
-        const [project] = await db.select().from(projects).where(eq(projects.id, entry.projectId));
-        if (project) enriched.project = project;
-      }
-      if (entry.taskId) {
-        const [task] = await db.select().from(tasks).where(eq(tasks.id, entry.taskId));
-        if (task) enriched.task = task;
-      }
-      
-      result.push(enriched);
-    }
-    
-    return result;
+    return batchEnrichEntries(entries);
   }
 
   async getTimeEntriesByUser(userId: string, workspaceId: string): Promise<TimeEntryWithRelations[]> {
@@ -203,31 +218,7 @@ export class TimeTrackingRepository {
       .where(and(...conditions))
       .orderBy(desc(timeEntries.startTime));
 
-    const result: TimeEntryWithRelations[] = [];
-    for (const entry of entries) {
-      const enriched: TimeEntryWithRelations = { ...entry };
-      
-      if (entry.userId) {
-        const [user] = await db.select().from(users).where(eq(users.id, entry.userId));
-        if (user) enriched.user = user;
-      }
-      if (entry.clientId) {
-        const [client] = await db.select().from(clients).where(eq(clients.id, entry.clientId));
-        if (client) enriched.client = client;
-      }
-      if (entry.projectId) {
-        const [project] = await db.select().from(projects).where(eq(projects.id, entry.projectId));
-        if (project) enriched.project = project;
-      }
-      if (entry.taskId) {
-        const [task] = await db.select().from(tasks).where(eq(tasks.id, entry.taskId));
-        if (task) enriched.task = task;
-      }
-      
-      result.push(enriched);
-    }
-    
-    return result;
+    return batchEnrichEntries(entries);
   }
 
   async createTimeEntryWithTenant(entry: InsertTimeEntry, tenantId: string): Promise<TimeEntry> {

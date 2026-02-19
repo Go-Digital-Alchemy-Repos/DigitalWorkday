@@ -1514,30 +1514,31 @@ export class DatabaseStorage implements IStorage {
     return comment || undefined;
   }
 
+  private async batchEnrichCommentsWithUsers(commentsList: Comment[]): Promise<(Comment & { user?: User })[]> {
+    if (commentsList.length === 0) return [];
+    const userIds = [...new Set(commentsList.map(c => c.userId).filter(Boolean))];
+    const userList = userIds.length > 0
+      ? await db.select().from(users).where(inArray(users.id, userIds))
+      : [];
+    const userMap = new Map(userList.map(u => [u.id, u]));
+    return commentsList.map(comment => ({
+      ...comment,
+      user: userMap.get(comment.userId),
+    }));
+  }
+
   async getCommentsByTask(taskId: string): Promise<(Comment & { user?: User })[]> {
     const commentsList = await db.select().from(comments)
       .where(eq(comments.taskId, taskId))
       .orderBy(asc(comments.createdAt));
-    
-    const result = [];
-    for (const comment of commentsList) {
-      const user = await this.getUser(comment.userId);
-      result.push({ ...comment, user });
-    }
-    return result;
+    return this.batchEnrichCommentsWithUsers(commentsList);
   }
 
   async getCommentsBySubtask(subtaskId: string): Promise<(Comment & { user?: User })[]> {
     const commentsList = await db.select().from(comments)
       .where(eq(comments.subtaskId, subtaskId))
       .orderBy(asc(comments.createdAt));
-    
-    const result = [];
-    for (const comment of commentsList) {
-      const user = await this.getUser(comment.userId);
-      result.push({ ...comment, user });
-    }
-    return result;
+    return this.batchEnrichCommentsWithUsers(commentsList);
   }
 
   async createComment(insertComment: InsertComment): Promise<Comment> {
@@ -1759,12 +1760,16 @@ export class DatabaseStorage implements IStorage {
       .where(eq(taskAttachments.taskId, taskId))
       .orderBy(desc(taskAttachments.createdAt));
     
-    const result: TaskAttachmentWithUser[] = [];
-    for (const attachment of attachmentsList) {
-      const user = await this.getUser(attachment.uploadedByUserId);
-      result.push({ ...attachment, uploadedByUser: user });
-    }
-    return result;
+    if (attachmentsList.length === 0) return [];
+    const uploaderIds = [...new Set(attachmentsList.map(a => a.uploadedByUserId).filter(Boolean))];
+    const uploaderList = uploaderIds.length > 0
+      ? await db.select().from(users).where(inArray(users.id, uploaderIds))
+      : [];
+    const uploaderMap = new Map(uploaderList.map(u => [u.id, u]));
+    return attachmentsList.map(attachment => ({
+      ...attachment,
+      uploadedByUser: uploaderMap.get(attachment.uploadedByUserId),
+    }));
   }
 
   async createTaskAttachment(insertAttachment: InsertTaskAttachment): Promise<TaskAttachment> {

@@ -13,6 +13,7 @@ import {
   enrichCommentsWithAttachments as enrichComments,
   toAttachmentMeta,
 } from "../../utils/commentAttachments";
+import { perfLog } from "../../lib/queryDebug";
 
 const router = createApiRouter({
   policy: "authTenant",
@@ -21,8 +22,10 @@ const router = createApiRouter({
 
 router.get("/tasks/:taskId/comments", async (req, res) => {
   try {
+    const t0 = Date.now();
     const comments = await storage.getCommentsByTask(req.params.taskId);
     const enriched = await enrichComments(comments, storage);
+    perfLog("GET /tasks/:taskId/comments", `${enriched.length} comments in ${Date.now() - t0}ms (batched)`);
     res.json(enriched);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/tasks/:taskId/comments", req);
