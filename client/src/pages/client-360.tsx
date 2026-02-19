@@ -1304,7 +1304,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
   const [convoSearch, setConvoSearch] = useState("");
   const [debouncedSearch, setDebouncedSearch] = useState("");
   const [assignedFilter, setAssignedFilter] = useState<string>("all");
-  const [statusFilter, setStatusFilter] = useState<string>("all");
+  const [statusFilter, setStatusFilter] = useState<string>("open");
   const [priorityFilter, setPriorityFilter] = useState<string>("all");
   const [dateFrom, setDateFrom] = useState<string>("");
   const [dateTo, setDateTo] = useState<string>("");
@@ -1844,6 +1844,28 @@ function MessagesTab({ clientId }: { clientId: string }) {
         }
       />
 
+      <div className="flex items-center gap-1" data-testid="convo-quick-filter-tabs">
+        {[
+          { value: "all", label: "All Open", statusOverride: "open" },
+          { value: "me", label: "Assigned to Me", statusOverride: "open" },
+          { value: "unassigned", label: "Unassigned", statusOverride: "open" },
+        ].map((tab) => (
+          <Button
+            key={tab.value}
+            variant={assignedFilter === tab.value && statusFilter === "open" ? "secondary" : "ghost"}
+            size="sm"
+            className="toggle-elevate"
+            onClick={() => {
+              setAssignedFilter(tab.value);
+              setStatusFilter(tab.statusOverride);
+            }}
+            data-testid={`button-quick-filter-${tab.value}`}
+          >
+            {tab.label}
+          </Button>
+        ))}
+      </div>
+
       {showFilters && (
         <Card>
           <CardContent className="p-3">
@@ -2008,7 +2030,21 @@ function MessagesTab({ clientId }: { clientId: string }) {
             >
               <CardContent className="p-3">
                 <div className="flex items-start justify-between gap-2">
-                  <div className="min-w-0 flex-1">
+                  <div className="flex items-start gap-2.5 min-w-0 flex-1">
+                    {c.assigneeName ? (
+                      <Avatar className="h-7 w-7 shrink-0 mt-0.5" data-testid={`avatar-assignee-${c.id}`}>
+                        <AvatarFallback className="text-xs">
+                          {c.assigneeName.split(" ").map((n: string) => n[0]).join("").toUpperCase().slice(0, 2)}
+                        </AvatarFallback>
+                      </Avatar>
+                    ) : (
+                      <Avatar className="h-7 w-7 shrink-0 mt-0.5 opacity-40" data-testid={`avatar-unassigned-${c.id}`}>
+                        <AvatarFallback className="text-xs">
+                          <UserCheck className="h-3.5 w-3.5" />
+                        </AvatarFallback>
+                      </Avatar>
+                    )}
+                    <div className="min-w-0 flex-1">
                     <span className="font-medium text-sm">{c.subject}</span>
                     {c.matchingSnippet ? (
                       <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
@@ -2020,6 +2056,7 @@ function MessagesTab({ clientId }: { clientId: string }) {
                         {c.lastMessage.authorName}: {c.lastMessage.bodyText}
                       </p>
                     ) : null}
+                    </div>
                   </div>
                   <div className="flex flex-col items-end gap-1 shrink-0">
                     <span className="text-xs text-muted-foreground">
@@ -2042,12 +2079,6 @@ function MessagesTab({ clientId }: { clientId: string }) {
                           data-testid={`priority-badge-${c.id}`}
                         >
                           {c.priority}
-                        </Badge>
-                      )}
-                      {c.assigneeName && (
-                        <Badge variant="outline" className="text-xs">
-                          <UserCheck className="h-3 w-3 mr-0.5" />
-                          {c.assigneeName}
                         </Badge>
                       )}
                       <Badge variant="outline" className="text-xs">{c.messageCount}</Badge>

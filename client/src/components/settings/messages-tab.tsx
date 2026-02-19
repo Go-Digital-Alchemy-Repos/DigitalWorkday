@@ -26,9 +26,83 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Loader2, FileText, GripVertical, Shield } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, FileText, GripVertical, Shield, UserCheck } from "lucide-react";
 import type { MessagePermissions } from "@shared/schema";
 import { DEFAULT_MESSAGE_PERMISSIONS } from "@shared/schema";
+
+function AutoAssignCard() {
+  const { toast } = useToast();
+
+  const { data: settingsData, isLoading: settingsLoading } = useQuery<{
+    defaultConversationAssigneeId: string | null;
+    assignee: { id: string; name: string; role: string } | null;
+  }>({
+    queryKey: ["/api/crm/conversation-settings"],
+  });
+
+  const { data: tenantUsers = [] } = useQuery<any[]>({
+    queryKey: ["/api/tenant/users"],
+  });
+
+  const staffUsers = tenantUsers.filter((u: any) => u.role !== "client");
+
+  const saveMutation = useMutation({
+    mutationFn: async (assigneeId: string | null) => {
+      const res = await apiRequest("PATCH", "/api/crm/conversation-settings", {
+        defaultConversationAssigneeId: assigneeId,
+      });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversation-settings"] });
+      toast({ title: "Auto-assign setting updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <UserCheck className="h-5 w-5" />
+          Auto-Assign Rule
+        </CardTitle>
+        <CardDescription>
+          Automatically assign new client conversations to a default team member. When set, all new conversations (including portal requests) will be assigned to this person.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {settingsLoading ? (
+          <Skeleton className="h-10 w-full max-w-xs" />
+        ) : (
+          <div className="flex items-center gap-3 flex-wrap">
+            <Select
+              value={settingsData?.defaultConversationAssigneeId || "__none__"}
+              onValueChange={(value) => {
+                saveMutation.mutate(value === "__none__" ? null : value);
+              }}
+            >
+              <SelectTrigger className="w-[250px]" data-testid="select-default-assignee">
+                <SelectValue placeholder="No auto-assign" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__none__">No auto-assign (manual)</SelectItem>
+                {staffUsers.map((u: any) => (
+                  <SelectItem key={u.id} value={u.id} data-testid={`option-assignee-${u.id}`}>
+                    {u.name || u.email}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {saveMutation.isPending && <Loader2 className="h-4 w-4 animate-spin" />}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 interface MessageTemplate {
   id: string;
@@ -382,6 +456,8 @@ export function MessagesTab() {
 
   return (
     <div className="space-y-6">
+      <AutoAssignCard />
+
       <PermissionsMatrixCard />
 
       <Card>

@@ -269,7 +269,16 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
 
     const userId = getCurrentUserId(req);
 
-    const assigneeId = data.assignedToUserId || userId;
+    let assigneeId = data.assignedToUserId || userId;
+    if (!data.assignedToUserId) {
+      const [settings] = await db.select({ defaultConversationAssigneeId: tenantSettings.defaultConversationAssigneeId })
+        .from(tenantSettings)
+        .where(eq(tenantSettings.tenantId, tenantId))
+        .limit(1);
+      if (settings?.defaultConversationAssigneeId) {
+        assigneeId = settings.defaultConversationAssigneeId;
+      }
+    }
 
     if (assigneeId !== userId) {
       const [targetUser] = await db.select({ id: users.id, tenantId: users.tenantId, role: users.role })
@@ -599,6 +608,30 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
           authorUserId: userId,
           messageId: message.id,
         });
+
+        if (user.role === UserRole.CLIENT) {
+          try {
+            const notification = await storage.createNotification({
+              tenantId,
+              userId: conversation.assignedToUserId,
+              type: "mention",
+              title: "New reply on assigned conversation",
+              message: `New reply on "${conversation.subject}": ${data.bodyText.substring(0, 100)}${data.bodyText.length > 100 ? "..." : ""}`,
+              payloadJson: { conversationId, clientId: conversation.clientId, messageId: message.id } as any,
+            });
+            emitNotificationNew(conversation.assignedToUserId, {
+              id: notification.id,
+              tenantId: notification.tenantId,
+              userId: notification.userId,
+              type: notification.type,
+              title: notification.title,
+              message: notification.message,
+              payloadJson: notification.payloadJson,
+              readAt: notification.readAt,
+              createdAt: notification.createdAt,
+            });
+          } catch {}
+        }
       }
     }
 
@@ -1461,6 +1494,96 @@ router.get("/crm/messages/reports", requireAuth, requireAdmin, async (req: Reque
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/crm/messages/reports", req);
+  }
+});
+
+router.get("/crm/conversation-settings", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+      return sendError(res, AppError.forbidden("Only admins can view conversation settings"), req);
+    }
+
+    const [settings] = await db.select({
+      defaultConversationAssigneeId: tenantSettings.defaultConversationAssigneeId,
+    })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId))
+      .limit(1);
+
+    let assignee = null;
+    if (settings?.defaultConversationAssigneeId) {
+      const [user] = await db.select({ id: users.id, name: users.name, role: users.role })
+        .from(users)
+        .where(and(eq(users.id, settings.defaultConversationAssigneeId), eq(users.tenantId, tenantId)))
+        .limit(1);
+      assignee = user || null;
+    }
+
+    res.json({
+      defaultConversationAssigneeId: settings?.defaultConversationAssigneeId || null,
+      assignee,
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/conversation-settings", req);
+  }
+});
+
+router.patch("/crm/conversation-settings", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+      return sendError(res, AppError.forbidden("Only admins can update conversation settings"), req);
+    }
+
+    const schema = z.object({
+      defaultConversationAssigneeId: z.string().nullable(),
+    });
+
+    const data = validateBody(req.body, schema, res);
+    if (!data) return;
+
+    if (data.defaultConversationAssigneeId) {
+      const [targetUser] = await db.select({ id: users.id, tenantId: users.tenantId, role: users.role })
+        .from(users)
+        .where(eq(users.id, data.defaultConversationAssigneeId))
+        .limit(1);
+      if (!targetUser || targetUser.tenantId !== tenantId) {
+        return sendError(res, AppError.badRequest("Invalid user for this tenant"), req);
+      }
+      if (targetUser.role === "client") {
+        return sendError(res, AppError.badRequest("Cannot assign conversations to client users"), req);
+      }
+    }
+
+    await db.update(tenantSettings)
+      .set({
+        defaultConversationAssigneeId: data.defaultConversationAssigneeId,
+        updatedAt: new Date(),
+      })
+      .where(eq(tenantSettings.tenantId, tenantId));
+
+    let assignee = null;
+    if (data.defaultConversationAssigneeId) {
+      const [u] = await db.select({ id: users.id, name: users.name, role: users.role })
+        .from(users)
+        .where(and(eq(users.id, data.defaultConversationAssigneeId), eq(users.tenantId, tenantId)))
+        .limit(1);
+      assignee = u || null;
+    }
+
+    res.json({
+      defaultConversationAssigneeId: data.defaultConversationAssigneeId,
+      assignee,
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /api/crm/conversation-settings", req);
   }
 });
 

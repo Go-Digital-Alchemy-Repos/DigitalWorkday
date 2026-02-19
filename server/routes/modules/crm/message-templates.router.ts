@@ -9,10 +9,13 @@ import {
   clientMessageTemplates,
   clientConversations,
   clientMessages,
+  tenantSettings,
   UserRole,
 } from "@shared/schema";
 import { getCurrentUserId } from "../../helpers";
-import { emitToTenant } from "../../../realtime/socket";
+import { emitToTenant, emitToUser } from "../../../realtime/socket";
+import { emitNotificationNew } from "../../../realtime/events";
+import { storage } from "../../../storage";
 import { CLIENT_CONVERSATION_EVENTS } from "@shared/events";
 
 const router = Router();
@@ -198,11 +201,21 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
 
     const userId = getCurrentUserId(req);
 
+    let autoAssigneeId: string | null = null;
+    const [settings] = await db.select({ defaultConversationAssigneeId: tenantSettings.defaultConversationAssigneeId })
+      .from(tenantSettings)
+      .where(eq(tenantSettings.tenantId, tenantId))
+      .limit(1);
+    if (settings?.defaultConversationAssigneeId) {
+      autoAssigneeId = settings.defaultConversationAssigneeId;
+    }
+
     const [conversation] = await db.insert(clientConversations).values({
       tenantId,
       clientId: data.clientId,
       subject: data.subject,
       createdByUserId: userId,
+      assignedToUserId: autoAssigneeId,
     }).returning();
 
     const [msg] = await db.insert(clientMessages).values({
@@ -217,10 +230,43 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
       tenantId,
       clientId: data.clientId,
       subject: conversation.subject,
-      assignedToUserId: null,
+      assignedToUserId: autoAssigneeId,
       authorUserId: userId,
       messageId: msg.id,
     });
+
+    if (autoAssigneeId) {
+      try {
+        const notification = await storage.createNotification({
+          tenantId,
+          userId: autoAssigneeId,
+          type: "task_assigned",
+          title: "New client conversation assigned",
+          message: `A new conversation "${conversation.subject}" has been auto-assigned to you`,
+          payloadJson: { conversationId: conversation.id, clientId: data.clientId } as any,
+        });
+        emitNotificationNew(autoAssigneeId, {
+          id: notification.id,
+          tenantId: notification.tenantId,
+          userId: notification.userId,
+          type: notification.type,
+          title: notification.title,
+          message: notification.message,
+          payloadJson: notification.payloadJson,
+          readAt: notification.readAt,
+          createdAt: notification.createdAt,
+        });
+      } catch {}
+
+      emitToUser(autoAssigneeId, CLIENT_CONVERSATION_EVENTS.ASSIGNED, {
+        conversationId: conversation.id,
+        tenantId,
+        clientId: data.clientId,
+        subject: conversation.subject,
+        assignedToUserId: autoAssigneeId,
+        assignedByUserId: null,
+      });
+    }
 
     res.status(201).json(conversation);
   } catch (error) {
