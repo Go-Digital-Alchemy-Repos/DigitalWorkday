@@ -1,11 +1,23 @@
-import { useEffect } from "react";
+import { useEffect, useRef } from "react";
 import { Redirect, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useAppMode } from "@/hooks/useAppMode";
 import { useToast } from "@/hooks/use-toast";
 import { setLastAttemptedTenantUrl, isTenantRoute } from "@/lib/tenant-url-storage";
+import { markNavigationStart, markNavigationEnd } from "@/lib/perf";
 import { Loader2 } from "lucide-react";
 import { createElement } from "react";
+
+function useNavTiming(componentName: string) {
+  const started = useRef(false);
+  if (!started.current) {
+    started.current = true;
+    markNavigationStart(componentName);
+  }
+  useEffect(() => {
+    markNavigationEnd(componentName);
+  }, [componentName]);
+}
 
 function LoadingSpinner() {
   return createElement(
@@ -48,6 +60,7 @@ export function SuperRouteGuard({ component: Component }: { component: React.Com
 }
 
 export function TenantRouteGuard({ component: Component }: { component: React.ComponentType }) {
+  useNavTiming(Component.displayName || Component.name || "TenantView");
   const { isAuthenticated, isLoading, user } = useAuth();
   const { appMode } = useAppMode();
   const { toast } = useToast();

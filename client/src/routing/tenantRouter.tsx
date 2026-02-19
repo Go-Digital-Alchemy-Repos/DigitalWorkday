@@ -32,31 +32,33 @@ import { MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check }
 import { type Workspace } from "@shared/schema";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
-const Home = lazy(() => import("@/pages/home"));
-const MyTasks = lazy(() => import("@/pages/my-tasks"));
-const ProjectsDashboard = lazy(() => import("@/pages/projects-dashboard"));
-const ProjectPage = lazy(() => import("@/pages/project"));
-const ClientsPage = lazy(() => import("@/pages/clients"));
-const ClientDetailPage = lazy(() => import("@/pages/client-detail"));
-const Client360Page = lazy(() => import("@/pages/client-360"));
-const CrmPipelinePage = lazy(() => import("@/pages/crm-pipeline"));
-const CrmFollowupsPage = lazy(() => import("@/pages/crm-followups"));
-const SettingsPage = lazy(() => import("@/pages/settings"));
-const AccountPage = lazy(() => import("@/pages/account"));
-const UserManagerPage = lazy(() => import("@/pages/user-manager"));
-const UserProfilePage = lazy(() => import("@/pages/user-profile"));
-const ChatPage = lazy(() => import("@/pages/chat"));
-const ReportsPage = lazy(() => import("@/pages/reports"));
-const TemplatesPage = lazy(() => import("@/pages/templates"));
-const CalendarPage = lazy(() => import("@/pages/calendar"));
-const MyTimePage = lazy(() => import("@/pages/my-time"));
-const MyCalendarPage = lazy(() => import("@/pages/my-calendar"));
-const TeamDetailPage = lazy(() => import("@/pages/team-detail"));
-const SupportTickets = lazy(() => import("@/pages/support-tickets"));
-const SupportTicketDetail = lazy(() => import("@/pages/support-ticket-detail"));
-const SupportTemplates = lazy(() => import("@/pages/support-templates"));
-const SupportSlaPolicies = lazy(() => import("@/pages/support-sla-policies"));
-const SupportFormSchemas = lazy(() => import("@/pages/support-form-schemas"));
+import { trackChunkLoad } from "@/lib/perf";
+
+const Home = lazy(trackChunkLoad("Home", () => import("@/pages/home")));
+const MyTasks = lazy(trackChunkLoad("MyTasks", () => import("@/pages/my-tasks")));
+const ProjectsDashboard = lazy(trackChunkLoad("Projects", () => import("@/pages/projects-dashboard")));
+const ProjectPage = lazy(trackChunkLoad("Project", () => import("@/pages/project")));
+const ClientsPage = lazy(trackChunkLoad("Clients", () => import("@/pages/clients")));
+const ClientDetailPage = lazy(trackChunkLoad("ClientDetail", () => import("@/pages/client-detail")));
+const Client360Page = lazy(trackChunkLoad("Client360", () => import("@/pages/client-360")));
+const CrmPipelinePage = lazy(trackChunkLoad("CrmPipeline", () => import("@/pages/crm-pipeline")));
+const CrmFollowupsPage = lazy(trackChunkLoad("CrmFollowups", () => import("@/pages/crm-followups")));
+const SettingsPage = lazy(trackChunkLoad("Settings", () => import("@/pages/settings")));
+const AccountPage = lazy(trackChunkLoad("Account", () => import("@/pages/account")));
+const UserManagerPage = lazy(trackChunkLoad("UserManager", () => import("@/pages/user-manager")));
+const UserProfilePage = lazy(trackChunkLoad("UserProfile", () => import("@/pages/user-profile")));
+const ChatPage = lazy(trackChunkLoad("Chat", () => import("@/pages/chat")));
+const ReportsPage = lazy(trackChunkLoad("Reports", () => import("@/pages/reports")));
+const TemplatesPage = lazy(trackChunkLoad("Templates", () => import("@/pages/templates")));
+const CalendarPage = lazy(trackChunkLoad("Calendar", () => import("@/pages/calendar")));
+const MyTimePage = lazy(trackChunkLoad("MyTime", () => import("@/pages/my-time")));
+const MyCalendarPage = lazy(trackChunkLoad("MyCalendar", () => import("@/pages/my-calendar")));
+const TeamDetailPage = lazy(trackChunkLoad("TeamDetail", () => import("@/pages/team-detail")));
+const SupportTickets = lazy(trackChunkLoad("SupportTickets", () => import("@/pages/support-tickets")));
+const SupportTicketDetail = lazy(trackChunkLoad("SupportTicketDetail", () => import("@/pages/support-ticket-detail")));
+const SupportTemplates = lazy(trackChunkLoad("SupportTemplates", () => import("@/pages/support-templates")));
+const SupportSlaPolicies = lazy(trackChunkLoad("SupportSla", () => import("@/pages/support-sla-policies")));
+const SupportFormSchemas = lazy(trackChunkLoad("SupportForms", () => import("@/pages/support-form-schemas")));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 function TenantRouter() {

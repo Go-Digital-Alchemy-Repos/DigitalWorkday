@@ -29,6 +29,14 @@ export const pool = new Pool({
 
 export const db = drizzle(pool, { schema });
 
+// Instrument pool for slow query telemetry (opt-in via PERF_TELEMETRY=1)
+if (process.env.PERF_TELEMETRY === "1" && databaseUrl) {
+  import("./middleware/queryTelemetry").then(({ instrumentPool }) => {
+    instrumentPool(pool);
+    console.log("[db] Query telemetry enabled (PERF_TELEMETRY=1)");
+  });
+}
+
 // Track if database is configured
 export const isDatabaseConfigured = !!databaseUrl;
 

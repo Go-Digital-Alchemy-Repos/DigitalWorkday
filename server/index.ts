@@ -16,6 +16,8 @@ import { errorHandler } from "./middleware/errorHandler";
 import { errorLoggingMiddleware } from "./middleware/errorLogging";
 import { apiJsonResponseGuard, apiNotFoundHandler } from "./middleware/apiJsonGuard";
 import { requestLogger } from "./middleware/requestLogger";
+import { requestPerfMiddleware } from "./middleware/perfTelemetry";
+import { instrumentPool } from "./middleware/queryTelemetry";
 import { csrfProtection } from "./middleware/csrf";
 import { logMigrationStatus } from "./scripts/migration-status";
 import { ensureSchemaReady, getLastSchemaCheck } from "./startup/schemaReadiness";
@@ -169,6 +171,9 @@ app.use(tenantContextMiddleware);
 // Request logging middleware (after auth and tenant context for user/tenant info)
 app.use(requestLogger);
 
+// Performance telemetry middleware (after request logger, opt-in via PERF_TELEMETRY=1)
+app.use(requestPerfMiddleware);
+
 // Setup agreement enforcement (must be after tenant context)
 app.use(agreementEnforcementGuard);
 
@@ -180,6 +185,42 @@ app.use(apiJsonResponseGuard);
 
 import { log } from "./lib/log";
 export { log };
+
+// Client performance telemetry endpoint (sampled, no PII)
+app.post("/api/v1/system/perf", (req, res) => {
+  if (process.env.PERF_TELEMETRY !== "1") {
+    return res.status(204).end();
+  }
+  const { entries } = req.body || {};
+  if (!Array.isArray(entries) || entries.length === 0) {
+    return res.status(204).end();
+  }
+  const perfLog = require("./lib/logger").createLogger("perf:client");
+  for (const entry of entries.slice(0, 50)) {
+    if (entry && typeof entry.type === "string" && typeof entry.view === "string") {
+      perfLog.info("Client metric", {
+        metricType: entry.type,
+        view: entry.view,
+        durationMs: entry.durationMs,
+      });
+    }
+  }
+  res.status(204).end();
+});
+
+// Perf stats endpoint (super-admin or dev only)
+app.get("/api/v1/system/perf/stats", (req, res) => {
+  if (process.env.PERF_TELEMETRY !== "1") {
+    return res.json({ enabled: false });
+  }
+  const { getRequestPerfStats } = require("./middleware/perfTelemetry");
+  const { getQueryPerfStats } = require("./middleware/queryTelemetry");
+  res.json({
+    enabled: true,
+    requests: getRequestPerfStats(),
+    queries: getQueryPerfStats(),
+  });
+});
 
 // Database health endpoint - public, no auth required
 // Returns database connectivity, latency, pool stats, and migration count
