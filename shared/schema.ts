@@ -886,8 +886,28 @@ export const clientDocumentCategories = pgTable("client_document_categories", {
 ]);
 
 /**
+ * Client Document Folders table - hierarchical folder structure for organizing client documents
+ * Supports nested folders via self-referencing parentFolderId
+ */
+export const clientDocumentFolders = pgTable("client_document_folders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  name: text("name").notNull(),
+  parentFolderId: varchar("parent_folder_id"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("client_doc_folders_tenant_idx").on(table.tenantId),
+  index("client_doc_folders_client_idx").on(table.clientId),
+  index("client_doc_folders_parent_idx").on(table.parentFolderId),
+  uniqueIndex("client_doc_folders_unique_name_idx").on(table.tenantId, table.clientId, table.parentFolderId, table.name),
+]);
+
+/**
  * Client Documents table - document library for each client
- * Accepts all major file types, organized by categories
+ * Accepts all major file types, organized by folders and categories
  * Tenant admins/employees and future client users can access
  */
 export const clientDocuments = pgTable("client_documents", {
@@ -895,6 +915,7 @@ export const clientDocuments = pgTable("client_documents", {
   tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
   clientId: varchar("client_id").references(() => clients.id).notNull(),
   categoryId: varchar("category_id").references(() => clientDocumentCategories.id),
+  folderId: varchar("folder_id").references(() => clientDocumentFolders.id),
   uploadedByUserId: varchar("uploaded_by_user_id").references(() => users.id).notNull(),
   originalFileName: text("original_file_name").notNull(),
   displayName: text("display_name"),
@@ -910,6 +931,7 @@ export const clientDocuments = pgTable("client_documents", {
   index("client_documents_tenant_idx").on(table.tenantId),
   index("client_documents_client_idx").on(table.clientId),
   index("client_documents_category_idx").on(table.categoryId),
+  index("client_documents_folder_idx").on(table.folderId),
   index("client_documents_created_at_idx").on(table.createdAt),
 ]);
 
