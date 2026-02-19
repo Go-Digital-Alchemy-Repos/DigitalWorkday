@@ -1101,6 +1101,10 @@ export const tasks = pgTable("tasks", {
   index("tasks_personal_user").on(table.isPersonal, table.createdBy),
   index("tasks_tenant_idx").on(table.tenantId),
   index("tasks_personal_section_idx").on(table.personalSectionId, table.personalSortOrder),
+  index("tasks_tenant_project_idx").on(table.tenantId, table.projectId),
+  index("tasks_tenant_status_idx").on(table.tenantId, table.status),
+  index("tasks_tenant_created_by_idx").on(table.tenantId, table.createdBy),
+  index("tasks_tenant_due_date_idx").on(table.tenantId, table.dueDate),
 ]);
 
 // Task Assignees table (for multiple assignees)
