@@ -811,6 +811,62 @@ export const clientNoteAttachments = pgTable("client_note_attachments", {
 ]);
 
 /**
+ * Project Note Categories table - tenant-level categories for project notes
+ */
+export const projectNoteCategories = pgTable("project_note_categories", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  name: text("name").notNull(),
+  color: text("color"),
+  isSystem: boolean("is_system").default(false).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("project_note_categories_tenant_idx").on(table.tenantId),
+  uniqueIndex("project_note_categories_name_tenant_idx").on(table.tenantId, table.name),
+]);
+
+/**
+ * Project Notes table - chronological notes attached to projects
+ * Mirrors client_notes structure for project-level note-taking
+ */
+export const projectNotes = pgTable("project_notes", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  projectId: varchar("project_id").references(() => projects.id).notNull(),
+  authorUserId: varchar("author_user_id").references(() => users.id).notNull(),
+  lastEditedByUserId: varchar("last_edited_by_user_id").references(() => users.id),
+  body: jsonb("body").notNull(),
+  categoryId: varchar("category_id").references(() => projectNoteCategories.id),
+  category: text("category").default("general"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("project_notes_tenant_idx").on(table.tenantId),
+  index("project_notes_project_idx").on(table.projectId),
+  index("project_notes_created_at_idx").on(table.createdAt),
+  index("project_notes_category_idx").on(table.categoryId),
+]);
+
+/**
+ * Project Note Versions table - stores historical versions of project notes
+ */
+export const projectNoteVersions = pgTable("project_note_versions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  noteId: varchar("note_id").references(() => projectNotes.id, { onDelete: "cascade" }).notNull(),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  editorUserId: varchar("editor_user_id").references(() => users.id).notNull(),
+  body: jsonb("body").notNull(),
+  category: text("category"),
+  categoryId: varchar("category_id").references(() => projectNoteCategories.id),
+  versionNumber: integer("version_number").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("project_note_versions_note_idx").on(table.noteId),
+  index("project_note_versions_tenant_idx").on(table.tenantId),
+  index("project_note_versions_created_at_idx").on(table.createdAt),
+]);
+
+/**
  * Client Document Categories table - user-definable categories for organizing documents
  */
 export const clientDocumentCategories = pgTable("client_document_categories", {
