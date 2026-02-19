@@ -177,8 +177,9 @@ export function WorkspacesTab() {
             {displayWorkspaces.map((workspace) => (
               <Card
                 key={workspace.id}
-                className={workspace.id === currentWorkspace?.id ? "border-primary" : ""}
+                className={`cursor-pointer hover-elevate ${workspace.id === currentWorkspace?.id ? "border-primary" : ""}`}
                 data-testid={`card-workspace-${workspace.id}`}
+                onClick={() => openEditWorkspace(workspace)}
               >
                 <CardHeader className="pb-2">
                   <div className="flex items-start justify-between">
@@ -195,27 +196,29 @@ export function WorkspacesTab() {
                         )}
                       </div>
                     </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" className="h-8 w-8">
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem onClick={() => openEditWorkspace(workspace)}>
-                          <Edit className="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => setDeleteTarget(workspace)}
-                          data-testid={`button-delete-workspace-${workspace.id}`}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+                    <div onClick={(e) => e.stopPropagation()}>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" className="h-8 w-8">
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem onClick={() => openEditWorkspace(workspace)}>
+                            <Edit className="h-4 w-4 mr-2" />
+                            Edit
+                          </DropdownMenuItem>
+                          <DropdownMenuItem
+                            className="text-destructive"
+                            onClick={() => setDeleteTarget(workspace)}
+                            data-testid={`button-delete-workspace-${workspace.id}`}
+                          >
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Delete
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   </div>
                 </CardHeader>
                 <CardContent>
