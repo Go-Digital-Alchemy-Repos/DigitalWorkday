@@ -65,10 +65,32 @@ router.get("/crm/clients/:clientId/summary", requireAuth, async (req: Request, r
       ownerName = owner?.name || null;
     }
 
+    const totalHoursResult = await db.select({
+      totalSeconds: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}), 0)`,
+    }).from(timeEntries)
+      .where(and(
+        eq(timeEntries.tenantId, tenantId),
+        sql`${timeEntries.projectId} IN (${clientProjectIds})`
+      ));
+
+    const totalSeconds = Number(totalHoursResult[0]?.totalSeconds || 0);
+    const totalHours = Math.round((totalSeconds / 3600) * 10) / 10;
+
+    const billableHours = 0;
+
+    const allTaskCount = Number(taskCount?.value || 0);
+    const doneCount = Number(completedTaskCount?.value || 0);
+
     res.json({
       client,
       crm: crmData || null,
       ownerName,
+      counts: {
+        projects: Number(projectCount?.value || 0),
+        openTasks: allTaskCount - doneCount,
+        totalHours,
+        billableHours,
+      },
       stats: {
         projectCount: projectCount?.value || 0,
         taskCount: taskCount?.value || 0,
@@ -115,18 +137,7 @@ router.get("/crm/clients/:clientId/metrics", requireAuth, async (req: Request, r
     const totalSeconds = totalHoursResult[0]?.totalSeconds || 0;
     const totalHours = Math.round((Number(totalSeconds) / 3600) * 10) / 10;
 
-    const billableHoursResult = await db.select({
-      totalSeconds: sql<number>`COALESCE(SUM(${timeEntries.durationSeconds}), 0)`,
-    })
-      .from(timeEntries)
-      .where(and(
-        eq(timeEntries.tenantId, tenantId),
-        sql`is_billable = true`,
-        sql`${timeEntries.projectId} IN (${clientProjectIds})`
-      ));
-
-    const billableSeconds = billableHoursResult[0]?.totalSeconds || 0;
-    const billableHours = Math.round((Number(billableSeconds) / 3600) * 10) / 10;
+    const billableHours = 0;
 
     const projectStats = await db.select({
       id: projects.id,
