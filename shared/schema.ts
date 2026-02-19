@@ -168,6 +168,8 @@ export const tenantSettings = pgTable("tenant_settings", {
   defaultThemePack: text("default_theme_pack"),
   // Chat retention settings (tenant-specific override, null = use system default)
   chatRetentionDays: integer("chat_retention_days"),
+  // Fine-grained conversation/message permissions per role (JSONB, null = use defaults)
+  messagePermissions: jsonb("message_permissions"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
@@ -2608,6 +2610,29 @@ export type InsertTenant = z.infer<typeof insertTenantSchema>;
 
 export type TenantSettings = typeof tenantSettings.$inferSelect;
 export type InsertTenantSettings = z.infer<typeof insertTenantSettingsSchema>;
+
+export const rolePermissionSchema = z.object({
+  admin: z.boolean(),
+  employee: z.boolean(),
+  client: z.boolean(),
+});
+
+export const messagePermissionsSchema = z.object({
+  closeThread: rolePermissionSchema,
+  changePriority: rolePermissionSchema,
+  viewInternalNotes: rolePermissionSchema,
+  assignThread: rolePermissionSchema,
+});
+
+export type RolePermission = z.infer<typeof rolePermissionSchema>;
+export type MessagePermissions = z.infer<typeof messagePermissionsSchema>;
+
+export const DEFAULT_MESSAGE_PERMISSIONS: MessagePermissions = {
+  closeThread: { admin: true, employee: false, client: false },
+  changePriority: { admin: true, employee: true, client: false },
+  viewInternalNotes: { admin: true, employee: true, client: false },
+  assignThread: { admin: true, employee: false, client: false },
+};
 
 export type TenantIntegration = typeof tenantIntegrations.$inferSelect;
 export type InsertTenantIntegration = z.infer<typeof insertTenantIntegrationSchema>;

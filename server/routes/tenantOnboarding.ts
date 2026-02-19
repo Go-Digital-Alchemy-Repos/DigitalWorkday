@@ -21,7 +21,7 @@ import crypto from "crypto";
 import { storage } from "../storage";
 import { z } from "zod";
 import { db } from "../db";
-import { tenants, TenantStatus, UserRole } from "@shared/schema";
+import { tenants, TenantStatus, UserRole, messagePermissionsSchema, DEFAULT_MESSAGE_PERMISSIONS } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../auth";
 import { getEffectiveTenantId } from "../middleware/tenantContext";
@@ -186,6 +186,7 @@ const updateSettingsSchema = z.object({
   supportEmail: z.string().email().optional().nullable(),
   whiteLabelEnabled: z.boolean().optional(),
   hideVendorBranding: z.boolean().optional(),
+  messagePermissions: messagePermissionsSchema.optional(),
 });
 
 router.patch("/settings", requireAuth, requireTenantAdmin, async (req, res) => {
@@ -360,6 +361,10 @@ router.get("/settings", requireAuth, requireTenantAdmin, async (req, res) => {
       return res.json({ tenantSettings: null });
     }
 
+    const parsedPerms = settings.messagePermissions
+      ? messagePermissionsSchema.safeParse(settings.messagePermissions)
+      : null;
+
     res.json({
       tenantSettings: {
         displayName: settings.displayName,
@@ -374,6 +379,7 @@ router.get("/settings", requireAuth, requireTenantAdmin, async (req, res) => {
         supportEmail: settings.supportEmail,
         whiteLabelEnabled: settings.whiteLabelEnabled,
         hideVendorBranding: settings.hideVendorBranding,
+        messagePermissions: parsedPerms?.success ? parsedPerms.data : DEFAULT_MESSAGE_PERMISSIONS,
       },
     });
   } catch (error) {

@@ -15,6 +15,10 @@ import {
   ClientMessageVisibility,
   conversationSlaPolicies,
   ConversationPriority,
+  tenantSettings,
+  DEFAULT_MESSAGE_PERMISSIONS,
+  messagePermissionsSchema,
+  type MessagePermissions,
 } from "@shared/schema";
 import { getCurrentUserId } from "../../helpers";
 import { verifyClientTenancy } from "./crm.helpers";
@@ -25,6 +29,27 @@ import { CLIENT_CONVERSATION_EVENTS } from "@shared/events";
 import type { NotificationPayload } from "@shared/events";
 
 const router = Router();
+
+async function getMessagePermissions(tenantId: string): Promise<MessagePermissions> {
+  const [settings] = await db.select({ messagePermissions: tenantSettings.messagePermissions })
+    .from(tenantSettings)
+    .where(eq(tenantSettings.tenantId, tenantId))
+    .limit(1);
+  if (settings?.messagePermissions) {
+    const parsed = messagePermissionsSchema.safeParse(settings.messagePermissions);
+    if (parsed.success) return parsed.data;
+  }
+  return DEFAULT_MESSAGE_PERMISSIONS;
+}
+
+function checkPermission(perms: MessagePermissions, action: keyof MessagePermissions, role: string): boolean {
+  if (role === UserRole.SUPER_USER) return true;
+  const actionPerms = perms[action];
+  if (role === UserRole.ADMIN) return actionPerms.admin;
+  if (role === UserRole.EMPLOYEE) return actionPerms.employee;
+  if (role === UserRole.CLIENT) return actionPerms.client;
+  return false;
+}
 
 router.get("/crm/clients/:clientId/conversations", requireAuth, async (req: Request, res: Response) => {
   try {
@@ -321,8 +346,9 @@ router.patch("/crm/conversations/:conversationId/assign", requireAuth, async (re
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const user = req.user!;
-    if (user.role === UserRole.CLIENT) {
-      return sendError(res, AppError.forbidden("Clients cannot assign conversations"), req);
+    const perms = await getMessagePermissions(tenantId);
+    if (!checkPermission(perms, "assignThread", user.role)) {
+      return sendError(res, AppError.forbidden("You do not have permission to assign conversations"), req);
     }
 
     const { conversationId } = req.params;
@@ -445,7 +471,8 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
       assigneeName = assignee?.name || null;
     }
 
-    const isClientUser = user.role === UserRole.CLIENT;
+    const perms = await getMessagePermissions(tenantId);
+    const canViewInternal = checkPermission(perms, "viewInternalNotes", user.role);
 
     let messagesQuery = db.select({
       id: clientMessages.id,
@@ -461,9 +488,9 @@ router.get("/crm/conversations/:conversationId/messages", requireAuth, async (re
       .from(clientMessages)
       .leftJoin(users, eq(clientMessages.authorUserId, users.id))
       .where(
-        isClientUser
-          ? and(eq(clientMessages.conversationId, conversationId), eq(clientMessages.visibility, ClientMessageVisibility.PUBLIC))
-          : eq(clientMessages.conversationId, conversationId)
+        canViewInternal
+          ? eq(clientMessages.conversationId, conversationId)
+          : and(eq(clientMessages.conversationId, conversationId), eq(clientMessages.visibility, ClientMessageVisibility.PUBLIC))
       )
       .orderBy(clientMessages.createdAt);
 
@@ -525,8 +552,11 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
 
     const userId = getCurrentUserId(req);
 
-    if (data.visibility === "internal" && user.role === UserRole.CLIENT) {
-      return sendError(res, AppError.forbidden("Client users cannot post internal notes"), req);
+    if (data.visibility === "internal") {
+      const perms = await getMessagePermissions(tenantId);
+      if (!checkPermission(perms, "viewInternalNotes", user.role)) {
+        return sendError(res, AppError.forbidden("You do not have permission to post internal notes"), req);
+      }
     }
 
     const [message] = await db.insert(clientMessages).values({
@@ -1096,8 +1126,9 @@ router.patch("/crm/conversations/:conversationId/priority", requireAuth, async (
     if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
 
     const user = req.user!;
-    if (user.role === UserRole.CLIENT) {
-      return sendError(res, AppError.forbidden("Clients cannot change priority"), req);
+    const perms = await getMessagePermissions(tenantId);
+    if (!checkPermission(perms, "changePriority", user.role)) {
+      return sendError(res, AppError.forbidden("You do not have permission to change priority"), req);
     }
 
     const { conversationId } = req.params;
@@ -1117,6 +1148,135 @@ router.patch("/crm/conversations/:conversationId/priority", requireAuth, async (
     res.json(updated);
   } catch (error) {
     return handleRouteError(res, error, "PATCH /api/crm/conversations/:conversationId/priority", req);
+  }
+});
+
+// =============================================================================
+// CLOSE / REOPEN THREAD
+// =============================================================================
+
+router.post("/crm/conversations/:conversationId/close", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    const perms = await getMessagePermissions(tenantId);
+    if (!checkPermission(perms, "closeThread", user.role)) {
+      return sendError(res, AppError.forbidden("You do not have permission to close threads"), req);
+    }
+
+    const { conversationId } = req.params;
+    const [conversation] = await db.select()
+      .from(clientConversations)
+      .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)))
+      .limit(1);
+
+    if (!conversation) return sendError(res, AppError.notFound("Conversation"), req);
+    if (conversation.closedAt) return sendError(res, AppError.badRequest("Conversation is already closed"), req);
+
+    const now = new Date();
+    const userId = getCurrentUserId(req);
+
+    const [updated] = await db.update(clientConversations)
+      .set({ closedAt: now, updatedAt: now })
+      .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)))
+      .returning();
+
+    await db.insert(clientMessages).values({
+      tenantId,
+      conversationId,
+      authorUserId: userId,
+      bodyText: "[Thread closed]",
+      visibility: "internal",
+    });
+
+    emitToTenant(tenantId, CLIENT_CONVERSATION_EVENTS.UPDATED, {
+      conversationId,
+      tenantId,
+      clientId: conversation.clientId,
+      closedAt: now.toISOString(),
+    });
+
+    res.json(updated);
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/crm/conversations/:conversationId/close", req);
+  }
+});
+
+router.post("/crm/conversations/:conversationId/reopen", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const user = req.user!;
+    const perms = await getMessagePermissions(tenantId);
+    if (!checkPermission(perms, "closeThread", user.role)) {
+      return sendError(res, AppError.forbidden("You do not have permission to reopen threads"), req);
+    }
+
+    const { conversationId } = req.params;
+    const [conversation] = await db.select()
+      .from(clientConversations)
+      .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)))
+      .limit(1);
+
+    if (!conversation) return sendError(res, AppError.notFound("Conversation"), req);
+    if (!conversation.closedAt) return sendError(res, AppError.badRequest("Conversation is not closed"), req);
+
+    const now = new Date();
+    const userId = getCurrentUserId(req);
+
+    const [updated] = await db.update(clientConversations)
+      .set({ closedAt: null, updatedAt: now })
+      .where(and(eq(clientConversations.id, conversationId), eq(clientConversations.tenantId, tenantId)))
+      .returning();
+
+    await db.insert(clientMessages).values({
+      tenantId,
+      conversationId,
+      authorUserId: userId,
+      bodyText: "[Thread reopened]",
+      visibility: "internal",
+    });
+
+    emitToTenant(tenantId, CLIENT_CONVERSATION_EVENTS.UPDATED, {
+      conversationId,
+      tenantId,
+      clientId: conversation.clientId,
+      closedAt: null,
+    });
+
+    res.json(updated);
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/crm/conversations/:conversationId/reopen", req);
+  }
+});
+
+// =============================================================================
+// MESSAGE PERMISSIONS ENDPOINT
+// =============================================================================
+
+router.get("/crm/message-permissions", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const perms = await getMessagePermissions(tenantId);
+    const user = req.user!;
+    const role = user.role;
+
+    res.json({
+      permissions: perms,
+      effective: {
+        closeThread: checkPermission(perms, "closeThread", role),
+        changePriority: checkPermission(perms, "changePriority", role),
+        viewInternalNotes: checkPermission(perms, "viewInternalNotes", role),
+        assignThread: checkPermission(perms, "assignThread", role),
+      },
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/message-permissions", req);
   }
 });
 

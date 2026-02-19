@@ -89,7 +89,7 @@ import {
 import { RichTextEditor, RichTextViewer } from "@/components/ui/rich-text-editor";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
 import { RequestApprovalDialog } from "@/components/request-approval-dialog";
-import { ClipboardCheck, UserCheck, Eye, EyeOff, AlertTriangle, ShieldAlert, SlidersHorizontal, X, Search } from "lucide-react";
+import { ClipboardCheck, UserCheck, Eye, EyeOff, AlertTriangle, ShieldAlert, SlidersHorizontal, X, Search, XCircle, RotateCcw } from "lucide-react";
 import {
   Select,
   SelectContent,
@@ -1274,10 +1274,25 @@ interface ApprovalItem {
   requesterName: string;
 }
 
+interface EffectivePermissions {
+  closeThread: boolean;
+  changePriority: boolean;
+  viewInternalNotes: boolean;
+  assignThread: boolean;
+}
+
 function MessagesTab({ clientId }: { clientId: string }) {
   const { toast } = useToast();
   const { user: authUser } = useAuth();
   const isAdmin = authUser?.role === "admin" || authUser?.role === "super_user";
+
+  const { data: permsData } = useQuery<{ permissions: any; effective: EffectivePermissions }>({
+    queryKey: ["/api/crm/message-permissions"],
+  });
+  const canClose = permsData?.effective?.closeThread ?? isAdmin;
+  const canChangePriority = permsData?.effective?.changePriority ?? isAdmin;
+  const canViewInternal = permsData?.effective?.viewInternalNotes ?? isAdmin;
+  const canAssign = permsData?.effective?.assignThread ?? isAdmin;
   const [selectedConvoId, setSelectedConvoId] = useState<string | null>(null);
   const [showNewConvo, setShowNewConvo] = useState(false);
   const [newSubject, setNewSubject] = useState("");
@@ -1412,6 +1427,36 @@ function MessagesTab({ clientId }: { clientId: string }) {
     },
   });
 
+  const closeMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      const res = await apiRequest("POST", `/api/crm/conversations/${conversationId}/close`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", selectedConvoId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
+      toast({ title: "Thread closed" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const reopenMutation = useMutation({
+    mutationFn: async (conversationId: string) => {
+      const res = await apiRequest("POST", `/api/crm/conversations/${conversationId}/reopen`);
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", selectedConvoId, "messages"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/clients", clientId, "conversations"] });
+      toast({ title: "Thread reopened" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
   const { data: mergeCandidates = [] } = useQuery<any[]>({
     queryKey: ["/api/crm/clients", clientId, "conversations/merge-candidates", selectedConvoId],
     queryFn: async () => {
@@ -1481,48 +1526,58 @@ function MessagesTab({ clientId }: { clientId: string }) {
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0 flex-wrap">
-            <Select
-              value={convo?.priority || "normal"}
-              onValueChange={(val) => {
-                priorityMutation.mutate({ conversationId: selectedConvoId!, priority: val });
-              }}
-            >
-              <SelectTrigger className="w-[110px]" data-testid="select-convo-priority">
-                <div className="flex items-center gap-1.5">
-                  <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" />
-                  <SelectValue />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="low">Low</SelectItem>
-                <SelectItem value="normal">Normal</SelectItem>
-                <SelectItem value="high">High</SelectItem>
-                <SelectItem value="urgent">Urgent</SelectItem>
-              </SelectContent>
-            </Select>
-            <Select
-              value={convo?.assignedToUserId || "__none__"}
-              onValueChange={(val) => {
-                assignMutation.mutate({
-                  conversationId: selectedConvoId,
-                  assignedToUserId: val === "__none__" ? null : val,
-                });
-              }}
-            >
-              <SelectTrigger className="w-[160px]" data-testid="select-convo-assignee">
-                <div className="flex items-center gap-1.5">
-                  <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
-                  <SelectValue placeholder="Unassigned" />
-                </div>
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="__none__">Unassigned</SelectItem>
-                {staffUsers.map((u: any) => (
-                  <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            {!isClosed && isAdmin && (
+            {canChangePriority && (
+              <Select
+                value={convo?.priority || "normal"}
+                onValueChange={(val) => {
+                  priorityMutation.mutate({ conversationId: selectedConvoId!, priority: val });
+                }}
+              >
+                <SelectTrigger className="w-[110px]" data-testid="select-convo-priority">
+                  <div className="flex items-center gap-1.5">
+                    <AlertTriangle className="h-3.5 w-3.5 text-muted-foreground" />
+                    <SelectValue />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="low">Low</SelectItem>
+                  <SelectItem value="normal">Normal</SelectItem>
+                  <SelectItem value="high">High</SelectItem>
+                  <SelectItem value="urgent">Urgent</SelectItem>
+                </SelectContent>
+              </Select>
+            )}
+            {!canChangePriority && convo?.priority && (
+              <Badge variant="outline" className="text-xs">
+                <AlertTriangle className="h-3 w-3 mr-1" />
+                {convo.priority}
+              </Badge>
+            )}
+            {canAssign && (
+              <Select
+                value={convo?.assignedToUserId || "__none__"}
+                onValueChange={(val) => {
+                  assignMutation.mutate({
+                    conversationId: selectedConvoId,
+                    assignedToUserId: val === "__none__" ? null : val,
+                  });
+                }}
+              >
+                <SelectTrigger className="w-[160px]" data-testid="select-convo-assignee">
+                  <div className="flex items-center gap-1.5">
+                    <UserCheck className="h-3.5 w-3.5 text-muted-foreground" />
+                    <SelectValue placeholder="Unassigned" />
+                  </div>
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__none__">Unassigned</SelectItem>
+                  {staffUsers.map((u: any) => (
+                    <SelectItem key={u.id} value={u.id}>{u.name || u.email}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            )}
+            {(canClose || isAdmin) && (
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button variant="ghost" size="icon" data-testid="button-convo-actions">
@@ -1530,13 +1585,33 @@ function MessagesTab({ clientId }: { clientId: string }) {
                   </Button>
                 </DropdownMenuTrigger>
                 <DropdownMenuContent align="end">
-                  <DropdownMenuItem
-                    onClick={() => { setMergeTargetId(""); setShowMergeDialog(true); }}
-                    data-testid="button-merge-conversation"
-                  >
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Merge With...
-                  </DropdownMenuItem>
+                  {!isClosed && canClose && (
+                    <DropdownMenuItem
+                      onClick={() => closeMutation.mutate(selectedConvoId!)}
+                      data-testid="button-close-conversation"
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Close Thread
+                    </DropdownMenuItem>
+                  )}
+                  {isClosed && canClose && (
+                    <DropdownMenuItem
+                      onClick={() => reopenMutation.mutate(selectedConvoId!)}
+                      data-testid="button-reopen-conversation"
+                    >
+                      <RotateCcw className="h-4 w-4 mr-2" />
+                      Reopen Thread
+                    </DropdownMenuItem>
+                  )}
+                  {!isClosed && isAdmin && (
+                    <DropdownMenuItem
+                      onClick={() => { setMergeTargetId(""); setShowMergeDialog(true); }}
+                      data-testid="button-merge-conversation"
+                    >
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Merge With...
+                    </DropdownMenuItem>
+                  )}
                 </DropdownMenuContent>
               </DropdownMenu>
             )}
@@ -1688,16 +1763,18 @@ function MessagesTab({ clientId }: { clientId: string }) {
                 <Eye className="h-3.5 w-3.5 mr-1" />
                 Public Reply
               </Button>
-              <Button
-                variant={replyVisibility === "internal" ? "default" : "outline"}
-                size="sm"
-                onClick={() => setReplyVisibility("internal")}
-                className={replyVisibility === "internal" ? "bg-amber-600 hover:bg-amber-700 border-amber-600" : ""}
-                data-testid="button-reply-internal"
-              >
-                <EyeOff className="h-3.5 w-3.5 mr-1" />
-                Internal Note
-              </Button>
+              {canViewInternal && (
+                <Button
+                  variant={replyVisibility === "internal" ? "default" : "outline"}
+                  size="sm"
+                  onClick={() => setReplyVisibility("internal")}
+                  className={replyVisibility === "internal" ? "bg-amber-600 hover:bg-amber-700 border-amber-600" : ""}
+                  data-testid="button-reply-internal"
+                >
+                  <EyeOff className="h-3.5 w-3.5 mr-1" />
+                  Internal Note
+                </Button>
+              )}
             </div>
             {replyVisibility === "internal" && (
               <p className="text-xs text-amber-600 dark:text-amber-400">

@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Checkbox } from "@/components/ui/checkbox";
 import {
   Dialog,
   DialogContent,
@@ -25,7 +26,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
-import { Plus, Pencil, Trash2, Loader2, FileText, GripVertical } from "lucide-react";
+import { Plus, Pencil, Trash2, Loader2, FileText, GripVertical, Shield } from "lucide-react";
+import type { MessagePermissions } from "@shared/schema";
+import { DEFAULT_MESSAGE_PERMISSIONS } from "@shared/schema";
 
 interface MessageTemplate {
   id: string;
@@ -51,6 +54,115 @@ const CATEGORIES = [
   { value: "onboarding", label: "Onboarding" },
   { value: "other", label: "Other" },
 ];
+
+const PERMISSION_LABELS: Record<keyof MessagePermissions, { label: string; description: string }> = {
+  closeThread: { label: "Close / Reopen Threads", description: "Can close and reopen conversation threads" },
+  changePriority: { label: "Change Priority", description: "Can change thread priority level" },
+  viewInternalNotes: { label: "View Internal Notes", description: "Can see internal-only messages in threads" },
+  assignThread: { label: "Assign Threads", description: "Can assign threads to team members" },
+};
+
+const ROLE_LABELS: Record<string, string> = {
+  admin: "Admin",
+  employee: "Employee",
+  client: "Client",
+};
+
+function PermissionsMatrixCard() {
+  const { toast } = useToast();
+  const { data: settingsData, isLoading } = useQuery<{ tenantSettings: { messagePermissions?: MessagePermissions } | null }>({
+    queryKey: ["/api/v1/tenant/settings"],
+  });
+
+  const permissions: MessagePermissions = settingsData?.tenantSettings?.messagePermissions ?? DEFAULT_MESSAGE_PERMISSIONS;
+
+  const saveMutation = useMutation({
+    mutationFn: async (perms: MessagePermissions) => {
+      const res = await apiRequest("PATCH", "/api/v1/tenant/settings", { messagePermissions: perms });
+      return res.json();
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/crm/message-permissions"] });
+      toast({ title: "Permissions updated" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const handleToggle = (action: keyof MessagePermissions, role: "admin" | "employee" | "client", checked: boolean) => {
+    const updated: MessagePermissions = {
+      ...permissions,
+      [action]: {
+        ...permissions[action],
+        [role]: checked,
+      },
+    };
+    saveMutation.mutate(updated);
+  };
+
+  const permissionKeys = Object.keys(PERMISSION_LABELS) as (keyof MessagePermissions)[];
+  const roles = ["admin", "employee", "client"] as const;
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="flex items-center gap-2">
+          <Shield className="h-5 w-5" />
+          Message Permissions
+        </CardTitle>
+        <CardDescription>
+          Control which roles can perform actions on conversation threads. Super admins always have full access.
+        </CardDescription>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <Skeleton className="h-48 w-full" />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead>
+                <tr className="border-b">
+                  <th className="text-left py-2 pr-4 font-medium text-muted-foreground">Action</th>
+                  {roles.map((role) => (
+                    <th key={role} className="text-center py-2 px-4 font-medium text-muted-foreground" data-testid={`th-role-${role}`}>
+                      {ROLE_LABELS[role]}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {permissionKeys.map((action) => (
+                  <tr key={action} className="border-b last:border-b-0">
+                    <td className="py-3 pr-4">
+                      <div>
+                        <span className="font-medium" data-testid={`text-permission-label-${action}`}>{PERMISSION_LABELS[action].label}</span>
+                        <p className="text-xs text-muted-foreground mt-0.5">{PERMISSION_LABELS[action].description}</p>
+                      </div>
+                    </td>
+                    {roles.map((role) => (
+                      <td key={role} className="text-center py-3 px-4">
+                        <div className="flex items-center justify-center">
+                          <Checkbox
+                            checked={permissions[action]?.[role] ?? false}
+                            onCheckedChange={(checked) => handleToggle(action, role, !!checked)}
+                            disabled={saveMutation.isPending}
+                            data-testid={`checkbox-perm-${action}-${role}`}
+                          />
+                        </div>
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
 
 function TemplateFormDialog({
   open,
@@ -270,6 +382,8 @@ export function MessagesTab() {
 
   return (
     <div className="space-y-6">
+      <PermissionsMatrixCard />
+
       <Card>
         <CardHeader className="flex flex-row items-center justify-between gap-4">
           <div>
