@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor, RichTextRenderer } from "@/components/richtext";
+import { toPlainText } from "@/components/richtext/richTextUtils";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { Separator } from "@/components/ui/separator";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -764,8 +765,12 @@ export function TaskDetailDrawer({
     if (task && title.trim() && title !== task.title) {
       onUpdate?.(task.id, { title: title.trim() });
     }
-    if (task && description !== (task.description || "")) {
-      onUpdate?.(task.id, { description });
+    if (task) {
+      const currentPlain = toPlainText(description);
+      const taskPlain = toPlainText(task.description);
+      if (currentPlain !== taskPlain) {
+        onUpdate?.(task.id, { description });
+      }
     }
     markClean();
     onOpenChange(false);
@@ -855,7 +860,10 @@ export function TaskDetailDrawer({
 
   const handleDescriptionBlur = () => {
     if (closingRef.current) return;
-    if (description !== task.description) {
+    if (!task) return;
+    const currentPlain = toPlainText(description);
+    const taskPlain = toPlainText(task.description);
+    if (currentPlain !== taskPlain) {
       onUpdate?.(task.id, { description: description || null });
       markClean();
     }

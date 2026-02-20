@@ -433,6 +433,7 @@ export function RichTextEditor({
   useEffect(() => { onBlurRef.current = onBlur; }, [onBlur]);
 
   const prevValueRef = useRef(value);
+  const suppressOnChangeRef = useRef(false);
 
   const editor = useEditor({
     extensions,
@@ -460,6 +461,7 @@ export function RichTextEditor({
       },
     },
     onUpdate: ({ editor }) => {
+      if (suppressOnChangeRef.current) return;
       const doc = editor.getJSON();
       onChangeRef.current(serializeDocToString(doc));
     },
@@ -477,7 +479,9 @@ export function RichTextEditor({
         const prevDoc = serializeDocToString(getDocForEditor(prevValueRef.current));
         const isExternalChange = prevDoc !== newDoc;
         if (isExternalChange || !editor.isFocused) {
+          suppressOnChangeRef.current = true;
           editor.commands.setContent(getDocForEditor(value));
+          suppressOnChangeRef.current = false;
         }
       }
       prevValueRef.current = value;
