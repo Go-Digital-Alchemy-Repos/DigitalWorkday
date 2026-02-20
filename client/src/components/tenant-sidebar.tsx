@@ -224,6 +224,27 @@ export function TenantSidebar() {
     return division?.name || null;
   };
 
+  const { data: chatChannels } = useQuery<{ id: string; unreadCount: number }[]>({
+    queryKey: ["/api/chat/channels"],
+    refetchInterval: 30000,
+  });
+
+  const { data: chatDmThreads } = useQuery<{ id: string; unreadCount: number }[]>({
+    queryKey: ["/api/chat/dm"],
+    refetchInterval: 30000,
+  });
+
+  const totalUnreadChat = useMemo(() => {
+    let count = 0;
+    if (chatChannels) {
+      for (const ch of chatChannels) count += ch.unreadCount || 0;
+    }
+    if (chatDmThreads) {
+      for (const dm of chatDmThreads) count += dm.unreadCount || 0;
+    }
+    return count;
+  }, [chatChannels, chatDmThreads]);
+
   const { data: uiPrefs } = useQuery<UiPreferences>({
     queryKey: ["/api/users/me/ui-preferences"],
   });
@@ -419,7 +440,17 @@ export function TenantSidebar() {
                       >
                         <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s/g, "-")}`}>
                           <item.icon className="h-4 w-4" />
-                          <span>{item.title}</span>
+                          <span className="relative">
+                            {item.title}
+                            {item.title === "Chat" && totalUnreadChat > 0 && (
+                              <span
+                                className="absolute -top-2 -right-7 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none"
+                                data-testid="badge-chat-unread"
+                              >
+                                {totalUnreadChat > 99 ? "99+" : totalUnreadChat}
+                              </span>
+                            )}
+                          </span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
