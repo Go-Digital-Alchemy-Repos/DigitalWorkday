@@ -1,0 +1,315 @@
+REPLIT PROMPT — Robust Notification Center (Bell Slide-Down Panel)
+DigitalWorkday
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE:
+Implement a robust, unified Notification System:
+- Notifications bell in header shows unread count
+- Clicking bell opens a slide-down notification panel (popover/sheet style)
+- Notifications arrive in realtime for:
+  - Internal Chat messages
+  - Client Messages (portal inbox messages)
+  - Support Tickets / Work Orders
+  - Mentions (@user) across comments/descriptions/messages
+- Each notification deep-links to the exact context (message thread, chat channel + message, ticket, task comment)
+- Supports read/unread, mark all read, clear/dismiss
+- Must be tenant-scoped and user-scoped (no cross-tenant leak)
+- Must be performant and not spammy (dedupe + coalesce)
+
+UI CONSTRAINTS:
+- Use shadcn/ui components only (Radix primitives + Tailwind).
+- Components live in client/src/components/ui/ or feature folders following existing patterns.
+- Use Popover/Sheet/ScrollArea/Tabs/Button/Badge/Avatar/Tooltip/Separator.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT remove existing notifications systems; integrate/bridge them.
+- Keep existing chat and portal flows working.
+- Add feature flag: NOTIFICATIONS_V2 (default false) to gate new panel behavior.
+- Add tests: policy drift + integration (server), and basic UI smoke (client) if present.
+- Add docs: docs/features/notifications.md + update docs/ARCHITECTURE_OVERVIEW where relevant.
+
+DELIVERABLES:
+1) DB tables for notifications + reads
+2) Server notification service + event emitters
+3) API endpoints (list, mark read, mark all, dismiss)
+4) Socket.IO realtime notification channel
+5) Frontend notification bell + slide-down panel UI
+6) Deep-link routing handlers for each notification type
+7) Dedupe/coalescing logic
+8) Documentation
+
+================================================================================
+PHASE 1 — Data Model (DB)
+================================================================================
+
+Create table: notifications
+- id (uuid)
+- tenantId
+- userId                 // recipient tenant user
+- type (string enum)
+  - chat_message
+  - client_message
+  - support_ticket
+  - work_order
+  - mention
+  - task_assigned
+  - project_updated
+  - system
+- title (text)
+- body (text, nullable)
+- severity (info|success|warning|danger) default info
+- createdAt
+- dedupeKey (text, nullable)          // for coalescing
+- entityType (text, nullable)         // "chat_channel" | "client_thread" | "ticket" | "task" ...
+- entityId (text, nullable)
+- href (text, nullable)               // app route to open
+- metaJson (jsonb, nullable)          // { channelId, messageId, clientId, threadId, ticketId, taskId... }
+- isDismissed (boolean default false)
+
+Indexes:
+- (tenantId, userId, createdAt desc)
+- (tenantId, userId, isDismissed, createdAt desc)
+- (tenantId, userId, dedupeKey) (optional)
+
+Create table: notification_reads
+- id (uuid)
+- tenantId
+- userId
+- notificationId
+- readAt
+
+Unique:
+- (notificationId, userId)
+
+Indexes:
+- (tenantId, userId, readAt desc)
+- (tenantId, userId, notificationId)
+
+NOTES:
+- Read state should be per user (recipient), not global.
+- Dismiss is optional; can be per notification row (recipient-scoped already).
+
+================================================================================
+PHASE 2 — Server Notification Service (Single Source of Truth)
+================================================================================
+
+Create:
+server/features/notifications/notification.service.ts
+server/features/notifications/notification.repo.ts
+server/features/notifications/notification.types.ts
+
+Service API:
+- createNotification({tenantId, userId, type, title, body?, severity?, entityType?, entityId?, href?, meta?, dedupeKey?})
+- createManyNotifications([...])
+- markRead({tenantId, userId, notificationId})
+- markAllRead({tenantId, userId})
+- dismiss({tenantId, userId, notificationId})
+- list({tenantId, userId, cursor?, limit?, unreadOnly?, types?})
+- countUnread({tenantId, userId})
+
+Dedupe / Coalesce:
+- If dedupeKey present and a matching notification exists within last N minutes and is unread:
+  - Update existing notification (append counter in metaJson: { count })
+  - Bump createdAt (or add updatedAt)
+  - Do not insert a new row
+Example dedupeKey patterns:
+- chat_message: `chat:${channelId}`
+- client_message: `clientThread:${threadId}`
+- ticket: `ticket:${ticketId}`
+- mention: `mention:${entityType}:${entityId}`
+
+================================================================================
+PHASE 3 — Emit Notifications from Key Events
+================================================================================
+
+Integrate notifications into existing event points (non-breaking):
+
+1) Internal Chat:
+- On new chat message:
+  - notify channel members except sender (respect muted channels if exists; else v1 notify all)
+  - type=chat_message
+  - title="New message in #<channel>"
+  - body="<sender>: <snippet>"
+  - meta={channelId, messageId}
+  - href should open chat channel and focus message
+
+2) Client Messages (Portal Inbox):
+- On new portal/client message or tenant reply:
+  - notify tenant users (assigned owner if exists; else admins)
+  - type=client_message
+  - title="New client message: <client name>"
+  - meta={clientId, threadId, messageId}
+  - href opens client workspace/messages thread
+
+3) Support Tickets / Work Orders:
+- On new ticket:
+  - notify tenant admins and/or assigned handler
+  - type=support_ticket or work_order
+  - meta={clientId, ticketId}
+  - href opens ticket detail
+
+4) Mentions:
+- When @mention detected in:
+  - comments
+  - task descriptions
+  - client messages (tenant side)
+  - chat (optional)
+  - create notification per mentioned user
+  - type=mention
+  - meta={sourceType, sourceId, clientId?, taskId?, commentId?}
+  - href deep-links to exact location
+
+Make sure tenancy + membership checks are applied when generating recipients.
+
+================================================================================
+PHASE 4 — API Endpoints (authTenant)
+================================================================================
+
+Create router:
+server/http/domains/notifications.router.ts (createApiRouter authTenant)
+
+Routes:
+GET    /api/v1/notifications?cursor=&limit=&unreadOnly=&types=
+GET    /api/v1/notifications/unread-count
+POST   /api/v1/notifications/:id/read
+POST   /api/v1/notifications/read-all
+POST   /api/v1/notifications/:id/dismiss
+
+Security:
+- Only returns notifications for ctx.userId + ctx.tenantId
+- Never allow reading others’ notifications
+
+Add policy drift tests + integration tests.
+
+================================================================================
+PHASE 5 — Realtime Delivery via Socket.IO
+================================================================================
+
+Add notification socket channel:
+- room: user:{userId}
+- event: NOTIFICATIONS.NEW
+- event: NOTIFICATIONS.UPDATED (for dedupe bump)
+- event: NOTIFICATIONS.READ (optional)
+- event: NOTIFICATIONS.COUNT (optional)
+
+On createNotification:
+- emit NOTIFICATIONS.NEW to recipient user room
+- emit updated unread count
+
+Ensure socketPolicy wrappers enforce:
+- auth + tenant context
+- joins to user room allowed only for self
+
+================================================================================
+PHASE 6 — Frontend: Bell + Slide-Down Panel (shadcn/ui)
+================================================================================
+
+1) NotificationBell component
+Location:
+client/src/components/notifications/NotificationBell.tsx
+
+Behavior:
+- Shows Bell icon + unread badge
+- Clicking opens popover panel anchored to bell
+- Panel max height with ScrollArea
+- Tabs:
+  - All
+  - Unread
+  - Mentions
+  - Tickets
+  - Messages
+  - Chat
+(keep simple v1; can be filters instead)
+
+Use:
+- Popover (or Sheet for mobile)
+- ScrollArea
+- Tabs
+- Badge
+- Button
+- Separator
+- Avatar
+
+2) Panel UI Features
+- Each item shows:
+  - icon by type
+  - title
+  - snippet
+  - relative timestamp
+  - unread dot
+- Actions:
+  - Mark as read (click item)
+  - Dismiss (x)
+  - Mark all read
+
+3) Deep-link Navigation
+On click:
+- call markRead
+- navigate to href
+- if chat: open channel + scroll to messageId
+- if client messages: open client + threadId
+- if ticket: open ticket drawer/page
+
+4) Realtime Updates
+- Subscribe to socket events:
+  - add new notification to list cache
+  - update unread count query
+- Use React Query setQueryData for instant UI updates
+
+5) Mobile behavior
+- On mobile, bell opens a Sheet (bottom or right) not Popover
+- Ensure safe padding and not obscured by navbar
+
+Feature flag:
+- If NOTIFICATIONS_V2 off:
+  - keep existing behavior
+- If on:
+  - show NotificationBell panel
+
+================================================================================
+PHASE 7 — Perf + UX Polish
+================================================================================
+
+- Limit initial fetch to 30 notifications, infinite scroll for older
+- Coalesce bursts (dedupeKey + count)
+- Don’t play sound for every coalesced update (only first new within burst)
+- Add subtle animation for panel open and new items
+- Ensure panel doesn’t re-render full list on count update (memoize rows)
+
+================================================================================
+PHASE 8 — Sounds (Optional tie-in)
+================================================================================
+
+If sounds system exists:
+- On NOTIFICATIONS.NEW, play subtle sound based on type:
+  - chat_message: soft “tick”
+  - support_ticket/work_order: slightly stronger “ding”
+  - mention: short “pop”
+Add user setting:
+- Notifications sounds ON/OFF
+- Per-type toggles (optional later)
+
+================================================================================
+PHASE 9 — Testing + Docs
+================================================================================
+
+Server tests:
+- Create notification tenant isolation
+- unread-count correctness
+- mark read/all/dismiss works
+- socket room join restrictions
+
+Docs:
+Create docs/features/notifications.md:
+- event sources and types
+- dedupe behavior
+- APIs
+- socket events
+- UI/UX notes
+Update Docs Library entry in Super Admin.
+
+OUTPUT:
+- list of files changed
+- tests passing
+- docs updated
