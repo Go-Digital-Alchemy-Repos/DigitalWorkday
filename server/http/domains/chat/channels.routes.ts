@@ -10,6 +10,7 @@ import { emitToTenant, emitToChatChannel } from "../../../realtime/socket";
 import { CHAT_EVENTS } from "@shared/events";
 import { chatDebugStore } from "../../../realtime/chatDebug";
 import { getCurrentTenantId, createChannelSchema, sendMessageSchema, addMembersSchema } from "./shared";
+import { extractChatContext, requireChannelMember, requireChannelMemberStrict, logSecurityEvent } from "../../../features/chat/security";
 
 const router = Router();
 
@@ -96,9 +97,9 @@ router.post(
 router.get(
   "/channels/:channelId",
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = getCurrentTenantId(req);
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, userId } = extractChatContext(req);
 
+    await requireChannelMember(tenantId, userId, req.params.channelId);
     const channel = await storage.getChatChannel(req.params.channelId);
     if (!channel || channel.tenantId !== tenantId) {
       throw AppError.notFound("Channel not found");
@@ -111,12 +112,13 @@ router.get(
 router.get(
   "/channels/:channelId/members",
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = getCurrentTenantId(req);
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, userId } = extractChatContext(req);
+
+    await requireChannelMember(tenantId, userId, req.params.channelId);
 
     const channel = await storage.getChatChannel(req.params.channelId);
-    if (!channel || channel.tenantId !== tenantId) {
-      throw AppError.notFound("Channel not found");
+    if (channel?.isPrivate) {
+      await requireChannelMemberStrict(tenantId, userId, req.params.channelId);
     }
 
     const members = await storage.getChatChannelMembers(req.params.channelId);

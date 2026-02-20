@@ -309,6 +309,8 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
       }
     ));
 
+    const MAX_CHAT_ROOMS_PER_SOCKET = 50;
+
     // Handle joining/leaving chat rooms (channels and DMs)
     // Authorization: Uses server-derived userId/tenantId from authenticated session (ignores client-supplied IDs)
     socket.on(CHAT_ROOM_EVENTS.JOIN, withSocketPolicy(
@@ -317,6 +319,12 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
       async (ctx, { targetType, targetId }) => {
         const roomName = `chat:${targetType}:${targetId}`;
         const conversationId = `${targetType}:${targetId}`;
+
+        const chatRooms = [...socket.rooms].filter(r => r.startsWith("chat:"));
+        if (chatRooms.length >= MAX_CHAT_ROOMS_PER_SOCKET) {
+          log(`[chat-security] Room join denied: max rooms (${MAX_CHAT_ROOMS_PER_SOCKET}) reached for socket=${socket.id} user=${ctx.userId}`, 'security');
+          return;
+        }
 
         socket.join(roomName);
         log(`Client ${socket.id} joined chat room: ${roomName}`, 'socket.io');

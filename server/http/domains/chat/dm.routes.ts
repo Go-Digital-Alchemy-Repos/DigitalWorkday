@@ -10,6 +10,7 @@ import { emitToChatDm } from "../../../realtime/socket";
 import { CHAT_EVENTS } from "@shared/events";
 import { chatDebugStore } from "../../../realtime/chatDebug";
 import { getCurrentTenantId, createDmSchema, sendMessageSchema } from "./shared";
+import { extractChatContext, requireDmMember } from "../../../features/chat/security";
 
 const router = Router();
 
@@ -57,19 +58,13 @@ router.post(
 router.get(
   "/dm/:dmId",
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = getCurrentTenantId(req);
-    const userId = getCurrentUserId(req);
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, userId } = extractChatContext(req);
+
+    await requireDmMember(tenantId, userId, req.params.dmId);
 
     const thread = await storage.getChatDmThread(req.params.dmId);
     if (!thread || thread.tenantId !== tenantId) {
       throw AppError.notFound("DM thread not found");
-    }
-
-    const threads = await storage.getUserChatDmThreads(tenantId, userId);
-    const isMember = threads.some(t => t.id === thread.id);
-    if (!isMember) {
-      throw AppError.forbidden("Not a member of this DM thread");
     }
 
     res.json(thread);
@@ -79,20 +74,9 @@ router.get(
 router.get(
   "/dm/:dmId/messages",
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = getCurrentTenantId(req);
-    const userId = getCurrentUserId(req);
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, userId } = extractChatContext(req);
 
-    const thread = await storage.getChatDmThread(req.params.dmId);
-    if (!thread || thread.tenantId !== tenantId) {
-      throw AppError.notFound("DM thread not found");
-    }
-
-    const threads = await storage.getUserChatDmThreads(tenantId, userId);
-    const isMember = threads.some(t => t.id === thread.id);
-    if (!isMember) {
-      throw AppError.forbidden("Not a member of this DM thread");
-    }
+    await requireDmMember(tenantId, userId, req.params.dmId);
 
     const limit = parseInt(req.query.limit as string) || 50;
     const before = req.query.before ? new Date(req.query.before as string) : undefined;
@@ -106,20 +90,9 @@ router.get(
 router.get(
   "/dm/:dmId/first-unread",
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = getCurrentTenantId(req);
-    const userId = getCurrentUserId(req);
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, userId } = extractChatContext(req);
 
-    const thread = await storage.getChatDmThread(req.params.dmId);
-    if (!thread || thread.tenantId !== tenantId) {
-      throw AppError.notFound("DM thread not found");
-    }
-
-    const threads = await storage.getUserChatDmThreads(tenantId, userId);
-    const isMember = threads.some(t => t.id === thread.id);
-    if (!isMember) {
-      throw AppError.forbidden("Not a member of this DM thread");
-    }
+    await requireDmMember(tenantId, userId, req.params.dmId);
 
     const firstUnreadId = await storage.getFirstUnreadMessageId("dm", req.params.dmId, userId);
     res.json({ firstUnreadMessageId: firstUnreadId });
@@ -131,9 +104,7 @@ router.post(
   chatSendRateLimiter,
   validateBody(sendMessageSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = getCurrentTenantId(req);
-    const userId = getCurrentUserId(req);
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, userId } = extractChatContext(req);
 
     chatDebugStore.logEvent({
       eventType: 'message_send_attempt',
@@ -144,15 +115,11 @@ router.post(
       payloadSize: req.body.body?.length || 0,
     });
 
+    await requireDmMember(tenantId, userId, req.params.dmId);
+
     const thread = await storage.getChatDmThread(req.params.dmId);
     if (!thread || thread.tenantId !== tenantId) {
       throw AppError.notFound("DM thread not found");
-    }
-
-    const threads = await storage.getUserChatDmThreads(tenantId, userId);
-    const isMember = threads.some(t => t.id === thread.id);
-    if (!isMember) {
-      throw AppError.forbidden("Not a member of this DM thread");
     }
 
     const attachmentIds: string[] = req.body.attachmentIds || [];
@@ -257,14 +224,9 @@ router.post(
 router.get(
   "/dm/:dmThreadId/thread-summaries",
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = getCurrentTenantId(req);
-    const userId = getCurrentUserId(req);
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, userId } = extractChatContext(req);
 
-    const isMember = await storage.isUserInDmThread(req.params.dmThreadId, userId);
-    if (!isMember) {
-      throw AppError.forbidden("Not a member of this DM");
-    }
+    await requireDmMember(tenantId, userId, req.params.dmThreadId);
 
     const summaries = await storage.getThreadSummariesForConversation("dm", req.params.dmThreadId);
     

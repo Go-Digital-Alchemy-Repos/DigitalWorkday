@@ -14,6 +14,7 @@ import { db } from "../../../db";
 import { eq, and, desc, sql, isNull } from "drizzle-orm";
 import { getCurrentTenantId, sendMessageSchema, markReadSchema, upload } from "./shared";
 import { z } from "zod";
+import { extractChatContext, requireMessageAccess, requireChannelMember, requireDmMember, logSecurityEvent } from "../../../features/chat/security";
 
 const EDIT_WINDOW_MS = 5 * 60 * 1000;
 
@@ -71,29 +72,13 @@ router.get(
 router.get(
   "/messages/:messageId/thread",
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = getCurrentTenantId(req);
-    const userId = getCurrentUserId(req);
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, userId } = extractChatContext(req);
+
+    await requireMessageAccess(tenantId, userId, req.params.messageId);
 
     const parentMessage = await storage.getChatMessage(req.params.messageId);
     if (!parentMessage || parentMessage.tenantId !== tenantId) {
       throw AppError.notFound("Message not found");
-    }
-
-    if (parentMessage.channelId) {
-      const channel = await storage.getChatChannel(parentMessage.channelId);
-      if (!channel || channel.tenantId !== tenantId) {
-        throw AppError.notFound("Channel not found");
-      }
-      const member = await storage.getChatChannelMember(parentMessage.channelId, userId);
-      if (!member && channel.isPrivate) {
-        throw AppError.forbidden("Not a member of this private channel");
-      }
-    } else if (parentMessage.dmThreadId) {
-      const isMember = await storage.isUserInDmThread(parentMessage.dmThreadId, userId);
-      if (!isMember) {
-        throw AppError.forbidden("Not a member of this DM");
-      }
     }
 
     const limit = parseInt(req.query.limit as string) || 100;
@@ -112,9 +97,9 @@ router.patch(
   "/messages/:messageId",
   validateBody(sendMessageSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = getCurrentTenantId(req);
-    const userId = getCurrentUserId(req);
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, userId } = extractChatContext(req);
+
+    const container = await requireMessageAccess(tenantId, userId, req.params.messageId);
 
     const message = await storage.getChatMessage(req.params.messageId);
     if (!message || message.tenantId !== tenantId) {
@@ -161,9 +146,9 @@ router.patch(
 router.delete(
   "/messages/:messageId",
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = getCurrentTenantId(req);
-    const userId = getCurrentUserId(req);
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, userId } = extractChatContext(req);
+
+    await requireMessageAccess(tenantId, userId, req.params.messageId);
 
     const message = await storage.getChatMessage(req.params.messageId);
     if (!message || message.tenantId !== tenantId) {
@@ -203,13 +188,9 @@ router.delete(
 router.get(
   "/messages/:messageId/reactions",
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = getCurrentTenantId(req);
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, userId } = extractChatContext(req);
 
-    const message = await storage.getChatMessage(req.params.messageId);
-    if (!message || message.tenantId !== tenantId) {
-      throw AppError.notFound("Message not found");
-    }
+    await requireMessageAccess(tenantId, userId, req.params.messageId);
 
     const reactions = await storage.getReactionsForMessage(req.params.messageId);
     res.json(reactions);
@@ -220,9 +201,9 @@ router.post(
   "/messages/:messageId/reactions",
   validateBody(reactionSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = getCurrentTenantId(req);
-    const userId = getCurrentUserId(req);
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, userId } = extractChatContext(req);
+
+    const container = await requireMessageAccess(tenantId, userId, req.params.messageId);
 
     const message = await storage.getChatMessage(req.params.messageId);
     if (!message || message.tenantId !== tenantId) {
@@ -262,9 +243,9 @@ router.post(
 router.delete(
   "/messages/:messageId/reactions/:emoji",
   asyncHandler(async (req: Request, res: Response) => {
-    const tenantId = getCurrentTenantId(req);
-    const userId = getCurrentUserId(req);
-    if (!tenantId) throw AppError.forbidden("Tenant context required");
+    const { tenantId, userId } = extractChatContext(req);
+
+    await requireMessageAccess(tenantId, userId, req.params.messageId);
 
     const message = await storage.getChatMessage(req.params.messageId);
     if (!message || message.tenantId !== tenantId) {
