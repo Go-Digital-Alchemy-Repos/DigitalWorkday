@@ -4,7 +4,7 @@ import {
   notifications, notificationPreferences,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, isNull, sql, lt, ne } from "drizzle-orm";
+import { eq, and, desc, isNull, sql, lt, ne, inArray } from "drizzle-orm";
 
 export interface NotificationQueryOptions {
   unreadOnly?: boolean;
@@ -76,7 +76,12 @@ export class NotificationsRepository {
       }
 
       if (options?.typeFilter) {
-        conditions.push(eq(notifications.type, options.typeFilter));
+        const types = options.typeFilter.split(",");
+        if (types.length === 1) {
+          conditions.push(eq(notifications.type, types[0]));
+        } else {
+          conditions.push(inArray(notifications.type, types));
+        }
       }
       
       return db.select()
@@ -119,7 +124,7 @@ export class NotificationsRepository {
         if (types.length === 1) {
           conditions.push(eq(notifications.type, types[0]));
         } else {
-          conditions.push(sql`${notifications.type} = ANY(${types})`);
+          conditions.push(inArray(notifications.type, types));
         }
       }
 
