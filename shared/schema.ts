@@ -1517,6 +1517,12 @@ export const notifications = pgTable("notifications", {
   title: text("title").notNull(),
   message: text("message"),
   payloadJson: jsonb("payload_json"),
+  severity: text("severity").default("info").notNull(),
+  entityType: text("entity_type"),
+  entityId: text("entity_id"),
+  href: text("href"),
+  dedupeKey: text("dedupe_key"),
+  isDismissed: boolean("is_dismissed").default(false).notNull(),
   readAt: timestamp("read_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
@@ -1525,6 +1531,7 @@ export const notifications = pgTable("notifications", {
   index("notifications_created_idx").on(table.createdAt),
   index("notifications_user_read_idx").on(table.userId, table.readAt),
   index("notifications_tenant_user_idx").on(table.tenantId, table.userId),
+  index("notifications_dedupe_idx").on(table.tenantId, table.userId, table.dedupeKey),
 ]);
 
 // Notification preferences table
@@ -1540,6 +1547,10 @@ export const notificationPreferences = pgTable("notification_preferences", {
   projectUpdate: boolean("project_update").default(true).notNull(),
   projectMemberAdded: boolean("project_member_added").default(true).notNull(),
   taskStatusChanged: boolean("task_status_changed").default(false).notNull(),
+  chatMessage: boolean("chat_message").default(true).notNull(),
+  clientMessage: boolean("client_message").default(true).notNull(),
+  supportTicket: boolean("support_ticket").default(true).notNull(),
+  workOrder: boolean("work_order").default(true).notNull(),
   emailEnabled: boolean("email_enabled").default(false).notNull(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

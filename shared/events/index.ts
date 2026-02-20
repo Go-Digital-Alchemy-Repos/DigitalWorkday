@@ -753,6 +753,11 @@ export interface NotificationPayload {
   title: string;
   message: string | null;
   payloadJson: any;
+  severity: string;
+  entityType: string | null;
+  entityId: string | null;
+  href: string | null;
+  isDismissed: boolean;
   readAt: Date | null;
   createdAt: Date;
 }
