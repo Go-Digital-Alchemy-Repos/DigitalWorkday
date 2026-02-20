@@ -45,7 +45,8 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { Building2, X, Archive, RotateCcw, Search, LogOut, Eye, Pin } from "lucide-react";
+import { Building2, X, Archive, RotateCcw, Search, LogOut, Eye, Pin, Trash2 } from "lucide-react";
+import { useLocation } from "wouter";
 import type { Project, ClientWithContacts, Team } from "@shared/schema";
 
 const PROJECT_COLORS = [
@@ -82,7 +83,8 @@ export function ProjectSettingsSheet({
 }: ProjectSettingsSheetProps) {
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "super_user";
+  const [, setLocation] = useLocation();
   const [clientSearch, setClientSearch] = useState("");
 
   const { data: clients = [] } = useQuery<ClientWithContacts[]>({
@@ -285,6 +287,29 @@ export function ProjectSettingsSheet({
       toast({
         title: "Error",
         description: "Failed to leave project.",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const deleteProjectMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("DELETE", `/api/projects/${project.id}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      toast({
+        title: "Project deleted",
+        description: `"${project.name}" has been permanently deleted.`,
+      });
+      onOpenChange(false);
+      setLocation("/projects");
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete project.",
         variant: "destructive",
       });
     },
@@ -667,6 +692,55 @@ export function ProjectSettingsSheet({
                             data-testid="button-confirm-archive"
                           >
                             {isArchived ? "Restore" : "Archive"}
+                          </AlertDialogAction>
+                        </AlertDialogFooter>
+                      </AlertDialogContent>
+                    </AlertDialog>
+                  </div>
+                </div>
+              </div>
+
+              <Separator />
+
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-destructive">Danger Zone</Label>
+                <div className="p-3 rounded-lg border border-destructive/30 bg-destructive/5">
+                  <div className="flex items-center justify-between gap-2">
+                    <div>
+                      <p className="text-sm font-medium">Delete this project</p>
+                      <p className="text-xs text-muted-foreground">
+                        Permanently delete this project along with all its tasks, sections, notes, and attachments. Time entries will be preserved but unlinked. This cannot be undone.
+                      </p>
+                    </div>
+                    <AlertDialog>
+                      <AlertDialogTrigger asChild>
+                        <Button
+                          variant="destructive"
+                          size="sm"
+                          disabled={deleteProjectMutation.isPending}
+                          data-testid="button-delete-project"
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Delete
+                        </Button>
+                      </AlertDialogTrigger>
+                      <AlertDialogContent>
+                        <AlertDialogHeader>
+                          <AlertDialogTitle>
+                            Delete Project
+                          </AlertDialogTitle>
+                          <AlertDialogDescription>
+                            Are you sure you want to permanently delete <span className="font-semibold">"{project.name}"</span>? This will remove all tasks, sections, notes, and attachments associated with this project. Time entries will be preserved but unlinked from the project. This action cannot be undone.
+                          </AlertDialogDescription>
+                        </AlertDialogHeader>
+                        <AlertDialogFooter>
+                          <AlertDialogCancel data-testid="button-cancel-delete">Cancel</AlertDialogCancel>
+                          <AlertDialogAction
+                            onClick={() => deleteProjectMutation.mutate()}
+                            className="bg-destructive text-destructive-foreground"
+                            data-testid="button-confirm-delete"
+                          >
+                            Delete Project
                           </AlertDialogAction>
                         </AlertDialogFooter>
                       </AlertDialogContent>

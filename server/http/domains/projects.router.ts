@@ -47,10 +47,20 @@ import {
   updateProjectSchema,
   updateSectionSchema,
   projectTemplates,
+  projects,
+  projectMembers,
+  projectNotes,
+  sections,
+  tasks,
+  taskAttachments,
+  timeEntries,
+  activeTimers,
+  approvalRequests,
+  clientConversations,
 } from "@shared/schema";
 import type { ProjectTemplateContent } from "@shared/schema";
 import { db } from "../../db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, inArray } from "drizzle-orm";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import {
   getCurrentUserId,
@@ -60,6 +70,7 @@ import {
 import {
   emitProjectCreated,
   emitProjectUpdated,
+  emitProjectDeleted,
   emitSectionCreated,
   emitSectionUpdated,
   emitSectionDeleted,
@@ -382,6 +393,78 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
     res.json(project);
   } catch (error) {
     return handleRouteError(res, error, "PATCH /api/projects/:id", req);
+  }
+});
+
+router.delete("/projects/:id", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const currentUserId = getCurrentUserId(req);
+    const currentUser = await storage.getUser(currentUserId);
+
+    if (!currentUser) {
+      return sendError(res, AppError.unauthorized("User not found"), req);
+    }
+
+    const isAdmin = currentUser.role === "admin" || isSuperUser(req);
+    if (!isAdmin) {
+      return sendError(res, AppError.forbidden("Only admins can delete projects"), req);
+    }
+
+    let existingProject;
+    if (tenantId) {
+      existingProject = await storage.getProjectByIdAndTenant(req.params.id, tenantId);
+    } else if (isSuperUser(req)) {
+      existingProject = await storage.getProject(req.params.id);
+    }
+
+    if (!existingProject) {
+      return sendError(res, AppError.notFound("Project"), req);
+    }
+
+    const projectId = existingProject.id;
+
+    const taskIds = await db.select({ id: tasks.id }).from(tasks).where(eq(tasks.projectId, projectId));
+    const taskIdList = taskIds.map(t => t.id);
+
+    await db.transaction(async (tx) => {
+      if (taskIdList.length > 0) {
+        const { subtasks: subtasksTable, subtaskAssignees, subtaskTags, taskAssignees, taskWatchers, taskTags, comments } = await import("@shared/schema");
+        
+        const subtaskIds = await tx.select({ id: subtasksTable.id }).from(subtasksTable).where(inArray(subtasksTable.taskId, taskIdList));
+        const subtaskIdList = subtaskIds.map(s => s.id);
+
+        if (subtaskIdList.length > 0) {
+          await tx.delete(subtaskAssignees).where(inArray(subtaskAssignees.subtaskId, subtaskIdList));
+          await tx.delete(subtaskTags).where(inArray(subtaskTags.subtaskId, subtaskIdList));
+          await tx.delete(subtasksTable).where(inArray(subtasksTable.taskId, taskIdList));
+        }
+
+        await tx.delete(taskAssignees).where(inArray(taskAssignees.taskId, taskIdList));
+        await tx.delete(taskWatchers).where(inArray(taskWatchers.taskId, taskIdList));
+        await tx.delete(taskTags).where(inArray(taskTags.taskId, taskIdList));
+        await tx.delete(comments).where(inArray(comments.taskId, taskIdList));
+        await tx.delete(taskAttachments).where(inArray(taskAttachments.taskId, taskIdList));
+      }
+
+      await tx.delete(taskAttachments).where(eq(taskAttachments.projectId, projectId));
+      await tx.delete(tasks).where(eq(tasks.projectId, projectId));
+      await tx.delete(sections).where(eq(sections.projectId, projectId));
+      await tx.delete(projectNotes).where(eq(projectNotes.projectId, projectId));
+      await tx.delete(projectMembers).where(eq(projectMembers.projectId, projectId));
+      await tx.update(timeEntries).set({ projectId: null }).where(eq(timeEntries.projectId, projectId));
+      await tx.update(activeTimers).set({ projectId: null }).where(eq(activeTimers.projectId, projectId));
+      await tx.update(approvalRequests).set({ projectId: null }).where(eq(approvalRequests.projectId, projectId));
+      await tx.update(clientConversations).set({ projectId: null }).where(eq(clientConversations.projectId, projectId));
+
+      await tx.delete(projects).where(eq(projects.id, projectId));
+    });
+
+    emitProjectDeleted(projectId);
+
+    res.json({ success: true, message: `Project "${existingProject.name}" deleted successfully` });
+  } catch (error) {
+    return handleRouteError(res, error, "DELETE /api/projects/:id", req);
   }
 });
 
