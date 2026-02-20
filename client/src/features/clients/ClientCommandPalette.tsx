@@ -1,6 +1,7 @@
 import { useState, useEffect, useCallback, useMemo } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
+import { create } from 'zustand';
 import {
   CommandDialog,
   CommandEmpty,
@@ -61,8 +62,6 @@ const SECTION_ICONS: Record<string, typeof LayoutDashboard> = {
   portal: Globe,
   "asset-library": PackageOpen,
 };
-
-import { create } from 'zustand';
 
 interface CommandPaletteStore {
   isOpen: boolean;
