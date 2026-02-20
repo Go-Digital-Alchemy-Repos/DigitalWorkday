@@ -50,6 +50,7 @@ export interface ClientCommandPaletteProps {
 
 const SECTION_ICONS: Record<string, typeof LayoutDashboard> = {
   overview: LayoutDashboard,
+  "control-center": Search,
   contacts: Users,
   projects: FolderKanban,
   divisions: Layers,

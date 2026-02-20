@@ -31,6 +31,7 @@ router.get("/features/flags", async (_req, res) => {
       documentsUsingAssets: config.features.documentsUsingAssets,
       clientProfileLayoutV2: config.features.clientProfileLayoutV2,
       clientCommandPaletteV1: config.features.clientCommandPaletteV1,
+      clientControlCenterPremium: config.features.clientControlCenterPremium,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);
