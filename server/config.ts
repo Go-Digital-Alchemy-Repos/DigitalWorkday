@@ -175,6 +175,12 @@ export const config = {
     clientMessagingEnabled: optionalEnvBool("CRM_CLIENT_MESSAGING_ENABLED", false),
   },
 
+  // Client Workspace Migration Feature Flags (all default OFF)
+  features: {
+    assetLibraryV2: optionalEnvBool("ASSET_LIBRARY_V2", false),
+    clientWorkspaceV2: optionalEnvBool("CLIENT_WORKSPACE_V2", false),
+  },
+
   // Git info for versioning
   git: {
     commitSha: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || "unknown",

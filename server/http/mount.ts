@@ -25,6 +25,7 @@ import { jobsRouter } from "../jobs/jobs.router";
 import supportRouter from "./domains/support.router";
 import clientDocumentsRouter from "./domains/clientDocuments.router";
 import automationRouter from "./domains/automation.router";
+import assetsRouter from "./domains/assets.router";
 
 interface DomainEntry {
   path: string;
@@ -188,6 +189,13 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "automation",
     description: "Client stage automation: CRUD rules, dry-run, audit events. Admin-only pipeline automation.",
+  },
+  {
+    path: "/api/v1",
+    router: assetsRouter,
+    policy: "authTenant",
+    domain: "assets",
+    description: "Asset Library: unified asset management, folders, upload, download. Phase 1 of client workspace migration.",
   },
 ];
 

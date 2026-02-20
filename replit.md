@@ -43,6 +43,7 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **Dynamic Forms**: Category-specific ticket forms using dynamic JSON schemas, allowing custom fields on client portal and detailed views.
 - **Chat Enhancements**: Emoji reactions, message editing with a time limit, and soft delete functionality with audit trails. Single-level message threading with a dedicated ThreadPanel drawer.
 - **Observability**: Implements request IDs for end-to-end correlation, structured logging, and error logging to the database, along with health endpoints.
+- **Asset Library (Beta)**: Centralized asset management system parallel to legacy `client_documents`. Features: `asset_folders`, `assets`, `asset_links` tables; folder tree navigation; presigned R2 upload/download; source tracking (manual, task, comment, etc.); dedupe via r2Key; backfill script for existing attachments. Behind `ASSET_LIBRARY_V2` feature flag. Frontend at `client/src/features/assetLibrary/`. Backend at `server/features/assetLibrary/` with APIs mounted at `/api/v1/assets`.
 
 ## External Dependencies
 - **PostgreSQL**: Primary database.

@@ -87,6 +87,8 @@ import {
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useCrmFlags } from "@/hooks/use-crm-flags";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
+import { AssetLibraryPanel } from "@/features/assetLibrary/AssetLibraryPanel";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import { DivisionDrawer } from "@/features/clients";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
@@ -285,6 +287,7 @@ export default function ClientDetailPage() {
 
   const { user } = useAuth();
   const crmFlags = useCrmFlags();
+  const featureFlags = useFeatureFlags();
   const canDeleteClient = user?.role === "super_user" || user?.role === "tenant_admin" || user?.role === "admin";
 
   const { data: client, isLoading } = useQuery<ClientWithContacts>({
@@ -865,6 +868,12 @@ export default function ClientDetailPage() {
               <TabsTrigger value="documents" data-testid="tab-documents">
                 Documents
               </TabsTrigger>
+              {featureFlags.assetLibraryV2 && (
+                <TabsTrigger value="asset-library" data-testid="tab-asset-library" className="gap-1.5">
+                  Asset Library
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Beta</Badge>
+                </TabsTrigger>
+              )}
             </TabsList>
           </div>
 
@@ -2060,6 +2069,12 @@ export default function ClientDetailPage() {
           <TabsContent value="documents" className="p-6">
             <ClientDocumentsPanel clientId={clientId || ""} />
           </TabsContent>
+
+          {featureFlags.assetLibraryV2 && (
+            <TabsContent value="asset-library" className="p-6 h-[calc(100%-3rem)]">
+              <AssetLibraryPanel clientId={clientId || ""} />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
 

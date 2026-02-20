@@ -691,6 +691,105 @@ export const clientStageAutomationEvents = pgTable("client_stage_automation_even
 export type ClientStageAutomationEvent = typeof clientStageAutomationEvents.$inferSelect;
 export type InsertClientStageAutomationEvent = typeof clientStageAutomationEvents.$inferInsert;
 
+// =============================================================================
+// ASSET LIBRARY TABLES (Phase 1 — Client Workspace Migration)
+// =============================================================================
+
+export const ASSET_SOURCE_TYPES = [
+  "manual", "task", "subtask", "comment", "message",
+  "support_ticket", "work_order", "chat", "project", "system",
+] as const;
+export type AssetSourceType = typeof ASSET_SOURCE_TYPES[number];
+
+export const ASSET_VISIBILITY = ["internal", "client_visible"] as const;
+export type AssetVisibility = typeof ASSET_VISIBILITY[number];
+
+export const ASSET_UPLOADER_TYPES = ["tenant_user", "portal_user", "system"] as const;
+export type AssetUploaderType = typeof ASSET_UPLOADER_TYPES[number];
+
+export const assetFolders = pgTable("asset_folders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  parentFolderId: varchar("parent_folder_id"),
+  name: text("name").notNull(),
+  path: text("path"),
+  sortOrder: integer("sort_order"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("asset_folders_tenant_client_parent_idx").on(table.tenantId, table.clientId, table.parentFolderId),
+  uniqueIndex("asset_folders_unique_name_idx").on(table.tenantId, table.clientId, table.parentFolderId, table.name),
+]);
+
+export type AssetFolder = typeof assetFolders.$inferSelect;
+export type InsertAssetFolder = typeof assetFolders.$inferInsert;
+export const insertAssetFolderSchema = createInsertSchema(assetFolders).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const assets = pgTable("assets", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  folderId: varchar("folder_id").references(() => assetFolders.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  mimeType: text("mime_type").notNull(),
+  sizeBytes: integer("size_bytes").notNull(),
+  r2Key: text("r2_key").notNull(),
+  checksum: text("checksum"),
+  sourceType: text("source_type").notNull().default("manual"),
+  sourceId: varchar("source_id"),
+  sourceContextJson: jsonb("source_context_json"),
+  visibility: text("visibility").notNull().default("internal"),
+  uploadedByType: text("uploaded_by_type").notNull().default("tenant_user"),
+  uploadedByUserId: varchar("uploaded_by_user_id").references(() => users.id),
+  uploadedByPortalUserId: varchar("uploaded_by_portal_user_id"),
+  isDeleted: boolean("is_deleted").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("assets_tenant_client_created_idx").on(table.tenantId, table.clientId, table.createdAt),
+  index("assets_tenant_client_folder_idx").on(table.tenantId, table.clientId, table.folderId),
+  index("assets_tenant_client_source_idx").on(table.tenantId, table.clientId, table.sourceType, table.sourceId),
+  uniqueIndex("assets_tenant_r2key_idx").on(table.tenantId, table.r2Key),
+]);
+
+export type Asset = typeof assets.$inferSelect;
+export type InsertAsset = typeof assets.$inferInsert;
+export const insertAssetSchema = createInsertSchema(assets).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  isDeleted: true,
+});
+
+export const assetLinks = pgTable("asset_links", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  assetId: varchar("asset_id").references(() => assets.id).notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: varchar("entity_id").notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("asset_links_unique_idx").on(table.entityType, table.entityId, table.assetId),
+  index("asset_links_asset_idx").on(table.assetId),
+  index("asset_links_entity_idx").on(table.entityType, table.entityId),
+]);
+
+export type AssetLink = typeof assetLinks.$inferSelect;
+export type InsertAssetLink = typeof assetLinks.$inferInsert;
+export const insertAssetLinkSchema = createInsertSchema(assetLinks).omit({
+  id: true,
+  createdAt: true,
+});
+
 /**
  * Client Contacts table - represents people at client companies
  */

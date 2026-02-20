@@ -55,6 +55,7 @@ CRM_FILES_ENABLED = "true"
 CRM_CONTACTS_ENABLED = "true"
 CRM_TIMELINE_ENABLED = "true"
 APP_BASE_URL = "https://b34eec93-d6a1-451c-9ccb-646667f4acb9-00-22u50f2dj5ux7.janeway.replit.dev"
+ASSET_LIBRARY_V2 = "true"
 
 [userenv.production]
 FAST_STARTUP="true"

@@ -23,4 +23,15 @@ router.get("/crm/flags", async (_req, res) => {
   }
 });
 
+router.get("/features/flags", async (_req, res) => {
+  try {
+    res.json({
+      assetLibraryV2: config.features.assetLibraryV2,
+      clientWorkspaceV2: config.features.clientWorkspaceV2,
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/features/flags", _req);
+  }
+});
+
 export default router;
