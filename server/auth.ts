@@ -21,7 +21,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { db } from "./db";
-import { users, UserRole, platformInvitations, platformAuditEvents, invitations, tenants, workspaces, passwordResetTokens } from "@shared/schema";
+import { users, UserRole, platformInvitations, platformAuditEvents, invitations, tenants, tenantSettings, workspaces, passwordResetTokens } from "@shared/schema";
 import { eq, sql, and, desc } from "drizzle-orm";
 import { createHash } from "crypto";
 import type { User } from "@shared/schema";
@@ -409,6 +409,37 @@ export function setupBootstrapEndpoints(app: Express): void {
     } catch (error) {
       console.error("[auth] bootstrap-status error:", error);
       res.status(500).json({ error: "Failed to check bootstrap status" });
+    }
+  });
+
+  /**
+   * GET /api/v1/auth/login-branding
+   * Returns tenant branding for the login page (public, no auth required).
+   * Returns the first active tenant's settings that has branding configured.
+   */
+  app.get("/api/v1/auth/login-branding", async (_req, res) => {
+    try {
+      const result = await db
+        .select({
+          appName: tenantSettings.appName,
+          loginMessage: tenantSettings.loginMessage,
+          logoUrl: tenantSettings.logoUrl,
+          displayName: tenantSettings.displayName,
+        })
+        .from(tenantSettings)
+        .innerJoin(tenants, eq(tenants.id, tenantSettings.tenantId))
+        .where(eq(tenants.status, "active"))
+        .limit(1);
+
+      const settings = result[0] || null;
+      res.json({
+        appName: settings?.appName || settings?.displayName || null,
+        loginMessage: settings?.loginMessage || null,
+        logoUrl: settings?.logoUrl || null,
+      });
+    } catch (error) {
+      console.error("[auth] login-branding error:", error);
+      res.json({ appName: null, loginMessage: null, logoUrl: null });
     }
   });
 

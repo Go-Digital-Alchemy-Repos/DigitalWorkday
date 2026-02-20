@@ -20,6 +20,12 @@ interface GoogleAuthStatus {
   enabled: boolean;
 }
 
+interface LoginBranding {
+  appName: string | null;
+  loginMessage: string | null;
+  logoUrl: string | null;
+}
+
 export default function LoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
@@ -31,6 +37,7 @@ export default function LoginPage() {
   const [bootstrapRequired, setBootstrapRequired] = useState(false);
   const [isCheckingBootstrap, setIsCheckingBootstrap] = useState(true);
   const [googleAuthEnabled, setGoogleAuthEnabled] = useState(false);
+  const [branding, setBranding] = useState<LoginBranding>({ appName: null, loginMessage: null, logoUrl: null });
   const { login } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -96,6 +103,23 @@ export default function LoginPage() {
       }
     }
     checkGoogleAuthStatus();
+  }, []);
+
+  useEffect(() => {
+    async function fetchLoginBranding() {
+      try {
+        const response = await fetch("/api/v1/auth/login-branding", {
+          credentials: "include",
+        });
+        if (response.ok) {
+          const data: LoginBranding = await response.json();
+          setBranding(data);
+        }
+      } catch (error) {
+        console.error("Failed to fetch login branding:", error);
+      }
+    }
+    fetchLoginBranding();
   }, []);
 
   const handleLogin = async (e: React.FormEvent) => {
@@ -209,11 +233,23 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          <CardTitle className="text-2xl font-bold text-center">MyWorkDay</CardTitle>
-          <CardDescription className="text-center">
+          {branding.logoUrl && (
+            <div className="flex justify-center mb-2">
+              <img 
+                src={branding.logoUrl} 
+                alt={branding.appName || "Logo"} 
+                className="h-10 w-auto object-contain"
+                data-testid="img-login-logo"
+              />
+            </div>
+          )}
+          <CardTitle className="text-2xl font-bold text-center" data-testid="text-login-title">
+            {branding.appName || "MyWorkDay"}
+          </CardTitle>
+          <CardDescription className="text-center" data-testid="text-login-description">
             {showBootstrap 
               ? "Create the first admin account to get started"
-              : "Enter your credentials to access your workspace"
+              : branding.loginMessage || "Enter your credentials to access your workspace"
             }
           </CardDescription>
         </CardHeader>
