@@ -74,6 +74,7 @@ import { useToast } from "@/hooks/use-toast";
 import { RichTextRenderer } from "@/components/richtext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useProjectSocket } from "@/lib/realtime";
+import { useAuth } from "@/lib/auth";
 import type { Project, SectionWithTasks, TaskWithRelations, Section, ProjectTemplate, ProjectTemplateContent } from "@shared/schema";
 import { Link } from "wouter";
 import { usePromptDialog } from "@/components/prompt-dialog";
@@ -94,6 +95,9 @@ export default function ProjectPage() {
   const projectId = params?.id;
   const { toast } = useToast();
   const [, navigate] = useLocation();
+
+  const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
 
   // Subscribe to real-time updates for this project
   useProjectSocket(projectId);
@@ -736,26 +740,30 @@ export default function ProjectPage() {
                 <Play className="h-4 w-4 mr-1" />
                 Start Timer
               </Button>
-              <Button
-                variant="outline"
-                size="icon"
-                className="md:hidden"
-                onClick={() => setAiPlannerOpen(true)}
-                aria-label="AI planner"
-                data-testid="button-ai-planner-mobile"
-              >
-                <Sparkles className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="hidden md:flex"
-                onClick={() => setAiPlannerOpen(true)}
-                data-testid="button-ai-planner"
-              >
-                <Sparkles className="h-4 w-4 mr-1" />
-                AI Plan
-              </Button>
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="md:hidden"
+                  onClick={() => setAiPlannerOpen(true)}
+                  aria-label="AI planner"
+                  data-testid="button-ai-planner-mobile"
+                >
+                  <Sparkles className="h-4 w-4" />
+                </Button>
+              )}
+              {isAdmin && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hidden md:flex"
+                  onClick={() => setAiPlannerOpen(true)}
+                  data-testid="button-ai-planner"
+                >
+                  <Sparkles className="h-4 w-4 mr-1" />
+                  AI Plan
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"

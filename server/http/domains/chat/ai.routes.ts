@@ -17,6 +17,15 @@ async function requireAiChat(tenantId: string): Promise<void> {
   }
 }
 
+async function requireAdminForAI(req: Request): Promise<void> {
+  const userId = getCurrentUserId(req);
+  const currentUser = await storage.getUser(userId);
+  const isSuperUser = (req as any).tenant?.isSuperUser === true;
+  if (currentUser?.role !== "admin" && !isSuperUser) {
+    throw AppError.forbidden("Only admins can use AI features");
+  }
+}
+
 async function getOpenAIClientForTenant(tenantId: string): Promise<{ client: OpenAI; model: string; maxTokens: number; temperature: number }> {
   const result = await getAIProviderOrThrow(tenantId);
   return {
@@ -32,6 +41,14 @@ router.get(
   asyncHandler(async (req: Request, res: Response) => {
     const tenantId = getCurrentTenantId(req);
     if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const userId = getCurrentUserId(req);
+    const currentUser = await storage.getUser(userId);
+    const isSuperUser = (req as any).tenant?.isSuperUser === true;
+    const isAdmin = currentUser?.role === "admin" || isSuperUser;
+    if (!isAdmin) {
+      return res.json({ aiChatEnabled: false, aiAvailable: false, ready: false });
+    }
 
     const settings = await storage.getTenantSettings(tenantId);
     const aiChatEnabled = settings?.aiChatEnabled ?? false;
@@ -64,6 +81,7 @@ router.post(
     const userId = getCurrentUserId(req);
     if (!tenantId) throw AppError.forbidden("Tenant context required");
 
+    await requireAdminForAI(req);
     await requireAiChat(tenantId);
 
     const parsed = summarizeChannelSchema.safeParse(req.body);
@@ -127,6 +145,7 @@ router.post(
     const userId = getCurrentUserId(req);
     if (!tenantId) throw AppError.forbidden("Tenant context required");
 
+    await requireAdminForAI(req);
     await requireAiChat(tenantId);
 
     const parsed = summarizeThreadSchema.safeParse(req.body);
@@ -200,6 +219,7 @@ router.post(
     const userId = getCurrentUserId(req);
     if (!tenantId) throw AppError.forbidden("Tenant context required");
 
+    await requireAdminForAI(req);
     await requireAiChat(tenantId);
 
     const parsed = draftReplySchema.safeParse(req.body);
@@ -268,6 +288,7 @@ router.post(
     const userId = getCurrentUserId(req);
     if (!tenantId) throw AppError.forbidden("Tenant context required");
 
+    await requireAdminForAI(req);
     await requireAiChat(tenantId);
 
     const parsed = convertToTaskSchema.safeParse(req.body);
