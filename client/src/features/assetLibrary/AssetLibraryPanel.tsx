@@ -233,7 +233,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
       return apiRequest("PATCH", `/api/v1/assets/folders/${id}`, { name });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets/folders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets/folders", { clientId }] });
       setRenameFolderId(null);
       toast({ title: "Folder renamed" });
     },
@@ -244,7 +244,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
       return apiRequest("DELETE", `/api/v1/assets/folders/${id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets/folders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets/folders", { clientId }] });
       toast({ title: "Folder deleted" });
     },
     onError: (err: any) => {
