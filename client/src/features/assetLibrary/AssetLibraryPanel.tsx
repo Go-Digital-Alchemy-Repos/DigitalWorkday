@@ -218,7 +218,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets/folders"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets/folders", { clientId }] });
       setCreateFolderOpen(false);
       setNewFolderName("");
       toast({ title: "Folder created" });
