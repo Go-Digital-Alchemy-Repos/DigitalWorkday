@@ -7,14 +7,39 @@ import {
   suggestProjectPlan,
   generateTaskDescription,
 } from "../../services/ai/aiService";
+import { storage } from "../../storage";
+import { getCurrentUserId, isSuperUser } from "../../routes/helpers";
+import { AppError, sendError } from "../../lib/errors";
 
 const router = createApiRouter({
   policy: "authTenant",
   skipEnvelope: true,
 });
 
+async function requireAdmin(req: any, res: any): Promise<boolean> {
+  const currentUserId = getCurrentUserId(req);
+  const currentUser = await storage.getUser(currentUserId);
+  if (!currentUser) {
+    sendError(res, AppError.unauthorized("User not found"), req);
+    return false;
+  }
+  const isAdmin = currentUser.role === "admin" || isSuperUser(req);
+  if (!isAdmin) {
+    sendError(res, AppError.forbidden("Only admins can use AI features"), req);
+    return false;
+  }
+  return true;
+}
+
 router.get("/v1/ai/status", async (req, res) => {
   try {
+    const currentUserId = getCurrentUserId(req);
+    const currentUser = await storage.getUser(currentUserId);
+    const isAdmin = currentUser?.role === "admin" || isSuperUser(req);
+    if (!isAdmin) {
+      return res.json({ enabled: false, isOperational: false, error: null });
+    }
+
     const configStatus = await getAIConfigStatus();
     res.json({
       enabled: configStatus.config !== null,
@@ -35,6 +60,9 @@ const taskBreakdownSchema = z.object({
 
 router.post("/v1/ai/suggest/task-breakdown", async (req, res) => {
   try {
+    const allowed = await requireAdmin(req, res);
+    if (!allowed) return;
+
     const enabled = await isAIEnabled();
     if (!enabled) {
       return res.status(400).json({
@@ -76,6 +104,9 @@ const projectPlanSchema = z.object({
 
 router.post("/v1/ai/suggest/project-plan", async (req, res) => {
   try {
+    const allowed = await requireAdmin(req, res);
+    if (!allowed) return;
+
     const enabled = await isAIEnabled();
     if (!enabled) {
       return res.status(400).json({
@@ -115,6 +146,9 @@ const descriptionSchema = z.object({
 
 router.post("/v1/ai/suggest/task-description", async (req, res) => {
   try {
+    const allowed = await requireAdmin(req, res);
+    if (!allowed) return;
+
     const enabled = await isAIEnabled();
     if (!enabled) {
       return res.status(400).json({
