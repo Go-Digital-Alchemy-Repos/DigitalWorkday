@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback, useMemo } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo, lazy, Suspense } from "react";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -31,8 +31,27 @@ import {
   ListTodo,
   MessagesSquare,
   ArrowDown,
+  Download,
+  FileText,
+  Eye,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
+
+const LazyImageLightbox = lazy(() =>
+  import("./ImageLightbox").then((mod) => ({ default: mod.ImageLightbox }))
+);
+const LazyPdfPreviewModal = lazy(() =>
+  import("./PdfPreviewModal").then((mod) => ({ default: mod.PdfPreviewModal }))
+);
+
+interface AttachmentPreview {
+  type: "image" | "pdf";
+  src: string;
+  fileName: string;
+  sizeBytes?: number;
+  uploaderName?: string;
+  timestamp?: string;
+}
 
 export interface ChatMessage {
   id: string;
@@ -306,6 +325,7 @@ export function ChatMessageTimeline({
   const [editingMessageId, setEditingMessageId] = useState<string | null>(null);
   const [editingBody, setEditingBody] = useState("");
   const [longPressMessageId, setLongPressMessageId] = useState<string | null>(null);
+  const [attachmentPreview, setAttachmentPreview] = useState<AttachmentPreview | null>(null);
   const longPressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastMessageCountRef = useRef(messages.length);
 
@@ -643,43 +663,120 @@ export function ChatMessageTimeline({
                             {message.attachments &&
                               message.attachments.length > 0 &&
                               !isDeleted && (
-                                <div className="mt-2 flex flex-wrap gap-2">
-                                  {message.attachments.map((attachment) => {
-                                    const FileIcon = getFileIcon?.(attachment.mimeType);
-                                    const isImage = attachment.mimeType.startsWith("image/");
-                                    return (
-                                      <a
-                                        key={attachment.id}
-                                        href={attachment.url}
-                                        target="_blank"
-                                        rel="noopener noreferrer"
-                                        className="flex items-center gap-2 p-2 rounded-md bg-background/60 hover-elevate"
-                                        data-testid={`attachment-${attachment.id}`}
-                                      >
-                                        {isImage ? (
-                                          <img
-                                            src={attachment.url}
-                                            alt={attachment.fileName}
-                                            className="h-16 w-16 object-cover rounded"
-                                          />
-                                        ) : (
-                                          <>
-                                            {FileIcon && (
-                                              <FileIcon className="h-4 w-4 text-muted-foreground" />
-                                            )}
-                                            <span className="text-xs truncate max-w-[150px]">
-                                              {attachment.fileName}
-                                            </span>
-                                            {formatFileSize && (
-                                              <span className="text-xs text-muted-foreground">
-                                                ({formatFileSize(attachment.sizeBytes)})
-                                              </span>
-                                            )}
-                                          </>
-                                        )}
-                                      </a>
-                                    );
-                                  })}
+                                <div className="mt-2 space-y-2">
+                                  {message.attachments.filter(a => a.mimeType.startsWith("image/")).length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                      {message.attachments
+                                        .filter(a => a.mimeType.startsWith("image/"))
+                                        .map((attachment) => (
+                                          <button
+                                            type="button"
+                                            key={attachment.id}
+                                            onClick={() => setAttachmentPreview({
+                                              type: "image",
+                                              src: attachment.url,
+                                              fileName: attachment.fileName,
+                                              sizeBytes: attachment.sizeBytes,
+                                              uploaderName: authorName || undefined,
+                                              timestamp: typeof message.createdAt === "string" ? message.createdAt : message.createdAt?.toISOString?.(),
+                                            })}
+                                            className="group relative rounded-md overflow-visible cursor-pointer hover-elevate"
+                                            data-testid={`attachment-${attachment.id}`}
+                                          >
+                                            <img
+                                              src={attachment.url}
+                                              alt={attachment.fileName}
+                                              className="max-h-48 max-w-xs object-cover rounded-md"
+                                              loading="lazy"
+                                            />
+                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-md flex items-center justify-center">
+                                              <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                                            </div>
+                                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1.5 rounded-b-md opacity-0 group-hover:opacity-100 transition-opacity">
+                                              <span className="text-[10px] text-white/90 truncate block">{attachment.fileName}</span>
+                                            </div>
+                                          </button>
+                                        ))}
+                                    </div>
+                                  )}
+                                  {message.attachments.filter(a => !a.mimeType.startsWith("image/")).length > 0 && (
+                                    <div className="flex flex-wrap gap-2">
+                                      {message.attachments
+                                        .filter(a => !a.mimeType.startsWith("image/"))
+                                        .map((attachment) => {
+                                          const isPdf = attachment.mimeType === "application/pdf";
+                                          const FileIcon = getFileIcon?.(attachment.mimeType);
+                                          return (
+                                            <div
+                                              key={attachment.id}
+                                              className="flex items-center gap-2 p-2 rounded-md bg-muted/50 border border-border/50 min-w-[180px] max-w-[280px]"
+                                              data-testid={`attachment-${attachment.id}`}
+                                            >
+                                              <div className="flex-shrink-0 h-9 w-9 rounded-md bg-muted flex items-center justify-center">
+                                                {FileIcon ? (
+                                                  <FileIcon className="h-5 w-5 text-muted-foreground" />
+                                                ) : (
+                                                  <FileText className="h-5 w-5 text-muted-foreground" />
+                                                )}
+                                              </div>
+                                              <div className="flex-1 min-w-0">
+                                                <p className="text-xs font-medium truncate">{attachment.fileName}</p>
+                                                <p className="text-[10px] text-muted-foreground">
+                                                  {formatFileSize?.(attachment.sizeBytes) || `${attachment.sizeBytes} B`}
+                                                </p>
+                                              </div>
+                                              <div className="flex items-center gap-0.5 flex-shrink-0">
+                                                {isPdf && (
+                                                  <Tooltip>
+                                                    <TooltipTrigger asChild>
+                                                      <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        className="h-7 w-7"
+                                                        onClick={() => setAttachmentPreview({
+                                                          type: "pdf",
+                                                          src: attachment.url,
+                                                          fileName: attachment.fileName,
+                                                          sizeBytes: attachment.sizeBytes,
+                                                          uploaderName: authorName || undefined,
+                                                          timestamp: typeof message.createdAt === "string" ? message.createdAt : message.createdAt?.toISOString?.(),
+                                                        })}
+                                                        data-testid={`preview-pdf-${attachment.id}`}
+                                                      >
+                                                        <Eye className="h-3.5 w-3.5" />
+                                                      </Button>
+                                                    </TooltipTrigger>
+                                                    <TooltipContent>Preview</TooltipContent>
+                                                  </Tooltip>
+                                                )}
+                                                <Tooltip>
+                                                  <TooltipTrigger asChild>
+                                                    <a
+                                                      href={attachment.url}
+                                                      target="_blank"
+                                                      rel="noopener noreferrer"
+                                                      download={attachment.fileName}
+                                                    >
+                                                      <Button
+                                                        size="icon"
+                                                        variant="ghost"
+                                                        className="h-7 w-7"
+                                                        asChild
+                                                      >
+                                                        <span>
+                                                          <Download className="h-3.5 w-3.5" />
+                                                        </span>
+                                                      </Button>
+                                                    </a>
+                                                  </TooltipTrigger>
+                                                  <TooltipContent>Download</TooltipContent>
+                                                </Tooltip>
+                                              </div>
+                                            </div>
+                                          );
+                                        })}
+                                    </div>
+                                  )}
                                 </div>
                               )}
 
@@ -1084,6 +1181,35 @@ export function ChatMessageTimeline({
             New messages
           </Button>
         </div>
+      )}
+
+      {attachmentPreview?.type === "image" && (
+        <Suspense fallback={null}>
+          <LazyImageLightbox
+            open
+            onClose={() => setAttachmentPreview(null)}
+            src={attachmentPreview.src}
+            alt={attachmentPreview.fileName}
+            fileName={attachmentPreview.fileName}
+            sizeBytes={attachmentPreview.sizeBytes}
+            uploaderName={attachmentPreview.uploaderName}
+            timestamp={attachmentPreview.timestamp}
+          />
+        </Suspense>
+      )}
+
+      {attachmentPreview?.type === "pdf" && (
+        <Suspense fallback={null}>
+          <LazyPdfPreviewModal
+            open
+            onClose={() => setAttachmentPreview(null)}
+            src={attachmentPreview.src}
+            fileName={attachmentPreview.fileName}
+            sizeBytes={attachmentPreview.sizeBytes}
+            uploaderName={attachmentPreview.uploaderName}
+            timestamp={attachmentPreview.timestamp}
+          />
+        </Suspense>
       )}
 
     </div>
