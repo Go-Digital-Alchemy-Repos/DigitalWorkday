@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -335,10 +336,15 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
     mutationFn: async (data: { name: string; color?: string }) => {
       return apiRequest("POST", `/api/clients/${clientId}/notes/categories`, data);
     },
-    onSuccess: () => {
+    onSuccess: (res: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes", "categories"] });
       closeCategoryDialog();
       toast({ title: "Category created", description: "Your category has been saved." });
+      
+      // If we're creating/editing a note, auto-select the new category
+      if (res?.category && (drawerMode === "create" || drawerMode === "edit")) {
+        setNoteCategory(res.category.name.toLowerCase());
+      }
     },
     onError: (error) => {
       const { title, description } = formatErrorForToast(error);
@@ -617,9 +623,9 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
       )}
 
       {/* Dashboard Layout */}
-      <div className="grid grid-cols-1 lg:grid-cols-4 gap-4">
+      <div className="flex flex-col lg:flex-row gap-6">
         {/* Main Content Area */}
-        <div className="lg:col-span-3 space-y-4">
+        <div className="flex-1 min-w-0 space-y-4">
           {/* Latest Notes Section */}
           {latestNotes.length > 0 && (
             <Card data-testid="section-latest-notes">
@@ -771,128 +777,147 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
         </div>
 
         {/* Sidebar - Categories Panel */}
-        <div className="space-y-4">
+        <div className="w-full lg:w-72 shrink-0 space-y-4">
           {/* Categories Overview */}
-          <Card data-testid="panel-categories-overview">
-            <CardHeader className="pb-3">
-              <CardTitle className="text-base flex items-center justify-between">
-                <span className="flex items-center gap-2">
-                  <FolderOpen className="h-4 w-4" />
-                  Categories
-                </span>
-                <Button variant="ghost" size="icon" onClick={openCreateCategoryDialog} data-testid="button-add-category-sidebar">
-                  <Plus className="h-4 w-4" />
-                </Button>
+          <Card data-testid="panel-categories-overview" className="sticky top-4">
+            <CardHeader className="pb-3 flex flex-row items-center justify-between space-y-0">
+              <CardTitle className="text-base flex items-center gap-2">
+                <FolderOpen className="h-4 w-4" />
+                Categories
               </CardTitle>
+              <Button variant="ghost" size="icon" onClick={openCreateCategoryDialog} data-testid="button-add-category-sidebar" className="h-8 w-8">
+                <Plus className="h-4 w-4" />
+              </Button>
             </CardHeader>
-            <CardContent className="space-y-2">
-              {/* Default Categories */}
-              {DEFAULT_CATEGORIES.map((cat) => {
-                const count = categoryStats[cat.value] || 0;
-                return (
-                  <div 
-                    key={cat.value}
-                    className={`flex items-center justify-between p-2 rounded-md cursor-pointer hover-elevate ${filterCategory === cat.value ? 'bg-primary/10' : ''}`}
-                    onClick={() => setFilterCategory(filterCategory === cat.value ? "all" : cat.value)}
-                    data-testid={`filter-category-${cat.value}`}
-                  >
-                    <div className="flex items-center gap-2">
-                      <div 
-                        className="w-3 h-3 rounded-full" 
-                        style={{ backgroundColor: cat.color || "#6b7280" }}
-                      />
-                      <span className="text-sm">{cat.label}</span>
-                    </div>
-                    <Badge variant="secondary" className="text-xs">{count}</Badge>
-                  </div>
-                );
-              })}
-
-              {/* Custom Categories */}
-              {customCategories.length > 0 && (
-                <>
-                  <div className="border-t my-2" />
-                  <p className="text-xs text-muted-foreground font-medium">Custom Categories</p>
-                  {customCategories.map((cat) => {
-                    const count = categoryStats[cat.name.toLowerCase()] || 0;
-                    return (
-                      <div 
-                        key={cat.id}
-                        className={`flex items-center justify-between p-2 rounded-md group ${filterCategory === cat.name.toLowerCase() ? 'bg-primary/10' : ''}`}
-                        data-testid={`custom-category-${cat.id}`}
-                      >
+            <CardContent className="p-0">
+              <div className="flex flex-col">
+                <button
+                  onClick={() => setFilterCategory("all")}
+                  className={cn(
+                    "flex items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-muted/50 text-left border-l-2",
+                    filterCategory === "all" ? "bg-muted font-medium text-primary border-primary" : "text-muted-foreground border-transparent"
+                  )}
+                >
+                  <span className="flex items-center gap-2">
+                    <StickyNote className="h-4 w-4" />
+                    All Notes
+                  </span>
+                  <Badge variant="secondary" className="text-[10px] h-5 px-1.5">{notes.length}</Badge>
+                </button>
+                
+                {/* Default Categories */}
+                {DEFAULT_CATEGORIES.map((cat) => {
+                  const count = categoryStats[cat.value] || 0;
+                  return (
+                    <button 
+                      key={cat.value}
+                      className={cn(
+                        "flex items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-muted/50 text-left border-l-2",
+                        filterCategory === cat.value ? "bg-muted font-medium text-primary border-primary" : "text-muted-foreground border-transparent"
+                      )}
+                      onClick={() => setFilterCategory(cat.value)}
+                      data-testid={`filter-category-${cat.value}`}
+                    >
+                      <div className="flex items-center gap-2">
                         <div 
-                          className="flex items-center gap-2 flex-1 cursor-pointer"
-                          onClick={() => setFilterCategory(filterCategory === cat.name.toLowerCase() ? "all" : cat.name.toLowerCase())}
-                        >
-                          <div 
-                            className="w-3 h-3 rounded-full" 
-                            style={{ backgroundColor: cat.color || "#6b7280" }}
-                          />
-                          <span className="text-sm">{cat.name}</span>
-                        </div>
-                        <div className="flex items-center gap-1">
-                          <Badge variant="secondary" className="text-xs">{count}</Badge>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild>
-                              <Button variant="ghost" size="icon" className="h-6 w-6 opacity-0 group-hover:opacity-100" data-testid={`category-menu-${cat.id}`}>
-                                <MoreHorizontal className="h-3 w-3" />
-                              </Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => openEditCategoryDialog(cat)} data-testid={`category-edit-${cat.id}`}>
-                                <Pencil className="h-4 w-4 mr-2" />
-                                Edit
-                              </DropdownMenuItem>
-                              <DropdownMenuItem
-                                onClick={() => setDeleteCategory(cat)}
-                                className="text-destructive"
-                                data-testid={`category-delete-${cat.id}`}
-                              >
-                                <Trash2 className="h-4 w-4 mr-2" />
-                                Delete
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </div>
+                          className="w-2.5 h-2.5 rounded-full" 
+                          style={{ backgroundColor: cat.color || "#6b7280" }}
+                        />
+                        <span>{cat.label}</span>
                       </div>
-                    );
-                  })}
-                </>
-              )}
+                      <Badge variant="secondary" className="text-[10px] h-5 px-1.5">{count}</Badge>
+                    </button>
+                  );
+                })}
 
-              {customCategories.length === 0 && (
-                <p className="text-xs text-muted-foreground text-center py-2">
-                  No custom categories yet
-                </p>
-              )}
+                {/* Custom Categories */}
+                {customCategories.length > 0 && (
+                  <>
+                    <div className="px-4 py-2 mt-2">
+                      <p className="text-[10px] uppercase tracking-wider text-muted-foreground font-bold">Custom</p>
+                    </div>
+                    {customCategories.map((cat) => {
+                      const count = categoryStats[cat.name.toLowerCase()] || 0;
+                      return (
+                        <div 
+                          key={cat.id}
+                          className={cn(
+                            "group flex items-center border-l-2",
+                            filterCategory === cat.name.toLowerCase() ? "bg-muted font-medium text-primary border-primary" : "text-muted-foreground border-transparent"
+                          )}
+                        >
+                          <button 
+                            className="flex-1 flex items-center justify-between px-4 py-2.5 text-sm transition-colors hover:bg-muted/50 text-left"
+                            onClick={() => setFilterCategory(cat.name.toLowerCase())}
+                            data-testid={`custom-category-${cat.id}`}
+                          >
+                            <div className="flex items-center gap-2">
+                              <div 
+                                className="w-2.5 h-2.5 rounded-full" 
+                                style={{ backgroundColor: cat.color || "#6b7280" }}
+                              />
+                              <span className="truncate">{cat.name}</span>
+                            </div>
+                            <Badge variant="secondary" className="text-[10px] h-5 px-1.5">{count}</Badge>
+                          </button>
+                          <div className="flex opacity-0 group-hover:opacity-100 transition-opacity pr-2">
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7" 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                openEditCategoryDialog(cat);
+                              }}
+                            >
+                              <Pencil className="h-3 w-3" />
+                            </Button>
+                            <Button 
+                              variant="ghost" 
+                              size="icon" 
+                              className="h-7 w-7 text-destructive hover:text-destructive" 
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                setDeleteCategory(cat);
+                              }}
+                            >
+                              <Trash2 className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </>
+                )}
+              </div>
+              <div className="p-3 border-t">
+                <Button 
+                  variant="outline" 
+                  size="sm" 
+                  className="w-full text-xs h-8 border-dashed" 
+                  onClick={openCreateCategoryDialog}
+                >
+                  <Plus className="h-3 w-3 mr-1" />
+                  New Category
+                </Button>
+              </div>
             </CardContent>
           </Card>
 
-          {/* Stats Card */}
-          <Card data-testid="panel-notes-stats">
+          {/* Quick Info */}
+          <Card data-testid="panel-notes-info">
             <CardHeader className="pb-3">
               <CardTitle className="text-base flex items-center gap-2">
                 <Settings className="h-4 w-4" />
-                Statistics
+                Quick Info
               </CardTitle>
             </CardHeader>
-            <CardContent className="space-y-2">
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Total Notes</span>
-                <span className="font-medium">{notes.length}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Categories Used</span>
-                <span className="font-medium">{Object.keys(categoryStats).length}</span>
-              </div>
-              <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Custom Categories</span>
-                <span className="font-medium">{customCategories.length}</span>
-              </div>
+            <CardContent className="text-xs text-muted-foreground leading-relaxed">
+              <p>Keep your client notes organized by using categories. Each note tracks full version history and the author of each change.</p>
             </CardContent>
           </Card>
         </div>
+      </div>
       </div>
 
       {/* Create/Edit Note Drawer */}
@@ -946,7 +971,19 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
       >
         <div className="space-y-6">
           <div className="space-y-2">
-            <Label>Category</Label>
+            <div className="flex items-center justify-between">
+              <Label>Category</Label>
+              <Button 
+                variant="link" 
+                className="h-auto p-0 text-xs" 
+                onClick={(e) => {
+                  e.preventDefault();
+                  openCreateCategoryDialog();
+                }}
+              >
+                + Add New Category
+              </Button>
+            </div>
             <Select value={noteCategory} onValueChange={setNoteCategory}>
               <SelectTrigger data-testid="select-note-category">
                 <SelectValue />
