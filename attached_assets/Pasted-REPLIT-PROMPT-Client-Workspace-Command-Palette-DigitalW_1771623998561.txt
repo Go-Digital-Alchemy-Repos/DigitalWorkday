@@ -1,0 +1,198 @@
+REPLIT PROMPT — Client Workspace Command Palette
+DigitalWorkday
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE:
+Add a powerful Slack/Notion-style Command Palette inside the Client Profile.
+Users can press:
+- ⌘K (Mac)
+- Ctrl+K (Windows)
+to open a searchable command dialog scoped to the current client.
+
+The palette must:
+- Jump to sections (Overview, Projects, Messages, Requests, Assets, Activity, Reports, Notes)
+- Jump to specific entities:
+  - Projects (within this client)
+  - Tasks (within client projects)
+  - Tickets / Work Orders
+  - Message threads
+  - Assets
+- Trigger quick actions:
+  - New Message
+  - New Ticket
+  - New Project
+  - Upload Asset
+- Respect role permissions
+- Respect tenant isolation
+- Use shadcn/ui Command + Dialog components
+
+NON-DESTRUCTIVE:
+- Do not remove existing navigation.
+- Integrate with new ClientProfileShell.
+- Feature flag: CLIENT_COMMAND_PALETTE_V1 (default true in dev, false in prod until verified).
+
+================================================================================
+PHASE 1 — Core Command Palette Component
+================================================================================
+
+Create:
+client/src/features/clients/profile/ClientCommandPalette.tsx
+
+Use:
+- shadcn Command
+- Dialog
+- CommandInput
+- CommandList
+- CommandGroup
+- CommandItem
+- CommandEmpty
+- ScrollArea
+
+Open behavior:
+- Keyboard listener when inside ClientProfileShell
+- Only active if a client profile is mounted
+- Prevent conflicts with global command palette if one exists
+
+================================================================================
+PHASE 2 — Data Providers for Search
+================================================================================
+
+Implement lightweight search queries:
+
+1) Sections:
+- Pull from CLIENT_PROFILE_SECTIONS registry
+
+2) Projects:
+- Use existing client projects query
+- Limit first 25
+- Include projectId + name
+
+3) Tasks:
+- Fetch recent tasks for client
+- Limit to 25
+- Return taskId + projectId + name
+
+4) Tickets / Requests:
+- Query support/work orders for this client
+- Limit to 25
+
+5) Message Threads:
+- Fetch client threads
+- Limit to 25
+
+6) Assets:
+- Query Asset Library (limit 25)
+- Return id + title
+
+Implement debounced search (200–300ms).
+Do not aggressively fetch all data — only query when palette is open.
+
+================================================================================
+PHASE 3 — Action Handling
+================================================================================
+
+Each CommandItem should:
+- Close palette
+- Navigate using router
+- Or switch section via useClientProfileSection
+
+Examples:
+
+Section jump:
+- setSection('assets')
+
+Project:
+- navigate(`/clients/${clientId}?section=projects&projectId=${projectId}`)
+
+Task:
+- navigate to project + open task drawer
+
+Ticket:
+- navigate to ?section=requests&ticketId=...
+
+Message thread:
+- navigate to ?section=messages&threadId=...
+
+Asset:
+- navigate to ?section=assets&assetId=...
+
+Quick actions:
+- Trigger existing modals:
+  - openNewMessageDialog()
+  - openNewTicketDialog()
+  - openNewProjectDialog()
+  - openAssetUpload()
+
+================================================================================
+PHASE 4 — UI/UX Enhancements
+================================================================================
+
+- Show icons for each group (Lucide icons)
+- Display subtle group headers:
+  - Sections
+  - Projects
+  - Tasks
+  - Requests
+  - Messages
+  - Assets
+  - Actions
+- Show keyboard hint footer:
+  - ↵ to open
+  - ↑ ↓ to navigate
+  - Esc to close
+- Ensure dark mode compatibility
+- Ensure mobile fallback:
+  - Add “Jump” button in header for mobile (opens same dialog)
+
+================================================================================
+PHASE 5 — Performance
+================================================================================
+
+- Lazy load heavy queries only when palette open
+- Memoize search results
+- Cancel previous queries when input changes
+- Limit results per category
+- Avoid rendering entire large lists
+
+================================================================================
+PHASE 6 — Permissions & Tenant Safety
+================================================================================
+
+- Only show Reports for admin
+- Only show Tickets if user has access
+- Never query outside tenant scope
+- Never expose IDs not belonging to client
+
+================================================================================
+PHASE 7 — Tests + Docs
+================================================================================
+
+Tests:
+- Section registry integration
+- Section switching via command
+- Admin-only visibility
+- Search returns correct entities
+- Keyboard open/close works
+
+Docs:
+Create:
+docs/UX/client-command-palette.md
+
+Include:
+- Keyboard shortcuts
+- How to add new command groups
+- How to extend search sources
+- Role gating model
+
+================================================================================
+SUCCESS CRITERIA
+================================================================================
+
+- ⌘K opens instantly inside client profile
+- Search feels fast
+- Jumping between sections no longer depends on cramped tabs
+- Power users can navigate entire client account without touching tabs
+- Works on mobile via button trigger
+
+END OF PROMPT

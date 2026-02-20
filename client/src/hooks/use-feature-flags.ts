@@ -5,6 +5,7 @@ export interface FeatureFlags {
   clientWorkspaceV2: boolean;
   documentsUsingAssets: boolean;
   clientProfileLayoutV2: boolean;
+  clientCommandPaletteV1: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -12,6 +13,7 @@ const ALL_OFF: FeatureFlags = {
   clientWorkspaceV2: false,
   documentsUsingAssets: false,
   clientProfileLayoutV2: false,
+  clientCommandPaletteV1: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

@@ -181,6 +181,7 @@ export const config = {
     clientWorkspaceV2: optionalEnvBool("CLIENT_WORKSPACE_V2", false),
     documentsUsingAssets: optionalEnvBool("DOCUMENTS_USING_ASSETS", false),
     clientProfileLayoutV2: optionalEnvBool("CLIENT_PROFILE_LAYOUT_V2", true),
+    clientCommandPaletteV1: optionalEnvBool("CLIENT_COMMAND_PALETTE_V1", true),
   },
 
   // Git info for versioning
