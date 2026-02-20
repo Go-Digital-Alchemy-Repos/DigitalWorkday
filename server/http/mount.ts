@@ -26,6 +26,7 @@ import supportRouter from "./domains/support.router";
 import clientDocumentsRouter from "./domains/clientDocuments.router";
 import automationRouter from "./domains/automation.router";
 import assetsRouter from "./domains/assets.router";
+import controlCenterRouter from "./domains/controlCenter.router";
 
 interface DomainEntry {
   path: string;
@@ -196,6 +197,13 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "assets",
     description: "Asset Library: unified asset management, folders, upload, download. Phase 1 of client workspace migration.",
+  },
+  {
+    path: "/api/v1",
+    router: controlCenterRouter,
+    policy: "authTenant",
+    domain: "control-center",
+    description: "Control Center widget layout: GET/PUT pinned widget configuration per tenant/workspace.",
   },
 ];
 
