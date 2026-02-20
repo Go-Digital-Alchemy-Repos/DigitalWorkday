@@ -637,7 +637,7 @@ export default function ClientDetailPage() {
         <Link href="/clients">
           <Button variant="outline">
             <ArrowLeft className="h-4 w-4 mr-2" />
-            Back to Clients
+            Back
           </Button>
         </Link>
       </div>
@@ -648,7 +648,7 @@ export default function ClientDetailPage() {
     <div className="flex flex-col h-full overflow-hidden">
       <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-border shrink-0">
         <div className="flex items-center gap-4">
-          <Link href="/clients">
+          <Link href={client.parentClientId ? `/clients/${client.parentClientId}` : "/clients"}>
             <Button variant="ghost" size="icon" aria-label="Go back" data-testid="button-back-to-clients">
               <ArrowLeft className="h-4 w-4" />
             </Button>
