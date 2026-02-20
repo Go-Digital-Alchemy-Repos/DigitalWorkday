@@ -343,74 +343,76 @@ function ClientGridCard({
       <div onClick={() => onOpenProfile(client.id)} className="cursor-pointer">
         <Card
           className={cn(
-            "cursor-pointer transition-colors hover-elevate",
+            "cursor-pointer transition-colors hover-elevate overflow-hidden",
             isSelected && "ring-2 ring-primary"
           )}
           data-testid={`card-client-${client.id}`}
         >
           <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-3">
-                {client.depth > 0 && (
-                  <div
-                    className="flex items-center text-muted-foreground shrink-0"
-                    style={{ paddingLeft: `${(client.depth - 1) * 12}px` }}
-                  >
-                    <ChevronRight className="h-4 w-4" />
-                  </div>
-                )}
-                <Avatar className="h-10 w-10">
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    {getInitials(client.companyName)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <CardTitle className="text-base truncate">
+            <div className="flex items-start gap-3 min-w-0">
+              {client.depth > 0 && (
+                <div
+                  className="flex items-center text-muted-foreground shrink-0 pt-0.5"
+                  style={{ paddingLeft: `${(client.depth - 1) * 12}px` }}
+                >
+                  <ChevronRight className="h-4 w-4" />
+                </div>
+              )}
+              <Avatar className="h-10 w-10 shrink-0">
+                <AvatarFallback className="bg-primary/10 text-primary">
+                  {getInitials(client.companyName)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 min-w-0">
+                  <CardTitle className="text-base truncate min-w-0">
                     {client.companyName}
                   </CardTitle>
-                  {client.parentName ? (
-                    <p className="text-xs text-muted-foreground truncate">
-                      Sub-client of {client.parentName}
-                    </p>
-                  ) : (
-                    client.displayName && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        {client.displayName}
-                      </p>
-                    )
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {client.needsAttention && (
+                      <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {client.needsAttention && (
-                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                {client.parentName ? (
+                  <p className="text-xs text-muted-foreground truncate">
+                    Sub-client of {client.parentName}
+                  </p>
+                ) : (
+                  client.displayName && (
+                    <p className="text-xs text-muted-foreground truncate">
+                      {client.displayName}
+                    </p>
+                  )
                 )}
-                <Badge variant="outline" className={STAGE_TEXT_COLORS[client.stage] || ""}>
-                  <span className={cn("h-1.5 w-1.5 rounded-full mr-1.5 shrink-0", STAGE_COLORS[client.stage] || "bg-muted")} />
-                  {CLIENT_STAGE_LABELS[client.stage as ClientStageType] || client.stage}
-                </Badge>
+                <div className="mt-1.5">
+                  <Badge variant="outline" className={cn("text-xs", STAGE_TEXT_COLORS[client.stage] || "")}>
+                    <span className={cn("h-1.5 w-1.5 rounded-full mr-1.5 shrink-0", STAGE_COLORS[client.stage] || "bg-muted")} />
+                    {CLIENT_STAGE_LABELS[client.stage as ClientStageType] || client.stage}
+                  </Badge>
+                </div>
               </div>
             </div>
           </CardHeader>
           <CardContent className="pt-0">
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
-                <FolderKanban className="h-3.5 w-3.5" />
+                <FolderKanban className="h-3.5 w-3.5 shrink-0" />
                 <span>{client.projectCount} projects</span>
               </div>
               <div className="flex items-center gap-1">
-                <User className="h-3.5 w-3.5" />
+                <User className="h-3.5 w-3.5 shrink-0" />
                 <span>{client.contactCount} contacts</span>
               </div>
               {client.openTasksCount > 0 && (
                 <div className="flex items-center gap-1">
-                  <ListChecks className="h-3.5 w-3.5" />
+                  <ListChecks className="h-3.5 w-3.5 shrink-0" />
                   <span>{client.openTasksCount} tasks</span>
                 </div>
               )}
             </div>
             {client.lastActivityAt && (
-              <p className="text-xs text-muted-foreground mt-1.5">
+              <p className="text-xs text-muted-foreground mt-1.5 truncate">
                 Last activity {formatDistanceToNow(new Date(client.lastActivityAt), { addSuffix: true })}
               </p>
             )}
@@ -484,52 +486,54 @@ function ClientGroupCard({
       )}
       <Card
         className={cn(
-          "transition-colors",
+          "transition-colors overflow-hidden",
           selectedIds.has(parent.id) && "ring-2 ring-primary"
         )}
         data-testid={`card-client-group-${parent.id}`}
       >
         <div
           onClick={() => onOpenProfile(parent.id)}
-          className="cursor-pointer overflow-visible hover-elevate rounded-t-md"
+          className="cursor-pointer overflow-hidden hover-elevate rounded-t-md"
         >
           <CardHeader className="pb-3">
-            <div className="flex items-start justify-between gap-2">
-              <div className="flex items-center gap-3">
-                <Avatar className="h-10 w-10">
-                  <AvatarFallback className="bg-primary/10 text-primary">
-                    {getInitials(parent.companyName)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <CardTitle className="text-base truncate">
+            <div className="flex items-start gap-3 min-w-0">
+              <Avatar className="h-10 w-10 shrink-0">
+                <AvatarFallback className="bg-primary/10 text-primary">
+                  {getInitials(parent.companyName)}
+                </AvatarFallback>
+              </Avatar>
+              <div className="flex-1 min-w-0">
+                <div className="flex items-start justify-between gap-2 min-w-0">
+                  <CardTitle className="text-base truncate min-w-0">
                     {parent.companyName}
                   </CardTitle>
-                  {parent.displayName && (
-                    <p className="text-xs text-muted-foreground truncate">
-                      {parent.displayName}
-                    </p>
-                  )}
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {parent.needsAttention && (
+                      <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                    )}
+                  </div>
                 </div>
-              </div>
-              <div className="flex items-center gap-1.5">
-                {parent.needsAttention && (
-                  <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                {parent.displayName && (
+                  <p className="text-xs text-muted-foreground truncate">
+                    {parent.displayName}
+                  </p>
                 )}
-                <Badge className={getStatusColor(parent.status)}>
-                  {parent.status}
-                </Badge>
+                <div className="mt-1.5">
+                  <Badge className={cn("text-xs", getStatusColor(parent.status))}>
+                    {parent.status}
+                  </Badge>
+                </div>
               </div>
             </div>
           </CardHeader>
           <CardContent className="pt-0 pb-3">
-            <div className="flex items-center gap-4 text-sm text-muted-foreground">
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
               <div className="flex items-center gap-1">
-                <FolderKanban className="h-3.5 w-3.5" />
+                <FolderKanban className="h-3.5 w-3.5 shrink-0" />
                 <span>{parent.projectCount} projects</span>
               </div>
               <div className="flex items-center gap-1">
-                <User className="h-3.5 w-3.5" />
+                <User className="h-3.5 w-3.5 shrink-0" />
                 <span>{parent.contactCount} contacts</span>
               </div>
             </div>
@@ -564,13 +568,14 @@ function ClientGroupCard({
                 key={child.id}
                 onClick={() => onOpenProfile(child.id)}
                 className={cn(
-                  "flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover-elevate",
+                  "flex flex-wrap items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover-elevate min-w-0",
                   selectedIds.has(child.id) && "ring-1 ring-primary"
                 )}
                 data-testid={`card-child-client-${child.id}`}
               >
                 {showCheckbox && (
                   <div
+                    className="shrink-0"
                     onClick={(e) => {
                       e.preventDefault();
                       e.stopPropagation();
@@ -584,7 +589,7 @@ function ClientGroupCard({
                     />
                   </div>
                 )}
-                <Avatar className="h-6 w-6">
+                <Avatar className="h-6 w-6 shrink-0">
                   <AvatarFallback className="bg-muted text-muted-foreground text-xs">
                     {getInitials(child.companyName)}
                   </AvatarFallback>
@@ -595,14 +600,16 @@ function ClientGroupCard({
                 >
                   {child.companyName}
                 </span>
-                {child.needsAttention && (
-                  <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
-                )}
-                <Badge
-                  className={cn(getStatusColor(child.status), "text-xs")}
-                >
-                  {child.status}
-                </Badge>
+                <div className="flex items-center gap-1.5 shrink-0">
+                  {child.needsAttention && (
+                    <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                  )}
+                  <Badge
+                    className={cn(getStatusColor(child.status), "text-xs")}
+                  >
+                    {child.status}
+                  </Badge>
+                </div>
               </div>
             ))}
           </div>
