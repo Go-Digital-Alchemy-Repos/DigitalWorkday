@@ -171,6 +171,25 @@ router.post("/tickets", async (req, res) => {
       payloadJson: { title: ticket.title },
     });
 
+    if (ticket.assignedToUserId && ticket.assignedToUserId !== userId) {
+      (async () => {
+        try {
+          const { notifySupportTicketAssigned } = await import("../../features/notifications/notification.service");
+          const creator = await storage.getUser(userId);
+          const assignerName = creator?.name || "Someone";
+          await notifySupportTicketAssigned(
+            ticket.assignedToUserId!,
+            ticket.id,
+            ticket.title,
+            assignerName,
+            { tenantId }
+          );
+        } catch (e) {
+          console.warn("[support] Failed to emit ticket assignment notification:", e);
+        }
+      })();
+    }
+
     res.status(201).json(ticket);
   } catch (error) {
     return handleRouteError(res, error, "POST /api/v1/support/tickets", req);
@@ -222,6 +241,24 @@ router.patch("/tickets/:id", async (req, res) => {
         eventType: SupportTicketEventType.ASSIGNED,
         payloadJson: { from: existing.assignedToUserId, to: body.assignedToUserId },
       });
+
+      if (body.assignedToUserId && body.assignedToUserId !== userId) {
+        (async () => {
+          try {
+            const { notifySupportTicketAssigned } = await import("../../features/notifications/notification.service");
+            const assigner = await storage.getUser(userId);
+            await notifySupportTicketAssigned(
+              body.assignedToUserId!,
+              existing.id,
+              existing.title,
+              assigner?.name || "Someone",
+              { tenantId }
+            );
+          } catch (e) {
+            console.warn("[support] Failed to emit ticket reassignment notification:", e);
+          }
+        })();
+      }
     }
 
     const updated = await storage.updateSupportTicket(existing.id, tenantId, updates as any);

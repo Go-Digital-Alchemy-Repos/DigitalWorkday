@@ -217,6 +217,26 @@ router.post(
       metadata: { messageId: message.id },
     });
 
+    (async () => {
+      try {
+        const { notifyDirectMessage } = await import("../../../features/notifications/notification.service");
+        const senderName = author?.name || "Someone";
+        const preview = req.body.body || "";
+        const recipientId = thread.user1Id === userId ? thread.user2Id : thread.user1Id;
+        if (recipientId) {
+          notifyDirectMessage(
+            recipientId,
+            userId,
+            senderName,
+            preview,
+            { tenantId, excludeUserId: userId }
+          ).catch(() => {});
+        }
+      } catch (e) {
+        console.warn("[chat] Failed to emit DM notifications:", e);
+      }
+    })();
+
     res.status(201).json({ ...message, author });
   })
 );

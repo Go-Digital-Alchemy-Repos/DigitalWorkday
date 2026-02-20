@@ -354,6 +354,28 @@ router.post(
       metadata: { messageId: message.id },
     });
 
+    (async () => {
+      try {
+        const { notifyChatMessage } = await import("../../../features/notifications/notification.service");
+        const members = await storage.getChatChannelMembers(channel.id);
+        const senderName = author?.name || "Someone";
+        const preview = req.body.body || "";
+        for (const m of members) {
+          if (m.userId === userId) continue;
+          notifyChatMessage(
+            m.userId,
+            channel.id,
+            channel.name,
+            senderName,
+            preview,
+            { tenantId, excludeUserId: userId }
+          ).catch(() => {});
+        }
+      } catch (e) {
+        console.warn("[chat] Failed to emit chat notifications:", e);
+      }
+    })();
+
     res.status(201).json({ ...message, author });
   })
 );
