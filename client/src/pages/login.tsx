@@ -11,6 +11,7 @@ import { SiGoogle } from "react-icons/si";
 import { Separator } from "@/components/ui/separator";
 import { UserRole } from "@shared/schema";
 import { prefetchPostLogin } from "@/lib/prefetch";
+import { getStorageUrl } from "@/lib/storageUrl";
 
 interface BootstrapStatus {
   bootstrapRequired: boolean;
@@ -113,7 +114,10 @@ export default function LoginPage() {
         });
         if (response.ok) {
           const data: LoginBranding = await response.json();
-          setBranding(data);
+          setBranding({
+            ...data,
+            logoUrl: getStorageUrl(data.logoUrl) || data.logoUrl,
+          });
         }
       } catch (error) {
         console.error("Failed to fetch login branding:", error);

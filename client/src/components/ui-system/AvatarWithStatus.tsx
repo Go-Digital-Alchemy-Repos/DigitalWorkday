@@ -1,6 +1,7 @@
 import { cn } from "@/lib/utils";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { getStorageUrl } from "@/lib/storageUrl";
 
 export type AvatarSize = "xs" | "sm" | "md" | "lg" | "xl";
 export type PresenceStatus = "online" | "offline" | "idle" | "busy" | "dnd";
@@ -103,7 +104,7 @@ export function AvatarWithStatus({
   const avatarContent = (
     <div className={cn("relative inline-block shrink-0", className)} data-testid={testId}>
       <Avatar className={sizeClasses[size]}>
-        {src && <AvatarImage src={src} alt={name} />}
+        {src && <AvatarImage src={getStorageUrl(src)} alt={name} />}
         <AvatarFallback className={cn(textSizeClasses[size], bgColor, "text-white")}>
           {initials}
         </AvatarFallback>

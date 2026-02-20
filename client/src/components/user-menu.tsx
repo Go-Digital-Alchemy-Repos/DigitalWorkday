@@ -12,6 +12,7 @@ import { Button } from "@/components/ui/button";
 import { LogOut, User, Shield, Users } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
+import { getStorageUrl } from "@/lib/storageUrl";
 
 function getRoleIcon(role: string) {
   switch (role) {
@@ -57,7 +58,7 @@ export function UserMenu() {
       <DropdownMenuTrigger asChild>
         <Button variant="ghost" className="relative h-9 w-9 rounded-full" data-testid="button-user-menu">
           <Avatar className="h-9 w-9">
-            <AvatarImage src={user.avatarUrl || undefined} alt={user.name} />
+            <AvatarImage src={getStorageUrl(user.avatarUrl)} alt={user.name} />
             <AvatarFallback className="bg-primary text-primary-foreground text-sm">
               {initials}
             </AvatarFallback>

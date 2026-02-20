@@ -41,7 +41,8 @@ export async function registerRoutes(
         req.path.startsWith("/v1/auth/") || 
         req.path === "/v1/super/bootstrap" || 
         req.path === "/health" ||
-        req.path.startsWith("/v1/webhooks/")) {
+        req.path.startsWith("/v1/webhooks/") ||
+        req.path.startsWith("/v1/files/serve/")) {
       return next();
     }
     return requireAuth(req, res, next);
@@ -56,7 +57,8 @@ export async function registerRoutes(
         req.path === "/health" || 
         req.path.startsWith("/v1/super/") ||
         req.path.startsWith("/v1/tenant/") ||
-        req.path.startsWith("/v1/webhooks/")) {
+        req.path.startsWith("/v1/webhooks/") ||
+        req.path.startsWith("/v1/files/serve/")) {
       return next();
     }
     return requireTenantContext(req, res, next);

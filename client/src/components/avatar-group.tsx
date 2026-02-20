@@ -2,6 +2,7 @@ import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { cn } from "@/lib/utils";
 import type { User } from "@shared/schema";
+import { getStorageUrl } from "@/lib/storageUrl";
 
 interface AvatarGroupProps {
   users: Partial<User>[];
@@ -36,7 +37,7 @@ export function AvatarGroup({ users, max = 3, size = "default" }: AvatarGroupPro
                 "border-2 border-background ring-0"
               )}
             >
-              {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name || ""} />}
+              {user.avatarUrl && <AvatarImage src={getStorageUrl(user.avatarUrl)} alt={user.name || ""} />}
               <AvatarFallback className={cn("bg-primary/10 text-primary", textSize)}>
                 {getInitials(user.name || "U")}
               </AvatarFallback>

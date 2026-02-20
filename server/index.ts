@@ -165,6 +165,10 @@ setupPasswordResetEndpoints(app);
 // Setup Google OAuth endpoints (must be after session middleware)
 setupGoogleAuth(app);
 
+// Public file serving proxy (before auth middleware, no auth required)
+import fileServeRouter from "./http/domains/fileServe.router";
+app.use("/api/v1/files/serve", fileServeRouter);
+
 // Setup tenant context middleware (must be after auth)
 app.use(tenantContextMiddleware);
 

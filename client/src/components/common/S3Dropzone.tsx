@@ -24,6 +24,7 @@ import { Progress } from "@/components/ui/progress";
 import { Upload, X, FileText, AlertCircle, Check } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ImageCropper } from "./ImageCropper";
+import { getStorageUrl } from "@/lib/storageUrl";
 
 interface UploadContext {
   projectId?: string;
@@ -85,7 +86,8 @@ export function S3Dropzone({
   });
 
   const [imageLoadError, setImageLoadError] = useState(false);
-  const displayUrl = valueUrl || inheritedUrl;
+  const rawDisplayUrl = valueUrl || inheritedUrl;
+  const displayUrl = getStorageUrl(rawDisplayUrl) || rawDisplayUrl;
   const isInherited = !valueUrl && !!inheritedUrl;
 
   useEffect(() => {

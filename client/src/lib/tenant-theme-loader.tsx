@@ -2,6 +2,7 @@ import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { useThemeSync } from "@/hooks/use-theme-sync";
+import { getStorageUrl } from "@/lib/storageUrl";
 
 interface TenantSettings {
   displayName?: string;
@@ -130,7 +131,7 @@ export function useTenantTheme() {
         link.rel = "icon";
         document.head.appendChild(link);
       }
-      link.href = settings.faviconUrl;
+      link.href = getStorageUrl(settings.faviconUrl) || settings.faviconUrl;
     }
 
     if (settings.appName) {
@@ -151,7 +152,7 @@ export function useTenantTheme() {
   return {
     settings: data?.tenantSettings,
     appName: data?.tenantSettings?.appName || "MyWorkDay",
-    logoUrl: data?.tenantSettings?.logoUrl,
+    logoUrl: getStorageUrl(data?.tenantSettings?.logoUrl),
     hideVendorBranding: data?.tenantSettings?.hideVendorBranding || false,
   };
 }

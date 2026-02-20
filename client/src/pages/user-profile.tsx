@@ -16,6 +16,7 @@ import { useLocation } from "wouter";
 import { useTheme } from "@/lib/theme-provider";
 import { type ThemePack } from "@/theme/themePacks";
 import { cn } from "@/lib/utils";
+import { getStorageUrl } from "@/lib/storageUrl";
 
 function getRoleLabel(role: string) {
   switch (role) {
@@ -86,7 +87,8 @@ export default function UserProfilePage() {
     },
   });
 
-  const displayAvatarUrl = pendingAvatarUrl !== undefined ? pendingAvatarUrl : user?.avatarUrl;
+  const rawAvatarUrl = pendingAvatarUrl !== undefined ? pendingAvatarUrl : user?.avatarUrl;
+  const displayAvatarUrl = getStorageUrl(rawAvatarUrl);
 
   const handleAvatarUploaded = (fileUrl: string) => {
     setPendingAvatarUrl(fileUrl);
