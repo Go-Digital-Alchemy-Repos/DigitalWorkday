@@ -68,6 +68,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuTrigger,
+} from "@/components/ui/dropdown-menu";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -873,9 +879,53 @@ export default function ProjectPage() {
                 onClick={() => setSettingsOpen(true)}
                 aria-label="Project settings"
                 data-testid="button-project-settings"
+                className="hidden md:flex"
               >
                 <Settings className="h-4 w-4" />
               </Button>
+              <DropdownMenu>
+                <DropdownMenuTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="md:hidden"
+                    aria-label="More options"
+                    data-testid="button-project-more-mobile"
+                  >
+                    <MoreHorizontal className="h-4 w-4" />
+                  </Button>
+                </DropdownMenuTrigger>
+                <DropdownMenuContent align="end">
+                  <DropdownMenuItem onClick={() => setMembersOpen(true)} data-testid="menu-project-members-mobile">
+                    <Users className="h-4 w-4 mr-2" />
+                    Members
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setActivityOpen(true)} data-testid="menu-project-activity-mobile">
+                    <Activity className="h-4 w-4 mr-2" />
+                    Activity
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setSettingsOpen(true)} data-testid="menu-project-settings-mobile">
+                    <Settings className="h-4 w-4 mr-2" />
+                    Settings
+                  </DropdownMenuItem>
+                  <DropdownMenuItem 
+                    onClick={() => {
+                      const url = `${window.location.origin}/projects/${projectId}`;
+                      navigator.clipboard.writeText(url).then(() => {
+                        toast({ title: "Link copied", description: "Project link copied to clipboard" });
+                      });
+                    }}
+                    data-testid="menu-copy-link-mobile"
+                  >
+                    <Link2 className="h-4 w-4 mr-2" />
+                    Copy Link
+                  </DropdownMenuItem>
+                  <DropdownMenuItem onClick={() => setTemplatePopoverOpen(true)} data-testid="menu-apply-template-mobile">
+                    <FileStack className="h-4 w-4 mr-2" />
+                    Apply Template
+                  </DropdownMenuItem>
+                </DropdownMenuContent>
+              </DropdownMenu>
               <Popover open={templatePopoverOpen} onOpenChange={setTemplatePopoverOpen}>
                 <PopoverTrigger asChild>
                   <Button 
@@ -884,6 +934,7 @@ export default function ProjectPage() {
                     aria-label="Apply template"
                     title="Apply Template"
                     data-testid="button-apply-template"
+                    className="hidden md:flex"
                   >
                     <FileStack className="h-4 w-4" />
                   </Button>
@@ -942,6 +993,7 @@ export default function ProjectPage() {
                 aria-label="Copy project link"
                 title="Copy Project Link"
                 data-testid="button-copy-project-link"
+                className="hidden md:flex"
                 onClick={() => {
                   const url = `${window.location.origin}/projects/${projectId}`;
                   navigator.clipboard.writeText(url).then(() => {

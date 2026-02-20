@@ -161,26 +161,32 @@ export default function TeamDetailPage() {
   }
 
   return (
-    <div className="container mx-auto p-6 max-w-4xl">
-      <div className="flex items-center gap-4 mb-6">
+    <div className="container mx-auto px-3 sm:px-4 lg:px-6 py-4 md:py-6 max-w-4xl">
+      <div className="flex items-center gap-3 md:gap-4 mb-4 md:mb-6">
         <Button variant="ghost" size="icon" aria-label="Go back" onClick={() => navigate("/settings/teams")} data-testid="button-back-teams">
           <ArrowLeft className="h-4 w-4" />
         </Button>
-        <div className="flex-1">
-          <h1 className="text-2xl font-semibold flex items-center gap-2" data-testid="text-team-name">
-            <Users className="h-6 w-6" />
-            {team.name}
+        <div className="flex-1 min-w-0">
+          <h1 className="text-lg md:text-2xl font-semibold flex items-center gap-2 truncate" data-testid="text-team-name">
+            <Users className="h-5 w-5 md:h-6 md:w-6 shrink-0" />
+            <span className="truncate">{team.name}</span>
           </h1>
-          <p className="text-muted-foreground text-sm">
+          <p className="text-muted-foreground text-xs md:text-sm">
             {teamMembers.length} member{teamMembers.length !== 1 ? "s" : ""} · {teamProjects.length} project{teamProjects.length !== 1 ? "s" : ""}
           </p>
         </div>
-        <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={() => setEditTeamOpen(true)} data-testid="button-edit-team">
+        <div className="flex items-center gap-2 shrink-0">
+          <Button variant="outline" size="icon" className="md:hidden" onClick={() => setEditTeamOpen(true)} data-testid="button-edit-team-mobile" aria-label="Edit team">
+            <Edit className="h-4 w-4" />
+          </Button>
+          <Button variant="outline" className="hidden md:flex" onClick={() => setEditTeamOpen(true)} data-testid="button-edit-team">
             <Edit className="h-4 w-4 mr-2" />
             Edit
           </Button>
-          <Button variant="destructive" onClick={() => setDeleteDialogOpen(true)} data-testid="button-delete-team">
+          <Button variant="destructive" size="icon" className="md:hidden" onClick={() => setDeleteDialogOpen(true)} data-testid="button-delete-team-mobile" aria-label="Delete team">
+            <Trash2 className="h-4 w-4" />
+          </Button>
+          <Button variant="destructive" className="hidden md:flex" onClick={() => setDeleteDialogOpen(true)} data-testid="button-delete-team">
             <Trash2 className="h-4 w-4 mr-2" />
             Delete
           </Button>
@@ -207,61 +213,99 @@ export default function TeamDetailPage() {
             ) : teamMembers.length === 0 ? (
               <p className="text-muted-foreground text-center py-8">No members in this team yet</p>
             ) : (
-              <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Member</TableHead>
-                    <TableHead>Role</TableHead>
-                    <TableHead className="w-12"></TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
+              <>
+                <div className="md:hidden space-y-2">
                   {teamMembers.map((member) => (
-                    <TableRow key={member.id} data-testid={`row-member-${member.userId}`}>
-                      <TableCell>
-                        <div className="flex items-center gap-3">
-                          <Avatar className="h-8 w-8">
-                            {member.user?.avatarUrl && <AvatarImage src={member.user.avatarUrl} alt={`${member.user?.firstName || ""} ${member.user?.lastName || ""}`} />}
-                            <AvatarFallback>
-                              {member.user?.firstName?.charAt(0) || member.user?.email?.charAt(0) || "U"}
-                            </AvatarFallback>
-                          </Avatar>
-                          <div>
-                            <p className="font-medium">
-                              {member.user?.firstName} {member.user?.lastName}
-                            </p>
-                            <p className="text-xs text-muted-foreground">{member.user?.email}</p>
-                          </div>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant="secondary">{member.user?.role || "employee"}</Badge>
-                      </TableCell>
-                      <TableCell>
-                        <DropdownMenu>
-                          <DropdownMenuTrigger asChild>
-                            <Button variant="ghost" size="icon" aria-label="Member options" data-testid={`button-member-menu-${member.userId}`}>
-                              <MoreHorizontal className="h-4 w-4" />
-                            </Button>
-                          </DropdownMenuTrigger>
-                          <DropdownMenuContent align="end">
-                            <DropdownMenuItem 
-                              onClick={() => confirmRemoveMember(member)}
-                              className="text-destructive"
-                              data-testid={`button-remove-member-${member.userId}`}
-                            >
-                              <UserMinus className="h-4 w-4 mr-2" />
-                              Remove from team
-                            </DropdownMenuItem>
-                          </DropdownMenuContent>
-                        </DropdownMenu>
-                      </TableCell>
-                    </TableRow>
+                    <div key={member.id} className="flex items-center gap-3 p-3 rounded-lg border" data-testid={`card-member-${member.userId}`}>
+                      <Avatar className="h-10 w-10 shrink-0">
+                        {member.user?.avatarUrl && <AvatarImage src={member.user.avatarUrl} alt={`${member.user?.firstName || ""} ${member.user?.lastName || ""}`} />}
+                        <AvatarFallback>
+                          {member.user?.firstName?.charAt(0) || member.user?.email?.charAt(0) || "U"}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="flex-1 min-w-0">
+                        <p className="font-medium text-sm truncate">
+                          {member.user?.firstName} {member.user?.lastName}
+                        </p>
+                        <p className="text-xs text-muted-foreground truncate">{member.user?.email}</p>
+                        <Badge variant="secondary" className="mt-1 text-xs">{member.user?.role || "employee"}</Badge>
+                      </div>
+                      <DropdownMenu>
+                        <DropdownMenuTrigger asChild>
+                          <Button variant="ghost" size="icon" aria-label="Member options" data-testid={`button-member-menu-mobile-${member.userId}`}>
+                            <MoreHorizontal className="h-4 w-4" />
+                          </Button>
+                        </DropdownMenuTrigger>
+                        <DropdownMenuContent align="end">
+                          <DropdownMenuItem 
+                            onClick={() => confirmRemoveMember(member)}
+                            className="text-destructive"
+                            data-testid={`button-remove-member-mobile-${member.userId}`}
+                          >
+                            <UserMinus className="h-4 w-4 mr-2" />
+                            Remove from team
+                          </DropdownMenuItem>
+                        </DropdownMenuContent>
+                      </DropdownMenu>
+                    </div>
                   ))}
-                </TableBody>
-              </Table>
-              </div>
+                </div>
+                <div className="hidden md:block overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Member</TableHead>
+                      <TableHead>Role</TableHead>
+                      <TableHead className="w-12"></TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {teamMembers.map((member) => (
+                      <TableRow key={member.id} data-testid={`row-member-${member.userId}`}>
+                        <TableCell>
+                          <div className="flex items-center gap-3">
+                            <Avatar className="h-8 w-8">
+                              {member.user?.avatarUrl && <AvatarImage src={member.user.avatarUrl} alt={`${member.user?.firstName || ""} ${member.user?.lastName || ""}`} />}
+                              <AvatarFallback>
+                                {member.user?.firstName?.charAt(0) || member.user?.email?.charAt(0) || "U"}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div>
+                              <p className="font-medium">
+                                {member.user?.firstName} {member.user?.lastName}
+                              </p>
+                              <p className="text-xs text-muted-foreground">{member.user?.email}</p>
+                            </div>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant="secondary">{member.user?.role || "employee"}</Badge>
+                        </TableCell>
+                        <TableCell>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" aria-label="Member options" data-testid={`button-member-menu-${member.userId}`}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem 
+                                onClick={() => confirmRemoveMember(member)}
+                                className="text-destructive"
+                                data-testid={`button-remove-member-${member.userId}`}
+                              >
+                                <UserMinus className="h-4 w-4 mr-2" />
+                                Remove from team
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
+                        </TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+                </div>
+              </>
             )}
           </CardContent>
         </Card>
