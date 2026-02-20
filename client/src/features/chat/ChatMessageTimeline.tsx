@@ -74,6 +74,12 @@ export interface ThreadSummary {
   lastReplyAuthorId: string | null;
 }
 
+export interface ReadByUser {
+  userId: string;
+  name: string;
+  avatarUrl: string | null;
+}
+
 interface ChatMessageTimelineProps {
   messages: ChatMessage[];
   currentUserId?: string;
@@ -91,6 +97,7 @@ interface ChatMessageTimelineProps {
   onCreateTaskFromMessage?: (message: ChatMessage) => void;
   onOpenThread?: (messageId: string) => void;
   threadSummaries?: Map<string, ThreadSummary>;
+  readByMap?: Map<string, ReadByUser[]>;
   firstUnreadMessageId?: string | null;
   onMarkAsRead?: () => void;
   renderMessageBody?: (body: string) => React.ReactNode;
@@ -282,6 +289,7 @@ export function ChatMessageTimeline({
   onCreateTaskFromMessage,
   onOpenThread,
   threadSummaries,
+  readByMap,
   firstUnreadMessageId,
   onMarkAsRead,
   renderMessageBody,
@@ -827,6 +835,33 @@ export function ChatMessageTimeline({
                         </div>
                       )}
 
+                      {readByMap?.get(message.id) && readByMap.get(message.id)!.length > 0 && (
+                        <div className={`flex items-center gap-0.5 mt-1 ${isOwnMessage ? "justify-end" : ""}`} data-testid={`read-by-${message.id}`}>
+                          {readByMap.get(message.id)!.slice(0, 5).map((reader) => (
+                            <Tooltip key={reader.userId}>
+                              <TooltipTrigger asChild>
+                                <span className="inline-block">
+                                  <Avatar className="h-4 w-4">
+                                    {reader.avatarUrl && <AvatarImage src={reader.avatarUrl} />}
+                                    <AvatarFallback className="text-[7px]">
+                                      {getInitials(reader.name)}
+                                    </AvatarFallback>
+                                  </Avatar>
+                                </span>
+                              </TooltipTrigger>
+                              <TooltipContent side="bottom" className="text-xs">
+                                Seen by {reader.name}
+                              </TooltipContent>
+                            </Tooltip>
+                          ))}
+                          {readByMap.get(message.id)!.length > 5 && (
+                            <span className="text-[10px] text-muted-foreground ml-0.5">
+                              +{readByMap.get(message.id)!.length - 5}
+                            </span>
+                          )}
+                        </div>
+                      )}
+
                       {isLongPressed && isMobile && !isDeleted && !isEditing && (
                         <div
                           className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
@@ -931,6 +966,7 @@ export function ChatMessageTimeline({
       onAddReaction,
       onRemoveReaction,
       threadSummaries,
+      readByMap,
       renderMessageBody,
       getFileIcon,
       formatFileSize,

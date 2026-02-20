@@ -2,11 +2,16 @@
 import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, ApiError } from "@/lib/queryClient";
-import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanelToggle } from "@/features/chat";
+import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanelToggle, type ReadByUser } from "@/features/chat";
 
 const LazyChatContextPanel = lazy(() =>
   import("@/features/chat/ChatContextPanel").then((mod) => ({
     default: mod.ChatContextPanel,
+  }))
+);
+const LazyThreadPanel = lazy(() =>
+  import("@/features/chat/ThreadPanel").then((mod) => ({
+    default: mod.ThreadPanel,
   }))
 );
 import { useAuth } from "@/lib/auth";
@@ -281,6 +286,18 @@ export default function ChatPage() {
   const [addMemberSearchQuery, setAddMemberSearchQuery] = useState("");
   const [removeMemberConfirmUserId, setRemoveMemberConfirmUserId] = useState<string | null>(null);
 
+  // Thread panel state - close when conversation changes
+  const [threadParentMessage, setThreadParentMessage] = useState<ChatMessage | null>(null);
+  const threadPanelOpen = !!threadParentMessage;
+  const prevConversationRef = useRef<string | null>(null);
+  useEffect(() => {
+    const currentId = selectedChannel?.id ?? selectedDm?.id ?? null;
+    if (prevConversationRef.current !== null && prevConversationRef.current !== currentId) {
+      setThreadParentMessage(null);
+    }
+    prevConversationRef.current = currentId;
+  }, [selectedChannel?.id, selectedDm?.id]);
+
   // Context panel state - default open on desktop (>768px), closed on mobile
   const [contextPanelOpen, setContextPanelOpen] = useState(() => {
     if (typeof window !== "undefined") {
@@ -450,6 +467,47 @@ export default function ChatPage() {
     },
     enabled: startChatDrawerOpen,
   });
+
+  // Thread summaries query (reply counts per parent message)
+  const conversationType = selectedChannel ? "channel" : selectedDm ? "dm" : null;
+  const conversationId = selectedChannel?.id ?? selectedDm?.id ?? null;
+  const threadSummariesQuery = useQuery<Record<string, { replyCount: number; lastReplyAt: string | null; lastReplyAuthorId: string | null }>>({
+    queryKey: [
+      conversationType === "channel" ? "/api/v1/chat/channels" : "/api/v1/chat/dm",
+      conversationId,
+      "thread-summaries",
+    ],
+    enabled: !!conversationId,
+  });
+
+  const threadSummaries = useMemo(() => {
+    if (!threadSummariesQuery.data) return undefined;
+    const map = new Map<string, { replyCount: number; lastReplyAt: Date | string | null; lastReplyAuthorId: string | null }>();
+    for (const [key, val] of Object.entries(threadSummariesQuery.data)) {
+      map.set(key, val);
+    }
+    return map;
+  }, [threadSummariesQuery.data]);
+
+  // Build read-by-user map: messageId -> users who have read up to that message
+  const readByMap = useMemo(() => {
+    if (readReceipts.size === 0) return undefined;
+    const map = new Map<string, ReadByUser[]>();
+    readReceipts.forEach((receipt, recipientUserId) => {
+      if (!receipt.lastReadMessageId || recipientUserId === user?.id) return;
+      const teamUser = teamUsers.find(u => u.id === recipientUserId);
+      if (!teamUser) return;
+      const entry: ReadByUser = {
+        userId: recipientUserId,
+        name: teamUser.displayName || teamUser.email?.split("@")[0] || "Unknown",
+        avatarUrl: teamUser.avatarUrl || null,
+      };
+      const existing = map.get(receipt.lastReadMessageId) || [];
+      existing.push(entry);
+      map.set(receipt.lastReadMessageId, existing);
+    });
+    return map.size > 0 ? map : undefined;
+  }, [readReceipts, user?.id, teamUsers]);
 
   // Channel members query for the members drawer and context panel
   const { data: channelMembers = [], refetch: refetchChannelMembers } = useQuery<ChannelMember[]>({
@@ -1315,6 +1373,24 @@ export default function ChatPage() {
       }
     };
 
+    const handleThreadReply = (payload: ChatNewMessagePayload) => {
+      const isCurrentChannel = selectedChannel && payload.targetType === "channel" && payload.targetId === selectedChannel.id;
+      const isCurrentDm = selectedDm && payload.targetType === "dm" && payload.targetId === selectedDm.id;
+      if (isCurrentChannel || isCurrentDm) {
+        queryClient.invalidateQueries({
+          queryKey: [
+            isCurrentChannel ? "/api/v1/chat/channels" : "/api/v1/chat/dm",
+            payload.targetId,
+            "thread-summaries",
+          ],
+        });
+        const parentId = (payload.message as any).parentMessageId;
+        if (parentId) {
+          queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/messages", parentId, "thread"] });
+        }
+      }
+    };
+
     socket.on(CHAT_EVENTS.NEW_MESSAGE as any, handleNewMessage as any);
     socket.on(CHAT_EVENTS.MESSAGE_UPDATED as any, handleMessageUpdated as any);
     socket.on(CHAT_EVENTS.MESSAGE_DELETED as any, handleMessageDeleted as any);
@@ -1324,6 +1400,7 @@ export default function ChatPage() {
     socket.on(CHAT_EVENTS.MEMBER_ADDED as any, handleMemberAdded as any);
     socket.on(CHAT_EVENTS.MEMBER_REMOVED as any, handleMemberRemoved as any);
     socket.on(CHAT_EVENTS.CONVERSATION_READ as any, handleConversationRead as any);
+    socket.on(CHAT_EVENTS.THREAD_REPLY_CREATED as any, handleThreadReply as any);
 
     return () => {
       socket.off(CHAT_EVENTS.NEW_MESSAGE as any, handleNewMessage as any);
@@ -1335,6 +1412,7 @@ export default function ChatPage() {
       socket.off(CHAT_EVENTS.MEMBER_ADDED as any, handleMemberAdded as any);
       socket.off(CHAT_EVENTS.MEMBER_REMOVED as any, handleMemberRemoved as any);
       socket.off(CHAT_EVENTS.CONVERSATION_READ as any, handleConversationRead as any);
+      socket.off(CHAT_EVENTS.THREAD_REPLY_CREATED as any, handleThreadReply as any);
     };
   }, [selectedChannel, selectedDm, user?.id]);
 
@@ -1787,6 +1865,17 @@ export default function ChatPage() {
     setCreateTaskModalOpen(true);
   };
 
+  const handleOpenThread = useCallback((messageId: string) => {
+    const msg = messages.find(m => m.id === messageId);
+    if (msg) {
+      setThreadParentMessage(msg);
+    }
+  }, [messages]);
+
+  const handleCloseThread = useCallback(() => {
+    setThreadParentMessage(null);
+  }, []);
+
   const getDmDisplayName = (dm: ChatDmThread) => {
     const otherMembers = dm.members.filter((m) => m.userId !== user?.id);
     if (otherMembers.length === 0) return "Just you";
@@ -2044,6 +2133,9 @@ export default function ChatPage() {
               onCopyMessage={handleCopyMessage}
               onQuoteReply={handleQuoteReply}
               onCreateTaskFromMessage={handleCreateTaskFromMessage}
+              onOpenThread={handleOpenThread}
+              threadSummaries={threadSummaries}
+              readByMap={readByMap}
               renderMessageBody={renderMessageBody}
               getFileIcon={getFileIcon}
               formatFileSize={formatFileSize}
@@ -2310,8 +2402,30 @@ export default function ChatPage() {
         )}
       </div>
 
+      {/* Thread Panel - Right Side */}
+      {threadPanelOpen && threadParentMessage && (
+        <Suspense
+          fallback={
+            <div className="w-80 border-l bg-background flex items-center justify-center">
+              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+            </div>
+          }
+        >
+          <div className="w-80 flex-shrink-0" data-testid="thread-panel-container">
+            <LazyThreadPanel
+              parentMessage={threadParentMessage}
+              conversationType={selectedChannel ? "channel" : "dm"}
+              conversationId={selectedChannel?.id || selectedDm?.id || ""}
+              currentUserId={user?.id || ""}
+              onClose={handleCloseThread}
+              renderMessageBody={renderMessageBody}
+            />
+          </div>
+        </Suspense>
+      )}
+
       {/* Context Panel - Right Side (lazy-loaded) */}
-      {(selectedChannel || selectedDm) && contextPanelOpen && (
+      {(selectedChannel || selectedDm) && contextPanelOpen && !threadPanelOpen && (
         <Suspense
           fallback={
             <div className="w-72 border-l bg-background flex items-center justify-center">

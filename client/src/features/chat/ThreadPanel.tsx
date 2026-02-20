@@ -58,30 +58,32 @@ export function ThreadPanel({
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const baseUrl = conversationType === "channel" 
-    ? `/api/chat/channels/${conversationId}` 
-    : `/api/chat/dm/${conversationId}`;
+  const apiBase = conversationType === "channel"
+    ? `/api/v1/chat/channels/${conversationId}`
+    : `/api/v1/chat/dm/${conversationId}`;
 
-  const { data: replies = [], isLoading: isLoadingReplies } = useQuery<ChatMessage[]>({
-    queryKey: ["thread-replies", parentMessage.id],
-    queryFn: async () => {
-      const res = await fetch(`/api/chat/messages/${parentMessage.id}/thread`);
-      if (!res.ok) throw new Error("Failed to fetch thread replies");
-      return res.json();
-    },
-    refetchOnWindowFocus: false,
+  const threadQueryKey = ["/api/v1/chat/messages", parentMessage.id, "thread"];
+  const summariesQueryKey = [
+    conversationType === "channel" ? "/api/v1/chat/channels" : "/api/v1/chat/dm",
+    conversationId,
+    "thread-summaries",
+  ];
+
+  const { data: threadData, isLoading: isLoadingReplies } = useQuery<{ parentMessage: ChatMessage; replies: ChatMessage[] }>({
+    queryKey: threadQueryKey,
   });
+  const replies = threadData?.replies ?? [];
 
   const { toast } = useToast();
-  
+
   const sendReplyMutation = useMutation({
     mutationFn: async (body: string) => {
-      return apiRequest("POST", `${baseUrl}/messages`, { body, parentMessageId: parentMessage.id });
+      return apiRequest("POST", `${apiBase}/messages`, { body, parentMessageId: parentMessage.id });
     },
     onSuccess: () => {
       setReplyInput("");
-      queryClient.invalidateQueries({ queryKey: ["thread-replies", parentMessage.id] });
-      queryClient.invalidateQueries({ queryKey: ["thread-summaries", conversationType, conversationId] });
+      queryClient.invalidateQueries({ queryKey: threadQueryKey });
+      queryClient.invalidateQueries({ queryKey: summariesQueryKey });
     },
     onError: (error: Error) => {
       toast({
