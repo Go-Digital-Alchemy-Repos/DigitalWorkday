@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, ApiError } from "@/lib/queryClient";
-import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanelToggle, PinnedMessagesPanel, type ReadByUser } from "@/features/chat";
+import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanelToggle, PinnedMessagesPanel, SlashCommandDropdown, getMatchingCommands, parseSlashCommand, isSlashCommandInput, findCommand, type SlashCommand, type ReadByUser } from "@/features/chat";
 
 const LazyChatContextPanel = lazy(() =>
   import("@/features/chat/ChatContextPanel").then((mod) => ({
@@ -288,6 +288,10 @@ export default function ChatPage() {
   const [membersDrawerOpen, setMembersDrawerOpen] = useState(false);
   // Pinned messages panel state
   const [pinnedPanelOpen, setPinnedPanelOpen] = useState(false);
+  // Slash command state
+  const [slashCommandOpen, setSlashCommandOpen] = useState(false);
+  const [slashCommandIndex, setSlashCommandIndex] = useState(0);
+  const [slashCommandMatches, setSlashCommandMatches] = useState<SlashCommand[]>([]);
   const [addMemberSearchQuery, setAddMemberSearchQuery] = useState("");
   const [removeMemberConfirmUserId, setRemoveMemberConfirmUserId] = useState<string | null>(null);
 
@@ -826,6 +830,17 @@ export default function ChatPage() {
     // Emit typing start event (throttled by the hook)
     if (newValue.trim()) {
       startTyping();
+    }
+    
+    // Slash command detection
+    const matches = getMatchingCommands(newValue);
+    if (matches.length > 0 && !newValue.includes(" ")) {
+      setSlashCommandOpen(true);
+      setSlashCommandMatches(matches);
+      setSlashCommandIndex(0);
+    } else {
+      setSlashCommandOpen(false);
+      setSlashCommandMatches([]);
     }
     
     const textarea = messageInputRef.current;
@@ -1900,10 +1915,112 @@ export default function ChatPage() {
     }
   };
 
+  const slashCommandMutation = useMutation({
+    mutationFn: async ({ command, args, channelId }: { command: string; args: string; channelId?: string }) => {
+      const res = await apiRequest("POST", "/api/v1/chat/slash-command", { command, args, channelId });
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setMessageInput("");
+      setSlashCommandOpen(false);
+      setSlashCommandMatches([]);
+
+      if (data.type === "help") {
+        const helpLines = data.data.commands.map(
+          (c: { name: string; usage: string; description: string }) =>
+            `${c.name} - ${c.description}\n  Usage: ${c.usage}`
+        );
+        toast({
+          title: "Available Commands",
+          description: helpLines.join("\n"),
+        });
+      } else {
+        toast({
+          title: "Command executed",
+          description: data.message,
+        });
+      }
+
+      if (selectedChannel) {
+        queryClient.invalidateQueries({
+          queryKey: ["/api/v1/chat/channels", selectedChannel.id, "messages"],
+        });
+      }
+    },
+    onError: (error) => {
+      let msg = "Command failed";
+      if (error instanceof ApiError) {
+        msg = error.message;
+      } else if (error instanceof Error) {
+        msg = error.message;
+      }
+      toast({
+        title: "Command failed",
+        description: msg,
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleSlashCommandSelect = (cmd: SlashCommand) => {
+    setSlashCommandOpen(false);
+    setSlashCommandMatches([]);
+    setSlashCommandIndex(0);
+
+    if (cmd.name === "help") {
+      slashCommandMutation.mutate({
+        command: "help",
+        args: "",
+        channelId: selectedChannel?.id,
+      });
+      setMessageInput("");
+      return;
+    }
+
+    setMessageInput(`/${cmd.name} `);
+    messageInputRef.current?.focus();
+  };
+
+  const executeSlashCommand = (input: string): boolean => {
+    const parsed = parseSlashCommand(input);
+    if (!parsed) return false;
+
+    const cmd = findCommand(parsed.command);
+    if (!cmd) {
+      toast({
+        title: "Unknown command",
+        description: `"/${parsed.command}" is not a recognized command. Type /help for available commands.`,
+        variant: "destructive",
+      });
+      setMessageInput("");
+      return true;
+    }
+
+    if (cmd.requiresArgs && !parsed.args) {
+      toast({
+        title: "Missing arguments",
+        description: `Usage: ${cmd.usage}`,
+        variant: "destructive",
+      });
+      return true;
+    }
+
+    slashCommandMutation.mutate({
+      command: parsed.command,
+      args: parsed.args,
+      channelId: selectedChannel?.id,
+    });
+    return true;
+  };
+
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const readyAttachments = pendingAttachments.filter(a => !a.uploading);
     if (!messageInput.trim() && readyAttachments.length === 0) return;
+
+    if (isSlashCommandInput(messageInput) && readyAttachments.length === 0) {
+      if (executeSlashCommand(messageInput.trim())) return;
+    }
     
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
@@ -1915,6 +2032,32 @@ export default function ChatPage() {
   };
 
   const handleMessageKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    // Slash command keyboard navigation
+    if (slashCommandOpen && slashCommandMatches.length > 0) {
+      if (e.key === "ArrowDown") {
+        e.preventDefault();
+        setSlashCommandIndex((prev) => (prev + 1) % slashCommandMatches.length);
+        return;
+      }
+      if (e.key === "ArrowUp") {
+        e.preventDefault();
+        setSlashCommandIndex((prev) => (prev - 1 + slashCommandMatches.length) % slashCommandMatches.length);
+        return;
+      }
+      if (e.key === "Enter" || e.key === "Tab") {
+        e.preventDefault();
+        handleSlashCommandSelect(slashCommandMatches[slashCommandIndex]);
+        return;
+      }
+      if (e.key === "Escape") {
+        e.preventDefault();
+        setSlashCommandOpen(false);
+        setSlashCommandMatches([]);
+        setSlashCommandIndex(0);
+        return;
+      }
+    }
+
     const mentionUsers = mentionableUsersQuery.data;
     if (mentionOpen && mentionUsers && mentionUsers.length > 0) {
       if (e.key === "ArrowDown") {
@@ -2505,6 +2648,13 @@ export default function ChatPage() {
                     placeholder={`Message ${selectedChannel ? "#" + selectedChannel.name : getDmDisplayName(selectedDm!)}`}
                     disabled={sendMessageMutation.isPending}
                     data-testid="input-message"
+                  />
+                  <SlashCommandDropdown
+                    commands={slashCommandMatches}
+                    selectedIndex={slashCommandIndex}
+                    onSelect={handleSlashCommandSelect}
+                    onHover={setSlashCommandIndex}
+                    visible={slashCommandOpen}
                   />
                   {mentionOpen && mentionableUsersQuery.data && mentionableUsersQuery.data.length > 0 && (
                     <div className="absolute bottom-full left-0 w-72 mb-1 bg-popover border rounded-md shadow-lg z-50 max-h-52 overflow-y-auto py-1" data-testid="mention-popup">

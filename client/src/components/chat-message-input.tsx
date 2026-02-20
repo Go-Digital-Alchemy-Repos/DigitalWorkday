@@ -55,8 +55,8 @@ export const ChatMessageInput = forwardRef<HTMLTextAreaElement, ChatMessageInput
             data-testid="button-emoji-chat"
           />
           <span className="flex-1" />
-          <span className="text-[10px] text-muted-foreground mr-1 select-none">
-            Enter to send
+          <span className="text-[10px] text-muted-foreground mr-1 select-none" data-testid="text-composer-hint">
+            / for commands &middot; Enter to send
           </span>
         </div>
       </div>
