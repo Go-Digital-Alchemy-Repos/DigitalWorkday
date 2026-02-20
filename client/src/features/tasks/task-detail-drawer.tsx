@@ -575,6 +575,21 @@ export function TaskDetailDrawer({
     }
   };
 
+  const [isReopeningTask, setIsReopeningTask] = useState(false);
+
+  const handleMarkAsIncomplete = async () => {
+    if (task?.status !== "done") return;
+    setIsReopeningTask(true);
+    try {
+      await updateTaskStatusMutation.mutateAsync("todo");
+      toast({ title: "Task reopened", description: `"${task?.title}" marked as incomplete` });
+    } catch (error) {
+      toast({ title: "Failed to reopen task", variant: "destructive" });
+    } finally {
+      setIsReopeningTask(false);
+    }
+  };
+
   const handleTimeTrackingNo = () => {
     setShowTimeTrackingPrompt(false);
     completeTaskDirectly();
@@ -1347,6 +1362,10 @@ export function TaskDetailDrawer({
           onMarkComplete={handleMarkAsComplete}
           completeDisabled={timeEntriesLoading || isCompletingTask}
           isCompleting={isCompletingTask}
+          showIncomplete={task.status === "done"}
+          onMarkIncomplete={handleMarkAsIncomplete}
+          incompleteDisabled={isReopeningTask}
+          isIncompleting={isReopeningTask}
           extraActions={
             activeTimer && !isTimerOnThisTask ? (
               <Badge variant="secondary" className="text-xs">

@@ -1,12 +1,13 @@
 import { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Play, Save, Check, Loader2, Pause, Square } from "lucide-react";
+import { Play, Save, Check, Loader2, Pause, Square, RotateCcw } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DrawerActionBarProps {
   onStartTimer?: () => void;
   onSave?: () => void;
   onMarkComplete?: () => void;
+  onMarkIncomplete?: () => void;
   timerState?: "idle" | "running" | "paused" | "other_task" | "loading" | "hidden";
   onPauseTimer?: () => void;
   onResumeTimer?: () => void;
@@ -15,9 +16,13 @@ interface DrawerActionBarProps {
   saveLabel?: string;
   completeDisabled?: boolean;
   completeLabel?: string;
+  incompleteDisabled?: boolean;
+  incompleteLabel?: string;
   isCompleting?: boolean;
+  isIncompleting?: boolean;
   isSaving?: boolean;
   showComplete?: boolean;
+  showIncomplete?: boolean;
   showSave?: boolean;
   showTimer?: boolean;
   extraActions?: ReactNode;
@@ -28,6 +33,7 @@ export function DrawerActionBar({
   onStartTimer,
   onSave,
   onMarkComplete,
+  onMarkIncomplete,
   timerState = "idle",
   onPauseTimer,
   onResumeTimer,
@@ -36,9 +42,13 @@ export function DrawerActionBar({
   saveLabel = "Save",
   completeDisabled = false,
   completeLabel = "Mark Complete",
+  incompleteDisabled = false,
+  incompleteLabel = "Mark Incomplete",
   isCompleting = false,
+  isIncompleting = false,
   isSaving = false,
   showComplete = true,
+  showIncomplete = false,
   showSave = true,
   extraActions,
   className,
@@ -54,6 +64,23 @@ export function DrawerActionBar({
       {extraActions}
 
       <div className="flex items-center gap-2 ml-auto">
+        {showIncomplete && onMarkIncomplete && (
+          <Button
+            size="default"
+            variant="outline"
+            onClick={onMarkIncomplete}
+            disabled={incompleteDisabled || isIncompleting}
+            data-testid="button-action-mark-incomplete"
+          >
+            {isIncompleting ? (
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+            ) : (
+              <RotateCcw className="h-4 w-4 mr-1.5" />
+            )}
+            {isIncompleting ? "Reopening..." : incompleteLabel}
+          </Button>
+        )}
+
         {showSave && onSave && (
           <Button
             size="default"
