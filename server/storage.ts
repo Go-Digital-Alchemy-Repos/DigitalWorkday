@@ -554,10 +554,14 @@ export interface IStorage {
 
   // Notifications
   createNotification(notification: InsertNotification): Promise<Notification>;
-  getNotificationsByUser(userId: string, tenantId: string | null, options?: { unreadOnly?: boolean; limit?: number; offset?: number }): Promise<Notification[]>;
+  createOrDedupeNotification(notification: InsertNotification): Promise<Notification>;
+  getNotificationsByUser(userId: string, tenantId: string | null, options?: { unreadOnly?: boolean; limit?: number; offset?: number; typeFilter?: string }): Promise<Notification[]>;
+  getNotificationsByUserPaginated(userId: string, tenantId: string | null, options?: { unreadOnly?: boolean; limit?: number; cursor?: string; typeFilter?: string }): Promise<{ items: Notification[]; nextCursor: string | null; hasMore: boolean }>;
   getUnreadNotificationCount(userId: string, tenantId: string | null): Promise<number>;
   markNotificationRead(id: string, userId: string, tenantId: string | null): Promise<Notification | undefined>;
   markAllNotificationsRead(userId: string, tenantId: string | null): Promise<void>;
+  dismissNotification(id: string, userId: string, tenantId: string | null): Promise<Notification | undefined>;
+  dismissAllNotifications(userId: string, tenantId: string | null): Promise<void>;
   deleteNotification(id: string, userId: string, tenantId: string | null): Promise<void>;
 
   // Notification Preferences
@@ -4071,8 +4075,16 @@ export class DatabaseStorage implements IStorage {
     return notificationsRepo.createNotification(notification);
   }
 
-  async getNotificationsByUser(userId: string, tenantId: string | null, options?: { unreadOnly?: boolean; limit?: number; offset?: number }): Promise<Notification[]> {
+  async createOrDedupeNotification(notification: InsertNotification): Promise<Notification> {
+    return notificationsRepo.createOrDedupeNotification(notification);
+  }
+
+  async getNotificationsByUser(userId: string, tenantId: string | null, options?: { unreadOnly?: boolean; limit?: number; offset?: number; typeFilter?: string }): Promise<Notification[]> {
     return notificationsRepo.getNotificationsByUser(userId, tenantId, options);
+  }
+
+  async getNotificationsByUserPaginated(userId: string, tenantId: string | null, options?: { unreadOnly?: boolean; limit?: number; cursor?: string; typeFilter?: string }): Promise<{ items: Notification[]; nextCursor: string | null; hasMore: boolean }> {
+    return notificationsRepo.getNotificationsByUserPaginated(userId, tenantId, options);
   }
 
   async getUnreadNotificationCount(userId: string, tenantId: string | null): Promise<number> {
@@ -4085,6 +4097,14 @@ export class DatabaseStorage implements IStorage {
 
   async markAllNotificationsRead(userId: string, tenantId: string | null): Promise<void> {
     return notificationsRepo.markAllNotificationsRead(userId, tenantId);
+  }
+
+  async dismissNotification(id: string, userId: string, tenantId: string | null): Promise<Notification | undefined> {
+    return notificationsRepo.dismissNotification(id, userId, tenantId);
+  }
+
+  async dismissAllNotifications(userId: string, tenantId: string | null): Promise<void> {
+    return notificationsRepo.dismissAllNotifications(userId, tenantId);
   }
 
   async deleteNotification(id: string, userId: string, tenantId: string | null): Promise<void> {

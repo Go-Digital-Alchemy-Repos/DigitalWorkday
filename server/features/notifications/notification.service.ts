@@ -15,17 +15,29 @@ type NotificationType =
   | "project_member_added"
   | "task_status_changed"
   | "crm_followup_due"
-  | "approval_response";
+  | "approval_response"
+  | "chat_message"
+  | "client_message"
+  | "support_ticket"
+  | "work_order";
+
+type Severity = "info" | "warning" | "urgent";
 
 interface NotificationContext {
   tenantId: string | null;
   excludeUserId?: string;
 }
 
-// Validate that target user belongs to the same tenant (critical for multi-tenant isolation)
+interface EnhancedNotificationOptions {
+  severity?: Severity;
+  entityType?: string;
+  entityId?: string;
+  href?: string;
+  dedupeKey?: string;
+}
+
 async function validateUserTenant(userId: string, tenantId: string | null): Promise<boolean> {
   if (!tenantId) {
-    // No tenant context means super user scope - allow notification
     return true;
   }
   
@@ -42,7 +54,6 @@ async function shouldNotifyUser(userId: string, type: NotificationType): Promise
   try {
     const prefs = await storage.getNotificationPreferences(userId);
     
-    // If no preferences exist, default to sending notifications
     if (!prefs) {
       return true;
     }
@@ -56,15 +67,17 @@ async function shouldNotifyUser(userId: string, type: NotificationType): Promise
       project_update: "projectUpdate",
       project_member_added: "projectMemberAdded",
       task_status_changed: "taskStatusChanged",
+      chat_message: "chatMessage",
+      client_message: "clientMessage",
+      support_ticket: "supportTicket",
+      work_order: "workOrder",
       crm_followup_due: null,
       approval_response: null,
     };
     const field = typeToField[type];
     if (!field) return true;
-    // Default to true if preference is not explicitly set to false
     return prefs[field] !== false;
   } catch {
-    // On any error, default to sending notifications
     return true;
   }
 }
@@ -75,13 +88,13 @@ async function createAndEmitNotification(
   title: string,
   message: string | null,
   payloadJson: unknown,
-  context: NotificationContext
+  context: NotificationContext,
+  options?: EnhancedNotificationOptions
 ): Promise<void> {
   if (context.excludeUserId === userId) {
     return;
   }
   
-  // Validate tenant isolation - user must belong to same tenant
   const isSameTenant = await validateUserTenant(userId, context.tenantId);
   if (!isSameTenant) {
     console.warn(`[notifications] Blocked notification to user ${userId} - tenant mismatch`);
@@ -93,14 +106,23 @@ async function createAndEmitNotification(
     return;
   }
 
-  const notification = await storage.createNotification({
+  const insertData = {
     tenantId: context.tenantId,
     userId,
     type,
     title,
     message,
     payloadJson: payloadJson as Record<string, unknown>,
-  });
+    severity: options?.severity || "info",
+    entityType: options?.entityType || null,
+    entityId: options?.entityId || null,
+    href: options?.href || null,
+    dedupeKey: options?.dedupeKey || null,
+  };
+
+  const notification = options?.dedupeKey
+    ? await storage.createOrDedupeNotification(insertData)
+    : await storage.createNotification(insertData);
 
   const payload: NotificationPayload = {
     id: notification.id,
@@ -110,6 +132,11 @@ async function createAndEmitNotification(
     title: notification.title,
     message: notification.message,
     payloadJson: notification.payloadJson,
+    severity: notification.severity,
+    entityType: notification.entityType,
+    entityId: notification.entityId,
+    href: notification.href,
+    isDismissed: notification.isDismissed,
     readAt: notification.readAt,
     createdAt: notification.createdAt,
   };
@@ -131,7 +158,8 @@ export async function notifyTaskAssigned(
     `New task assigned: ${taskTitle}`,
     `${assignerName} assigned you a task in ${projectName}`,
     { taskId, projectName },
-    context
+    context,
+    { entityType: "task", entityId: taskId, href: `/tasks?taskId=${taskId}` }
   );
 }
 
@@ -148,7 +176,8 @@ export async function notifyTaskCompleted(
     `Task completed: ${taskTitle}`,
     `${completedByName} completed this task`,
     { taskId },
-    context
+    context,
+    { entityType: "task", entityId: taskId, href: `/tasks?taskId=${taskId}` }
   );
 }
 
@@ -166,7 +195,8 @@ export async function notifyTaskStatusChanged(
     `Status changed: ${taskTitle}`,
     `${changedByName} changed status to ${newStatus}`,
     { taskId, status: newStatus },
-    context
+    context,
+    { entityType: "task", entityId: taskId, href: `/tasks?taskId=${taskId}` }
   );
 }
 
@@ -188,7 +218,8 @@ export async function notifyCommentAdded(
     `New comment on: ${taskTitle}`,
     `${commenterName}: ${preview}`,
     { taskId },
-    context
+    context,
+    { entityType: "task", entityId: taskId, href: `/tasks?taskId=${taskId}` }
   );
 }
 
@@ -210,7 +241,8 @@ export async function notifyCommentMention(
     `${mentionerName} mentioned you`,
     `In task "${taskTitle}": ${preview}`,
     { taskId },
-    context
+    context,
+    { entityType: "task", entityId: taskId, href: `/tasks?taskId=${taskId}`, severity: "warning" }
   );
 }
 
@@ -227,7 +259,8 @@ export async function notifyProjectMemberAdded(
     `Added to project: ${projectName}`,
     `${addedByName} added you to this project`,
     { projectId },
-    context
+    context,
+    { entityType: "project", entityId: projectId, href: `/projects/${projectId}` }
   );
 }
 
@@ -244,7 +277,8 @@ export async function notifyProjectUpdate(
     `Project update: ${projectName}`,
     updateDescription,
     { projectId },
-    context
+    context,
+    { entityType: "project", entityId: projectId, href: `/projects/${projectId}` }
   );
 }
 
@@ -262,7 +296,14 @@ export async function notifyTaskDeadlineApproaching(
     `Task due soon: ${taskTitle}`,
     `This task is due on ${dueDateStr}`,
     { taskId, dueDate: dueDate.toISOString() },
-    context
+    context,
+    {
+      severity: "warning",
+      entityType: "task",
+      entityId: taskId,
+      href: `/tasks?taskId=${taskId}`,
+      dedupeKey: `deadline:${taskId}`,
+    }
   );
 }
 
@@ -280,12 +321,191 @@ export async function notifyFollowUpDue(
     `Follow-up due: ${clientName}`,
     `Client follow-up is due on ${dueDateStr}`,
     { clientId, followUpDate: followUpDate.toISOString() },
-    context
+    context,
+    {
+      severity: "warning",
+      entityType: "client",
+      entityId: clientId,
+      href: `/clients/${clientId}`,
+      dedupeKey: `followup:${clientId}`,
+    }
   );
 }
 
-// Check for upcoming task deadlines and send notifications
-// This should be called periodically (e.g., daily) by a scheduler
+export async function notifyChatMessage(
+  userId: string,
+  channelId: string,
+  channelName: string,
+  senderName: string,
+  messagePreview: string,
+  context: NotificationContext
+): Promise<void> {
+  const preview = messagePreview.length > 80
+    ? messagePreview.slice(0, 80) + "..."
+    : messagePreview;
+
+  await createAndEmitNotification(
+    userId,
+    "chat_message",
+    `New message in #${channelName}`,
+    `${senderName}: ${preview}`,
+    { channelId },
+    context,
+    {
+      entityType: "channel",
+      entityId: channelId,
+      href: `/chat?channel=${channelId}`,
+      dedupeKey: `chat:${channelId}`,
+    }
+  );
+}
+
+export async function notifyDirectMessage(
+  userId: string,
+  senderId: string,
+  senderName: string,
+  messagePreview: string,
+  context: NotificationContext
+): Promise<void> {
+  const preview = messagePreview.length > 80
+    ? messagePreview.slice(0, 80) + "..."
+    : messagePreview;
+
+  await createAndEmitNotification(
+    userId,
+    "chat_message",
+    `New message from ${senderName}`,
+    preview,
+    { senderId },
+    context,
+    {
+      entityType: "dm",
+      entityId: senderId,
+      href: `/chat?dm=${senderId}`,
+      dedupeKey: `dm:${senderId}`,
+    }
+  );
+}
+
+export async function notifyClientMessage(
+  userId: string,
+  clientId: string,
+  clientName: string,
+  threadId: string,
+  messagePreview: string,
+  context: NotificationContext
+): Promise<void> {
+  const preview = messagePreview.length > 80
+    ? messagePreview.slice(0, 80) + "..."
+    : messagePreview;
+
+  await createAndEmitNotification(
+    userId,
+    "client_message",
+    `Client message from ${clientName}`,
+    preview,
+    { clientId, threadId },
+    context,
+    {
+      entityType: "client_thread",
+      entityId: threadId,
+      href: `/clients/${clientId}/messages?thread=${threadId}`,
+      dedupeKey: `client_msg:${threadId}`,
+    }
+  );
+}
+
+export async function notifySupportTicketCreated(
+  userId: string,
+  ticketId: string,
+  ticketTitle: string,
+  submittedByName: string,
+  context: NotificationContext
+): Promise<void> {
+  await createAndEmitNotification(
+    userId,
+    "support_ticket",
+    `New support ticket: ${ticketTitle}`,
+    `Submitted by ${submittedByName}`,
+    { ticketId },
+    context,
+    {
+      entityType: "support_ticket",
+      entityId: ticketId,
+      href: `/support/tickets/${ticketId}`,
+    }
+  );
+}
+
+export async function notifySupportTicketUpdated(
+  userId: string,
+  ticketId: string,
+  ticketTitle: string,
+  updatedByName: string,
+  updateDescription: string,
+  context: NotificationContext
+): Promise<void> {
+  await createAndEmitNotification(
+    userId,
+    "support_ticket",
+    `Ticket updated: ${ticketTitle}`,
+    `${updatedByName}: ${updateDescription}`,
+    { ticketId },
+    context,
+    {
+      entityType: "support_ticket",
+      entityId: ticketId,
+      href: `/support/tickets/${ticketId}`,
+      dedupeKey: `ticket:${ticketId}`,
+    }
+  );
+}
+
+export async function notifySupportTicketAssigned(
+  userId: string,
+  ticketId: string,
+  ticketTitle: string,
+  assignedByName: string,
+  context: NotificationContext
+): Promise<void> {
+  await createAndEmitNotification(
+    userId,
+    "support_ticket",
+    `Ticket assigned to you: ${ticketTitle}`,
+    `${assignedByName} assigned this ticket to you`,
+    { ticketId },
+    context,
+    {
+      severity: "warning",
+      entityType: "support_ticket",
+      entityId: ticketId,
+      href: `/support/tickets/${ticketId}`,
+    }
+  );
+}
+
+export async function notifyWorkOrderCreated(
+  userId: string,
+  workOrderId: string,
+  workOrderTitle: string,
+  createdByName: string,
+  context: NotificationContext
+): Promise<void> {
+  await createAndEmitNotification(
+    userId,
+    "work_order",
+    `New work order: ${workOrderTitle}`,
+    `Created by ${createdByName}`,
+    { workOrderId },
+    context,
+    {
+      entityType: "work_order",
+      entityId: workOrderId,
+      href: `/support/work-orders/${workOrderId}`,
+    }
+  );
+}
+
 export async function checkUpcomingDeadlines(): Promise<void> {
   try {
     const now = new Date();
@@ -293,7 +513,6 @@ export async function checkUpcomingDeadlines(): Promise<void> {
     tomorrow.setDate(tomorrow.getDate() + 1);
     tomorrow.setHours(23, 59, 59, 999);
     
-    // Get all tasks with due dates within the next 24 hours
     const upcomingTasks = await storage.getTasksDueSoon(tomorrow);
     
     for (const task of upcomingTasks) {
@@ -321,7 +540,6 @@ export async function checkUpcomingDeadlines(): Promise<void> {
   }
 }
 
-// Start the deadline checker interval (runs every 6 hours)
 let deadlineCheckerInterval: NodeJS.Timeout | null = null;
 
 export function startDeadlineChecker(): void {
@@ -329,12 +547,10 @@ export function startDeadlineChecker(): void {
     clearInterval(deadlineCheckerInterval);
   }
   
-  // Run once on startup (after a short delay)
   setTimeout(() => {
     checkUpcomingDeadlines().catch(console.error);
   }, 10000);
   
-  // Then run every 6 hours
   const SIX_HOURS = 6 * 60 * 60 * 1000;
   deadlineCheckerInterval = setInterval(() => {
     checkUpcomingDeadlines().catch(console.error);
@@ -414,7 +630,8 @@ export async function notifyApprovalResponse(
     `Approval ${statusLabel}: ${approvalTitle}`,
     `${respondedByName} ${status === "approved" ? "approved" : "requested changes on"} "${approvalTitle}"`,
     { approvalId, status },
-    context
+    context,
+    { entityType: "approval", entityId: approvalId }
   );
 }
 

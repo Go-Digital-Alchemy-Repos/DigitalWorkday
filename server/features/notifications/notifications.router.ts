@@ -11,26 +11,33 @@ function getCurrentUserId(req: Request): string {
 
 const router = Router();
 
-// Get notifications for current user
 router.get("/notifications", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
-    const { unreadOnly, limit, offset } = req.query;
-    
-    const notifications = await storage.getNotificationsByUser(userId, tenantId, {
+    const { unreadOnly, limit, cursor, typeFilter } = req.query;
+
+    if (cursor) {
+      const result = await storage.getNotificationsByUserPaginated(userId, tenantId, {
+        unreadOnly: unreadOnly === "true",
+        limit: limit ? parseInt(limit as string) : 30,
+        cursor: cursor as string,
+        typeFilter: typeFilter as string | undefined,
+      });
+      return res.json(result);
+    }
+
+    const result = await storage.getNotificationsByUserPaginated(userId, tenantId, {
       unreadOnly: unreadOnly === "true",
-      limit: limit ? parseInt(limit as string) : 50,
-      offset: offset ? parseInt(offset as string) : 0,
+      limit: limit ? parseInt(limit as string) : 30,
+      typeFilter: typeFilter as string | undefined,
     });
-    
-    res.json(notifications);
+    res.json(result);
   } catch (error) {
     return handleRouteError(res, error, "GET /notifications", req);
   }
 });
 
-// Get unread notification count
 router.get("/notifications/unread-count", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
@@ -42,7 +49,6 @@ router.get("/notifications/unread-count", async (req, res) => {
   }
 });
 
-// Mark a notification as read
 router.patch("/notifications/:id/read", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
@@ -60,7 +66,6 @@ router.patch("/notifications/:id/read", async (req, res) => {
   }
 });
 
-// Mark all notifications as read
 router.post("/notifications/mark-all-read", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
@@ -72,7 +77,34 @@ router.post("/notifications/mark-all-read", async (req, res) => {
   }
 });
 
-// Delete a notification
+router.patch("/notifications/:id/dismiss", async (req, res) => {
+  try {
+    const userId = getCurrentUserId(req);
+    const tenantId = getEffectiveTenantId(req);
+    const { id } = req.params;
+
+    const notification = await storage.dismissNotification(id, userId, tenantId);
+    if (!notification) {
+      throw AppError.notFound("Notification");
+    }
+
+    res.json(notification);
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /notifications/:id/dismiss", req);
+  }
+});
+
+router.post("/notifications/dismiss-all", async (req, res) => {
+  try {
+    const userId = getCurrentUserId(req);
+    const tenantId = getEffectiveTenantId(req);
+    await storage.dismissAllNotifications(userId, tenantId);
+    res.json({ success: true });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /notifications/dismiss-all", req);
+  }
+});
+
 router.delete("/notifications/:id", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
@@ -86,7 +118,6 @@ router.delete("/notifications/:id", async (req, res) => {
   }
 });
 
-// Default notification preferences for when table doesn't exist or user has no preferences
 function getDefaultPreferences(userId: string, tenantId: string | null) {
   return {
     id: "default",
@@ -100,13 +131,16 @@ function getDefaultPreferences(userId: string, tenantId: string | null) {
     projectUpdate: true,
     projectMemberAdded: true,
     taskStatusChanged: true,
+    chatMessage: true,
+    clientMessage: true,
+    supportTicket: true,
+    workOrder: true,
     emailEnabled: false,
     createdAt: new Date(),
     updatedAt: new Date(),
   };
 }
 
-// Get notification preferences
 router.get("/notifications/preferences", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
@@ -115,14 +149,13 @@ router.get("/notifications/preferences", async (req, res) => {
     let prefs = await storage.getNotificationPreferences(userId);
     
     if (!prefs) {
-      // Try to create preferences, fall back to defaults if table doesn't exist
       try {
         prefs = await storage.upsertNotificationPreferences(userId, {
           tenantId: tenantId || undefined,
         });
       } catch (error) {
         console.warn("[notifications] Could not create preferences, using defaults:", error);
-        prefs = getDefaultPreferences(userId, tenantId);
+        prefs = getDefaultPreferences(userId, tenantId) as any;
       }
     }
     
@@ -134,7 +167,6 @@ router.get("/notifications/preferences", async (req, res) => {
   }
 });
 
-// Update notification preferences
 const updatePreferencesSchema = z.object({
   taskDeadline: z.boolean().optional(),
   taskAssigned: z.boolean().optional(),
@@ -144,6 +176,10 @@ const updatePreferencesSchema = z.object({
   projectUpdate: z.boolean().optional(),
   projectMemberAdded: z.boolean().optional(),
   taskStatusChanged: z.boolean().optional(),
+  chatMessage: z.boolean().optional(),
+  clientMessage: z.boolean().optional(),
+  supportTicket: z.boolean().optional(),
+  workOrder: z.boolean().optional(),
   emailEnabled: z.boolean().optional(),
 });
 
