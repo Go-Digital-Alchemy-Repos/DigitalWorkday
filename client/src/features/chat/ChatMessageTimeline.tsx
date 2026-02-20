@@ -34,6 +34,7 @@ import {
   Download,
   FileText,
   Eye,
+  Pin,
 } from "lucide-react";
 import { useIsMobile } from "@/hooks/use-mobile";
 
@@ -124,6 +125,10 @@ interface ChatMessageTimelineProps {
   formatFileSize?: (bytes: number) => string;
   onAddReaction?: (messageId: string, emoji: string) => void;
   onRemoveReaction?: (messageId: string, emoji: string) => void;
+  onPinMessage?: (messageId: string) => void;
+  onUnpinMessage?: (messageId: string) => void;
+  pinnedMessageIds?: Set<string>;
+  canPin?: boolean;
   isDm?: boolean;
   className?: string;
 }
@@ -316,6 +321,10 @@ export function ChatMessageTimeline({
   formatFileSize,
   onAddReaction,
   onRemoveReaction,
+  onPinMessage,
+  onUnpinMessage,
+  pinnedMessageIds,
+  canPin = false,
   isDm = false,
   className,
 }: ChatMessageTimelineProps) {
@@ -633,6 +642,12 @@ export function ChatMessageTimeline({
                                   {message.editedAt && !isDeleted && (
                                     <span className="text-xs text-muted-foreground flex-shrink-0">(edited)</span>
                                   )}
+                                  {pinnedMessageIds?.has(message.id) && (
+                                    <span className="text-xs text-muted-foreground flex items-center gap-0.5 flex-shrink-0" data-testid={`message-pinned-indicator-${message.id}`}>
+                                      <Pin className="h-3 w-3" />
+                                      Pinned
+                                    </span>
+                                  )}
                                 </div>
 
                                 {isFailed && message._tempId && (
@@ -860,6 +875,25 @@ export function ChatMessageTimeline({
                                       <MessagesSquare className="h-4 w-4 mr-2" />
                                       Reply in thread
                                     </DropdownMenuItem>
+                                  )}
+                                  {canPin && !isDm && !message.parentMessageId && (
+                                    pinnedMessageIds?.has(message.id) ? (
+                                      <DropdownMenuItem
+                                        onClick={() => onUnpinMessage?.(message.id)}
+                                        data-testid={`message-unpin-${message.id}`}
+                                      >
+                                        <Pin className="h-4 w-4 mr-2" />
+                                        Unpin message
+                                      </DropdownMenuItem>
+                                    ) : (
+                                      <DropdownMenuItem
+                                        onClick={() => onPinMessage?.(message.id)}
+                                        data-testid={`message-pin-${message.id}`}
+                                      >
+                                        <Pin className="h-4 w-4 mr-2" />
+                                        Pin message
+                                      </DropdownMenuItem>
+                                    )
                                   )}
                                   {canEdit && (
                                     <DropdownMenuItem

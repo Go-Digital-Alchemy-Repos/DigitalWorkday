@@ -57,6 +57,7 @@ import {
   type ChatDmMember, type InsertChatDmMember,
   type ChatMessage, type InsertChatMessage,
   type ChatAttachment, type InsertChatAttachment,
+  type ChatPin, type InsertChatPin,
   type ChatExportJob, type InsertChatExportJob,
   type ErrorLog, type InsertErrorLog,
   type ClientDivision, type InsertClientDivision,
@@ -483,6 +484,13 @@ export interface IStorage {
   getChatAttachment(id: string): Promise<ChatAttachment | undefined>;
   getChatAttachmentsByTenantAndIds(tenantId: string, ids: string[]): Promise<ChatAttachment[]>;
   linkChatAttachmentsToMessage(messageId: string, attachmentIds: string[]): Promise<void>;
+
+  // Chat - Pins
+  getPinnedMessages(channelId: string, tenantId: string): Promise<any[]>;
+  createPin(pin: InsertChatPin): Promise<ChatPin>;
+  deletePin(channelId: string, messageId: string, tenantId: string): Promise<boolean>;
+  getPin(channelId: string, messageId: string): Promise<ChatPin | undefined>;
+  getPinCount(channelId: string): Promise<number>;
 
   // Chat - Read Tracking
   upsertChatRead(tenantId: string, userId: string, targetType: "channel" | "dm", targetId: string, lastReadMessageId: string): Promise<{ lastReadAt: Date }>;
@@ -3711,6 +3719,26 @@ export class DatabaseStorage implements IStorage {
 
   async linkChatAttachmentsToMessage(messageId: string, attachmentIds: string[]): Promise<void> {
     return chatRepo.linkChatAttachmentsToMessage(messageId, attachmentIds);
+  }
+
+  async getPinnedMessages(channelId: string, tenantId: string): Promise<any[]> {
+    return chatRepo.getPinnedMessages(channelId, tenantId);
+  }
+
+  async createPin(pin: InsertChatPin): Promise<ChatPin> {
+    return chatRepo.createPin(pin);
+  }
+
+  async deletePin(channelId: string, messageId: string, tenantId: string): Promise<boolean> {
+    return chatRepo.deletePin(channelId, messageId, tenantId);
+  }
+
+  async getPin(channelId: string, messageId: string): Promise<ChatPin | undefined> {
+    return chatRepo.getPin(channelId, messageId);
+  }
+
+  async getPinCount(channelId: string): Promise<number> {
+    return chatRepo.getPinCount(channelId);
   }
 
   async upsertChatRead(tenantId: string, userId: string, targetType: "channel" | "dm", targetId: string, lastReadMessageId: string): Promise<{ lastReadAt: Date }> {

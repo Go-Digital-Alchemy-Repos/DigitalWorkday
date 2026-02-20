@@ -519,4 +519,120 @@ router.delete(
   })
 );
 
+router.get(
+  "/channels/:channelId/pins",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const channel = await storage.getChatChannel(req.params.channelId);
+    if (!channel || channel.tenantId !== tenantId) {
+      throw AppError.notFound("Channel not found");
+    }
+
+    if (channel.isPrivate) {
+      const member = await storage.getChatChannelMember(req.params.channelId, userId);
+      if (!member) {
+        throw AppError.forbidden("You are not a member of this private channel");
+      }
+    }
+
+    const pins = await storage.getPinnedMessages(req.params.channelId, tenantId);
+    res.json(pins);
+  })
+);
+
+router.post(
+  "/channels/:channelId/pins",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const { messageId } = req.body;
+    if (!messageId) throw AppError.badRequest("messageId is required");
+
+    const channel = await storage.getChatChannel(req.params.channelId);
+    if (!channel || channel.tenantId !== tenantId) {
+      throw AppError.notFound("Channel not found");
+    }
+
+    const user = await storage.getUser(userId);
+    const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+    const isChannelOwner = channel.createdBy === userId;
+    if (!isAdmin && !isChannelOwner) {
+      throw AppError.forbidden("Only admins or channel owners can pin messages");
+    }
+
+    const message = await storage.getChatMessage(messageId);
+    if (!message || message.channelId !== req.params.channelId || message.tenantId !== tenantId) {
+      throw AppError.badRequest("Message does not belong to this channel");
+    }
+
+    if (message.parentMessageId) {
+      throw AppError.badRequest("Thread replies cannot be pinned");
+    }
+
+    const existingPin = await storage.getPin(req.params.channelId, messageId);
+    if (existingPin) {
+      throw AppError.badRequest("Message is already pinned");
+    }
+
+    const pin = await storage.createPin({
+      tenantId,
+      channelId: req.params.channelId,
+      messageId,
+      pinnedByUserId: userId,
+    });
+
+    emitToChatChannel(req.params.channelId, CHAT_EVENTS.MESSAGE_PINNED, {
+      channelId: req.params.channelId,
+      messageId,
+      pinnedByUserId: userId,
+      pinnedByName: user?.name || user?.email || "Unknown",
+    });
+
+    res.status(201).json(pin);
+  })
+);
+
+router.delete(
+  "/channels/:channelId/pins",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const { messageId } = req.body;
+    if (!messageId) throw AppError.badRequest("messageId is required");
+
+    const channel = await storage.getChatChannel(req.params.channelId);
+    if (!channel || channel.tenantId !== tenantId) {
+      throw AppError.notFound("Channel not found");
+    }
+
+    const user = await storage.getUser(userId);
+    const isAdmin = user?.role === "admin" || user?.role === "super_admin";
+    const isChannelOwner = channel.createdBy === userId;
+    if (!isAdmin && !isChannelOwner) {
+      throw AppError.forbidden("Only admins or channel owners can unpin messages");
+    }
+
+    const deleted = await storage.deletePin(req.params.channelId, messageId, tenantId);
+    if (!deleted) {
+      throw AppError.notFound("Pin not found");
+    }
+
+    emitToChatChannel(req.params.channelId, CHAT_EVENTS.MESSAGE_UNPINNED, {
+      channelId: req.params.channelId,
+      messageId,
+      pinnedByUserId: userId,
+      pinnedByName: user?.name || user?.email || "Unknown",
+    });
+
+    res.json({ success: true });
+  })
+);
+
 export default router;

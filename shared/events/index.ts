@@ -534,6 +534,8 @@ export const CHAT_EVENTS = {
   CONVERSATION_READ: 'chat:conversationRead',
   TYPING_UPDATE: 'chat:typing:update',
   THREAD_REPLY_CREATED: 'chat:thread:replyCreated',
+  MESSAGE_PINNED: 'chat:messagePinned',
+  MESSAGE_UNPINNED: 'chat:messageUnpinned',
 } as const;
 
 export const TYPING_EVENTS = {
@@ -598,6 +600,13 @@ export interface ChatMessageReactionPayload {
     name: string;
     avatarUrl: string | null;
   };
+}
+
+export interface ChatPinPayload {
+  channelId: string;
+  messageId: string;
+  pinnedByUserId: string;
+  pinnedByName: string;
 }
 
 export interface ChatChannelCreatedPayload {
@@ -825,6 +834,8 @@ export type ServerToClientEvents = {
   [CHAT_EVENTS.CONVERSATION_READ]: (payload: ChatConversationReadPayload) => void;
   [CHAT_EVENTS.TYPING_UPDATE]: (payload: ChatTypingUpdatePayload) => void;
   [CHAT_EVENTS.THREAD_REPLY_CREATED]: (payload: ChatNewMessagePayload) => void;
+  [CHAT_EVENTS.MESSAGE_PINNED]: (payload: ChatPinPayload) => void;
+  [CHAT_EVENTS.MESSAGE_UNPINNED]: (payload: ChatPinPayload) => void;
   // Connection events
   [CONNECTION_EVENTS.CONNECTED]: (payload: ConnectionConnectedPayload) => void;
   // Notification events

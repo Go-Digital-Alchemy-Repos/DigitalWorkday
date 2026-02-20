@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, ApiError } from "@/lib/queryClient";
-import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanelToggle, type ReadByUser } from "@/features/chat";
+import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanelToggle, PinnedMessagesPanel, type ReadByUser } from "@/features/chat";
 
 const LazyChatContextPanel = lazy(() =>
   import("@/features/chat/ChatContextPanel").then((mod) => ({
@@ -70,6 +70,7 @@ import {
   Wifi,
   WifiOff,
   ArrowLeft,
+  Pin,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -285,6 +286,8 @@ export default function ChatPage() {
 
   // Members drawer state
   const [membersDrawerOpen, setMembersDrawerOpen] = useState(false);
+  // Pinned messages panel state
+  const [pinnedPanelOpen, setPinnedPanelOpen] = useState(false);
   const [addMemberSearchQuery, setAddMemberSearchQuery] = useState("");
   const [removeMemberConfirmUserId, setRemoveMemberConfirmUserId] = useState<string | null>(null);
 
@@ -296,6 +299,7 @@ export default function ChatPage() {
     const currentId = selectedChannel?.id ?? selectedDm?.id ?? null;
     if (prevConversationRef.current !== null && prevConversationRef.current !== currentId) {
       setThreadParentMessage(null);
+      setPinnedPanelOpen(false);
     }
     prevConversationRef.current = currentId;
   }, [selectedChannel?.id, selectedDm?.id]);
@@ -412,6 +416,22 @@ export default function ChatPage() {
     queryKey: ["/api/v1/chat/dm", selectedDm?.id, "messages"],
     enabled: !!selectedDm,
   });
+
+  const pinnedMessagesQuery = useQuery<any[]>({
+    queryKey: ["/api/v1/chat/channels", selectedChannel?.id, "pins"],
+    enabled: !!selectedChannel,
+  });
+  const pinnedMessages = pinnedMessagesQuery.data ?? [];
+  const pinnedMessageIds = useMemo(
+    () => new Set(pinnedMessages.map((p: any) => p.messageId)),
+    [pinnedMessages]
+  );
+  const canPin = useMemo(() => {
+    if (!selectedChannel || !user) return false;
+    const isAdmin = user.role === "admin" || user.role === "super_admin";
+    const isOwner = selectedChannel.createdBy === user.id;
+    return isAdmin || isOwner;
+  }, [selectedChannel, user]);
 
   const debouncedSearchQuery = useDebounce(searchQuery, 250);
   const searchResultsQuery = useQuery<{ messages: SearchResult[]; total: number }>({
@@ -1404,6 +1424,14 @@ export default function ChatPage() {
     socket.on(CHAT_EVENTS.CONVERSATION_READ as any, handleConversationRead as any);
     socket.on(CHAT_EVENTS.THREAD_REPLY_CREATED as any, handleThreadReply as any);
 
+    const handlePinChange = () => {
+      if (selectedChannel) {
+        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel.id, "pins"] });
+      }
+    };
+    socket.on(CHAT_EVENTS.MESSAGE_PINNED as any, handlePinChange);
+    socket.on(CHAT_EVENTS.MESSAGE_UNPINNED as any, handlePinChange);
+
     return () => {
       socket.off(CHAT_EVENTS.NEW_MESSAGE as any, handleNewMessage as any);
       socket.off(CHAT_EVENTS.MESSAGE_UPDATED as any, handleMessageUpdated as any);
@@ -1415,6 +1443,8 @@ export default function ChatPage() {
       socket.off(CHAT_EVENTS.MEMBER_REMOVED as any, handleMemberRemoved as any);
       socket.off(CHAT_EVENTS.CONVERSATION_READ as any, handleConversationRead as any);
       socket.off(CHAT_EVENTS.THREAD_REPLY_CREATED as any, handleThreadReply as any);
+      socket.off(CHAT_EVENTS.MESSAGE_PINNED as any, handlePinChange);
+      socket.off(CHAT_EVENTS.MESSAGE_UNPINNED as any, handlePinChange);
     };
   }, [selectedChannel, selectedDm, user?.id]);
 
@@ -1655,6 +1685,34 @@ export default function ChatPage() {
     },
     onError: (error: Error) => {
       toast({ title: "Failed to remove reaction", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const pinMessageMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      if (!selectedChannel) throw new Error("No channel selected");
+      return apiRequest("POST", `/api/v1/chat/channels/${selectedChannel.id}/pins`, { messageId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel?.id, "pins"] });
+      toast({ title: "Message pinned" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to pin message", description: error.message, variant: "destructive" });
+    },
+  });
+
+  const unpinMessageMutation = useMutation({
+    mutationFn: async (messageId: string) => {
+      if (!selectedChannel) throw new Error("No channel selected");
+      return apiRequest("DELETE", `/api/v1/chat/channels/${selectedChannel.id}/pins`, { messageId });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel?.id, "pins"] });
+      toast({ title: "Message unpinned" });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Failed to unpin message", description: error.message, variant: "destructive" });
     },
   });
 
@@ -2133,16 +2191,31 @@ export default function ChatPage() {
                   </div>
                 )}
                 {selectedChannel && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setMembersDrawerOpen(true)}
-                    className="gap-1"
-                    data-testid="button-channel-members"
-                  >
-                    <Users className="h-4 w-4" />
-                    <span className="text-xs">Members</span>
-                  </Button>
+                  <>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setPinnedPanelOpen(prev => !prev)}
+                      className="gap-1"
+                      data-testid="button-pinned-messages"
+                    >
+                      <Pin className="h-4 w-4" />
+                      <span className="text-xs">Pins</span>
+                      {pinnedMessages.length > 0 && (
+                        <span className="text-xs text-muted-foreground">({pinnedMessages.length})</span>
+                      )}
+                    </Button>
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setMembersDrawerOpen(true)}
+                      className="gap-1"
+                      data-testid="button-channel-members"
+                    >
+                      <Users className="h-4 w-4" />
+                      <span className="text-xs">Members</span>
+                    </Button>
+                  </>
                 )}
                 <Button
                   variant="ghost"
@@ -2199,6 +2272,16 @@ export default function ChatPage() {
               </div>
             </div>
 
+            {pinnedPanelOpen && selectedChannel && (
+              <PinnedMessagesPanel
+                pinnedMessages={pinnedMessages}
+                onClose={() => setPinnedPanelOpen(false)}
+                onUnpin={(messageId) => unpinMessageMutation.mutate(messageId)}
+                canUnpin={canPin}
+                renderMessageBody={renderMessageBody}
+              />
+            )}
+
             <ChatMessageTimeline
               messages={messages}
               currentUserId={user?.id}
@@ -2211,6 +2294,10 @@ export default function ChatPage() {
               onDeleteMessage={(messageId) => deleteMessageMutation.mutate(messageId)}
               onAddReaction={(messageId, emoji) => addReactionMutation.mutate({ messageId, emoji })}
               onRemoveReaction={(messageId, emoji) => removeReactionMutation.mutate({ messageId, emoji })}
+              onPinMessage={(messageId) => pinMessageMutation.mutate(messageId)}
+              onUnpinMessage={(messageId) => unpinMessageMutation.mutate(messageId)}
+              pinnedMessageIds={pinnedMessageIds}
+              canPin={canPin}
               onRetryMessage={retryFailedMessage}
               onRemoveFailedMessage={removeFailedMessage}
               onCopyMessage={handleCopyMessage}

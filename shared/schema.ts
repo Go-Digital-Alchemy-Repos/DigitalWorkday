@@ -1706,6 +1706,22 @@ export const chatMentions = pgTable("chat_mentions", {
 ]);
 
 /**
+ * Chat Pins table - pinned messages in channels
+ */
+export const chatPins = pgTable("chat_pins", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  channelId: varchar("channel_id").references(() => chatChannels.id).notNull(),
+  messageId: varchar("message_id").references(() => chatMessages.id).notNull(),
+  pinnedByUserId: varchar("pinned_by_user_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("chat_pins_channel_message_unique").on(table.channelId, table.messageId),
+  index("chat_pins_tenant_idx").on(table.tenantId),
+  index("chat_pins_channel_idx").on(table.channelId),
+]);
+
+/**
  * Chat Export Jobs - Tracks background export jobs for chat data backup
  * Super Admin only feature for exporting chat data before purge
  */
@@ -2608,6 +2624,11 @@ export const insertChatMentionSchema = createInsertSchema(chatMentions).omit({
   createdAt: true,
 });
 
+export const insertChatPinSchema = createInsertSchema(chatPins).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertChatExportJobSchema = createInsertSchema(chatExportJobs).omit({
   id: true,
   createdAt: true,
@@ -2944,6 +2965,9 @@ export type ChatAttachment = typeof chatAttachments.$inferSelect;
 export type InsertChatAttachment = z.infer<typeof insertChatAttachmentSchema>;
 
 export type ChatMessageReaction = typeof chatMessageReactions.$inferSelect;
+
+export type ChatPin = typeof chatPins.$inferSelect;
+export type InsertChatPin = z.infer<typeof insertChatPinSchema>;
 
 // Chat extended types
 export type ChatChannelWithMembers = ChatChannel & {

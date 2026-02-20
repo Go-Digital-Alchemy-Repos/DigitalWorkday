@@ -8,11 +8,12 @@ import {
   type ChatAttachment, type InsertChatAttachment,
   type ChatExportJob, type InsertChatExportJob,
   type ChatMessageReaction,
+  type ChatPin, type InsertChatPin,
   users,
   chatChannels, chatChannelMembers,
   chatDmThreads, chatDmMembers,
   chatMessages, chatAttachments, chatReads, chatExportJobs,
-  chatMessageReactions,
+  chatMessageReactions, chatPins,
 } from "@shared/schema";
 import { db } from "../db";
 import { eq, and, desc, asc, inArray, gte, lte, gt, isNull, sql, ilike, or, type SQL } from "drizzle-orm";
@@ -919,5 +920,60 @@ export class ChatRepository {
     query = query.limit(limit) as any;
     
     return query;
+  }
+
+  async getPinnedMessages(channelId: string, tenantId: string): Promise<(ChatPin & { message: ChatMessage & { author: User }; pinnedBy: User })[]> {
+    const rows = await db
+      .select({
+        pin: chatPins,
+        message: chatMessages,
+        author: users,
+      })
+      .from(chatPins)
+      .innerJoin(chatMessages, eq(chatPins.messageId, chatMessages.id))
+      .innerJoin(users, eq(chatMessages.authorUserId, users.id))
+      .where(and(eq(chatPins.channelId, channelId), eq(chatPins.tenantId, tenantId)))
+      .orderBy(desc(chatPins.createdAt));
+
+    const pinnedByUserIds = [...new Set(rows.map(r => r.pin.pinnedByUserId))];
+    const pinnedByUsers = pinnedByUserIds.length > 0
+      ? await db.select().from(users).where(inArray(users.id, pinnedByUserIds))
+      : [];
+    const pinnedByMap = new Map(pinnedByUsers.map(u => [u.id, u]));
+
+    return rows.map(r => ({
+      ...r.pin,
+      message: { ...r.message, author: r.author },
+      pinnedBy: pinnedByMap.get(r.pin.pinnedByUserId)!,
+    }));
+  }
+
+  async createPin(pin: InsertChatPin): Promise<ChatPin> {
+    const [created] = await db.insert(chatPins).values(pin).returning();
+    return created;
+  }
+
+  async deletePin(channelId: string, messageId: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(chatPins)
+      .where(and(
+        eq(chatPins.channelId, channelId),
+        eq(chatPins.messageId, messageId),
+        eq(chatPins.tenantId, tenantId),
+      ))
+      .returning();
+    return result.length > 0;
+  }
+
+  async getPin(channelId: string, messageId: string): Promise<ChatPin | undefined> {
+    const [pin] = await db.select().from(chatPins)
+      .where(and(eq(chatPins.channelId, channelId), eq(chatPins.messageId, messageId)));
+    return pin || undefined;
+  }
+
+  async getPinCount(channelId: string): Promise<number> {
+    const [result] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(chatPins)
+      .where(eq(chatPins.channelId, channelId));
+    return result?.count ?? 0;
   }
 }
