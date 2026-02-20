@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Download, X, ExternalLink, FileText } from "lucide-react";
@@ -34,6 +34,12 @@ export function PdfPreviewModal({
   timestamp,
 }: PdfPreviewModalProps) {
   const [loadError, setLoadError] = useState(false);
+
+  useEffect(() => {
+    if (open) {
+      setLoadError(false);
+    }
+  }, [open, src]);
 
   const handleDownload = () => {
     const link = document.createElement("a");

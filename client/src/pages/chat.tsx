@@ -1474,7 +1474,10 @@ export default function ChatPage() {
       setMessageInput("");
       stopTyping(); // Stop typing indicator on send
       setQuoteReply(null);
-      setPendingAttachments([]);
+      setPendingAttachments(prev => {
+        prev.forEach(a => { if (a.localPreviewUrl) URL.revokeObjectURL(a.localPreviewUrl); });
+        return [];
+      });
       
       // Clear draft from localStorage on send
       const key = getConversationKey();
@@ -1719,7 +1722,13 @@ export default function ChatPage() {
   };
 
   const removePendingAttachment = (id: string) => {
-    setPendingAttachments(prev => prev.filter(a => a.id !== id));
+    setPendingAttachments(prev => {
+      const toRemove = prev.find(a => a.id === id);
+      if (toRemove?.localPreviewUrl) {
+        URL.revokeObjectURL(toRemove.localPreviewUrl);
+      }
+      return prev.filter(a => a.id !== id);
+    });
   };
 
   const uploadFiles = async (files: FileList | File[]) => {
