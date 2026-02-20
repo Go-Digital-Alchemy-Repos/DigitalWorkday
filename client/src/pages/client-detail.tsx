@@ -456,9 +456,7 @@ export default function ClientDetailPage() {
   const portalInviteMutation = useMutation({
     mutationFn: async (contact: ClientContact) => {
       const res = await apiRequest("POST", `/api/clients/${clientId}/users/invite`, {
-        email: contact.email,
-        firstName: contact.firstName,
-        lastName: contact.lastName || "",
+        contactId: contact.id,
         accessLevel: "viewer",
       });
       return res.json();
