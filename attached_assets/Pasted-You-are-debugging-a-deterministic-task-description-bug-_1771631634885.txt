@@ -1,0 +1,87 @@
+You are debugging a deterministic task-description bug in my existing app. Do NOT refactor unrelated code. Focus only on reproducing, root-causing, and fixing this specific issue.
+
+BUG SUMMARY
+- In list view, task description preview appears.
+- Clicking the task opens drawer/editor with empty description.
+- Editing one task description sometimes causes same description to appear on multiple tasks in same section.
+- Issue persists across several prior attempts.
+
+KNOWN RELEVANT FLOW (read these first)
+1) Task preview rendering:
+   - `client/src/features/tasks/task-card.tsx` uses `task.description` + `getPreviewText(...)` for preview.
+2) Drawer description state + save:
+   - `client/src/features/tasks/task-detail-drawer.tsx`
+   - local `description` state initialized/reset from `task.description`
+   - save on blur calls `onUpdate(task.id, { description: ... })`
+3) Parent mutation wiring:
+   - `client/src/pages/project.tsx`, `client/src/pages/home.tsx`, `client/src/pages/my-tasks.tsx`
+   - `TaskDetailDrawer onUpdate` -> `updateTaskMutation` -> PATCH `/api/tasks/:id`
+4) Server update path:
+   - `server/http/domains/tasks.router.ts` PATCH `/tasks/:id`
+   - `server/storage/tasks.repo.ts` `updateTaskWithTenant` updates by `(tasks.id, tenantId)`.
+
+GOAL
+Create a deterministic reproduction, prove whether this is client-state/cache vs server-data corruption, then apply minimal fix with tests.
+
+STEP 1 — REPRO HARNESS (must be deterministic)
+- Seed or create:
+  - 1 project
+  - 1 section
+  - 3 tasks in that section: T1, T2, T3
+  - distinct descriptions:
+    - T1 = "alpha one"
+    - T2 = "beta two"
+    - T3 = "gamma three"
+- Open list view and verify previews differ per task.
+- Open T2 drawer and record what description loads in editor.
+- Edit T2 to "beta two updated", blur/save, then inspect T1/T3 previews and drawer contents.
+
+STEP 2 — INSTRUMENTATION (required)
+Add temporary debug logs (remove before final commit) at these points:
+- Frontend:
+  - `TaskCard` render: log `{task.id, previewText}`
+  - `TaskDetailDrawer`:
+    - when `task` changes: log `{task.id, task.description}`
+    - before `onUpdate`: log `{task.id, outgoingDescription}`
+  - page `onUpdate` handlers in project/home/my-tasks: log `{taskId arg, data.description}`
+- Network:
+  - log every PATCH `/api/tasks/:id` payload + URL task id.
+  - log GET `/api/tasks/:id` response used by drawer.
+- Backend:
+  - in PATCH route before update: log `{req.params.id, tenantId, updateData.description}`
+  - after update: log returned `{id, description}`
+  - optional: DB verification query by section after PATCH to show each row `{id,title,description}`.
+
+STEP 3 — ROOT CAUSE DECISION TREE
+- If PATCH request URL/payload taskId is wrong -> fix frontend id propagation.
+- If PATCH is correct but DB rows for multiple task IDs change -> backend query/update bug.
+- If DB is correct but UI shows cloned descriptions -> client cache/state/object reference bug.
+- If drawer empty while preview exists:
+  - compare raw `task.description` type/value (string/JSON/null)
+  - validate rich-text conversion path and blur save guard logic.
+
+STEP 4 — FIX CONSTRAINTS
+- Minimal, surgical fix only.
+- Do not change API contracts.
+- Do not alter unrelated UX/components.
+- Keep multi-tenant constraints intact.
+
+STEP 5 — TESTS (required)
+Add regression tests that fail before and pass after:
+1) “Editing Task A description does not mutate Task B/C descriptions in same section.”
+2) “Drawer shows persisted description for selected task.”
+3) “List preview reflects edited description for only that task.”
+Prefer integration test around PATCH + fetch and at least one UI-level test for drawer/preview consistency.
+
+STEP 6 — OUTPUT FORMAT
+Return:
+1) Root cause (1-2 paragraphs).
+2) Exact files changed and why.
+3) Before/after behavior.
+4) Test evidence (commands + pass/fail).
+5) Any temporary debug logs removed confirmation.
+
+Important:
+- Do not stop at “cannot reproduce.”
+- If flaky, run repro loop 20 times and report pass/fail count.
+- If still flaky, add deterministic guard/assertion to lock race ordering and then fix.

@@ -83,9 +83,22 @@ router.get("/crm/clients/:clientId/summary", requireAuth, async (req: Request, r
     const allTaskCount = Number(taskCount?.value || 0);
     const doneCount = Number(completedTaskCount?.value || 0);
 
+    const crmResponse = crmData || {
+      clientId,
+      tenantId,
+      status: client.status || "active",
+      ownerUserId: null,
+      tags: null,
+      lastContactAt: null,
+      nextFollowUpAt: null,
+      followUpNotes: null,
+      createdAt: client.createdAt,
+      updatedAt: client.updatedAt,
+    };
+
     res.json({
       client,
-      crm: crmData || null,
+      crm: crmResponse,
       ownerName,
       counts: {
         projects: Number(projectCount?.value || 0),
@@ -285,7 +298,7 @@ router.get("/crm/pipeline", requireAdmin, async (req: Request, res: Response) =>
         displayName: clients.displayName,
         email: clients.email,
         industry: clients.industry,
-        crmStatus: clientCrm.status,
+        crmStatus: sql<string>`COALESCE(${clientCrm.status}, ${clients.status}, 'active')`.as("crm_status"),
         ownerUserId: clientCrm.ownerUserId,
         ownerName: users.name,
         tags: clientCrm.tags,
