@@ -804,8 +804,8 @@ export function TaskDetailDrawer({
     }
   };
 
-  const handleDrawerClose = (shouldClose: boolean) => {
-    if (!shouldClose) return;
+  const handleDrawerClose = (newOpen: boolean) => {
+    if (newOpen) return;
     if (isDirty) {
       confirmIfDirty(() => {
         markClean();
