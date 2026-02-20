@@ -738,6 +738,7 @@ export function ProjectSettingsSheet({
                           <AlertDialogAction
                             onClick={() => deleteProjectMutation.mutate()}
                             className="bg-destructive text-destructive-foreground"
+                            disabled={deleteProjectMutation.isPending}
                             data-testid="button-confirm-delete"
                           >
                             Delete Project

@@ -57,6 +57,13 @@ import {
   activeTimers,
   approvalRequests,
   clientConversations,
+  subtasks as subtasksTable,
+  subtaskAssignees,
+  subtaskTags,
+  taskAssignees,
+  taskWatchers,
+  taskTags,
+  comments,
 } from "@shared/schema";
 import type { ProjectTemplateContent } from "@shared/schema";
 import { db } from "../../db";
@@ -429,8 +436,6 @@ router.delete("/projects/:id", async (req: Request, res: Response) => {
 
     await db.transaction(async (tx) => {
       if (taskIdList.length > 0) {
-        const { subtasks: subtasksTable, subtaskAssignees, subtaskTags, taskAssignees, taskWatchers, taskTags, comments } = await import("@shared/schema");
-        
         const subtaskIds = await tx.select({ id: subtasksTable.id }).from(subtasksTable).where(inArray(subtasksTable.taskId, taskIdList));
         const subtaskIdList = subtaskIds.map(s => s.id);
 
