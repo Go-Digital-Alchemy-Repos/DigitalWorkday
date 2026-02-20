@@ -76,6 +76,7 @@ import {
   notifyTaskCompleted,
   notifyTaskStatusChanged,
 } from "../../features/notifications/notification.service";
+import { evaluateAutomation } from "../../features/automation/clientStageAutomation.service";
 
 const router = createApiRouter({ policy: "authTenant", skipEnvelope: true });
 
@@ -656,6 +657,47 @@ router.patch("/tasks/:id", async (req, res) => {
               currentUserName,
               notificationContext
             ).catch(() => {});
+          }
+        }
+
+        if (project?.clientId && tenantId) {
+          const section = task.sectionId ? await storage.getSection(task.sectionId) : null;
+          const taskTagsList = await storage.getTaskTags(task.id);
+          const tagNames = taskTagsList.map(tt => tt.tag?.name).filter(Boolean) as string[];
+          evaluateAutomation({
+            tenantId,
+            workspaceId: project.workspaceId,
+            clientId: project.clientId,
+            projectId: project.id,
+            triggerType: "task_completed",
+            payload: {
+              taskTitle: task.title,
+              sectionName: section?.name || null,
+              sectionId: task.sectionId,
+              taskTags: tagNames,
+            },
+            userId,
+          }).catch(() => {});
+
+          if (task.sectionId && section && task.projectId) {
+            const projectTasks = await storage.getTasksByProject(task.projectId);
+            const sectionTasks = projectTasks.filter(t => t.sectionId === task.sectionId);
+            const allComplete = sectionTasks.every(t => t.id === task.id ? true : t.status === "completed");
+            if (allComplete && sectionTasks.length > 0) {
+              evaluateAutomation({
+                tenantId,
+                workspaceId: project.workspaceId,
+                clientId: project.clientId,
+                projectId: project.id,
+                triggerType: "all_tasks_in_section_completed",
+                payload: {
+                  sectionName: section.name,
+                  sectionId: section.id,
+                  taskCount: sectionTasks.length,
+                },
+                userId,
+              }).catch(() => {});
+            }
           }
         }
       }

@@ -43,6 +43,8 @@ import {
   type ClientInvite, type InsertClientInvite,
   type ClientWithContacts,
   type ClientStageHistory, type InsertClientStageHistory,
+  type ClientStageAutomationRule, type InsertClientStageAutomationRule,
+  type ClientStageAutomationEvent, type InsertClientStageAutomationEvent,
   type TimeEntry, type InsertTimeEntry,
   type ActiveTimer, type InsertActiveTimer,
   type TimeEntryWithRelations, type ActiveTimerWithRelations,
@@ -69,7 +71,7 @@ import {
   users, workspaces, workspaceMembers, teams, teamMembers,
   projects, projectMembers, hiddenProjects, sections, tasks, taskAssignees, taskWatchers,
   subtasks, subtaskAssignees, subtaskTags, tags, taskTags, comments, commentMentions, activityLog, taskAttachments,
-  clients, clientContacts, clientInvites, clientUserAccess, clientStageHistory,
+  clients, clientContacts, clientInvites, clientUserAccess, clientStageHistory, clientStageAutomationRules, clientStageAutomationEvents,
   clientDivisions, divisionMembers,
   timeEntries, activeTimers,
   invitations, appSettings, tenants, tenantSettings, personalTaskSections,
@@ -319,6 +321,13 @@ export interface IStorage {
   updateClientStage(clientId: string, tenantId: string, toStage: string, changedByUserId: string): Promise<Client | undefined>;
   getClientStageSummary(tenantId: string): Promise<{ stage: string; clientCount: number; projectCount: number }[]>;
   getClientStageHistory(clientId: string, tenantId: string): Promise<ClientStageHistory[]>;
+  getAutomationRulesByTenant(tenantId: string, enabledOnly?: boolean): Promise<ClientStageAutomationRule[]>;
+  getAutomationRule(id: string, tenantId: string): Promise<ClientStageAutomationRule | undefined>;
+  createAutomationRule(rule: InsertClientStageAutomationRule): Promise<ClientStageAutomationRule>;
+  updateAutomationRule(id: string, tenantId: string, updates: Partial<InsertClientStageAutomationRule>): Promise<ClientStageAutomationRule | undefined>;
+  deleteAutomationRule(id: string, tenantId: string): Promise<boolean>;
+  createAutomationEvent(event: InsertClientStageAutomationEvent): Promise<ClientStageAutomationEvent>;
+  getAutomationEvents(tenantId: string, limit?: number): Promise<ClientStageAutomationEvent[]>;
   getChildClients(parentClientId: string): Promise<Client[]>;
   validateParentClient(parentClientId: string, tenantId: string): Promise<boolean>;
   createClientWithTenant(client: InsertClient, tenantId: string): Promise<Client>;
@@ -2600,6 +2609,66 @@ export class DatabaseStorage implements IStorage {
         eq(clientStageHistory.tenantId, tenantId),
       ))
       .orderBy(desc(clientStageHistory.changedAt));
+  }
+
+  async getAutomationRulesByTenant(tenantId: string, enabledOnly = false): Promise<ClientStageAutomationRule[]> {
+    const conditions = [eq(clientStageAutomationRules.tenantId, tenantId)];
+    if (enabledOnly) {
+      conditions.push(eq(clientStageAutomationRules.isEnabled, true));
+    }
+    return db.select()
+      .from(clientStageAutomationRules)
+      .where(and(...conditions))
+      .orderBy(asc(clientStageAutomationRules.createdAt));
+  }
+
+  async getAutomationRule(id: string, tenantId: string): Promise<ClientStageAutomationRule | undefined> {
+    const [rule] = await db.select()
+      .from(clientStageAutomationRules)
+      .where(and(
+        eq(clientStageAutomationRules.id, id),
+        eq(clientStageAutomationRules.tenantId, tenantId),
+      ));
+    return rule;
+  }
+
+  async createAutomationRule(rule: InsertClientStageAutomationRule): Promise<ClientStageAutomationRule> {
+    const [created] = await db.insert(clientStageAutomationRules).values(rule).returning();
+    return created;
+  }
+
+  async updateAutomationRule(id: string, tenantId: string, updates: Partial<InsertClientStageAutomationRule>): Promise<ClientStageAutomationRule | undefined> {
+    const [updated] = await db.update(clientStageAutomationRules)
+      .set({ ...updates, updatedAt: new Date() })
+      .where(and(
+        eq(clientStageAutomationRules.id, id),
+        eq(clientStageAutomationRules.tenantId, tenantId),
+      ))
+      .returning();
+    return updated;
+  }
+
+  async deleteAutomationRule(id: string, tenantId: string): Promise<boolean> {
+    const result = await db.delete(clientStageAutomationRules)
+      .where(and(
+        eq(clientStageAutomationRules.id, id),
+        eq(clientStageAutomationRules.tenantId, tenantId),
+      ))
+      .returning();
+    return result.length > 0;
+  }
+
+  async createAutomationEvent(event: InsertClientStageAutomationEvent): Promise<ClientStageAutomationEvent> {
+    const [created] = await db.insert(clientStageAutomationEvents).values(event).returning();
+    return created;
+  }
+
+  async getAutomationEvents(tenantId: string, limit = 50): Promise<ClientStageAutomationEvent[]> {
+    return db.select()
+      .from(clientStageAutomationEvents)
+      .where(eq(clientStageAutomationEvents.tenantId, tenantId))
+      .orderBy(desc(clientStageAutomationEvents.createdAt))
+      .limit(limit);
   }
 
   async getChildClients(parentClientId: string): Promise<Client[]> {

@@ -2,18 +2,20 @@ import { useLocation, useRoute, Redirect } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings as SettingsIcon, Puzzle, FileText, Mail, UserCircle, MessageSquare } from "lucide-react";
+import { Settings as SettingsIcon, Puzzle, FileText, Mail, UserCircle, MessageSquare, Zap } from "lucide-react";
 import { ProfileTab } from "@/components/settings/profile-tab";
 import { IntegrationsTab } from "@/components/settings/integrations-tab";
 import { AgreementTab } from "@/components/settings/agreement-tab";
 import { EmailLogsTab } from "@/components/settings/email-logs-tab";
 import { MessagesTab } from "@/components/settings/messages-tab";
+import { PipelineAutomationTab } from "@/components/settings/pipeline-automation-tab";
 
 const SETTINGS_TABS = [
   { id: "profile", label: "Profile", icon: UserCircle },
   { id: "integrations", label: "Integrations", icon: Puzzle },
   { id: "messages", label: "Messages", icon: MessageSquare },
   { id: "email-logs", label: "Email Logs", icon: Mail },
+  { id: "automation", label: "Automation", icon: Zap },
   { id: "agreement", label: "Agreement", icon: FileText },
 ];
 
@@ -75,6 +77,10 @@ export default function SettingsPage() {
 
           <TabsContent value="email-logs" className="mt-6">
             <EmailLogsTab />
+          </TabsContent>
+
+          <TabsContent value="automation" className="mt-6">
+            <PipelineAutomationTab />
           </TabsContent>
 
           <TabsContent value="agreement" className="mt-6">

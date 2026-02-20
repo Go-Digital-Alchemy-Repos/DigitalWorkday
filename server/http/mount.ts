@@ -24,6 +24,7 @@ import workloadReportsRouter from "./domains/workload-reports.router";
 import { jobsRouter } from "../jobs/jobs.router";
 import supportRouter from "./domains/support.router";
 import clientDocumentsRouter from "./domains/clientDocuments.router";
+import automationRouter from "./domains/automation.router";
 
 interface DomainEntry {
   path: string;
@@ -180,6 +181,13 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "client-documents",
     description: "Client Documents 2.0: folder CRUD, file presign/complete/move/rename/delete/download, bulk ops. Dropbox-style document manager.",
+  },
+  {
+    path: "/api/v1",
+    router: automationRouter,
+    policy: "authTenant",
+    domain: "automation",
+    description: "Client stage automation: CRUD rules, dry-run, audit events. Admin-only pipeline automation.",
   },
 ];
 

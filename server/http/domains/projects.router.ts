@@ -69,6 +69,7 @@ import {
   notifyProjectMemberAdded,
   notifyProjectUpdate,
 } from "../../features/notifications/notification.service";
+import { evaluateAutomation, type AutomationEvent } from "../../features/automation/clientStageAutomation.service";
 
 const router = createApiRouter({ policy: "authTenant", skipEnvelope: true });
 
@@ -260,6 +261,18 @@ router.post("/projects", async (req: Request, res: Response) => {
 
     emitProjectCreated(project as any);
 
+    if (project.clientId && tenantId) {
+      evaluateAutomation({
+        tenantId,
+        workspaceId: project.workspaceId,
+        clientId: project.clientId,
+        projectId: project.id,
+        triggerType: "project_created",
+        payload: { projectName: project.name, projectStatus: project.status },
+        userId: creatorId,
+      }).catch(() => {});
+    }
+
     res.status(201).json(project);
   } catch (error) {
     if (error instanceof z.ZodError) {
@@ -338,6 +351,31 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
             { tenantId, excludeUserId: currentUserId }
           ).catch(() => {});
         }
+      }
+    }
+
+    if (tenantId && project!.clientId && data.status && existingProject.status !== data.status) {
+      const isComplete = data.status === "completed" || data.status === "complete";
+      if (isComplete) {
+        evaluateAutomation({
+          tenantId,
+          workspaceId: project!.workspaceId,
+          clientId: project!.clientId,
+          projectId: project!.id,
+          triggerType: "project_marked_complete",
+          payload: { fromStatus: existingProject.status, toStatus: data.status },
+          userId: currentUserId,
+        }).catch(() => {});
+      } else {
+        evaluateAutomation({
+          tenantId,
+          workspaceId: project!.workspaceId,
+          clientId: project!.clientId,
+          projectId: project!.id,
+          triggerType: "project_status_changed",
+          payload: { fromStatus: existingProject.status, toStatus: data.status },
+          userId: currentUserId,
+        }).catch(() => {});
       }
     }
 

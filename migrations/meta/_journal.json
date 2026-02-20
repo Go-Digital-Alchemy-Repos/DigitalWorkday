@@ -260,6 +260,13 @@
       "when": 1771557985334,
       "tag": "0036_material_molten_man",
       "breakpoints": true
+    },
+    {
+      "idx": 37,
+      "version": "7",
+      "when": 1771558910453,
+      "tag": "0037_military_zarek",
+      "breakpoints": true
     }
   ]
 }

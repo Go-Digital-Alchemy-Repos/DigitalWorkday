@@ -623,6 +623,74 @@ export const clientStageHistory = pgTable("client_stage_history", {
 export type ClientStageHistory = typeof clientStageHistory.$inferSelect;
 export type InsertClientStageHistory = typeof clientStageHistory.$inferInsert;
 
+export const AutomationTriggerType = {
+  PROJECT_CREATED: "project_created",
+  PROJECT_STATUS_CHANGED: "project_status_changed",
+  TASK_COMPLETED: "task_completed",
+  ALL_TASKS_IN_SECTION_COMPLETED: "all_tasks_in_section_completed",
+  PROJECT_MARKED_COMPLETE: "project_marked_complete",
+} as const;
+
+export type AutomationTriggerTypeValue = typeof AutomationTriggerType[keyof typeof AutomationTriggerType];
+
+export const AUTOMATION_TRIGGER_LABELS: Record<AutomationTriggerTypeValue, string> = {
+  project_created: "Project Created",
+  project_status_changed: "Project Status Changed",
+  task_completed: "Task Completed",
+  all_tasks_in_section_completed: "All Tasks in Section Completed",
+  project_marked_complete: "Project Marked Complete",
+};
+
+export const clientStageAutomationRules = pgTable("client_stage_automation_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  workspaceId: varchar("workspace_id").references(() => workspaces.id),
+  name: text("name").notNull(),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  triggerType: text("trigger_type").notNull(),
+  triggerConfig: jsonb("trigger_config").default({}),
+  conditionConfig: jsonb("condition_config").default({}),
+  toStage: text("to_stage").notNull(),
+  allowBackward: boolean("allow_backward").notNull().default(false),
+  allowSkipStages: boolean("allow_skip_stages").notNull().default(true),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("automation_rules_tenant_enabled_idx").on(table.tenantId, table.isEnabled),
+  index("automation_rules_tenant_workspace_idx").on(table.tenantId, table.workspaceId, table.isEnabled),
+]);
+
+export type ClientStageAutomationRule = typeof clientStageAutomationRules.$inferSelect;
+export type InsertClientStageAutomationRule = typeof clientStageAutomationRules.$inferInsert;
+
+export const insertClientStageAutomationRuleSchema = createInsertSchema(clientStageAutomationRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+
+export const clientStageAutomationEvents = pgTable("client_stage_automation_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  ruleId: varchar("rule_id").references(() => clientStageAutomationRules.id),
+  ruleName: text("rule_name"),
+  clientId: varchar("client_id").references(() => clients.id),
+  projectId: varchar("project_id"),
+  triggerType: text("trigger_type").notNull(),
+  payload: jsonb("payload").default({}),
+  outcome: text("outcome").notNull(),
+  reason: text("reason"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("automation_events_tenant_idx").on(table.tenantId),
+  index("automation_events_rule_idx").on(table.tenantId, table.ruleId),
+  index("automation_events_created_at_idx").on(table.tenantId, table.createdAt),
+]);
+
+export type ClientStageAutomationEvent = typeof clientStageAutomationEvents.$inferSelect;
+export type InsertClientStageAutomationEvent = typeof clientStageAutomationEvents.$inferInsert;
+
 /**
  * Client Contacts table - represents people at client companies
  */
