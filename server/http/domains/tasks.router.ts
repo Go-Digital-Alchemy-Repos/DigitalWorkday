@@ -728,7 +728,18 @@ router.patch("/tasks/:id", async (req, res) => {
 router.delete("/tasks/:id", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
-    
+    const currentUserId = getCurrentUserId(req);
+    const currentUser = await storage.getUser(currentUserId);
+
+    if (!currentUser) {
+      return sendError(res, AppError.unauthorized("User not found"), req);
+    }
+
+    const isAdmin = currentUser.role === "admin" || isSuperUser(req);
+    if (!isAdmin) {
+      return sendError(res, AppError.forbidden("Only admins can delete tasks"), req);
+    }
+
     const task = tenantId 
       ? await storage.getTaskByIdAndTenant(req.params.id, tenantId)
       : isSuperUser(req) 

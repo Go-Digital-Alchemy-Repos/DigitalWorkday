@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus } from "lucide-react";
+import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus, Trash2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -21,6 +21,17 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -133,6 +144,7 @@ export function TaskDetailDrawer({
   );
 
   const { user: currentUser } = useAuth();
+  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
@@ -372,6 +384,32 @@ export function TaskDetailDrawer({
       return apiRequest("DELETE", `/api/subtasks/${subtaskId}`);
     },
     onSuccess: invalidateTaskQueries,
+  });
+
+  const deleteTaskMutation = useMutation({
+    mutationFn: async (taskId: string) => {
+      return apiRequest("DELETE", `/api/tasks/${taskId}`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      if (task?.projectId) {
+        queryClient.invalidateQueries({ queryKey: [`/api/projects/${task.projectId}/sections`] });
+      }
+      toast({
+        title: "Task deleted",
+        description: `"${task?.title}" has been permanently deleted.`,
+      });
+      onOpenChange(false);
+      onRefresh?.();
+    },
+    onError: () => {
+      toast({
+        title: "Error",
+        description: "Failed to delete task.",
+        variant: "destructive",
+      });
+    },
   });
 
   const timeEntriesQueryKey = useMemo(
@@ -833,7 +871,41 @@ export function TaskDetailDrawer({
               <SheetTitle className="sr-only">Task Details</SheetTitle>
               <StatusBadge status={task.status as any} />
             </div>
-            <div className="flex items-center gap-2">
+            <div className="flex items-center gap-1">
+              {isAdmin && (
+                <AlertDialog>
+                  <AlertDialogTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      disabled={deleteTaskMutation.isPending}
+                      aria-label="Delete task"
+                      data-testid="button-delete-task"
+                    >
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </AlertDialogTrigger>
+                  <AlertDialogContent>
+                    <AlertDialogHeader>
+                      <AlertDialogTitle>Delete Task</AlertDialogTitle>
+                      <AlertDialogDescription>
+                        Are you sure you want to permanently delete <span className="font-semibold">"{task.title}"</span>? This will remove all subtasks, comments, and attachments associated with this task. This action cannot be undone.
+                      </AlertDialogDescription>
+                    </AlertDialogHeader>
+                    <AlertDialogFooter>
+                      <AlertDialogCancel data-testid="button-cancel-delete-task">Cancel</AlertDialogCancel>
+                      <AlertDialogAction
+                        onClick={() => deleteTaskMutation.mutate(task.id)}
+                        className="bg-destructive text-destructive-foreground"
+                        disabled={deleteTaskMutation.isPending}
+                        data-testid="button-confirm-delete-task"
+                      >
+                        Delete Task
+                      </AlertDialogAction>
+                    </AlertDialogFooter>
+                  </AlertDialogContent>
+                </AlertDialog>
+              )}
               <Button
                 variant="secondary"
                 size="icon"
