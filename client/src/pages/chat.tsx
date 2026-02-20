@@ -126,6 +126,8 @@ interface ChatAttachment {
 
 interface PendingAttachment extends ChatAttachment {
   uploading?: boolean;
+  progress?: number;
+  localPreviewUrl?: string;
 }
 
 interface ReadReceipt {
@@ -1724,32 +1726,67 @@ export default function ChatPage() {
     setIsUploading(true);
     
     for (const file of Array.from(files)) {
+      const tempId = `uploading-${Date.now()}-${Math.random().toString(36).substr(2, 6)}`;
+      const isImage = file.type.startsWith("image/");
+      const localPreviewUrl = isImage ? URL.createObjectURL(file) : undefined;
+      
+      setPendingAttachments(prev => [...prev, {
+        id: tempId,
+        fileName: file.name,
+        mimeType: file.type || "application/octet-stream",
+        sizeBytes: file.size,
+        url: "",
+        uploading: true,
+        progress: 0,
+        localPreviewUrl,
+      }]);
+
       try {
-        const formData = new FormData();
-        formData.append("file", file);
-        
-        const response = await fetch("/api/v1/chat/uploads", {
-          method: "POST",
-          body: formData,
-          credentials: "include",
+        const result = await new Promise<any>((resolve, reject) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open("POST", "/api/v1/chat/uploads");
+          xhr.withCredentials = true;
+          
+          xhr.upload.onprogress = (e) => {
+            if (e.lengthComputable) {
+              const pct = Math.round((e.loaded / e.total) * 100);
+              setPendingAttachments(prev =>
+                prev.map(a => a.id === tempId ? { ...a, progress: pct } : a)
+              );
+            }
+          };
+          
+          xhr.onload = () => {
+            if (xhr.status >= 200 && xhr.status < 300) {
+              try {
+                resolve(JSON.parse(xhr.responseText));
+              } catch { reject(new Error("Invalid response")); }
+            } else {
+              try {
+                const err = JSON.parse(xhr.responseText);
+                reject(new Error(err.message || "Upload failed"));
+              } catch { reject(new Error("Upload failed")); }
+            }
+          };
+          
+          xhr.onerror = () => reject(new Error("Network error"));
+          
+          const formData = new FormData();
+          formData.append("file", file);
+          xhr.send(formData);
         });
         
-        if (!response.ok) {
-          const error = await response.json().catch(() => ({ message: "Upload failed" }));
-          toast({
-            title: "Upload failed",
-            description: error.message || `Could not upload ${file.name}`,
-            variant: "destructive",
-          });
-          continue;
-        }
+        if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
         
-        const attachment = await response.json();
-        setPendingAttachments(prev => [...prev, attachment]);
-      } catch (error) {
+        setPendingAttachments(prev =>
+          prev.map(a => a.id === tempId ? { ...result, uploading: false, progress: 100 } : a)
+        );
+      } catch (error: any) {
+        if (localPreviewUrl) URL.revokeObjectURL(localPreviewUrl);
+        setPendingAttachments(prev => prev.filter(a => a.id !== tempId));
         toast({
-          title: "Upload error",
-          description: `Could not upload ${file.name}`,
+          title: "Upload failed",
+          description: error.message || `Could not upload ${file.name}`,
           variant: "destructive",
         });
       }
@@ -1758,21 +1795,36 @@ export default function ChatPage() {
     setIsUploading(false);
   };
 
+  const dragCounterRef = useRef(0);
+  
+  const handleDragEnter = (e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    dragCounterRef.current++;
+    if (e.dataTransfer.types.includes("Files")) {
+      setIsDragOver(true);
+    }
+  };
+
   const handleDragOver = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    if (!isDragOver) setIsDragOver(true);
   };
 
   const handleDragLeave = (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    setIsDragOver(false);
+    dragCounterRef.current--;
+    if (dragCounterRef.current <= 0) {
+      dragCounterRef.current = 0;
+      setIsDragOver(false);
+    }
   };
 
   const handleDrop = async (e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
+    dragCounterRef.current = 0;
     setIsDragOver(false);
     
     const files = e.dataTransfer.files;
@@ -1783,14 +1835,14 @@ export default function ChatPage() {
 
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
-    if (!messageInput.trim() && pendingAttachments.length === 0) return;
+    const readyAttachments = pendingAttachments.filter(a => !a.uploading);
+    if (!messageInput.trim() && readyAttachments.length === 0) return;
     
-    // Generate temporary ID for optimistic update
     const tempId = `temp-${Date.now()}-${Math.random().toString(36).substr(2, 9)}`;
     
     sendMessageMutation.mutate({
-      body: messageInput.trim() || " ", // Ensure body is not empty
-      attachmentIds: pendingAttachments.map(a => a.id),
+      body: messageInput.trim() || " ",
+      attachmentIds: readyAttachments.map(a => a.id),
       tempId,
     });
   };
@@ -1993,7 +2045,29 @@ export default function ChatPage() {
         </Tabs>
       </div>
 
-      <div className={`flex-1 flex flex-col ${isMobile && !hasConversation ? "hidden" : ""}`}>
+      <div 
+        className={`flex-1 flex flex-col relative ${isMobile && !hasConversation ? "hidden" : ""}`}
+        onDragEnter={handleDragEnter}
+        onDragOver={handleDragOver}
+        onDragLeave={handleDragLeave}
+        onDrop={handleDrop}
+      >
+        {isDragOver && (selectedChannel || selectedDm) && (
+          <div 
+            className="absolute inset-0 z-50 flex items-center justify-center bg-background/80 backdrop-blur-sm border-2 border-dashed border-primary rounded-md pointer-events-none"
+            data-testid="drag-drop-overlay"
+          >
+            <div className="flex flex-col items-center gap-3 text-center p-8">
+              <div className="h-16 w-16 rounded-full bg-primary/10 flex items-center justify-center">
+                <Paperclip className="h-8 w-8 text-primary" />
+              </div>
+              <div>
+                <p className="text-base font-medium">Drop files to upload</p>
+                <p className="text-sm text-muted-foreground mt-1">Images, PDFs, documents and more</p>
+              </div>
+            </div>
+          </div>
+        )}
         {selectedChannel || selectedDm ? (
           <>
             <div className="h-14 border-b flex items-center px-2 sm:px-4 gap-2 justify-between">
@@ -2205,20 +2279,10 @@ export default function ChatPage() {
             <form 
               ref={composerRef}
               onSubmit={handleSendMessage} 
-              className={`px-2 sm:px-4 py-2 sm:py-3 border-t transition-colors ${isDragOver ? "bg-accent/20 border-primary border-2 border-dashed" : ""}`}
+              className="px-2 sm:px-4 py-2 sm:py-3 border-t"
               style={isMobile && keyboardOffset > 0 ? { paddingBottom: `calc(${keyboardOffset}px + env(safe-area-inset-bottom, 0px))` } : undefined}
-              onDragOver={handleDragOver}
-              onDragLeave={handleDragLeave}
-              onDrop={handleDrop}
               data-testid="message-composer-form"
             >
-              {/* Drag and drop indicator */}
-              {isDragOver && (
-                <div className="mb-2 text-center text-sm text-muted-foreground flex items-center justify-center gap-2">
-                  <Paperclip className="h-4 w-4" />
-                  Drop files here to upload
-                </div>
-              )}
               {quoteReply && (
                 <div className="mb-2 flex items-start gap-2 p-2 rounded-md bg-muted/60 border-l-2 border-primary" data-testid="quote-reply-indicator">
                   <div className="flex-1 min-w-0">
@@ -2258,29 +2322,53 @@ export default function ChatPage() {
                   </Button>
                 </div>
               )}
-              {/* Pending attachments preview */}
               {pendingAttachments.length > 0 && (
                 <div className="mb-2 flex flex-wrap gap-2">
                   {pendingAttachments.map(attachment => {
                     const FileIcon = getFileIcon(attachment.mimeType);
+                    const isImage = attachment.mimeType.startsWith("image/");
+                    const previewSrc = attachment.localPreviewUrl || (isImage && attachment.url ? attachment.url : null);
                     return (
                       <div
                         key={attachment.id}
-                        className="flex items-center gap-2 p-2 rounded-md bg-muted text-sm"
+                        className="relative flex items-center gap-2 p-2 rounded-md bg-muted text-sm min-w-[120px] max-w-[200px]"
                         data-testid={`pending-attachment-${attachment.id}`}
                       >
-                        <FileIcon className="h-4 w-4 text-muted-foreground" />
-                        <span className="truncate max-w-[100px]">{attachment.fileName}</span>
+                        {previewSrc ? (
+                          <img 
+                            src={previewSrc} 
+                            alt={attachment.fileName}
+                            className="h-10 w-10 object-cover rounded flex-shrink-0"
+                          />
+                        ) : (
+                          <FileIcon className="h-5 w-5 text-muted-foreground flex-shrink-0" />
+                        )}
+                        <div className="flex-1 min-w-0">
+                          <span className="text-xs truncate block">{attachment.fileName}</span>
+                          <span className="text-[10px] text-muted-foreground">
+                            {formatFileSize(attachment.sizeBytes)}
+                          </span>
+                        </div>
                         <Button
                           type="button"
                           size="icon"
                           variant="ghost"
+                          className="h-6 w-6 flex-shrink-0"
                           onClick={() => removePendingAttachment(attachment.id)}
                           aria-label="Remove attachment"
                           data-testid={`remove-attachment-${attachment.id}`}
                         >
-                          <X className="h-4 w-4" />
+                          <X className="h-3 w-3" />
                         </Button>
+                        {attachment.uploading && (
+                          <div className="absolute bottom-0 left-0 right-0 h-1 bg-muted-foreground/20 rounded-b-md overflow-hidden">
+                            <div 
+                              className="h-full bg-primary transition-all duration-200"
+                              style={{ width: `${attachment.progress || 0}%` }}
+                              data-testid={`upload-progress-${attachment.id}`}
+                            />
+                          </div>
+                        )}
                       </div>
                     );
                   })}
@@ -2360,7 +2448,7 @@ export default function ChatPage() {
                 <Button
                   type="submit"
                   size="icon"
-                  disabled={(!messageInput.trim() && pendingAttachments.length === 0) || sendMessageMutation.isPending}
+                  disabled={(!messageInput.trim() && pendingAttachments.filter(a => !a.uploading).length === 0) || sendMessageMutation.isPending || pendingAttachments.some(a => a.uploading)}
                   aria-label="Send message"
                   title="Send message"
                   data-testid="button-send-message"
