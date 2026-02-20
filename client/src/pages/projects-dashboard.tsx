@@ -341,6 +341,49 @@ export default function ProjectsDashboard() {
             </span>
           </Button>
         </div>
+
+        {analytics?.totals && (
+          <div className="grid gap-3 grid-cols-2 md:grid-cols-4 mt-4">
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2">
+                  <FolderKanban className="h-4 w-4 text-primary" />
+                  <span className="text-sm text-muted-foreground">Active Projects</span>
+                </div>
+                <div className="text-2xl font-bold mt-1">{analytics.totals.activeProjects}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <span className="text-sm text-muted-foreground">Projects at Risk</span>
+                </div>
+                <div className="text-2xl font-bold mt-1 text-destructive">
+                  {analytics.totals.projectsWithOverdue}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-orange-500" />
+                  <span className="text-sm text-muted-foreground">Due Today</span>
+                </div>
+                <div className="text-2xl font-bold mt-1">{analytics.totals.tasksDueToday}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2">
+                  <CircleOff className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Unassigned Tasks</span>
+                </div>
+                <div className="text-2xl font-bold mt-1">{analytics.totals.unassignedOpenTasks}</div>
+              </CardContent>
+            </Card>
+          </div>
+        )}
       </div>
 
       {isEmployee && (
@@ -431,49 +474,6 @@ export default function ProjectsDashboard() {
           )}
         </div>
       </div>
-
-      {analytics?.totals && (
-        <div className="grid gap-3 grid-cols-2 md:grid-cols-4 mb-6">
-          <Card>
-            <CardContent className="pt-4 pb-3">
-              <div className="flex items-center gap-2">
-                <FolderKanban className="h-4 w-4 text-primary" />
-                <span className="text-sm text-muted-foreground">Active Projects</span>
-              </div>
-              <div className="text-2xl font-bold mt-1">{analytics.totals.activeProjects}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-3">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-                <span className="text-sm text-muted-foreground">Projects at Risk</span>
-              </div>
-              <div className="text-2xl font-bold mt-1 text-destructive">
-                {analytics.totals.projectsWithOverdue}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-3">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-orange-500" />
-                <span className="text-sm text-muted-foreground">Due Today</span>
-              </div>
-              <div className="text-2xl font-bold mt-1">{analytics.totals.tasksDueToday}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-3">
-              <div className="flex items-center gap-2">
-                <CircleOff className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Unassigned Tasks</span>
-              </div>
-              <div className="text-2xl font-bold mt-1">{analytics.totals.unassignedOpenTasks}</div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
 
       {filteredProjects.length === 0 ? (
         <EmptyState
