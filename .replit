@@ -62,6 +62,7 @@ FAST_STARTUP="true"
 AUTO_MIGRATE = "true"
 SKIP_PARITY_CHECK = "true"
 NODE_ENV = "production"
+CRM_CLIENT_360_ENABLED = "true"
 
 [userenv.shared]
 CRM_APPROVALS_ENABLED = "true"
