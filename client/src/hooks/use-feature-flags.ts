@@ -7,6 +7,7 @@ export interface FeatureFlags {
   clientProfileLayoutV2: boolean;
   clientCommandPaletteV1: boolean;
   clientControlCenterPremium: boolean;
+  clientControlCenterPinnedWidgets: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -16,6 +17,7 @@ const ALL_OFF: FeatureFlags = {
   clientProfileLayoutV2: false,
   clientCommandPaletteV1: false,
   clientControlCenterPremium: false,
+  clientControlCenterPinnedWidgets: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

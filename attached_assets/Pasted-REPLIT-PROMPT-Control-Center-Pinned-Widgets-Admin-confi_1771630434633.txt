@@ -1,0 +1,212 @@
+REPLIT PROMPT — Control Center “Pinned Widgets” (Admin-configurable Dashboard)
+DigitalWorkday
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE:
+Add “Pinned Widgets” to the Client Profile Control Center so Tenant Admins can choose which widgets
+appear (and in what order) on the Control Center landing panel.
+
+This should feel premium:
+- drag + drop reorder (desktop)
+- quick pin/unpin toggles
+- sensible defaults
+- stored per-tenant (and optionally per-workspace)
+- safe role gating (employees see only allowed widgets; admin can configure)
+
+CONSTRAINTS:
+- Use shadcn/ui only for UI elements.
+- For drag & drop, prefer an existing dependency if already present; otherwise add @dnd-kit/core + @dnd-kit/sortable (lightweight, popular).
+- Must be non-destructive and feature-flagged.
+- Must not slow down the Control Center.
+
+FEATURE FLAGS:
+- CLIENT_PROFILE_CONTROL_CENTER_PREMIUM (existing)
+- CLIENT_CONTROL_CENTER_PINNED_WIDGETS (new, default true dev, false prod until verified)
+
+SCOPE (V1):
+Pinned widgets apply to the Control Center landing panel only.
+Store configuration per tenant, optionally keyed by workspaceId (if workspaces exist).
+
+WIDGETS (V1 CATALOG):
+Define a widget registry with ids and permissions:
+1) tiles_activity
+2) tiles_reports (admin only)
+3) tiles_portal_users (admin only)
+4) tiles_divisions
+5) stats_health_snapshot
+6) stats_operational_alerts
+7) feed_recent_activity
+8) feed_recent_messages
+9) stats_assets_summary
+10) stats_projects_summary
+
+You can add more later; design for extension.
+
+================================================================================
+PHASE 1 — Data Model & Persistence
+================================================================================
+
+SERVER:
+Implement persistent storage for widget layout.
+
+Option A (Preferred): tenant_settings JSON
+- If tenant_settings has a JSON column or “settingsJson”, extend it with:
+  controlCenter: {
+    pinnedWidgetIds: string[],
+    layout: { id: string, order: number, size?: 'sm'|'md'|'lg' }[]
+  }
+
+Option B: new table
+Create table: control_center_widget_layouts
+- id (uuid)
+- tenantId
+- workspaceId (nullable)
+- createdByUserId
+- updatedByUserId
+- layoutJson (jsonb)  // array of widget configs
+- updatedAt
+Unique:
+- (tenantId, workspaceId)
+
+Choose the option that best fits existing patterns (prefer tenant_settings if already used for theming).
+
+API:
+Create new router: server/http/domains/controlCenter.router.ts (createApiRouter authTenant)
+Endpoints:
+GET  /api/v1/control-center/widgets/layout?clientId=...&workspaceId=...
+- returns resolved layout for current tenant/workspace with defaults applied
+PUT  /api/v1/control-center/widgets/layout
+Body: { workspaceId?: string, layout: Array<{id, order, size?}> }
+- admin-only
+- validates widget ids exist in registry
+- strips widgets user cannot access for safety (server-side)
+
+Validation:
+- enforce max widgets (e.g., 12)
+- require unique ids
+- require contiguous order or sort server-side
+
+================================================================================
+PHASE 2 — Widget Registry (Client + Server)
+================================================================================
+
+Create shared registry shape (keep DRY but avoid bundling server->client directly):
+- shared/controlCenterWidgets.ts OR client/src/features/... + server mirror
+
+Each widget:
+- id
+- title
+- description
+- icon (client only)
+- minRole / permission check
+- defaultPinned (true/false)
+- defaultOrder
+- size options
+
+Defaults (suggested):
+Pinned by default (in order):
+- tiles_activity
+- stats_operational_alerts
+- stats_health_snapshot
+- feed_recent_activity
+Admin-only additionally pinned:
+- tiles_reports
+- tiles_portal_users
+
+Ensure employees never see admin-only widgets even if configured.
+
+================================================================================
+PHASE 3 — Control Center UI: Render Widgets from Layout
+================================================================================
+
+Update:
+client/src/features/clients/profile/sections/ControlCenterSection.tsx
+
+Change from hardcoded layout → layout-driven:
+- fetch layout via React Query:
+  ['controlCenter','layout',tenantId,workspaceId]
+- if no saved layout: use registry defaults
+- render widgets in a responsive grid:
+  - desktop: 2-column or 3-column
+  - mobile: single column
+- each widget renders via a component map:
+  widgetRenderers[widgetId] = <WidgetComponent ... />
+
+Each widget component should:
+- accept summary data (from the existing summary hook) or its own lightweight query if required
+- avoid heavy fetching unless visible
+
+================================================================================
+PHASE 4 — Admin “Customize” Mode UI (Pin/Unpin + Reorder)
+================================================================================
+
+Add a “Customize” button (admin only) in Control Center header:
+- opens a Sheet or Dialog (shadcn)
+- shows:
+  A) Pinned Widgets list (sortable)
+  B) Available Widgets list (un-pinned)
+
+Implement:
+- drag and drop reorder for pinned list (desktop)
+- up/down buttons as fallback (mobile & accessibility)
+- toggle pin/unpin buttons
+- optional widget size selector (sm/md/lg) as a Select (can be stored but not necessarily used yet)
+
+When saving:
+- PUT layout endpoint
+- optimistic update React Query cache
+- show toast “Control Center updated”
+
+Guardrails:
+- enforce required widgets? (optional)
+- enforce max 12 pinned
+- ensure stable ordering
+
+================================================================================
+PHASE 5 — Permissions & Safety
+================================================================================
+
+Server must:
+- validate caller is tenant admin for PUT
+- sanitize layout: remove unknown widgets
+- remove widgets disallowed for tenant role
+Client must:
+- hide Customize for non-admin
+- hide admin-only widgets for non-admin even if returned (defense in depth)
+
+================================================================================
+PHASE 6 — Tests
+================================================================================
+
+Server integration tests:
+1) non-admin cannot PUT layout
+2) admin can PUT and GET returns updated order
+3) layout strips unknown widget ids
+4) layout strips admin-only widgets when requested by employee (GET response filtered)
+
+Client tests (lightweight if infra exists):
+- layout defaults apply when none saved
+- reorder updates state and saves
+
+================================================================================
+PHASE 7 — Docs
+================================================================================
+
+Add:
+docs/features/control-center-widgets.md
+Include:
+- widget registry
+- default layout
+- API contract
+- how to add a widget
+- permission rules
+Update Docs Library entry.
+
+OUTPUT REQUIREMENTS:
+- list of files changed
+- tests added + pass
+- manual QA steps noted in doc:
+  - admin customizes
+  - employee view differs correctly
+  - refresh persists

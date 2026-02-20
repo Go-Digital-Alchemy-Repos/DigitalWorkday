@@ -214,6 +214,23 @@ export const tenantSettings = pgTable("tenant_settings", {
 ]);
 
 /**
+ * Control Center Widget Layouts - stores per-tenant (optionally per-workspace)
+ * widget layout configuration for the client profile Control Center.
+ */
+export const controlCenterWidgetLayouts = pgTable("control_center_widget_layouts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  workspaceId: varchar("workspace_id"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  updatedByUserId: varchar("updated_by_user_id").references(() => users.id),
+  layoutJson: jsonb("layout_json").notNull().default(sql`'[]'::jsonb`),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("cc_widget_layouts_tenant_idx").on(table.tenantId),
+  uniqueIndex("cc_widget_layouts_tenant_ws_uniq").on(table.tenantId, table.workspaceId),
+]);
+
+/**
  * Integration status enum
  */
 export const IntegrationStatus = {

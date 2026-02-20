@@ -183,6 +183,7 @@ export const config = {
     clientProfileLayoutV2: optionalEnvBool("CLIENT_PROFILE_LAYOUT_V2", true),
     clientCommandPaletteV1: optionalEnvBool("CLIENT_COMMAND_PALETTE_V1", true),
     clientControlCenterPremium: optionalEnvBool("CLIENT_CONTROL_CENTER_PREMIUM", true),
+    clientControlCenterPinnedWidgets: optionalEnvBool("CLIENT_CONTROL_CENTER_PINNED_WIDGETS", true),
   },
 
   // Git info for versioning
