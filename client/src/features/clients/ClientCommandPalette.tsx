@@ -27,7 +27,6 @@ import {
   CheckSquare,
   Plus,
   Upload,
-  Zap,
   Search,
 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
@@ -38,7 +37,7 @@ interface ClientSearchResult {
   tasks: Array<{ id: string; name: string; type: string; projectId: string; status: string }>;
 }
 
-interface ClientCommandPaletteProps {
+export interface ClientCommandPaletteProps {
   clientId: string;
   clientName: string;
   visibleSections: ClientProfileSection[];
@@ -63,24 +62,8 @@ const SECTION_ICONS: Record<string, typeof LayoutDashboard> = {
   "asset-library": PackageOpen,
 };
 
-export function ClientCommandPalette({
-  clientId,
-  clientName,
-  visibleSections,
-  activeSection,
-  onSectionChange,
-  onNewProject,
-  onUploadAsset,
-}: ClientCommandPaletteProps) {
+export function useClientCommandPaletteState() {
   const [open, setOpen] = useState(false);
-  const [search, setSearch] = useState("");
-  const [, setLocation] = useLocation();
-  const debouncedSearch = useDebounce(search, 250);
-
-  const { data: searchResults } = useQuery<ClientSearchResult>({
-    queryKey: ["/api/clients", clientId, "search", { q: debouncedSearch }],
-    enabled: open && debouncedSearch.length >= 2,
-  });
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -96,11 +79,34 @@ export function ClientCommandPalette({
     return () => document.removeEventListener("keydown", down, true);
   }, []);
 
+  return { open, setOpen };
+}
+
+export function ClientCommandPalette({
+  clientId,
+  clientName,
+  visibleSections,
+  activeSection,
+  onSectionChange,
+  onNewProject,
+  onUploadAsset,
+  open,
+  onOpenChange,
+}: ClientCommandPaletteProps & { open: boolean; onOpenChange: (open: boolean) => void }) {
+  const [search, setSearch] = useState("");
+  const [, setLocation] = useLocation();
+  const debouncedSearch = useDebounce(search, 250);
+
+  const { data: searchResults } = useQuery<ClientSearchResult>({
+    queryKey: ["/api/clients", clientId, "search", { q: debouncedSearch }],
+    enabled: open && debouncedSearch.length >= 2,
+  });
+
   const handleSelect = useCallback((callback: () => void) => {
-    setOpen(false);
+    onOpenChange(false);
     setSearch("");
     callback();
-  }, []);
+  }, [onOpenChange]);
 
   const navigateTo = useCallback((path: string) => {
     handleSelect(() => setLocation(path));
@@ -121,7 +127,7 @@ export function ClientCommandPalette({
   const showQuickActions = !search;
 
   return (
-    <CommandDialog open={open} onOpenChange={setOpen}>
+    <CommandDialog open={open} onOpenChange={onOpenChange}>
       <CommandInput
         placeholder={`Search in ${clientName}...`}
         value={search}
@@ -256,11 +262,16 @@ export function ClientCommandPalette({
   );
 }
 
-export function ClientCommandPaletteTrigger({ onClick }: { onClick: () => void }) {
-  return null;
-}
-
-export function useClientCommandPaletteOpen() {
-  const [open, setOpen] = useState(false);
-  return { open, setOpen };
+export function ClientCommandPaletteMobileTrigger({ onOpen }: { onOpen: () => void }) {
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="md:hidden fixed bottom-4 right-4 z-40 h-12 w-12 rounded-full bg-primary text-primary-foreground shadow-lg flex items-center justify-center"
+      aria-label="Open command palette"
+      data-testid="button-client-command-trigger"
+    >
+      <Search className="h-5 w-5" />
+    </button>
+  );
 }

@@ -94,7 +94,7 @@ import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { AssetLibraryPanel } from "@/features/assetLibrary/AssetLibraryPanel";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
-import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, useClientProfileSection } from "@/features/clients";
+import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState } from "@/features/clients";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
 import { ClientNotesTab } from "@/components/client-notes-tab";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
@@ -279,7 +279,6 @@ export default function ClientDetailPage() {
   const [addContactOpen, setAddContactOpen] = useState(false);
   const [editContactOpen, setEditContactOpen] = useState(false);
   const [editingContact, setEditingContact] = useState<ClientContact | null>(null);
-  const [editClientOpen, setEditClientOpen] = useState(false);
   const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
   const [addProjectOpen, setAddProjectOpen] = useState(false);
   const [projectView, setProjectView] = useState<"options" | "create" | "assign">("options");
@@ -301,6 +300,7 @@ export default function ClientDetailPage() {
     [crmFlags, featureFlags],
   );
   const { activeSection, setActiveSection } = useClientProfileSection(visibleSections, clientId || "");
+  const cmdPalette = useClientCommandPaletteState();
   const useV2Layout = featureFlags.clientProfileLayoutV2;
   const canDeleteClient = user?.role === "super_user" || user?.role === "tenant_admin" || user?.role === "admin";
 
@@ -665,6 +665,28 @@ export default function ClientDetailPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
+      {featureFlags.clientCommandPaletteV1 && (
+        <>
+          <ClientCommandPalette
+            clientId={clientId || ""}
+            clientName={client.companyName}
+            visibleSections={visibleSections}
+            activeSection={activeSection}
+            onSectionChange={(id) => {
+              setActiveSection(id);
+              setActiveTab(id);
+            }}
+            onNewProject={() => setAddProjectOpen(true)}
+            onUploadAsset={() => {
+              setActiveSection("documents");
+              setActiveTab("documents");
+            }}
+            open={cmdPalette.open}
+            onOpenChange={cmdPalette.setOpen}
+          />
+          <ClientCommandPaletteMobileTrigger onOpen={() => cmdPalette.setOpen(true)} />
+        </>
+      )}
       <div className="flex items-center justify-between px-4 md:px-6 py-3 md:py-4 border-b border-border shrink-0">
         <div className="flex items-center gap-4">
           <Link href={client.parentClientId ? `/clients/${client.parentClientId}` : "/clients"}>
@@ -712,113 +734,6 @@ export default function ClientDetailPage() {
             <Play className="h-4 w-4 mr-2" />
             Start Timer
           </Button>
-          <Dialog open={editClientOpen} onOpenChange={setEditClientOpen}>
-            <DialogTrigger asChild>
-              <Button variant="outline" data-testid="button-edit-client">
-                <Pencil className="h-4 w-4 mr-2" />
-                Edit
-              </Button>
-            </DialogTrigger>
-            <DialogContent>
-              <DialogHeader>
-                <DialogTitle>Edit Client</DialogTitle>
-              </DialogHeader>
-              <Form {...clientForm}>
-                <form onSubmit={clientForm.handleSubmit(handleUpdateClient)} className="space-y-4">
-                  <FormField
-                    control={clientForm.control}
-                    name="companyName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Company Name *</FormLabel>
-                        <FormControl>
-                          <Input {...field} data-testid="input-edit-company-name" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={clientForm.control}
-                    name="displayName"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Display Name</FormLabel>
-                        <FormControl>
-                          <Input {...field} data-testid="input-edit-display-name" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={clientForm.control}
-                    name="status"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Status</FormLabel>
-                        <Select onValueChange={field.onChange} value={field.value}>
-                          <FormControl>
-                            <SelectTrigger data-testid="select-edit-status">
-                              <SelectValue />
-                            </SelectTrigger>
-                          </FormControl>
-                          <SelectContent>
-                            <SelectItem value="active">Active</SelectItem>
-                            <SelectItem value="inactive">Inactive</SelectItem>
-                            <SelectItem value="prospect">Prospect</SelectItem>
-                          </SelectContent>
-                        </Select>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={clientForm.control}
-                    name="industry"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Industry</FormLabel>
-                        <FormControl>
-                          <Input {...field} data-testid="input-edit-industry" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <FormField
-                    control={clientForm.control}
-                    name="website"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Website</FormLabel>
-                        <FormControl>
-                          <Input {...field} data-testid="input-edit-website" />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-                  <div className="flex justify-end gap-2 pt-4">
-                    <Button
-                      type="button"
-                      variant="outline"
-                      onClick={() => setEditClientOpen(false)}
-                    >
-                      Cancel
-                    </Button>
-                    <Button
-                      type="submit"
-                      disabled={updateClientMutation.isPending}
-                      data-testid="button-save-client"
-                    >
-                      {updateClientMutation.isPending ? "Saving..." : "Save Changes"}
-                    </Button>
-                  </div>
-                </form>
-              </Form>
-            </DialogContent>
-          </Dialog>
           {canDeleteClient && (
             <>
               <Button
