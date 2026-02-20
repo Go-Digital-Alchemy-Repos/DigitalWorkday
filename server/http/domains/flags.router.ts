@@ -28,6 +28,7 @@ router.get("/features/flags", async (_req, res) => {
     res.json({
       assetLibraryV2: config.features.assetLibraryV2,
       clientWorkspaceV2: config.features.clientWorkspaceV2,
+      documentsUsingAssets: config.features.documentsUsingAssets,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

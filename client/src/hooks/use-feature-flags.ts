@@ -3,11 +3,13 @@ import { useQuery } from "@tanstack/react-query";
 export interface FeatureFlags {
   assetLibraryV2: boolean;
   clientWorkspaceV2: boolean;
+  documentsUsingAssets: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
   assetLibraryV2: false,
   clientWorkspaceV2: false,
+  documentsUsingAssets: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

@@ -17,11 +17,17 @@ import {
 } from "../../s3";
 import { AppError, handleRouteError, sendError } from "../../lib/errors";
 import { sanitizeFilename, isFilenameUnsafe } from "../middleware/uploadGuards";
+import { config } from "../../config";
+import { documentsAssetAdapter } from "../../features/documents/documentsAssetAdapter";
 
 const router = createApiRouter({
   policy: "authTenant",
   skipEnvelope: true,
 });
+
+function useAssetAdapter(): boolean {
+  return config.features.documentsUsingAssets === true;
+}
 
 function getTenantId(req: Request): string {
   const tenantId = (req as any).tenant?.effectiveTenantId || (req.user as any)?.tenantId;
@@ -134,6 +140,11 @@ router.get(
       const { clientId } = req.params;
       await verifyClientAccess(clientId, tenantId);
 
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.getFolderTree(tenantId, clientId);
+        return res.json(result);
+      }
+
       const folders = await db.select()
         .from(clientDocumentFolders)
         .where(and(
@@ -182,6 +193,11 @@ router.post(
 
       const data = createFolderSchema.parse(req.body);
 
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.createFolder(tenantId, clientId, userId, data.name, data.parentFolderId || null);
+        return res.status(201).json(result);
+      }
+
       if (data.parentFolderId) {
         await verifyFolderAccess(data.parentFolderId, clientId, tenantId);
       }
@@ -216,6 +232,11 @@ router.patch(
 
       const data = renameFolderSchema.parse(req.body);
 
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.renameFolder(tenantId, folderId, clientId, data.name);
+        return res.json(result);
+      }
+
       const [folder] = await db.update(clientDocumentFolders)
         .set({ name: data.name, updatedAt: new Date() })
         .where(and(
@@ -243,9 +264,15 @@ router.patch(
       const tenantId = getTenantId(req);
       const { clientId, folderId } = req.params;
       await verifyClientAccess(clientId, tenantId);
-      await verifyFolderAccess(folderId, clientId, tenantId);
 
       const data = moveFolderSchema.parse(req.body);
+
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.moveFolder(tenantId, folderId, clientId, data.parentFolderId);
+        return res.json(result);
+      }
+
+      await verifyFolderAccess(folderId, clientId, tenantId);
 
       if (data.parentFolderId === folderId) {
         return sendError(res, AppError.badRequest("Cannot move a folder into itself"), req);
@@ -286,6 +313,12 @@ router.delete(
       const tenantId = getTenantId(req);
       const { clientId, folderId } = req.params;
       await verifyClientAccess(clientId, tenantId);
+
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.deleteFolder(tenantId, folderId, clientId);
+        return res.json(result);
+      }
+
       await verifyFolderAccess(folderId, clientId, tenantId);
 
       const [childFolders] = await db.select({ count: count() })
@@ -336,6 +369,15 @@ router.get(
       const { clientId } = req.params;
       const { folderId, q, sort } = req.query;
       await verifyClientAccess(clientId, tenantId);
+
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.listFiles(tenantId, clientId, {
+          folderId: folderId as string | undefined,
+          q: q as string | undefined,
+          sort: sort as string | undefined,
+        });
+        return res.json(result);
+      }
 
       const conditions = [
         eq(clientDocuments.clientId, clientId),
@@ -400,6 +442,11 @@ router.post(
 
       const data = presignSchema.parse(req.body);
 
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.presignUpload(tenantId, clientId, data.folderId || null, data.filename, data.mimeType, data.sizeBytes);
+        return res.json(result);
+      }
+
       const safeName = sanitizeFilename(data.filename);
       if (isFilenameUnsafe(safeName)) {
         return sendError(res, AppError.badRequest("This file type is not allowed for security reasons"), req);
@@ -443,6 +490,11 @@ router.post(
 
       const data = completeSchema.parse(req.body);
 
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.completeUpload(tenantId, clientId, userId, data);
+        return res.status(201).json(result);
+      }
+
       if (data.folderId) {
         await verifyFolderAccess(data.folderId, clientId, tenantId);
       }
@@ -480,6 +532,11 @@ router.patch(
 
       const data = renameFileSchema.parse(req.body);
 
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.renameFile(tenantId, fileId, clientId, data.displayName);
+        return res.json(result);
+      }
+
       const [document] = await db.update(clientDocuments)
         .set({ displayName: data.displayName, updatedAt: new Date() })
         .where(and(
@@ -506,6 +563,11 @@ router.patch(
       await verifyClientAccess(clientId, tenantId);
 
       const data = moveFileSchema.parse(req.body);
+
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.moveFile(tenantId, fileId, clientId, data.folderId);
+        return res.json(result);
+      }
 
       if (data.folderId) {
         await verifyFolderAccess(data.folderId, clientId, tenantId);
@@ -535,6 +597,11 @@ router.delete(
       const tenantId = getTenantId(req);
       const { clientId, fileId } = req.params;
       await verifyClientAccess(clientId, tenantId);
+
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.deleteFile(tenantId, fileId, clientId);
+        return res.json(result);
+      }
 
       const [document] = await db.select()
         .from(clientDocuments)
@@ -574,6 +641,11 @@ router.get(
       const { clientId, fileId } = req.params;
       await verifyClientAccess(clientId, tenantId);
 
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.downloadFile(tenantId, fileId, clientId);
+        return res.json(result);
+      }
+
       const [document] = await db.select()
         .from(clientDocuments)
         .where(and(
@@ -607,6 +679,11 @@ router.post(
       await verifyClientAccess(clientId, tenantId);
 
       const data = bulkMoveSchema.parse(req.body);
+
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.bulkMove(tenantId, clientId, data.fileIds, data.folderIds, data.destinationFolderId);
+        return res.json(result);
+      }
 
       if (data.destinationFolderId) {
         await verifyFolderAccess(data.destinationFolderId, clientId, tenantId);
@@ -658,6 +735,12 @@ router.post(
       await verifyClientAccess(clientId, tenantId);
 
       const data = bulkDeleteSchema.parse(req.body);
+
+      if (useAssetAdapter()) {
+        const result = await documentsAssetAdapter.bulkDelete(tenantId, clientId, data.fileIds, data.folderIds);
+        return res.json(result);
+      }
+
       let deletedFiles = 0;
       let deletedFolders = 0;
 
