@@ -169,6 +169,11 @@ export function TenantSidebar() {
   const [createTeamOpen, setCreateTeamOpen] = useState(false);
   const [projectsLimit, setProjectsLimit] = useState(10);
 
+  const { data: unreadCount = 0 } = useQuery<number>({
+    queryKey: ["/api/v1/chat/unread-count"],
+    refetchInterval: 30000,
+  });
+
   const PROJECTS_PAGE_SIZE = 10;
   const { user } = useAuth();
   const { toast } = useToast();
@@ -442,13 +447,13 @@ export function TenantSidebar() {
                           <item.icon className="h-4 w-4" />
                           <span className="relative flex items-center gap-2">
                             {item.title}
-                            {item.title === "Chat" && totalUnreadChat > 0 && (
+                            {item.title === "Chat" && (totalUnreadChat > 0 || unreadCount > 0) && (
                               <Badge 
                                 variant="destructive" 
                                 className="h-4 min-w-[16px] px-1 text-[10px] flex items-center justify-center rounded-full"
                                 data-testid="badge-chat-unread"
                               >
-                                {totalUnreadChat > 99 ? "99+" : totalUnreadChat}
+                                {(totalUnreadChat + unreadCount) > 99 ? "99+" : (totalUnreadChat + unreadCount)}
                               </Badge>
                             )}
                           </span>

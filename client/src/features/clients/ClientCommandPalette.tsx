@@ -62,8 +62,20 @@ const SECTION_ICONS: Record<string, typeof LayoutDashboard> = {
   "asset-library": PackageOpen,
 };
 
+import { create } from 'zustand';
+
+interface CommandPaletteStore {
+  isOpen: boolean;
+  setIsOpen: (open: boolean) => void;
+}
+
+export const useCommandPaletteStore = create<CommandPaletteStore>((set) => ({
+  isOpen: false,
+  setIsOpen: (isOpen) => set({ isOpen }),
+}));
+
 export function useClientCommandPaletteState() {
-  const [open, setOpen] = useState(false);
+  const { isOpen, setIsOpen } = useCommandPaletteStore();
 
   useEffect(() => {
     const down = (e: KeyboardEvent) => {
@@ -71,15 +83,15 @@ export function useClientCommandPaletteState() {
         e.preventDefault();
         e.stopPropagation();
         e.stopImmediatePropagation();
-        setOpen((o) => !o);
+        setIsOpen(!isOpen);
       }
     };
 
     document.addEventListener("keydown", down, true);
     return () => document.removeEventListener("keydown", down, true);
-  }, []);
+  }, [isOpen, setIsOpen]);
 
-  return { open, setOpen };
+  return { open: isOpen, setOpen: setIsOpen };
 }
 
 export function ClientCommandPalette({

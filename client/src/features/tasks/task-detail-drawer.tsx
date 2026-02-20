@@ -971,9 +971,9 @@ export function TaskDetailDrawer({
           </div>
         </SheetHeader>
 
-        <div className="flex flex-col flex-1 min-h-0">
-        <div className={cn("flex-1 overflow-y-auto space-y-6", drawerBodyPadding)}>
-          <div className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap" data-testid="task-breadcrumbs">
+        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
+          <div className={cn("flex-1 overflow-y-auto space-y-6 scrollbar-hide", drawerBodyPadding)}>
+            <div className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap" data-testid="task-breadcrumbs">
             {task.projectId && projectContextLoading ? (
               <div className="flex items-center gap-2">
                 <Loader2 className="h-3 w-3 animate-spin" />

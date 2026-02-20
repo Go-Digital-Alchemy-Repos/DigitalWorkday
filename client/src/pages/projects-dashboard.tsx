@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X, Pin } from "lucide-react";
+import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X, Pin, Link2, Trash2, Loader2 } from "lucide-react";
 import { ProjectDrawer } from "@/features/projects";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -33,6 +33,18 @@ import type { Project, Client, Team, ClientDivision } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
+import { cn } from "@/lib/utils";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog";
 
 interface ProjectWithCounts extends Project {
   openTaskCount?: number;
@@ -91,7 +103,7 @@ export default function ProjectsDashboard() {
 
   const selectedClientHasDivisions = clientDivisions.length > 0;
 
-  const { data: analytics, isLoading: analyticsLoading } = useQuery<ProjectAnalyticsSummary>({
+  const { data: analytics } = useQuery<ProjectAnalyticsSummary>({
     queryKey: ["/api/v1/projects/analytics/summary"],
     staleTime: 30000,
   });
@@ -219,6 +231,19 @@ export default function ProjectsDashboard() {
     return client?.companyName || "-";
   };
 
+  if (projectsLoading) {
+    return (
+      <PageShell className="max-w-7xl mx-auto">
+        <PageHeader
+          title="Projects"
+          subtitle="View and manage all projects across your workspace"
+          icon={<FolderKanban className="h-6 w-6" />}
+        />
+        <LoadingState type="table" rows={5} />
+      </PageShell>
+    );
+  }
+
   if (projectsError) {
     return (
       <PageShell className="max-w-7xl mx-auto">
@@ -250,229 +275,295 @@ export default function ProjectsDashboard() {
         }
       />
 
+      <div className="mb-6" data-testid="projects-pipeline-bar">
+        <div className="flex gap-0.5 h-2.5 rounded-full overflow-hidden bg-muted mb-3">
+          {projects && projects.length > 0 && (
+            <>
+              {(() => {
+                const total = projects.length;
+                const activeCount = projects.filter(p => p.status !== "archived").length;
+                const archivedCount = total - activeCount;
+                const activePct = (activeCount / total) * 100;
+                const archivedPct = (archivedCount / total) * 100;
+                
+                return (
+                  <>
+                    <div 
+                      className="bg-primary transition-all duration-300 cursor-pointer" 
+                      style={{ width: `${Math.max(activePct, 2)}%` }}
+                      onClick={() => setStatusFilter("active")}
+                      title={`Active: ${activeCount}`}
+                    />
+                    <div 
+                      className="bg-muted-foreground/30 transition-all duration-300 cursor-pointer" 
+                      style={{ width: `${Math.max(archivedPct, 2)}%` }}
+                      onClick={() => setStatusFilter("archived")}
+                      title={`Archived: ${archivedCount}`}
+                    />
+                  </>
+                );
+              })()}
+            </>
+          )}
+        </div>
+        <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
+          <Button
+            variant={statusFilter === "all" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setStatusFilter("all")}
+            className="shrink-0 h-8"
+          >
+            All
+            <span className="ml-1.5 text-xs text-muted-foreground">{projects?.length || 0}</span>
+          </Button>
+          <Button
+            variant={statusFilter === "active" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setStatusFilter("active")}
+            className="shrink-0 h-8"
+          >
+            <span className="h-2 w-2 rounded-full mr-1.5 shrink-0 bg-primary" />
+            Active
+            <span className="ml-1.5 text-xs text-muted-foreground">
+              {projects?.filter(p => p.status !== "archived").length || 0}
+            </span>
+          </Button>
+          <Button
+            variant={statusFilter === "archived" ? "secondary" : "ghost"}
+            size="sm"
+            onClick={() => setStatusFilter("archived")}
+            className="shrink-0 h-8"
+          >
+            <span className="h-2 w-2 rounded-full mr-1.5 shrink-0 bg-muted-foreground/30" />
+            Archived
+            <span className="ml-1.5 text-xs text-muted-foreground">
+              {projects?.filter(p => p.status === "archived").length || 0}
+            </span>
+          </Button>
+        </div>
+      </div>
+
       {isEmployee && (
         <AccessInfoBanner variant="projects" className="mb-4" />
       )}
 
-        {analytics?.totals && (
-          <div className="grid gap-3 grid-cols-2 md:grid-cols-4 mb-6">
-            <Card>
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-2">
-                  <FolderKanban className="h-4 w-4 text-primary" />
-                  <span className="text-sm text-muted-foreground">Active Projects</span>
-                </div>
-                <div className="text-2xl font-bold mt-1">{analytics.totals.activeProjects}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-2">
-                  <AlertTriangle className="h-4 w-4 text-destructive" />
-                  <span className="text-sm text-muted-foreground">Projects at Risk</span>
-                </div>
-                <div className="text-2xl font-bold mt-1 text-destructive">
-                  {analytics.totals.projectsWithOverdue}
-                </div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-2">
-                  <Clock className="h-4 w-4 text-orange-500" />
-                  <span className="text-sm text-muted-foreground">Due Today</span>
-                </div>
-                <div className="text-2xl font-bold mt-1">{analytics.totals.tasksDueToday}</div>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="pt-4 pb-3">
-                <div className="flex items-center gap-2">
-                  <CircleOff className="h-4 w-4 text-muted-foreground" />
-                  <span className="text-sm text-muted-foreground">Unassigned Tasks</span>
-                </div>
-                <div className="text-2xl font-bold mt-1">{analytics.totals.unassignedOpenTasks}</div>
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        <div className="flex flex-col gap-3 md:gap-4 mb-4 md:mb-6">
-          <div className="relative w-full md:max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input
-              placeholder="Search projects..."
-              value={searchQuery}
-              onChange={(e) => setSearchQuery(e.target.value)}
-              className="pl-9"
-              data-testid="input-search-projects"
-            />
-          </div>
-          
-          <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-hide">
-            <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
-            
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
-              <SelectTrigger className="w-[100px] md:w-[130px] shrink-0" data-testid="select-status-filter">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Status</SelectItem>
-                <SelectItem value="active">Active</SelectItem>
-                <SelectItem value="archived">Archived</SelectItem>
-              </SelectContent>
-            </Select>
-
-            <Select value={clientFilter} onValueChange={handleClientFilterChange}>
-              <SelectTrigger className="w-[110px] md:w-[150px] shrink-0" data-testid="select-client-filter">
-                <SelectValue placeholder="Client" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Clients</SelectItem>
-                {clients?.map((client) => (
-                  <SelectItem key={client.id} value={client.id}>
-                    {client.displayName || client.companyName}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {selectedClientHasDivisions && (
-              <Select value={divisionFilter} onValueChange={setDivisionFilter}>
-                <SelectTrigger className="w-[110px] md:w-[150px] shrink-0" data-testid="select-division-filter">
-                  <SelectValue placeholder="Division" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="all">All Divisions</SelectItem>
-                  {clientDivisions.map((division) => (
-                    <SelectItem key={division.id} value={division.id}>
-                      {division.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            )}
-
-            <Select value={teamFilter} onValueChange={setTeamFilter}>
-              <SelectTrigger className="w-[100px] md:w-[150px] shrink-0" data-testid="select-team-filter">
-                <SelectValue placeholder="Team" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Teams</SelectItem>
-                {teams?.map((team) => (
-                  <SelectItem key={team.id} value={team.id}>
-                    {team.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleClearFilters}
-                className="shrink-0 text-muted-foreground gap-1"
-                data-testid="button-clear-filters"
-              >
-                <X className="h-4 w-4" />
-                <span className="hidden md:inline">Clear filters</span>
-              </Button>
-            )}
-          </div>
-        </div>
-
-        {projectsLoading ? (
-          <LoadingState type="table" rows={5} />
-        ) : filteredProjects.length === 0 ? (
-          <EmptyState
-            icon={<FolderKanban className="h-12 w-12" />}
-            title="No projects found"
-            description={
-              hasActiveFilters
-                ? "Try adjusting your filters"
-                : "Create your first project to get started"
-            }
-            action={
-              !hasActiveFilters && (
-                <Button onClick={() => setCreateProjectOpen(true)} data-testid="button-add-first-project">
-                  <Plus className="h-4 w-4 mr-2" />
-                  Create Project
-                </Button>
-              )
-            }
+      <div className="flex flex-col gap-3 md:gap-4 mb-4 md:mb-6">
+        <div className="relative w-full md:max-w-md">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Search projects..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            className="pl-9"
+            data-testid="input-search-projects"
           />
-        ) : (
-          <>
-            {/* Mobile card view */}
-            <div className="md:hidden space-y-3">
-              {filteredProjects.map((project) => {
-                const stats = getProjectStats(project.id);
-                return (
-                  <Card
-                    key={project.id}
-                    className="hover-elevate cursor-pointer"
-                    onClick={() => handleRowClick(project)}
-                    data-testid={`card-project-${project.id}`}
-                  >
-                    <CardContent className="p-4">
-                      <div className="flex items-start gap-3">
-                        <div
-                          className="h-8 w-8 rounded-md flex items-center justify-center text-white text-sm font-medium shrink-0"
-                          style={{ backgroundColor: project.color || "#3B82F6" }}
-                        >
-                          {project.name.charAt(0).toUpperCase()}
-                        </div>
-                        <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1">
-                            <h3 className="font-medium truncate">{project.name}</h3>
-                            {project.stickyAt && (
-                              <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
-                            )}
-                            <Badge variant={project.status === "archived" ? "secondary" : "default"} className="shrink-0">
-                              {project.status === "archived" ? "Archived" : "Active"}
-                            </Badge>
-                          </div>
-                          {project.description && (
-                            <p className="text-xs text-muted-foreground line-clamp-1 mb-2">{getPreviewText(project.description)}</p>
-                          )}
-                          <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-                            {getClientName(project.clientId) !== "-" && (
-                              <span className="flex items-center gap-1">
-                                <Users className="h-3 w-3" />
-                                {getClientName(project.clientId)}
-                              </span>
-                            )}
-                            {stats && (
-                              <>
-                                <span className="flex items-center gap-1">
-                                  <CheckSquare className="h-3 w-3" />
-                                  {stats.openTasks} open
-                                </span>
-                                {stats.overdueTasks > 0 && (
-                                  <Badge variant="destructive" className="text-xs px-1.5 py-0">
-                                    {stats.overdueTasks} overdue
-                                  </Badge>
-                                )}
-                              </>
-                            )}
-                          </div>
-                          {stats && (
-                            <div className="mt-2">
-                              <Progress value={stats.completionPercent} className="h-1.5" />
-                            </div>
-                          )}
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                );
-              })}
-            </div>
+        </div>
+        
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-hide">
+          <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
+          
+          <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <SelectTrigger className="w-[100px] md:w-[130px] shrink-0" data-testid="select-status-filter">
+              <SelectValue placeholder="Status" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Status</SelectItem>
+              <SelectItem value="active">Active</SelectItem>
+              <SelectItem value="archived">Archived</SelectItem>
+            </SelectContent>
+          </Select>
 
-            {/* Desktop table view */}
-            <div className="hidden md:block border rounded-lg overflow-x-auto">
-              <Table>
+          <Select value={clientFilter} onValueChange={handleClientFilterChange}>
+            <SelectTrigger className="w-[110px] md:w-[150px] shrink-0" data-testid="select-client-filter">
+              <SelectValue placeholder="Client" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Clients</SelectItem>
+              {clients?.map((client) => (
+                <SelectItem key={client.id} value={client.id}>
+                  {client.displayName || client.companyName}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {selectedClientHasDivisions && (
+            <Select value={divisionFilter} onValueChange={setDivisionFilter}>
+              <SelectTrigger className="w-[110px] md:w-[150px] shrink-0" data-testid="select-division-filter">
+                <SelectValue placeholder="Division" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Divisions</SelectItem>
+                {clientDivisions.map((division) => (
+                  <SelectItem key={division.id} value={division.id}>
+                    {division.name}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          <Select value={teamFilter} onValueChange={setTeamFilter}>
+            <SelectTrigger className="w-[100px] md:w-[130px] shrink-0" data-testid="select-team-filter">
+              <SelectValue placeholder="Team" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Teams</SelectItem>
+              {teams?.map((team) => (
+                <SelectItem key={team.id} value={team.id}>
+                  {team.name}
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+
+          {hasActiveFilters && (
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleClearFilters}
+              className="shrink-0 text-muted-foreground gap-1"
+              data-testid="button-clear-filters"
+            >
+              <X className="h-4 w-4" />
+              <span className="hidden md:inline">Clear filters</span>
+            </Button>
+          )}
+        </div>
+      </div>
+
+      {analytics?.totals && (
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-4 mb-6">
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center gap-2">
+                <FolderKanban className="h-4 w-4 text-primary" />
+                <span className="text-sm text-muted-foreground">Active Projects</span>
+              </div>
+              <div className="text-2xl font-bold mt-1">{analytics.totals.activeProjects}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center gap-2">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <span className="text-sm text-muted-foreground">Projects at Risk</span>
+              </div>
+              <div className="text-2xl font-bold mt-1 text-destructive">
+                {analytics.totals.projectsWithOverdue}
+              </div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center gap-2">
+                <Clock className="h-4 w-4 text-orange-500" />
+                <span className="text-sm text-muted-foreground">Due Today</span>
+              </div>
+              <div className="text-2xl font-bold mt-1">{analytics.totals.tasksDueToday}</div>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent className="pt-4 pb-3">
+              <div className="flex items-center gap-2">
+                <CircleOff className="h-4 w-4 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Unassigned Tasks</span>
+              </div>
+              <div className="text-2xl font-bold mt-1">{analytics.totals.unassignedOpenTasks}</div>
+            </CardContent>
+          </Card>
+        </div>
+      )}
+
+      {filteredProjects.length === 0 ? (
+        <EmptyState
+          icon={<FolderKanban className="h-12 w-12" />}
+          title="No projects found"
+          description={
+            hasActiveFilters
+              ? "Try adjusting your filters"
+              : "Create your first project to get started"
+          }
+          action={
+            !hasActiveFilters && (
+              <Button onClick={() => setCreateProjectOpen(true)} data-testid="button-add-first-project">
+                <Plus className="h-4 w-4 mr-2" />
+                Create Project
+              </Button>
+            )
+          }
+        />
+      ) : (
+        <>
+          {/* Mobile card view */}
+          <div className="md:hidden space-y-3">
+            {filteredProjects.map((project) => {
+              const stats = getProjectStats(project.id);
+              return (
+                <Card
+                  key={project.id}
+                  className="hover-elevate cursor-pointer"
+                  onClick={() => handleRowClick(project)}
+                  data-testid={`card-project-${project.id}`}
+                >
+                  <CardContent className="p-4">
+                    <div className="flex items-start gap-3">
+                      <div
+                        className="h-8 w-8 rounded-md flex items-center justify-center text-white text-sm font-medium shrink-0"
+                        style={{ backgroundColor: project.color || "#3B82F6" }}
+                      >
+                        {project.name.charAt(0).toUpperCase()}
+                      </div>
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-2 mb-1">
+                          <h3 className="font-medium truncate">{project.name}</h3>
+                          {project.stickyAt && (
+                            <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
+                          )}
+                          <Badge variant={project.status === "archived" ? "secondary" : "default"} className="shrink-0">
+                            {project.status === "archived" ? "Archived" : "Active"}
+                          </Badge>
+                        </div>
+                        {project.description && (
+                          <p className="text-xs text-muted-foreground line-clamp-1 mb-2">{getPreviewText(project.description)}</p>
+                        )}
+                        <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
+                          {getClientName(project.clientId) !== "-" && (
+                            <span className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              {getClientName(project.clientId)}
+                            </span>
+                          )}
+                          {stats && (
+                            <>
+                              <span className="flex items-center gap-1">
+                                <CheckSquare className="h-3 w-3" />
+                                {stats.openTasks} open
+                              </span>
+                              {stats.overdueTasks > 0 && (
+                                <Badge variant="destructive" className="text-xs px-1.5 py-0">
+                                  {stats.overdueTasks} overdue
+                                </Badge>
+                              )}
+                            </>
+                          )}
+                        </div>
+                        {stats && (
+                          <div className="mt-2">
+                            <Progress value={stats.completionPercent} className="h-1.5" />
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  </CardContent>
+                </Card>
+              );
+            })}
+          </div>
+
+          {/* Desktop table view */}
+          <div className="hidden md:block border rounded-lg overflow-x-auto">
+            <Table>
               <TableHeader>
                 <TableRow>
                   <TableHead className="w-[250px]">Project Name</TableHead>
@@ -597,50 +688,37 @@ export default function ProjectsDashboard() {
                     <TableCell>
                       {(() => {
                         const stats = getProjectStats(project.id);
-                        if (stats?.lastActivityAt) {
-                          return (
-                            <span className="text-sm text-muted-foreground">
-                              {format(new Date(stats.lastActivityAt), "MMM d")}
-                            </span>
-                          );
-                        }
-                        if (project.updatedAt) {
-                          return (
-                            <span className="text-sm text-muted-foreground">
-                              {format(new Date(project.updatedAt), "MMM d")}
-                            </span>
-                          );
-                        }
-                        return <span className="text-muted-foreground">-</span>;
+                        if (!stats || !stats.lastActivityAt) return <span className="text-muted-foreground">-</span>;
+                        return (
+                          <span className="text-xs text-muted-foreground">
+                            {format(new Date(stats.lastActivityAt), "MMM d, yyyy")}
+                          </span>
+                        );
                       })()}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
             </Table>
-            </div>
-          </>
-        )}
+          </div>
+        </>
+      )}
 
-        <div className="mt-4 text-sm text-muted-foreground">
-          Showing {filteredProjects.length} of {projects?.length || 0} projects
-        </div>
+      <ProjectDrawer
+        open={createProjectOpen}
+        onOpenChange={setCreateProjectOpen}
+        onSubmit={handleCreateProject}
+        clients={clients || []}
+        teams={teams || []}
+      />
 
       <ProjectDrawer
         open={editProjectOpen}
         onOpenChange={setEditProjectOpen}
         onSubmit={handleUpdateProject}
         project={editingProject}
-        isLoading={updateProjectMutation.isPending}
-        mode="edit"
-      />
-
-      <ProjectDrawer
-        open={createProjectOpen}
-        onOpenChange={setCreateProjectOpen}
-        onSubmit={handleCreateProject}
-        isLoading={createProjectMutation.isPending}
-        mode="create"
+        clients={clients || []}
+        teams={teams || []}
       />
     </PageShell>
   );
