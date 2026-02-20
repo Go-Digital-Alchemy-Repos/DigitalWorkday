@@ -7,3 +7,4 @@ export type { ClientProfileSection } from "./clientProfileSections";
 export { useClientProfileSection } from "./useClientProfileSection";
 export { ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState } from "./ClientCommandPalette";
 export type { ClientCommandPaletteProps } from "./ClientCommandPalette";
+export { ControlCenterSection } from "./ControlCenterSection";

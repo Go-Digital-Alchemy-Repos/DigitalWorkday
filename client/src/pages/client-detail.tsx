@@ -94,7 +94,7 @@ import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { AssetLibraryPanel } from "@/features/assetLibrary/AssetLibraryPanel";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
-import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState } from "@/features/clients";
+import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState, ControlCenterSection } from "@/features/clients";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
 import { ClientNotesTab } from "@/components/client-notes-tab";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
@@ -844,6 +844,16 @@ export default function ClientDetailPage() {
               </TabsList>
             )}
           </div>
+
+          <TabsContent value="control-center" className="overflow-auto">
+            <ControlCenterSection
+              clientId={clientId || ""}
+              onNavigateTab={(tab) => {
+                setActiveTab(tab);
+                if (useV2Layout) setActiveSection(tab);
+              }}
+            />
+          </TabsContent>
 
           <TabsContent value="overview" className="p-6 overflow-auto">
             {crmFlags.client360 && (
