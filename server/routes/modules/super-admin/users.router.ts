@@ -1,8 +1,11 @@
 import { Router } from 'express';
+import multer from 'multer';
 import { requireSuperUser } from '../../../middleware/tenantContext';
 import { storage } from '../../../storage';
 import { db } from '../../../db';
 import { hashPassword } from '../../../auth';
+import { isS3Configured, uploadToS3, generateAvatarKey, validateAvatar } from '../../../s3';
+import { deleteFromStorageByUrl } from '../../../services/uploads/s3UploadService';
 import {
   UserRole,
   users,
@@ -57,6 +60,11 @@ import { eq, sql, desc, and, count, gte, isNull, ne, inArray } from 'drizzle-orm
 import { z } from 'zod';
 
 export const superUsersRouter = Router();
+
+const avatarUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 2 * 1024 * 1024 },
+});
 
 superUsersRouter.get("/users/orphaned", requireSuperUser, async (req, res) => {
   try {
@@ -398,6 +406,85 @@ superUsersRouter.patch("/users/:userId", requireSuperUser, async (req, res) => {
     }
     console.error("[super/users/:userId] Error:", error);
     res.status(500).json({ error: "Failed to update user" });
+  }
+});
+
+superUsersRouter.post("/users/:userId/avatar", requireSuperUser, avatarUpload.single("file"), async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const superUser = req.user as any;
+
+    if (!isS3Configured()) {
+      return res.status(503).json({ error: "S3 storage is not configured" });
+    }
+
+    const existingUser = await storage.getUser(userId);
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (existingUser.role === UserRole.SUPER_USER) {
+      return res.status(403).json({ error: "Cannot modify super users through this endpoint" });
+    }
+
+    if (!req.file) {
+      return res.status(400).json({ error: "No file provided" });
+    }
+
+    const mimeType = req.file.mimetype;
+    const validation = validateAvatar(mimeType, req.file.size);
+    if (!validation.valid) {
+      return res.status(400).json({ error: validation.error || "Invalid avatar file" });
+    }
+
+    if (existingUser.avatarUrl) {
+      deleteFromStorageByUrl(existingUser.avatarUrl, existingUser.tenantId).catch(err => {
+        console.error("[super/users/:userId/avatar] Failed to delete old avatar:", err);
+      });
+    }
+
+    const storageKey = generateAvatarKey(existingUser.tenantId, userId, req.file.originalname);
+    const url = await uploadToS3(req.file.buffer, storageKey, mimeType);
+
+    await db.update(users).set({ avatarUrl: url, updatedAt: new Date() }).where(eq(users.id, userId));
+
+    console.log(`[super/users/:userId/avatar] Avatar updated for ${existingUser.email} by super admin ${superUser?.email}`);
+
+    res.json({ url });
+  } catch (error) {
+    console.error("[super/users/:userId/avatar] Error:", error);
+    res.status(500).json({ error: "Failed to upload avatar" });
+  }
+});
+
+superUsersRouter.delete("/users/:userId/avatar", requireSuperUser, async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const superUser = req.user as any;
+
+    const existingUser = await storage.getUser(userId);
+    if (!existingUser) {
+      return res.status(404).json({ error: "User not found" });
+    }
+
+    if (existingUser.role === UserRole.SUPER_USER) {
+      return res.status(403).json({ error: "Cannot modify super users through this endpoint" });
+    }
+
+    if (existingUser.avatarUrl) {
+      deleteFromStorageByUrl(existingUser.avatarUrl, existingUser.tenantId).catch(err => {
+        console.error("[super/users/:userId/avatar] Failed to delete old avatar:", err);
+      });
+    }
+
+    await db.update(users).set({ avatarUrl: null, updatedAt: new Date() }).where(eq(users.id, userId));
+
+    console.log(`[super/users/:userId/avatar] Avatar removed for ${existingUser.email} by super admin ${superUser?.email}`);
+
+    res.json({ ok: true });
+  } catch (error) {
+    console.error("[super/users/:userId/avatar] Error:", error);
+    res.status(500).json({ error: "Failed to remove avatar" });
   }
 });
 

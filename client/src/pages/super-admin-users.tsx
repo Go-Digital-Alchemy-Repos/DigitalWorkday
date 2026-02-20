@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -16,7 +16,7 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { Redirect } from "wouter";
 import { 
-  Loader2, Shield, Save, Mail, Plus, Link, Copy, MoreHorizontal, 
+  Loader2, Shield, Save, Mail, Plus, Link, Copy, MoreHorizontal, Camera,
   UserCheck, UserX, Clock, AlertCircle, KeyRound, Eye, EyeOff, Trash2, Send,
   Search, Building2, Users, ChevronLeft, ChevronRight, Activity, Edit, X
 } from "lucide-react";
@@ -474,6 +474,58 @@ export default function SuperAdminUsers() {
       toast({ title: error.message || "Failed to update user", variant: "destructive" });
     },
   });
+
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+
+  const uploadAvatarMutation = useMutation({
+    mutationFn: async ({ userId, file }: { userId: string; file: File }) => {
+      const formData = new FormData();
+      formData.append("file", file);
+      const res = await fetch(`/api/v1/super/users/${userId}/avatar`, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error || "Failed to upload avatar");
+      }
+      return res.json();
+    },
+    onSuccess: (_data, variables) => {
+      toast({ title: "Avatar updated successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/users"] });
+      if (selectedAppUser && selectedAppUser.id === variables.userId) {
+        setSelectedAppUser({ ...selectedAppUser, avatarUrl: _data.url });
+      }
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "Failed to upload avatar", variant: "destructive" });
+    },
+  });
+
+  const removeAvatarMutation = useMutation({
+    mutationFn: async (userId: string) => {
+      return apiRequest("DELETE", `/api/v1/super/users/${userId}/avatar`);
+    },
+    onSuccess: (_data, userId) => {
+      toast({ title: "Avatar removed" });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/users"] });
+      if (selectedAppUser && selectedAppUser.id === userId) {
+        setSelectedAppUser({ ...selectedAppUser, avatarUrl: null });
+      }
+    },
+    onError: (error: any) => {
+      toast({ title: error.message || "Failed to remove avatar", variant: "destructive" });
+    },
+  });
+
+  const handleAvatarFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file || !selectedAppUser) return;
+    uploadAvatarMutation.mutate({ userId: selectedAppUser.id, file });
+    e.target.value = "";
+  };
 
   const setAppUserPasswordMutation = useMutation({
     mutationFn: async ({ id, password, mustChangeOnNextLogin }: { id: string; password: string; mustChangeOnNextLogin: boolean }) => {
@@ -1069,10 +1121,65 @@ export default function SuperAdminUsers() {
           {selectedAppUser && (
             <div className="space-y-6 py-6">
               <div className="flex items-center gap-4">
-                <Avatar className="h-16 w-16">
-                  <AvatarImage src={selectedAppUser.avatarUrl || undefined} />
-                  <AvatarFallback className="text-lg">{getInitials(selectedAppUser.name || `${selectedAppUser.firstName || ""} ${selectedAppUser.lastName || ""}`.trim() || null, selectedAppUser.email)}</AvatarFallback>
-                </Avatar>
+                <input
+                  ref={avatarFileInputRef}
+                  type="file"
+                  accept="image/png,image/jpeg,image/webp,image/gif"
+                  className="hidden"
+                  onChange={handleAvatarFileChange}
+                  data-testid="input-avatar-file"
+                />
+                {!selectedAppUser.isPendingInvite ? (
+                  <DropdownMenu>
+                    <DropdownMenuTrigger asChild>
+                      <div
+                        role="button"
+                        tabIndex={0}
+                        className="relative group cursor-pointer rounded-full"
+                        data-testid="button-avatar-edit"
+                      >
+                        <Avatar className="h-16 w-16" data-testid="img-user-avatar">
+                          <AvatarImage src={selectedAppUser.avatarUrl || undefined} />
+                          <AvatarFallback className="text-lg">{getInitials(selectedAppUser.name || `${selectedAppUser.firstName || ""} ${selectedAppUser.lastName || ""}`.trim() || null, selectedAppUser.email)}</AvatarFallback>
+                        </Avatar>
+                        <div
+                          className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center invisible group-hover:visible"
+                          data-testid="overlay-avatar-edit"
+                        >
+                          {uploadAvatarMutation.isPending ? (
+                            <Loader2 className="h-5 w-5 text-white animate-spin" />
+                          ) : (
+                            <Camera className="h-5 w-5 text-white" />
+                          )}
+                        </div>
+                      </div>
+                    </DropdownMenuTrigger>
+                    <DropdownMenuContent align="start">
+                      <DropdownMenuItem
+                        onClick={() => avatarFileInputRef.current?.click()}
+                        data-testid="menu-item-upload-avatar"
+                      >
+                        <Camera className="h-4 w-4 mr-2" />
+                        Upload new avatar
+                      </DropdownMenuItem>
+                      {selectedAppUser.avatarUrl && (
+                        <DropdownMenuItem
+                          onClick={() => removeAvatarMutation.mutate(selectedAppUser.id)}
+                          className="text-destructive"
+                          data-testid="menu-item-remove-avatar"
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Remove avatar
+                        </DropdownMenuItem>
+                      )}
+                    </DropdownMenuContent>
+                  </DropdownMenu>
+                ) : (
+                  <Avatar className="h-16 w-16" data-testid="img-user-avatar">
+                    <AvatarImage src={selectedAppUser.avatarUrl || undefined} />
+                    <AvatarFallback className="text-lg">{getInitials(selectedAppUser.name || `${selectedAppUser.firstName || ""} ${selectedAppUser.lastName || ""}`.trim() || null, selectedAppUser.email)}</AvatarFallback>
+                  </Avatar>
+                )}
                 <div>
                   <div className="font-semibold text-lg">
                     {selectedAppUser.firstName && selectedAppUser.lastName ? `${selectedAppUser.firstName} ${selectedAppUser.lastName}` : selectedAppUser.name || selectedAppUser.email}
