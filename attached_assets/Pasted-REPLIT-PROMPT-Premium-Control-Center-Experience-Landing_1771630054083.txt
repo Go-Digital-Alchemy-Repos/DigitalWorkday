@@ -1,0 +1,207 @@
+REPLIT PROMPT — Premium “Control Center” Experience (Landing Panel + Tiles + Metrics)
+DigitalWorkday
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE:
+Upgrade the Client Profile “Control Center” into a premium admin experience:
+- Clicking “Control Center” (the tab itself) opens a Control Center landing panel (a real section)
+- Dropdown still exists for direct navigation to child areas
+- Landing panel shows:
+  1) Quick tiles (Activity, Reports, Portal Users, Divisions)
+  2) Client Health snapshot (premium stats cards)
+  3) Operational alerts (open tickets, overdue tasks, last client message)
+  4) Shortcuts (New Ticket, New Message, Upload Asset)
+- Respect role gating:
+  - Reports/admin-only tiles hidden for non-admins
+  - Portal Users hidden for non-admins
+- Mobile friendly (cards stacked, no clutter)
+- Uses shadcn/ui only and matches the app’s existing styling and spacing conventions
+
+NON-DESTRUCTIVE RULES:
+- Do not remove any existing sections/routes.
+- Keep deep links (?section=activity etc.) working.
+- Keep Control Center dropdown working.
+- Add a new section key: control_center (landing).
+- Add feature flag CLIENT_PROFILE_CONTROL_CENTER_PREMIUM (default true dev, false prod until verified).
+
+================================================================================
+PHASE 1 — Add Control Center as a Real Section
+================================================================================
+
+1) Update the section registry:
+client/src/features/clients/profile/clientProfileSections.ts
+
+- Add section:
+  key: 'control_center'
+  label: 'Control Center'
+  icon: Settings
+  showInPrimaryTabs: true
+  (This is the landing panel)
+- The dropdown menu remains, but now its parent tab routes to ?section=control_center on click.
+
+2) Update active-state logic:
+- If current section is control_center, highlight Control Center tab
+- If current section is any child (activity/reports/portal_users/divisions), also highlight Control Center tab
+
+================================================================================
+PHASE 2 — Refactor the Tab + Dropdown Interaction (Premium Behavior)
+================================================================================
+
+Update:
+client/src/features/clients/profile/ClientSectionSwitcher.tsx
+
+Behavior:
+- Clicking the Control Center tab label:
+  -> setSection('control_center')
+- Clicking the chevron / right side area:
+  -> opens dropdown menu
+(Implement as a split-button tab using shadcn Button variants styled to look like a tab.)
+
+Accessibility:
+- Enter/Space on tab navigates to landing
+- Alt+Down or ArrowDown opens menu
+- Chevron button is separate focus target
+
+================================================================================
+PHASE 3 — Build the Premium Control Center Landing Panel
+================================================================================
+
+Create:
+client/src/features/clients/profile/sections/ControlCenterSection.tsx
+
+Layout (Desktop):
+- Top row: Title + shortcuts
+- Grid of cards below:
+  Left 2/3:
+    - Quick Tiles (4 cards)
+    - Operational Alerts (list)
+  Right 1/3:
+    - Client Health Snapshot (stats)
+    - “Recent Activity” mini feed (top 5)
+
+Layout (Mobile):
+- Single column stack:
+  - Shortcuts
+  - Tiles
+  - Health snapshot
+  - Alerts
+  - Recent activity
+
+Use shadcn/ui:
+- Card, CardHeader, CardContent
+- Button
+- Badge
+- Separator
+- ScrollArea (for mini feeds)
+- Tooltip
+
+================================================================================
+PHASE 4 — Data Wiring (Lightweight, Fast)
+================================================================================
+
+This landing panel must be fast and not over-fetch.
+
+Create a hook:
+client/src/features/clients/profile/sections/useControlCenterSummary.ts
+
+Fetch minimal summary endpoints (prefer existing ones):
+- open ticket count for client
+- overdue task count for client
+- active projects count
+- last message timestamp + snippet (client messages)
+- last activity event timestamp
+- stage + days in stage (if pipeline exists)
+- portal user count
+- divisions count
+- asset count
+
+If these endpoints do not exist:
+- add ONE consolidated endpoint:
+GET /api/v1/clients/:clientId/control-center-summary
+(authTenant)
+Return a compact JSON payload with counts + recent items.
+
+Performance rules:
+- 1 request for the summary
+- 1 request for mini activity feed (if not included)
+- No heavy lists
+
+================================================================================
+PHASE 5 — Tiles + Actions
+================================================================================
+
+Quick Tiles (each card clickable):
+1) Activity
+- shows last activity time
+- CTA: “View Activity”
+
+2) Reports (admin only)
+- shows “Stage breakdown” or “Reports available”
+- CTA: “Open Reports”
+
+3) Portal Users (admin only)
+- shows portal user count
+- CTA: “Manage Portal Users”
+
+4) Divisions
+- shows divisions count
+- CTA: “Manage Divisions”
+
+Shortcuts row:
+- New Ticket (opens existing ticket dialog / route)
+- New Message (opens message composer / thread creation)
+- Upload Asset (opens Asset Library upload)
+- View Client Portal (if exists)
+
+Operational Alerts card:
+- “Overdue tasks: X”
+- “Open tickets: X”
+- “Unread client messages: X”
+Each item links to the relevant section filtered (preselect filters via URL params if you support them).
+
+Client Health Snapshot card (v1 simple):
+- Stage + time in stage
+- Last client activity (message or portal login if tracked)
+- SLA status (if exists)
+- “Health” badge computed from simple heuristics:
+  - warning if overdue tasks > 0
+  - warning if open tickets > 0
+  - healthy otherwise
+(Keep simple now; design for future scoring later.)
+
+================================================================================
+PHASE 6 — Integrate Into Client Profile Shell
+================================================================================
+
+In ClientProfileShell render mapping:
+- if section === 'control_center' render <ControlCenterSection />
+
+Ensure:
+- role gating hides forbidden content
+- section selector includes Control Center
+- command palette includes Control Center landing jump
+
+================================================================================
+PHASE 7 — Tests + Docs
+================================================================================
+
+Tests:
+- Control Center section renders for employee/admin
+- Reports/Portal Users tiles hidden for non-admin
+- Clicking tile navigates to correct section via setSection
+- Summary endpoint tenant scoping enforced
+
+Docs:
+- Update docs/UX/client-profile.md:
+  - Control Center landing definition
+  - how to add new tiles/metrics
+- Add docs/features/control-center.md:
+  - summary payload contract
+  - permission rules
+- Update Docs Library entry in Super Admin.
+
+OUTPUT:
+- files changed
+- tests passing
+- docs updated
