@@ -4,12 +4,14 @@ export interface FeatureFlags {
   assetLibraryV2: boolean;
   clientWorkspaceV2: boolean;
   documentsUsingAssets: boolean;
+  clientProfileLayoutV2: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
   assetLibraryV2: false,
   clientWorkspaceV2: false,
   documentsUsingAssets: false,
+  clientProfileLayoutV2: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

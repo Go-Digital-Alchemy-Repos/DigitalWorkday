@@ -180,6 +180,7 @@ export const config = {
     assetLibraryV2: optionalEnvBool("ASSET_LIBRARY_V2", false),
     clientWorkspaceV2: optionalEnvBool("CLIENT_WORKSPACE_V2", false),
     documentsUsingAssets: optionalEnvBool("DOCUMENTS_USING_ASSETS", false),
+    clientProfileLayoutV2: optionalEnvBool("CLIENT_PROFILE_LAYOUT_V2", true),
   },
 
   // Git info for versioning

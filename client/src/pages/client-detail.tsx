@@ -94,7 +94,7 @@ import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { AssetLibraryPanel } from "@/features/assetLibrary/AssetLibraryPanel";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
-import { DivisionDrawer } from "@/features/clients";
+import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, useClientProfileSection } from "@/features/clients";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
 import { ClientNotesTab } from "@/components/client-notes-tab";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
@@ -295,6 +295,13 @@ export default function ClientDetailPage() {
   const { user } = useAuth();
   const crmFlags = useCrmFlags();
   const featureFlags = useFeatureFlags();
+
+  const visibleSections = useMemo(
+    () => getVisibleSections(crmFlags, featureFlags),
+    [crmFlags, featureFlags],
+  );
+  const { activeSection, setActiveSection } = useClientProfileSection(visibleSections, clientId || "");
+  const useV2Layout = featureFlags.clientProfileLayoutV2;
   const canDeleteClient = user?.role === "super_user" || user?.role === "tenant_admin" || user?.role === "admin";
 
   const { data: client, isLoading } = useQuery<ClientWithContacts>({
@@ -850,57 +857,78 @@ export default function ClientDetailPage() {
       </div>
 
       <div className="flex-1 overflow-auto">
-        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
+        <Tabs value={useV2Layout ? activeSection : activeTab} onValueChange={(val) => {
+          if (useV2Layout) {
+            setActiveSection(val);
+          }
+          setActiveTab(val);
+        }} className="h-full">
           <div className="px-6 pt-4 border-b border-border">
-            <TabsList>
-              <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-              <TabsTrigger value="contacts" data-testid="tab-contacts">
-                Contacts ({client.contacts?.length || 0})
-              </TabsTrigger>
-              <TabsTrigger value="projects" data-testid="tab-projects">
-                Projects ({client.projects?.length || 0})
-              </TabsTrigger>
-              <TabsTrigger value="divisions" data-testid="tab-divisions">
-                Divisions ({divisions.length + childClients.length})
-              </TabsTrigger>
-              <TabsTrigger value="activity" data-testid="tab-activity">
-                <Activity className="h-3.5 w-3.5 mr-1" />
-                Activity
-              </TabsTrigger>
-              <TabsTrigger value="notes" data-testid="tab-notes">
-                Notes
-              </TabsTrigger>
-              <TabsTrigger value="documents" data-testid="tab-documents">
-                Documents
-              </TabsTrigger>
-              {crmFlags.client360 && (
-                <TabsTrigger value="reports" data-testid="tab-reports">
-                  <BarChart3 className="h-3.5 w-3.5 mr-1" />
-                  Reports
+            {useV2Layout ? (
+              <ClientSectionSwitcher
+                sections={visibleSections}
+                activeSection={activeSection}
+                onSectionChange={(id) => {
+                  setActiveSection(id);
+                  setActiveTab(id);
+                }}
+                badgeCounts={{
+                  contacts: client.contacts?.length || 0,
+                  projects: client.projects?.length || 0,
+                  divisions: divisions.length + childClients.length,
+                }}
+              />
+            ) : (
+              <TabsList>
+                <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
+                <TabsTrigger value="contacts" data-testid="tab-contacts">
+                  Contacts ({client.contacts?.length || 0})
                 </TabsTrigger>
-              )}
-              {crmFlags.approvals && (
-                <TabsTrigger value="approvals" data-testid="tab-approvals">
-                  <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
-                  Approvals
+                <TabsTrigger value="projects" data-testid="tab-projects">
+                  Projects ({client.projects?.length || 0})
                 </TabsTrigger>
-              )}
-              {crmFlags.clientMessaging && (
-                <TabsTrigger value="messages" data-testid="tab-messages">
-                  <MessageSquare className="h-3.5 w-3.5 mr-1" />
-                  Messages
+                <TabsTrigger value="divisions" data-testid="tab-divisions">
+                  Divisions ({divisions.length + childClients.length})
                 </TabsTrigger>
-              )}
-              <TabsTrigger value="portal" data-testid="tab-portal">
-                Portal Users
-              </TabsTrigger>
-              {featureFlags.assetLibraryV2 && (
-                <TabsTrigger value="asset-library" data-testid="tab-asset-library" className="gap-1.5">
-                  Asset Library
-                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Beta</Badge>
+                <TabsTrigger value="activity" data-testid="tab-activity">
+                  <Activity className="h-3.5 w-3.5 mr-1" />
+                  Activity
                 </TabsTrigger>
-              )}
-            </TabsList>
+                <TabsTrigger value="notes" data-testid="tab-notes">
+                  Notes
+                </TabsTrigger>
+                <TabsTrigger value="documents" data-testid="tab-documents">
+                  Documents
+                </TabsTrigger>
+                {crmFlags.client360 && (
+                  <TabsTrigger value="reports" data-testid="tab-reports">
+                    <BarChart3 className="h-3.5 w-3.5 mr-1" />
+                    Reports
+                  </TabsTrigger>
+                )}
+                {crmFlags.approvals && (
+                  <TabsTrigger value="approvals" data-testid="tab-approvals">
+                    <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
+                    Approvals
+                  </TabsTrigger>
+                )}
+                {crmFlags.clientMessaging && (
+                  <TabsTrigger value="messages" data-testid="tab-messages">
+                    <MessageSquare className="h-3.5 w-3.5 mr-1" />
+                    Messages
+                  </TabsTrigger>
+                )}
+                <TabsTrigger value="portal" data-testid="tab-portal">
+                  Portal Users
+                </TabsTrigger>
+                {featureFlags.assetLibraryV2 && (
+                  <TabsTrigger value="asset-library" data-testid="tab-asset-library" className="gap-1.5">
+                    Asset Library
+                    <Badge variant="secondary" className="text-[10px] px-1.5 py-0">Beta</Badge>
+                  </TabsTrigger>
+                )}
+              </TabsList>
+            )}
           </div>
 
           <TabsContent value="overview" className="p-6 overflow-auto">
@@ -910,7 +938,10 @@ export default function ClientDetailPage() {
                   clientId={clientId || ""}
                   summary={crmSummary}
                   isLoading={crmSummaryLoading}
-                  onNavigateTab={setActiveTab}
+                  onNavigateTab={(tab) => {
+                    setActiveTab(tab);
+                    if (useV2Layout) setActiveSection(tab);
+                  }}
                 />
               </div>
             )}

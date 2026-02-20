@@ -29,6 +29,7 @@ router.get("/features/flags", async (_req, res) => {
       assetLibraryV2: config.features.assetLibraryV2,
       clientWorkspaceV2: config.features.clientWorkspaceV2,
       documentsUsingAssets: config.features.documentsUsingAssets,
+      clientProfileLayoutV2: config.features.clientProfileLayoutV2,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

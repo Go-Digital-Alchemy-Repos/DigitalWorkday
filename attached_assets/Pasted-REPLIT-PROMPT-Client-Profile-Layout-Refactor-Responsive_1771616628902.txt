@@ -1,0 +1,192 @@
+REPLIT PROMPT — Client Profile Layout Refactor (Responsive Section Switcher)
+DigitalWorkday
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE:
+Redesign the consolidated Client Profile (Detail + 360) layout so navigation never overflows on small widths.
+Replace brittle top tab overflow with a responsive, accessible Section Switcher.
+
+PRIMARY PROBLEM:
+Top tabs overflow horizontally and become inaccessible when the browser shrinks.
+
+SOLUTION SUMMARY:
+Implement a unified "ClientProfileShell" with:
+- Responsive Section Switcher:
+  - lg+: scrollable Tabs with gradient edges + chevrons
+  - md: compact Tabs for primary sections + "More" dropdown for overflow
+  - sm: Section Select (Command/Popover) with optional chips row
+- Sticky header behavior and correct padding to avoid overlap
+- Keep content area stable, not cramped
+
+UI CONSTRAINTS:
+Use shadcn/ui components (Tabs, Button, Popover, DropdownMenu, Command, ScrollArea, Separator, Sheet).
+No new UI libraries.
+
+NON-DESTRUCTIVE RULES:
+- Do NOT remove any existing client sections (Projects, Messages, Requests, Asset Library, Activity, Reports, Notes, etc.)
+- Keep routing stable (deep links should still work).
+- Preserve existing components for each section; only re-wrap them in the new shell.
+- Add feature flag CLIENT_PROFILE_LAYOUT_V2 (default true in dev, false in prod until verified).
+
+DELIVERABLES:
+1) New shell/layout components
+2) Section registry/config (single source of truth)
+3) Responsive section switcher implementation
+4) Persist last-selected section per user (optional but recommended)
+5) Update deep linking so URLs can open a specific section reliably
+6) Tests (basic) + docs update
+
+================================================================================
+PHASE 1 — Create a Section Registry (Single Source of Truth)
+================================================================================
+
+Create:
+client/src/features/clients/profile/clientProfileSections.ts
+
+It must export:
+- type ClientProfileSectionKey = 'overview' | 'projects' | 'messages' | 'requests' | 'assets' | 'activity' | 'notes' | 'reports' | ...
+- const CLIENT_PROFILE_SECTIONS: Array<{
+    key,
+    label,
+    icon (lucide icon),
+    showInPrimaryTabs?: boolean,   // primary tabs shown on md
+    minRole?: 'employee'|'admin',  // for hiding admin-only like reports
+    visibleInPortal?: boolean,     // future-safe
+    routeParam?: string            // used for deep link ?section=
+  }>
+
+Define primary tabs (md and up) as:
+- Overview
+- Projects
+- Messages
+- Requests
+- Assets
+Everything else goes into “More”.
+
+================================================================================
+PHASE 2 — ClientProfileShell Layout Component
+================================================================================
+
+Create:
+client/src/features/clients/profile/ClientProfileShell.tsx
+
+Layout:
+- Header row:
+  - Client name
+  - Stage selector
+  - Quick actions (New Message, New Ticket, Upload Asset)
+- Section navigation row:
+  - Responsive switcher (see Phase 3)
+- Main body:
+  - left rail (optional on lg+): Client summary card, contacts, owner, health
+  - center: active section content
+  - right panel (optional): context preview (asset preview, message details)
+Make rails collapsible on md/sm.
+
+Use:
+- sticky header (top-0) within the profile container
+- ensure z-index and padding prevents overlap with main content
+- ensure mobile safe padding (pb-16 if mobile nav exists)
+
+================================================================================
+PHASE 3 — Responsive Section Switcher
+================================================================================
+
+Create:
+client/src/features/clients/profile/ClientSectionSwitcher.tsx
+
+Behavior by breakpoint:
+
+A) Desktop (lg+):
+- Use shadcn Tabs with horizontal overflow:
+  - Wrap the tabs list in a ScrollArea with horizontal scroll.
+  - Add left/right "chevron" buttons that scroll the tab bar.
+  - Add subtle gradient fade on edges when overflow exists.
+- Tabs never wrap; always accessible.
+
+B) Medium (md):
+- Render primary tabs only (5 tabs).
+- Add “More” dropdown (DropdownMenu or Popover+Command):
+  - list all remaining sections user has access to
+  - selecting sets active section
+
+C) Mobile (sm):
+- Replace tab bar with a Section Select:
+  - Use Popover + Command list (searchable)
+  - Show current section label + icon
+- Optional: show the primary tabs as small chips below (h-9) in horizontal scroll.
+
+Accessibility:
+- keyboard navigable
+- aria labels
+- focus ring consistent with app
+
+================================================================================
+PHASE 4 — Deep Linking + State Persistence
+================================================================================
+
+Implement section selection as:
+- URL param: ?section=<key>
+If absent:
+- use last selected section from localStorage (scoped by tenantId + clientId + userId if available)
+Else default:
+- overview
+
+Create:
+client/src/features/clients/profile/useClientProfileSection.ts
+- reads query param
+- validates section key
+- persists selection
+- exposes setSection(key) which updates URL without full reload
+
+Ensure all links to client profile can include:
+- ?section=messages
+- ?section=assets
+etc.
+
+================================================================================
+PHASE 5 — Refactor Existing Client Profile to Use Shell
+================================================================================
+
+1) Find the consolidated Client Profile component/page.
+2) Replace its layout with:
+<ClientProfileShell clientId=...>
+  render active section content based on section key
+</ClientProfileShell>
+
+Do NOT rewrite section components.
+Just mount the existing ones.
+
+Ensure admin-only sections (Reports) are hidden for employees.
+
+================================================================================
+PHASE 6 — Visual Polish (Reduce “Cramped” Feel)
+================================================================================
+
+- Increase top spacing and typographic hierarchy
+- Use Separator between header and content
+- Add consistent PageContainer padding
+- Ensure the nav area is sticky but compact
+- Make each section content have its own title row only if needed (avoid duplicates)
+
+================================================================================
+PHASE 7 — Tests + Docs
+================================================================================
+
+Tests (lightweight):
+- section registry keys valid
+- unknown section param falls back to overview
+- “More” menu includes expected sections
+- role gating hides reports for non-admin
+
+Docs:
+Update docs/UX/client-profile.md:
+- new layout behavior by breakpoint
+- how to add new sections (edit registry)
+- deep linking rules
+
+OUTPUT:
+- files added/changed
+- screenshots not required, but ensure layout works at sm/md/lg
+- ensure build passes
