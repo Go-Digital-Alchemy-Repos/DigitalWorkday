@@ -30,6 +30,7 @@ import {
   FileStack,
   RotateCcw,
   Archive,
+  Link2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -889,6 +890,21 @@ export default function ProjectPage() {
                   </ScrollArea>
                 </PopoverContent>
               </Popover>
+              <Button
+                variant="ghost"
+                size="icon"
+                aria-label="Copy project link"
+                title="Copy Project Link"
+                data-testid="button-copy-project-link"
+                onClick={() => {
+                  const url = `${window.location.origin}/projects/${projectId}`;
+                  navigator.clipboard.writeText(url).then(() => {
+                    toast({ title: "Link copied", description: "Project link copied to clipboard" });
+                  });
+                }}
+              >
+                <Link2 className="h-4 w-4" />
+              </Button>
             </div>
           </div>
           {project.status === "archived" ? (
