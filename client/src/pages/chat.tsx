@@ -71,6 +71,8 @@ import {
   WifiOff,
   ArrowLeft,
   Pin,
+  Menu,
+  Camera,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -270,6 +272,7 @@ export default function ChatPage() {
   const [isDragOver, setIsDragOver] = useState(false);
   const [readReceipts, setReadReceipts] = useState<Map<string, ReadReceipt>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
   const lastMarkedReadRef = useRef<string | null>(null);
   const markAsReadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
@@ -340,6 +343,8 @@ export default function ChatPage() {
   // URL-based conversation state management (shared hook for consistency)
   const { searchString, getConversationFromUrl, updateUrl: updateUrlForConversation } = useChatUrlState();
 
+  const [mobileDrawerOpen, setMobileDrawerOpen] = useState(false);
+
   // Mobile keyboard-safe viewport offset
   const [keyboardOffset, setKeyboardOffset] = useState(0);
   const composerRef = useRef<HTMLFormElement>(null);
@@ -361,10 +366,14 @@ export default function ChatPage() {
   }, [isMobile]);
 
   const handleMobileBack = useCallback(() => {
+    if (threadParentMessage) {
+      setThreadParentMessage(null);
+      return;
+    }
     setSelectedChannel(null);
     setSelectedDm(null);
     updateUrlForConversation(null, null);
-  }, [updateUrlForConversation]);
+  }, [updateUrlForConversation, threadParentMessage]);
 
   // Connection status tracking
   const [isConnected, setIsConnected] = useState(isSocketConnected());
@@ -1887,6 +1896,7 @@ export default function ChatPage() {
       const dm = dmThreads.find((d) => d.id === id);
       if (dm) handleSelectDm(dm);
     }
+    if (isMobile) setMobileDrawerOpen(false);
   };
 
   const handleFileSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -1897,6 +1907,9 @@ export default function ChatPage() {
     
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
+    }
+    if (cameraInputRef.current) {
+      cameraInputRef.current.value = "";
     }
   };
 
@@ -2251,118 +2264,130 @@ export default function ChatPage() {
   };
 
   const hasConversation = !!(selectedChannel || selectedDm);
-  const showMobileList = isMobile && !hasConversation;
-  const showMobileConversation = isMobile && hasConversation;
+
+  const sidebarContent = (
+    <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as "chats" | "team")} className="flex-1 flex flex-col">
+      <TabsList className="grid w-full grid-cols-2 mx-2 mt-2" style={{ width: "calc(100% - 16px)" }}>
+        <TabsTrigger value="chats" data-testid="tab-chats">
+          <MessageCircle className="h-4 w-4 mr-1" />
+          Chats
+        </TabsTrigger>
+        <TabsTrigger value="team" data-testid="tab-team">
+          <Users className="h-4 w-4 mr-1" />
+          Team
+        </TabsTrigger>
+      </TabsList>
+      <TabsContent value="chats" className="flex-1 flex flex-col overflow-hidden mt-0 p-0">
+        <ConversationListPanel
+          channels={channels}
+          dmThreads={dmThreads}
+          currentUserId={user?.id}
+          selectedConversation={selectedConversation}
+          onSelectConversation={handleConversationSelect}
+          onNewDm={() => { setStartChatDrawerOpen(true); if (isMobile) setMobileDrawerOpen(false); }}
+          onNewChannel={() => { setCreateChannelOpen(true); if (isMobile) setMobileDrawerOpen(false); }}
+          isLoading={isLoadingChannels || isLoadingDmThreads}
+          showNewChannelButton={true}
+          className="flex-1"
+        />
+      </TabsContent>
+      <TabsContent value="team" className="flex-1 flex flex-col overflow-hidden mt-0 p-0">
+        <div className="p-4 border-b">
+          <Input
+            placeholder="Search team members..."
+            value={teamSearchQuery}
+            onChange={(e) => setTeamSearchQuery(e.target.value)}
+            className="mb-2"
+            data-testid="input-team-search"
+          />
+          {selectedTeamUsers.size > 0 && (
+            <div className="flex items-center gap-2 mb-2">
+              <Badge variant="secondary">
+                {selectedTeamUsers.size} selected
+              </Badge>
+              <Button
+                size="sm"
+                onClick={handleStartChat}
+                disabled={startDmMutation.isPending || createGroupWithMembersMutation.isPending}
+                data-testid="button-start-chat"
+              >
+                {startDmMutation.isPending || createGroupWithMembersMutation.isPending ? (
+                  <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                ) : (
+                  <MessageCircle className="h-4 w-4 mr-1" />
+                )}
+                Start Chat
+              </Button>
+            </div>
+          )}
+        </div>
+        <ScrollArea className="flex-1 p-2">
+          {isLoadingTeamUsers ? (
+            <div className="flex justify-center p-4">
+              <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+            </div>
+          ) : filteredTeamUsers.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center p-4">
+              {teamSearchQuery ? "No users found" : "No team members"}
+            </p>
+          ) : (
+            <div className="space-y-1">
+              {filteredTeamUsers.map((teamUser) => (
+                <div
+                  key={teamUser.id}
+                  className="flex items-center gap-2 px-2 py-2 rounded hover-elevate cursor-pointer"
+                  onClick={() => toggleUserSelection(teamUser.id)}
+                  data-testid={`team-user-${teamUser.id}`}
+                >
+                  <Checkbox
+                    checked={selectedTeamUsers.has(teamUser.id)}
+                    onCheckedChange={() => toggleUserSelection(teamUser.id)}
+                    data-testid={`checkbox-user-${teamUser.id}`}
+                  />
+                  <div className="relative">
+                    <Avatar className="h-8 w-8">
+                      <AvatarFallback className="text-xs">
+                        {getInitials(teamUser.displayName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <AvatarPresenceIndicator userId={teamUser.id} avatarSize={32} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">{teamUser.displayName}</p>
+                    <p className="text-xs text-muted-foreground truncate">{teamUser.email}</p>
+                  </div>
+                  <Badge variant="outline" className="text-xs">
+                    {teamUser.role}
+                  </Badge>
+                </div>
+              ))}
+            </div>
+          )}
+        </ScrollArea>
+      </TabsContent>
+    </Tabs>
+  );
 
   return (
     <div className="flex h-full" data-testid="chat-page">
-      <div className={`${isMobile ? (showMobileList ? "flex flex-col w-full" : "hidden") : "w-64"} border-r bg-sidebar flex flex-col`}>
-        <Tabs value={sidebarTab} onValueChange={(v) => setSidebarTab(v as "chats" | "team")} className="flex-1 flex flex-col">
-          <TabsList className="grid w-full grid-cols-2 mx-2 mt-2" style={{ width: "calc(100% - 16px)" }}>
-            <TabsTrigger value="chats" data-testid="tab-chats">
-              <MessageCircle className="h-4 w-4 mr-1" />
-              Chats
-            </TabsTrigger>
-            <TabsTrigger value="team" data-testid="tab-team">
-              <Users className="h-4 w-4 mr-1" />
-              Team
-            </TabsTrigger>
-          </TabsList>
-          {/* Chats Tab - Using new ConversationListPanel */}
-          <TabsContent value="chats" className="flex-1 flex flex-col overflow-hidden mt-0 p-0">
-            <ConversationListPanel
-              channels={channels}
-              dmThreads={dmThreads}
-              currentUserId={user?.id}
-              selectedConversation={selectedConversation}
-              onSelectConversation={handleConversationSelect}
-              onNewDm={() => setStartChatDrawerOpen(true)}
-              onNewChannel={() => setCreateChannelOpen(true)}
-              isLoading={isLoadingChannels || isLoadingDmThreads}
-              showNewChannelButton={true}
-              className="flex-1"
-            />
-          </TabsContent>
-          {/* Team Tab */}
-          <TabsContent value="team" className="flex-1 flex flex-col overflow-hidden mt-0 p-0">
-            <div className="p-4 border-b">
-              <Input
-                placeholder="Search team members..."
-                value={teamSearchQuery}
-                onChange={(e) => setTeamSearchQuery(e.target.value)}
-                className="mb-2"
-                data-testid="input-team-search"
-              />
-              {selectedTeamUsers.size > 0 && (
-                <div className="flex items-center gap-2 mb-2">
-                  <Badge variant="secondary">
-                    {selectedTeamUsers.size} selected
-                  </Badge>
-                  <Button
-                    size="sm"
-                    onClick={handleStartChat}
-                    disabled={startDmMutation.isPending || createGroupWithMembersMutation.isPending}
-                    data-testid="button-start-chat"
-                  >
-                    {startDmMutation.isPending || createGroupWithMembersMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 animate-spin mr-1" />
-                    ) : (
-                      <MessageCircle className="h-4 w-4 mr-1" />
-                    )}
-                    Start Chat
-                  </Button>
-                </div>
-              )}
-            </div>
-            <ScrollArea className="flex-1 p-2">
-              {isLoadingTeamUsers ? (
-                <div className="flex justify-center p-4">
-                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
-                </div>
-              ) : filteredTeamUsers.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center p-4">
-                  {teamSearchQuery ? "No users found" : "No team members"}
-                </p>
-              ) : (
-                <div className="space-y-1">
-                  {filteredTeamUsers.map((teamUser) => (
-                    <div
-                      key={teamUser.id}
-                      className="flex items-center gap-2 px-2 py-2 rounded hover-elevate cursor-pointer"
-                      onClick={() => toggleUserSelection(teamUser.id)}
-                      data-testid={`team-user-${teamUser.id}`}
-                    >
-                      <Checkbox
-                        checked={selectedTeamUsers.has(teamUser.id)}
-                        onCheckedChange={() => toggleUserSelection(teamUser.id)}
-                        data-testid={`checkbox-user-${teamUser.id}`}
-                      />
-                      <div className="relative">
-                        <Avatar className="h-8 w-8">
-                          <AvatarFallback className="text-xs">
-                            {getInitials(teamUser.displayName)}
-                          </AvatarFallback>
-                        </Avatar>
-                        <AvatarPresenceIndicator userId={teamUser.id} avatarSize={32} />
-                      </div>
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium truncate">{teamUser.displayName}</p>
-                        <p className="text-xs text-muted-foreground truncate">{teamUser.email}</p>
-                      </div>
-                      <Badge variant="outline" className="text-xs">
-                        {teamUser.role}
-                      </Badge>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </ScrollArea>
-          </TabsContent>
-        </Tabs>
-      </div>
+      {isMobile ? (
+        <Sheet open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
+          <SheetContent side="left" className="w-[85vw] max-w-sm p-0 flex flex-col" data-testid="mobile-channel-drawer">
+            <SheetHeader className="sr-only">
+              <SheetTitle>Conversations</SheetTitle>
+              <SheetDescription>Select a conversation</SheetDescription>
+            </SheetHeader>
+            {sidebarContent}
+          </SheetContent>
+        </Sheet>
+      ) : (
+        <div className="w-64 border-r bg-sidebar flex flex-col">
+          {sidebarContent}
+        </div>
+      )}
 
       <div 
-        className={`flex-1 flex flex-col relative ${isMobile && !hasConversation ? "hidden" : ""}`}
+        className="flex-1 flex flex-col relative"
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -2392,11 +2417,11 @@ export default function ChatPage() {
                   <Button
                     size="icon"
                     variant="ghost"
-                    onClick={handleMobileBack}
-                    aria-label="Go back"
+                    onClick={threadParentMessage ? handleMobileBack : () => setMobileDrawerOpen(true)}
+                    aria-label={threadParentMessage ? "Back to conversation" : "Open conversations"}
                     data-testid="button-chat-back"
                   >
-                    <ArrowLeft className="h-5 w-5" />
+                    {threadParentMessage ? <ArrowLeft className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
                   </Button>
                 )}
                 {selectedChannel && (
@@ -2443,26 +2468,26 @@ export default function ChatPage() {
                   <>
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size={isMobile ? "icon" : "sm"}
                       onClick={() => setPinnedPanelOpen(prev => !prev)}
-                      className="gap-1"
+                      className={isMobile ? "" : "gap-1"}
                       data-testid="button-pinned-messages"
                     >
                       <Pin className="h-4 w-4" />
-                      <span className="text-xs">Pins</span>
-                      {pinnedMessages.length > 0 && (
+                      {!isMobile && <span className="text-xs">Pins</span>}
+                      {!isMobile && pinnedMessages.length > 0 && (
                         <span className="text-xs text-muted-foreground">({pinnedMessages.length})</span>
                       )}
                     </Button>
                     <Button
                       variant="ghost"
-                      size="sm"
+                      size={isMobile ? "icon" : "sm"}
                       onClick={() => setMembersDrawerOpen(true)}
-                      className="gap-1"
+                      className={isMobile ? "" : "gap-1"}
                       data-testid="button-channel-members"
                     >
                       <Users className="h-4 w-4" />
-                      <span className="text-xs">Members</span>
+                      {!isMobile && <span className="text-xs">Members</span>}
                     </Button>
                   </>
                 )}
@@ -2520,10 +2545,12 @@ export default function ChatPage() {
                     </AlertDialog>
                   </>
                 )}
-                <ChatContextPanelToggle
-                  onClick={() => setContextPanelOpen(true)}
-                  isOpen={contextPanelOpen}
-                />
+                {!isMobile && (
+                  <ChatContextPanelToggle
+                    onClick={() => setContextPanelOpen(true)}
+                    isOpen={contextPanelOpen}
+                  />
+                )}
               </div>
             </div>
 
@@ -2735,6 +2762,15 @@ export default function ChatPage() {
                   onChange={handleFileSelect}
                   data-testid="input-file-upload"
                 />
+                <input
+                  ref={cameraInputRef}
+                  type="file"
+                  className="hidden"
+                  accept="image/*"
+                  capture="environment"
+                  onChange={handleFileSelect}
+                  data-testid="input-camera-capture"
+                />
                 <Button
                   type="button"
                   size="icon"
@@ -2751,6 +2787,20 @@ export default function ChatPage() {
                     <Paperclip className="h-4 w-4" />
                   )}
                 </Button>
+                {isMobile && (
+                  <Button
+                    type="button"
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => cameraInputRef.current?.click()}
+                    disabled={isUploading || sendMessageMutation.isPending}
+                    aria-label="Take photo"
+                    title="Take photo"
+                    data-testid="button-camera-capture"
+                  >
+                    <Camera className="h-4 w-4" />
+                  </Button>
+                )}
                 <div className="relative flex-1">
                   <ChatMessageInput
                     ref={messageInputRef}
@@ -2824,9 +2874,19 @@ export default function ChatPage() {
               </div>
               <h3 className="text-lg font-semibold mb-2">Welcome to Chat</h3>
               <p className="text-sm text-muted-foreground mb-6">
-                Select a conversation from the sidebar or start a new one to begin chatting with your team.
+                {isMobile ? "Tap below to open your conversations or start a new one." : "Select a conversation from the sidebar or start a new one to begin chatting with your team."}
               </p>
-              <div className="flex gap-2 justify-center">
+              <div className="flex flex-wrap gap-2 justify-center">
+                {isMobile && (
+                  <Button
+                    variant="outline"
+                    onClick={() => setMobileDrawerOpen(true)}
+                    data-testid="button-open-conversations-mobile"
+                  >
+                    <Menu className="h-4 w-4 mr-2" />
+                    Conversations
+                  </Button>
+                )}
                 <Button
                   variant="outline"
                   onClick={() => setStartDmOpen(true)}
@@ -2848,26 +2908,60 @@ export default function ChatPage() {
         )}
       </div>
 
-      {/* Thread Panel - Right Side */}
       {threadPanelOpen && threadParentMessage && (
-        <Suspense
-          fallback={
-            <div className="w-80 border-l bg-background flex items-center justify-center">
-              <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+        isMobile ? (
+          <div className="fixed inset-0 z-40 bg-background flex flex-col" data-testid="thread-panel-container">
+            <div className="h-14 border-b flex items-center px-3 gap-2">
+              <Button
+                size="icon"
+                variant="ghost"
+                onClick={handleCloseThread}
+                aria-label="Back to conversation"
+                data-testid="button-thread-back"
+              >
+                <ArrowLeft className="h-5 w-5" />
+              </Button>
+              <span className="font-semibold text-sm">Thread</span>
             </div>
-          }
-        >
-          <div className="w-80 flex-shrink-0" data-testid="thread-panel-container">
-            <LazyThreadPanel
-              parentMessage={threadParentMessage}
-              conversationType={selectedChannel ? "channel" : "dm"}
-              conversationId={selectedChannel?.id || selectedDm?.id || ""}
-              currentUserId={user?.id || ""}
-              onClose={handleCloseThread}
-              renderMessageBody={renderMessageBody}
-            />
+            <div className="flex-1 overflow-hidden">
+              <Suspense
+                fallback={
+                  <div className="flex-1 flex items-center justify-center">
+                    <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                  </div>
+                }
+              >
+                <LazyThreadPanel
+                  parentMessage={threadParentMessage}
+                  conversationType={selectedChannel ? "channel" : "dm"}
+                  conversationId={selectedChannel?.id || selectedDm?.id || ""}
+                  currentUserId={user?.id || ""}
+                  onClose={handleCloseThread}
+                  renderMessageBody={renderMessageBody}
+                />
+              </Suspense>
+            </div>
           </div>
-        </Suspense>
+        ) : (
+          <Suspense
+            fallback={
+              <div className="w-80 border-l bg-background flex items-center justify-center">
+                <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+              </div>
+            }
+          >
+            <div className="w-80 flex-shrink-0" data-testid="thread-panel-container">
+              <LazyThreadPanel
+                parentMessage={threadParentMessage}
+                conversationType={selectedChannel ? "channel" : "dm"}
+                conversationId={selectedChannel?.id || selectedDm?.id || ""}
+                currentUserId={user?.id || ""}
+                onClose={handleCloseThread}
+                renderMessageBody={renderMessageBody}
+              />
+            </div>
+          </Suspense>
+        )
       )}
 
       {/* Context Panel - Right Side (lazy-loaded) */}

@@ -220,13 +220,14 @@ interface MessageGroup {
   messages: ChatMessage[];
   dateSeparator?: string;
   timeGapSeparator?: string;
+  unreadDivider?: boolean;
 }
 
 const TWO_HOURS_MS = 2 * 60 * 60 * 1000;
 const EDIT_WINDOW_MS = 5 * 60 * 1000;
 const QUICK_REACTIONS = ["\u{1F44D}", "\u2764\uFE0F", "\u{1F602}", "\u{1F62E}", "\u{1F622}", "\u{1F389}"];
 
-function groupMessages(messages: ChatMessage[], _firstUnreadMessageId?: string | null): MessageGroup[] {
+function groupMessages(messages: ChatMessage[], firstUnreadMessageId?: string | null): MessageGroup[] {
   const groups: MessageGroup[] = [];
   let currentGroup: MessageGroup | null = null;
   let lastDate: string | null = null;
@@ -237,6 +238,7 @@ function groupMessages(messages: ChatMessage[], _firstUnreadMessageId?: string |
     const messageDate = new Date(message.createdAt).toDateString();
     const needsDateSeparator = messageDate !== lastDate;
     const shouldGroup = !needsDateSeparator && shouldGroupMessage(message, previousMessage);
+    const isUnreadStart = firstUnreadMessageId != null && message.id === firstUnreadMessageId;
 
     if (needsDateSeparator) {
       lastDate = messageDate;
@@ -250,7 +252,7 @@ function groupMessages(messages: ChatMessage[], _firstUnreadMessageId?: string |
       }
     }
 
-    const needsNewGroup = timeGapSeparator != null;
+    const needsNewGroup = timeGapSeparator != null || isUnreadStart;
 
     if (shouldGroup && currentGroup && !needsNewGroup) {
       currentGroup.messages.push(message);
@@ -262,6 +264,7 @@ function groupMessages(messages: ChatMessage[], _firstUnreadMessageId?: string |
         messages: [message],
         dateSeparator: needsDateSeparator ? formatDateSeparator(message.createdAt) : undefined,
         timeGapSeparator,
+        unreadDivider: isUnreadStart,
       };
       groups.push(currentGroup);
     }
@@ -896,6 +899,46 @@ const MessageBubble = memo(function MessageBubble({
               onClick={(e) => e.stopPropagation()}
             >
               <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-3" />
+              <div className="flex justify-center gap-3 px-4 py-2 mb-1" data-testid={`action-sheet-reactions-${message.id}`}>
+                {QUICK_REACTIONS.map(emoji => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="h-11 w-11 flex items-center justify-center rounded-full bg-muted/80 text-lg cursor-pointer transition-transform active:scale-90"
+                    onClick={() => {
+                      onAddReaction?.(message.id, emoji);
+                      onDismissLongPress();
+                    }}
+                    data-testid={`action-sheet-react-${message.id}-${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+              </div>
+              {onOpenThread && !message.parentMessageId && (
+                <button
+                  className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
+                  onClick={() => {
+                    onOpenThread(message.id);
+                    onDismissLongPress();
+                  }}
+                  data-testid={`action-sheet-thread-${message.id}`}
+                >
+                  <MessagesSquare className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-sm font-medium">Reply in thread</span>
+                </button>
+              )}
+              <button
+                className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
+                onClick={() => {
+                  onQuoteReply?.(authorName, message.body);
+                  onDismissLongPress();
+                }}
+                data-testid={`action-sheet-quote-${message.id}`}
+              >
+                <Quote className="h-5 w-5 text-muted-foreground" />
+                <span className="text-sm font-medium">Quote reply</span>
+              </button>
               <button
                 className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
                 onClick={() => {
@@ -911,14 +954,31 @@ const MessageBubble = memo(function MessageBubble({
               <button
                 className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
                 onClick={() => {
-                  onQuoteReply?.(authorName, message.body);
+                  onCreateTaskFromMessage?.(message);
                   onDismissLongPress();
                 }}
-                data-testid={`action-sheet-quote-${message.id}`}
+                data-testid={`action-sheet-create-task-${message.id}`}
               >
-                <Quote className="h-5 w-5 text-muted-foreground" />
-                <span className="text-sm font-medium">Quote reply</span>
+                <ListTodo className="h-5 w-5 text-muted-foreground" />
+                <span className="text-sm font-medium">Create task</span>
               </button>
+              {canPin && !isDm && !message.parentMessageId && (
+                <button
+                  className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
+                  onClick={() => {
+                    if (isPinned) {
+                      onUnpinMessage?.(message.id);
+                    } else {
+                      onPinMessage?.(message.id);
+                    }
+                    onDismissLongPress();
+                  }}
+                  data-testid={`action-sheet-pin-${message.id}`}
+                >
+                  <Pin className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-sm font-medium">{isPinned ? "Unpin message" : "Pin message"}</span>
+                </button>
+              )}
               {canEdit && (
                 <button
                   className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
@@ -1141,6 +1201,16 @@ export function ChatMessageTimeline({
                 {group.dateSeparator}
               </span>
               <div className="flex-1 h-px bg-border" />
+            </div>
+          )}
+
+          {group.unreadDivider && (
+            <div className="flex items-center gap-4 py-3" data-testid="unread-divider">
+              <div className="flex-1 h-px bg-destructive/50" />
+              <span className="text-xs font-semibold text-destructive px-2 whitespace-nowrap">
+                New messages
+              </span>
+              <div className="flex-1 h-px bg-destructive/50" />
             </div>
           )}
 
