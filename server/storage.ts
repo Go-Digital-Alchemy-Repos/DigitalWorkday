@@ -42,6 +42,7 @@ import {
   type ClientContact, type InsertClientContact,
   type ClientInvite, type InsertClientInvite,
   type ClientWithContacts,
+  type ClientStageHistory, type InsertClientStageHistory,
   type TimeEntry, type InsertTimeEntry,
   type ActiveTimer, type InsertActiveTimer,
   type TimeEntryWithRelations, type ActiveTimerWithRelations,
@@ -68,7 +69,7 @@ import {
   users, workspaces, workspaceMembers, teams, teamMembers,
   projects, projectMembers, hiddenProjects, sections, tasks, taskAssignees, taskWatchers,
   subtasks, subtaskAssignees, subtaskTags, tags, taskTags, comments, commentMentions, activityLog, taskAttachments,
-  clients, clientContacts, clientInvites, clientUserAccess,
+  clients, clientContacts, clientInvites, clientUserAccess, clientStageHistory,
   clientDivisions, divisionMembers,
   timeEntries, activeTimers,
   invitations, appSettings, tenants, tenantSettings, personalTaskSections,
@@ -315,6 +316,9 @@ export interface IStorage {
   getClientsByTenant(tenantId: string, workspaceId?: string): Promise<ClientWithContacts[]>;
   getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean })[]>;
   getClientsSummaryByTenant(tenantId: string): Promise<{ total: number; active: number; inactive: number; prospect: number; newThisMonth: number; needsAttention: number }>;
+  updateClientStage(clientId: string, tenantId: string, toStage: string, changedByUserId: string): Promise<Client | undefined>;
+  getClientStageSummary(tenantId: string): Promise<{ stage: string; clientCount: number; projectCount: number }[]>;
+  getClientStageHistory(clientId: string, tenantId: string): Promise<ClientStageHistory[]>;
   getChildClients(parentClientId: string): Promise<Client[]>;
   validateParentClient(parentClientId: string, tenantId: string): Promise<boolean>;
   createClientWithTenant(client: InsertClient, tenantId: string): Promise<Client>;
@@ -2546,6 +2550,56 @@ export class DatabaseStorage implements IStorage {
     }
 
     return { total, active, inactive, prospect, newThisMonth, needsAttention: needsAttentionCount };
+  }
+
+  async updateClientStage(clientId: string, tenantId: string, toStage: string, changedByUserId: string): Promise<Client | undefined> {
+    const [existing] = await db.select()
+      .from(clients)
+      .where(and(eq(clients.id, clientId), eq(clients.tenantId, tenantId)));
+
+    if (!existing) return undefined;
+
+    const fromStage = existing.stage;
+    if (fromStage === toStage) return existing;
+
+    const [updated] = await db.update(clients)
+      .set({ stage: toStage, updatedAt: new Date() })
+      .where(and(eq(clients.id, clientId), eq(clients.tenantId, tenantId)))
+      .returning();
+
+    await db.insert(clientStageHistory).values({
+      tenantId,
+      clientId,
+      fromStage,
+      toStage,
+      changedByUserId,
+    });
+
+    return updated;
+  }
+
+  async getClientStageSummary(tenantId: string): Promise<{ stage: string; clientCount: number; projectCount: number }[]> {
+    const results = await db.select({
+      stage: clients.stage,
+      clientCount: sql<number>`count(distinct ${clients.id})::int`,
+      projectCount: sql<number>`count(distinct ${projects.id})::int`,
+    })
+      .from(clients)
+      .leftJoin(projects, eq(projects.clientId, clients.id))
+      .where(eq(clients.tenantId, tenantId))
+      .groupBy(clients.stage);
+
+    return results;
+  }
+
+  async getClientStageHistory(clientId: string, tenantId: string): Promise<ClientStageHistory[]> {
+    return db.select()
+      .from(clientStageHistory)
+      .where(and(
+        eq(clientStageHistory.clientId, clientId),
+        eq(clientStageHistory.tenantId, tenantId),
+      ))
+      .orderBy(desc(clientStageHistory.changedAt));
   }
 
   async getChildClients(parentClientId: string): Promise<Client[]> {

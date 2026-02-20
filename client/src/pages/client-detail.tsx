@@ -94,6 +94,7 @@ import { ClientNotesTab } from "@/components/client-notes-tab";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
 import { useToast } from "@/hooks/use-toast";
 import type { ClientWithContacts, Project, ClientContact, ClientDivision } from "@shared/schema";
+import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
 
 interface DivisionWithCounts extends ClientDivision {
   memberCount: number;
@@ -390,6 +391,34 @@ export default function ClientDetailPage() {
     },
   });
 
+  const updateStageMutation = useMutation({
+    mutationFn: async (stage: string) => {
+      return apiRequest("PATCH", `/api/v1/clients/${clientId}/stage`, { stage });
+    },
+    onMutate: async (newStage) => {
+      await queryClient.cancelQueries({ queryKey: ["/api/clients", clientId] });
+      const prev = queryClient.getQueryData<ClientWithContacts>(["/api/clients", clientId]);
+      if (prev) {
+        queryClient.setQueryData<ClientWithContacts>(["/api/clients", clientId], { ...prev, stage: newStage });
+      }
+      return { prev };
+    },
+    onError: (_err, _stage, context) => {
+      if (context?.prev) {
+        queryClient.setQueryData(["/api/clients", clientId], context.prev);
+      }
+      toast({ title: "Failed to update stage", variant: "destructive" });
+    },
+    onSuccess: () => {
+      toast({ title: "Client stage updated" });
+    },
+    onSettled: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/clients/hierarchy/list"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/clients/stages/summary"] });
+    },
+  });
+
   const deleteContactMutation = useMutation({
     mutationFn: async (contactId: string) => {
       return apiRequest("DELETE", `/api/clients/${clientId}/contacts/${contactId}`);
@@ -635,9 +664,21 @@ export default function ClientDetailPage() {
                 <p className="text-sm text-muted-foreground">{client.displayName}</p>
               )}
             </div>
-            <Badge className={getStatusColor(client.status)}>
-              {client.status}
-            </Badge>
+            <Select
+              value={client.stage}
+              onValueChange={(val) => updateStageMutation.mutate(val)}
+            >
+              <SelectTrigger className="w-auto gap-1.5" data-testid="select-client-stage">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {CLIENT_STAGES_ORDERED.map((stage) => (
+                  <SelectItem key={stage} value={stage} data-testid={`stage-option-${stage}`}>
+                    {CLIENT_STAGE_LABELS[stage]}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
         </div>
         <div className="flex items-center gap-2">

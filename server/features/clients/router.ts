@@ -7,6 +7,8 @@ import {
   insertClientContactSchema,
   insertClientInviteSchema,
   insertClientDivisionSchema,
+  CLIENT_STAGES_ORDERED,
+  ClientStage,
 } from "@shared/schema";
 import {
   emitClientCreated,
@@ -92,6 +94,63 @@ router.get("/summary", async (req, res) => {
     return res.json(summary);
   } catch (error) {
     return handleRouteError(res, error, "GET /summary", req);
+  }
+});
+
+router.get("/stages/summary", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) {
+      throw AppError.tenantRequired();
+    }
+    const summary = await storage.getClientStageSummary(tenantId);
+    return res.json(summary);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /stages/summary", req);
+  }
+});
+
+router.patch("/:id/stage", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) {
+      throw AppError.tenantRequired();
+    }
+
+    const schema = z.object({
+      stage: z.enum(CLIENT_STAGES_ORDERED as [string, ...string[]]),
+    });
+    const { stage } = schema.parse(req.body);
+    const userId = (req.user as any)?.id;
+
+    const updated = await storage.updateClientStage(req.params.id, tenantId, stage, userId);
+    if (!updated) {
+      throw AppError.notFound("Client");
+    }
+
+    emitClientUpdated(updated);
+    return res.json(updated);
+  } catch (error) {
+    return handleRouteError(res, error, "PATCH /:id/stage", req);
+  }
+});
+
+router.get("/:id/stage-history", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) {
+      throw AppError.tenantRequired();
+    }
+
+    const client = await storage.getClientByIdAndTenant(req.params.id, tenantId);
+    if (!client) {
+      throw AppError.notFound("Client");
+    }
+
+    const history = await storage.getClientStageHistory(req.params.id, tenantId);
+    return res.json(history);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /:id/stage-history", req);
   }
 });
 

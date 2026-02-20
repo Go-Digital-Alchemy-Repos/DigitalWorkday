@@ -1,8 +1,10 @@
-import { useState, lazy, Suspense } from "react";
+import { useState, lazy, Suspense, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
+import { useQuery } from "@tanstack/react-query";
 import { Redirect } from "wouter";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { 
@@ -15,12 +17,42 @@ import {
   Calendar,
   Target,
   MessageSquare,
+  Building2,
+  FolderKanban,
 } from "lucide-react";
 import { ReportsTab } from "@/components/settings/reports-tab";
+import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
+import { cn } from "@/lib/utils";
 
 const MessagesReports = lazy(() => import("@/components/reports/messages-reports"));
 
-type ReportView = "landing" | "workload" | "time" | "projects" | "messages";
+type ReportView = "landing" | "workload" | "time" | "projects" | "messages" | "pipeline";
+
+interface StageSummaryItem {
+  stage: string;
+  clientCount: number;
+  projectCount: number;
+}
+
+const STAGE_COLORS: Record<string, string> = {
+  lead: "bg-slate-500",
+  proposal: "bg-blue-500",
+  content_strategy: "bg-indigo-500",
+  design: "bg-violet-500",
+  development: "bg-amber-500",
+  final_testing: "bg-orange-500",
+  active_maintenance: "bg-green-500",
+};
+
+const STAGE_TEXT_COLORS: Record<string, string> = {
+  lead: "text-slate-600 dark:text-slate-400",
+  proposal: "text-blue-600 dark:text-blue-400",
+  content_strategy: "text-indigo-600 dark:text-indigo-400",
+  design: "text-violet-600 dark:text-violet-400",
+  development: "text-amber-600 dark:text-amber-400",
+  final_testing: "text-orange-600 dark:text-orange-400",
+  active_maintenance: "text-green-600 dark:text-green-400",
+};
 
 interface ReportCardProps {
   icon: React.ReactNode;
@@ -49,6 +81,224 @@ function ReportCard({ icon, title, description, onClick, color }: ReportCardProp
         </CardDescription>
       </CardContent>
     </Card>
+  );
+}
+
+function PipelineReport() {
+  const { data: stageSummary, isLoading } = useQuery<StageSummaryItem[]>({
+    queryKey: ["/api/v1/clients/stages/summary"],
+  });
+
+  const totalClients = useMemo(() => {
+    if (!stageSummary) return 0;
+    return stageSummary.reduce((sum, s) => sum + s.clientCount, 0);
+  }, [stageSummary]);
+
+  const totalProjects = useMemo(() => {
+    if (!stageSummary) return 0;
+    return stageSummary.reduce((sum, s) => sum + s.projectCount, 0);
+  }, [stageSummary]);
+
+  const stageMap = useMemo(() => {
+    const map: Record<string, StageSummaryItem> = {};
+    if (stageSummary) {
+      stageSummary.forEach((s) => { map[s.stage] = s; });
+    }
+    return map;
+  }, [stageSummary]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}>
+              <CardContent className="p-4">
+                <Skeleton className="h-3 w-20 mb-2" />
+                <Skeleton className="h-7 w-16" />
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+        <Card>
+          <CardContent className="p-6">
+            <Skeleton className="h-48 w-full" />
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6" data-testid="pipeline-report">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+        <Card data-testid="metric-total-clients">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Total Clients</p>
+            <p className="text-2xl font-semibold">{totalClients}</p>
+          </CardContent>
+        </Card>
+        <Card data-testid="metric-total-projects">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Total Projects</p>
+            <p className="text-2xl font-semibold">{totalProjects}</p>
+          </CardContent>
+        </Card>
+        <Card data-testid="metric-stages-used">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Active Stages</p>
+            <p className="text-2xl font-semibold">
+              {stageSummary?.filter(s => s.clientCount > 0).length || 0}
+              <span className="text-sm text-muted-foreground font-normal"> / {CLIENT_STAGES_ORDERED.length}</span>
+            </p>
+          </CardContent>
+        </Card>
+        <Card data-testid="metric-avg-per-stage">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Avg Clients/Stage</p>
+            <p className="text-2xl font-semibold">
+              {totalClients > 0 ? (totalClients / CLIENT_STAGES_ORDERED.length).toFixed(1) : 0}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Pipeline Distribution</CardTitle>
+          <CardDescription>Visual breakdown of clients across pipeline stages</CardDescription>
+        </CardHeader>
+        <CardContent>
+          {(() => {
+            const activeStages = CLIENT_STAGES_ORDERED.filter(s => (stageMap[s]?.clientCount || 0) > 0);
+            return (
+              <div className="flex h-4 rounded-full overflow-hidden bg-muted mb-6">
+                {activeStages.map((stage) => {
+                  const count = stageMap[stage]?.clientCount || 0;
+                  const pct = totalClients > 0 ? (count / totalClients) * 100 : 0;
+                  return (
+                    <div
+                      key={stage}
+                      className={cn(STAGE_COLORS[stage], "transition-all duration-300")}
+                      style={{ width: `${pct}%`, minWidth: activeStages.length > 1 ? "4px" : undefined }}
+                      title={`${CLIENT_STAGE_LABELS[stage]}: ${count} (${pct.toFixed(1)}%)`}
+                      data-testid={`report-pipeline-segment-${stage}`}
+                    />
+                  );
+                })}
+              </div>
+            );
+          })()}
+
+          <div className="space-y-3">
+            {CLIENT_STAGES_ORDERED.map((stage) => {
+              const data = stageMap[stage];
+              const count = data?.clientCount || 0;
+              const projects = data?.projectCount || 0;
+              const pct = totalClients > 0 ? (count / totalClients) * 100 : 0;
+
+              return (
+                <div key={stage} className="flex items-center gap-3 flex-wrap" data-testid={`report-stage-row-${stage}`}>
+                  <span className={cn("h-3 w-3 rounded-full shrink-0", STAGE_COLORS[stage])} />
+                  <span className="text-sm font-medium w-40 shrink-0">{CLIENT_STAGE_LABELS[stage]}</span>
+
+                  <div className="flex-1 min-w-[120px] h-6 bg-muted rounded-md overflow-hidden relative">
+                    {pct > 0 && (
+                      <div
+                        className={cn(STAGE_COLORS[stage], "h-full rounded-md transition-all duration-500 opacity-80")}
+                        style={{ width: `${pct}%` }}
+                      />
+                    )}
+                    <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-foreground">
+                      {count} client{count !== 1 ? "s" : ""} ({pct.toFixed(0)}%)
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground w-24 shrink-0 justify-end">
+                    <FolderKanban className="h-3 w-3" />
+                    <span>{projects} project{projects !== 1 ? "s" : ""}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Stage Details</CardTitle>
+            <CardDescription>Clients and projects per stage</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {CLIENT_STAGES_ORDERED.map((stage) => {
+                const data = stageMap[stage];
+                const count = data?.clientCount || 0;
+                const projects = data?.projectCount || 0;
+
+                return (
+                  <div key={stage} className="flex items-center justify-between gap-2 py-2 border-b last:border-b-0" data-testid={`report-stage-detail-${stage}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={cn("h-2 w-2 rounded-full", STAGE_COLORS[stage])} />
+                      <span className="text-sm">{CLIENT_STAGE_LABELS[stage]}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className={cn("text-xs", STAGE_TEXT_COLORS[stage])}>
+                        {count} client{count !== 1 ? "s" : ""}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{projects} proj.</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Pipeline Health</CardTitle>
+            <CardDescription>Distribution insights</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {(() => {
+                const earlyStages = ["lead", "proposal"];
+                const midStages = ["content_strategy", "design", "development"];
+                const lateStages = ["final_testing", "active_maintenance"];
+
+                const earlyCount = earlyStages.reduce((sum, s) => sum + (stageMap[s]?.clientCount || 0), 0);
+                const midCount = midStages.reduce((sum, s) => sum + (stageMap[s]?.clientCount || 0), 0);
+                const lateCount = lateStages.reduce((sum, s) => sum + (stageMap[s]?.clientCount || 0), 0);
+
+                const groups = [
+                  { label: "Early Pipeline", description: "Lead & Proposal", count: earlyCount, color: "text-blue-600 dark:text-blue-400" },
+                  { label: "Mid Pipeline", description: "Strategy, Design & Development", count: midCount, color: "text-violet-600 dark:text-violet-400" },
+                  { label: "Late Pipeline", description: "Testing & Maintenance", count: lateCount, color: "text-green-600 dark:text-green-400" },
+                ];
+
+                return groups.map((group) => (
+                  <div key={group.label} className="flex items-center justify-between gap-3" data-testid={`report-pipeline-health-${group.label.toLowerCase().replace(/\s+/g, '-')}`}>
+                    <div>
+                      <p className="text-sm font-medium">{group.label}</p>
+                      <p className="text-xs text-muted-foreground">{group.description}</p>
+                    </div>
+                    <div className="text-right">
+                      <p className={cn("text-lg font-semibold", group.color)}>{group.count}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {totalClients > 0 ? `${((group.count / totalClients) * 100).toFixed(0)}%` : "0%"}
+                      </p>
+                    </div>
+                  </div>
+                ));
+              })()}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
   );
 }
 
@@ -100,6 +350,13 @@ export default function ReportsPage() {
       view: "messages" as ReportView,
       color: "bg-amber-500",
     },
+    {
+      icon: <Building2 className="h-6 w-6 text-white" />,
+      title: "Client Pipeline",
+      description: "Stage breakdown, pipeline distribution, and client progression through your workflow stages",
+      view: "pipeline" as ReportView,
+      color: "bg-indigo-500",
+    },
   ];
 
   if (currentView === "landing") {
@@ -118,7 +375,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-4 mb-8">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 mb-8">
             {reportCategories.map((category) => (
               <ReportCard
                 key={category.title}
@@ -158,6 +415,7 @@ export default function ReportsPage() {
       case "time": return "Time Tracking Reports";
       case "projects": return "Project Analytics";
       case "messages": return "Messages Reports";
+      case "pipeline": return "Client Pipeline";
       default: return "Reports";
     }
   };
@@ -165,7 +423,16 @@ export default function ReportsPage() {
   const getViewDescription = () => {
     switch (currentView) {
       case "messages": return "Response times, SLA compliance, and conversation analytics";
+      case "pipeline": return "Pipeline stage distribution and client progression";
       default: return "Detailed analytics and exportable reports";
+    }
+  };
+
+  const getViewIcon = () => {
+    switch (currentView) {
+      case "messages": return <MessageSquare className="h-5 w-5 text-primary" />;
+      case "pipeline": return <Building2 className="h-5 w-5 text-primary" />;
+      default: return <BarChart3 className="h-5 w-5 text-primary" />;
     }
   };
 
@@ -182,11 +449,7 @@ export default function ReportsPage() {
             <ArrowLeft className="h-5 w-5" />
           </Button>
           <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            {currentView === "messages" ? (
-              <MessageSquare className="h-5 w-5 text-primary" />
-            ) : (
-              <BarChart3 className="h-5 w-5 text-primary" />
-            )}
+            {getViewIcon()}
           </div>
           <div>
             <h1 className="text-2xl font-bold">{getViewTitle()}</h1>
@@ -215,6 +478,8 @@ export default function ReportsPage() {
           >
             <MessagesReports />
           </Suspense>
+        ) : currentView === "pipeline" ? (
+          <PipelineReport />
         ) : (
           <ReportsTab defaultTab={currentView === "workload" ? "workload" : currentView === "time" ? "time" : undefined} />
         )}

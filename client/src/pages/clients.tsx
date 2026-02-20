@@ -68,6 +68,7 @@ import { Separator } from "@/components/ui/separator";
 import { useLocalStorage, useSavedViews } from "@/hooks/use-local-storage";
 import type { SavedView } from "@/hooks/use-local-storage";
 import type { ClientWithContacts, Client } from "@shared/schema";
+import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
@@ -91,35 +92,45 @@ interface ClientSummary {
   needsAttention: number;
 }
 
-type SegmentTab = "all" | "active" | "inactive" | "prospect" | "needs-attention";
+interface StageSummaryItem {
+  stage: string;
+  clientCount: number;
+  projectCount: number;
+}
 
-const SEGMENT_TABS: { value: SegmentTab; label: string }[] = [
-  { value: "all", label: "All" },
-  { value: "active", label: "Active" },
-  { value: "inactive", label: "Inactive" },
-  { value: "prospect", label: "Prospect" },
-  { value: "needs-attention", label: "Needs Attention" },
-];
+type SegmentTab = "all" | ClientStageType | "needs-attention";
 
-const STATUS_FILTERS: FilterConfig[] = [
-  {
-    key: "status",
-    label: "Status",
-    options: [
-      { value: "all", label: "All statuses" },
-      { value: "active", label: "Active" },
-      { value: "inactive", label: "Inactive" },
-      { value: "prospect", label: "Prospect" },
-    ],
-  },
-  {
-    key: "industry",
-    label: "Industry",
-    options: [
-      { value: "all", label: "All industries" },
-    ],
-  },
-];
+const STAGE_COLORS: Record<string, string> = {
+  lead: "bg-slate-500",
+  proposal: "bg-blue-500",
+  content_strategy: "bg-indigo-500",
+  design: "bg-violet-500",
+  development: "bg-amber-500",
+  final_testing: "bg-orange-500",
+  active_maintenance: "bg-green-500",
+};
+
+const STAGE_TEXT_COLORS: Record<string, string> = {
+  lead: "text-slate-600 dark:text-slate-400",
+  proposal: "text-blue-600 dark:text-blue-400",
+  content_strategy: "text-indigo-600 dark:text-indigo-400",
+  design: "text-violet-600 dark:text-violet-400",
+  development: "text-amber-600 dark:text-amber-400",
+  final_testing: "text-orange-600 dark:text-orange-400",
+  active_maintenance: "text-green-600 dark:text-green-400",
+};
+
+const STAGE_FILTER: FilterConfig = {
+  key: "stage",
+  label: "Stage",
+  options: [
+    { value: "all", label: "All stages" },
+    ...CLIENT_STAGES_ORDERED.map((s) => ({
+      value: s,
+      label: CLIENT_STAGE_LABELS[s],
+    })),
+  ],
+};
 
 const SORT_OPTIONS: SortOption[] = [
   { value: "name-asc", label: "Name (A-Z)" },
@@ -187,45 +198,114 @@ function KPIStrip({ summary, isLoading }: { summary?: ClientSummary; isLoading: 
   );
 }
 
-function SegmentTabs({
-  activeTab,
-  onTabChange,
-  summary,
+function PipelineBar({
+  activeStage,
+  onStageChange,
+  stageSummary,
+  totalClients,
+  needsAttentionCount,
+  isLoading,
 }: {
-  activeTab: SegmentTab;
-  onTabChange: (tab: SegmentTab) => void;
-  summary?: ClientSummary;
+  activeStage: SegmentTab;
+  onStageChange: (stage: SegmentTab) => void;
+  stageSummary?: StageSummaryItem[];
+  totalClients: number;
+  needsAttentionCount: number;
+  isLoading: boolean;
 }) {
-  const tabCounts: Record<SegmentTab, number | undefined> = {
-    all: summary?.total,
-    active: summary?.active,
-    inactive: summary?.inactive,
-    prospect: summary?.prospect,
-    "needs-attention": summary?.needsAttention,
-  };
+  const stageCountMap = useMemo(() => {
+    const map: Record<string, number> = {};
+    if (stageSummary) {
+      stageSummary.forEach((s) => {
+        map[s.stage] = s.clientCount;
+      });
+    }
+    return map;
+  }, [stageSummary]);
+
+  if (isLoading) {
+    return (
+      <div className="mb-4 space-y-3" data-testid="pipeline-bar-skeleton">
+        <div className="flex gap-1 h-2 rounded-full overflow-hidden bg-muted">
+          {Array.from({ length: 7 }).map((_, i) => (
+            <Skeleton key={i} className="flex-1 h-full" />
+          ))}
+        </div>
+        <div className="flex gap-1 overflow-x-auto pb-1">
+          {Array.from({ length: 9 }).map((_, i) => (
+            <Skeleton key={i} className="h-8 w-24 shrink-0 rounded-md" />
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
-    <div className="flex items-center gap-1 mb-4 overflow-x-auto pb-1" data-testid="segment-tabs">
-      {SEGMENT_TABS.map((tab) => (
+    <div className="mb-4 space-y-3" data-testid="pipeline-bar">
+      <div className="flex gap-0.5 h-2.5 rounded-full overflow-hidden bg-muted">
+        {CLIENT_STAGES_ORDERED.map((stage) => {
+          const count = stageCountMap[stage] || 0;
+          const pct = totalClients > 0 ? (count / totalClients) * 100 : 0;
+          if (pct === 0) return null;
+          return (
+            <div
+              key={stage}
+              className={cn(
+                STAGE_COLORS[stage],
+                "transition-all duration-300 cursor-pointer",
+                activeStage === stage ? "opacity-100 ring-2 ring-foreground/20" : "opacity-70 hover:opacity-90"
+              )}
+              style={{ width: `${Math.max(pct, 2)}%` }}
+              onClick={() => onStageChange(activeStage === stage ? "all" : stage as SegmentTab)}
+              title={`${CLIENT_STAGE_LABELS[stage]}: ${count}`}
+              data-testid={`pipeline-segment-${stage}`}
+            />
+          );
+        })}
+      </div>
+
+      <div className="flex items-center gap-1 overflow-x-auto pb-1" data-testid="pipeline-tabs">
         <Button
-          key={tab.value}
-          variant={activeTab === tab.value ? "secondary" : "ghost"}
+          variant={activeStage === "all" ? "secondary" : "ghost"}
           size="sm"
-          onClick={() => onTabChange(tab.value)}
+          onClick={() => onStageChange("all")}
           className="shrink-0"
-          data-testid={`tab-${tab.value}`}
+          data-testid="tab-all"
         >
-          {tab.value === "needs-attention" && (
-            <AlertTriangle className="h-3.5 w-3.5 mr-1.5 text-amber-500" />
-          )}
-          {tab.label}
-          {tabCounts[tab.value] !== undefined && (
-            <span className="ml-1.5 text-xs text-muted-foreground">
-              {tabCounts[tab.value]}
-            </span>
-          )}
+          All
+          <span className="ml-1.5 text-xs text-muted-foreground">{totalClients}</span>
         </Button>
-      ))}
+
+        {CLIENT_STAGES_ORDERED.map((stage) => {
+          const count = stageCountMap[stage] || 0;
+          return (
+            <Button
+              key={stage}
+              variant={activeStage === stage ? "secondary" : "ghost"}
+              size="sm"
+              onClick={() => onStageChange(stage as SegmentTab)}
+              className="shrink-0"
+              data-testid={`tab-${stage}`}
+            >
+              <span className={cn("h-2 w-2 rounded-full mr-1.5 shrink-0", STAGE_COLORS[stage])} />
+              {CLIENT_STAGE_LABELS[stage]}
+              <span className="ml-1.5 text-xs text-muted-foreground">{count}</span>
+            </Button>
+          );
+        })}
+
+        <Button
+          variant={activeStage === "needs-attention" ? "secondary" : "ghost"}
+          size="sm"
+          onClick={() => onStageChange("needs-attention")}
+          className="shrink-0"
+          data-testid="tab-needs-attention"
+        >
+          <AlertTriangle className="h-3.5 w-3.5 mr-1.5 text-amber-500" />
+          Needs Attention
+          <span className="ml-1.5 text-xs text-muted-foreground">{needsAttentionCount}</span>
+        </Button>
+      </div>
     </div>
   );
 }
@@ -305,8 +385,9 @@ function ClientGridCard({
                 {client.needsAttention && (
                   <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
                 )}
-                <Badge className={getStatusColor(client.status)}>
-                  {client.status}
+                <Badge variant="outline" className={STAGE_TEXT_COLORS[client.stage] || ""}>
+                  <span className={cn("h-1.5 w-1.5 rounded-full mr-1.5 shrink-0", STAGE_COLORS[client.stage] || "bg-muted")} />
+                  {CLIENT_STAGE_LABELS[client.stage as ClientStageType] || client.stage}
                 </Badge>
               </div>
             </div>
@@ -661,11 +742,13 @@ function ClientTableRow({
           </div>
         </div>
 
-        <div className="hidden sm:flex items-center gap-2 w-24 shrink-0 justify-end">
+        <div className="hidden sm:flex items-center gap-2 w-32 shrink-0 justify-end">
           <Badge
-            className={cn(getStatusColor(client.status), compact && "text-xs")}
+            variant="outline"
+            className={cn(STAGE_TEXT_COLORS[client.stage] || "", compact && "text-xs")}
           >
-            {client.status}
+            <span className={cn("h-1.5 w-1.5 rounded-full mr-1 shrink-0", STAGE_COLORS[client.stage] || "bg-muted")} />
+            {CLIENT_STAGE_LABELS[client.stage as ClientStageType] || client.stage}
           </Badge>
         </div>
 
@@ -722,7 +805,7 @@ function TableHeader({ compact }: { compact: boolean }) {
       )}
     >
       <div className="flex-1">Client</div>
-      <div className="hidden sm:block w-24 text-right">Status</div>
+      <div className="hidden sm:block w-32 text-right">Stage</div>
       <div className="hidden md:block w-24 text-right">Industry</div>
       <div className="hidden lg:block w-28 text-right">Last Activity</div>
       <div className="hidden lg:block w-32 text-right">Stats</div>
@@ -816,7 +899,10 @@ function ClientDetailSheet({
 
         <div className="space-y-4">
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge className={getStatusColor(client.status)}>{client.status}</Badge>
+            <Badge variant="outline" className={STAGE_TEXT_COLORS[client.stage] || ""}>
+              <span className={cn("h-1.5 w-1.5 rounded-full mr-1.5 shrink-0", STAGE_COLORS[client.stage] || "bg-muted")} />
+              {CLIENT_STAGE_LABELS[client.stage as ClientStageType] || client.stage}
+            </Badge>
             {client.needsAttention && (
               <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-600">
                 <AlertTriangle className="h-3 w-3 mr-1" />
@@ -1088,6 +1174,10 @@ export default function ClientsPage() {
     queryKey: ["/api/v1/clients/summary"],
   });
 
+  const { data: stageSummary, isLoading: stageSummaryLoading } = useQuery<StageSummaryItem[]>({
+    queryKey: ["/api/v1/clients/stages/summary"],
+  });
+
   const { data: clients } = useQuery<ClientWithContacts[]>({
     queryKey: ["/api/clients"],
   });
@@ -1112,7 +1202,7 @@ export default function ClientsPage() {
 
   const dynamicFilters = useMemo((): FilterConfig[] => {
     return [
-      STATUS_FILTERS[0],
+      STAGE_FILTER,
       {
         key: "industry",
         label: "Industry",
@@ -1210,6 +1300,9 @@ export default function ClientsPage() {
       queryClient.invalidateQueries({
         queryKey: ["/api/v1/clients/summary"],
       });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/v1/clients/stages/summary"],
+      });
     },
   });
 
@@ -1239,6 +1332,9 @@ export default function ClientsPage() {
       });
       queryClient.invalidateQueries({
         queryKey: ["/api/v1/clients/summary"],
+      });
+      queryClient.invalidateQueries({
+        queryKey: ["/api/v1/clients/stages/summary"],
       });
     },
   });
@@ -1330,9 +1426,9 @@ export default function ClientsPage() {
     if (!hierarchyClients) return [];
 
     let result = hierarchyClients.filter((client) => {
-      if (activeSegment === "active" && client.status !== "active") return false;
-      if (activeSegment === "inactive" && client.status !== "inactive") return false;
-      if (activeSegment === "prospect" && client.status !== "prospect") return false;
+      if (activeSegment !== "all" && activeSegment !== "needs-attention") {
+        if (client.stage !== activeSegment) return false;
+      }
       if (activeSegment === "needs-attention" && !client.needsAttention) return false;
 
       const matchesSearch =
@@ -1343,10 +1439,10 @@ export default function ClientsPage() {
           .includes(searchQuery.toLowerCase()) ||
         client.parentName?.toLowerCase().includes(searchQuery.toLowerCase());
 
-      const matchesStatus =
-        !filterValues.status ||
-        filterValues.status === "all" ||
-        client.status === filterValues.status;
+      const matchesStage =
+        !filterValues.stage ||
+        filterValues.stage === "all" ||
+        client.stage === filterValues.stage;
 
       const matchesIndustry =
         !filterValues.industry ||
@@ -1358,7 +1454,7 @@ export default function ClientsPage() {
         filterValues.tag === "all" ||
         (client.tags && client.tags.includes(filterValues.tag));
 
-      return matchesSearch && matchesStatus && matchesIndustry && matchesTag;
+      return matchesSearch && matchesStage && matchesIndustry && matchesTag;
     });
 
     result.sort((a, b) => {
@@ -1504,10 +1600,13 @@ export default function ClientsPage() {
 
       <KPIStrip summary={summary} isLoading={summaryLoading} />
 
-      <SegmentTabs
-        activeTab={activeSegment}
-        onTabChange={setActiveSegment}
-        summary={summary}
+      <PipelineBar
+        activeStage={activeSegment}
+        onStageChange={setActiveSegment}
+        stageSummary={stageSummary}
+        totalClients={summary?.total ?? 0}
+        needsAttentionCount={summary?.needsAttention ?? 0}
+        isLoading={stageSummaryLoading}
       />
 
       <DataToolbar

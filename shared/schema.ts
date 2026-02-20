@@ -94,6 +94,39 @@ export const ClientAccessLevel = {
   COLLABORATOR: "collaborator",
 } as const;
 
+// Client pipeline stages
+export const ClientStage = {
+  LEAD: "lead",
+  PROPOSAL: "proposal",
+  CONTENT_STRATEGY: "content_strategy",
+  DESIGN: "design",
+  DEVELOPMENT: "development",
+  FINAL_TESTING: "final_testing",
+  ACTIVE_MAINTENANCE: "active_maintenance",
+} as const;
+
+export type ClientStageType = typeof ClientStage[keyof typeof ClientStage];
+
+export const CLIENT_STAGE_LABELS: Record<ClientStageType, string> = {
+  lead: "Lead",
+  proposal: "Proposal",
+  content_strategy: "Content Strategy",
+  design: "Design",
+  development: "Development",
+  final_testing: "Final Testing",
+  active_maintenance: "Active Maintenance",
+};
+
+export const CLIENT_STAGES_ORDERED: ClientStageType[] = [
+  ClientStage.LEAD,
+  ClientStage.PROPOSAL,
+  ClientStage.CONTENT_STRATEGY,
+  ClientStage.DESIGN,
+  ClientStage.DEVELOPMENT,
+  ClientStage.FINAL_TESTING,
+  ClientStage.ACTIVE_MAINTENANCE,
+];
+
 // =============================================================================
 // MULTI-TENANCY TABLES
 // =============================================================================
@@ -554,6 +587,7 @@ export const clients = pgTable("clients", {
   primaryContactEmail: text("primary_contact_email"),
   primaryContactPhone: text("primary_contact_phone"),
   status: text("status").notNull().default("active"),
+  stage: text("stage").notNull().default("lead"),
   notes: text("notes"),
   tags: text("tags").array(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -565,7 +599,29 @@ export const clients = pgTable("clients", {
   index("clients_parent_idx").on(table.parentClientId),
   index("clients_tenant_status_idx").on(table.tenantId, table.status),
   index("clients_tenant_workspace_idx").on(table.tenantId, table.workspaceId),
+  index("clients_stage_idx").on(table.stage),
+  index("clients_tenant_stage_idx").on(table.tenantId, table.stage),
 ]);
+
+/**
+ * Client Stage History - tracks pipeline stage transitions
+ */
+export const clientStageHistory = pgTable("client_stage_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  fromStage: text("from_stage").notNull(),
+  toStage: text("to_stage").notNull(),
+  changedByUserId: varchar("changed_by_user_id").references(() => users.id),
+  changedAt: timestamp("changed_at").defaultNow().notNull(),
+}, (table) => [
+  index("client_stage_history_tenant_idx").on(table.tenantId),
+  index("client_stage_history_client_idx").on(table.tenantId, table.clientId),
+  index("client_stage_history_changed_at_idx").on(table.tenantId, table.clientId, table.changedAt),
+]);
+
+export type ClientStageHistory = typeof clientStageHistory.$inferSelect;
+export type InsertClientStageHistory = typeof clientStageHistory.$inferInsert;
 
 /**
  * Client Contacts table - represents people at client companies
