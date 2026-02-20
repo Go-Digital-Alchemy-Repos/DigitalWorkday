@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useEffect } from "react";
 import { Switch, Route, Redirect, useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
 import { SidebarProvider, SidebarTrigger } from "@/components/ui/sidebar";
@@ -61,6 +61,14 @@ const SupportFormSchemas = lazy(trackChunkLoad("SupportForms", () => import("@/p
 const DesignSystemPage = lazy(trackChunkLoad("DesignSystem", () => import("@/pages/design-system")));
 const NotFound = lazy(trackChunkLoad("NotFound", () => import("@/pages/not-found")));
 
+function ClientRedirect({ id }: { id: string }) {
+  const [, navigate] = useLocation();
+  useEffect(() => {
+    navigate(`/clients/${id}`, { replace: true });
+  }, [id, navigate]);
+  return null;
+}
+
 function TenantRouter() {
   return (
     <Suspense fallback={<PageSkeleton />}>
@@ -81,7 +89,7 @@ function TenantRouter() {
           {() => <TenantRouteGuard component={ClientsPage} />}
         </Route>
         <Route path="/clients/:id/360">
-          {(params) => <Redirect to={`/clients/${params.id}`} />}
+          {(params) => <ClientRedirect id={params.id} />}
         </Route>
         <Route path="/clients/:id">
           {() => <TenantRouteGuard component={ClientDetailPage} />}
