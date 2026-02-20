@@ -918,7 +918,6 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
           </Card>
         </div>
       </div>
-      </div>
 
       {/* Create/Edit Note Drawer */}
       <FullScreenDrawer
