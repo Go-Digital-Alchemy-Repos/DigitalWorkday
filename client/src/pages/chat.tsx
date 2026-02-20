@@ -137,6 +137,8 @@ interface ReadReceipt {
   lastReadAt: string | Date;
 }
 
+const MESSAGES_PAGE_SIZE = 50;
+
 // Message status for optimistic updates
 type MessageStatus = 'pending' | 'sent' | 'failed';
 
@@ -240,6 +242,8 @@ export default function ChatPage() {
   const [selectedDm, setSelectedDm] = useState<ChatDmThread | null>(null);
   const [messageInput, setMessageInput] = useState("");
   const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [hasMoreMessages, setHasMoreMessages] = useState(false);
+  const [isLoadingMore, setIsLoadingMore] = useState(false);
   const [sendError, setSendError] = useState<string | null>(null);
   const [quoteReply, setQuoteReply] = useState<{ authorName: string; body: string } | null>(null);
   const [createTaskModalOpen, setCreateTaskModalOpen] = useState(false);
@@ -412,12 +416,12 @@ export default function ChatPage() {
   });
 
   const channelMessagesQuery = useQuery<ChatMessage[]>({
-    queryKey: ["/api/v1/chat/channels", selectedChannel?.id, "messages"],
+    queryKey: ["/api/v1/chat/channels", selectedChannel?.id, "messages", { limit: String(MESSAGES_PAGE_SIZE) }],
     enabled: !!selectedChannel,
   });
 
   const dmMessagesQuery = useQuery<ChatMessage[]>({
-    queryKey: ["/api/v1/chat/dm", selectedDm?.id, "messages"],
+    queryKey: ["/api/v1/chat/dm", selectedDm?.id, "messages", { limit: String(MESSAGES_PAGE_SIZE) }],
     enabled: !!selectedDm,
   });
 
@@ -915,20 +919,83 @@ export default function ChatPage() {
 
   useEffect(() => {
     if (selectedChannel && channelMessagesQuery.data) {
-      setMessages(sortMessages(channelMessagesQuery.data));
-      // Clear seen IDs when switching conversations
+      const sorted = sortMessages(channelMessagesQuery.data);
+      setMessages(sorted);
+      setHasMoreMessages(channelMessagesQuery.data.length >= MESSAGES_PAGE_SIZE);
       seenMessageIds.current.clear();
       channelMessagesQuery.data.forEach(m => seenMessageIds.current.add(m.id));
     } else if (selectedDm && dmMessagesQuery.data) {
-      setMessages(sortMessages(dmMessagesQuery.data));
-      // Clear seen IDs when switching conversations
+      const sorted = sortMessages(dmMessagesQuery.data);
+      setMessages(sorted);
+      setHasMoreMessages(dmMessagesQuery.data.length >= MESSAGES_PAGE_SIZE);
       seenMessageIds.current.clear();
       dmMessagesQuery.data.forEach(m => seenMessageIds.current.add(m.id));
     } else {
       setMessages([]);
+      setHasMoreMessages(false);
       seenMessageIds.current.clear();
     }
   }, [selectedChannel, selectedDm, channelMessagesQuery.data, dmMessagesQuery.data]);
+
+  const messagesRef = useRef<ChatMessage[]>(messages);
+  messagesRef.current = messages;
+  const hasMoreRef = useRef(hasMoreMessages);
+  hasMoreRef.current = hasMoreMessages;
+  const isLoadingMoreRef = useRef(isLoadingMore);
+  isLoadingMoreRef.current = isLoadingMore;
+
+  const loadAbortRef = useRef<AbortController | null>(null);
+
+  const loadOlderMessages = useCallback(async () => {
+    if (isLoadingMoreRef.current || !hasMoreRef.current || messagesRef.current.length === 0) return;
+    
+    if (loadAbortRef.current) {
+      loadAbortRef.current.abort();
+    }
+    const abortController = new AbortController();
+    loadAbortRef.current = abortController;
+    
+    const conversationId = selectedChannel?.id ?? selectedDm?.id;
+    
+    setIsLoadingMore(true);
+    try {
+      const oldestMessage = messagesRef.current[0];
+      const beforeDate = new Date(oldestMessage.createdAt).toISOString();
+      let url: string;
+      if (selectedChannel) {
+        url = `/api/v1/chat/channels/${selectedChannel.id}/messages?limit=${MESSAGES_PAGE_SIZE}&before=${encodeURIComponent(beforeDate)}`;
+      } else if (selectedDm) {
+        url = `/api/v1/chat/dm/${selectedDm.id}/messages?limit=${MESSAGES_PAGE_SIZE}&before=${encodeURIComponent(beforeDate)}`;
+      } else {
+        return;
+      }
+      const res = await fetch(url, { credentials: "include", signal: abortController.signal });
+      if (!res.ok) throw new Error("Failed to load older messages");
+      const olderMessages: ChatMessage[] = await res.json();
+      
+      const currentConversationId = selectedChannel?.id ?? selectedDm?.id;
+      if (currentConversationId !== conversationId) {
+        return;
+      }
+      
+      if (olderMessages.length < MESSAGES_PAGE_SIZE) {
+        setHasMoreMessages(false);
+      }
+      if (olderMessages.length > 0) {
+        setMessages((prev) => {
+          const existingIds = new Set(prev.map((m) => m.id));
+          const newMsgs = olderMessages.filter((m) => !existingIds.has(m.id));
+          newMsgs.forEach((m) => seenMessageIds.current.add(m.id));
+          return sortMessages([...newMsgs, ...prev]);
+        });
+      }
+    } catch (err) {
+      if (err instanceof DOMException && err.name === "AbortError") return;
+      console.error("[chat] Failed to load older messages:", err);
+    } finally {
+      setIsLoadingMore(false);
+    }
+  }, [selectedChannel?.id, selectedDm?.id]);
 
   // Mark thread as read when messages load and there are messages
   // Uses ref to prevent redundant POST requests when the same message is already marked
@@ -2430,9 +2497,9 @@ export default function ChatPage() {
               currentUserId={user?.id}
               currentUserRole={user?.role}
               isLoading={channelMessagesQuery.isLoading || dmMessagesQuery.isLoading}
-              hasMoreMessages={false}
-              onLoadMore={() => {}}
-              isLoadingMore={false}
+              hasMoreMessages={hasMoreMessages}
+              onLoadMore={loadOlderMessages}
+              isLoadingMore={isLoadingMore}
               onEditMessage={(messageId, body) => editMessageMutation.mutate({ messageId, body })}
               onDeleteMessage={(messageId) => deleteMessageMutation.mutate(messageId)}
               onAddReaction={(messageId, emoji) => addReactionMutation.mutate({ messageId, emoji })}

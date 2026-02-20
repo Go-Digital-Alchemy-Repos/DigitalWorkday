@@ -1,4 +1,4 @@
-import { useRef, useEffect, useState, useCallback, useMemo, lazy, Suspense } from "react";
+import { useRef, useEffect, useState, useCallback, useMemo, memo, lazy, Suspense } from "react";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -1153,7 +1153,8 @@ export function ChatMessageTimeline({
         firstItemIndex={firstItemIndex}
         initialTopMostItemIndex={messageGroups.length - 1}
         itemContent={(index, group) => renderGroup(index, group)}
-        followOutput="smooth"
+        computeItemKey={(index, group) => group.id}
+        followOutput={(isAtBottom) => (isAtBottom ? "smooth" : false)}
         alignToBottom
         atBottomStateChange={handleAtBottomStateChange}
         atBottomThreshold={60}
@@ -1161,6 +1162,7 @@ export function ChatMessageTimeline({
         rangeChanged={handleRangeChanged}
         increaseViewportBy={{ top: 400, bottom: 200 }}
         overscan={300}
+        defaultItemHeight={80}
         style={{ flex: 1 }}
         className="scrollbar-thin"
         components={{

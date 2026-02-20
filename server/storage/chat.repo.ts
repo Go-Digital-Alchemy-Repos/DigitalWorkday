@@ -16,7 +16,7 @@ import {
   chatMessageReactions, chatPins,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, asc, inArray, gte, lte, gt, isNull, sql, ilike, or, type SQL } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, gte, lte, lt, gt, isNull, sql, ilike, or, type SQL } from "drizzle-orm";
 
 export class ChatRepository {
 
@@ -183,7 +183,7 @@ export class ChatRepository {
     
     const conditions: SQL[] = [eq(targetColumn, targetId)];
     if (before) {
-      conditions.push(lte(chatMessages.createdAt, before));
+      conditions.push(lt(chatMessages.createdAt, before));
     }
     if (after) {
       conditions.push(gte(chatMessages.createdAt, after));
