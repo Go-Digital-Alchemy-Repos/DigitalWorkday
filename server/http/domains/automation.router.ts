@@ -60,6 +60,17 @@ router.post("/automation/client-stage-rules", async (req: Request, res: Response
   }
 });
 
+const updateAutomationRuleSchema = z.object({
+  name: z.string().min(1).optional(),
+  isEnabled: z.boolean().optional(),
+  triggerType: z.string().optional(),
+  triggerConfig: z.record(z.any()).optional(),
+  conditionConfig: z.record(z.any()).optional(),
+  toStage: z.string().optional(),
+  allowBackward: z.boolean().optional(),
+  allowSkipStages: z.boolean().optional(),
+});
+
 router.patch("/automation/client-stage-rules/:id", async (req: Request, res: Response) => {
   try {
     if (!requireAdminRole(req, res)) return;
@@ -69,10 +80,13 @@ router.patch("/automation/client-stage-rules/:id", async (req: Request, res: Res
     const existing = await storage.getAutomationRule(req.params.id, tenantId);
     if (!existing) return sendError(res, AppError.notFound("Automation rule"), req);
 
-    const updates = req.body;
+    const updates = updateAutomationRuleSchema.parse(req.body);
     const rule = await storage.updateAutomationRule(req.params.id, tenantId, updates);
     res.json(rule);
   } catch (error) {
+    if (error instanceof z.ZodError) {
+      return sendError(res, AppError.badRequest("Validation failed", error.errors), req);
+    }
     return handleRouteError(res, error, "PATCH /automation/client-stage-rules/:id", req);
   }
 });
