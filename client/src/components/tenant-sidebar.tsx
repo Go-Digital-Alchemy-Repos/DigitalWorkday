@@ -440,15 +440,16 @@ export function TenantSidebar() {
                       >
                         <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s/g, "-")}`}>
                           <item.icon className="h-4 w-4" />
-                          <span className="relative">
+                          <span className="relative flex items-center gap-2">
                             {item.title}
                             {item.title === "Chat" && totalUnreadChat > 0 && (
-                              <span
-                                className="absolute -top-2 -right-7 flex items-center justify-center min-w-[18px] h-[18px] px-1 rounded-full bg-red-500 text-white text-[10px] font-bold leading-none"
+                              <Badge 
+                                variant="destructive" 
+                                className="h-4 min-w-[16px] px-1 text-[10px] flex items-center justify-center rounded-full"
                                 data-testid="badge-chat-unread"
                               >
                                 {totalUnreadChat > 99 ? "99+" : totalUnreadChat}
-                              </span>
+                              </Badge>
                             )}
                           </span>
                         </Link>

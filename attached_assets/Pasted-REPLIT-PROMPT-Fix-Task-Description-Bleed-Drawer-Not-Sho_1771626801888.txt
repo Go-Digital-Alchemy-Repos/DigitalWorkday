@@ -1,0 +1,194 @@
+REPLIT PROMPT — Fix Task Description “Bleed” + Drawer Not Showing Description
+DigitalWorkday
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+PROBLEM SUMMARY (FROM USER):
+- In task list view, a description preview appears.
+- When opening a task drawer, description field is blank.
+- Editing one task’s description:
+  - it still may not update that task’s preview
+  - WORSE: other tasks in the same section start showing the same description (“bleed” / shared state)
+This strongly suggests a client-side state/keying bug (shared editor state across items) plus an API/serialization mismatch for drawer loading.
+
+OBJECTIVE:
+Investigate and fix:
+1) Task drawer must load and display the correct description for the selected task
+2) Editing a description must only update that task (no cross-task bleed)
+3) List preview must reflect the task’s stored description (after save)
+4) Ensure the stored format (plain text vs TipTap JSON) is consistently handled in both list + drawer
+5) Add tests and documentation note so this doesn’t regress
+
+NON-DESTRUCTIVE RULES:
+- Keep response shapes stable where possible.
+- Do not remove the rich text editor; fix its binding.
+- Maintain tenant scoping and task/section boundaries.
+- Add regression tests (unit + integration) and verify manually with a short checklist.
+
+================================================================================
+PHASE 0 — Repro + Hypothesis Checklist
+================================================================================
+
+1) Reproduce in dev:
+- open a project section with multiple tasks
+- confirm list shows preview snippets
+- open task A drawer → description blank
+- set description on task A, save
+- close drawer, check list preview
+- open task B drawer → confirm wrong description appears / bleed
+
+2) Likely root causes (investigate all):
+A) Shared editor state instance reused across tasks (single state variable, not keyed by taskId)
+B) React list uses unstable keys (index keys) so components reuse state across rows
+C) Drawer uses wrong query key or stale selection (taskId mismatch)
+D) Drawer loads a different field (e.g., descriptionHtml vs descriptionJson) than list uses
+E) Backend update endpoint accidentally updates by sectionId or projectId instead of taskId
+F) Server returning cached 304/partial data causing mismatch (but “bleed” points more to UI)
+
+================================================================================
+PHASE 1 — Data Shape Audit (Server + Client)
+================================================================================
+
+1) Locate task schema fields in shared/schema.ts:
+- task.description (what type? text/json?)
+- any other description columns (descriptionJson, descriptionHtml, descriptionText)
+
+2) Locate backend endpoints:
+- GET task list endpoint(s) used by list view
+- GET task detail endpoint used by drawer
+- PATCH/PUT endpoint for updating task description
+
+3) Confirm what the client expects:
+- list preview: where is it derived from? (task.description? task.descriptionText?)
+- drawer editor: what is its value prop bound to?
+
+4) Identify any serializer helpers:
+- stripHtml, tiptapToText, richTextToPlainText, etc.
+
+OUTPUT:
+- a short report in docs/review/task-description-incident.md:
+  - endpoints involved
+  - exact fields returned
+  - suspected mismatch points
+
+================================================================================
+PHASE 2 — Fix Client “Bleed” (React Keys + Editor State Isolation)
+================================================================================
+
+A) Fix unstable keys in task list rendering
+- Find the task list/map rendering component(s) for project section tasks.
+- Ensure each row uses key={task.id} NOT index or section-based keys.
+- Ensure any nested components (TaskRow, TaskCard, TaskDrawerTrigger) also use stable keys.
+
+B) Ensure editor state is per-task instance
+- In the drawer/editor component:
+  - The editor must be controlled by selectedTaskId
+  - On taskId change:
+    - reset editor content to that task’s description (not keep previous state)
+- If using TipTap:
+  - Recreate editor instance when taskId changes OR call editor.commands.setContent(...)
+  - Never store editor JSON in a shared state used by multiple tasks.
+- If the drawer component is reused for different tasks, make sure it has:
+  - key={taskId} on the drawer content component to force state reset safely.
+
+C) Ensure “save” only updates selected task in cache
+- When saving description:
+  - Update the specific task in React Query cache by taskId
+  - Do NOT write to a “section tasks” array incorrectly
+- Verify setQueryData usage:
+  - it must map tasks and replace only matching id
+  - not replace all tasks or all tasks in a section
+
+D) Ensure there is no accidental memoization leakage
+- Search for:
+  - useMemo/useCallback dependencies missing taskId
+  - shared “draftDescription” state lifted to parent section component
+  - Zustand/global store holding a single “taskDescriptionDraft” value
+
+Fix any found by scoping state to taskId or placing it inside keyed components.
+
+================================================================================
+PHASE 3 — Fix Drawer Loading (Correct Field + Correct Fetch)
+================================================================================
+
+A) Ensure drawer fetch uses the selected taskId
+- Verify the drawer uses a query key like:
+  ['task', taskId] (or existing pattern)
+- Ensure it does not accidentally use sectionId or lastSelectedTaskId
+
+B) Ensure drawer displays the correct field
+- If the backend stores TipTap JSON:
+  - drawer must render JSON into editor
+  - list preview should use derived plain text (server-side or client-side)
+- Implement ONE canonical utility:
+  client/src/lib/richText.ts
+  - toPlainText(rich)
+  - toEditorContent(rich)
+  - normalizeFromApi(field)
+Use it in both:
+- list preview
+- drawer editor initialization
+
+C) Ensure saving persists the correct canonical format
+- Decide canonical storage:
+  - Prefer storing TipTap JSON in DB (jsonb/text) + a derived plain text column for search/preview
+- If you already have both:
+  - update both on save:
+    - descriptionRich (json)
+    - descriptionText (plain)
+- Ensure server returns consistent fields in both list and detail endpoints.
+
+================================================================================
+PHASE 4 — Server Safety Check (Prevent Wrong Row Updates)
+================================================================================
+
+Because the symptom includes “same description appears in all tasks in the section”:
+- audit the task update endpoint to ensure it updates WHERE id = :taskId AND tenantId = :tenantId
+- confirm it is not updating WHERE sectionId = :sectionId or projectId accidentally
+- confirm Drizzle update call uses eq(tasks.id, taskId) not eq(tasks.sectionId, sectionId)
+
+Add an integration test:
+- create two tasks in same section
+- update description for task A
+- fetch tasks
+- assert task B description unchanged
+
+================================================================================
+PHASE 5 — Regression Tests
+================================================================================
+
+Client unit tests (if setup exists; otherwise minimal):
+- reducer/cache update function updates only one task
+- rich text normalize functions
+
+Server integration tests:
+1) Update task A description does not affect task B
+2) GET list returns description preview field
+3) GET detail returns rich description field
+4) Tenant isolation holds
+
+Add test names that reference this incident:
+- “task description does not bleed across tasks”
+- “task drawer loads description consistently”
+
+================================================================================
+PHASE 6 — Manual QA Checklist (Short)
+================================================================================
+
+Create docs/QA/task-description.md:
+- list preview shows snippet
+- open drawer shows same content
+- edit task A only changes task A
+- close/reopen drawer retains correct description
+- switch between tasks quickly does not show stale content
+- refresh page confirms persisted values
+
+================================================================================
+OUTPUT REQUIREMENTS
+================================================================================
+
+At completion, output:
+- root cause(s) identified (keys/state/cache/server where clause)
+- files changed
+- tests added + pass count
+- manual QA checklist results
