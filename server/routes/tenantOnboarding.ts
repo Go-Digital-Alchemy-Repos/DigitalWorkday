@@ -187,6 +187,7 @@ const updateSettingsSchema = z.object({
   whiteLabelEnabled: z.boolean().optional(),
   hideVendorBranding: z.boolean().optional(),
   messagePermissions: messagePermissionsSchema.optional(),
+  aiChatEnabled: z.boolean().optional(),
 });
 
 router.patch("/settings", requireAuth, requireTenantAdmin, async (req, res) => {
@@ -380,6 +381,7 @@ router.get("/settings", requireAuth, requireTenantAdmin, async (req, res) => {
         whiteLabelEnabled: settings.whiteLabelEnabled,
         hideVendorBranding: settings.hideVendorBranding,
         messagePermissions: parsedPerms?.success ? parsedPerms.data : DEFAULT_MESSAGE_PERMISSIONS,
+        aiChatEnabled: settings.aiChatEnabled ?? false,
       },
     });
   } catch (error) {

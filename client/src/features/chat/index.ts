@@ -3,6 +3,7 @@ export { ConversationListPanel, type ChatChannel, type ChatDmThread } from "./Co
 export { ChatContextPanelToggle } from "./ChatContextPanelToggle";
 export { ChatMessageTimeline, type ChatMessage, type ThreadSummary, type ReadByUser } from "./ChatMessageTimeline";
 export { PinnedMessagesPanel } from "./PinnedMessagesPanel";
+export { ChatAIAssist, ConvertToTaskAction } from "./ChatAIAssist";
 export { SlashCommandDropdown } from "./SlashCommandDropdown";
 export { SLASH_COMMANDS, parseSlashCommand, isSlashCommandInput, getMatchingCommands, findCommand, parseDueDate, parseRemindTime } from "./slashCommands";
 export type { SlashCommand, ParsedCommand } from "./slashCommands";

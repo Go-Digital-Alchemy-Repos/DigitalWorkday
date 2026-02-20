@@ -2,7 +2,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, ApiError } from "@/lib/queryClient";
-import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanelToggle, PinnedMessagesPanel, SlashCommandDropdown, getMatchingCommands, parseSlashCommand, isSlashCommandInput, findCommand, type SlashCommand, type ReadByUser } from "@/features/chat";
+import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanelToggle, PinnedMessagesPanel, ChatAIAssist, ConvertToTaskAction, SlashCommandDropdown, getMatchingCommands, parseSlashCommand, isSlashCommandInput, findCommand, type SlashCommand, type ReadByUser } from "@/features/chat";
 
 const LazyChatContextPanel = lazy(() =>
   import("@/features/chat/ChatContextPanel").then((mod) => ({
@@ -253,6 +253,13 @@ export default function ChatPage() {
     authorName: string;
     conversationType: "channel" | "dm";
     conversationId: string;
+  } | null>(null);
+  const [convertedTask, setConvertedTask] = useState<{
+    id: string;
+    title: string;
+    description?: string;
+    priority: string;
+    status: string;
   } | null>(null);
   const [createChannelOpen, setCreateChannelOpen] = useState(false);
   const [startDmOpen, setStartDmOpen] = useState(false);
@@ -1770,6 +1777,21 @@ export default function ChatPage() {
     },
   });
 
+  const convertToTaskMutation = useMutation({
+    mutationFn: async (params: { messageId: string; channelId?: string; dmThreadId?: string }) => {
+      const res = await apiRequest("POST", "/api/v1/chat/ai/convert-to-task", params);
+      return res.json();
+    },
+    onSuccess: (data) => {
+      setConvertedTask(data.task);
+      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+      toast({ title: "Task Created", description: `"${data.task.title}" has been created` });
+    },
+    onError: (error: Error) => {
+      toast({ title: "Convert to Task Failed", description: error.message, variant: "destructive" });
+    },
+  });
+
   const pinMessageMutation = useMutation({
     mutationFn: async (messageId: string) => {
       if (!selectedChannel) throw new Error("No channel selected");
@@ -2427,6 +2449,12 @@ export default function ChatPage() {
                     </Button>
                   </>
                 )}
+                <ChatAIAssist
+                  channelId={selectedChannel?.id}
+                  dmThreadId={selectedDm?.id}
+                  threadParentMessageId={threadParentMessage?.id}
+                  onInsertDraft={(text) => setNewMessage(text)}
+                />
                 <Button
                   variant="ghost"
                   size="icon"
@@ -2894,27 +2922,20 @@ export default function ChatPage() {
       {/* Create Task from Message Modal */}
       <Dialog open={createTaskModalOpen} onOpenChange={(open) => {
         setCreateTaskModalOpen(open);
-        if (!open) setCreateTaskMessage(null);
+        if (!open) {
+          setCreateTaskMessage(null);
+          setConvertedTask(null);
+        }
       }}>
         <DialogContent>
           <DialogHeader>
             <DialogTitle>Create Task from Message</DialogTitle>
             <DialogDescription>
-              Create a new task with the message content prefilled.
+              {convertedTask ? "Task created successfully" : "Use AI to extract a task from this message, or create one manually."}
             </DialogDescription>
           </DialogHeader>
-          {createTaskMessage && (
+          {createTaskMessage && !convertedTask && (
             <div className="space-y-4 py-4">
-              <div className="space-y-2">
-                <Label>Task Title</Label>
-                <Input
-                  defaultValue={createTaskMessage.body.length > 80 
-                    ? createTaskMessage.body.substring(0, 80) + "..." 
-                    : createTaskMessage.body}
-                  placeholder="Task title"
-                  data-testid="input-task-title"
-                />
-              </div>
               <div className="space-y-2">
                 <Label>Message Content</Label>
                 <div className="p-3 rounded-md bg-muted text-sm">
@@ -2933,22 +2954,48 @@ export default function ChatPage() {
               </div>
             </div>
           )}
-          <DialogFooter>
+          {convertedTask && (
+            <div className="space-y-3 py-4" data-testid="converted-task-result">
+              <div className="p-3 rounded-md border space-y-2">
+                <div className="font-medium text-sm">{convertedTask.title}</div>
+                {convertedTask.description && (
+                  <p className="text-sm text-muted-foreground">{convertedTask.description}</p>
+                )}
+                <div className="flex gap-2">
+                  <Badge variant="outline">{convertedTask.priority}</Badge>
+                  <Badge variant="outline">{convertedTask.status}</Badge>
+                </div>
+              </div>
+            </div>
+          )}
+          <DialogFooter className="gap-2">
             <Button variant="outline" onClick={() => setCreateTaskModalOpen(false)}>
-              Cancel
+              {convertedTask ? "Close" : "Cancel"}
             </Button>
-            <Button
-              onClick={() => {
-                toast({
-                  title: "Coming soon",
-                  description: "Task creation from messages will be available in a future update.",
-                });
-                setCreateTaskModalOpen(false);
-              }}
-              data-testid="button-confirm-create-task"
-            >
-              Create Task
-            </Button>
+            {!convertedTask && (
+              <Button
+                onClick={() => {
+                  if (createTaskMessage) {
+                    convertToTaskMutation.mutate({
+                      messageId: createTaskMessage.id,
+                      channelId: createTaskMessage.conversationType === "channel" ? createTaskMessage.conversationId : undefined,
+                      dmThreadId: createTaskMessage.conversationType === "dm" ? createTaskMessage.conversationId : undefined,
+                    });
+                  }
+                }}
+                disabled={convertToTaskMutation.isPending}
+                data-testid="button-confirm-create-task"
+              >
+                {convertToTaskMutation.isPending ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Creating...
+                  </>
+                ) : (
+                  "Create Task with AI"
+                )}
+              </Button>
+            )}
           </DialogFooter>
         </DialogContent>
       </Dialog>

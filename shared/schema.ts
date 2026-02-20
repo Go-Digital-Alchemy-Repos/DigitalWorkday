@@ -172,6 +172,8 @@ export const tenantSettings = pgTable("tenant_settings", {
   messagePermissions: jsonb("message_permissions"),
   // Default assignee for new client conversations (auto-assign rule)
   defaultConversationAssigneeId: varchar("default_conversation_assignee_id").references(() => users.id),
+  // AI Chat Assist feature flag (tenant-level toggle)
+  aiChatEnabled: boolean("ai_chat_enabled").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
