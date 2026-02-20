@@ -538,6 +538,18 @@ function SubtaskListInner({
           </Button>
         </div>
       )}
+      {subtasks.length > 0 && !isAdding && (
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => setIsAdding(true)}
+          className="w-full justify-center text-muted-foreground"
+          data-testid="button-add-subtask-bottom"
+        >
+          <Plus className="h-3.5 w-3.5 mr-1" />
+          Add Subtask
+        </Button>
+      )}
       {subtasks.length === 0 && !isAdding && (
         <p className="text-xs text-muted-foreground py-2">
           No subtasks yet. Click "Add" to create one.
