@@ -72,7 +72,6 @@ import {
   Link as LinkIcon,
   Search,
   Play,
-  Layers,
   Users,
   Calendar,
   Briefcase,
@@ -83,6 +82,11 @@ import {
   X,
   Tag,
   UserPlus,
+  Layers,
+  Activity,
+  BarChart3,
+  ClipboardCheck,
+  MessageSquare,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
@@ -94,6 +98,8 @@ import { DivisionDrawer } from "@/features/clients";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
 import { ClientNotesTab } from "@/components/client-notes-tab";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
+import { CrmOverviewSection, NotesTab as Crm360NotesTab, ActivityTab, ApprovalsTab, MessagesTab, type CrmSummary } from "@/components/client-360-tabs";
+import { ClientReportsTab } from "@/components/client-reports-tab";
 import { useToast } from "@/hooks/use-toast";
 import type { ClientWithContacts, Project, ClientContact, ClientDivision } from "@shared/schema";
 import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
@@ -284,6 +290,7 @@ export default function ClientDetailPage() {
   const [deleteClientOpen, setDeleteClientOpen] = useState(false);
   const [mailingSameAsPhysical, setMailingSameAsPhysical] = useState(true);
   const [portalInviteContact, setPortalInviteContact] = useState<ClientContact | null>(null);
+  const [activeTab, setActiveTab] = useState("overview");
 
   const { user } = useAuth();
   const crmFlags = useCrmFlags();
@@ -298,6 +305,11 @@ export default function ClientDetailPage() {
   const { data: divisions = [] } = useQuery<DivisionWithCounts[]>({
     queryKey: ["/api/v1/clients", clientId, "divisions"],
     enabled: !!clientId,
+  });
+
+  const { data: crmSummary, isLoading: crmSummaryLoading } = useQuery<CrmSummary>({
+    queryKey: [`/api/crm/clients/${clientId}/summary`],
+    enabled: !!clientId && crmFlags.client360,
   });
 
   // Fetch all clients for parent client selector (excluding the current client)
@@ -685,14 +697,6 @@ export default function ClientDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {crmFlags.client360 && (
-            <Link href={`/clients/${clientId}/360`}>
-              <Button variant="outline" data-testid="button-open-360-view">
-                <Layers className="h-4 w-4 mr-2" />
-                360 View
-              </Button>
-            </Link>
-          )}
           <Button 
             variant="default" 
             onClick={() => setTimerDrawerOpen(true)}
@@ -846,7 +850,7 @@ export default function ClientDetailPage() {
       </div>
 
       <div className="flex-1 overflow-auto">
-        <Tabs defaultValue="overview" className="h-full">
+        <Tabs value={activeTab} onValueChange={setActiveTab} className="h-full">
           <div className="px-6 pt-4 border-b border-border">
             <TabsList>
               <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
@@ -859,14 +863,36 @@ export default function ClientDetailPage() {
               <TabsTrigger value="divisions" data-testid="tab-divisions">
                 Divisions ({divisions.length + childClients.length})
               </TabsTrigger>
-              <TabsTrigger value="portal" data-testid="tab-portal">
-                Portal Users
+              <TabsTrigger value="activity" data-testid="tab-activity">
+                <Activity className="h-3.5 w-3.5 mr-1" />
+                Activity
               </TabsTrigger>
               <TabsTrigger value="notes" data-testid="tab-notes">
                 Notes
               </TabsTrigger>
               <TabsTrigger value="documents" data-testid="tab-documents">
                 Documents
+              </TabsTrigger>
+              {crmFlags.client360 && (
+                <TabsTrigger value="reports" data-testid="tab-reports">
+                  <BarChart3 className="h-3.5 w-3.5 mr-1" />
+                  Reports
+                </TabsTrigger>
+              )}
+              {crmFlags.approvals && (
+                <TabsTrigger value="approvals" data-testid="tab-approvals">
+                  <ClipboardCheck className="h-3.5 w-3.5 mr-1" />
+                  Approvals
+                </TabsTrigger>
+              )}
+              {crmFlags.clientMessaging && (
+                <TabsTrigger value="messages" data-testid="tab-messages">
+                  <MessageSquare className="h-3.5 w-3.5 mr-1" />
+                  Messages
+                </TabsTrigger>
+              )}
+              <TabsTrigger value="portal" data-testid="tab-portal">
+                Portal Users
               </TabsTrigger>
               {featureFlags.assetLibraryV2 && (
                 <TabsTrigger value="asset-library" data-testid="tab-asset-library" className="gap-1.5">
@@ -878,6 +904,16 @@ export default function ClientDetailPage() {
           </div>
 
           <TabsContent value="overview" className="p-6 overflow-auto">
+            {crmFlags.client360 && (
+              <div className="mb-6">
+                <CrmOverviewSection
+                  clientId={clientId || ""}
+                  summary={crmSummary}
+                  isLoading={crmSummaryLoading}
+                  onNavigateTab={setActiveTab}
+                />
+              </div>
+            )}
             <Form {...clientForm}>
               <form onSubmit={clientForm.handleSubmit(handleUpdateClient)} className="space-y-6">
                 <div className="flex items-center justify-between gap-4">
@@ -2062,13 +2098,39 @@ export default function ClientDetailPage() {
             <ClientPortalUsersTab clientId={clientId || ""} />
           </TabsContent>
 
+          <TabsContent value="activity" className="p-6">
+            <ActivityTab clientId={clientId || ""} />
+          </TabsContent>
+
           <TabsContent value="notes" className="p-6">
-            <ClientNotesTab clientId={clientId || ""} />
+            {crmFlags.client360 ? (
+              <Crm360NotesTab clientId={clientId || ""} />
+            ) : (
+              <ClientNotesTab clientId={clientId || ""} />
+            )}
           </TabsContent>
 
           <TabsContent value="documents" className="p-6">
             <ClientDocumentsPanel clientId={clientId || ""} />
           </TabsContent>
+
+          {crmFlags.client360 && (
+            <TabsContent value="reports" className="p-6">
+              <ClientReportsTab clientId={clientId || ""} />
+            </TabsContent>
+          )}
+
+          {crmFlags.approvals && (
+            <TabsContent value="approvals" className="p-6">
+              <ApprovalsTab clientId={clientId || ""} />
+            </TabsContent>
+          )}
+
+          {crmFlags.clientMessaging && (
+            <TabsContent value="messages" className="p-6">
+              <MessagesTab clientId={clientId || ""} />
+            </TabsContent>
+          )}
 
           {featureFlags.assetLibraryV2 && (
             <TabsContent value="asset-library" className="p-6 h-[calc(100%-3rem)]">

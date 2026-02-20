@@ -40,7 +40,6 @@ const ProjectsDashboard = lazy(trackChunkLoad("Projects", () => import("@/pages/
 const ProjectPage = lazy(trackChunkLoad("Project", () => import("@/pages/project")));
 const ClientsPage = lazy(trackChunkLoad("Clients", () => import("@/pages/clients")));
 const ClientDetailPage = lazy(trackChunkLoad("ClientDetail", () => import("@/pages/client-detail")));
-const Client360Page = lazy(trackChunkLoad("Client360", () => import("@/pages/client-360")));
 const CrmPipelinePage = lazy(trackChunkLoad("CrmPipeline", () => import("@/pages/crm-pipeline")));
 const CrmFollowupsPage = lazy(trackChunkLoad("CrmFollowups", () => import("@/pages/crm-followups")));
 const SettingsPage = lazy(trackChunkLoad("Settings", () => import("@/pages/settings")));
@@ -82,7 +81,7 @@ function TenantRouter() {
           {() => <TenantRouteGuard component={ClientsPage} />}
         </Route>
         <Route path="/clients/:id/360">
-          {() => <TenantRouteGuard component={Client360Page} />}
+          {(params) => <Redirect to={`/clients/${params.id}`} />}
         </Route>
         <Route path="/clients/:id">
           {() => <TenantRouteGuard component={ClientDetailPage} />}
