@@ -1,4 +1,4 @@
-import { useState, useCallback, useMemo } from "react";
+import { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
 import { useCreateTask } from "@/hooks/use-create-task";
@@ -171,6 +171,29 @@ export default function ProjectPage() {
   const activeTask = activeTaskId
     ? displaySections?.flatMap((s) => s.tasks || []).find((t) => t.id === activeTaskId)
     : null;
+
+  const urlTaskId = useMemo(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get('task');
+  }, []);
+
+  const { data: linkedTask } = useQuery<TaskWithRelations>({
+    queryKey: ["/api/tasks", urlTaskId],
+    enabled: !!urlTaskId && !selectedTask && !!tasks && !tasks.find(t => t.id === urlTaskId),
+  });
+
+  useEffect(() => {
+    if (sectionsLoading || selectedTask || !urlTaskId) return;
+    const allTasks = displaySections?.flatMap((s) => s.tasks || []) || [];
+    const found = allTasks.find(t => t.id === urlTaskId) || tasks?.find(t => t.id === urlTaskId);
+    if (found) {
+      setSelectedTask(found);
+      return;
+    }
+    if (linkedTask) {
+      setSelectedTask(linkedTask);
+    }
+  }, [sectionsLoading, tasks, linkedTask, selectedTask, urlTaskId, displaySections]);
 
   const createTaskMutation = useCreateTask();
 
@@ -468,6 +491,16 @@ export default function ProjectPage() {
 
   const handleTaskSelect = (task: TaskWithRelations) => {
     setSelectedTask(task);
+    const url = new URL(window.location.href);
+    url.searchParams.set('task', task.id);
+    window.history.replaceState({}, '', url.pathname + url.search);
+  };
+
+  const handleCloseTaskDrawer = () => {
+    setSelectedTask(null);
+    const url = new URL(window.location.href);
+    url.searchParams.delete('task');
+    window.history.replaceState({}, '', url.pathname + url.search);
   };
 
   const handleStatusChange = async (taskId: string, completed: boolean) => {
@@ -975,7 +1008,7 @@ export default function ProjectPage() {
       <TaskDetailDrawer
         task={selectedTask}
         open={!!selectedTask}
-        onOpenChange={(open) => !open && setSelectedTask(null)}
+        onOpenChange={(open) => !open && handleCloseTaskDrawer()}
         onUpdate={(taskId: string, data: Partial<TaskWithRelations>) => {
           updateTaskMutation.mutate({ taskId, data });
         }}
@@ -1048,7 +1081,7 @@ export default function ProjectPage() {
                 onTaskClick={(taskId) => {
                   setActivityOpen(false);
                   const task = tasks?.find((t) => t.id === taskId);
-                  if (task) setSelectedTask(task);
+                  if (task) handleTaskSelect(task);
                 }}
               />
             </div>

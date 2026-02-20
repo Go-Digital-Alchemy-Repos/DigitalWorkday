@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus, Trash2 } from "lucide-react";
+import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus, Trash2, Link2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -872,6 +872,22 @@ export function TaskDetailDrawer({
               <StatusBadge status={task.status as any} />
             </div>
             <div className="flex items-center gap-1">
+              {task.projectId && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    const url = `${window.location.origin}/projects/${task.projectId}?task=${task.id}`;
+                    navigator.clipboard.writeText(url).then(() => {
+                      toast({ title: "Link copied", description: "Task link copied to clipboard" });
+                    });
+                  }}
+                  title="Copy task link"
+                  data-testid="button-copy-task-link"
+                >
+                  <Link2 className="h-4 w-4" />
+                </Button>
+              )}
               {isAdmin && (
                 <AlertDialog>
                   <AlertDialogTrigger asChild>

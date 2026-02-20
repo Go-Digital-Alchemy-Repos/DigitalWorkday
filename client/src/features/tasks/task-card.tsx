@@ -25,7 +25,9 @@ import {
   CheckCircle2,
   Flag,
   CalendarDays,
+  Link2,
 } from "lucide-react";
+import { useToast } from "@/hooks/use-toast";
 import type { TaskWithRelations, User, Tag } from "@shared/schema";
 import { getPreviewText } from "@/components/richtext/richTextUtils";
 import { usePrefetchTask } from "@/hooks/use-prefetch";
@@ -41,16 +43,32 @@ interface TaskCardProps {
   dragHandleProps?: React.HTMLAttributes<HTMLDivElement>;
   isDragging?: boolean;
   showQuickActions?: boolean;
+  projectId?: string;
+}
+
+function useTaskLink(task: TaskWithRelations, projectId?: string) {
+  const { toast } = useToast();
+  const copyLink = (e: React.MouseEvent) => {
+    e.stopPropagation();
+    const pid = projectId || task.projectId;
+    if (!pid) return;
+    const url = `${window.location.origin}/projects/${pid}?task=${task.id}`;
+    navigator.clipboard.writeText(url).then(() => {
+      toast({ title: "Link copied", description: "Task link copied to clipboard" });
+    });
+  };
+  return { copyLink, hasProject: !!(projectId || task.projectId) };
 }
 
 export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function TaskCard(
-  { task, view = "list", onSelect, onStatusChange, onPriorityChange, onDueDateChange, dragHandleProps, isDragging, showQuickActions = false },
+  { task, view = "list", onSelect, onStatusChange, onPriorityChange, onDueDateChange, dragHandleProps, isDragging, showQuickActions = false, projectId },
   ref
 ) {
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
   const isCompleted = task.status === "done";
   const { prefetch: prefetchTask, cancel: cancelPrefetch } = usePrefetchTask();
   const isMobile = useIsMobile();
+  const { copyLink, hasProject } = useTaskLink(task, projectId);
   const [justCompleted, setJustCompleted] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const assigneeUsers: Partial<User>[] = task.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [];
@@ -116,6 +134,18 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
             >
               {task.title}
             </span>
+            {hasProject && (
+              <Button
+                variant="ghost"
+                size="icon"
+                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                onClick={copyLink}
+                title="Copy task link"
+                data-testid={`button-copy-link-${task.id}`}
+              >
+                <Link2 className="h-3.5 w-3.5" />
+              </Button>
+            )}
           </div>
 
           {task.isPersonal && (
@@ -205,11 +235,22 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
             >
               {task.title}
             </span>
-            {assigneeUsers.length > 0 && (
-              <div className="shrink-0">
+            <div className="flex items-center gap-1 shrink-0">
+              {hasProject && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={copyLink}
+                  title="Copy task link"
+                  data-testid={`button-copy-link-${task.id}`}
+                >
+                  <Link2 className="h-3.5 w-3.5" />
+                </Button>
+              )}
+              {assigneeUsers.length > 0 && (
                 <AvatarGroup users={assigneeUsers} max={2} size="sm" />
-              </div>
-            )}
+              )}
+            </div>
           </div>
           <div className="flex items-center gap-2 flex-wrap">
             <PriorityBadge priority={task.priority as any} showLabel={false} size="sm" />
@@ -289,6 +330,18 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
           >
             {task.title}
           </span>
+          {hasProject && (
+            <Button
+              variant="ghost"
+              size="icon"
+              className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+              onClick={copyLink}
+              title="Copy task link"
+              data-testid={`button-copy-link-${task.id}`}
+            >
+              <Link2 className="h-3.5 w-3.5" />
+            </Button>
+          )}
           {task.isPersonal && (
             <Badge variant="outline" className="text-xs shrink-0 gap-1 px-1.5 py-0">
               <UserIcon className="h-3 w-3" />
