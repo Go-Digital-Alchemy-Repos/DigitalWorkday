@@ -22,6 +22,10 @@ router.get("/*", async (req: Request, res: Response) => {
 
     const decodedKey = decodeURIComponent(key);
 
+    if (decodedKey.includes("..")) {
+      return res.status(400).json({ error: "Invalid file key" });
+    }
+
     if (!ALLOWED_PREFIXES.some(p => decodedKey.startsWith(p))) {
       return res.status(400).json({ error: "Invalid file key" });
     }
