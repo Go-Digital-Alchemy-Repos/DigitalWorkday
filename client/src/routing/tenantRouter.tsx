@@ -60,7 +60,7 @@ const SupportTemplates = lazy(trackChunkLoad("SupportTemplates", () => import("@
 const SupportSlaPolicies = lazy(trackChunkLoad("SupportSla", () => import("@/pages/support-sla-policies")));
 const SupportFormSchemas = lazy(trackChunkLoad("SupportForms", () => import("@/pages/support-form-schemas")));
 const DesignSystemPage = lazy(trackChunkLoad("DesignSystem", () => import("@/pages/design-system")));
-const NotFound = lazy(() => import("@/pages/not-found"));
+const NotFound = lazy(trackChunkLoad("NotFound", () => import("@/pages/not-found")));
 
 function TenantRouter() {
   return (

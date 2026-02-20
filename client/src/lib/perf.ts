@@ -74,15 +74,46 @@ export function markNavigationEnd(view: string): void {
   });
 }
 
+function isChunkLoadError(error: unknown): boolean {
+  if (!(error instanceof Error)) return false;
+  const msg = error.message || "";
+  return (
+    msg.includes("Failed to fetch dynamically imported module") ||
+    msg.includes("Importing a module script failed") ||
+    msg.includes("is not a valid JavaScript MIME type") ||
+    msg.includes("Loading chunk") ||
+    msg.includes("Loading CSS chunk") ||
+    error.name === "ChunkLoadError"
+  );
+}
+
+const CHUNK_RELOAD_KEY = "__chunk_reload_ts";
+
+function handleChunkLoadError(error: unknown): never {
+  if (isChunkLoadError(error)) {
+    const lastReload = sessionStorage.getItem(CHUNK_RELOAD_KEY);
+    const now = Date.now();
+    if (!lastReload || now - Number(lastReload) > 10_000) {
+      sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+      window.location.reload();
+    }
+  }
+  throw error;
+}
+
+export { isChunkLoadError };
+
 export function trackChunkLoad<T>(
   view: string,
   importFn: () => Promise<T>
 ): () => Promise<T> {
-  if (!CLIENT_PERF_LOG && !PERF_TELEMETRY) return importFn;
+  const wrappedImport = () => importFn().catch(handleChunkLoadError);
+
+  if (!CLIENT_PERF_LOG && !PERF_TELEMETRY) return wrappedImport;
 
   return () => {
     const start = performance.now();
-    return importFn().then((mod) => {
+    return wrappedImport().then((mod) => {
       const durationMs =
         Math.round((performance.now() - start) * 10) / 10;
       log({ type: "chunk", view, durationMs, timestamp: Date.now() });

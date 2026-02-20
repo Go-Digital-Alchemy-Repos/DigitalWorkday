@@ -1,6 +1,7 @@
 import { Component, type ReactNode } from "react";
 import { AlertCircle, RefreshCw } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { isChunkLoadError } from "@/lib/perf";
 
 function reportErrorToBackend(error: Error, context: Record<string, unknown> = {}) {
   try {
@@ -61,6 +62,18 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
     console.error("[ErrorBoundary]", error, errorInfo);
+
+    if (isChunkLoadError(error)) {
+      const key = "__chunk_reload_ts";
+      const lastReload = sessionStorage.getItem(key);
+      const now = Date.now();
+      if (!lastReload || now - Number(lastReload) > 10_000) {
+        sessionStorage.setItem(key, String(now));
+        window.location.reload();
+        return;
+      }
+    }
+
     reportErrorToBackend(error, {
       source: "ErrorBoundary",
       componentStack: errorInfo.componentStack?.slice(0, 2000),

@@ -11,17 +11,18 @@ import { ClientPortalSidebar } from "@/components/client-portal-sidebar";
 import { ClientPortalMobileNav } from "@/components/client-portal-mobile-nav";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
+import { trackChunkLoad } from "@/lib/perf";
 
-const ClientPortalDashboard = lazy(() => import("@/pages/client-portal-dashboard"));
-const ClientPortalProjects = lazy(() => import("@/pages/client-portal-projects"));
-const ClientPortalTasks = lazy(() => import("@/pages/client-portal-tasks"));
-const ClientPortalProjectDetail = lazy(() => import("@/pages/client-portal-project-detail"));
-const ClientPortalApprovals = lazy(() => import("@/pages/client-portal-approvals"));
-const ClientPortalMessages = lazy(() => import("@/pages/client-portal-messages"));
-const ChatPage = lazy(() => import("@/pages/chat"));
-const ClientPortalSupport = lazy(() => import("@/pages/client-portal-support"));
-const ClientPortalSupportNew = lazy(() => import("@/pages/client-portal-support-new"));
-const ClientPortalSupportDetail = lazy(() => import("@/pages/client-portal-support-detail"));
+const ClientPortalDashboard = lazy(trackChunkLoad("PortalDashboard", () => import("@/pages/client-portal-dashboard")));
+const ClientPortalProjects = lazy(trackChunkLoad("PortalProjects", () => import("@/pages/client-portal-projects")));
+const ClientPortalTasks = lazy(trackChunkLoad("PortalTasks", () => import("@/pages/client-portal-tasks")));
+const ClientPortalProjectDetail = lazy(trackChunkLoad("PortalProjectDetail", () => import("@/pages/client-portal-project-detail")));
+const ClientPortalApprovals = lazy(trackChunkLoad("PortalApprovals", () => import("@/pages/client-portal-approvals")));
+const ClientPortalMessages = lazy(trackChunkLoad("PortalMessages", () => import("@/pages/client-portal-messages")));
+const ChatPage = lazy(trackChunkLoad("PortalChat", () => import("@/pages/chat")));
+const ClientPortalSupport = lazy(trackChunkLoad("PortalSupport", () => import("@/pages/client-portal-support")));
+const ClientPortalSupportNew = lazy(trackChunkLoad("PortalSupportNew", () => import("@/pages/client-portal-support-new")));
+const ClientPortalSupportDetail = lazy(trackChunkLoad("PortalSupportDetail", () => import("@/pages/client-portal-support-detail")));
 
 function ClientPortalRouter() {
   return (
