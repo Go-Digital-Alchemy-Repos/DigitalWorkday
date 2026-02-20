@@ -118,15 +118,25 @@ export class ChatRepository {
   async getChatDmThreadByMembers(tenantId: string, userIds: string[]): Promise<ChatDmThread | undefined> {
     if (userIds.length < 2) return undefined;
 
-    const sortedUserIds = [...userIds].sort();
-    const threads = await db.select().from(chatDmThreads).where(eq(chatDmThreads.tenantId, tenantId));
+    const result = await db.select({ dmThreadId: chatDmMembers.dmThreadId })
+      .from(chatDmMembers)
+      .where(and(
+        eq(chatDmMembers.tenantId, tenantId),
+        inArray(chatDmMembers.userId, userIds)
+      ))
+      .groupBy(chatDmMembers.dmThreadId)
+      .having(sql`count(distinct ${chatDmMembers.userId}) = ${userIds.length}`);
 
-    for (const thread of threads) {
-      const members = await db.select().from(chatDmMembers).where(eq(chatDmMembers.dmThreadId, thread.id));
-      const memberUserIds = members.map(m => m.userId).sort();
-      
-      if (memberUserIds.length === sortedUserIds.length && memberUserIds.every((id, i) => id === sortedUserIds[i])) {
-        return thread;
+    if (result.length === 0) return undefined;
+
+    for (const { dmThreadId } of result) {
+      const allMembers = await db.select({ count: sql<number>`count(*)` })
+        .from(chatDmMembers)
+        .where(eq(chatDmMembers.dmThreadId, dmThreadId));
+
+      if (Number(allMembers[0].count) === userIds.length) {
+        const [thread] = await db.select().from(chatDmThreads).where(eq(chatDmThreads.id, dmThreadId));
+        return thread || undefined;
       }
     }
     return undefined;
@@ -179,6 +189,7 @@ export class ChatRepository {
   }
 
   async getChatMessages(targetType: 'channel' | 'dm', targetId: string, limit = 50, before?: Date, after?: Date): Promise<(ChatMessage & { author: User; reactions?: (ChatMessageReaction & { user: Pick<User, 'id' | 'name' | 'avatarUrl'> })[] })[]> {
+    const perfStart = process.env.CHAT_PERF_LOG === '1' ? performance.now() : 0;
     const targetColumn = targetType === 'channel' ? chatMessages.channelId : chatMessages.dmThreadId;
     
     const conditions: SQL[] = [eq(targetColumn, targetId)];
@@ -204,7 +215,7 @@ export class ChatRepository {
     const messageIds = messages.map(m => m.id);
     const reactionsMap = await this.getReactionsForMessages(messageIds);
 
-    return messages
+    const result = messages
       .map(m => ({
         ...m,
         author: authorMap.get(m.authorUserId)!,
@@ -212,6 +223,12 @@ export class ChatRepository {
       }))
       .filter(m => m.author)
       .reverse();
+
+    if (process.env.CHAT_PERF_LOG === '1') {
+      console.log(`[chat-perf] getChatMessages(${targetType}, ${targetId}): ${(performance.now() - perfStart).toFixed(1)}ms, ${result.length} messages`);
+    }
+
+    return result;
   }
 
   async getFirstUnreadMessageId(targetType: 'channel' | 'dm', targetId: string, userId: string): Promise<string | null> {

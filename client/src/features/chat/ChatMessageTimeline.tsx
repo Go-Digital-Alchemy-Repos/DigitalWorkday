@@ -294,6 +294,672 @@ function renderLinkedText(text: string): React.ReactNode {
   });
 }
 
+interface MessageBubbleProps {
+  message: ChatMessage;
+  isOwnMessage: boolean;
+  isOwnGroup: boolean;
+  isFirstInGroup: boolean;
+  isLastInGroup: boolean;
+  showInGroupTimestamp: boolean;
+  currentUserId?: string;
+  isTenantAdmin: boolean;
+  editingMessageId: string | null;
+  editingBody: string;
+  isMobile: boolean;
+  longPressMessageId: string | null;
+  isDm: boolean;
+  isPinned: boolean;
+  canPin: boolean;
+  threadSummary?: ThreadSummary;
+  readBy?: ReadByUser[];
+  onEditSave: (messageId: string, body: string) => void;
+  onEditCancel: () => void;
+  onSetEditing: (messageId: string, body: string) => void;
+  onSetEditingBody: (body: string) => void;
+  onLongPressStart: (messageId: string) => void;
+  onLongPressEnd: () => void;
+  onDismissLongPress: () => void;
+  onAttachmentPreview: (preview: AttachmentPreview) => void;
+  onCopyMessage?: (body: string) => void;
+  onQuoteReply?: (authorName: string, body: string) => void;
+  onCreateTaskFromMessage?: (message: ChatMessage) => void;
+  onOpenThread?: (messageId: string) => void;
+  onDeleteMessage?: (messageId: string) => void;
+  onRetryMessage?: (message: ChatMessage) => void;
+  onRemoveFailedMessage?: (tempId: string) => void;
+  onAddReaction?: (messageId: string, emoji: string) => void;
+  onRemoveReaction?: (messageId: string, emoji: string) => void;
+  onPinMessage?: (messageId: string) => void;
+  onUnpinMessage?: (messageId: string) => void;
+  renderMessageBody?: (body: string) => React.ReactNode;
+  getFileIcon?: (mimeType: string) => React.ComponentType<{ className?: string }>;
+  formatFileSize?: (bytes: number) => string;
+}
+
+function messageBubbleAreEqual(prev: MessageBubbleProps, next: MessageBubbleProps): boolean {
+  const msgId = prev.message.id;
+
+  if (prev.message !== next.message) {
+    const pm = prev.message;
+    const nm = next.message;
+    if (pm.id !== nm.id || pm.body !== nm.body ||
+        pm.editedAt !== nm.editedAt || pm.deletedAt !== nm.deletedAt ||
+        pm._status !== nm._status || pm.reactions !== nm.reactions ||
+        pm.attachments !== nm.attachments) return false;
+  }
+
+  if (prev.isOwnMessage !== next.isOwnMessage) return false;
+  if (prev.isOwnGroup !== next.isOwnGroup) return false;
+  if (prev.isFirstInGroup !== next.isFirstInGroup) return false;
+  if (prev.isLastInGroup !== next.isLastInGroup) return false;
+  if (prev.showInGroupTimestamp !== next.showInGroupTimestamp) return false;
+  if (prev.currentUserId !== next.currentUserId) return false;
+  if (prev.isTenantAdmin !== next.isTenantAdmin) return false;
+  if (prev.isMobile !== next.isMobile) return false;
+  if (prev.canPin !== next.canPin) return false;
+  if (prev.isDm !== next.isDm) return false;
+
+  const prevEditing = prev.editingMessageId === msgId;
+  const nextEditing = next.editingMessageId === msgId;
+  if (prevEditing !== nextEditing) return false;
+  if (nextEditing && prev.editingBody !== next.editingBody) return false;
+
+  const prevLongPressed = prev.longPressMessageId === msgId;
+  const nextLongPressed = next.longPressMessageId === msgId;
+  if (prevLongPressed !== nextLongPressed) return false;
+
+  if (prev.isPinned !== next.isPinned) return false;
+  if (prev.threadSummary !== next.threadSummary) return false;
+  if (prev.readBy !== next.readBy) return false;
+
+  return true;
+}
+
+const MessageBubble = memo(function MessageBubble({
+  message,
+  isOwnMessage,
+  isOwnGroup,
+  isFirstInGroup,
+  isLastInGroup,
+  showInGroupTimestamp,
+  currentUserId,
+  isTenantAdmin,
+  editingMessageId,
+  editingBody,
+  isMobile,
+  longPressMessageId,
+  isDm,
+  isPinned,
+  canPin,
+  threadSummary,
+  readBy,
+  onEditSave,
+  onEditCancel,
+  onSetEditing,
+  onSetEditingBody,
+  onLongPressStart,
+  onLongPressEnd,
+  onDismissLongPress,
+  onAttachmentPreview,
+  onCopyMessage,
+  onQuoteReply,
+  onCreateTaskFromMessage,
+  onOpenThread,
+  onDeleteMessage,
+  onRetryMessage,
+  onRemoveFailedMessage,
+  onAddReaction,
+  onRemoveReaction,
+  onPinMessage,
+  onUnpinMessage,
+  renderMessageBody,
+  getFileIcon,
+  formatFileSize,
+}: MessageBubbleProps) {
+  const isDeleted = !!message.deletedAt;
+  const isEditing = editingMessageId === message.id;
+  const elapsed = Date.now() - new Date(message.createdAt).getTime();
+  const withinEditWindow = elapsed <= EDIT_WINDOW_MS;
+  const canEdit = isOwnMessage && !isDeleted && !message._status && withinEditWindow;
+  const canDelete = (isOwnMessage || isTenantAdmin) && !isDeleted && !message._status;
+  const isPending = message._status === "pending";
+  const isFailed = message._status === "failed";
+  const isLongPressed = longPressMessageId === message.id;
+  const authorName = message.author?.name || message.author?.email || "Unknown";
+
+  const bubbleRounding = isOwnMessage
+    ? `${isFirstInGroup ? "rounded-t-2xl" : "rounded-t-md"} ${isLastInGroup ? "rounded-bl-2xl rounded-br-md" : "rounded-b-md"} rounded-l-2xl`
+    : `${isFirstInGroup ? "rounded-t-2xl" : "rounded-t-md"} ${isLastInGroup ? "rounded-br-2xl rounded-bl-md" : "rounded-b-md"} rounded-r-2xl`;
+
+  return (
+    <div>
+      {showInGroupTimestamp && (
+        <div className="flex justify-end mb-0.5">
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="text-[10px] text-muted-foreground cursor-default">
+                {formatTime(message.createdAt)}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent>
+              {formatFullDateTime(message.createdAt)}
+            </TooltipContent>
+          </Tooltip>
+        </div>
+      )}
+      <div
+        className={`group relative ${isOwnMessage ? "flex justify-end" : ""}`}
+        data-testid={`message-${message._tempId || message.id}`}
+        onTouchStart={() => onLongPressStart(message.id)}
+        onTouchEnd={onLongPressEnd}
+        onTouchCancel={onLongPressEnd}
+      >
+        <div
+          className={`relative inline-block px-3 py-1.5 ${bubbleRounding} ${
+            isPending ? "opacity-60" : ""
+          } ${
+            isFailed ? "bg-destructive/10 border border-destructive/30" : ""
+          } ${
+            isDeleted
+              ? "bg-muted/40"
+              : isOwnMessage
+                ? "bg-primary/10 dark:bg-primary/15"
+                : "bg-muted/60"
+          }`}
+          style={{ maxWidth: "100%", wordBreak: "break-word" }}
+        >
+          <div className="flex items-start gap-2">
+            <div className="flex-1 min-w-0">
+              {isEditing ? (
+                <div className="flex items-center gap-2">
+                  <Input
+                    value={editingBody}
+                    onChange={(e) => onSetEditingBody(e.target.value)}
+                    className="flex-1 text-sm"
+                    autoFocus
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && !e.shiftKey) {
+                        e.preventDefault();
+                        onEditSave(message.id, editingBody);
+                      }
+                      if (e.key === "Escape") {
+                        onEditCancel();
+                      }
+                    }}
+                    data-testid={`message-edit-input-${message.id}`}
+                  />
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={() => onEditSave(message.id, editingBody)}
+                    disabled={!editingBody.trim()}
+                    aria-label="Save edit"
+                    data-testid={`message-edit-save-${message.id}`}
+                  >
+                    <Check className="h-4 w-4" />
+                  </Button>
+                  <Button
+                    size="icon"
+                    variant="ghost"
+                    onClick={onEditCancel}
+                    aria-label="Cancel edit"
+                    data-testid={`message-edit-cancel-${message.id}`}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ) : (
+                <>
+                  <div className="flex items-center gap-2">
+                    <p
+                      className={`text-sm whitespace-pre-wrap break-words ${
+                        isDeleted ? "text-muted-foreground italic" : ""
+                      }`}
+                    >
+                      {isDeleted
+                        ? message.body
+                        : renderMessageBody
+                        ? renderMessageBody(message.body)
+                        : renderLinkedText(message.body)}
+                    </p>
+                    {isPending && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0">
+                        <Loader2 className="h-3 w-3 animate-spin" />
+                      </span>
+                    )}
+                    {isFailed && (
+                      <span className="text-xs text-destructive flex items-center gap-1 flex-shrink-0">
+                        <AlertCircle className="h-3 w-3" />
+                        Failed
+                      </span>
+                    )}
+                    {message.editedAt && !isDeleted && (
+                      <span className="text-xs text-muted-foreground flex-shrink-0">(edited)</span>
+                    )}
+                    {isPinned && (
+                      <span className="text-xs text-muted-foreground flex items-center gap-0.5 flex-shrink-0" data-testid={`message-pinned-indicator-${message.id}`}>
+                        <Pin className="h-3 w-3" />
+                        Pinned
+                      </span>
+                    )}
+                  </div>
+
+                  {isFailed && message._tempId && (
+                    <div className="flex items-center gap-2 mt-1">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => onRetryMessage?.(message)}
+                        data-testid={`message-retry-${message._tempId}`}
+                      >
+                        <RefreshCw className="h-3 w-3 mr-1" />
+                        Retry
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="ghost"
+                        onClick={() => onRemoveFailedMessage?.(message._tempId!)}
+                        data-testid={`message-remove-${message._tempId}`}
+                      >
+                        <X className="h-3 w-3 mr-1" />
+                        Remove
+                      </Button>
+                    </div>
+                  )}
+                </>
+              )}
+
+              {message.attachments &&
+                message.attachments.length > 0 &&
+                !isDeleted && (
+                  <div className="mt-2 space-y-2">
+                    {message.attachments.filter(a => a.mimeType.startsWith("image/")).length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {message.attachments
+                          .filter(a => a.mimeType.startsWith("image/"))
+                          .map((attachment) => (
+                            <button
+                              type="button"
+                              key={attachment.id}
+                              onClick={() => onAttachmentPreview({
+                                type: "image",
+                                src: attachment.url,
+                                fileName: attachment.fileName,
+                                sizeBytes: attachment.sizeBytes,
+                                uploaderName: authorName || undefined,
+                                timestamp: typeof message.createdAt === "string" ? message.createdAt : message.createdAt?.toISOString?.(),
+                              })}
+                              className="group relative rounded-md overflow-visible cursor-pointer hover-elevate"
+                              data-testid={`attachment-${attachment.id}`}
+                            >
+                              <img
+                                src={attachment.url}
+                                alt={attachment.fileName}
+                                className="max-h-48 max-w-xs object-cover rounded-md"
+                                loading="lazy"
+                              />
+                              <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-md flex items-center justify-center">
+                                <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
+                              </div>
+                              <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1.5 rounded-b-md opacity-0 group-hover:opacity-100 transition-opacity">
+                                <span className="text-[10px] text-white/90 truncate block">{attachment.fileName}</span>
+                              </div>
+                            </button>
+                          ))}
+                      </div>
+                    )}
+                    {message.attachments.filter(a => !a.mimeType.startsWith("image/")).length > 0 && (
+                      <div className="flex flex-wrap gap-2">
+                        {message.attachments
+                          .filter(a => !a.mimeType.startsWith("image/"))
+                          .map((attachment) => {
+                            const isPdf = attachment.mimeType === "application/pdf";
+                            const FileIcon = getFileIcon?.(attachment.mimeType);
+                            return (
+                              <div
+                                key={attachment.id}
+                                className="flex items-center gap-2 p-2 rounded-md bg-muted/50 border border-border/50 min-w-[180px] max-w-[280px]"
+                                data-testid={`attachment-${attachment.id}`}
+                              >
+                                <div className="flex-shrink-0 h-9 w-9 rounded-md bg-muted flex items-center justify-center">
+                                  {FileIcon ? (
+                                    <FileIcon className="h-5 w-5 text-muted-foreground" />
+                                  ) : (
+                                    <FileText className="h-5 w-5 text-muted-foreground" />
+                                  )}
+                                </div>
+                                <div className="flex-1 min-w-0">
+                                  <p className="text-xs font-medium truncate">{attachment.fileName}</p>
+                                  <p className="text-[10px] text-muted-foreground">
+                                    {formatFileSize?.(attachment.sizeBytes) || `${attachment.sizeBytes} B`}
+                                  </p>
+                                </div>
+                                <div className="flex items-center gap-0.5 flex-shrink-0">
+                                  {isPdf && (
+                                    <Tooltip>
+                                      <TooltipTrigger asChild>
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-7 w-7"
+                                          onClick={() => onAttachmentPreview({
+                                            type: "pdf",
+                                            src: attachment.url,
+                                            fileName: attachment.fileName,
+                                            sizeBytes: attachment.sizeBytes,
+                                            uploaderName: authorName || undefined,
+                                            timestamp: typeof message.createdAt === "string" ? message.createdAt : message.createdAt?.toISOString?.(),
+                                          })}
+                                          data-testid={`preview-pdf-${attachment.id}`}
+                                        >
+                                          <Eye className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </TooltipTrigger>
+                                      <TooltipContent>Preview</TooltipContent>
+                                    </Tooltip>
+                                  )}
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <a
+                                        href={attachment.url}
+                                        target="_blank"
+                                        rel="noopener noreferrer"
+                                        download={attachment.fileName}
+                                      >
+                                        <Button
+                                          size="icon"
+                                          variant="ghost"
+                                          className="h-7 w-7"
+                                          asChild
+                                        >
+                                          <span>
+                                            <Download className="h-3.5 w-3.5" />
+                                          </span>
+                                        </Button>
+                                      </a>
+                                    </TooltipTrigger>
+                                    <TooltipContent>Download</TooltipContent>
+                                  </Tooltip>
+                                </div>
+                              </div>
+                            );
+                          })}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+              {!message.parentMessageId && threadSummary && (
+                <button
+                  type="button"
+                  onClick={() => onOpenThread?.(message.id)}
+                  className="mt-1 flex items-center gap-1.5 text-xs text-primary hover:underline cursor-pointer"
+                  data-testid={`thread-replies-${message.id}`}
+                >
+                  <MessagesSquare className="h-3.5 w-3.5" />
+                  <span>
+                    {threadSummary.replyCount}{" "}
+                    {threadSummary.replyCount === 1 ? "reply" : "replies"}
+                  </span>
+                </button>
+              )}
+            </div>
+
+            {!isDeleted && !isEditing && !isMobile && (
+              <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
+                {QUICK_REACTIONS.slice(0, 4).map(emoji => (
+                  <button
+                    key={emoji}
+                    type="button"
+                    className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted/80 text-sm cursor-pointer transition-colors"
+                    onClick={() => onAddReaction?.(message.id, emoji)}
+                    data-testid={`quick-react-${message.id}-${emoji}`}
+                  >
+                    {emoji}
+                  </button>
+                ))}
+                <DropdownMenu>
+                  <DropdownMenuTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6 flex-shrink-0"
+                      aria-label="Message actions"
+                      data-testid={`message-menu-${message.id}`}
+                    >
+                      <MoreHorizontal className="h-4 w-4" />
+                    </Button>
+                  </DropdownMenuTrigger>
+                  <DropdownMenuContent align="end">
+                    <DropdownMenuItem
+                      onClick={() => {
+                        if (onCopyMessage) {
+                          onCopyMessage(message.body);
+                        } else {
+                          navigator.clipboard.writeText(message.body);
+                        }
+                      }}
+                      data-testid={`message-copy-${message.id}`}
+                    >
+                      <Copy className="h-4 w-4 mr-2" />
+                      Copy text
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => {
+                        onQuoteReply?.(authorName, message.body);
+                      }}
+                      data-testid={`message-quote-${message.id}`}
+                    >
+                      <Quote className="h-4 w-4 mr-2" />
+                      Quote reply
+                    </DropdownMenuItem>
+                    <DropdownMenuItem
+                      onClick={() => onCreateTaskFromMessage?.(message)}
+                      data-testid={`message-create-task-${message.id}`}
+                    >
+                      <ListTodo className="h-4 w-4 mr-2" />
+                      Create task
+                    </DropdownMenuItem>
+                    {onOpenThread && !message.parentMessageId && (
+                      <DropdownMenuItem
+                        onClick={() => onOpenThread(message.id)}
+                        data-testid={`message-thread-${message.id}`}
+                      >
+                        <MessagesSquare className="h-4 w-4 mr-2" />
+                        Reply in thread
+                      </DropdownMenuItem>
+                    )}
+                    {canPin && !isDm && !message.parentMessageId && (
+                      isPinned ? (
+                        <DropdownMenuItem
+                          onClick={() => onUnpinMessage?.(message.id)}
+                          data-testid={`message-unpin-${message.id}`}
+                        >
+                          <Pin className="h-4 w-4 mr-2" />
+                          Unpin message
+                        </DropdownMenuItem>
+                      ) : (
+                        <DropdownMenuItem
+                          onClick={() => onPinMessage?.(message.id)}
+                          data-testid={`message-pin-${message.id}`}
+                        >
+                          <Pin className="h-4 w-4 mr-2" />
+                          Pin message
+                        </DropdownMenuItem>
+                      )
+                    )}
+                    {canEdit && (
+                      <DropdownMenuItem
+                        onClick={() => {
+                          onSetEditing(message.id, message.body);
+                        }}
+                        data-testid={`message-edit-${message.id}`}
+                      >
+                        <Pencil className="h-4 w-4 mr-2" />
+                        Edit
+                      </DropdownMenuItem>
+                    )}
+                    {canDelete && (
+                      <DropdownMenuItem
+                        onClick={() => onDeleteMessage?.(message.id)}
+                        className="text-destructive focus:text-destructive"
+                        data-testid={`message-delete-${message.id}`}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Delete
+                      </DropdownMenuItem>
+                    )}
+                  </DropdownMenuContent>
+                </DropdownMenu>
+              </div>
+            )}
+          </div>
+        </div>
+
+        {message.reactions && message.reactions.length > 0 && !isDeleted && (
+          <div className={`flex flex-wrap gap-1 mt-1 ${isOwnMessage ? "justify-end" : ""}`} data-testid={`reactions-${message.id}`}>
+            {Object.entries(
+              message.reactions.reduce((acc, r) => {
+                if (!acc[r.emoji]) acc[r.emoji] = [];
+                acc[r.emoji].push(r);
+                return acc;
+              }, {} as Record<string, typeof message.reactions>)
+            ).map(([emoji, reactors]) => {
+              const hasReacted = reactors.some(r => r.userId === currentUserId);
+              return (
+                <Tooltip key={emoji}>
+                  <TooltipTrigger asChild>
+                    <button
+                      type="button"
+                      className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs cursor-pointer transition-colors ${
+                        hasReacted
+                          ? "bg-primary/15 border border-primary/30"
+                          : "bg-muted/80 border border-transparent hover:border-border"
+                      }`}
+                      onClick={() => {
+                        if (hasReacted) {
+                          onRemoveReaction?.(message.id, emoji);
+                        } else {
+                          onAddReaction?.(message.id, emoji);
+                        }
+                      }}
+                      data-testid={`reaction-${message.id}-${emoji}`}
+                    >
+                      <span>{emoji}</span>
+                      <span className="text-muted-foreground font-medium">{reactors.length}</span>
+                    </button>
+                  </TooltipTrigger>
+                  <TooltipContent>
+                    <span>{reactors.map(r => r.user?.name || 'Unknown').join(', ')}</span>
+                  </TooltipContent>
+                </Tooltip>
+              );
+            })}
+          </div>
+        )}
+
+        {readBy && readBy.length > 0 && (
+          <div className={`flex items-center gap-0.5 mt-1 ${isOwnMessage ? "justify-end" : ""}`} data-testid={`read-by-${message.id}`}>
+            {readBy.slice(0, 5).map((reader) => (
+              <Tooltip key={reader.userId}>
+                <TooltipTrigger asChild>
+                  <span className="inline-block">
+                    <Avatar className="h-4 w-4">
+                      {reader.avatarUrl && <AvatarImage src={reader.avatarUrl} />}
+                      <AvatarFallback className="text-[7px]">
+                        {getInitials(reader.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                  </span>
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="text-xs">
+                  Seen by {reader.name}
+                </TooltipContent>
+              </Tooltip>
+            ))}
+            {readBy.length > 5 && (
+              <span className="text-[10px] text-muted-foreground ml-0.5">
+                +{readBy.length - 5}
+              </span>
+            )}
+          </div>
+        )}
+
+        {isLongPressed && isMobile && !isDeleted && !isEditing && (
+          <div
+            className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
+            onClick={() => onDismissLongPress()}
+            data-testid={`message-action-sheet-${message.id}`}
+          >
+            <div
+              className="w-full max-w-sm bg-background rounded-t-xl p-2 pb-6 space-y-1 animate-in slide-in-from-bottom-4 duration-200"
+              onClick={(e) => e.stopPropagation()}
+            >
+              <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-3" />
+              <button
+                className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
+                onClick={() => {
+                  if (onCopyMessage) onCopyMessage(message.body);
+                  else navigator.clipboard.writeText(message.body);
+                  onDismissLongPress();
+                }}
+                data-testid={`action-sheet-copy-${message.id}`}
+              >
+                <Copy className="h-5 w-5 text-muted-foreground" />
+                <span className="text-sm font-medium">Copy text</span>
+              </button>
+              <button
+                className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
+                onClick={() => {
+                  onQuoteReply?.(authorName, message.body);
+                  onDismissLongPress();
+                }}
+                data-testid={`action-sheet-quote-${message.id}`}
+              >
+                <Quote className="h-5 w-5 text-muted-foreground" />
+                <span className="text-sm font-medium">Quote reply</span>
+              </button>
+              {canEdit && (
+                <button
+                  className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
+                  onClick={() => {
+                    onSetEditing(message.id, message.body);
+                    onDismissLongPress();
+                  }}
+                  data-testid={`action-sheet-edit-${message.id}`}
+                >
+                  <Pencil className="h-5 w-5 text-muted-foreground" />
+                  <span className="text-sm font-medium">Edit</span>
+                </button>
+              )}
+              {canDelete && (
+                <button
+                  className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
+                  onClick={() => {
+                    onDeleteMessage?.(message.id);
+                    onDismissLongPress();
+                  }}
+                  data-testid={`action-sheet-delete-${message.id}`}
+                >
+                  <Trash2 className="h-5 w-5 text-destructive" />
+                  <span className="text-sm font-medium text-destructive">Delete</span>
+                </button>
+              )}
+              <button
+                className="flex items-center justify-center w-full px-4 min-h-11 mt-2 rounded-md bg-muted text-sm font-medium"
+                onClick={() => onDismissLongPress()}
+                data-testid={`action-sheet-cancel-${message.id}`}
+              >
+                Cancel
+              </button>
+            </div>
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}, messageBubbleAreEqual);
+
 const FIRST_ITEM_INDEX = 100000;
 
 export function ChatMessageTimeline({
@@ -409,19 +1075,28 @@ export function ChatMessageTimeline({
   }, [hasMoreMessages, isLoadingMore, onLoadMore]);
 
   const handleEditSave = useCallback(
-    (messageId: string) => {
-      if (editingBody.trim() && onEditMessage) {
-        onEditMessage(messageId, editingBody.trim());
+    (messageId: string, body: string) => {
+      if (body.trim() && onEditMessage) {
+        onEditMessage(messageId, body.trim());
         setEditingMessageId(null);
         setEditingBody("");
       }
     },
-    [editingBody, onEditMessage]
+    [onEditMessage]
   );
 
   const handleEditCancel = useCallback(() => {
     setEditingMessageId(null);
     setEditingBody("");
+  }, []);
+
+  const handleSetEditing = useCallback((messageId: string, body: string) => {
+    setEditingMessageId(messageId);
+    setEditingBody(body);
+  }, []);
+
+  const handleDismissLongPress = useCallback(() => {
+    setLongPressMessageId(null);
   }, []);
 
   const handleLongPressStart = useCallback((messageId: string) => {
@@ -441,7 +1116,7 @@ export function ChatMessageTimeline({
   const isTenantAdmin = currentUserRole === "admin";
 
   const renderGroup = useCallback(
-    (index: number, group: MessageGroup) => {
+    (_index: number, group: MessageGroup) => {
       const isOwnGroup = group.authorUserId === currentUserId;
 
       return (
@@ -518,555 +1193,54 @@ export function ChatMessageTimeline({
               )}
 
               {group.messages.map((message, idx) => {
-                const isDeleted = !!message.deletedAt;
-                const isOwnMessage = message.authorUserId === currentUserId;
-                const isEditing = editingMessageId === message.id;
-                const elapsed = Date.now() - new Date(message.createdAt).getTime();
-                const withinEditWindow = elapsed <= EDIT_WINDOW_MS;
-                const canEdit = isOwnMessage && !isDeleted && !message._status && withinEditWindow;
-                const canDelete = (isOwnMessage || isTenantAdmin) && !isDeleted && !message._status;
-                const isPending = message._status === "pending";
-                const isFailed = message._status === "failed";
-                const showInGroupTimestamp = idx > 0 && isOwnGroup;
-                const isLongPressed = longPressMessageId === message.id;
-
                 const isFirstInGroup = idx === 0;
                 const isLastInGroup = idx === group.messages.length - 1;
-
-                const bubbleRounding = isOwnMessage
-                  ? `${isFirstInGroup ? "rounded-t-2xl" : "rounded-t-md"} ${isLastInGroup ? "rounded-bl-2xl rounded-br-md" : "rounded-b-md"} rounded-l-2xl`
-                  : `${isFirstInGroup ? "rounded-t-2xl" : "rounded-t-md"} ${isLastInGroup ? "rounded-br-2xl rounded-bl-md" : "rounded-b-md"} rounded-r-2xl`;
+                const showInGroupTimestamp = idx > 0 && isOwnGroup;
+                const isOwnMessage = message.authorUserId === currentUserId;
 
                 return (
-                  <div key={message._tempId || message.id}>
-                    {showInGroupTimestamp && (
-                      <div className="flex justify-end mb-0.5">
-                        <Tooltip>
-                          <TooltipTrigger asChild>
-                            <span className="text-[10px] text-muted-foreground cursor-default">
-                              {formatTime(message.createdAt)}
-                            </span>
-                          </TooltipTrigger>
-                          <TooltipContent>
-                            {formatFullDateTime(message.createdAt)}
-                          </TooltipContent>
-                        </Tooltip>
-                      </div>
-                    )}
-                    <div
-                      className={`group relative ${isOwnMessage ? "flex justify-end" : ""}`}
-                      data-testid={`message-${message._tempId || message.id}`}
-                      onTouchStart={() => handleLongPressStart(message.id)}
-                      onTouchEnd={handleLongPressEnd}
-                      onTouchCancel={handleLongPressEnd}
-                    >
-                      <div
-                        className={`relative inline-block px-3 py-1.5 ${bubbleRounding} ${
-                          isPending ? "opacity-60" : ""
-                        } ${
-                          isFailed ? "bg-destructive/10 border border-destructive/30" : ""
-                        } ${
-                          isDeleted
-                            ? "bg-muted/40"
-                            : isOwnMessage
-                              ? "bg-primary/10 dark:bg-primary/15"
-                              : "bg-muted/60"
-                        }`}
-                        style={{ maxWidth: "100%", wordBreak: "break-word" }}
-                      >
-                        <div className="flex items-start gap-2">
-                          <div className="flex-1 min-w-0">
-                            {isEditing ? (
-                              <div className="flex items-center gap-2">
-                                <Input
-                                  value={editingBody}
-                                  onChange={(e) => setEditingBody(e.target.value)}
-                                  className="flex-1 text-sm"
-                                  autoFocus
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter" && !e.shiftKey) {
-                                      e.preventDefault();
-                                      handleEditSave(message.id);
-                                    }
-                                    if (e.key === "Escape") {
-                                      handleEditCancel();
-                                    }
-                                  }}
-                                  data-testid={`message-edit-input-${message.id}`}
-                                />
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={() => handleEditSave(message.id)}
-                                  disabled={!editingBody.trim()}
-                                  aria-label="Save edit"
-                                  data-testid={`message-edit-save-${message.id}`}
-                                >
-                                  <Check className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  size="icon"
-                                  variant="ghost"
-                                  onClick={handleEditCancel}
-                                  aria-label="Cancel edit"
-                                  data-testid={`message-edit-cancel-${message.id}`}
-                                >
-                                  <X className="h-4 w-4" />
-                                </Button>
-                              </div>
-                            ) : (
-                              <>
-                                <div className="flex items-center gap-2">
-                                  <p
-                                    className={`text-sm whitespace-pre-wrap break-words ${
-                                      isDeleted ? "text-muted-foreground italic" : ""
-                                    }`}
-                                  >
-                                    {isDeleted
-                                      ? message.body
-                                      : renderMessageBody
-                                      ? renderMessageBody(message.body)
-                                      : renderLinkedText(message.body)}
-                                  </p>
-                                  {isPending && (
-                                    <span className="text-xs text-muted-foreground flex items-center gap-1 flex-shrink-0">
-                                      <Loader2 className="h-3 w-3 animate-spin" />
-                                    </span>
-                                  )}
-                                  {isFailed && (
-                                    <span className="text-xs text-destructive flex items-center gap-1 flex-shrink-0">
-                                      <AlertCircle className="h-3 w-3" />
-                                      Failed
-                                    </span>
-                                  )}
-                                  {message.editedAt && !isDeleted && (
-                                    <span className="text-xs text-muted-foreground flex-shrink-0">(edited)</span>
-                                  )}
-                                  {pinnedMessageIds?.has(message.id) && (
-                                    <span className="text-xs text-muted-foreground flex items-center gap-0.5 flex-shrink-0" data-testid={`message-pinned-indicator-${message.id}`}>
-                                      <Pin className="h-3 w-3" />
-                                      Pinned
-                                    </span>
-                                  )}
-                                </div>
-
-                                {isFailed && message._tempId && (
-                                  <div className="flex items-center gap-2 mt-1">
-                                    <Button
-                                      size="sm"
-                                      variant="outline"
-                                      onClick={() => onRetryMessage?.(message)}
-                                      data-testid={`message-retry-${message._tempId}`}
-                                    >
-                                      <RefreshCw className="h-3 w-3 mr-1" />
-                                      Retry
-                                    </Button>
-                                    <Button
-                                      size="sm"
-                                      variant="ghost"
-                                      onClick={() => onRemoveFailedMessage?.(message._tempId!)}
-                                      data-testid={`message-remove-${message._tempId}`}
-                                    >
-                                      <X className="h-3 w-3 mr-1" />
-                                      Remove
-                                    </Button>
-                                  </div>
-                                )}
-                              </>
-                            )}
-
-                            {message.attachments &&
-                              message.attachments.length > 0 &&
-                              !isDeleted && (
-                                <div className="mt-2 space-y-2">
-                                  {message.attachments.filter(a => a.mimeType.startsWith("image/")).length > 0 && (
-                                    <div className="flex flex-wrap gap-2">
-                                      {message.attachments
-                                        .filter(a => a.mimeType.startsWith("image/"))
-                                        .map((attachment) => (
-                                          <button
-                                            type="button"
-                                            key={attachment.id}
-                                            onClick={() => setAttachmentPreview({
-                                              type: "image",
-                                              src: attachment.url,
-                                              fileName: attachment.fileName,
-                                              sizeBytes: attachment.sizeBytes,
-                                              uploaderName: authorName || undefined,
-                                              timestamp: typeof message.createdAt === "string" ? message.createdAt : message.createdAt?.toISOString?.(),
-                                            })}
-                                            className="group relative rounded-md overflow-visible cursor-pointer hover-elevate"
-                                            data-testid={`attachment-${attachment.id}`}
-                                          >
-                                            <img
-                                              src={attachment.url}
-                                              alt={attachment.fileName}
-                                              className="max-h-48 max-w-xs object-cover rounded-md"
-                                              loading="lazy"
-                                            />
-                                            <div className="absolute inset-0 bg-black/0 group-hover:bg-black/20 transition-colors rounded-md flex items-center justify-center">
-                                              <Eye className="h-6 w-6 text-white opacity-0 group-hover:opacity-100 transition-opacity drop-shadow-lg" />
-                                            </div>
-                                            <div className="absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black/60 to-transparent p-1.5 rounded-b-md opacity-0 group-hover:opacity-100 transition-opacity">
-                                              <span className="text-[10px] text-white/90 truncate block">{attachment.fileName}</span>
-                                            </div>
-                                          </button>
-                                        ))}
-                                    </div>
-                                  )}
-                                  {message.attachments.filter(a => !a.mimeType.startsWith("image/")).length > 0 && (
-                                    <div className="flex flex-wrap gap-2">
-                                      {message.attachments
-                                        .filter(a => !a.mimeType.startsWith("image/"))
-                                        .map((attachment) => {
-                                          const isPdf = attachment.mimeType === "application/pdf";
-                                          const FileIcon = getFileIcon?.(attachment.mimeType);
-                                          return (
-                                            <div
-                                              key={attachment.id}
-                                              className="flex items-center gap-2 p-2 rounded-md bg-muted/50 border border-border/50 min-w-[180px] max-w-[280px]"
-                                              data-testid={`attachment-${attachment.id}`}
-                                            >
-                                              <div className="flex-shrink-0 h-9 w-9 rounded-md bg-muted flex items-center justify-center">
-                                                {FileIcon ? (
-                                                  <FileIcon className="h-5 w-5 text-muted-foreground" />
-                                                ) : (
-                                                  <FileText className="h-5 w-5 text-muted-foreground" />
-                                                )}
-                                              </div>
-                                              <div className="flex-1 min-w-0">
-                                                <p className="text-xs font-medium truncate">{attachment.fileName}</p>
-                                                <p className="text-[10px] text-muted-foreground">
-                                                  {formatFileSize?.(attachment.sizeBytes) || `${attachment.sizeBytes} B`}
-                                                </p>
-                                              </div>
-                                              <div className="flex items-center gap-0.5 flex-shrink-0">
-                                                {isPdf && (
-                                                  <Tooltip>
-                                                    <TooltipTrigger asChild>
-                                                      <Button
-                                                        size="icon"
-                                                        variant="ghost"
-                                                        className="h-7 w-7"
-                                                        onClick={() => setAttachmentPreview({
-                                                          type: "pdf",
-                                                          src: attachment.url,
-                                                          fileName: attachment.fileName,
-                                                          sizeBytes: attachment.sizeBytes,
-                                                          uploaderName: authorName || undefined,
-                                                          timestamp: typeof message.createdAt === "string" ? message.createdAt : message.createdAt?.toISOString?.(),
-                                                        })}
-                                                        data-testid={`preview-pdf-${attachment.id}`}
-                                                      >
-                                                        <Eye className="h-3.5 w-3.5" />
-                                                      </Button>
-                                                    </TooltipTrigger>
-                                                    <TooltipContent>Preview</TooltipContent>
-                                                  </Tooltip>
-                                                )}
-                                                <Tooltip>
-                                                  <TooltipTrigger asChild>
-                                                    <a
-                                                      href={attachment.url}
-                                                      target="_blank"
-                                                      rel="noopener noreferrer"
-                                                      download={attachment.fileName}
-                                                    >
-                                                      <Button
-                                                        size="icon"
-                                                        variant="ghost"
-                                                        className="h-7 w-7"
-                                                        asChild
-                                                      >
-                                                        <span>
-                                                          <Download className="h-3.5 w-3.5" />
-                                                        </span>
-                                                      </Button>
-                                                    </a>
-                                                  </TooltipTrigger>
-                                                  <TooltipContent>Download</TooltipContent>
-                                                </Tooltip>
-                                              </div>
-                                            </div>
-                                          );
-                                        })}
-                                    </div>
-                                  )}
-                                </div>
-                              )}
-
-                            {!message.parentMessageId && threadSummaries?.get(message.id) && (
-                              <button
-                                type="button"
-                                onClick={() => onOpenThread?.(message.id)}
-                                className="mt-1 flex items-center gap-1.5 text-xs text-primary hover:underline cursor-pointer"
-                                data-testid={`thread-replies-${message.id}`}
-                              >
-                                <MessagesSquare className="h-3.5 w-3.5" />
-                                <span>
-                                  {threadSummaries.get(message.id)!.replyCount}{" "}
-                                  {threadSummaries.get(message.id)!.replyCount === 1 ? "reply" : "replies"}
-                                </span>
-                              </button>
-                            )}
-                          </div>
-
-                          {!isDeleted && !isEditing && !isMobile && (
-                            <div className="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity flex-shrink-0">
-                              {QUICK_REACTIONS.slice(0, 4).map(emoji => (
-                                <button
-                                  key={emoji}
-                                  type="button"
-                                  className="h-6 w-6 flex items-center justify-center rounded hover:bg-muted/80 text-sm cursor-pointer transition-colors"
-                                  onClick={() => onAddReaction?.(message.id, emoji)}
-                                  data-testid={`quick-react-${message.id}-${emoji}`}
-                                >
-                                  {emoji}
-                                </button>
-                              ))}
-                              <DropdownMenu>
-                                <DropdownMenuTrigger asChild>
-                                  <Button
-                                    variant="ghost"
-                                    size="icon"
-                                    className="h-6 w-6 flex-shrink-0"
-                                    aria-label="Message actions"
-                                    data-testid={`message-menu-${message.id}`}
-                                  >
-                                    <MoreHorizontal className="h-4 w-4" />
-                                  </Button>
-                                </DropdownMenuTrigger>
-                                <DropdownMenuContent align="end">
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      if (onCopyMessage) {
-                                        onCopyMessage(message.body);
-                                      } else {
-                                        navigator.clipboard.writeText(message.body);
-                                      }
-                                    }}
-                                    data-testid={`message-copy-${message.id}`}
-                                  >
-                                    <Copy className="h-4 w-4 mr-2" />
-                                    Copy text
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => {
-                                      const authorName = message.author?.name || message.author?.email || "Unknown";
-                                      onQuoteReply?.(authorName, message.body);
-                                    }}
-                                    data-testid={`message-quote-${message.id}`}
-                                  >
-                                    <Quote className="h-4 w-4 mr-2" />
-                                    Quote reply
-                                  </DropdownMenuItem>
-                                  <DropdownMenuItem
-                                    onClick={() => onCreateTaskFromMessage?.(message)}
-                                    data-testid={`message-create-task-${message.id}`}
-                                  >
-                                    <ListTodo className="h-4 w-4 mr-2" />
-                                    Create task
-                                  </DropdownMenuItem>
-                                  {onOpenThread && !message.parentMessageId && (
-                                    <DropdownMenuItem
-                                      onClick={() => onOpenThread(message.id)}
-                                      data-testid={`message-thread-${message.id}`}
-                                    >
-                                      <MessagesSquare className="h-4 w-4 mr-2" />
-                                      Reply in thread
-                                    </DropdownMenuItem>
-                                  )}
-                                  {canPin && !isDm && !message.parentMessageId && (
-                                    pinnedMessageIds?.has(message.id) ? (
-                                      <DropdownMenuItem
-                                        onClick={() => onUnpinMessage?.(message.id)}
-                                        data-testid={`message-unpin-${message.id}`}
-                                      >
-                                        <Pin className="h-4 w-4 mr-2" />
-                                        Unpin message
-                                      </DropdownMenuItem>
-                                    ) : (
-                                      <DropdownMenuItem
-                                        onClick={() => onPinMessage?.(message.id)}
-                                        data-testid={`message-pin-${message.id}`}
-                                      >
-                                        <Pin className="h-4 w-4 mr-2" />
-                                        Pin message
-                                      </DropdownMenuItem>
-                                    )
-                                  )}
-                                  {canEdit && (
-                                    <DropdownMenuItem
-                                      onClick={() => {
-                                        setEditingMessageId(message.id);
-                                        setEditingBody(message.body);
-                                      }}
-                                      data-testid={`message-edit-${message.id}`}
-                                    >
-                                      <Pencil className="h-4 w-4 mr-2" />
-                                      Edit
-                                    </DropdownMenuItem>
-                                  )}
-                                  {canDelete && (
-                                    <DropdownMenuItem
-                                      onClick={() => onDeleteMessage?.(message.id)}
-                                      className="text-destructive focus:text-destructive"
-                                      data-testid={`message-delete-${message.id}`}
-                                    >
-                                      <Trash2 className="h-4 w-4 mr-2" />
-                                      Delete
-                                    </DropdownMenuItem>
-                                  )}
-                                </DropdownMenuContent>
-                              </DropdownMenu>
-                            </div>
-                          )}
-                        </div>
-                      </div>
-
-                      {message.reactions && message.reactions.length > 0 && !isDeleted && (
-                        <div className={`flex flex-wrap gap-1 mt-1 ${isOwnMessage ? "justify-end" : ""}`} data-testid={`reactions-${message.id}`}>
-                          {Object.entries(
-                            message.reactions.reduce((acc, r) => {
-                              if (!acc[r.emoji]) acc[r.emoji] = [];
-                              acc[r.emoji].push(r);
-                              return acc;
-                            }, {} as Record<string, typeof message.reactions>)
-                          ).map(([emoji, reactors]) => {
-                            const hasReacted = reactors.some(r => r.userId === currentUserId);
-                            return (
-                              <Tooltip key={emoji}>
-                                <TooltipTrigger asChild>
-                                  <button
-                                    type="button"
-                                    className={`inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-xs cursor-pointer transition-colors ${
-                                      hasReacted
-                                        ? "bg-primary/15 border border-primary/30"
-                                        : "bg-muted/80 border border-transparent hover:border-border"
-                                    }`}
-                                    onClick={() => {
-                                      if (hasReacted) {
-                                        onRemoveReaction?.(message.id, emoji);
-                                      } else {
-                                        onAddReaction?.(message.id, emoji);
-                                      }
-                                    }}
-                                    data-testid={`reaction-${message.id}-${emoji}`}
-                                  >
-                                    <span>{emoji}</span>
-                                    <span className="text-muted-foreground font-medium">{reactors.length}</span>
-                                  </button>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <span>{reactors.map(r => r.user?.name || 'Unknown').join(', ')}</span>
-                                </TooltipContent>
-                              </Tooltip>
-                            );
-                          })}
-                        </div>
-                      )}
-
-                      {readByMap?.get(message.id) && readByMap.get(message.id)!.length > 0 && (
-                        <div className={`flex items-center gap-0.5 mt-1 ${isOwnMessage ? "justify-end" : ""}`} data-testid={`read-by-${message.id}`}>
-                          {readByMap.get(message.id)!.slice(0, 5).map((reader) => (
-                            <Tooltip key={reader.userId}>
-                              <TooltipTrigger asChild>
-                                <span className="inline-block">
-                                  <Avatar className="h-4 w-4">
-                                    {reader.avatarUrl && <AvatarImage src={reader.avatarUrl} />}
-                                    <AvatarFallback className="text-[7px]">
-                                      {getInitials(reader.name)}
-                                    </AvatarFallback>
-                                  </Avatar>
-                                </span>
-                              </TooltipTrigger>
-                              <TooltipContent side="bottom" className="text-xs">
-                                Seen by {reader.name}
-                              </TooltipContent>
-                            </Tooltip>
-                          ))}
-                          {readByMap.get(message.id)!.length > 5 && (
-                            <span className="text-[10px] text-muted-foreground ml-0.5">
-                              +{readByMap.get(message.id)!.length - 5}
-                            </span>
-                          )}
-                        </div>
-                      )}
-
-                      {isLongPressed && isMobile && !isDeleted && !isEditing && (
-                        <div
-                          className="fixed inset-0 z-50 flex items-end justify-center bg-black/40"
-                          onClick={() => setLongPressMessageId(null)}
-                          data-testid={`message-action-sheet-${message.id}`}
-                        >
-                          <div
-                            className="w-full max-w-sm bg-background rounded-t-xl p-2 pb-6 space-y-1 animate-in slide-in-from-bottom-4 duration-200"
-                            onClick={(e) => e.stopPropagation()}
-                          >
-                            <div className="w-10 h-1 bg-muted-foreground/30 rounded-full mx-auto mb-3" />
-                            <button
-                              className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
-                              onClick={() => {
-                                if (onCopyMessage) onCopyMessage(message.body);
-                                else navigator.clipboard.writeText(message.body);
-                                setLongPressMessageId(null);
-                              }}
-                              data-testid={`action-sheet-copy-${message.id}`}
-                            >
-                              <Copy className="h-5 w-5 text-muted-foreground" />
-                              <span className="text-sm font-medium">Copy text</span>
-                            </button>
-                            <button
-                              className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
-                              onClick={() => {
-                                const authorName = message.author?.name || message.author?.email || "Unknown";
-                                onQuoteReply?.(authorName, message.body);
-                                setLongPressMessageId(null);
-                              }}
-                              data-testid={`action-sheet-quote-${message.id}`}
-                            >
-                              <Quote className="h-5 w-5 text-muted-foreground" />
-                              <span className="text-sm font-medium">Quote reply</span>
-                            </button>
-                            {canEdit && (
-                              <button
-                                className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
-                                onClick={() => {
-                                  setEditingMessageId(message.id);
-                                  setEditingBody(message.body);
-                                  setLongPressMessageId(null);
-                                }}
-                                data-testid={`action-sheet-edit-${message.id}`}
-                              >
-                                <Pencil className="h-5 w-5 text-muted-foreground" />
-                                <span className="text-sm font-medium">Edit</span>
-                              </button>
-                            )}
-                            {canDelete && (
-                              <button
-                                className="flex items-center gap-3 w-full px-4 min-h-11 rounded-md hover-elevate text-left"
-                                onClick={() => {
-                                  onDeleteMessage?.(message.id);
-                                  setLongPressMessageId(null);
-                                }}
-                                data-testid={`action-sheet-delete-${message.id}`}
-                              >
-                                <Trash2 className="h-5 w-5 text-destructive" />
-                                <span className="text-sm font-medium text-destructive">Delete</span>
-                              </button>
-                            )}
-                            <button
-                              className="flex items-center justify-center w-full px-4 min-h-11 mt-2 rounded-md bg-muted text-sm font-medium"
-                              onClick={() => setLongPressMessageId(null)}
-                              data-testid={`action-sheet-cancel-${message.id}`}
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
+                  <MessageBubble
+                    key={message._tempId || message.id}
+                    message={message}
+                    isOwnMessage={isOwnMessage}
+                    isOwnGroup={isOwnGroup}
+                    isFirstInGroup={isFirstInGroup}
+                    isLastInGroup={isLastInGroup}
+                    showInGroupTimestamp={showInGroupTimestamp}
+                    currentUserId={currentUserId}
+                    isTenantAdmin={isTenantAdmin}
+                    editingMessageId={editingMessageId}
+                    editingBody={editingBody}
+                    isMobile={isMobile}
+                    longPressMessageId={longPressMessageId}
+                    isDm={isDm}
+                    isPinned={!!pinnedMessageIds?.has(message.id)}
+                    canPin={canPin}
+                    threadSummary={threadSummaries?.get(message.id)}
+                    readBy={readByMap?.get(message.id)}
+                    onEditSave={handleEditSave}
+                    onEditCancel={handleEditCancel}
+                    onSetEditing={handleSetEditing}
+                    onSetEditingBody={setEditingBody}
+                    onLongPressStart={handleLongPressStart}
+                    onLongPressEnd={handleLongPressEnd}
+                    onDismissLongPress={handleDismissLongPress}
+                    onAttachmentPreview={setAttachmentPreview}
+                    onCopyMessage={onCopyMessage}
+                    onQuoteReply={onQuoteReply}
+                    onCreateTaskFromMessage={onCreateTaskFromMessage}
+                    onOpenThread={onOpenThread}
+                    onDeleteMessage={onDeleteMessage}
+                    onRetryMessage={onRetryMessage}
+                    onRemoveFailedMessage={onRemoveFailedMessage}
+                    onAddReaction={onAddReaction}
+                    onRemoveReaction={onRemoveReaction}
+                    onPinMessage={onPinMessage}
+                    onUnpinMessage={onUnpinMessage}
+                    renderMessageBody={renderMessageBody}
+                    getFileIcon={getFileIcon}
+                    formatFileSize={formatFileSize}
+                  />
                 );
               })}
             </div>
@@ -1082,10 +1256,14 @@ export function ChatMessageTimeline({
       isDm,
       isMobile,
       longPressMessageId,
+      canPin,
+      pinnedMessageIds,
       handleEditSave,
       handleEditCancel,
+      handleSetEditing,
       handleLongPressStart,
       handleLongPressEnd,
+      handleDismissLongPress,
       onRetryMessage,
       onRemoveFailedMessage,
       onCopyMessage,
@@ -1093,9 +1271,10 @@ export function ChatMessageTimeline({
       onCreateTaskFromMessage,
       onOpenThread,
       onDeleteMessage,
-      onEditMessage,
       onAddReaction,
       onRemoveReaction,
+      onPinMessage,
+      onUnpinMessage,
       threadSummaries,
       readByMap,
       renderMessageBody,

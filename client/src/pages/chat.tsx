@@ -271,6 +271,7 @@ export default function ChatPage() {
   const [readReceipts, setReadReceipts] = useState<Map<string, ReadReceipt>>(new Map());
   const fileInputRef = useRef<HTMLInputElement>(null);
   const lastMarkedReadRef = useRef<string | null>(null);
+  const markAsReadTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   
   // Typing indicator - compute conversationId based on selected channel/DM
   const currentConversationId = selectedChannel 
@@ -1006,7 +1007,14 @@ export default function ChatPage() {
 
   // Mark thread as read when messages load and there are messages
   // Uses ref to prevent redundant POST requests when the same message is already marked
+  // Debounced by 1000ms to prevent rapid emissions during scrolling
   useEffect(() => {
+    // Clear any pending timeout when dependencies change
+    if (markAsReadTimeoutRef.current) {
+      clearTimeout(markAsReadTimeoutRef.current);
+      markAsReadTimeoutRef.current = null;
+    }
+
     if (messages.length > 0 && (selectedChannel || selectedDm)) {
       const lastMessage = messages[messages.length - 1];
       const threadKey = selectedChannel 
@@ -1020,20 +1028,31 @@ export default function ChatPage() {
       
       lastMarkedReadRef.current = threadKey;
       
-      if (selectedChannel) {
-        markAsReadMutation.mutate({
-          targetType: "channel",
-          targetId: selectedChannel.id,
-          lastReadMessageId: lastMessage.id,
-        });
-      } else if (selectedDm) {
-        markAsReadMutation.mutate({
-          targetType: "dm",
-          targetId: selectedDm.id,
-          lastReadMessageId: lastMessage.id,
-        });
-      }
+      // Debounce the mutation by 1000ms to batch rapid read receipt emissions
+      markAsReadTimeoutRef.current = setTimeout(() => {
+        if (selectedChannel) {
+          markAsReadMutation.mutate({
+            targetType: "channel",
+            targetId: selectedChannel.id,
+            lastReadMessageId: lastMessage.id,
+          });
+        } else if (selectedDm) {
+          markAsReadMutation.mutate({
+            targetType: "dm",
+            targetId: selectedDm.id,
+            lastReadMessageId: lastMessage.id,
+          });
+        }
+        markAsReadTimeoutRef.current = null;
+      }, 1000);
     }
+    
+    return () => {
+      if (markAsReadTimeoutRef.current) {
+        clearTimeout(markAsReadTimeoutRef.current);
+        markAsReadTimeoutRef.current = null;
+      }
+    };
   }, [messages.length, selectedChannel?.id, selectedDm?.id]);
 
 
@@ -1210,19 +1229,17 @@ export default function ChatPage() {
     const unsubscribe = onConnectionChange((connected) => {
       setIsConnected(connected);
       if (connected) {
-        // Refetch data on reconnect to ensure fresh state
-        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm"] });
+        // On reconnect, only refetch the active channel/DM messages for performance
+        // Avoid invalidating the entire channel/DM list to prevent unnecessary re-renders
         if (selectedChannel) {
           queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/channels", selectedChannel.id, "messages"] });
-        }
-        if (selectedDm) {
+        } else if (selectedDm) {
           queryClient.invalidateQueries({ queryKey: ["/api/v1/chat/dm", selectedDm.id, "messages"] });
         }
       }
     });
     return unsubscribe;
-  }, [selectedChannel, selectedDm]);
+  }, [selectedChannel?.id, selectedDm?.id]);
 
   // Join/leave socket rooms when selection changes
   // Uses centralized room management with reconnect support

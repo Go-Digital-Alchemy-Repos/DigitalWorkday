@@ -1650,6 +1650,7 @@ export const chatMessageReactions = pgTable("chat_message_reactions", {
 }, (table) => [
   uniqueIndex("chat_message_reactions_unique").on(table.messageId, table.userId, table.emoji),
   index("chat_message_reactions_tenant_message_idx").on(table.tenantId, table.messageId),
+  index("chat_message_reactions_message_idx").on(table.messageId),
 ]);
 
 /**
@@ -1687,6 +1688,8 @@ export const chatReads = pgTable("chat_reads", {
   index("chat_reads_user_idx").on(table.userId),
   index("chat_reads_channel_idx").on(table.channelId),
   index("chat_reads_dm_thread_idx").on(table.dmThreadId),
+  index("chat_reads_user_channel_idx").on(table.userId, table.channelId),
+  index("chat_reads_user_dm_idx").on(table.userId, table.dmThreadId),
   uniqueIndex("chat_reads_user_channel_unique").on(table.userId, table.channelId),
   uniqueIndex("chat_reads_user_dm_unique").on(table.userId, table.dmThreadId),
 ]);

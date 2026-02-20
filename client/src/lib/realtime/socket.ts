@@ -67,6 +67,24 @@ export function getSocket(): TypedSocket {
       // Notify any listeners about the connected ack
       connectedAckCallbacks.forEach(cb => cb(payload));
     });
+
+    // Development-only guard against duplicate event handlers
+    if (import.meta.env.DEV) {
+      const registeredHandlers = new Map<string, Set<Function>>();
+      const originalOn = socket.on.bind(socket);
+      
+      socket.on = ((event: string, handler: Function) => {
+        if (!registeredHandlers.has(event)) {
+          registeredHandlers.set(event, new Set());
+        }
+        const handlers = registeredHandlers.get(event)!;
+        if (handlers.has(handler)) {
+          console.warn(`[Socket.IO] Duplicate handler registered for event: ${event}`);
+        }
+        handlers.add(handler);
+        return originalOn(event, handler);
+      }) as any;
+    }
   }
   return socket;
 }
