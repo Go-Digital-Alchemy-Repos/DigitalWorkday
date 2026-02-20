@@ -17,7 +17,7 @@
  * />
  */
 
-import { useState, useCallback, useRef } from "react";
+import { useState, useCallback, useRef, useEffect } from "react";
 import { useS3Upload, type UploadCategory, type AssetType } from "@/hooks/useS3Upload";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
@@ -84,8 +84,13 @@ export function S3Dropzone({
     context,
   });
 
+  const [imageLoadError, setImageLoadError] = useState(false);
   const displayUrl = valueUrl || inheritedUrl;
   const isInherited = !valueUrl && !!inheritedUrl;
+
+  useEffect(() => {
+    setImageLoadError(false);
+  }, [displayUrl]);
 
   const handleDragEnter = useCallback((e: React.DragEvent) => {
     e.preventDefault();
@@ -287,7 +292,7 @@ export function S3Dropzone({
           data-testid={`input-file-${category}`}
         />
 
-        {displayUrl && isImageUrl(displayUrl) ? (
+        {displayUrl && isImageUrl(displayUrl) && !imageLoadError ? (
           <div className="p-4 flex items-center gap-4">
             <div className="relative shrink-0">
               <img
@@ -297,6 +302,7 @@ export function S3Dropzone({
                   "w-16 h-16 object-contain rounded border",
                   isInherited && "opacity-60"
                 )}
+                onError={() => setImageLoadError(true)}
               />
               {isInherited && (
                 <div className="absolute inset-0 flex items-center justify-center bg-background/50 rounded">

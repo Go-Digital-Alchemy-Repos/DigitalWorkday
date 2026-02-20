@@ -203,12 +203,16 @@ router.patch("/users/me", requireAuth, async (req, res) => {
       throw AppError.badRequest("No valid fields to update");
     }
 
-    if (avatarUrl !== undefined && user.avatarUrl && user.avatarUrl !== avatarUrl) {
+    if (avatarUrl !== undefined) {
       const tenantId = req.tenant?.effectiveTenantId || user?.tenantId || null;
-      console.log("[profile-update] Deleting old avatar:", user.avatarUrl);
-      deleteFromStorageByUrl(user.avatarUrl, tenantId).catch(err => {
-        console.error("[profile-update] Failed to delete old avatar:", err);
-      });
+      const freshUser = await storage.getUser(user.id);
+      const currentAvatarUrl = freshUser?.avatarUrl;
+      if (currentAvatarUrl && currentAvatarUrl !== avatarUrl) {
+        console.log("[profile-update] Deleting old avatar:", currentAvatarUrl);
+        deleteFromStorageByUrl(currentAvatarUrl, tenantId).catch(err => {
+          console.error("[profile-update] Failed to delete old avatar:", err);
+        });
+      }
     }
 
     const updatedUser = await storage.updateUser(user.id, updates);

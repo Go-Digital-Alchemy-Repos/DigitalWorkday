@@ -67,25 +67,35 @@ export default function UserProfilePage() {
     },
   });
 
+  const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string | null | undefined>(undefined);
+
   const updateAvatarMutation = useMutation({
     mutationFn: async (avatarUrl: string | null) => {
       return apiRequest("PATCH", "/api/users/me", { avatarUrl });
     },
-    onSuccess: () => {
-      refetch();
+    onSuccess: async () => {
+      await refetch();
       queryClient.invalidateQueries({ queryKey: ["/api/user"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/auth/me"] });
     },
     onError: () => {
       toast({ title: "Failed to update avatar", variant: "destructive" });
     },
+    onSettled: () => {
+      setPendingAvatarUrl(undefined);
+    },
   });
 
+  const displayAvatarUrl = pendingAvatarUrl !== undefined ? pendingAvatarUrl : user?.avatarUrl;
+
   const handleAvatarUploaded = (fileUrl: string) => {
+    setPendingAvatarUrl(fileUrl);
     updateAvatarMutation.mutate(fileUrl);
     toast({ title: "Avatar uploaded successfully" });
   };
 
   const handleAvatarRemove = () => {
+    setPendingAvatarUrl(null);
     updateAvatarMutation.mutate(null);
     toast({ title: "Avatar removed" });
   };
@@ -173,7 +183,7 @@ export default function UserProfilePage() {
               <div className="flex flex-col sm:flex-row items-center gap-6">
                 <div className="flex-shrink-0">
                   <Avatar className="h-24 w-24">
-                    <AvatarImage src={user.avatarUrl || undefined} alt={user.name} />
+                    <AvatarImage src={displayAvatarUrl || undefined} alt={user.name} />
                     <AvatarFallback className="bg-primary text-primary-foreground text-2xl">
                       {initials}
                     </AvatarFallback>
@@ -184,7 +194,7 @@ export default function UserProfilePage() {
                     category="user-avatar"
                     label="Profile Picture"
                     description="PNG, JPG, WebP or GIF. Max 2MB."
-                    valueUrl={user.avatarUrl}
+                    valueUrl={displayAvatarUrl}
                     onUploaded={handleAvatarUploaded}
                     onRemoved={handleAvatarRemove}
                     enableCropping
