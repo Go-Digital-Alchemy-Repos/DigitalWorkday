@@ -405,7 +405,6 @@ export default function ClientDetailPage() {
     },
     onSuccess: () => {
       toast({ title: "Client updated successfully" });
-      setEditClientOpen(false);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
