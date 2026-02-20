@@ -375,146 +375,142 @@ export function ProjectSettingsSheet({
         <SheetHeader>
           <SheetTitle>Project Settings</SheetTitle>
           <SheetDescription>
-            {isAdmin ? "Edit project details and settings." : "View project settings."}
+            Edit project details and settings.
           </SheetDescription>
         </SheetHeader>
 
         <div className="mt-6 space-y-6">
-          {isAdmin && (
-            <>
-              <Form {...form}>
-                <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
-                  <FormField
-                    control={form.control}
-                    name="name"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Project Name</FormLabel>
-                        <FormControl>
-                          <Input
-                            placeholder="Enter project name..."
-                            {...field}
-                            data-testid="input-edit-project-name"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <FormField
-                    control={form.control}
-                    name="description"
-                    render={({ field }) => (
-                      <FormItem>
-                        <FormLabel>Description</FormLabel>
-                        <FormControl>
-                          <Textarea
-                            placeholder="Add a description..."
-                            className="min-h-[80px] resize-none"
-                            {...field}
-                            data-testid="textarea-edit-project-description"
-                          />
-                        </FormControl>
-                        <FormMessage />
-                      </FormItem>
-                    )}
-                  />
-
-                  <div className="grid grid-cols-2 gap-4">
-                    {teams.length > 0 && (
-                      <FormField
-                        control={form.control}
-                        name="teamId"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Team</FormLabel>
-                            <Select onValueChange={(v) => field.onChange(v === "_none" ? "" : v)} value={field.value || "_none"}>
-                              <FormControl>
-                                <SelectTrigger data-testid="select-edit-team">
-                                  <SelectValue placeholder="Select team" />
-                                </SelectTrigger>
-                              </FormControl>
-                              <SelectContent>
-                                <SelectItem value="_none">No team</SelectItem>
-                                {teams.map((team) => (
-                                  <SelectItem key={team.id} value={team.id}>
-                                    {team.name}
-                                  </SelectItem>
-                                ))}
-                              </SelectContent>
-                            </Select>
-                            <FormMessage />
-                          </FormItem>
-                        )}
+          <Form {...form}>
+            <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-4">
+              <FormField
+                control={form.control}
+                name="name"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Project Name</FormLabel>
+                    <FormControl>
+                      <Input
+                        placeholder="Enter project name..."
+                        {...field}
+                        data-testid="input-edit-project-name"
                       />
-                    )}
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
-                    <FormField
-                      control={form.control}
-                      name="visibility"
-                      render={({ field }) => (
-                        <FormItem>
-                          <FormLabel>Visibility</FormLabel>
-                          <Select onValueChange={field.onChange} value={field.value}>
-                            <FormControl>
-                              <SelectTrigger data-testid="select-edit-visibility">
-                                <SelectValue />
-                              </SelectTrigger>
-                            </FormControl>
-                            <SelectContent>
-                              <SelectItem value="workspace">Workspace</SelectItem>
-                              <SelectItem value="private">Private</SelectItem>
-                            </SelectContent>
-                          </Select>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  </div>
+              <FormField
+                control={form.control}
+                name="description"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Description</FormLabel>
+                    <FormControl>
+                      <Textarea
+                        placeholder="Add a description..."
+                        className="min-h-[80px] resize-none"
+                        {...field}
+                        data-testid="textarea-edit-project-description"
+                      />
+                    </FormControl>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
 
+              <div className="grid grid-cols-2 gap-4">
+                {teams.length > 0 && (
                   <FormField
                     control={form.control}
-                    name="color"
+                    name="teamId"
                     render={({ field }) => (
                       <FormItem>
-                        <FormLabel>Color</FormLabel>
-                        <div className="flex flex-wrap gap-2">
-                          {PROJECT_COLORS.map((color) => (
-                            <button
-                              key={color.value}
-                              type="button"
-                              onClick={() => field.onChange(color.value)}
-                              className={`h-8 w-8 rounded-md border-2 transition-all ${
-                                field.value === color.value
-                                  ? "border-foreground scale-110"
-                                  : "border-transparent"
-                              }`}
-                              style={{ backgroundColor: color.value }}
-                              title={color.name}
-                              data-testid={`edit-color-${color.name.toLowerCase()}`}
-                            />
-                          ))}
-                        </div>
+                        <FormLabel>Team</FormLabel>
+                        <Select onValueChange={(v) => field.onChange(v === "_none" ? "" : v)} value={field.value || "_none"}>
+                          <FormControl>
+                            <SelectTrigger data-testid="select-edit-team">
+                              <SelectValue placeholder="Select team" />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            <SelectItem value="_none">No team</SelectItem>
+                            {teams.map((team) => (
+                              <SelectItem key={team.id} value={team.id}>
+                                {team.name}
+                              </SelectItem>
+                            ))}
+                          </SelectContent>
+                        </Select>
                         <FormMessage />
                       </FormItem>
                     )}
                   />
+                )}
 
-                  <Button 
-                    type="submit" 
-                    className="w-full"
-                    disabled={updateProjectMutation.isPending}
-                    data-testid="button-save-project"
-                  >
-                    {updateProjectMutation.isPending ? "Saving..." : "Save Changes"}
-                  </Button>
-                </form>
-              </Form>
+                <FormField
+                  control={form.control}
+                  name="visibility"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Visibility</FormLabel>
+                      <Select onValueChange={field.onChange} value={field.value}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-visibility">
+                            <SelectValue />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="workspace">Workspace</SelectItem>
+                          <SelectItem value="private">Private</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
 
-              <Separator />
-            </>
-          )}
+              <FormField
+                control={form.control}
+                name="color"
+                render={({ field }) => (
+                  <FormItem>
+                    <FormLabel>Color</FormLabel>
+                    <div className="flex flex-wrap gap-2">
+                      {PROJECT_COLORS.map((color) => (
+                        <button
+                          key={color.value}
+                          type="button"
+                          onClick={() => field.onChange(color.value)}
+                          className={`h-8 w-8 rounded-md border-2 transition-all ${
+                            field.value === color.value
+                              ? "border-foreground scale-110"
+                              : "border-transparent"
+                          }`}
+                          style={{ backgroundColor: color.value }}
+                          title={color.name}
+                          data-testid={`edit-color-${color.name.toLowerCase()}`}
+                        />
+                      ))}
+                    </div>
+                    <FormMessage />
+                  </FormItem>
+                )}
+              />
+
+              <Button 
+                type="submit" 
+                className="w-full"
+                disabled={updateProjectMutation.isPending}
+                data-testid="button-save-project"
+              >
+                {updateProjectMutation.isPending ? "Saving..." : "Save Changes"}
+              </Button>
+            </form>
+          </Form>
+
+          <Separator />
 
           <div className="space-y-3">
             <Label className="text-sm font-medium">Client</Label>
