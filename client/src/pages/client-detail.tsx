@@ -777,7 +777,7 @@ export default function ClientDetailPage() {
           }
           setActiveTab(val);
         }} className="h-full">
-          <div className="px-6 pt-4 border-b border-border">
+          <div className="px-6 py-4 border-b border-border">
             {useV2Layout ? (
               <ClientSectionSwitcher
                 sections={visibleSections}
