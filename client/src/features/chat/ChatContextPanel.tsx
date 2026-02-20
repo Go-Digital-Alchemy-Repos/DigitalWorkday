@@ -2,6 +2,7 @@ import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { AvatarPresenceIndicator } from "@/components/ui/presence-indicator";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
@@ -204,7 +205,7 @@ export function ChatContextPanel({
                           <div className="relative">
                             <Avatar className="h-7 w-7">
                               {member.user.avatarUrl && (
-                                <AvatarImage src={member.user.avatarUrl} />
+                                <AvatarImage src={getStorageUrl(member.user.avatarUrl)} />
                               )}
                               <AvatarFallback className="text-xs">
                                 {getInitials(member.user.name || member.user.email)}
@@ -271,7 +272,7 @@ export function ChatContextPanel({
                   <div className="relative">
                     <Avatar className="h-20 w-20">
                       {otherMember.avatarUrl && (
-                        <AvatarImage src={otherMember.avatarUrl} />
+                        <AvatarImage src={getStorageUrl(otherMember.avatarUrl)} />
                       )}
                       <AvatarFallback className="text-xl">
                         {getInitials(otherMember.name || otherMember.email)}

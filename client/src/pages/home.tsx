@@ -24,6 +24,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { TaskCard } from "@/features/tasks";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { CreateProjectDialog } from "@/features/projects";
@@ -238,7 +239,7 @@ function AdminDashboardSection({
                     data-testid={`workload-employee-${employee.userId}`}
                   >
                     <Avatar className="h-8 w-8">
-                      <AvatarImage src={employee.avatarUrl || undefined} />
+                      <AvatarImage src={getStorageUrl(employee.avatarUrl)} />
                       <AvatarFallback className="text-xs">
                         {getInitials(employee.firstName, employee.lastName, employee.email)}
                       </AvatarFallback>
@@ -321,7 +322,7 @@ function AdminDashboardSection({
                       className="flex items-center gap-3 p-2 rounded-lg hover-elevate cursor-pointer"
                     >
                       <Avatar className="h-8 w-8 shrink-0">
-                        <AvatarImage src={msg.author?.avatarUrl || undefined} />
+                        <AvatarImage src={getStorageUrl(msg.author?.avatarUrl)} />
                         <AvatarFallback className="text-[10px]">
                           {getInitials(msg.author?.firstName, msg.author?.lastName, msg.author?.email)}
                         </AvatarFallback>

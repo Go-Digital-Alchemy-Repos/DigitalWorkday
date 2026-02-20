@@ -4,6 +4,7 @@ import { Check, Plus, X, Eye } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { AvatarGroup } from "@/components/avatar-group";
@@ -138,7 +139,7 @@ export function MultiSelectWatchers({
                     data-testid={`button-toggle-watcher-${user.id}`}
                   >
                     <Avatar className="h-6 w-6">
-                      {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name || ""} />}
+                      {user.avatarUrl && <AvatarImage src={getStorageUrl(user.avatarUrl)} alt={user.name || ""} />}
                       <AvatarFallback className="text-[10px] bg-primary/10 text-primary">
                         {getInitials(user.name || "U")}
                       </AvatarFallback>

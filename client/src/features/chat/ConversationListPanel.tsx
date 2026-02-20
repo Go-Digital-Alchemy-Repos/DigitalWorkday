@@ -4,6 +4,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { AvatarPresenceIndicator } from "@/components/ui/presence-indicator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -414,7 +415,7 @@ function DmRow({ dm, currentUserId, isSelected, onClick }: DmRowProps) {
         ) : firstMember ? (
           <div className="relative">
             <Avatar className="h-9 w-9">
-              <AvatarImage src={firstMember.user.avatarUrl || undefined} />
+              <AvatarImage src={getStorageUrl(firstMember.user.avatarUrl)} />
               <AvatarFallback className="text-xs">
                 {getInitials(firstMember.user.name || firstMember.user.email)}
               </AvatarFallback>

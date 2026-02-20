@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import {
   Select,
   SelectContent,
@@ -217,7 +218,7 @@ function WorkloadContent() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={employee.avatarUrl || undefined} />
+                          <AvatarImage src={getStorageUrl(employee.avatarUrl)} />
                           <AvatarFallback>{getInitials(employee.firstName, employee.lastName, employee.email)}</AvatarFallback>
                         </Avatar>
                         <div>
@@ -736,7 +737,7 @@ export function ReportsTab({ defaultTab }: ReportsTabProps = {}) {
                           <TableCell>
                             <div className="flex items-center gap-3">
                               <Avatar className="h-8 w-8">
-                                <AvatarImage src={employee.avatarUrl || undefined} />
+                                <AvatarImage src={getStorageUrl(employee.avatarUrl)} />
                                 <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
                               </Avatar>
                               <div>
@@ -814,7 +815,7 @@ export function ReportsTab({ defaultTab }: ReportsTabProps = {}) {
                           {index + 1}
                         </div>
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={employee.avatarUrl || undefined} />
+                          <AvatarImage src={getStorageUrl(employee.avatarUrl)} />
                           <AvatarFallback>{getInitials(employee.name)}</AvatarFallback>
                         </Avatar>
                         <div className="flex-1 min-w-0">

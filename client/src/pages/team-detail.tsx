@@ -6,6 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { TeamDrawer } from "@/features/teams";
@@ -218,7 +219,7 @@ export default function TeamDetailPage() {
                   {teamMembers.map((member) => (
                     <div key={member.id} className="flex items-center gap-3 p-3 rounded-lg border" data-testid={`card-member-${member.userId}`}>
                       <Avatar className="h-10 w-10 shrink-0">
-                        {member.user?.avatarUrl && <AvatarImage src={member.user.avatarUrl} alt={`${member.user?.firstName || ""} ${member.user?.lastName || ""}`} />}
+                        {member.user?.avatarUrl && <AvatarImage src={getStorageUrl(member.user.avatarUrl)} alt={`${member.user?.firstName || ""} ${member.user?.lastName || ""}`} />}
                         <AvatarFallback>
                           {member.user?.firstName?.charAt(0) || member.user?.email?.charAt(0) || "U"}
                         </AvatarFallback>
@@ -265,7 +266,7 @@ export default function TeamDetailPage() {
                         <TableCell>
                           <div className="flex items-center gap-3">
                             <Avatar className="h-8 w-8">
-                              {member.user?.avatarUrl && <AvatarImage src={member.user.avatarUrl} alt={`${member.user?.firstName || ""} ${member.user?.lastName || ""}`} />}
+                              {member.user?.avatarUrl && <AvatarImage src={getStorageUrl(member.user.avatarUrl)} alt={`${member.user?.firstName || ""} ${member.user?.lastName || ""}`} />}
                               <AvatarFallback>
                                 {member.user?.firstName?.charAt(0) || member.user?.email?.charAt(0) || "U"}
                               </AvatarFallback>

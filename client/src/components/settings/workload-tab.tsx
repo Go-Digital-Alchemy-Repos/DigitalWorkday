@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
@@ -380,7 +381,7 @@ export function WorkloadTab() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={employee.avatarUrl || undefined} />
+                          <AvatarImage src={getStorageUrl(employee.avatarUrl)} />
                           <AvatarFallback>{getInitials(employee.firstName, employee.lastName, employee.email)}</AvatarFallback>
                         </Avatar>
                         <div>
@@ -491,7 +492,7 @@ export function WorkloadTab() {
               {selectedEmployee && (
                 <>
                   <Avatar className="h-10 w-10">
-                    <AvatarImage src={selectedEmployee.avatarUrl || undefined} />
+                    <AvatarImage src={getStorageUrl(selectedEmployee.avatarUrl)} />
                     <AvatarFallback>
                       {getInitials(selectedEmployee.firstName, selectedEmployee.lastName, selectedEmployee.email)}
                     </AvatarFallback>

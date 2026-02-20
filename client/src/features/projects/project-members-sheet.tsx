@@ -12,6 +12,7 @@ import {
 } from "@/components/ui/sheet";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -156,7 +157,7 @@ export function ProjectMembersSheet({
                     >
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={(member.user as any)?.avatarUrl || undefined} />
+                          <AvatarImage src={getStorageUrl((member.user as any)?.avatarUrl)} />
                           <AvatarFallback className="text-xs">
                             {getInitials(member.user)}
                           </AvatarFallback>
@@ -228,7 +229,7 @@ export function ProjectMembersSheet({
                     >
                       <div className="flex items-center gap-3">
                         <Avatar className="h-8 w-8">
-                          <AvatarImage src={user.avatarUrl || undefined} />
+                          <AvatarImage src={getStorageUrl(user.avatarUrl)} />
                           <AvatarFallback className="text-xs">
                             {getInitials(user)}
                           </AvatarFallback>

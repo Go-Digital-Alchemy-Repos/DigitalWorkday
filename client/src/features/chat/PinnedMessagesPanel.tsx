@@ -1,5 +1,6 @@
 import { Button } from "@/components/ui/button";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { Pin, X } from "lucide-react";
 
 interface PinnedMessage {
@@ -88,7 +89,7 @@ export function PinnedMessagesPanel({
                 <div className="flex items-start gap-2">
                   <Avatar className="h-6 w-6 flex-shrink-0 mt-0.5">
                     {pin.message?.authorAvatarUrl && (
-                      <AvatarImage src={pin.message.authorAvatarUrl} />
+                      <AvatarImage src={getStorageUrl(pin.message.authorAvatarUrl)} />
                     )}
                     <AvatarFallback className="text-[10px]">
                       {getInitials(pin.message?.authorName || "?")}

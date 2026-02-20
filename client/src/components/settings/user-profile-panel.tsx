@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { useToast } from "@/hooks/use-toast";
 import {
   Select,
@@ -267,7 +268,7 @@ export function UserProfilePanel({ open, onClose, user, invitations }: UserProfi
         <div className="p-6 space-y-6 overflow-y-auto max-h-[calc(100vh-120px)]">
           <div className="flex items-center gap-4">
             <Avatar className="h-14 w-14">
-              {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={getFullName(user)} />}
+              {user.avatarUrl && <AvatarImage src={getStorageUrl(user.avatarUrl)} alt={getFullName(user)} />}
               <AvatarFallback className="text-lg">{getInitials(user)}</AvatarFallback>
             </Avatar>
             <div>

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { Button } from "@/components/ui/button";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Textarea } from "@/components/ui/textarea";
@@ -144,7 +145,7 @@ export function ThreadPanel({
             <div className="flex gap-3">
               <Avatar className="h-8 w-8 flex-shrink-0">
                 {parentMessage.author?.avatarUrl && (
-                  <AvatarImage src={parentMessage.author.avatarUrl} />
+                  <AvatarImage src={getStorageUrl(parentMessage.author.avatarUrl)} />
                 )}
                 <AvatarFallback>
                   {getInitials(parentMessage.author?.name || parentMessage.author?.email || "?")}
@@ -191,7 +192,7 @@ export function ThreadPanel({
             <div key={reply.id} className="flex gap-3" data-testid={`thread-reply-${reply.id}`}>
               <Avatar className="h-8 w-8 flex-shrink-0">
                 {reply.author?.avatarUrl && (
-                  <AvatarImage src={reply.author.avatarUrl} />
+                  <AvatarImage src={getStorageUrl(reply.author.avatarUrl)} />
                 )}
                 <AvatarFallback>
                   {getInitials(reply.author?.name || reply.author?.email || "?")}

@@ -16,6 +16,7 @@ import {
   Calendar,
 } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -361,7 +362,7 @@ export function ActivityFeed({
                 <div className="relative mt-0.5">
                   <Avatar className="h-7 w-7">
                     {item.actorAvatarUrl && (
-                      <AvatarImage src={item.actorAvatarUrl} alt={item.actorName} />
+                      <AvatarImage src={getStorageUrl(item.actorAvatarUrl)} alt={item.actorName} />
                     )}
                     <AvatarFallback className="text-xs bg-muted">
                       {getInitials(item.actorName)}

@@ -7,6 +7,7 @@ import { Button } from "@/components/ui/button";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { LogTimeOnCompleteDialog } from "@/components/log-time-on-complete-dialog";
 import { cn } from "@/lib/utils";
@@ -398,7 +399,7 @@ function SubtaskListInner({
                     >
                       {assignee ? (
                         <Avatar className="h-5 w-5">
-                          {assignee.avatarUrl && <AvatarImage src={assignee.avatarUrl} alt={assignee.name || ""} />}
+                          {assignee.avatarUrl && <AvatarImage src={getStorageUrl(assignee.avatarUrl)} alt={assignee.name || ""} />}
                           <AvatarFallback className="text-[8px] bg-primary/10 text-primary">
                             {getInitials(assignee.name || "U")}
                           </AvatarFallback>
@@ -435,7 +436,7 @@ function SubtaskListInner({
                               data-testid={`button-subtask-assign-${user.id}`}
                             >
                               <Avatar className="h-5 w-5">
-                                {user.avatarUrl && <AvatarImage src={user.avatarUrl} alt={user.name || ""} />}
+                                {user.avatarUrl && <AvatarImage src={getStorageUrl(user.avatarUrl)} alt={user.name || ""} />}
                                 <AvatarFallback className="text-[8px] bg-primary/10 text-primary">
                                   {getInitials(user.name || "U")}
                                 </AvatarFallback>

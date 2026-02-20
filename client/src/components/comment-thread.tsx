@@ -26,6 +26,7 @@
 import { useState, useRef, useCallback } from "react";
 import { Pencil, Trash2, Check, X, CheckCircle2, CircleDot, Paperclip, Loader2, RotateCcw } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { Button } from "@/components/ui/button";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
@@ -234,7 +235,7 @@ export function CommentThread({
               >
                 <Avatar className="h-8 w-8 shrink-0">
                   {comment.user?.avatarUrl && (
-                    <AvatarImage src={comment.user.avatarUrl} alt={comment.user.name} />
+                    <AvatarImage src={getStorageUrl(comment.user.avatarUrl)} alt={comment.user.name} />
                   )}
                   <AvatarFallback className="bg-primary/10 text-primary text-xs">
                     {getInitials(comment.user?.name || "U")}

@@ -1,6 +1,7 @@
 import { useRef, useEffect, useState, useCallback, useMemo, memo, lazy, Suspense } from "react";
 import { Virtuoso, VirtuosoHandle } from "react-virtuoso";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -868,7 +869,7 @@ const MessageBubble = memo(function MessageBubble({
                 <TooltipTrigger asChild>
                   <span className="inline-block">
                     <Avatar className="h-4 w-4">
-                      {reader.avatarUrl && <AvatarImage src={reader.avatarUrl} />}
+                      {reader.avatarUrl && <AvatarImage src={getStorageUrl(reader.avatarUrl)} />}
                       <AvatarFallback className="text-[7px]">
                         {getInitials(reader.name)}
                       </AvatarFallback>
@@ -1219,7 +1220,7 @@ export function ChatMessageTimeline({
               {!isOwnGroup && (
                 <Avatar className="h-8 w-8">
                   {group.author?.avatarUrl && (
-                    <AvatarImage src={group.author.avatarUrl} />
+                    <AvatarImage src={getStorageUrl(group.author.avatarUrl)} />
                   )}
                   <AvatarFallback className="text-[11px]">
                     {getInitials(group.author?.name || group.author?.email || "?")}

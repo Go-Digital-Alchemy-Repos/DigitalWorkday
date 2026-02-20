@@ -10,6 +10,7 @@ import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
@@ -1029,7 +1030,7 @@ export default function SuperAdminUsers() {
                       >
                         <div className="flex items-center gap-3">
                           <Avatar className="h-9 w-9">
-                            <AvatarImage src={appUser.avatarUrl || undefined} />
+                            <AvatarImage src={getStorageUrl(appUser.avatarUrl)} />
                             <AvatarFallback>{getInitials(appUser.name || `${appUser.firstName || ""} ${appUser.lastName || ""}`.trim() || null, appUser.email)}</AvatarFallback>
                           </Avatar>
                           <div>
@@ -1139,7 +1140,7 @@ export default function SuperAdminUsers() {
                         data-testid="button-avatar-edit"
                       >
                         <Avatar className="h-16 w-16" data-testid="img-user-avatar">
-                          <AvatarImage src={selectedAppUser.avatarUrl || undefined} />
+                          <AvatarImage src={getStorageUrl(selectedAppUser.avatarUrl)} />
                           <AvatarFallback className="text-lg">{getInitials(selectedAppUser.name || `${selectedAppUser.firstName || ""} ${selectedAppUser.lastName || ""}`.trim() || null, selectedAppUser.email)}</AvatarFallback>
                         </Avatar>
                         <div
@@ -1176,7 +1177,7 @@ export default function SuperAdminUsers() {
                   </DropdownMenu>
                 ) : (
                   <Avatar className="h-16 w-16" data-testid="img-user-avatar">
-                    <AvatarImage src={selectedAppUser.avatarUrl || undefined} />
+                    <AvatarImage src={getStorageUrl(selectedAppUser.avatarUrl)} />
                     <AvatarFallback className="text-lg">{getInitials(selectedAppUser.name || `${selectedAppUser.firstName || ""} ${selectedAppUser.lastName || ""}`.trim() || null, selectedAppUser.email)}</AvatarFallback>
                   </Avatar>
                 )}
