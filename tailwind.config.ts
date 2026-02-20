@@ -75,6 +75,11 @@ export default {
           foreground: "hsl(var(--sidebar-accent-foreground) / <alpha-value>)",
           border: "var(--sidebar-accent-border)"
         },
+        "surface-0": "hsl(var(--surface-0) / <alpha-value>)",
+        "surface-1": "hsl(var(--surface-1) / <alpha-value>)",
+        "surface-2": "hsl(var(--surface-2) / <alpha-value>)",
+        subtle: "hsl(var(--border-subtle) / <alpha-value>)",
+        strong: "hsl(var(--border-strong) / <alpha-value>)",
         status: {
           online: "rgb(34 197 94)",
           away: "rgb(245 158 11)",
@@ -115,6 +120,15 @@ export default {
         "section": "var(--space-section)",
         "card-pad": "var(--space-card)",
         "inline": "var(--space-inline)",
+      },
+      borderColor: {
+        subtle: "hsl(var(--border-subtle) / <alpha-value>)",
+        strong: "hsl(var(--border-strong) / <alpha-value>)",
+      },
+      boxShadow: {
+        soft: "var(--shadow-soft)",
+        medium: "var(--shadow-medium)",
+        float: "var(--shadow-float)",
       },
       transitionDuration: {
         instant: "var(--duration-instant)",

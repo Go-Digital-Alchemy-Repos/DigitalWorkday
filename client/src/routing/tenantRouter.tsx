@@ -59,6 +59,7 @@ const SupportTicketDetail = lazy(trackChunkLoad("SupportTicketDetail", () => imp
 const SupportTemplates = lazy(trackChunkLoad("SupportTemplates", () => import("@/pages/support-templates")));
 const SupportSlaPolicies = lazy(trackChunkLoad("SupportSla", () => import("@/pages/support-sla-policies")));
 const SupportFormSchemas = lazy(trackChunkLoad("SupportForms", () => import("@/pages/support-form-schemas")));
+const DesignSystemPage = lazy(trackChunkLoad("DesignSystem", () => import("@/pages/design-system")));
 const NotFound = lazy(() => import("@/pages/not-found"));
 
 function TenantRouter() {
@@ -145,6 +146,9 @@ function TenantRouter() {
         </Route>
         <Route path="/support/:id">
           {() => <TenantRouteGuard component={SupportTicketDetail} />}
+        </Route>
+        <Route path="/design-system">
+          {() => <TenantRouteGuard component={DesignSystemPage} />}
         </Route>
         <Route path="/profile">
           {() => <ProtectedRoute component={UserProfilePage} />}
