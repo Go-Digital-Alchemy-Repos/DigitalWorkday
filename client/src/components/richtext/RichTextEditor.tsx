@@ -427,6 +427,13 @@ export function RichTextEditor({
     }),
   ];
 
+  const onChangeRef = useRef(onChange);
+  useEffect(() => { onChangeRef.current = onChange; }, [onChange]);
+  const onBlurRef = useRef(onBlur);
+  useEffect(() => { onBlurRef.current = onBlur; }, [onBlur]);
+
+  const prevValueRef = useRef(value);
+
   const editor = useEditor({
     extensions,
     content: getDocForEditor(value),
@@ -454,10 +461,10 @@ export function RichTextEditor({
     },
     onUpdate: ({ editor }) => {
       const doc = editor.getJSON();
-      onChange(serializeDocToString(doc));
+      onChangeRef.current(serializeDocToString(doc));
     },
     onBlur: () => {
-      onBlur?.();
+      onBlurRef.current?.();
     },
   });
 
@@ -466,9 +473,14 @@ export function RichTextEditor({
       const currentDoc = serializeDocToString(editor.getJSON());
       const newDoc = serializeDocToString(getDocForEditor(value));
       
-      if (currentDoc !== newDoc && !editor.isFocused) {
-        editor.commands.setContent(getDocForEditor(value));
+      if (currentDoc !== newDoc) {
+        const prevDoc = serializeDocToString(getDocForEditor(prevValueRef.current));
+        const isExternalChange = prevDoc !== newDoc;
+        if (isExternalChange || !editor.isFocused) {
+          editor.commands.setContent(getDocForEditor(value));
+        }
       }
+      prevValueRef.current = value;
     }
   }, [editor, value]);
 

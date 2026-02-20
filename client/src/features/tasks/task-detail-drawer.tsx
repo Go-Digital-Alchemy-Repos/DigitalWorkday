@@ -155,6 +155,13 @@ export function TaskDetailDrawer({
   const [selectedSubtask, setSelectedSubtask] = useState<any | null>(null);
   const [subtaskDrawerOpen, setSubtaskDrawerOpen] = useState(false);
   const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
+  const closingRef = useRef(false);
+
+  useEffect(() => {
+    if (!open) {
+      closingRef.current = false;
+    }
+  }, [open]);
   
   const [showTimeTrackingPrompt, setShowTimeTrackingPrompt] = useState(false);
   const [showTimeEntryForm, setShowTimeEntryForm] = useState(false);
@@ -825,7 +832,6 @@ export function TaskDetailDrawer({
       onUpdate?.(task.id, { title: title.trim() });
     }
     setEditingTitle(false);
-    onOpenChange(false);
   };
 
   const handleDescriptionChange = (value: string) => {
@@ -836,20 +842,37 @@ export function TaskDetailDrawer({
   };
 
   const handleDescriptionBlur = () => {
+    if (closingRef.current) return;
     if (description !== task.description) {
       onUpdate?.(task.id, { description: description || null });
       markClean();
     }
   };
 
+  const saveAndClose = useCallback(() => {
+    closingRef.current = true;
+    if (title.trim() && title !== task.title) {
+      onUpdate?.(task.id, { title: title.trim() });
+    }
+    if (description !== (task.description || "")) {
+      onUpdate?.(task.id, { description });
+    }
+    markClean();
+    onOpenChange(false);
+  }, [task.id, task.title, task.description, title, description, onUpdate, markClean, onOpenChange]);
+
   const handleDrawerClose = (newOpen: boolean) => {
     if (newOpen) return;
     if (isDirty) {
+      closingRef.current = true;
       confirmIfDirty(() => {
-        markClean();
-        onOpenChange(false);
+        saveAndClose();
+      });
+      requestAnimationFrame(() => {
+        if (open) closingRef.current = false;
       });
     } else {
+      closingRef.current = true;
       onOpenChange(false);
     }
   };
@@ -925,7 +948,7 @@ export function TaskDetailDrawer({
               <Button
                 variant="secondary"
                 size="icon"
-                onClick={() => onOpenChange(false)}
+                onClick={saveAndClose}
                 aria-label="Close drawer"
                 data-testid="button-close-drawer"
               >
@@ -1435,16 +1458,7 @@ export function TaskDetailDrawer({
         </div>
         <DrawerActionBar
           showSave={true}
-          onSave={() => {
-            if (title.trim() && title !== task.title) {
-              onUpdate?.(task.id, { title: title.trim() });
-            }
-            if (description !== (task.description || "")) {
-              onUpdate?.(task.id, { description });
-            }
-            markClean();
-            onOpenChange(false);
-          }}
+          onSave={saveAndClose}
           saveLabel="Save Task"
           showComplete={task.status !== "done"}
           onMarkComplete={handleMarkAsComplete}
