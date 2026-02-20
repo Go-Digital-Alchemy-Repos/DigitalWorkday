@@ -172,28 +172,31 @@ export default function ProjectPage() {
     ? displaySections?.flatMap((s) => s.tasks || []).find((t) => t.id === activeTaskId)
     : null;
 
-  const urlTaskId = useMemo(() => {
+  const [urlTaskId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
     return params.get('task');
-  }, []);
+  });
+  const [deepLinkHandled, setDeepLinkHandled] = useState(false);
 
   const { data: linkedTask } = useQuery<TaskWithRelations>({
     queryKey: ["/api/tasks", urlTaskId],
-    enabled: !!urlTaskId && !selectedTask && !!tasks && !tasks.find(t => t.id === urlTaskId),
+    enabled: !!urlTaskId && !deepLinkHandled && !selectedTask && !!tasks && !tasks.find(t => t.id === urlTaskId),
   });
 
   useEffect(() => {
-    if (sectionsLoading || selectedTask || !urlTaskId) return;
+    if (deepLinkHandled || sectionsLoading || selectedTask || !urlTaskId) return;
     const allTasks = displaySections?.flatMap((s) => s.tasks || []) || [];
     const found = allTasks.find(t => t.id === urlTaskId) || tasks?.find(t => t.id === urlTaskId);
     if (found) {
       setSelectedTask(found);
+      setDeepLinkHandled(true);
       return;
     }
     if (linkedTask) {
       setSelectedTask(linkedTask);
+      setDeepLinkHandled(true);
     }
-  }, [sectionsLoading, tasks, linkedTask, selectedTask, urlTaskId, displaySections]);
+  }, [sectionsLoading, tasks, linkedTask, selectedTask, urlTaskId, displaySections, deepLinkHandled]);
 
   const createTaskMutation = useCreateTask();
 
