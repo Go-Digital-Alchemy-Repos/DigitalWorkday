@@ -1,10 +1,10 @@
-import { useState, useMemo, useCallback } from "react";
+import { useState, useMemo, useCallback, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { useToast } from "@/hooks/use-toast";
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,7 +45,6 @@ import {
   MAX_PINNED_WIDGETS,
   getDefaultLayout,
   filterLayoutByRole,
-  sanitizeLayout,
   type WidgetLayoutItem,
   type WidgetDefinition,
 } from "@shared/controlCenterWidgets";
@@ -137,7 +136,7 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Settings2 className="h-5 w-5 text-primary" />
+            <Settings2 className="h-5 w-5 text-muted-foreground" />
             Control Center
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -402,7 +401,7 @@ function TileCard({ icon: Icon, title, description, onClick, badge, testId, chil
     <Card
       className={cn(
         "transition-all duration-200",
-        onClick && "cursor-pointer hover:shadow-md hover:border-primary/30",
+        onClick && "cursor-pointer hover:bg-muted/50",
       )}
       onClick={onClick}
       data-testid={testId}
@@ -410,8 +409,8 @@ function TileCard({ icon: Icon, title, description, onClick, badge, testId, chil
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-md bg-primary/10">
-              <Icon className="h-4 w-4 text-primary" />
+            <div className="p-1.5 rounded-md bg-muted">
+              <Icon className="h-4 w-4 text-muted-foreground" />
             </div>
             <CardTitle className="text-sm font-medium">{title}</CardTitle>
           </div>
@@ -438,7 +437,7 @@ function StatValue({ label, value, trend }: { label: string; value: string | num
 
 function ActivityTileContent({ clientId }: { clientId: string }) {
   const { data, isLoading } = useQuery<any[]>({
-    queryKey: ["/api/v1/activity", { clientId, limit: 5 }],
+    queryKey: ["/api/activity-log", "client", clientId],
     enabled: !!clientId,
   });
   if (isLoading) return <Skeleton className="h-12 w-full" />;
@@ -546,7 +545,7 @@ function OperationalAlertsContent({ clientId }: { clientId: string }) {
 
 function RecentActivityContent({ clientId }: { clientId: string }) {
   const { data = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/v1/activity", { clientId, limit: 5 }],
+    queryKey: ["/api/activity-log", "client", clientId],
     enabled: !!clientId,
   });
   if (isLoading) return <Skeleton className="h-20 w-full" />;
@@ -613,6 +612,12 @@ function CustomizeSheet({ open, onOpenChange, currentLayout, role }: CustomizeSh
     () => [...currentLayout].sort((a, b) => a.order - b.order),
   );
   const { toast } = useToast();
+
+  useEffect(() => {
+    if (open) {
+      setPinnedItems([...currentLayout].sort((a, b) => a.order - b.order));
+    }
+  }, [open, currentLayout]);
 
   const pinnedIds = useMemo(() => new Set(pinnedItems.map((i) => i.id)), [pinnedItems]);
 
@@ -873,8 +878,8 @@ function SortableWidgetItem({
       >
         <GripVertical className="h-4 w-4 text-muted-foreground" />
       </button>
-      <div className="p-1.5 rounded-md bg-primary/10">
-        <Icon className="h-4 w-4 text-primary" />
+      <div className="p-1.5 rounded-md bg-muted">
+        <Icon className="h-4 w-4 text-muted-foreground" />
       </div>
       <div className="flex-1 min-w-0">
         <p className="text-sm font-medium">{def.title}</p>
