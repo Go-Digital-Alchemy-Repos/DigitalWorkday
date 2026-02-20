@@ -20,6 +20,7 @@ import { searchRouter } from "./modules/search/search.router";
 import clientsRouter from "./clients.router";
 import usersRouter from "./users.router";
 import crmRouter from "./crm.router";
+import fileServeRouter from "../http/domains/fileServe.router";
 // [MIGRATED Prompt #14] workspacesRouter → server/http/domains/workspaces.router.ts
 // [MIGRATED Prompt #14] teamsRouter → server/http/domains/teams.router.ts
 import tenantDataRoutes from "./tenantData";
@@ -33,6 +34,7 @@ router.use(crmRouter);
 router.use(clientsRouter);
 router.use(searchRouter);
 router.use(featuresRoutes);
+router.use("/v1/files/serve", fileServeRouter);
 router.use("/v1/super", superAdminRoutes);
 router.use("/v1/super", superSystemStatusRouter);
 router.use("/v1/super", superIntegrationsRouter);
