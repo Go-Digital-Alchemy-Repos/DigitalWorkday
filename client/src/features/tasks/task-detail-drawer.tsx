@@ -759,6 +759,18 @@ export function TaskDetailDrawer({
     invalidateTaskQueries();
   }, [onRefresh, invalidateTaskQueries]);
 
+  const saveAndClose = useCallback(() => {
+    closingRef.current = true;
+    if (task && title.trim() && title !== task.title) {
+      onUpdate?.(task.id, { title: title.trim() });
+    }
+    if (task && description !== (task.description || "")) {
+      onUpdate?.(task.id, { description });
+    }
+    markClean();
+    onOpenChange(false);
+  }, [task?.id, task?.title, task?.description, title, description, onUpdate, markClean, onOpenChange]);
+
   const drawerContentClass = isMobile 
     ? "w-full overflow-y-auto p-0" 
     : "w-full sm:max-w-2xl overflow-y-auto p-0";
@@ -849,17 +861,6 @@ export function TaskDetailDrawer({
     }
   };
 
-  const saveAndClose = useCallback(() => {
-    closingRef.current = true;
-    if (title.trim() && title !== task.title) {
-      onUpdate?.(task.id, { title: title.trim() });
-    }
-    if (description !== (task.description || "")) {
-      onUpdate?.(task.id, { description });
-    }
-    markClean();
-    onOpenChange(false);
-  }, [task.id, task.title, task.description, title, description, onUpdate, markClean, onOpenChange]);
 
   const handleDrawerClose = (newOpen: boolean) => {
     if (newOpen) return;
