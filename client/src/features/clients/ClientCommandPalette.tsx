@@ -55,7 +55,6 @@ const SECTION_ICONS: Record<string, typeof LayoutDashboard> = {
   divisions: Layers,
   activity: Activity,
   notes: StickyNote,
-  documents: FileText,
   reports: BarChart3,
   approvals: ClipboardCheck,
   messages: MessageSquare,
