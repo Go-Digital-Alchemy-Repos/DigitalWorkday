@@ -777,8 +777,8 @@ export function TaskDetailDrawer({
   }, [task?.id, task?.title, task?.description, title, description, onUpdate, markClean, onOpenChange]);
 
   const drawerContentClass = isMobile 
-    ? "w-full overflow-y-auto p-0" 
-    : "w-full sm:max-w-2xl overflow-y-auto p-0";
+    ? "w-full flex flex-col h-full p-0 overflow-hidden" 
+    : "w-full sm:max-w-2xl flex flex-col h-full p-0 overflow-hidden";
   const drawerPadding = isMobile ? "px-4 py-3" : "px-6 py-4";
   const drawerBodyPadding = isMobile ? "px-4 py-4" : "px-6 py-6";
 
@@ -789,13 +789,14 @@ export function TaskDetailDrawer({
           className={drawerContentClass}
           data-testid="task-detail-drawer-error"
         >
-          <SheetHeader className={cn("sticky top-0 z-10 bg-background border-b border-border", drawerPadding)}>
+          <SheetHeader className={cn("shrink-0 bg-background border-b border-border", drawerPadding)}>
             <SheetDescription className="sr-only">Error loading task</SheetDescription>
             <div className="flex items-center justify-between">
               <SheetTitle className="text-destructive">Error</SheetTitle>
               <Button
                 variant="ghost"
                 size="icon"
+                className="h-8 w-8"
                 onClick={() => onOpenChange(false)}
                 aria-label="Close drawer"
                 data-testid="button-close-drawer"
@@ -804,7 +805,7 @@ export function TaskDetailDrawer({
               </Button>
             </div>
           </SheetHeader>
-          <div className="flex flex-col items-center justify-center py-12 px-6 text-center">
+          <div className="flex-1 flex flex-col items-center justify-center py-12 px-6 text-center">
             <div className="text-muted-foreground mb-4">Failed to load task details</div>
             <Button variant="outline" onClick={() => onOpenChange(false)}>
               Close
@@ -822,7 +823,7 @@ export function TaskDetailDrawer({
           className={drawerContentClass}
           data-testid="task-detail-drawer-loading"
         >
-          <SheetHeader className={cn("sticky top-0 z-10 bg-background border-b border-border", drawerPadding)}>
+          <SheetHeader className={cn("shrink-0 bg-background border-b border-border", drawerPadding)}>
             <SheetDescription className="sr-only">Loading task details</SheetDescription>
             <div className="flex items-center justify-between">
               <SheetTitle className="sr-only">Loading Task</SheetTitle>
@@ -830,6 +831,7 @@ export function TaskDetailDrawer({
               <Button
                 variant="ghost"
                 size="icon"
+                className="h-8 w-8"
                 onClick={() => onOpenChange(false)}
                 aria-label="Close drawer"
                 data-testid="button-close-drawer"
@@ -838,7 +840,9 @@ export function TaskDetailDrawer({
               </Button>
             </div>
           </SheetHeader>
-          <TaskDrawerSkeleton />
+          <div className="flex-1 overflow-y-auto">
+            <TaskDrawerSkeleton />
+          </div>
         </SheetContent>
       </Sheet>
     );
@@ -1131,16 +1135,18 @@ export function TaskDetailDrawer({
 
           <Separator />
 
-          <FormFieldWrapper label="Description">
-            <RichTextEditor
-              value={description}
-              onChange={handleDescriptionChange}
-              onBlur={handleDescriptionBlur}
-              placeholder="Add a description... Type @ to mention someone"
-              minHeight="100px"
-              users={mentionUsers}
-              data-testid="textarea-description"
-            />
+          <FormFieldWrapper label="Description" className="overflow-hidden">
+            <div className="max-w-full overflow-hidden">
+              <RichTextEditor
+                value={description}
+                onChange={handleDescriptionChange}
+                onBlur={handleDescriptionBlur}
+                placeholder="Add a description... Type @ to mention someone"
+                minHeight="100px"
+                users={mentionUsers}
+                data-testid="textarea-description"
+              />
+            </div>
           </FormFieldWrapper>
 
           <Separator />
