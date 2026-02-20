@@ -156,13 +156,97 @@ router.post("/:clientId/users/invite", async (req, res) => {
   }
 });
 
-// Update client user access level
+// Create a client portal user directly (with password, no invite flow)
+router.post("/:clientId/users/create", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const { clientId } = req.params;
+
+    const schema = z.object({
+      email: z.string().email("Valid email is required"),
+      firstName: z.string().min(1, "First name is required"),
+      lastName: z.string().optional().default(""),
+      password: z.string().min(8, "Password must be at least 8 characters"),
+      accessLevel: z.enum(["viewer", "collaborator"]).default("viewer"),
+    });
+
+    const data = schema.parse(req.body);
+
+    const client = tenantId
+      ? await storage.getClientByIdAndTenant(clientId, tenantId)
+      : await storage.getClient(clientId);
+
+    if (!client) {
+      throw AppError.notFound("Client");
+    }
+
+    const existingUser = await storage.getUserByEmail(data.email);
+    if (existingUser) {
+      const existingAccess = await storage.getClientUserAccessByUserAndClient(
+        existingUser.id,
+        clientId
+      );
+      if (existingAccess) {
+        throw AppError.conflict("A user with this email already has access to this client");
+      }
+      throw AppError.conflict("A user with this email already exists. Use the invite flow to grant them access.");
+    }
+
+    const passwordHash = await hashPassword(data.password);
+
+    const user = await storage.createUser({
+      tenantId: client.tenantId,
+      email: data.email,
+      name: `${data.firstName} ${data.lastName}`.trim(),
+      firstName: data.firstName,
+      lastName: data.lastName || null,
+      passwordHash,
+      role: UserRole.CLIENT,
+      isActive: true,
+    });
+
+    await storage.addClientUserAccess({
+      workspaceId: client.workspaceId,
+      clientId,
+      userId: user.id,
+      accessLevel: data.accessLevel as "viewer" | "collaborator",
+    });
+
+    res.status(201).json({
+      message: "Portal user created successfully",
+      user: {
+        id: user.id,
+        email: user.email,
+        name: user.name,
+        firstName: user.firstName,
+        lastName: user.lastName,
+      },
+    });
+  } catch (error: any) {
+    if (error?.code === "23505") {
+      return res.status(409).json({ error: "A user with this email already exists" });
+    }
+    return handleRouteError(res, error, "POST /:clientId/users/create", req);
+  }
+});
+
+// Update client user (access level, name, and optionally password)
 router.patch("/:clientId/users/:userId", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const { clientId, userId } = req.params;
-    const { accessLevel } = req.body;
-    
+
+    const schema = z.object({
+      accessLevel: z.enum(["viewer", "collaborator"]).optional(),
+      firstName: z.string().min(1).optional(),
+      lastName: z.string().optional(),
+      password: z.string().min(8, "Password must be at least 8 characters").optional(),
+    }).refine(data => Object.keys(data).length > 0, {
+      message: "At least one field must be provided",
+    });
+
+    const data = schema.parse(req.body);
+
     // Verify client belongs to tenant
     if (tenantId) {
       const client = await storage.getClientByIdAndTenant(clientId, tenantId);
@@ -170,13 +254,55 @@ router.patch("/:clientId/users/:userId", async (req, res) => {
         throw AppError.notFound("Client");
       }
     }
-    
-    const access = await storage.updateClientUserAccess(clientId, userId, { accessLevel });
-    if (!access) {
+
+    const existingUser = await storage.getUser(userId);
+    if (!existingUser || existingUser.role !== UserRole.CLIENT) {
+      throw AppError.notFound("Portal user");
+    }
+
+    const existingAccess = await storage.getClientUserAccessByUserAndClient(userId, clientId);
+    if (!existingAccess) {
       throw AppError.notFound("Client user access");
     }
-    
-    res.json(access);
+
+    if (data.accessLevel) {
+      const access = await storage.updateClientUserAccess(clientId, userId, { accessLevel: data.accessLevel });
+      if (!access) {
+        throw AppError.notFound("Client user access");
+      }
+    }
+
+    const userUpdates: Record<string, any> = {};
+    if (data.firstName !== undefined) {
+      userUpdates.firstName = data.firstName;
+      userUpdates.name = `${data.firstName} ${data.lastName ?? existingUser.lastName ?? ""}`.trim();
+    }
+    if (data.lastName !== undefined) {
+      userUpdates.lastName = data.lastName;
+      if (!data.firstName) {
+        userUpdates.name = `${existingUser.firstName ?? ""} ${data.lastName}`.trim();
+      }
+    }
+    if (data.password) {
+      userUpdates.passwordHash = await hashPassword(data.password);
+    }
+
+    let updatedUser = existingUser;
+    if (Object.keys(userUpdates).length > 0) {
+      const result = await storage.updateUser(userId, userUpdates);
+      if (result) updatedUser = result;
+    }
+
+    res.json({
+      message: "Portal user updated successfully",
+      user: {
+        id: updatedUser.id,
+        email: updatedUser.email,
+        name: updatedUser.name,
+        firstName: updatedUser.firstName,
+        lastName: updatedUser.lastName,
+      },
+    });
   } catch (error) {
     return handleRouteError(res, error, "PATCH /:clientId/users/:userId", req);
   }
