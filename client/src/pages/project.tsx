@@ -475,10 +475,56 @@ export default function ProjectPage() {
   };
 
   const handleCreateTask = async (data: any) => {
+    const { tagIds, subtaskTitles, queuedFiles, ...taskData } = data;
     return new Promise<void>((resolve, reject) => {
-      createTaskMutation.mutate({ ...data, projectId: projectId! }, {
-        onSuccess: () => {
+      createTaskMutation.mutate({ ...taskData, projectId: projectId! }, {
+        onSuccess: async (createdTask: any) => {
           toast({ title: "Task created successfully" });
+
+          const postOps: Promise<any>[] = [];
+
+          if (tagIds && tagIds.length > 0) {
+            for (const tagId of tagIds) {
+              postOps.push(
+                apiRequest("POST", `/api/tasks/${createdTask.id}/tags`, { tagId }).catch((err) =>
+                  console.warn("Failed to add tag:", err)
+                )
+              );
+            }
+          }
+
+          if (subtaskTitles && subtaskTitles.length > 0) {
+            for (const title of subtaskTitles) {
+              postOps.push(
+                apiRequest("POST", `/api/tasks/${createdTask.id}/subtasks`, { title }).catch((err) =>
+                  console.warn("Failed to create subtask:", err)
+                )
+              );
+            }
+          }
+
+          if (queuedFiles && queuedFiles.length > 0) {
+            for (const file of queuedFiles as File[]) {
+              const formData = new FormData();
+              formData.append("file", file);
+              postOps.push(
+                fetch(`/api/projects/${projectId}/tasks/${createdTask.id}/attachments/upload`, {
+                  method: "POST",
+                  body: formData,
+                  credentials: "include",
+                }).catch((err) =>
+                  console.warn("Failed to upload attachment:", err)
+                )
+              );
+            }
+          }
+
+          if (postOps.length > 0) {
+            await Promise.allSettled(postOps);
+            queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
+            queryClient.invalidateQueries({ queryKey: ["/api/tasks", createdTask.id] });
+          }
+
           resolve();
         },
         onError: (error) => {
@@ -1044,6 +1090,8 @@ export default function ProjectPage() {
         defaultSectionId={selectedSectionId}
         tenantUsers={tenantUsers}
         isLoading={createTaskMutation.isPending}
+        projectId={projectId}
+        workspaceId={project?.workspaceId}
       />
       {project && (
         <ProjectSettingsSheet

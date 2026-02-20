@@ -13,6 +13,7 @@ export interface CreateTaskData {
   dueDate?: string | null;
   personalSectionId?: string;
   assigneeIds?: string[];
+  estimateMinutes?: number | null;
 }
 
 export interface CreatePersonalTaskData {
