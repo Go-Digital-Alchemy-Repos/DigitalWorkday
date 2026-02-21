@@ -331,43 +331,43 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab, onUpdate }: 
       </div>
 
       <div className="bg-muted/30 rounded-lg p-4 border border-border/50">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Quick Actions</h3>
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">Quick Actions</h3>
         <div className="flex flex-wrap gap-2">
           <Link href={`/clients/${clientId}`}>
-            <Button variant="outline" size="sm" data-testid="button-quick-add-project">
+            <Button variant="outline" size="sm" data-testid="button-quick-add-project" className="bg-background hover:bg-muted">
               <FolderKanban className="h-4 w-4 mr-2 text-purple-500" />
               Add Project
             </Button>
           </Link>
-          <Button variant="outline" size="sm" onClick={() => onNavigateTab("contacts")} data-testid="button-quick-add-contact">
+          <Button variant="outline" size="sm" onClick={() => onNavigateTab("contacts")} data-testid="button-quick-add-contact" className="bg-background hover:bg-muted">
             <Users className="h-4 w-4 mr-2 text-emerald-500" />
             Add Contact
           </Button>
-          <Button variant="outline" size="sm" onClick={() => onNavigateTab("notes")} data-testid="button-quick-add-note">
+          <Button variant="outline" size="sm" onClick={() => onNavigateTab("notes")} data-testid="button-quick-add-note" className="bg-background hover:bg-muted">
             <StickyNote className="h-4 w-4 mr-2 text-amber-500" />
             Add Note
           </Button>
           {crmFlags.clientMessaging && (
-            <Button variant="outline" size="sm" onClick={() => onNavigateTab("messages")} data-testid="button-quick-message-client">
+            <Button variant="outline" size="sm" onClick={() => onNavigateTab("messages")} data-testid="button-quick-message-client" className="bg-background hover:bg-muted">
               <MessageSquare className="h-4 w-4 mr-2 text-violet-500" />
               Message Client
             </Button>
           )}
           {crmFlags.files && (
-            <Button variant="outline" size="sm" data-testid="button-quick-upload-file">
+            <Button variant="outline" size="sm" data-testid="button-quick-upload-file" className="bg-background hover:bg-muted">
               <Upload className="h-4 w-4 mr-2 text-cyan-500" />
               Upload File
             </Button>
           )}
           {crmFlags.approvals && (
-            <Button variant="outline" size="sm" onClick={() => setShowApprovalDialog(true)} data-testid="button-quick-request-approval">
+            <Button variant="outline" size="sm" onClick={() => setShowApprovalDialog(true)} data-testid="button-quick-request-approval" className="bg-background hover:bg-muted">
               <ClipboardCheck className="h-4 w-4 mr-2 text-blue-500" />
               Request Approval
             </Button>
           )}
           {crmFlags.portal && (
             <Link href={`/clients/${clientId}`}>
-              <Button variant="outline" size="sm" data-testid="button-quick-invite-client">
+              <Button variant="outline" size="sm" data-testid="button-quick-invite-client" className="bg-background hover:bg-muted">
                 <UserPlus className="h-4 w-4 mr-2 text-orange-500" />
                 Invite to Portal
               </Button>

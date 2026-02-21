@@ -243,14 +243,15 @@ function QuickActions({ lastEntryId, onEditEntry, onStartTimer }: {
 }) {
   return (
     <div className="bg-muted/30 rounded-lg p-4 border border-border/50" data-testid="quick-actions">
-      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Quick Actions</h3>
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">Quick Actions</h3>
       <div className="flex flex-wrap gap-2">
         <Button 
           size="sm" 
           onClick={onStartTimer}
           data-testid="button-start-timer"
+          className="bg-background hover:bg-muted"
         >
-          <Play className="h-4 w-4 mr-1" />
+          <Play className="h-4 w-4 mr-1 text-blue-500" />
           Start Timer
         </Button>
         
@@ -260,15 +261,16 @@ function QuickActions({ lastEntryId, onEditEntry, onStartTimer }: {
             variant="outline" 
             onClick={() => onEditEntry(lastEntryId)}
             data-testid="button-edit-last-entry"
+            className="bg-background hover:bg-muted"
           >
-            <Edit className="h-4 w-4 mr-1" />
+            <Edit className="h-4 w-4 mr-1 text-amber-500" />
             Edit Last Entry
           </Button>
         )}
         
         <Link href="/my-calendar">
-          <Button size="sm" variant="outline" data-testid="button-view-calendar">
-            <Calendar className="h-4 w-4 mr-1" />
+          <Button size="sm" variant="outline" data-testid="button-view-calendar" className="bg-background hover:bg-muted">
+            <Calendar className="h-4 w-4 mr-1 text-purple-500" />
             My Calendar
           </Button>
         </Link>
