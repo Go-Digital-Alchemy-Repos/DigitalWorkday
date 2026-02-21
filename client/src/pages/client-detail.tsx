@@ -16,7 +16,19 @@ import {
   DialogHeader,
   DialogTitle,
   DialogTrigger,
+  DialogDescription,
+  DialogFooter,
 } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Sheet,
   SheetContent,
@@ -77,6 +89,10 @@ import {
   BarChart3,
   ClipboardCheck,
   MessageSquare,
+  KeyRound,
+  Copy,
+  Check,
+  ShieldCheck,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
@@ -279,6 +295,9 @@ export default function ClientDetailPage() {
   const [mailingSameAsPhysical, setMailingSameAsPhysical] = useState(true);
   const [portalInviteContact, setPortalInviteContact] = useState<ClientContact | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [convertToPortalOpen, setConvertToPortalOpen] = useState(false);
+  const [generatedCredentials, setGeneratedCredentials] = useState<{ email: string; password: string } | null>(null);
+  const [copiedField, setCopiedField] = useState<"email" | "password" | null>(null);
 
   const { user } = useAuth();
   const crmFlags = useCrmFlags();
@@ -512,6 +531,57 @@ export default function ClientDetailPage() {
     enabled: !!clientId,
   });
 
+  const generatePassword = () => {
+    const chars = "abcdefghijkmnopqrstuvwxyzABCDEFGHJKLMNPQRSTUVWXYZ23456789!@#$%";
+    let password = "";
+    for (let i = 0; i < 12; i++) {
+      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    }
+    return password;
+  };
+
+  const convertToPortalMutation = useMutation({
+    mutationFn: async () => {
+      const name = clientForm.getValues("primaryContactName") || "";
+      const email = clientForm.getValues("primaryContactEmail") || "";
+      if (!email) throw new Error("Primary contact must have an email address");
+      const nameParts = name.trim().split(/\s+/);
+      const firstName = nameParts[0] || email.split("@")[0];
+      const lastName = nameParts.slice(1).join(" ");
+      const password = generatePassword();
+      const res = await apiRequest("POST", `/api/clients/${clientId}/users/create`, {
+        email,
+        firstName,
+        lastName,
+        password,
+        accessLevel: "viewer",
+      });
+      await res.json();
+      return { email, password };
+    },
+    onSuccess: (credentials) => {
+      setGeneratedCredentials(credentials);
+      setConvertToPortalOpen(false);
+      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+      toast({ title: "Portal user created", description: "The primary contact now has portal access." });
+    },
+    onError: (error: Error) => {
+      setConvertToPortalOpen(false);
+      if (error.message.includes("already exists") || error.message.includes("already has access")) {
+        queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+        toast({ title: "This contact already has portal access", description: "Check the Portal Users section to manage their account." });
+      } else {
+        toast({ title: "Failed to create portal user", description: error.message, variant: "destructive" });
+      }
+    },
+  });
+
+  const copyToClipboard = (text: string, field: "email" | "password") => {
+    navigator.clipboard.writeText(text);
+    setCopiedField(field);
+    setTimeout(() => setCopiedField(null), 2000);
+  };
+
   const contactForm = useForm<CreateContactForm>({
     resolver: zodResolver(createContactSchema),
     defaultValues: {
@@ -560,6 +630,11 @@ export default function ClientDetailPage() {
       tags: client.tags || [],
     } : undefined,
   });
+
+  const primaryContactEmail = clientForm.watch("primaryContactEmail");
+  const primaryContactAlreadyPortalUser = portalUsersLoaded && primaryContactEmail
+    ? portalUsers.some((pu) => pu.user.email.toLowerCase() === primaryContactEmail.toLowerCase())
+    : false;
 
   const projectForm = useForm<CreateProjectForm>({
     resolver: zodResolver(createProjectSchema),
@@ -1281,6 +1356,27 @@ export default function ClientDetailPage() {
                           </FormItem>
                         )}
                       />
+
+                      {primaryContactAlreadyPortalUser ? (
+                        <div className="flex items-center gap-2 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 px-3 py-2" data-testid="badge-portal-user-active">
+                          <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+                          <span className="text-sm text-green-700 dark:text-green-300">Portal access enabled</span>
+                        </div>
+                      ) : primaryContactEmail ? (
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full gap-2"
+                          disabled={!portalUsersLoaded}
+                          onClick={() => setConvertToPortalOpen(true)}
+                          data-testid="button-convert-to-portal-user"
+                        >
+                          <UserPlus className="h-4 w-4" />
+                          Convert to Portal User
+                        </Button>
+                      ) : null}
+
                       <div className="grid grid-cols-2 gap-4">
                         <FormField
                           control={clientForm.control}
@@ -2286,6 +2382,107 @@ export default function ClientDetailPage() {
         onOpenChange={setTimerDrawerOpen}
         initialClientId={clientId}
       />
+
+      <AlertDialog open={convertToPortalOpen} onOpenChange={setConvertToPortalOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Convert to Portal User</AlertDialogTitle>
+            <AlertDialogDescription>
+              This will create a client portal account for{" "}
+              <span className="font-medium text-foreground">{clientForm.getValues("primaryContactName") || clientForm.getValues("primaryContactEmail")}</span>{" "}
+              ({clientForm.getValues("primaryContactEmail")}). They will be able to log in to the client portal to view projects and tasks. A secure password will be auto-generated for you to share.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-convert-portal">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => convertToPortalMutation.mutate()}
+              disabled={convertToPortalMutation.isPending}
+              data-testid="button-confirm-convert-portal"
+            >
+              {convertToPortalMutation.isPending ? (
+                <>
+                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <UserPlus className="h-4 w-4 mr-2" />
+                  Create Portal User
+                </>
+              )}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <Dialog open={!!generatedCredentials} onOpenChange={(open) => { if (!open) setGeneratedCredentials(null); }}>
+        <DialogContent className="sm:max-w-md" data-testid="dialog-portal-credentials">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <KeyRound className="h-5 w-5 text-primary" />
+              Portal User Created
+            </DialogTitle>
+            <DialogDescription>
+              Save these credentials now. The password cannot be viewed again after closing this dialog.
+            </DialogDescription>
+          </DialogHeader>
+          {generatedCredentials && (
+            <div className="space-y-4 py-2">
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Email</label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={generatedCredentials.email}
+                    className="font-mono text-sm bg-muted"
+                    data-testid="input-credentials-email"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => copyToClipboard(generatedCredentials.email, "email")}
+                    data-testid="button-copy-email"
+                  >
+                    {copiedField === "email" ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">Password</label>
+                <div className="flex items-center gap-2">
+                  <Input
+                    readOnly
+                    value={generatedCredentials.password}
+                    className="font-mono text-sm bg-muted"
+                    data-testid="input-credentials-password"
+                  />
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    onClick={() => copyToClipboard(generatedCredentials.password, "password")}
+                    data-testid="button-copy-password"
+                  >
+                    {copiedField === "password" ? <Check className="h-4 w-4 text-green-500" /> : <Copy className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+              <div className="rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/30 p-3">
+                <p className="text-sm text-amber-700 dark:text-amber-300">
+                  Share these credentials securely with the contact. They can change their password after logging in. You can also reset their password from the Portal Users section.
+                </p>
+              </div>
+            </div>
+          )}
+          <DialogFooter>
+            <Button onClick={() => setGeneratedCredentials(null)} data-testid="button-close-credentials">
+              Done
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
