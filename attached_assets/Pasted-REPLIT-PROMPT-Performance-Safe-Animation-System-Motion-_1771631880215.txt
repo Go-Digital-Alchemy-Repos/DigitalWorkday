@@ -1,0 +1,223 @@
+REPLIT PROMPT — Performance-Safe Animation System (Motion Tokens + Utilities + Shadcn Integration)
+DigitalWorkday
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE:
+Add a “Performance-Safe Animation System” that upgrades the app’s polish without measurable slowdown.
+The system must:
+- Use ONLY transform + opacity (GPU-friendly) for motion
+- Avoid layout/reflow animations (height/width/top/left/margin)
+- Provide reusable motion tokens (durations/easings) and utility classes
+- Integrate cleanly with shadcn/ui components and existing Tailwind setup
+- Respect prefers-reduced-motion globally
+- Provide a small set of tasteful micro-interactions (Slack/Apple-like)
+- Be easy to apply consistently across the app
+
+NON-DESTRUCTIVE RULES:
+- Do not change business logic.
+- Do not add heavy animation libraries unless already present.
+- Prefer CSS/Tailwind utilities; use minimal JS only where necessary.
+- Gate any optional “extra polish” behind a feature flag: MOTION_POLISH_V1 (default true dev, false prod until verified).
+- Ensure no animation is applied to large lists by default (tasks/chat timelines).
+
+UI CONSTRAINTS:
+- shadcn/ui (Radix primitives + Tailwind)
+- Components live in client/src/components/ui/
+- Tailwind utilities preferred
+
+DELIVERABLES:
+1) Motion tokens (durations/easings) standardized
+2) Tailwind-safe motion utility classes and keyframes
+3) Reduced motion support and audit
+4) A small set of safe micro-interactions applied to key UI surfaces
+5) Documentation and guidance for engineers
+
+================================================================================
+PHASE 1 — Global Motion Tokens (CSS Variables)
+================================================================================
+
+1) Create a new CSS file:
+client/src/styles/motion.css
+
+Define motion tokens:
+- durations:
+  --motion-fast: 120ms
+  --motion-base: 180ms
+  --motion-slow: 240ms
+- easings:
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1)          (premium ease-out)
+  --ease-in-out: cubic-bezier(0.4, 0, 0.2, 1)         (standard)
+  --ease-springy: cubic-bezier(0.16, 1, 0.3, 1)       (snappy but safe)
+
+2) Add a global reduced-motion policy:
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { animation: none !important; transition: none !important; scroll-behavior: auto !important; }
+}
+
+3) Import motion.css once in the app entry (where global styles are loaded):
+- ensure it loads after base Tailwind but before app overrides if needed
+
+================================================================================
+PHASE 2 — Tailwind Utilities: Performance-Safe Transitions Only
+================================================================================
+
+Add a small set of utilities (choose best approach based on current Tailwind v4 config):
+
+A) If Tailwind config file exists and supports theme extension:
+- extend transitionProperty:
+  - 'safe': 'transform, opacity'
+- add durations using CSS vars:
+  - duration-safe -> var(--motion-base)
+- add timing functions:
+  - ease-premium -> var(--ease-out)
+- define keyframes/animations for:
+  - fade-in
+  - slide-down (transform translateY + opacity)
+  - slide-up
+  - pop (scale + opacity)
+  - subtle-shimmer (OPTIONAL; only for skeletons)
+
+B) If config is minimal (Tailwind v4 with CSS-first):
+- create utility classes in:
+  client/src/styles/motion-utilities.css
+with:
+  .transition-safe { transition-property: transform, opacity; }
+  .duration-fast { transition-duration: var(--motion-fast); }
+  .duration-base { transition-duration: var(--motion-base); }
+  .duration-slow { transition-duration: var(--motion-slow); }
+  .ease-out-premium { transition-timing-function: var(--ease-out); }
+  .ease-in-out { transition-timing-function: var(--ease-in-out); }
+
+And animation helpers:
+  .animate-fade-in { animation: fade-in var(--motion-base) var(--ease-out) both; }
+  .animate-slide-down { animation: slide-down var(--motion-base) var(--ease-out) both; }
+  .animate-pop-in { animation: pop-in var(--motion-fast) var(--ease-out) both; }
+
+Keyframes MUST ONLY use opacity + transform.
+
+Ensure these utilities are included in Tailwind content scanning and not purged.
+
+================================================================================
+PHASE 3 — “Motion Primitives” Helpers (Optional, Lightweight)
+================================================================================
+
+Create:
+client/src/lib/motion.ts
+
+Export:
+- prefersReducedMotion(): boolean (memoized)
+- motionClass(baseClass: string, motionClass: string): string
+  - returns motionClass only if not reduced motion and feature flag enabled
+- a small map:
+  Motion = {
+    panelEnter: 'animate-slide-down',
+    fadeIn: 'animate-fade-in',
+    popIn: 'animate-pop-in',
+    hoverLift: 'transition-safe duration-fast ease-out-premium hover:-translate-y-0.5',
+    press: 'active:scale-[0.98] transition-safe duration-fast ease-out-premium',
+  }
+
+No runtime animation frameworks.
+
+================================================================================
+PHASE 4 — Integrate With Key Components (Small, High ROI)
+================================================================================
+
+Apply motion ONLY to targeted components that do not render 50+ items at once.
+
+1) Dropdowns / Popovers / Menus
+- For Radix content components:
+  - add data-state based classes:
+    - data-[state=open]:animate-fade-in
+    - data-[state=open]:animate-slide-down (for top panels)
+  - ensure transform origin is set appropriately
+
+Targets:
+- Notification panel
+- Command palette dialog
+- Dropdown menus
+- Select content
+- Dialog content
+
+2) Buttons (micro-interaction)
+Update shadcn Button component:
+client/src/components/ui/button.tsx
+- Add safe press feedback:
+  - transition-safe duration-fast ease-out-premium
+  - active:scale-[0.98]
+- Add hoverLift only for secondary/ghost? (keep subtle and consistent)
+
+3) Cards (Control Center tiles only)
+- Add hover lift to tile cards only:
+  - hover:-translate-y-0.5
+  - hover:shadow-sm (OK if small; avoid heavy blur)
+  - transition-safe duration-base ease-out-premium
+Do NOT apply to long list item cards by default.
+
+4) Drawers / Sheets
+- Add slide-in animations via transform (Radix already animates sometimes; align with tokens)
+- Ensure no height animations
+- Use translateX / translateY and opacity only
+
+Feature flag:
+- Apply these additions only when MOTION_POLISH_V1 enabled, to allow rollback.
+
+================================================================================
+PHASE 5 — Guardrails: Prevent Bad Animations
+================================================================================
+
+1) Add a simple lint-like check (best effort):
+- Search for suspicious transitions:
+  - transition-all
+  - animate-[height|width|top|left|margin]
+- Add a docs warning and optionally a CI grep step:
+  - “disallow transition-all in client code except approved components”
+If CI is too rigid, add a local script:
+script/auditMotionSafety.ts
+- prints occurrences of transition-all and non-safe keyframes usage
+
+2) Add a short dev doc snippet and link it in README or docs/UX:
+- “Use transition-safe not transition-all”
+- “Only animate transform/opacity”
+- “Don’t animate lists”
+
+================================================================================
+PHASE 6 — Documentation
+================================================================================
+
+Create:
+docs/UX/motion-system.md
+
+Include:
+- Motion tokens (durations/easings)
+- Allowed properties (transform, opacity)
+- Utility class recipes
+- Where motion is applied by default
+- How to add motion to a new component safely
+- Reduced motion behavior
+- Performance guidelines:
+  - avoid animating 50+ elements
+  - avoid big box-shadows/backdrop-filter
+  - avoid continuous animations
+
+Update Docs Library entry in Super Admin (if applicable).
+
+================================================================================
+PHASE 7 — Verification
+================================================================================
+
+1) Run build:
+npm run build
+2) Run tests:
+npm test / vitest (as configured)
+3) Manual quick QA checklist (document in docs/UX/motion-system.md):
+- reduced motion disables transitions
+- menus/panels animate smoothly
+- no layout jank in task list and chat timeline
+- mobile feels snappy
+
+OUTPUT:
+- list of files added/changed
+- confirm no layout property animations were added
+- test results
