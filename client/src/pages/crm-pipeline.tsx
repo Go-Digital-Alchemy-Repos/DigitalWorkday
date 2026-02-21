@@ -432,10 +432,10 @@ export default function CrmPipelinePage() {
               className="w-48"
               data-testid="select-pipeline-owner"
             >
-              <SelectValue placeholder="All Project Managers" />
+              <SelectValue placeholder="All PMs" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">All Project Managers</SelectItem>
+              <SelectItem value="__all__">All PMs</SelectItem>
               {users.map((user) => (
                 <SelectItem key={user.id} value={String(user.id)}>
                   {user.name}
