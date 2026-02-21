@@ -94,7 +94,7 @@ import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { AssetLibraryPanel } from "@/features/assetLibrary/AssetLibraryPanel";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
-import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState, ControlCenterSection } from "@/features/clients";
+import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, CONTROL_CENTER_CHILD_IDS, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState, ControlCenterSection } from "@/features/clients";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
 import { ClientNotesTab } from "@/components/client-notes-tab";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
@@ -295,10 +295,22 @@ export default function ClientDetailPage() {
   const crmFlags = useCrmFlags();
   const featureFlags = useFeatureFlags();
 
-  const visibleSections = useMemo(
+  const allVisibleSections = useMemo(
     () => getVisibleSections(crmFlags, featureFlags),
     [crmFlags, featureFlags],
   );
+
+  const hasControlCenter = allVisibleSections.some((s) => s.id === "control-center");
+
+  const tabBarSections = useMemo(
+    () =>
+      hasControlCenter
+        ? allVisibleSections.filter((s) => !CONTROL_CENTER_CHILD_IDS.has(s.id))
+        : allVisibleSections,
+    [allVisibleSections, hasControlCenter],
+  );
+
+  const visibleSections = allVisibleSections;
   const { activeSection, setActiveSection } = useClientProfileSection(visibleSections, clientId || "");
   const cmdPalette = useClientCommandPaletteState();
   const useV2Layout = featureFlags.clientProfileLayoutV2;
@@ -771,28 +783,44 @@ export default function ClientDetailPage() {
       </div>
 
       <div className="flex-1 overflow-auto">
+        {useV2Layout && (
+          <div className="px-6 py-4 border-b border-border">
+            <ClientSectionSwitcher
+              sections={tabBarSections}
+              activeSection={CONTROL_CENTER_CHILD_IDS.has(activeSection) ? "control-center" : activeSection}
+              onSectionChange={(id) => {
+                setActiveSection(id);
+                setActiveTab(id);
+              }}
+              badgeCounts={{
+                contacts: client.contacts?.length || 0,
+                projects: client.projects?.length || 0,
+                divisions: divisions.length + childClients.length,
+              }}
+            />
+          </div>
+        )}
+
+        {useV2Layout && activeSection === "control-center" && (
+          <div className="overflow-auto">
+            <ControlCenterSection
+              clientId={clientId || ""}
+              onNavigateTab={(tab) => {
+                setActiveTab(tab);
+                setActiveSection(tab);
+              }}
+            />
+          </div>
+        )}
+
         <Tabs value={useV2Layout ? activeSection : activeTab} onValueChange={(val) => {
           if (useV2Layout) {
             setActiveSection(val);
           }
           setActiveTab(val);
-        }} className="h-full">
-          <div className="px-6 py-4 border-b border-border">
-            {useV2Layout ? (
-              <ClientSectionSwitcher
-                sections={visibleSections}
-                activeSection={activeSection}
-                onSectionChange={(id) => {
-                  setActiveSection(id);
-                  setActiveTab(id);
-                }}
-                badgeCounts={{
-                  contacts: client.contacts?.length || 0,
-                  projects: client.projects?.length || 0,
-                  divisions: divisions.length + childClients.length,
-                }}
-              />
-            ) : (
+        }} className={useV2Layout && activeSection === "control-center" ? "hidden" : "h-full"}>
+          {!useV2Layout && (
+            <div className="px-6 py-4 border-b border-border">
               <TabsList>
                 <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
                 <TabsTrigger value="contacts" data-testid="tab-contacts">
@@ -842,18 +870,19 @@ export default function ClientDetailPage() {
                   </TabsTrigger>
                 )}
               </TabsList>
-            )}
-          </div>
+            </div>
+          )}
 
-          <TabsContent value="control-center" className="overflow-auto">
-            <ControlCenterSection
-              clientId={clientId || ""}
-              onNavigateTab={(tab) => {
-                setActiveTab(tab);
-                if (useV2Layout) setActiveSection(tab);
-              }}
-            />
-          </TabsContent>
+          {!useV2Layout && (
+            <TabsContent value="control-center" className="overflow-auto">
+              <ControlCenterSection
+                clientId={clientId || ""}
+                onNavigateTab={(tab) => {
+                  setActiveTab(tab);
+                }}
+              />
+            </TabsContent>
+          )}
 
           <TabsContent value="overview" className="p-6 overflow-auto">
             {crmFlags.client360 && (
