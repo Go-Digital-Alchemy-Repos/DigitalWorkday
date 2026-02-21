@@ -1,0 +1,205 @@
+REPLIT PROMPT — Premium Notification Panel Motion (GPU-safe + Reduced Motion)
+DigitalWorkday
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+PREREQUISITE:
+Assume the “Performance-Safe Animation System” prompt is already implemented:
+- motion tokens (motion.css)
+- safe utilities (transition-safe, animate-slide-down, animate-fade-in, animate-pop-in)
+- reduced-motion global guard
+- MOTION_POLISH_V1 feature flag (or equivalent)
+
+OBJECTIVE:
+Upgrade the Notification Bell + slide-down Notification Panel to feel Slack/Apple-like:
+- panel opens with premium slide-down + fade
+- new notification arrival has subtle “pop” highlight (not jarring)
+- bell has micro-interaction (gentle bounce on new notification, not continuous)
+- unread badge gently “pop-in” on change
+- list items animate in on insert (only for new items, not for initial bulk load)
+- all animations are GPU-safe: transform + opacity only
+- respects prefers-reduced-motion and feature flag
+
+CONSTRAINTS:
+- shadcn/ui only
+- no heavy animation libs
+- do NOT add animation to long lists in a way that triggers 50+ concurrent animations
+- no height/width animations
+- no transition-all
+- avoid heavy box-shadow animation
+
+FEATURE FLAGS:
+- NOTIFICATIONS_V2 (panel exists)
+- MOTION_POLISH_V1 (controls motion)
+- NOTIFICATION_MOTION_V1 (optional, default true dev, false prod until verified)
+
+DELIVERABLES:
+1) Panel open/close motion via Radix data-state classes
+2) Bell micro-bounce on new notifications
+3) Unread badge micro-pop on count increase
+4) New-item arrival animation (only on new items)
+5) Subtle “new” highlight that fades (opacity only)
+6) Docs update: docs/UX/notifications-motion.md
+
+================================================================================
+PHASE 1 — Identify Notification Components and Add Motion Hooks
+================================================================================
+
+1) Locate Notification UI entry points:
+- NotificationBell component
+- NotificationPanel/Popover content component
+- NotificationItem row component
+- Notification state handling (React Query + socket events)
+
+2) Ensure components are structured so motion can be applied without re-render loops.
+
+================================================================================
+PHASE 2 — Panel Open/Close Motion (Popover/Sheet Content)
+================================================================================
+
+In the Notification panel container (Radix PopoverContent or SheetContent):
+Add classes (only when MOTION_POLISH_V1 && NOTIFICATION_MOTION_V1):
+
+- Base:
+  transition-safe duration-base ease-out-premium will-change-transform will-change-opacity
+
+- State-based:
+  data-[state=open]:animate-slide-down
+  data-[state=closed]:animate-fade-out   (create if missing; opacity + slight translateY up)
+
+If fade-out keyframe does not exist, add in motion system:
+@keyframes fade-out { from { opacity: 1 } to { opacity: 0 } }
+Optionally:
+@keyframes slide-up-fade { from { opacity:1; transform: translateY(0)} to { opacity:0; transform: translateY(-6px)} }
+Use ONLY transform + opacity.
+
+Ensure panel origin:
+- origin-top-right for desktop bell anchor
+- origin-bottom for mobile sheet if used
+
+Do NOT animate height.
+
+================================================================================
+PHASE 3 — Bell Micro-Interaction (On New Notification)
+================================================================================
+
+Goal: a single, subtle bounce when a new notification arrives.
+
+1) Add a tiny keyframe (transform only):
+@keyframes bell-bounce {
+  0%   { transform: translateY(0) rotate(0deg); }
+  20%  { transform: translateY(-1px) rotate(-6deg); }
+  40%  { transform: translateY(0) rotate(6deg); }
+  60%  { transform: translateY(-1px) rotate(-4deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+
+Add utility:
+.animate-bell-bounce { animation: bell-bounce var(--motion-base) var(--ease-out) both; }
+
+2) In NotificationBell.tsx:
+- Track previous unread count in a ref
+- When unreadCount increases (and not initial load):
+  - set local state “pulseBell” true for ~250ms
+  - apply class animate-bell-bounce to the Bell icon wrapper
+- Ensure it does not re-trigger repeatedly during coalesced updates:
+  - throttle to once per 2 seconds OR only when delta >= 1 AND lastTrigger > 1500ms
+
+3) Respect reduced motion:
+- if prefersReducedMotion() true, do nothing
+
+================================================================================
+PHASE 4 — Unread Badge Pop (Count Change)
+================================================================================
+
+Add keyframe (transform + opacity only):
+@keyframes badge-pop {
+  0%   { transform: scale(0.9); opacity: 0.8; }
+  60%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.animate-badge-pop { animation: badge-pop var(--motion-fast) var(--ease-out) both; }
+
+In NotificationBell:
+- When unreadCount changes upward:
+  - apply animate-badge-pop to Badge element
+- When it goes to 0:
+  - badge disappears (no animation required)
+
+================================================================================
+PHASE 5 — New Notification Item Arrival Animation (Only Inserts)
+================================================================================
+
+We must avoid animating the whole list on initial render.
+
+1) In notifications state handling:
+- Keep a Set of “seenNotificationIds” in a ref
+- On initial list fetch:
+  - mark all fetched IDs as seen (no animations)
+- On socket event NOTIFICATIONS.NEW:
+  - when inserting into cache/list:
+    - mark the new ID as “newlyArrived”
+    - schedule removal from newlyArrived after 3 seconds
+
+2) In NotificationItem row:
+If id is in newlyArrived:
+- add classes:
+  animate-pop-in (or animate-fade-in + slight translateY)
+  and a subtle highlight overlay:
+    relative
+    after:absolute after:inset-0 after:rounded-md
+    after:bg-primary/10 after:opacity-100
+    after:transition-safe after:duration-slow after:ease-out-premium
+Then in effect (or by class toggling), fade overlay opacity to 0 after ~900ms.
+IMPORTANT:
+- Only animate overlay opacity (no layout)
+- Do not animate background-color directly; use overlay opacity.
+
+3) Ensure only the inserted item animates; not other items.
+
+================================================================================
+PHASE 6 — Panel “Feels Premium” Polish (Subtle)
+================================================================================
+
+1) Panel header:
+- When opening, header can fade-in with the panel (no separate animation)
+
+2) Hover interactions:
+- Notification row hover:
+  transition-safe duration-fast ease-out-premium
+  hover:translate-x-0.5 (very subtle)
+Avoid heavy shadow changes.
+
+3) Click feedback:
+- active:scale-[0.99] for row (optional)
+
+================================================================================
+PHASE 7 — Mobile Sheet Motion (If Notification uses Sheet on mobile)
+================================================================================
+
+If mobile uses Sheet:
+- Use translateY/opacity only
+- Keep durations short (180ms)
+- Ensure no nested animations stack excessively
+
+================================================================================
+PHASE 8 — Tests & Docs
+================================================================================
+
+1) Add a small unit test (if feasible) for “bell bounce triggers only on increase”
+2) Ensure reduced motion disables:
+- bell bounce
+- badge pop
+- new item pop
+(Panel open/close should also disable due to global reduced-motion rule.)
+
+3) Write docs/UX/notifications-motion.md:
+- what animates
+- triggers
+- guardrails
+- how to extend safely
+
+OUTPUT:
+- list of files changed
+- confirm all animations are transform/opacity only
+- confirm reduced-motion compliance

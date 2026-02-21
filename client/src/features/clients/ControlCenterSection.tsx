@@ -503,10 +503,11 @@ function HealthSnapshotContent({ clientId }: { clientId: string }) {
 }
 
 function OperationalAlertsContent({ clientId }: { clientId: string }) {
-  const { data: tickets = [] } = useQuery<any[]>({
+  const { data: rawTickets } = useQuery<any>({
     queryKey: ["/api/v1/support/tickets", { clientId }],
     enabled: !!clientId,
   });
+  const tickets: any[] = Array.isArray(rawTickets) ? rawTickets : Array.isArray(rawTickets?.tickets) ? rawTickets.tickets : [];
   const openTickets = tickets.filter(
     (t: any) => t.status === "open" || t.status === "in_progress",
   ).length;
