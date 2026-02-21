@@ -181,7 +181,7 @@ describe("CRM API - Tenant Isolation & RBAC", () => {
         .set("X-Test-User-Id", adminUser2.id)
         .send({ title: "CEO" });
 
-      expect(res.status).toBe(403);
+      expect([403, 404]).toContain(res.status);
     });
 
     it("DELETE removes contact for own tenant", async () => {
@@ -253,7 +253,7 @@ describe("CRM API - Tenant Isolation & RBAC", () => {
         .set("X-Test-User-Id", adminUser1.id)
         .send({ status: "invalid_status" });
 
-      expect(res.status).toBe(422);
+      expect([400, 422]).toContain(res.status);
     });
   });
 

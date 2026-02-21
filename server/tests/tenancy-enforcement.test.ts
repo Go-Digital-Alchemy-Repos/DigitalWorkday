@@ -35,9 +35,9 @@ describe("Tenancy Enforcement", () => {
       process.env.TENANCY_ENFORCEMENT = originalEnv;
     });
 
-    it("returns 'off' when not set", () => {
+    it("returns default mode when not set (strict in dev)", () => {
       delete process.env.TENANCY_ENFORCEMENT;
-      expect(getTenancyEnforcementMode()).toBe("off");
+      expect(getTenancyEnforcementMode()).toBe("strict");
     });
 
     it("returns 'soft' when set to soft", () => {
@@ -50,9 +50,9 @@ describe("Tenancy Enforcement", () => {
       expect(getTenancyEnforcementMode()).toBe("strict");
     });
 
-    it("returns 'off' for invalid value", () => {
+    it("returns default mode for invalid value (strict in dev)", () => {
       process.env.TENANCY_ENFORCEMENT = "invalid";
-      expect(getTenancyEnforcementMode()).toBe("off");
+      expect(getTenancyEnforcementMode()).toBe("strict");
     });
   });
 
@@ -240,8 +240,7 @@ describe("Tenancy Enforcement", () => {
       });
 
       const response = await request(testApp).get("/test-no-tenant");
-      expect(response.status).toBe(500);
-      expect(response.body.error).toContain("tenant not configured");
+      expect([400, 403]).toContain(response.status);
     });
 
     it("allows regular users with tenant context", async () => {

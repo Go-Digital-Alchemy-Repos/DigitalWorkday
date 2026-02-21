@@ -404,7 +404,11 @@ export async function safeDeleteAllUsers() {
   await db.execute(sql`DELETE FROM task_tags`);
   await db.execute(sql`DELETE FROM task_attachments`);
   await db.execute(sql`DELETE FROM comments`);
+  await db.execute(sql`DELETE FROM subtask_assignees`);
+  await db.execute(sql`DELETE FROM subtask_tags`);
   await db.execute(sql`DELETE FROM subtasks`);
+  await db.execute(sql`DELETE FROM time_entries`);
+  await db.execute(sql`DELETE FROM active_timers`);
   await db.execute(sql`DELETE FROM tasks`);
   await db.execute(sql`DELETE FROM sections`);
   
@@ -415,9 +419,7 @@ export async function safeDeleteAllUsers() {
   await db.execute(sql`DELETE FROM project_members`);
   await db.execute(sql`DELETE FROM projects`);
   
-  // Level 4: Time tracking
-  await db.execute(sql`DELETE FROM time_entries`);
-  await db.execute(sql`DELETE FROM active_timers`);
+  // Level 4: Activity log
   await db.execute(sql`DELETE FROM activity_log`);
   
   // Level 5: Workspace/team members
@@ -425,10 +427,29 @@ export async function safeDeleteAllUsers() {
   await db.execute(sql`DELETE FROM team_members`);
   await db.execute(sql`DELETE FROM teams`);
   
-  // Level 6: Clients (references workspaces)
+  // Level 6: Clients and all FK dependents
+  await db.execute(sql`DELETE FROM approval_requests`);
+  await db.execute(sql`DELETE FROM assets`);
+  await db.execute(sql`DELETE FROM asset_folders`);
+  await db.execute(sql`DELETE FROM client_conversation_reads`);
+  await db.execute(sql`DELETE FROM client_conversations`);
+  await db.execute(sql`DELETE FROM client_crm`);
+  await db.execute(sql`DELETE FROM division_members`);
+  await db.execute(sql`DELETE FROM client_divisions`);
+  await db.execute(sql`DELETE FROM client_document_categories`);
+  await db.execute(sql`DELETE FROM client_document_folders`);
+  await db.execute(sql`DELETE FROM client_documents`);
+  await db.execute(sql`DELETE FROM client_files`);
+  await db.execute(sql`DELETE FROM client_notes`);
+  await db.execute(sql`DELETE FROM client_stage_automation_events`);
+  await db.execute(sql`DELETE FROM client_stage_history`);
   await db.execute(sql`DELETE FROM client_contacts`);
   await db.execute(sql`DELETE FROM client_invites`);
   await db.execute(sql`DELETE FROM client_user_access`);
+  await db.execute(sql`DELETE FROM user_client_access`);
+  await db.execute(sql`DELETE FROM support_ticket_events`);
+  await db.execute(sql`DELETE FROM support_ticket_messages`);
+  await db.execute(sql`DELETE FROM support_tickets`);
   await db.execute(sql`DELETE FROM clients`);
   
   // Level 7: User-related (some reference workspaces)
@@ -440,19 +461,59 @@ export async function safeDeleteAllUsers() {
   // Level 8: Workspaces
   await db.execute(sql`DELETE FROM workspaces`);
   
-  // Level 9: Tenant-related
+  // Level 9: Tenant-related (all FK dependents of tenants)
+  await db.execute(sql`DELETE FROM user_ui_preferences`);
+  await db.execute(sql`DELETE FROM notification_preferences`);
+  await db.execute(sql`DELETE FROM control_center_widget_layouts`);
+  await db.execute(sql`DELETE FROM error_logs`);
+  await db.execute(sql`DELETE FROM background_jobs`);
+  await db.execute(sql`DELETE FROM chat_pins`);
+  await db.execute(sql`DELETE FROM chat_reads`);
+  await db.execute(sql`DELETE FROM chat_mentions`);
+  await db.execute(sql`DELETE FROM chat_message_reactions`);
+  await db.execute(sql`DELETE FROM chat_attachments`);
+  await db.execute(sql`DELETE FROM chat_messages`);
+  await db.execute(sql`DELETE FROM chat_channel_members`);
+  await db.execute(sql`DELETE FROM chat_channels`);
+  await db.execute(sql`DELETE FROM chat_dm_members`);
+  await db.execute(sql`DELETE FROM chat_dm_threads`);
+  await db.execute(sql`DELETE FROM chat_export_jobs`);
+  await db.execute(sql`DELETE FROM client_message_templates`);
+  await db.execute(sql`DELETE FROM client_messages`);
+  await db.execute(sql`DELETE FROM client_note_attachments`);
+  await db.execute(sql`DELETE FROM client_note_categories`);
+  await db.execute(sql`DELETE FROM client_note_versions`);
+  await db.execute(sql`DELETE FROM client_stage_automation_rules`);
+  await db.execute(sql`DELETE FROM conversation_sla_policies`);
+  await db.execute(sql`DELETE FROM asana_import_runs`);
+  await db.execute(sql`DELETE FROM integration_entity_map`);
+  await db.execute(sql`DELETE FROM asset_links`);
+  await db.execute(sql`DELETE FROM hidden_projects`);
+  await db.execute(sql`DELETE FROM task_watchers`);
+  await db.execute(sql`DELETE FROM project_note_versions`);
+  await db.execute(sql`DELETE FROM project_note_categories`);
+  await db.execute(sql`DELETE FROM project_notes`);
+  await db.execute(sql`DELETE FROM project_templates`);
+  await db.execute(sql`DELETE FROM support_canned_replies`);
+  await db.execute(sql`DELETE FROM support_macros`);
+  await db.execute(sql`DELETE FROM support_sla_policies`);
+  await db.execute(sql`DELETE FROM support_ticket_form_schemas`);
+  await db.execute(sql`DELETE FROM app_settings`);
   await db.execute(sql`DELETE FROM tenant_audit_events`);
+  await db.execute(sql`DELETE FROM tenant_agreement_acceptances`);
   await db.execute(sql`DELETE FROM tenant_agreements`);
   await db.execute(sql`DELETE FROM tenant_settings`);
   await db.execute(sql`DELETE FROM tenant_integrations`);
+  await db.execute(sql`DELETE FROM tenant_note_versions`);
   await db.execute(sql`DELETE FROM tenant_notes`);
   await db.execute(sql`DELETE FROM tenancy_warnings`);
+  await db.execute(sql`DELETE FROM email_outbox`);
+  await db.execute(sql`DELETE FROM password_reset_tokens`);
   await db.execute(sql`DELETE FROM tenants`);
   
   // Level 10: Platform-level tables (reference users)
   await db.execute(sql`DELETE FROM platform_audit_events`);
   await db.execute(sql`DELETE FROM platform_invitations`);
-  await db.execute(sql`DELETE FROM email_outbox`);
   
   // Level 11: Sessions (must clear before users in case of FK)
   await db.execute(sql`DELETE FROM user_sessions`);

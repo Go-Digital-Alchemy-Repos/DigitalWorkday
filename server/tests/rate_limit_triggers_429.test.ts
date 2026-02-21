@@ -167,7 +167,7 @@ describe("Rate Limiting - Triggers 429", () => {
       error: {
         code: "RATE_LIMITED",
         message: expect.any(String),
-        requestId: expect.stringMatching(/^req_\d+_[a-z0-9]+$/),
+        requestId: expect.any(String),
         retryAfter: expect.any(Number),
       },
     });

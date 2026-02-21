@@ -264,7 +264,9 @@ describe("Delete Endpoint - High Risk Guards", () => {
     
     expect(response.status).toBe(403);
     expect(response.body).toHaveProperty("error");
-    expect(response.body.error).toContain("not allowed");
+    const errorField = response.body.error;
+    const errorMsg = typeof errorField === "string" ? errorField : errorField?.message ?? "";
+    expect(errorMsg).toContain("not allowed");
     
     process.env.SUPER_DEBUG_DELETE_ALLOWED = originalEnv;
   });
