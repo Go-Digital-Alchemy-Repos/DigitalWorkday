@@ -201,7 +201,9 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab }: { clientId
         <Card data-testid="card-crm-status">
           <CardContent className="pt-5 pb-4 px-4">
             <div className="flex items-center gap-2 mb-2">
-              <Target className="h-4 w-4 text-muted-foreground" />
+              <div className="p-1 rounded-md bg-indigo-500/10">
+                <Target className="h-4 w-4 text-indigo-500" />
+              </div>
               <span className="text-sm text-muted-foreground">Pipeline Status</span>
             </div>
             {statusInfo ? (
@@ -215,7 +217,9 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab }: { clientId
         <Card data-testid="card-crm-owner">
           <CardContent className="pt-5 pb-4 px-4">
             <div className="flex items-center gap-2 mb-2">
-              <User className="h-4 w-4 text-muted-foreground" />
+              <div className="p-1 rounded-md bg-emerald-500/10">
+                <User className="h-4 w-4 text-emerald-500" />
+              </div>
               <span className="text-sm text-muted-foreground">Owner</span>
             </div>
             <span className="text-sm font-medium" data-testid="text-crm-owner">
@@ -227,7 +231,9 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab }: { clientId
         <Card data-testid="card-crm-followup">
           <CardContent className="pt-5 pb-4 px-4">
             <div className="flex items-center gap-2 mb-2">
-              <Calendar className="h-4 w-4 text-muted-foreground" />
+              <div className="p-1 rounded-md bg-amber-500/10">
+                <Calendar className="h-4 w-4 text-amber-500" />
+              </div>
               <span className="text-sm text-muted-foreground">Next Follow-up</span>
             </div>
             <span className="text-sm font-medium" data-testid="text-crm-followup">
@@ -241,7 +247,9 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab }: { clientId
         <Card data-testid="card-open-projects">
           <CardContent className="pt-5 pb-4 px-4">
             <div className="flex items-center gap-2 mb-2">
-              <FolderKanban className="h-4 w-4 text-muted-foreground" />
+              <div className="p-1 rounded-md bg-purple-500/10">
+                <FolderKanban className="h-4 w-4 text-purple-500" />
+              </div>
               <span className="text-sm text-muted-foreground">Open Projects</span>
             </div>
             <span className="text-2xl font-semibold" data-testid="text-open-projects">{summary.counts.projects}</span>
@@ -251,7 +259,9 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab }: { clientId
         <Card data-testid="card-open-tasks">
           <CardContent className="pt-5 pb-4 px-4">
             <div className="flex items-center gap-2 mb-2">
-              <CheckCircle2 className="h-4 w-4 text-muted-foreground" />
+              <div className="p-1 rounded-md bg-blue-500/10">
+                <CheckCircle2 className="h-4 w-4 text-blue-500" />
+              </div>
               <span className="text-sm text-muted-foreground">Open Tasks</span>
             </div>
             <span className="text-2xl font-semibold" data-testid="text-open-tasks">{summary.counts.openTasks}</span>
@@ -261,7 +271,9 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab }: { clientId
         <Card data-testid="card-hours-tracked">
           <CardContent className="pt-5 pb-4 px-4">
             <div className="flex items-center gap-2 mb-2">
-              <Clock className="h-4 w-4 text-muted-foreground" />
+              <div className="p-1 rounded-md bg-rose-500/10">
+                <Clock className="h-4 w-4 text-rose-500" />
+              </div>
               <span className="text-sm text-muted-foreground">Hours Tracked</span>
             </div>
             <div data-testid="text-hours-tracked">
@@ -284,40 +296,40 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab }: { clientId
           <div className="flex flex-wrap gap-2">
             <Link href={`/clients/${clientId}`}>
               <Button variant="outline" size="sm" data-testid="button-quick-add-project">
-                <FolderKanban className="h-4 w-4 mr-2" />
+                <FolderKanban className="h-4 w-4 mr-2 text-purple-500" />
                 Add Project
               </Button>
             </Link>
             <Button variant="outline" size="sm" onClick={() => onNavigateTab("contacts")} data-testid="button-quick-add-contact">
-              <Users className="h-4 w-4 mr-2" />
+              <Users className="h-4 w-4 mr-2 text-emerald-500" />
               Add Contact
             </Button>
             <Button variant="outline" size="sm" onClick={() => onNavigateTab("notes")} data-testid="button-quick-add-note">
-              <StickyNote className="h-4 w-4 mr-2" />
+              <StickyNote className="h-4 w-4 mr-2 text-amber-500" />
               Add Note
             </Button>
             {crmFlags.clientMessaging && (
               <Button variant="outline" size="sm" onClick={() => onNavigateTab("messages")} data-testid="button-quick-message-client">
-                <MessageSquare className="h-4 w-4 mr-2" />
+                <MessageSquare className="h-4 w-4 mr-2 text-violet-500" />
                 Message Client
               </Button>
             )}
             {crmFlags.files && (
               <Button variant="outline" size="sm" data-testid="button-quick-upload-file">
-                <Upload className="h-4 w-4 mr-2" />
+                <Upload className="h-4 w-4 mr-2 text-cyan-500" />
                 Upload File
               </Button>
             )}
             {crmFlags.approvals && (
               <Button variant="outline" size="sm" onClick={() => setShowApprovalDialog(true)} data-testid="button-quick-request-approval">
-                <ClipboardCheck className="h-4 w-4 mr-2" />
+                <ClipboardCheck className="h-4 w-4 mr-2 text-blue-500" />
                 Request Approval
               </Button>
             )}
             {crmFlags.portal && (
               <Link href={`/clients/${clientId}`}>
                 <Button variant="outline" size="sm" data-testid="button-quick-invite-client">
-                  <UserPlus className="h-4 w-4 mr-2" />
+                  <UserPlus className="h-4 w-4 mr-2 text-orange-500" />
                   Invite to Portal
                 </Button>
               </Link>
