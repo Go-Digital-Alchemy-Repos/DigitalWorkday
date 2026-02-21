@@ -281,6 +281,13 @@
       "when": 1771643625871,
       "tag": "0039_quick_quasimodo",
       "breakpoints": true
+    },
+    {
+      "idx": 40,
+      "version": "7",
+      "when": 1771654137626,
+      "tag": "0040_chubby_wolf_cub",
+      "breakpoints": true
     }
   ]
 }

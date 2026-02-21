@@ -110,6 +110,56 @@ All recommended indexes have been implemented. See `docs/performance/db-indexes.
 
 All tenant-scoping, FK, and time-range indexes listed in the original Priority 1-3 recommendations were already present in the database and schema. See `docs/performance/db-indexes.md` § "Pre-Existing Indexes" for the full cross-reference.
 
+## Database Indexes — Phase 2 (Priority Upgrade)
+
+**Applied:** 2026-02-21
+**Migration:** `migrations/0040_chubby_wolf_cub.sql`
+
+### New Index
+
+| Index | Table | Columns | Rationale |
+|---|---|---|---|
+| `time_entries_tenant_created_at_idx` | time_entries | `(tenant_id, created_at)` | Covers `ORDER BY created_at DESC` queries scoped to tenant — used by recent time entry listings and audit views |
+
+### Already-Covered (No Migration Needed)
+
+The remaining requested indexes were already present from the Phase 1 sprint:
+
+| Requested | Existing Index | Columns |
+|---|---|---|
+| `tasks(project_id)` | `tasks_project_id_idx` | `(project_id)` |
+| `tasks(project_id, status)` | `tasks_project_status_idx` | `(project_id, status)` |
+| `task_assignees(task_id)` | `task_assignees_task_id_idx` | `(task_id)` |
+| `projects(tenant_id, status)` | `projects_tenant_status_idx` | `(tenant_id, status)` |
+
+### EXPLAIN ANALYZE Results (dev, small dataset)
+
+> Note: Planner uses seq scan on small datasets. Indexes activate at scale (100+ rows).
+
+```
+-- tasks(project_id)
+Index Scan using tasks_project_status_idx on tasks
+  Index Cond: (project_id = ?)
+  Planning Time: 1.165 ms | Execution Time: 0.062 ms
+
+-- tasks(project_id, status)
+Index Scan using tasks_project_status_idx on tasks
+  Index Cond: (project_id = ? AND status = 'todo')
+  Planning Time: 1.416 ms | Execution Time: 0.073 ms
+
+-- task_assignees(task_id)
+Seq Scan on task_assignees (2 rows — too small for index)
+  Planning Time: 0.406 ms | Execution Time: 0.037 ms
+
+-- time_entries(tenant_id, created_at) ORDER BY created_at DESC
+Seq Scan on time_entries (7 rows — too small for index)
+  Planning Time: 0.837 ms | Execution Time: 0.057 ms
+
+-- projects(tenant_id, status)
+Seq Scan on projects (26 rows — borderline for index)
+  Planning Time: 0.881 ms | Execution Time: 0.039 ms
+```
+
 ### Verification
 
 ```bash

@@ -60,6 +60,18 @@ The following indexes from `docs/PERFORMANCE_NOTES.md` were already present befo
 
 ---
 
+## Phase 2 — Priority Upgrade (2026-02-21)
+
+**Migration:** `migrations/0040_chubby_wolf_cub.sql`
+
+### time_entries
+
+| Index | Columns | Rationale | Impacted Endpoints |
+|---|---|---|---|
+| `time_entries_tenant_created_at_idx` | `(tenant_id, created_at)` | Composite for tenant-scoped queries ordering by `created_at DESC`. Covers recent time entry listings, audit views, and report date-range queries filtering by tenant. | `GET /api/v1/time-entries`, time entry reports, CSV exports |
+
+---
+
 ## CONCURRENTLY Note
 
 Drizzle-kit's migration runner does not support `CREATE INDEX CONCURRENTLY` because it wraps statements in a transaction (and `CONCURRENTLY` cannot run inside a transaction). For production deployments with large tables under heavy load, consider running the `CREATE INDEX CONCURRENTLY` variants manually outside of Drizzle migrations to avoid table-level locks.
