@@ -1,0 +1,125 @@
+/* ==========================================================================
+   MOTION SYSTEM — Performance-Safe Animations
+   Only transform + opacity properties (GPU composited).
+   Never animate height, width, top, left, margin, or padding.
+   ========================================================================== */
+
+/* ---------- ENHANCED MOTION TOKENS ---------- */
+:root {
+  --motion-fast: 120ms;
+  --motion-base: 180ms;
+  --motion-slow: 240ms;
+  --ease-out-premium: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-in-out-smooth: cubic-bezier(0.4, 0, 0.2, 1);
+  --ease-springy: cubic-bezier(0.16, 1, 0.3, 1);
+}
+
+/* ---------- REDUCED MOTION — Global Kill Switch ---------- */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ---------- PERFORMANCE-SAFE KEYFRAMES ----------
+   Every keyframe uses ONLY opacity and/or transform. */
+
+@keyframes motion-fade-in {
+  from { opacity: 0; }
+  to   { opacity: 1; }
+}
+
+@keyframes motion-fade-out {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+@keyframes motion-slide-down {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes motion-slide-up {
+  from { opacity: 0; transform: translateY(4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes motion-slide-in-right {
+  from { opacity: 0; transform: translateX(8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes motion-slide-in-left {
+  from { opacity: 0; transform: translateX(-8px); }
+  to   { opacity: 1; transform: translateX(0); }
+}
+
+@keyframes motion-pop-in {
+  from { opacity: 0; transform: scale(0.96); }
+  to   { opacity: 1; transform: scale(1); }
+}
+
+@keyframes motion-pop-out {
+  from { opacity: 1; transform: scale(1); }
+  to   { opacity: 0; transform: scale(0.96); }
+}
+
+/* ---------- UTILITY CLASSES ---------- */
+
+.transition-safe {
+  transition-property: transform, opacity;
+  transition-duration: var(--motion-base);
+  transition-timing-function: var(--ease-out-premium);
+}
+
+.duration-motion-fast { transition-duration: var(--motion-fast); }
+.duration-motion-base { transition-duration: var(--motion-base); }
+.duration-motion-slow { transition-duration: var(--motion-slow); }
+
+.ease-out-premium { transition-timing-function: var(--ease-out-premium); }
+.ease-springy { transition-timing-function: var(--ease-springy); }
+
+/* ---------- ANIMATION HELPERS ---------- */
+
+.animate-motion-fade-in {
+  animation: motion-fade-in var(--motion-base) var(--ease-out-premium) both;
+}
+
+.animate-motion-slide-down {
+  animation: motion-slide-down var(--motion-base) var(--ease-out-premium) both;
+}
+
+.animate-motion-slide-up {
+  animation: motion-slide-up var(--motion-base) var(--ease-out-premium) both;
+}
+
+.animate-motion-slide-in-right {
+  animation: motion-slide-in-right var(--motion-base) var(--ease-out-premium) both;
+}
+
+.animate-motion-slide-in-left {
+  animation: motion-slide-in-left var(--motion-base) var(--ease-out-premium) both;
+}
+
+.animate-motion-pop-in {
+  animation: motion-pop-in var(--motion-fast) var(--ease-out-premium) both;
+}
+
+.animate-motion-pop-out {
+  animation: motion-pop-out var(--motion-fast) var(--ease-out-premium) both;
+}
+
+/* ---------- BUTTON PRESS MICRO-INTERACTION ---------- */
+.press-scale {
+  transition-property: transform, opacity;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-out-premium);
+}
+.press-scale:active {
+  transform: scale(0.98);
+}

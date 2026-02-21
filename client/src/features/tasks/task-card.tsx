@@ -98,7 +98,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
       <div
         ref={ref}
         className={cn(
-          "group relative w-full rounded-lg border border-card-border bg-card p-3 hover-elevate cursor-pointer transition-all duration-150",
+          "group relative w-full rounded-lg border border-card-border bg-card p-3 hover-elevate cursor-pointer transition-premium",
           isCompleted && "opacity-60",
           isDragging && "opacity-50 shadow-lg",
           justCompleted && "task-complete-pulse"
@@ -197,7 +197,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
       <div
         ref={ref}
         className={cn(
-          "group relative flex items-start gap-3 px-3 py-3 min-h-[56px] border-b border-border hover-elevate cursor-pointer transition-all duration-150",
+          "group relative flex items-start gap-3 px-3 py-3 min-h-[56px] border-b border-border hover-elevate cursor-pointer transition-premium",
           isCompleted && "opacity-60",
           isDragging && "opacity-50 shadow-lg bg-card",
           justCompleted && "task-complete-pulse"
@@ -291,7 +291,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
     <div
       ref={ref}
       className={cn(
-        "group relative grid items-center gap-3 px-4 py-3 min-h-[52px] border-b border-border hover-elevate cursor-pointer transition-all duration-150",
+        "group relative grid items-center gap-3 px-4 py-3 min-h-[52px] border-b border-border hover-elevate cursor-pointer transition-premium",
         showQuickActions 
           ? (dragHandleProps ? "grid-cols-[auto_auto_1fr_auto_auto_auto_auto]" : "grid-cols-[auto_1fr_auto_auto_auto_auto]")
           : (dragHandleProps ? "grid-cols-[auto_auto_1fr_auto_auto_auto]" : "grid-cols-[auto_1fr_auto_auto_auto]"),

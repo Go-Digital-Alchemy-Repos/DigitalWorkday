@@ -154,6 +154,9 @@ export default {
         tooltip: "var(--z-tooltip)",
         max: "var(--z-max)",
       },
+      transitionProperty: {
+        safe: "transform, opacity",
+      },
       keyframes: {
         "accordion-down": {
           from: { height: "0" },
@@ -163,10 +166,30 @@ export default {
           from: { height: "var(--radix-accordion-content-height)" },
           to: { height: "0" },
         },
+        "motion-fade-in": {
+          from: { opacity: "0" },
+          to: { opacity: "1" },
+        },
+        "motion-slide-down": {
+          from: { opacity: "0", transform: "translateY(-4px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "motion-slide-up": {
+          from: { opacity: "0", transform: "translateY(4px)" },
+          to: { opacity: "1", transform: "translateY(0)" },
+        },
+        "motion-pop-in": {
+          from: { opacity: "0", transform: "scale(0.96)" },
+          to: { opacity: "1", transform: "scale(1)" },
+        },
       },
       animation: {
         "accordion-down": "accordion-down 0.2s ease-out",
         "accordion-up": "accordion-up 0.2s ease-out",
+        "motion-fade-in": "motion-fade-in var(--motion-base, 180ms) var(--ease-out-premium, cubic-bezier(0.22,1,0.36,1)) both",
+        "motion-slide-down": "motion-slide-down var(--motion-base, 180ms) var(--ease-out-premium, cubic-bezier(0.22,1,0.36,1)) both",
+        "motion-slide-up": "motion-slide-up var(--motion-base, 180ms) var(--ease-out-premium, cubic-bezier(0.22,1,0.36,1)) both",
+        "motion-pop-in": "motion-pop-in var(--motion-fast, 120ms) var(--ease-out-premium, cubic-bezier(0.22,1,0.36,1)) both",
       },
     },
   },
