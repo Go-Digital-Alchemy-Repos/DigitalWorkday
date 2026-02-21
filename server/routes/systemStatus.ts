@@ -1,4 +1,5 @@
-import { Router, Request, Response } from "express";
+import { Request, Response } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import { requireSuperUser } from "../middleware/tenantContext";
 import { requireAuth } from "../auth";
 import { db, getPoolStats, checkDbHealth } from "../db";
@@ -10,7 +11,7 @@ import {
 import { isS3Configured, testS3Presign } from "../s3";
 import { storage } from "../storage";
 
-const router = Router();
+const router = createApiRouter({ policy: "authOnly", allowlist: ["/health/db"] });
 
 /**
  * GET /health/db - Database health check (no auth required)

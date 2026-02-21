@@ -1,8 +1,9 @@
-import { Router, Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import { emailOutboxService, EmailMessageType, EmailStatus } from "../services/emailOutbox";
 import { z } from "zod";
 
-const router = Router();
+const router = createApiRouter({ policy: "authOnly" });
 
 function generateRequestId(): string {
   return `req_${Date.now()}_${Math.random().toString(36).substring(2, 9)}`;

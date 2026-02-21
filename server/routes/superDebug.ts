@@ -24,10 +24,10 @@
  * - diagnostics.router.ts: Integrity checks, health recompute, cache, config
  * - superDebug.helpers.ts: Shared helpers (getQuarantineTenantId, writeAuditEvent)
  */
-import { Router } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import superDebugSubModules from "./modules/superDebug";
 
-const router = Router();
+const router = createApiRouter({ policy: "superUser" });
 
 router.use(superDebugSubModules);
 

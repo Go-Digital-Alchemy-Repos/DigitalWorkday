@@ -12,7 +12,7 @@
  * - GET /status/db - Database schema status (migrations, tables, columns)
  * - POST /status/checks/:type - Run specific checks
  */
-import { Router } from "express";
+import { createApiRouter } from "../../http/routerFactory";
 import { requireSuperUser } from "../../middleware/tenantContext";
 import { db, getPoolStats } from "../../db";
 import { sql } from "drizzle-orm";
@@ -20,7 +20,7 @@ import { isS3Configured } from "../../s3";
 import { isEncryptionAvailable } from "../../lib/encryption";
 import { checkSchemaReadiness } from "../../startup/schemaReadiness";
 
-const router = Router();
+const router = createApiRouter({ policy: "superUser" });
 
 /**
  * GET /status/health - System health checks

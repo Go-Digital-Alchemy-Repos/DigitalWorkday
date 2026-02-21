@@ -1,7 +1,11 @@
 import type { Express } from "express";
 import type { Server } from "http";
 import { registerRoute, clearRouteRegistry, getRouteRegistry } from "./routeRegistry";
-import { registerRoutes as legacyRegisterRoutes } from "../routes";
+import { apiNoCacheMiddleware } from "../middleware/apiCacheControl";
+import {
+  startDeadlineChecker,
+  startFollowUpChecker,
+} from "../features/notifications/notification.service";
 
 import systemRouter from "./domains/system.router";
 import tagsRouter from "./domains/tags.router";
@@ -27,6 +31,29 @@ import clientDocumentsRouter from "./domains/clientDocuments.router";
 import automationRouter from "./domains/automation.router";
 import assetsRouter from "./domains/assets.router";
 import controlCenterRouter from "./domains/controlCenter.router";
+import fileServeRouter from "./domains/fileServe.router";
+
+import usersRouter from "../routes/users.router";
+import crmRouter from "../routes/crm.router";
+import clientsRouter from "../routes/clients.router";
+import { searchRouter } from "../routes/modules/search/search.router";
+import featuresRoutes from "../features";
+import superAdminRoutes from "../routes/superAdmin";
+import superSystemStatusRouter from "../routes/super/systemStatus.router";
+import superIntegrationsRouter from "../routes/super/integrations.router";
+import superChatExportRouter from "../routes/super/chatExport.router";
+import superDebugRoutes from "../routes/superDebug";
+import chatDebugRoutes from "../routes/chatDebug";
+import superChatRoutes from "../routes/superChat";
+import systemStatusRoutes from "../routes/systemStatus";
+import tenantOnboardingRoutes from "../routes/tenantOnboarding";
+import tenantBillingRoutes from "../routes/tenantBilling";
+import tenantDataRoutes from "../routes/tenantData";
+import projectsDashboardRoutes from "../routes/projectsDashboard";
+import emailOutboxRoutes from "../routes/emailOutbox";
+import chatRetentionRoutes from "../routes/chatRetention";
+import tenancyHealthRoutes from "../routes/tenancyHealth";
+import webhookRoutes from "../routes/webhooks";
 
 interface DomainEntry {
   path: string;
@@ -36,132 +63,132 @@ interface DomainEntry {
   description: string;
 }
 
-const MIGRATED_DOMAINS: DomainEntry[] = [
+const REGISTERED_DOMAINS: DomainEntry[] = [
   {
     path: "/api/v1/system",
     router: systemRouter,
     policy: "superUser",
     domain: "system-integrations",
-    description: "System integration management. Pilot: migrated to new router factory with superUser policy.",
+    description: "System integration management.",
   },
   {
     path: "/api",
     router: tagsRouter,
     policy: "authTenant",
     domain: "tags",
-    description: "Tag CRUD and task-tag associations. Migrated from legacy routes/tags.router.ts (Prompt #2).",
+    description: "Tag CRUD and task-tag associations.",
   },
   {
     path: "/api",
     router: activityRouter,
     policy: "authTenant",
     domain: "activity",
-    description: "Activity log CRUD. Migrated from legacy routes/activity.router.ts.",
+    description: "Activity log CRUD.",
   },
   {
     path: "/api",
     router: commentsRouter,
     policy: "authTenant",
     domain: "comments",
-    description: "Comment CRUD, resolve/unresolve. Migrated from legacy routes/comments.router.ts (Prompt #4).",
+    description: "Comment CRUD, resolve/unresolve.",
   },
   {
     path: "/api",
     router: presenceRouter,
     policy: "authTenant",
     domain: "presence",
-    description: "User presence tracking. Migrated from legacy routes/presence.ts (Prompt #5).",
+    description: "User presence tracking.",
   },
   {
     path: "/api",
     router: aiRouter,
     policy: "authTenant",
     domain: "ai",
-    description: "AI integration routes (OpenAI). Migrated from legacy routes/ai.ts (Prompt #5).",
+    description: "AI integration routes (OpenAI).",
   },
   {
     path: "/api",
     router: attachmentsRouter,
     policy: "authTenant",
     domain: "attachments",
-    description: "Attachment CRUD, presign, upload complete, download. Migrated from legacy routes/attachments.router.ts (Prompt #6).",
+    description: "Attachment CRUD, presign, upload complete, download.",
   },
   {
     path: "/api",
     router: flagsRouter,
     policy: "authTenant",
     domain: "flags",
-    description: "CRM feature flags. Extracted from attachments router to restore domain boundaries (Prompt #7).",
+    description: "CRM feature flags.",
   },
   {
     path: "/api/v1/uploads",
     router: uploadsRouter,
     policy: "authTenant",
     domain: "uploads",
-    description: "Unified file upload: presign, proxy upload, status. Migrated from legacy routes/uploads.ts (Prompt #7).",
+    description: "Unified file upload: presign, proxy upload, status.",
   },
   {
     path: "/api/v1/chat",
     router: chatRouter,
     policy: "authTenant",
     domain: "chat",
-    description: "Internal chat system: channels, DMs, messages, threads, reads, search, uploads, mentions. Migrated from legacy routes/chat.ts (Prompt #8).",
+    description: "Internal chat system: channels, DMs, messages, threads, reads, search, uploads, mentions.",
   },
   {
     path: "/api",
     router: timeRouter,
     policy: "authTenant",
     domain: "time",
-    description: "Time tracking: active timers, time entries CRUD, calendar views, reporting, CSV export. Migrated from legacy routes/timeTracking.router.ts + routes/timeTracking.ts (Prompt #10).",
+    description: "Time tracking: active timers, time entries CRUD, calendar views, reporting, CSV export.",
   },
   {
     path: "/api",
     router: projectsRouter,
     policy: "authTenant",
     domain: "projects",
-    description: "Projects core: CRUD, members, visibility (hide/unhide), sections, task reorder. Migrated from legacy routes/projects.router.ts (Prompt #11).",
+    description: "Projects core: CRUD, members, visibility (hide/unhide), sections, task reorder.",
   },
   {
     path: "/api",
     router: tasksRouter,
     policy: "authTenant",
     domain: "tasks",
-    description: "Tasks core: CRUD, assignees, watchers, move, personal tasks, personal sections, child tasks, calendar events, project activity. Migrated from legacy routes/tasks.router.ts (Prompt #12).",
+    description: "Tasks core: CRUD, assignees, watchers, move, personal tasks, personal sections, child tasks, calendar events, project activity.",
   },
   {
     path: "/api",
     router: subtasksRouter,
     policy: "authTenant",
     domain: "subtasks",
-    description: "Subtasks: CRUD, move, assignees, tags, comments, full detail. Migrated from legacy routes/subtasks.router.ts (Prompt #13).",
+    description: "Subtasks: CRUD, move, assignees, tags, comments, full detail.",
   },
   {
     path: "/api",
     router: projectNotesRouter,
     policy: "authTenant",
     domain: "project-notes",
-    description: "Project notes: CRUD, categories, version history. Mirrors client notes feature for project-level note-taking.",
+    description: "Project notes: CRUD, categories, version history.",
   },
   {
     path: "/api",
     router: workspacesRouter,
     policy: "authTenant",
     domain: "workspaces",
-    description: "Workspaces: CRUD, members, current workspace. Migrated from legacy routes/workspaces.router.ts (Prompt #14).",
+    description: "Workspaces: CRUD, members, current workspace.",
   },
   {
     path: "/api",
     router: teamsRouter,
     policy: "authTenant",
     domain: "teams",
-    description: "Teams: CRUD, members, tenant-scoped. Migrated from legacy routes/teams.router.ts (Prompt #14).",
+    description: "Teams: CRUD, members, tenant-scoped.",
   },
   {
     path: "/api/v1",
     router: workloadReportsRouter,
     policy: "authTenant",
     domain: "workload-reports",
-    description: "Workload reports: tasks-by-employee, unassigned, by-status, by-priority, summary. Migrated from legacy routes/workloadReports.ts (Prompt #14).",
+    description: "Workload reports: tasks-by-employee, unassigned, by-status, by-priority, summary.",
   },
   {
     path: "/api",
@@ -175,28 +202,28 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     router: supportRouter,
     policy: "authTenant",
     domain: "support",
-    description: "Support tickets: CRUD, messages, status transitions, assignment. Tenant console endpoints.",
+    description: "Support tickets: CRUD, messages, status transitions, assignment.",
   },
   {
     path: "/api/v1",
     router: clientDocumentsRouter,
     policy: "authTenant",
     domain: "client-documents",
-    description: "Client Documents 2.0: folder CRUD, file presign/complete/move/rename/delete/download, bulk ops. Dropbox-style document manager.",
+    description: "Client Documents 2.0: folder CRUD, file presign/complete/move/rename/delete/download, bulk ops.",
   },
   {
     path: "/api/v1",
     router: automationRouter,
     policy: "authTenant",
     domain: "automation",
-    description: "Client stage automation: CRUD rules, dry-run, audit events. Admin-only pipeline automation.",
+    description: "Client stage automation: CRUD rules, dry-run, audit events.",
   },
   {
     path: "/api/v1",
     router: assetsRouter,
     policy: "authTenant",
     domain: "assets",
-    description: "Asset Library: unified asset management, folders, upload, download. Phase 1 of client workspace migration.",
+    description: "Asset Library: unified asset management, folders, upload, download.",
   },
   {
     path: "/api/v1",
@@ -205,39 +232,159 @@ const MIGRATED_DOMAINS: DomainEntry[] = [
     domain: "control-center",
     description: "Control Center widget layout: GET/PUT pinned widget configuration per tenant/workspace.",
   },
-];
-
-interface LegacyEntry {
-  path: string;
-  policy: import("./policy/requiredMiddleware").PolicyName;
-  domain: string;
-  description: string;
-}
-
-const LEGACY_DOMAINS: LegacyEntry[] = [
   {
-    path: "/api",
+    path: "/api/v1/files/serve",
+    router: fileServeRouter,
     policy: "authTenant",
-    domain: "legacy-aggregated",
-    description: "Legacy aggregated routes from routes/index.ts. Auth+tenant guards applied globally in routes.ts with path-based allowlists.",
+    domain: "file-serve",
+    description: "File serving and download endpoints.",
   },
   {
-    path: "/api/v1/webhooks",
-    policy: "public",
-    domain: "webhooks",
-    description: "Stripe webhook routes (signature-verified, no session auth). Exempt from auth/tenant/CSRF.",
+    path: "/api",
+    router: usersRouter,
+    policy: "authTenant",
+    domain: "users",
+    description: "User management: CRUD, invitations, password reset, avatar, UI preferences.",
+  },
+  {
+    path: "/api",
+    router: crmRouter,
+    policy: "authTenant",
+    domain: "crm",
+    description: "CRM: client summaries, metrics, pipeline, follow-ups, bulk update, access control, portal dashboard.",
+  },
+  {
+    path: "/api",
+    router: clientsRouter,
+    policy: "authTenant",
+    domain: "clients",
+    description: "Client management: CRUD, contacts, invites, projects, divisions, notes, documents.",
+  },
+  {
+    path: "/api",
+    router: searchRouter,
+    policy: "authTenant",
+    domain: "search",
+    description: "Global search for command palette and quick navigation.",
+  },
+  {
+    path: "/api",
+    router: featuresRoutes,
+    policy: "authTenant",
+    domain: "features",
+    description: "Feature modules: client features, notifications, client portal, templates.",
   },
   {
     path: "/api/v1/super",
+    router: superAdminRoutes,
     policy: "superUser",
     domain: "super-admin",
-    description: "Super admin routes. Exempt from tenant context requirement.",
+    description: "Super admin aggregator: tenants, workspaces, users, invitations, settings, integrations, health, seeding.",
+  },
+  {
+    path: "/api/v1/super",
+    router: superSystemStatusRouter,
+    policy: "superUser",
+    domain: "super-system-status",
+    description: "Super admin system status: health, auth diagnostics, DB schema status.",
+  },
+  {
+    path: "/api/v1/super",
+    router: superIntegrationsRouter,
+    policy: "superUser",
+    domain: "super-integrations",
+    description: "Super admin integrations: Mailgun, Cloudflare R2, Stripe global config.",
+  },
+  {
+    path: "/api/v1/super/chat",
+    router: superChatExportRouter,
+    policy: "superUser",
+    domain: "super-chat-export",
+    description: "Super admin chat export: create, download, list exports.",
+  },
+  {
+    path: "/api/v1/super/debug",
+    router: superDebugRoutes,
+    policy: "superUser",
+    domain: "super-debug",
+    description: "Super admin debug tools: quarantine, backfill, diagnostics.",
+  },
+  {
+    path: "/api/v1/super/debug/chat",
+    router: chatDebugRoutes,
+    policy: "superUser",
+    domain: "super-debug-chat",
+    description: "Chat debug: metrics, events, sockets, diagnostics.",
+  },
+  {
+    path: "/api/v1/super/chat",
+    router: superChatRoutes,
+    policy: "superUser",
+    domain: "super-chat-monitoring",
+    description: "Super admin chat monitoring: read-only access to tenant chat history.",
+  },
+  {
+    path: "/api/v1/super/status",
+    router: systemStatusRoutes,
+    policy: "authOnly",
+    domain: "system-status",
+    description: "System status: health checks, DB diagnostics, S3 status. /health/db is public.",
   },
   {
     path: "/api/v1/tenant",
+    router: tenantOnboardingRoutes,
     policy: "authOnly",
     domain: "tenant-onboarding",
-    description: "Tenant onboarding and billing. Auth required, tenant context exempt during onboarding.",
+    description: "Tenant onboarding: context, settings, branding, integrations, agreements.",
+  },
+  {
+    path: "/api/v1/tenant",
+    router: tenantBillingRoutes,
+    policy: "authOnly",
+    domain: "tenant-billing",
+    description: "Tenant billing: Stripe integration, invoices, portal sessions.",
+  },
+  {
+    path: "/api/v1/tenant/data",
+    router: tenantDataRoutes,
+    policy: "authTenant",
+    domain: "tenant-data",
+    description: "Tenant data: import/export clients, users, time entries. Asana import pipeline.",
+  },
+  {
+    path: "/api/v1",
+    router: projectsDashboardRoutes,
+    policy: "authTenant",
+    domain: "projects-dashboard",
+    description: "Projects dashboard: analytics, forecast, summary.",
+  },
+  {
+    path: "/api/v1",
+    router: emailOutboxRoutes,
+    policy: "authOnly",
+    domain: "email-outbox",
+    description: "Email outbox: logs, stats, resend for tenant admins and super admins.",
+  },
+  {
+    path: "/api/v1",
+    router: chatRetentionRoutes,
+    policy: "authOnly",
+    domain: "chat-retention",
+    description: "Chat retention: settings, archive runs, stats, export for super and tenant admins.",
+  },
+  {
+    path: "/api",
+    router: tenancyHealthRoutes,
+    policy: "authOnly",
+    domain: "tenancy-health",
+    description: "Tenancy health: integrity checks, warnings, backfill, orphans, constraints, remediation, migrations.",
+  },
+  {
+    path: "/api/v1/webhooks",
+    router: webhookRoutes,
+    policy: "public",
+    domain: "webhooks",
+    description: "Stripe webhook routes (signature-verified, no session auth).",
   },
 ];
 
@@ -247,18 +394,9 @@ export async function mountAllRoutes(
 ): Promise<Server> {
   clearRouteRegistry();
 
-  for (const entry of LEGACY_DOMAINS) {
-    registerRoute({
-      path: entry.path,
-      router: null as any,
-      policy: entry.policy,
-      domain: entry.domain,
-      description: entry.description,
-      legacy: true,
-    });
-  }
+  app.use("/api", apiNoCacheMiddleware);
 
-  for (const entry of MIGRATED_DOMAINS) {
+  for (const entry of REGISTERED_DOMAINS) {
     registerRoute({
       path: entry.path,
       router: entry.router,
@@ -269,14 +407,15 @@ export async function mountAllRoutes(
     });
   }
 
-  await legacyRegisterRoutes(httpServer, app);
-
   const registry = getRouteRegistry();
   for (const route of registry) {
-    if (!route.legacy && route.router) {
+    if (route.router) {
       app.use(route.path, route.router);
     }
   }
+
+  startDeadlineChecker();
+  startFollowUpChecker();
 
   return httpServer;
 }

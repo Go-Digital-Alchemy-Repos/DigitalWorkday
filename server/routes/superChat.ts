@@ -13,9 +13,8 @@
  * - GET /api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages - DM thread messages
  * - GET /api/v1/super/chat/search - Search messages with filters
  */
-import { Router } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import { storage } from "../storage";
-import { requireSuperUser } from "../middleware/tenantContext";
 import { db } from "../db";
 import { 
   chatChannels, chatDmThreads, chatDmMembers, chatMessages, chatAttachments, users,
@@ -24,9 +23,7 @@ import {
 import { eq, and, ilike, gte, lte, desc, sql, inArray, or } from "drizzle-orm";
 import { z } from "zod";
 
-const router = Router();
-
-router.use(requireSuperUser);
+const router = createApiRouter({ policy: "superUser" });
 
 /**
  * GET /api/v1/super/chat/tenants/:tenantId/threads

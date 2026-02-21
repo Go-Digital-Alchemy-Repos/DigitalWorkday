@@ -5,12 +5,12 @@
  * Provides tenant-scoped search across clients, projects, and tasks.
  * Also provides client-scoped search for the client command palette.
  */
-import { Router } from 'express';
+import { createApiRouter } from '../../../http/routerFactory';
 import { storage } from '../../../storage';
 import { AppError, handleRouteError, sendError } from '../../../lib/errors';
 import { getEffectiveTenantId, getCurrentWorkspaceIdAsync } from '../../helpers';
 
-export const searchRouter = Router();
+export const searchRouter = createApiRouter({ policy: "authTenant" });
 
 /**
  * Global Search Endpoint for Command Palette

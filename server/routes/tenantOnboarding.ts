@@ -16,7 +16,8 @@
  * - POST /api/v1/tenant/integrations/:provider/test - Test integration
  */
 
-import { Router, Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import crypto from "crypto";
 import { storage } from "../storage";
 import { z } from "zod";
@@ -36,7 +37,7 @@ const upload = multer({
   limits: { fileSize: 5 * 1024 * 1024 }
 });
 
-const router = Router();
+const router = createApiRouter({ policy: "authOnly" });
 
 function requireTenantAdmin(req: any, res: any, next: any) {
   const user = req.user as any;

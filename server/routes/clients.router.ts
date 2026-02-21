@@ -1,4 +1,5 @@
-import { Router, Request, Response } from "express";
+import { Request, Response } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import { z } from "zod";
 import { storage } from "../storage";
 import { db } from "../db";
@@ -37,7 +38,7 @@ import {
   emitProjectClientAssigned,
 } from "../realtime/events";
 
-const router = Router();
+const router = createApiRouter({ policy: "authTenant" });
 
 // =============================================================================
 // PROJECT CLIENT ASSIGNMENT

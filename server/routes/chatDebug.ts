@@ -16,13 +16,14 @@
  * - No secrets or message contents exposed
  */
 
-import { Router, Request, Response } from 'express';
+import { Request, Response } from 'express';
+import { createApiRouter } from '../http/routerFactory';
 import { requireSuperUser } from '../middleware/tenantContext';
 import { chatDebugStore, isChatDebugEnabled } from '../realtime/chatDebug';
 import { storage } from '../storage';
 import { z } from 'zod';
 
-const router = Router();
+const router = createApiRouter({ policy: "superUser" });
 
 function requireChatDebugEnabled(_req: Request, res: Response, next: Function) {
   if (!isChatDebugEnabled()) {

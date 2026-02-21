@@ -1,4 +1,5 @@
-import { Router, Request, Response } from "express";
+import { Request, Response } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import { z } from "zod";
 import { db } from "../db";
 import { eq, and, desc, sql, count, ilike, lte, gte, inArray, isNotNull } from "drizzle-orm";
@@ -27,7 +28,7 @@ import { verifyClientTenancy, isAdminOrSuper } from "./modules/crm/crm.helpers";
 
 import crmSubModules from "./modules/crm";
 
-const router = Router();
+const router = createApiRouter({ policy: "authTenant" });
 
 router.use(crmSubModules);
 

@@ -1,4 +1,5 @@
-import { Router, Request, Response } from "express";
+import { Request, Response } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import { requireSuperUser } from "../middleware/tenantContext";
 import { requireAuth } from "../auth";
 import { getTenancyEnforcementMode } from "../middleware/tenancyEnforcement";
@@ -13,7 +14,7 @@ import {
 import { sql, eq, isNull, and } from "drizzle-orm";
 import { AppError, handleRouteError } from "../lib/errors";
 
-const router = Router();
+const router = createApiRouter({ policy: "authOnly" });
 
 interface MissingTenantIdCount {
   table: string;

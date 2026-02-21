@@ -21,7 +21,7 @@
  * - POST /integrations/stripe/test - Test Stripe connection
  * - DELETE /integrations/stripe/secret/:secretName - Clear Stripe secret
  */
-import { Router } from "express";
+import { createApiRouter } from "../../http/routerFactory";
 import { z } from "zod";
 import { requireSuperUser } from "../../middleware/tenantContext";
 import { db } from "../../db";
@@ -31,7 +31,7 @@ import { encryptValue, decryptValue, isEncryptionAvailable } from "../../lib/enc
 import Mailgun from "mailgun.js";
 import FormData from "form-data";
 
-const router = Router();
+const router = createApiRouter({ policy: "superUser" });
 
 function maskSecret(value: string | null | undefined): string | null {
   if (!value || value.length < 4) return null;

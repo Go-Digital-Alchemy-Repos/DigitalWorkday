@@ -6,7 +6,7 @@
  *
  * This file mounts all sub-routers and exports shared helpers.
  */
-import { Router } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import { db } from "../db";
 import { tenantAuditEvents } from "@shared/schema";
 
@@ -42,7 +42,7 @@ import {
   asanaImportRouter,
 } from "./modules/super-admin";
 
-const router = Router();
+const router = createApiRouter({ policy: "superUser", allowlist: ["/bootstrap"] });
 
 router.use(bootstrapRouter);
 router.use(tenantsRouter);

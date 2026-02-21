@@ -1,399 +1,195 @@
-# Route Architecture Convention
-
-> **Status**: Active (Prompt #1 — Feb 2026)  
-> **Pilot Domain**: `system-integrations` at `/api/v1/system`
+# Route Architecture
 
 ## Overview
 
-All **new routes** must be created using `createApiRouter()` from `server/http/routerFactory.ts` and registered in `server/http/routeRegistry.ts` via `mountAllRoutes()` in `server/http/mount.ts`.
+All API routes are registered and mounted through a centralized system in `server/http/mount.ts`. This ensures consistent policy enforcement, discoverability, and prevents rogue route mounts.
 
-Legacy routes continue to work unchanged. They are inventoried in the route registry for tracking but mounted through the existing `server/routes.ts` aggregator.
+## Architecture
 
-## Key Files
+### Route Registry (`server/http/routeRegistry.ts`)
 
-| File | Purpose |
-|------|---------|
-| `server/http/routerFactory.ts` | Factory: creates routers with standardized guard policies |
-| `server/http/policy/requiredMiddleware.ts` | Policy definitions: `public`, `authOnly`, `authTenant`, `superUser` |
-| `server/http/policy/responseEnvelope.ts` | Non-breaking `res.ok()` / `res.fail()` helpers |
-| `server/http/routeRegistry.ts` | Single source of truth for all route mount declarations |
-| `server/http/mount.ts` | `mountAllRoutes()` — the single entry point for route registration |
-| `server/http/domains/system.router.ts` | Pilot: system-integrations router using new convention |
-| `server/tests/policy/routePolicy.test.ts` | Policy drift tests — fail if routes bypass required guards |
+The route registry is the single source of truth for all API routes. Every route mount is tracked with:
 
-## Policies
+- **path**: The Express mount path (e.g., `/api/v1/chat`)
+- **router**: The Express Router instance
+- **policy**: The authentication/authorization policy (`public`, `authOnly`, `authTenant`, `superUser`)
+- **domain**: A unique domain identifier (e.g., `chat`, `users`, `super-admin`)
+- **description**: Human-readable description
 
-| Policy | Factory-Applied Guards | Use Case |
-|--------|----------------------|----------|
-| `public` | None | Health checks, webhooks |
-| `authOnly` | `requireAuth` | Tenant onboarding, setup flows |
-| `authTenant` | `requireAuth` + `requireTenantContext` | Standard tenant-scoped API routes |
-| `superUser` | `requireAuth` + `requireSuperUser` | Admin-only system management |
+### Router Factory (`server/http/routerFactory.ts`)
 
-> **Note**: Request-ID (`X-Request-Id`), request logging, and CSRF middleware are applied **globally** at the app level (in `server/routes.ts`), not by the factory. The factory only applies auth/tenant/superUser guards specific to each policy. During the migration period, factory-mounted routers under `/api/*` also receive the legacy global auth/tenant guards — this is safe (idempotent) but redundant. Once all domains are migrated, the global guards in `routes.ts` will be removed.
+All routers are created using `createApiRouter(options)`:
 
-## Creating a New Domain Router
-
-```typescript
-// server/http/domains/myDomain.router.ts
-import { createApiRouter } from "../routerFactory";
+```ts
+import { createApiRouter } from "../http/routerFactory";
 
 const router = createApiRouter({
-  policy: "authTenant",          // choose appropriate policy
-  allowlist: ["/public-endpoint"], // optional: paths that bypass policy guards
+  policy: "authTenant",     // Required: auth policy
+  allowlist: ["/public"],   // Optional: paths exempt from policy
+  skipEnvelope: false,      // Optional: skip response envelope
 });
+```
 
-// Mount your route handlers
-router.get("/items", async (req, res) => {
-  const data = await getItems();
-  res.ok(data); // uses envelope helper
-});
+The factory automatically applies:
+1. **Response envelope middleware** — `res.ok()`, `res.fail()`, `res.sendSuccess()`, `res.sendError()`
+2. **Policy middleware** — Authentication and tenant context enforcement
 
-router.post("/items", async (req, res) => {
-  // policy guards already applied — user is authenticated + has tenant context
-  const item = await createItem(req.body);
-  res.ok(item, 201);
+### Mount System (`server/http/mount.ts`)
+
+`mountAllRoutes()` is called once during application startup. It:
+
+1. Clears any previous registry
+2. Applies global `apiNoCacheMiddleware` to `/api`
+3. Registers all domain routes with their metadata
+4. Mounts each router to its path via `app.use(path, router)`
+5. Starts background notification checkers
+
+### Policies
+
+| Policy | Auth Required | Tenant Required | Use Case |
+|--------|:---:|:---:|---|
+| `public` | No | No | Webhooks, health checks |
+| `authOnly` | Yes | No | Tenant onboarding, billing, cross-tenant routes |
+| `authTenant` | Yes | Yes | Most domain routes (tasks, projects, clients) |
+| `superUser` | Yes (super) | No | Super admin routes |
+
+## Domain Catalog
+
+### Core Domains (authTenant)
+
+| Domain | Mount Path | Description |
+|--------|-----------|-------------|
+| tags | /api | Tag CRUD and task-tag associations |
+| activity | /api | Activity log CRUD |
+| comments | /api | Comment CRUD, resolve/unresolve |
+| presence | /api | User presence tracking |
+| ai | /api | AI integration routes (OpenAI) |
+| attachments | /api | Attachment CRUD, presign, download |
+| flags | /api | CRM feature flags |
+| time | /api | Time tracking, timers, entries, reporting |
+| projects | /api | Projects CRUD, members, sections |
+| tasks | /api | Tasks CRUD, assignees, watchers, calendar |
+| subtasks | /api | Subtasks CRUD, move, assignees |
+| project-notes | /api | Project notes, categories, versions |
+| workspaces | /api | Workspace CRUD, members |
+| teams | /api | Team CRUD, members |
+| users | /api | User management, invitations, preferences |
+| crm | /api | CRM: pipeline, metrics, access control |
+| clients | /api | Client management, contacts, invites |
+| search | /api | Global search for command palette |
+| features | /api | Feature modules: notifications, portal, templates |
+| jobs | /api | Background job queue |
+
+### Versioned Domains (authTenant)
+
+| Domain | Mount Path | Description |
+|--------|-----------|-------------|
+| uploads | /api/v1/uploads | File upload: presign, proxy, status |
+| chat | /api/v1/chat | Internal chat system |
+| workload-reports | /api/v1 | Workload reports and analytics |
+| support | /api/v1/support | Support ticket system |
+| client-documents | /api/v1 | Document management |
+| automation | /api/v1 | Client stage automation |
+| assets | /api/v1 | Asset library |
+| control-center | /api/v1 | Control center widgets |
+| file-serve | /api/v1/files/serve | File serving |
+| projects-dashboard | /api/v1 | Project analytics and forecast |
+| tenant-data | /api/v1/tenant/data | Import/export, Asana import |
+
+### Super Admin Domains (superUser)
+
+| Domain | Mount Path | Description |
+|--------|-----------|-------------|
+| system-integrations | /api/v1/system | System integration management |
+| super-admin | /api/v1/super | Tenant CRUD, users, settings |
+| super-system-status | /api/v1/super | Health, auth diagnostics, DB status |
+| super-integrations | /api/v1/super | Mailgun, R2, Stripe config |
+| super-chat-export | /api/v1/super/chat | Chat data exports |
+| super-debug | /api/v1/super/debug | Debug tools, quarantine, backfill |
+| super-debug-chat | /api/v1/super/debug/chat | Chat debug metrics |
+| super-chat-monitoring | /api/v1/super/chat | Read-only chat monitoring |
+
+### Auth-Only Domains
+
+| Domain | Mount Path | Policy | Description |
+|--------|-----------|--------|-------------|
+| tenant-onboarding | /api/v1/tenant | authOnly | Onboarding, settings, branding |
+| tenant-billing | /api/v1/tenant | authOnly | Stripe billing, invoices |
+| email-outbox | /api/v1 | authOnly | Email logs for tenant and super |
+| chat-retention | /api/v1 | authOnly | Retention settings, archive |
+| tenancy-health | /api | authOnly | Tenancy integrity checks |
+| system-status | /api/v1/super/status | authOnly | Health checks (some public) |
+
+### Public Domains
+
+| Domain | Mount Path | Description |
+|--------|-----------|-------------|
+| webhooks | /api/v1/webhooks | Stripe webhooks (signature-verified) |
+
+## Guard Exempt Paths
+
+These paths bypass the global auth/tenant guards:
+
+- `/api/auth/*` — Authentication endpoints
+- `/api/v1/auth/*` — Versioned auth endpoints
+- `/api/v1/super/bootstrap` — Initial super admin setup
+- `/api/health` — Health check
+- `/api/v1/webhooks/*` — Webhook endpoints
+- `/api/v1/tenant/*` — Tenant onboarding
+
+## Testing
+
+### Policy Drift Test
+
+`server/tests/policy/routePolicyDrift.test.ts` ensures:
+
+- Zero legacy routes remain in the registry
+- All core domains are registered
+- No duplicate path+domain combinations
+- All routes have valid policies
+- All registered routes have non-null routers
+- Super admin routes use `superUser` policy
+- Webhook routes use `public` policy
+
+Run: `npx vitest run server/tests/policy/routePolicyDrift.test.ts`
+
+## Adding a New Route
+
+1. Create the router file in `server/http/domains/` using `createApiRouter`:
+
+```ts
+import { createApiRouter } from "../routerFactory";
+
+const router = createApiRouter({ policy: "authTenant" });
+
+router.get("/v1/my-domain/items", async (req, res) => {
+  // handler
 });
 
 export default router;
 ```
 
-Then register in `server/http/mount.ts`:
+2. Register in `server/http/mount.ts` by adding to `REGISTERED_DOMAINS`:
 
-```typescript
-import myDomainRouter from "./domains/myDomain.router";
-
-// Inside mountAllRoutes():
-registerRoute({
-  path: "/api/v1/my-domain",
+```ts
+{
+  path: "/api",
   router: myDomainRouter,
   policy: "authTenant",
   domain: "my-domain",
-  description: "Description of what this domain handles",
-  legacy: false,
-});
-
-// Mount it
-app.use("/api/v1/my-domain", myDomainRouter);
+  description: "My domain description.",
+},
 ```
 
-## Response Envelope Helpers
+3. Import the router at the top of mount.ts.
 
-New routes get `res.ok()` and `res.fail()` automatically:
+4. Update the policy drift test if adding a new core domain.
 
-```typescript
-// Success
-res.ok({ items: [...] });           // 200 by default
-res.ok({ id: "abc" }, 201);         // custom status
+## Migration History
 
-// Error
-res.fail("VALIDATION_ERROR", "Name is required", 400);
-res.fail("NOT_FOUND", "Item not found", 404);
-res.fail("INTERNAL_ERROR", "Something broke", 500, { debugInfo: "..." });
-```
+All routes were originally in `server/routes/` as plain Express routers with global auth middleware in `server/routes.ts`. They were progressively migrated to the registry-based model:
 
-These are **non-breaking additions** — existing `res.json()` / `res.status().json()` patterns continue to work.
+- Prompts #1-#14: Individual domain migrations (tags, activity, comments, etc.)
+- Prompt #3 (Route Consolidation): Final migration of all remaining legacy routes
 
-## Guard Allowlists
-
-Current auth-exempt paths (defined in `server/routes.ts`):
-- `/api/auth/*`
-- `/api/v1/auth/*`
-- `/api/v1/super/bootstrap`
-- `/api/health`
-- `/api/v1/webhooks/*`
-
-Current tenant-context-exempt paths:
-- `/api/auth/*`
-- `/api/health`
-- `/api/v1/super/*`
-- `/api/v1/tenant/*`
-- `/api/v1/webhooks/*`
-
-When a router-factory policy specifies an allowlist, it works at the router level — matching paths within that router that should skip the policy guards.
-
-## Policy Drift Tests
-
-Tests in `server/tests/policy/routePolicy.test.ts` verify:
-1. All registered routes have valid policies
-2. Webhooks use `public` policy
-3. Super admin routes use `superUser` policy
-4. Tags domain uses `authTenant` policy
-5. Non-legacy routes have actual router instances with factory metadata
-6. No rogue `app.use('/api'...)` mounts exist outside allowed files
-7. Guard allowlists match the actual exemptions in `routes.ts`
-
-Integration tests in `server/tests/integration/tagsRoutes.test.ts` verify:
-1. Unauthenticated requests blocked by factory authTenant policy (401)
-2. Authenticated requests reach handlers successfully
-3. Missing tenant context blocked (400/403)
-4. All tag CRUD routes match correctly (no express-level 404s)
-5. Factory metadata present with correct policy
-
-Run: `npx vitest run server/tests/policy/ server/tests/integration/`
-
-## Migrated Domains
-
-| Domain | Mount Path | Policy | Router File | Prompt | Date |
-|--------|-----------|--------|-------------|--------|------|
-| system-integrations | `/api/v1/system` | `superUser` | `server/http/domains/system.router.ts` | #1 (pilot) | Feb 2026 |
-| tags | `/api` | `authTenant` | `server/http/domains/tags.router.ts` | #2 | Feb 2026 |
-| activity | `/api` | `authTenant` | `server/http/domains/activity.router.ts` | #3 | Feb 2026 |
-| comments | `/api` | `authTenant` | `server/http/domains/comments.router.ts` | #4 | Feb 2026 |
-| presence | `/api` | `authTenant` | `server/http/domains/presence.router.ts` | #5 | Feb 2026 |
-| ai | `/api` | `authTenant` | `server/http/domains/ai.router.ts` | #5 | Feb 2026 |
-| attachments | `/api` | `authTenant` | `server/http/domains/attachments.router.ts` | #6 | Feb 2026 |
-| flags | `/api` | `authTenant` | `server/http/domains/flags.router.ts` | #7 | Feb 2026 |
-| uploads | `/api/v1/uploads` | `authTenant` | `server/http/domains/uploads.router.ts` | #7 | Feb 2026 |
-| chat | `/api/v1/chat` | `authTenant` | `server/http/domains/chat.router.ts` | #8 | Feb 2026 |
-| workspaces | `/api` | `authTenant` | `server/http/domains/workspaces.router.ts` | #14 | Feb 2026 |
-| teams | `/api` | `authTenant` | `server/http/domains/teams.router.ts` | #14 | Feb 2026 |
-| workload-reports | `/api/v1` | `authTenant` | `server/http/domains/workload-reports.router.ts` | #14 | Feb 2026 |
-
-### Presence Domain Migration Notes (Prompt #5)
-- **1 endpoint** migrated: GET `/v1/presence` (query all or specific user presence)
-- **skipEnvelope: true** — Legacy handler uses `res.json()` directly.
-- **Path mapping**: Legacy mount was `router.use("/v1/presence", presenceRoutes)` where handler used `/`. New router uses `/v1/presence` path directly, mounted at `/api`.
-- **Integration tests**: 5 smoke tests in `server/tests/integration/presenceRoutes.test.ts`.
-
-### AI Domain Migration Notes (Prompt #5)
-- **4 endpoints** migrated: GET `/v1/ai/status`, POST `/v1/ai/suggest/task-breakdown`, POST `/v1/ai/suggest/project-plan`, POST `/v1/ai/suggest/task-description`
-- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
-- **Policy: authTenant** — AI features are tenant-scoped. Legacy used `requireAuth` per-handler; factory policy now applies at router scope.
-- **Validation preserved**: Zod schemas for request body validation retained verbatim.
-- **Integration tests**: 8 smoke tests in `server/tests/integration/aiRoutes.test.ts`.
-
-### Attachments Domain Migration Notes (Prompt #6)
-- **7 endpoints** migrated: GET `/attachments/config`, GET `/crm/flags`, GET `/projects/:pid/tasks/:tid/attachments`, POST `/projects/:pid/tasks/:tid/attachments/presign`, POST `/projects/:pid/tasks/:tid/attachments/:aid/complete`, GET `/projects/:pid/tasks/:tid/attachments/:aid/download`, DELETE `/projects/:pid/tasks/:tid/attachments/:aid`
-- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
-- **Upload guard middleware introduced**: `server/http/middleware/uploadGuards.ts` provides `validateUploadRequest()` (filename sanitization, size/type logging), `sanitizeFilename()`, and `isFilenameUnsafe()`. Applied to the presign endpoint in warn/log-only mode — does not block existing flows.
-- **Storage side-effects preserved**: S3/R2 presigned URL generation, object existence checks, and deletion all retained verbatim.
-- **CRM flags co-located**: GET `/crm/flags` was in the legacy attachments router; migrated as-is to avoid breaking the endpoint. **Moved to its own flags.router.ts in Prompt #7.**
-- **Integration tests**: 10 smoke tests in `server/tests/integration/attachmentsRoutes.test.ts` covering auth, tenant enforcement, route matching, validation, metadata, and upload guards.
-
-### Uploads Domain Migration Notes (Prompt #7)
-- **3 endpoints** migrated: POST `/presign`, GET `/status`, POST `/upload` (multipart proxy)
-- **Mount path**: `/api/v1/uploads` — preserves legacy URL structure.
-- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
-- **Rate limiting preserved**: `uploadRateLimiter` applied to `/presign` and `/upload` endpoints as middleware.
-- **Legacy `requireAuth` removed**: Factory `authTenant` policy handles auth+tenant enforcement at router scope, replacing per-handler `requireAuth` calls.
-- **Upload guard middleware applied**: `validateUploadRequest()` on `/presign` with field mapping (`filename`/`contentType`/`size` fields).
-- **Integration tests**: 12 smoke tests in `server/tests/integration/uploadsRoutes.test.ts` covering auth, tenant, routing, validation, enforce-mode guard behavior, and metadata.
-
-### Chat Domain Migration Notes (Prompt #8)
-- **29 endpoints** migrated: channels CRUD + join/leave, DMs CRUD, messages send/edit/delete, thread replies, thread summaries, file uploads, read tracking, search, user lists, mentionable users, channel member management.
-- **Mount path**: `/api/v1/chat` — preserves legacy URL structure.
-- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
-- **De-duplication**: Removed 3 dead-code duplicate routes (PATCH/DELETE `/messages/:id` duplicated `/messages/:messageId`, GET `/users` duplicated at line 1230). Only first-registered Express routes were effective.
-- **Rate limiting preserved**: `chatSendRateLimiter` on POST `/channels/:channelId/messages` and POST `/dm/:dmId/messages`.
-- **Socket.IO integration preserved**: All `emitToTenant`, `emitToChatChannel`, `emitToChatDm` real-time broadcast calls retained verbatim.
-- **Chat debug instrumentation preserved**: All `chatDebugStore.logEvent()` calls retained for observability.
-- **Direct DB query**: GET `/messages/recent-since-login` uses direct Drizzle ORM query against `chatMessages` table (read-only). Not refactored to storage interface in this migration.
-- **File upload**: POST `/uploads` uses multer in-memory buffer + S3/R2 upload via `getStorageProvider()`.
-- **Policy tests**: 11 HTTP policy drift tests in `server/tests/chat-router-policy.test.ts`.
-
-### Socket.IO Policy Wrapper (Prompt #8/9)
-- **New file**: `server/realtime/socketPolicy.ts` — reusable `withSocketPolicy()` decorator for Socket.IO event handlers.
-- **Options**: `requireAuth`, `requireTenant`, `requireChatMembership`, `requireChatRoomAccess` — composable policy checks.
-- **AuthorizedContext**: Handler receives `{ userId, tenantId, socketId }` after policy checks pass.
-- **Membership validation**: When `requireChatMembership: true`, validates user is a member of the channel/DM specified by `conversationId`.
-- **Room Access validation**: When `requireChatRoomAccess: true`, validates user has access to the room specified by `targetType` and `targetId`.
-- **Caching**: Includes a lightweight membership cache to reduce database load on high-frequency events; automatically cleaned up on socket disconnection.
-- **Coverage**: `TYPING_EVENTS.START`, `TYPING_EVENTS.STOP`, `CHAT_ROOM_EVENTS.JOIN`, `CHAT_ROOM_EVENTS.LEAVE`, `PRESENCE_EVENTS.PING`, and `PRESENCE_EVENTS.IDLE` all use `withSocketPolicy()`.
-
-### Projects Domain Migration Notes (Prompt #11 — Slice 1: Projects Core)
-- **18 endpoints** migrated from `server/routes/projects.router.ts`:
-  - **Project CRUD** (6): GET `/projects`, `/projects/unassigned`, `/projects/hidden`, `/projects/:id`, POST `/projects`, PATCH `/projects/:id`
-  - **Project Members** (4): GET `/projects/:projectId/members`, POST `/projects/:projectId/members`, DELETE `/projects/:projectId/members/:userId`, PUT `/projects/:projectId/members`
-  - **Project Visibility** (3): POST `/projects/:projectId/hide`, DELETE `/projects/:projectId/hide`, GET `/projects/:projectId/hidden`
-  - **Sections** (4): GET `/projects/:projectId/sections`, POST `/sections`, PATCH `/sections/:id`, DELETE `/sections/:id`
-  - **Task Reorder** (1): PATCH `/projects/:projectId/tasks/reorder`
-- **skipEnvelope: true** — All handlers use `res.json()` directly with established response shapes.
-- **Tenancy-aware**: Uses `getEffectiveTenantId()` with super-user fallback for project CRUD, client/division validation on create/update, cross-tenant member validation.
-- **Key behaviors preserved**:
-  - POST `/projects` requires `clientId` when tenant context is present (400 if missing).
-  - Client/division cross-validation on create and update (validates ownership, division-to-client association).
-  - Project member notifications on update (via `notifyProjectUpdate` / `notifyProjectMemberAdded`).
-  - Real-time events: `emitProjectCreated`, `emitProjectUpdated`, `emitSectionCreated/Updated/Deleted`, `emitTaskReordered`.
-- **Dashboard endpoints NOT migrated** (separate concern at `/api/v1`):
-  - GET `/v1/projects` (dashboard list with counts/filters), `/v1/projects/analytics/summary`, `/v1/projects/:projectId/analytics`, `/v1/projects/:projectId/forecast`, `/v1/projects/forecast/summary`
-  - Remain in `server/routes/projectsDashboard.ts` mounted via `router.use("/v1", projectsDashboardRoutes)` — candidate for Slice 1b.
-- **Policy drift tests**: 19 tests in `server/tests/projects-router-policy.test.ts` (18 auth rejection + 1 factory metadata).
-- **Integration tests**: 30 tests in `server/tests/integration/projectsRoutes.test.ts` covering auth rejection (live + mini app), tenant enforcement (4 tests: no-tenant → 400/403), behavior assertions (4 tests: not-found → 404, missing clientId → 400), route matching (members + visibility + sections + reorder), and registry metadata.
-- **Next**: Slice 2 (Tasks core) migrated in Prompt #12.
-
-### Tasks Domain Migration Notes (Prompt #12 — Slice 2: Tasks Core)
-- **22 endpoints** migrated from `server/routes/tasks.router.ts`:
-  - **Project-scoped queries** (3): GET `/projects/:projectId/tasks`, `/projects/:projectId/calendar-events`, `/projects/:projectId/activity`
-  - **Task CRUD** (9): GET `/tasks/my`, `/tasks/:id`, `/tasks/:id/childtasks`, POST `/tasks`, `/tasks/personal`, `/tasks/:taskId/childtasks`, PATCH `/tasks/:id`, DELETE `/tasks/:id`, POST `/tasks/:id/move`
-  - **Task Assignees** (2): POST `/tasks/:taskId/assignees`, DELETE `/tasks/:taskId/assignees/:userId`
-  - **Task Watchers** (3): GET `/tasks/:taskId/watchers`, POST `/tasks/:taskId/watchers`, DELETE `/tasks/:taskId/watchers/:userId`
-  - **Personal Task Sections** (5): GET/POST `/v1/my-tasks/sections`, PATCH/DELETE `/v1/my-tasks/sections/:id`, POST `/v1/my-tasks/tasks/:taskId/move`
-- **skipEnvelope: true** — All handlers use `res.json()` directly.
-- **Tenancy-aware**: Uses `getEffectiveTenantId()` with super-user fallback for task CRUD/delete/move/assignees. Cross-tenant assignee validation on create. Tenant-scoped personal tasks/sections.
-- **Key behaviors preserved**:
-  - POST `/tasks` auto-assigns creator when no assigneeIds provided. Validates cross-tenant assignees.
-  - POST `/tasks/:taskId/childtasks` inherits parent's projectId/sectionId. Max 2-level depth enforced.
-  - PATCH `/tasks/:id` sends notifications on status changes (completed, other status transitions).
-  - Real-time events: `emitTaskCreated/Updated/Deleted/Moved`, `emitMyTaskCreated/Updated/Deleted`.
-- **Legacy split**: Subtask endpoints (14) migrated in Slice 3 (Prompt #13) — see below.
-- **Policy drift tests**: 23 tests in `server/tests/tasks-router-policy.test.ts` (22 auth rejection + 1 factory metadata).
-- **Integration tests**: 31 tests in `server/tests/integration/tasksRoutes.test.ts` covering auth rejection (live + mini app), tenant enforcement (4 tests), behavior assertions (6 tests: not-found → 404), route matching (8 tests), and registry metadata.
-
-### Subtasks Domain Migration Notes (Prompt #13 — Slice 3: Subtasks)
-- **14 endpoints** migrated from `server/routes/subtasks.router.ts`:
-  - **Subtask CRUD** (4): GET/POST `/tasks/:taskId/subtasks`, PATCH/DELETE `/subtasks/:id`
-  - **Subtask Reorder** (1): POST `/subtasks/:id/move`
-  - **Subtask Detail** (1): GET `/subtasks/:id/full`
-  - **Subtask Assignees** (3): GET/POST `/subtasks/:id/assignees`, DELETE `/subtasks/:subtaskId/assignees/:userId`
-  - **Subtask Tags** (3): GET/POST `/subtasks/:id/tags`, DELETE `/subtasks/:subtaskId/tags/:tagId`
-  - **Subtask Comments** (2): GET/POST `/subtasks/:subtaskId/comments`
-- **skipEnvelope: true** — All handlers use `res.json()` directly.
-- **Tenancy-aware**: Uses `getEffectiveTenantId()` with super-user fallback for subtask CRUD/delete, comment listing/creation. Parent task tenant validation on create/update/delete.
-- **Key behaviors preserved**:
-  - POST `/tasks/:taskId/subtasks` validates parent task tenant ownership, emits `emitSubtaskCreated`.
-  - PATCH `/subtasks/:id` validates parent task ownership, date coercion for dueDate, emits `emitSubtaskUpdated`.
-  - DELETE `/subtasks/:id` validates parent task ownership, emits `emitSubtaskDeleted`.
-  - POST `/subtasks/:subtaskId/comments` handles @mentions (createCommentMention, notifyCommentMention), assignee notifications (notifyCommentAdded), email outbox for mention emails.
-  - Duplicate assignee/tag detection via PostgreSQL unique constraint (error code 23505 → 409 Conflict).
-- **Task-Tag linkage**: Already migrated in Tags router (Prompt #2) — POST/DELETE `/tasks/:taskId/tags` in `server/http/domains/tags.router.ts`. No separate taskTags router needed.
-- **Policy drift tests**: 15 tests in `server/tests/subtasks-router-policy.test.ts` (14 auth rejection + 1 factory metadata).
-- **Integration tests**: 32 tests in `server/tests/integration/subtasksRoutes.test.ts` covering auth rejection (live 8 + mini app 6), tenant enforcement (4 tests), behavior assertions (7 tests: not-found → 404, validation → 400), route matching (6 tests), and registry metadata.
-- **Tasks/Subtasks migration complete**: All 36 original endpoints from legacy `tasks.router.ts` now migrated (22 tasks + 14 subtasks).
-- **Next**: Remaining legacy domains — users, clients, CRM, search, super-admin, or shift to Track B/C/D.
-
-### Workspaces Domain Migration Notes (Prompt #14)
-- **8 endpoints** migrated from `server/routes/workspaces.router.ts`:
-  - GET `/workspaces` (list by user), GET `/workspaces/current`, GET `/workspaces/:id`, POST `/workspaces`, PATCH `/workspaces/:id`
-  - GET `/workspaces/:workspaceId/members`, POST `/workspaces/:workspaceId/members`, GET `/workspace-members`
-- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
-- **Tenancy-aware**: Uses `getCurrentUserId()` for workspace listing, `getCurrentWorkspaceIdAsync()` for current workspace, `getCurrentWorkspaceId()` for workspace-members.
-- **Key behaviors preserved**: Workspace creation auto-adds creator as "owner" member. ZodError handling for POST/members body validation.
-- **Policy drift tests**: 9 tests in `server/tests/workspaces-router-policy.test.ts` (8 auth rejection + 1 factory metadata).
-- **Integration tests**: 13 tests in `server/tests/integration/workspacesRoutes.test.ts` covering auth rejection, tenant enforcement, route matching, and factory metadata.
-
-### Teams Domain Migration Notes (Prompt #14)
-- **8 endpoints** migrated from `server/routes/teams.router.ts`:
-  - GET `/teams`, GET `/teams/:id`, POST `/teams`, PATCH `/teams/:id`, DELETE `/teams/:id`
-  - GET `/teams/:teamId/members`, POST `/teams/:teamId/members`, DELETE `/teams/:teamId/members/:userId`
-- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
-- **Tenancy-aware**: Uses `getEffectiveTenantId()` with super-user fallback for team listing and creation. Per-team tenant validation on get/update/delete.
-- **Key behaviors preserved**: Team creation injects `tenantId` and `createdBy`. ZodError handling for POST/PATCH body validation. Team not-found returns 404. Delete validates team belongs to tenant.
-- **Policy drift tests**: 9 tests in `server/tests/teams-router-policy.test.ts` (8 auth rejection + 1 factory metadata).
-- **Integration tests**: 13 tests in `server/tests/integration/teamsRoutes.test.ts` covering auth rejection, tenant enforcement, behavior assertions (404 for nonexistent), route matching, and factory metadata.
-
-### Workload Reports Domain Migration Notes (Prompt #14)
-- **6 endpoints** migrated from `server/routes/workloadReports.ts`:
-  - GET `/workload/tasks-by-employee`, GET `/workload/employee/:userId/tasks`, GET `/workload/unassigned`
-  - GET `/workload/by-status`, GET `/workload/by-priority`, GET `/workload/summary`
-- **Mount path**: `/api/v1` — preserves legacy URL structure (`router.use("/v1", workloadReportsRoutes)`).
-- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
-- **Admin-only enforcement**: All 6 endpoints check `isAdmin(req)` and throw `AppError.forbidden("Admin access required")` for non-admin users.
-- **Tenancy-aware**: Uses `getEffectiveTenantId()` with super-user fallback for all queries. Cross-references tenant-scoped projects for task filtering.
-- **Key behaviors preserved**: `tasks-by-employee` aggregates per-user task stats, `employee/:userId/tasks` validates user tenant ownership, `summary` combines all metrics (total tasks, active projects, team members, completion rates).
-- **Policy drift tests**: 7 tests in `server/tests/workload-reports-router-policy.test.ts` (6 auth rejection + 1 factory metadata).
-- **Integration tests**: 16 tests in `server/tests/integration/workloadReportsRoutes.test.ts` covering auth rejection, admin-only enforcement (5 endpoints × 403), route matching, and factory metadata.
-
-### Time Domain Migration Notes (Prompt #10)
-- **18 endpoints** migrated from two legacy files:
-  - `server/routes/timeTracking.router.ts` (18 endpoints, tenancy-aware)
-  - `server/routes/timeTracking.ts` (7 overlapping timer endpoints, simpler version)
-- **Timer CRUD** (7): GET/PATCH/DELETE `/timer/current`, POST `/timer/start`, `/timer/pause`, `/timer/resume`, `/timer/stop`
-- **Time Entry CRUD** (7): GET `/time-entries`, `/time-entries/my`, `/time-entries/my/stats`, `/time-entries/:id`, POST `/time-entries`, PATCH `/time-entries/:id`, DELETE `/time-entries/:id`
-- **Reporting** (2): GET `/time-entries/report/summary`, `/time-entries/export/csv`
-- **Calendar** (2): GET `/calendar/events`, `/my-calendar/events`
-- **skipEnvelope: true** — All handlers use `res.json()` directly. Envelope helpers available but not adopted to maintain response compatibility.
-- **Invariants confirmed**:
-  - Single active timer per user: Starting a timer while one exists returns 409 Conflict.
-  - Timer must be running to pause; must be paused to resume.
-  - Stop with `discard: true` deletes timer without creating a time entry.
-  - Stop without discard + zero duration throws 400.
-  - No overlap enforcement on time entries (manual entries can overlap).
-- **Tenancy-aware**: Full strict/soft/legacy mode support preserved. Timer and time entry operations respect `isStrictMode()` / `isSoftMode()` with appropriate warning headers and fallback queries for legacy records.
-- **Policy drift tests**: 19 tests in `server/tests/time-router-policy.test.ts` (18 auth rejection + 1 factory metadata).
-- **Integration tests**: 30 tests in `server/tests/integration/timeRoutes.test.ts` covering auth rejection (live + mini app), tenant enforcement (4 tests: no-tenant → 400/403), timer invariants (4 tests: stop/pause/resume/delete with no active timer → 404), route matching (timer + time entry + reporting + calendar), and registry metadata.
-
-### Flags Domain Migration Notes (Prompt #7)
-- **1 endpoint**: GET `/crm/flags` — CRM feature flags.
-- **Extracted from attachments router**: Restores domain boundaries; `/crm/flags` was co-located in the legacy attachments router file.
-- **skipEnvelope: true** — Returns raw JSON response.
-- **Integration tests**: 4 smoke tests in `server/tests/integration/flagsRoutes.test.ts`.
-
-### Upload Guards: Warn/Enforce Mode (Prompt #7)
-- **`UPLOAD_GUARDS_MODE` env var**: Controls guard behavior. Values: `warn` (default) or `enforce`.
-- **Warn mode** (default): Logs structured warnings for unsafe filenames, oversized files, unexpected MIME types. Does not block requests.
-- **Enforce mode**: Blocks path traversal attempts, dangerous file extensions (.exe/.bat/etc), and absurd file sizes with `400 Bad Request`. Applied only when `UPLOAD_GUARDS_MODE=enforce`.
-- **Field mapping**: `validateUploadRequest()` supports configurable field names (`filenameField`, `mimeTypeField`, `sizeField`) to work with different request schemas (attachments use `fileName`/`mimeType`/`fileSizeBytes`, uploads use `filename`/`contentType`/`size`).
-- **Applied to**: Attachments presign endpoint + Uploads presign endpoint.
-
-### Registry-Only Mounting (Prompt #5)
-- **mount.ts refactored**: Domain routers are now declared in `MIGRATED_DOMAINS` array and registered via `registerRoute()`. All non-legacy routes are mounted by iterating `getRouteRegistry()` — no direct `app.use(path, router)` calls for individual domains.
-- **Policy drift test added**: Verifies mount.ts has no direct `app.use()` calls with router literals, and confirms registry iteration pattern is present.
-
-### Comments Domain Migration Notes (Prompt #4)
-- **6 endpoints** migrated: GET/POST `/tasks/:taskId/comments`, PATCH/DELETE `/comments/:id`, POST `/comments/:id/resolve`, POST `/comments/:id/unresolve`
-- **Mixed URL prefixes**: Routes span `/tasks/:taskId/comments` and `/comments/:id`. Mounted at `/api` to preserve all paths.
-- **skipEnvelope: true** — Legacy handlers use `res.json()` directly. Envelope helpers available but not adopted to maintain response compatibility.
-- **Notification side-effects preserved**: POST comment handler includes @mention notifications, email outbox, and assignee notifications — all retained verbatim.
-- **Integration tests**: 9 smoke tests in `server/tests/integration/commentsRoutes.test.ts` covering auth rejection, tenant enforcement, route matching, and metadata.
-
-### Activity Domain Migration Notes (Prompt #3)
-- **2 endpoints** migrated: POST `/activity-log`, GET `/activity-log/:entityType/:entityId`
-- **skipEnvelope: true** — Legacy handlers use `res.json()` directly.
-- **Smallest migration**: Only 2 endpoints, no side-effects.
-
-### Tags Domain Migration Notes (Prompt #2)
-- **6 endpoints** migrated: tag CRUD (GET, POST, PATCH, DELETE) + task-tag associations (POST, DELETE)
-- **Mixed URL prefixes**: Routes span `/workspaces/:id/tags`, `/tags/:id`, and `/tasks/:id/tags`. Mounted at `/api` to preserve all paths.
-- **skipEnvelope: true** — Legacy handlers use `res.json()` directly. Envelope helpers available but not adopted to maintain response compatibility.
-- **Double-guard**: Global auth+tenant from `routes.ts` runs first (idempotent), then factory's `authTenant` policy runs. Safe but redundant.
-- **No internal auth guards** — All auth/tenant enforcement came from global middleware, now handled by factory policy.
-
-## Migration Playbook (Next Domain)
-
-To migrate the next domain (Prompt #3):
-
-1. **Pick a domain** from the registry (look for `legacy: true` entries)
-2. **Create** `server/http/domains/<domain>.router.ts` using `createApiRouter()`
-3. **Move** the route handlers from the legacy router to the new domain file
-4. **Comment out** the legacy mount in `routes/index.ts` (add TODO marker)
-5. **Register** in `MIGRATED_DOMAINS` array in `mount.ts` — routers are auto-mounted via registry iteration
-6. **Add smoke tests** — at least: 401 unauth, 200 auth+tenant, route matching
-7. **Update policy drift tests** — verify the new domain's policy is declared
-8. **Test** — all tests must pass
-9. **Verify** — URLs unchanged, existing behavior preserved
-
-### Recommended migration order (low to high risk):
-1. `/api/v1/system` — system integrations (DONE - Prompt #1 pilot)
-2. `/api` tags — tag CRUD + task-tag associations (DONE - Prompt #2)
-3. `/api` activity — activity log (DONE - Prompt #3)
-4. `/api` comments — comment CRUD (DONE - Prompt #4)
-5. `/api/v1/presence` — presence tracking (DONE - Prompt #5)
-6. `/api/v1/ai` — AI routes (DONE - Prompt #5)
-7. `/api` attachments — attachment upload/download (DONE - Prompt #6)
-8. `/api/v1/uploads` — file uploads (DONE - Prompt #7)
-   - Also: `/api` flags — CRM feature flags (DONE - Prompt #7, extracted from attachments)
-9. `/api/v1/chat` — chat system (DONE - Prompt #8, 29 endpoints + socket policy pilot)
-10. `/api` time — time tracking, timers, calendar, reporting (DONE - Prompt #10, 18 endpoints)
-11. `/api` projects — project CRUD, members, visibility, sections, reorder (DONE - Prompt #11, 18 endpoints)
-    - Dashboard endpoints (`/api/v1/projects/*` analytics/forecast) remain legacy — candidate Slice 1b
-12. `/api` tasks — task CRUD, assignees, watchers, personal tasks/sections, move, child tasks (DONE - Prompt #12, 22 endpoints)
-13. `/api` subtasks — subtask CRUD, move, assignees, tags, comments (DONE - Prompt #13, 14 endpoints)
-    - Task-tag linkage (POST/DELETE `/tasks/:taskId/tags`) already in tags.router.ts — no separate taskTags router needed
-14. `/api` workspaces — workspace CRUD, members, current workspace (DONE - Prompt #14, 8 endpoints)
-    `/api` teams — team CRUD, members (DONE - Prompt #14, 8 endpoints)
-    `/api/v1` workload-reports — workload analytics, admin-only (DONE - Prompt #14, 6 endpoints)
-15. `/api` — remaining legacy domains: users, clients, CRM, search (NEXT)
-16. `/api/v1/super` — super admin (large, many sub-routers)
-
-### Known Risks
-
-- **Double middleware**: Legacy global auth/tenant guards in `routes.ts` apply to ALL `/api/*` paths. New factory-mounted routers under `/api/*` will get both the global guards AND their factory policy guards. Auth checks are idempotent, so this is safe but redundant. Once ALL domains are migrated, remove global guards from `routes.ts`.
-- **URL stability**: Never change external URLs during migration. Mount new routers at the exact same paths.
-- **Mixed-prefix domains**: Some legacy domains (tags, comments, activity) use routes under multiple URL prefixes (e.g., `/workspaces/:id/tags` AND `/tags/:id`). These must be mounted at `/api` level, not a more specific prefix.
-- **Error handler ordering**: Express error middleware must remain LAST. New routers are mounted before error handlers via `mountAllRoutes()`.
-- **skipEnvelope for compatibility**: Use `skipEnvelope: true` when migrating handlers that use `res.json()` directly. This preserves response format compatibility. Envelope helpers can be adopted incrementally later.
-
-## Preferred API Version
-
-`/api/v1` is the preferred prefix for new routes. Legacy `/api` prefix exists for backward compatibility.
+The legacy `server/routes/` folder is preserved but deprecated. `server/routes.ts` delegates to `mountAllRoutes()` for backward compatibility with test harnesses.

@@ -1,11 +1,12 @@
-import { Router, raw } from "express";
+import { raw } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import {
   getStripeWebhookSecret,
   getStripeSecretKey,
   StripeConfigError,
 } from "../config/stripe";
 
-const router = Router();
+const router = createApiRouter({ policy: "public", skipEnvelope: true });
 
 function errorEnvelope(
   code: string,

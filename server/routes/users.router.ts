@@ -1,4 +1,5 @@
-import { Router, Request, Response, RequestHandler } from "express";
+import { Request, Response, RequestHandler } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import crypto from "crypto";
 import { z } from "zod";
 import multer from "multer";
@@ -29,7 +30,7 @@ import {
 } from "@shared/schema";
 import { cleanupUserReferences } from "../utils/userDeletion";
 
-const router = Router();
+const router = createApiRouter({ policy: "authTenant" });
 
 const avatarUpload = multer({
   storage: multer.memoryStorage(),

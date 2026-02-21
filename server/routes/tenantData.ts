@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import express from "express";
 import { storage } from "../storage";
 import { db } from "../db";
@@ -19,7 +19,7 @@ import { recordTenantAuditEvent } from "./superAdmin";
 
 const largeJsonParser = express.json({ limit: "200mb" });
 
-const router = Router();
+const router = createApiRouter({ policy: "authTenant" });
 
 function requireTenantAdmin(req: any, res: any, next: any) {
   const user = req.user as any;

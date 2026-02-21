@@ -1,4 +1,4 @@
-import { Router } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import { db } from "../db";
 import { tenants, systemSettings, users } from "@shared/schema";
 import { eq } from "drizzle-orm";
@@ -7,7 +7,7 @@ import { decryptValue, isEncryptionAvailable } from "../lib/encryption";
 import { AppError, handleRouteError } from "../lib/errors";
 import Stripe from "stripe";
 
-const router = Router();
+const router = createApiRouter({ policy: "authOnly" });
 
 function requireTenantAdmin(req: any, res: any, next: any) {
   const user = req.user;

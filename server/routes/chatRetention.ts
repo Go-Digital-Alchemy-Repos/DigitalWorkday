@@ -1,4 +1,5 @@
-import { Router, Request, Response, NextFunction } from "express";
+import { Request, Response, NextFunction } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import { db } from "../db";
 import { 
   systemSettings, 
@@ -17,7 +18,7 @@ import { PutObjectCommand, GetObjectCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 import { AppError, handleRouteError } from "../lib/errors";
 
-const router = Router();
+const router = createApiRouter({ policy: "authOnly" });
 
 const requireTenantAdmin = (req: Request, res: Response, next: NextFunction) => {
   if (!req.user) {

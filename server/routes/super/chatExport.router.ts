@@ -4,23 +4,14 @@
  * API endpoints for managing chat data exports before purge operations.
  * Only accessible by Super Admins.
  */
-import { Router, Request, Response, NextFunction } from "express";
+import { Request, Response } from "express";
+import { createApiRouter } from "../../http/routerFactory";
 import { storage } from "../../storage";
 import { startChatExport } from "../../services/chatExport.service";
 import { createPresignedDownloadUrl, isR2Configured } from "../../s3";
 import { z } from "zod";
-import { UserRole } from "@shared/schema";
 
-const router = Router();
-
-function requireSuperAdmin(req: Request, res: Response, next: NextFunction) {
-  if (!req.user || req.user.role !== UserRole.SUPER_USER) {
-    return res.status(403).json({ error: "Super Admin access required" });
-  }
-  next();
-}
-
-router.use(requireSuperAdmin);
+const router = createApiRouter({ policy: "superUser" });
 
 const createExportSchema = z.object({
   scopeType: z.enum(["tenant", "all"]),

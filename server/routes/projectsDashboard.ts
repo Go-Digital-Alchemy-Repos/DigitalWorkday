@@ -1,10 +1,11 @@
-import { Router, Request } from "express";
+import { Request } from "express";
+import { createApiRouter } from "../http/routerFactory";
 import { DatabaseStorage } from "../storage";
 import { getEffectiveTenantId } from "../middleware/tenantContext";
 import { UserRole, TaskWithRelations } from "@shared/schema";
 import { AppError, handleRouteError } from "../lib/errors";
 
-const router = Router();
+const router = createApiRouter({ policy: "authTenant" });
 const storage = new DatabaseStorage();
 
 interface LightweightTask {
