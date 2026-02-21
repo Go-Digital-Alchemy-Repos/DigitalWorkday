@@ -110,6 +110,7 @@ export interface CrmSummary {
     nextFollowUpAt: string | null;
     followUpNotes: string | null;
   } | null;
+  ownerName?: string | null;
   counts: {
     projects: number;
     openTasks: number;
@@ -163,9 +164,31 @@ export const CRM_STATUS_MAP: Record<string, { label: string; variant: "default" 
   on_hold: { label: "On Hold", variant: "secondary" },
 };
 
-export function CrmOverviewSection({ clientId, summary, isLoading, onNavigateTab }: { clientId: string; summary?: CrmSummary; isLoading: boolean; onNavigateTab?: (tab: string) => void }) {
+export function CrmOverviewSection({ clientId, summary, isLoading, onNavigateTab, onUpdate }: { clientId: string; summary?: CrmSummary; isLoading: boolean; onNavigateTab?: (tab: string) => void; onUpdate?: () => void }) {
+  const { toast } = useToast();
   const crmFlags = useCrmFlags();
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
+
+  const { data: users = [] } = useQuery<any[]>({
+    queryKey: ["/api/users"],
+  });
+
+  const updateOwnerMutation = useMutation({
+    mutationFn: async (ownerUserId: string | null) => {
+      await apiRequest("PATCH", `/api/crm/clients/${clientId}/crm`, {
+        ownerUserId: ownerUserId === "__unassigned__" ? null : ownerUserId,
+      });
+    },
+    onSuccess: () => {
+      toast({ title: "Owner updated", description: "The client owner has been updated successfully." });
+      queryClient.invalidateQueries({ queryKey: [`/api/crm/clients/${clientId}/summary`] });
+      if (onUpdate) onUpdate();
+    },
+    onError: (error: any) => {
+      const { title, description } = formatErrorForToast(error);
+      toast({ title, description, variant: "destructive" });
+    },
+  });
 
   if (isLoading) {
     return (
@@ -206,14 +229,33 @@ export function CrmOverviewSection({ clientId, summary, isLoading, onNavigateTab
 
         <Card data-testid="card-crm-owner">
           <CardContent className="pt-5 pb-4 px-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1 rounded-md bg-emerald-500/10">
-                <User className="h-4 w-4 text-emerald-500" />
+            <div className="flex items-center justify-between mb-2">
+              <div className="flex items-center gap-2">
+                <div className="p-1 rounded-md bg-emerald-500/10">
+                  <User className="h-4 w-4 text-emerald-500" />
+                </div>
+                <span className="text-sm text-muted-foreground">Owner</span>
               </div>
-              <span className="text-sm text-muted-foreground">Owner</span>
+              <Select
+                value={summary.crm?.ownerUserId || "__unassigned__"}
+                onValueChange={(val) => updateOwnerMutation.mutate(val)}
+                disabled={updateOwnerMutation.isPending}
+              >
+                <SelectTrigger className="h-7 w-[130px] text-xs" data-testid="select-crm-owner">
+                  <SelectValue placeholder="Select owner" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="__unassigned__">Unassigned</SelectItem>
+                  {users.map((user: any) => (
+                    <SelectItem key={user.id} value={user.id.toString()}>
+                      {user.name}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <span className="text-sm font-medium" data-testid="text-crm-owner">
-              {summary.crm?.ownerUserId ? "Assigned" : "Unassigned"}
+              {summary.ownerName || "Unassigned"}
             </span>
           </CardContent>
         </Card>
