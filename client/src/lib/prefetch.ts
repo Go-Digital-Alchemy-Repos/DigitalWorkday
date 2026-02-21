@@ -40,19 +40,27 @@ function fireTenantPrefetch(): void {
   }
 }
 
-export function prefetchPostLogin(role?: string): void {
-  if (prefetchFired || !isNetworkOk()) return;
+export interface PrefetchOptions {
+  role?: string;
+  prefetchEnabled?: boolean;
+}
 
-  if (role === "client") return;
+export function prefetchPostLogin(opts: PrefetchOptions): void {
+  if (prefetchFired) return;
+  if (opts.prefetchEnabled === false) return;
+  if (!isNetworkOk()) return;
 
-  if (role === "super_user") return;
+  if (opts.role === "client") return;
+  if (opts.role === "super_user") return;
 
   prefetchFired = true;
   schedulePrefetch(fireTenantPrefetch);
 }
 
-export function prefetchTenantRoutes(): void {
-  if (prefetchFired || !isNetworkOk()) return;
+export function prefetchTenantRoutes(prefetchEnabled?: boolean): void {
+  if (prefetchFired) return;
+  if (prefetchEnabled === false) return;
+  if (!isNetworkOk()) return;
   prefetchFired = true;
   schedulePrefetch(fireTenantPrefetch);
 }

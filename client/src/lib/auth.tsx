@@ -2,7 +2,7 @@ import { createContext, useContext, useState, useEffect, useCallback, type React
 import { useLocation } from "wouter";
 import { type User, UserRole } from "@shared/schema";
 import { clearActingAsState, setSuperUserFlag, queryClient } from "./queryClient";
-import { prefetchPostLogin, resetPrefetchState } from "./prefetch";
+import { prefetchPostLogin, resetPrefetchState, type PrefetchOptions } from "./prefetch";
 
 interface UserImpersonationData {
   isImpersonating: boolean;
@@ -34,6 +34,22 @@ interface AuthContextType {
 
 const AuthContext = createContext<AuthContextType | null>(null);
 
+async function fetchPrefetchFlag(): Promise<boolean> {
+  try {
+    const res = await fetch("/api/features/flags", { credentials: "include" });
+    if (!res.ok) return true;
+    const data = await res.json();
+    return data.prefetchV1 !== false;
+  } catch {
+    return true;
+  }
+}
+
+async function triggerPrefetch(role?: string): Promise<void> {
+  const enabled = await fetchPrefetchFlag();
+  prefetchPostLogin({ role, prefetchEnabled: enabled });
+}
+
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [user, setUser] = useState<Omit<User, "passwordHash"> | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -62,7 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user);
         setUserImpersonation(data.impersonation || null);
         setSuperUserFlag(data.user?.role === UserRole.SUPER_USER);
-        prefetchPostLogin(data.user?.role);
+        triggerPrefetch(data.user?.role);
       } else {
         console.log("[Auth] /api/auth/me failed:", response.status);
         setUser(null);
@@ -113,6 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setIsLoading(false);
           // Set super user flag based on user role
           setSuperUserFlag(meData.user?.role === UserRole.SUPER_USER);
+          triggerPrefetch(meData.user?.role);
         }
         
         return { success: true, user: data.user };

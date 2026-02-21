@@ -1,6 +1,7 @@
 # Predictive Prefetch After Authentication
 
 **Added:** 2026-02-19
+**Updated:** 2026-02-21 — Feature flag guard (`PREFETCH_V1`)
 
 ---
 
@@ -10,17 +11,32 @@ After a user logs in (or has their session restored), the most commonly visited 
 
 ---
 
+## Feature Flag
+
+Prefetch is guarded behind the `PREFETCH_V1` feature flag.
+
+| Layer | Location | Default |
+|---|---|---|
+| Server env | `PREFETCH_V1` env var | `true` (on) |
+| Server config | `config.features.prefetchV1` | `true` |
+| API endpoint | `GET /api/features/flags` → `prefetchV1` | `true` |
+| Client hook | `useFeatureFlags().prefetchV1` | `false` (safe fallback) |
+
+Set `PREFETCH_V1=false` to disable prefetch globally without a code deploy.
+
+---
+
 ## How It Works
 
 ### Trigger Points
 
 | Trigger | File | When |
 |---|---|---|
-| Login form success | `client/src/pages/login.tsx` | After `login()` returns `success: true` |
 | Session restore | `client/src/lib/auth.tsx` | After `/api/auth/me` returns a valid user |
+| Login form success | `client/src/lib/auth.tsx` | After `login()` completes and `/me` re-fetch succeeds |
 | Tenant selection | `client/src/hooks/useAppMode.ts` | When super user enters tenant mode via `startImpersonation()` |
 
-Login and session restore call `prefetchPostLogin(role)`. Tenant selection calls `prefetchTenantRoutes()`. Both are in `client/src/lib/prefetch.ts`.
+Session restore and login call `triggerPrefetch(role)` which fetches the flag from `/api/features/flags` and then delegates to `prefetchPostLogin({ role, prefetchEnabled })`. Tenant selection calls `prefetchTenantRoutes(prefetchV1)` using the hook value.
 
 ### Scheduling
 
@@ -36,6 +52,7 @@ Prefetch is **skipped entirely** when:
 - `navigator.connection.saveData` is `true` (user opted to save data).
 - `navigator.connection.effectiveType` is `"2g"` or `"slow-2g"`.
 - Prefetch has already fired in the current session (`prefetchFired` guard).
+- `prefetchEnabled` is `false` (flag disabled).
 
 ### Max Prefetch Count
 
@@ -79,10 +96,12 @@ Heavy extras (emoji picker, rich text editor, calendar libraries) are **not** pr
 
 | File | Role |
 |---|---|
-| `client/src/lib/prefetch.ts` | Orchestrator: gating, scheduling, module list |
-| `client/src/lib/auth.tsx` | Calls prefetch on session restore; resets on logout |
-| `client/src/pages/login.tsx` | Calls prefetch on login success |
-| `client/src/hooks/useAppMode.ts` | Calls prefetch on tenant selection (super user entering tenant mode) |
+| `client/src/lib/prefetch.ts` | Orchestrator: gating, scheduling, module list, flag check |
+| `client/src/lib/auth.tsx` | Calls `triggerPrefetch()` on session restore and login; resets on logout |
+| `client/src/hooks/useAppMode.ts` | Calls `prefetchTenantRoutes(prefetchV1)` on tenant selection |
+| `client/src/hooks/use-feature-flags.ts` | Provides `prefetchV1` flag from server |
+| `server/config.ts` | `config.features.prefetchV1` from `PREFETCH_V1` env var |
+| `server/http/domains/flags.router.ts` | Exposes `prefetchV1` in `/api/features/flags` |
 
 ---
 
@@ -92,3 +111,4 @@ Heavy extras (emoji picker, rich text editor, calendar libraries) are **not** pr
 - Network tab shows prefetch loads fire once (idle/deferred).
 - No prefetch for client portal or super admin users.
 - Subsequent navigation to prefetched pages is instant (no loading spinner).
+- Set `PREFETCH_V1=false` → prefetch does not fire.

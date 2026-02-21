@@ -10,7 +10,6 @@ import { Loader2, LogIn, UserPlus, Shield, Eye, EyeOff } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
 import { Separator } from "@/components/ui/separator";
 import { UserRole } from "@shared/schema";
-import { prefetchPostLogin } from "@/lib/prefetch";
 import { getStorageUrl } from "@/lib/storageUrl";
 
 interface BootstrapStatus {
@@ -142,7 +141,6 @@ export default function LoginPage() {
     setIsSubmitting(false);
 
     if (result.success) {
-      prefetchPostLogin(result.user?.role);
       toast({
         title: "Welcome back!",
         description: "You have been logged in successfully",

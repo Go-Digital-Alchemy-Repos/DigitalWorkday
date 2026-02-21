@@ -25,6 +25,7 @@ import {
 } from "@/lib/queryClient";
 import { UserRole } from "@shared/schema";
 import { prefetchTenantRoutes } from "@/lib/prefetch";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
 
 export type AppMode = "super" | "tenant";
 
@@ -49,6 +50,7 @@ const ACTING_TENANT_NAME_KEY = "actingTenantName";
 export function useAppMode(): AppModeHook {
   const { user, userImpersonation } = useAuth();
   const { toast } = useToast();
+  const { prefetchV1 } = useFeatureFlags();
   const isSuperUser = user?.role === UserRole.SUPER_USER;
   const [isModeTransitioning, setIsModeTransitioning] = useState(false);
   const validationInProgress = useRef(false);
@@ -121,10 +123,10 @@ export function useAppMode(): AppModeHook {
     localStorage.setItem(ACTING_TENANT_NAME_KEY, tenantName);
     setImpersonation({ tenantId, tenantName });
     
-    prefetchTenantRoutes();
+    prefetchTenantRoutes(prefetchV1);
 
     setTimeout(() => setIsModeTransitioning(false), 100);
-  }, []);
+  }, [prefetchV1]);
 
   const stopImpersonation = useCallback(() => {
     setIsModeTransitioning(true);
