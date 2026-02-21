@@ -49,6 +49,7 @@ import {
   Upload,
   Send,
   Trash2,
+  StickyNote,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -211,6 +212,16 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
           >
             <Upload className="h-4 w-4 mr-1.5 text-cyan-500" />
             Upload Asset
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigateTab("notes")}
+            data-testid="shortcut-notes"
+            className="bg-background hover:bg-muted"
+          >
+            <StickyNote className="h-4 w-4 mr-1.5 text-amber-500" />
+            Notes
           </Button>
         </div>
       </div>

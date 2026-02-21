@@ -43,6 +43,7 @@ export const CONTROL_CENTER_CHILD_IDS = new Set([
   "reports",
   "portal",
   "divisions",
+  "notes",
 ]);
 
 export const ALL_CLIENT_PROFILE_SECTIONS: ClientProfileSection[] = [
@@ -52,8 +53,8 @@ export const ALL_CLIENT_PROFILE_SECTIONS: ClientProfileSection[] = [
   { id: "projects", label: "Projects", icon: FolderKanban, testId: "tab-projects", primary: true },
   { id: "divisions", label: "Divisions", icon: Layers, testId: "tab-divisions", primary: true },
   { id: "activity", label: "Activity", icon: Activity, testId: "tab-activity", primary: true },
-  { id: "notes", label: "Notes", icon: StickyNote, testId: "tab-notes", primary: true },
   { id: "reports", label: "Reports", icon: BarChart3, testId: "tab-reports", primary: false, requiresCrmFlag: "client360" },
+  { id: "notes", label: "Notes", icon: StickyNote, testId: "tab-notes", primary: false },
   { id: "approvals", label: "Approvals", icon: ClipboardCheck, testId: "tab-approvals", primary: false, requiresCrmFlag: "approvals" },
   { id: "messages", label: "Messages", icon: MessageSquare, testId: "tab-messages", primary: false, requiresCrmFlag: "clientMessaging" },
   { id: "portal", label: "Portal Users", icon: Globe, testId: "tab-portal", primary: false },
