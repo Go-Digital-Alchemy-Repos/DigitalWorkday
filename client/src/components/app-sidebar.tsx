@@ -3,6 +3,7 @@ import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useAnyCrmEnabled } from "@/hooks/use-crm-flags";
 import { useTenantTheme } from "@/lib/tenant-theme-loader";
+import { cn } from "@/lib/utils";
 import {
   Home,
   FolderKanban,

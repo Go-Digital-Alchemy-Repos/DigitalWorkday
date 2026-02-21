@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback } from "react";
 import { Link, useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { useTenantTheme } from "@/lib/tenant-theme-loader";
+import { cn } from "@/lib/utils";
 import {
   Home,
   FolderKanban,

@@ -536,9 +536,9 @@ function TileCard({ icon: Icon, title, description, onClick, badge, testId, chil
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className={cn("p-1.5 rounded-md", iconColorClass || "bg-muted")}>
-              <Icon className={cn("h-4 w-4", !iconColorClass && "text-muted-foreground")} />
-            </div>
+          <div className={cn("p-1.5 rounded-md", iconColorClass || "bg-muted")}>
+            <Icon className={cn("h-4 w-4", !iconColorClass && "text-muted-foreground")} />
+          </div>
             <CardTitle className="tracking-tight font-medium text-[16px]">{title}</CardTitle>
           </div>
           {badge && (
