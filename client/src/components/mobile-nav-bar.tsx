@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Link, useLocation } from "wouter";
-import { Home, CheckSquare, FolderKanban, Clock, Plus, Calendar, Menu, Play, MessageCircle } from "lucide-react";
+import { Home, CheckSquare, FolderKanban, Clock, Plus, Calendar, Menu, Play, MessageCircle, Users, Briefcase } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { useSidebar } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
@@ -34,16 +34,16 @@ const navItems: NavItem[] = [
     matchPaths: ["/my-tasks"]
   },
   { 
+    title: "Projects", 
+    href: "/projects", 
+    icon: FolderKanban,
+    matchPaths: ["/projects"]
+  },
+  { 
     title: "Chat", 
     href: "/chat", 
     icon: MessageCircle,
     matchPaths: ["/chat"]
-  },
-  { 
-    title: "Time", 
-    href: "/my-time", 
-    icon: Clock,
-    matchPaths: ["/my-time"]
   },
 ];
 
@@ -80,14 +80,20 @@ export function MobileNavBar() {
     {
       title: "Start Timer",
       description: "Track time on a task",
-      icon: Play,
+      icon: Clock,
       href: "/my-time",
     },
     {
-      title: "View Projects",
-      description: "Browse all projects",
-      icon: FolderKanban,
-      href: "/projects",
+      title: "View Calendar",
+      description: "Check your schedule",
+      icon: Calendar,
+      href: "/calendar",
+    },
+    {
+      title: "View Clients",
+      description: "Manage your clients",
+      icon: Briefcase,
+      href: "/clients",
     },
   ];
 
@@ -106,7 +112,7 @@ export function MobileNavBar() {
         className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden pb-safe"
         data-testid="mobile-nav-bar"
       >
-        <div className="flex h-16 items-center justify-around px-1">
+        <div className="flex h-16 items-center justify-around px-0.5">
           {navItems.slice(0, 2).map((item) => {
             const Icon = item.icon;
             const active = isActive(item);
@@ -116,12 +122,12 @@ export function MobileNavBar() {
                 variant="ghost"
                 size="sm"
                 asChild
-                className={cn("flex-1 max-w-16 h-full", active && "text-primary bg-primary/5")}
+                className={cn("flex-1 max-w-14 h-full px-0", active && "text-primary bg-primary/5")}
               >
                 <Link
                   href={item.href}
                   data-testid={`mobile-nav-${item.title.toLowerCase()}`}
-                  className="flex flex-col items-center justify-center gap-1"
+                  className="flex flex-col items-center justify-center gap-0.5"
                 >
                   <Icon className={cn("h-5 w-5", active && "text-primary")} />
                   <span className="text-[10px] font-medium leading-none">{item.title}</span>
@@ -150,12 +156,12 @@ export function MobileNavBar() {
                 variant="ghost"
                 size="sm"
                 asChild
-                className={cn("flex-1 max-w-16 h-full", active && "text-primary bg-primary/5")}
+                className={cn("flex-1 max-w-14 h-full px-0", active && "text-primary bg-primary/5")}
               >
                 <Link
                   href={item.href}
                   data-testid={`mobile-nav-${item.title.toLowerCase()}`}
-                  className="flex flex-col items-center justify-center gap-1"
+                  className="flex flex-col items-center justify-center gap-0.5"
                 >
                   <Icon className={cn("h-5 w-5", active && "text-primary")} />
                   <span className="text-[10px] font-medium leading-none">{item.title}</span>
@@ -169,7 +175,7 @@ export function MobileNavBar() {
             size="sm"
             onClick={() => setShowMobileSidebar(true)}
             data-testid="mobile-nav-menu"
-            className="flex-1 max-w-16 h-full flex flex-col items-center justify-center gap-1"
+            className="flex-1 max-w-14 h-full px-0 flex flex-col items-center justify-center gap-0.5"
           >
             <Menu className="h-5 w-5" />
             <span className="text-[10px] font-medium leading-none">More</span>

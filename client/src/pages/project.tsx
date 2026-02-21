@@ -1035,19 +1035,20 @@ export default function ProjectPage() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex gap-3 md:gap-4 px-3 sm:px-4 lg:px-6 py-4 md:py-6 h-full overflow-x-auto">
+            <div className="flex gap-3 md:gap-4 px-3 sm:px-4 lg:px-6 py-4 md:py-6 h-full overflow-x-auto snap-x snap-mandatory sm:snap-none scroll-smooth">
               {displaySections?.map((section) => (
-                <SectionColumn
-                  key={section.id}
-                  section={section}
-                  onAddTask={() => handleAddTask(section.id)}
-                  onTaskSelect={handleTaskSelect}
-                  onTaskStatusChange={handleStatusChange}
-                  onEditSection={handleEditSection}
-                  onDeleteSection={openDeleteSectionDialog}
-                />
+                <div key={section.id} className="snap-center sm:snap-align-none">
+                  <SectionColumn
+                    section={section}
+                    onAddTask={() => handleAddTask(section.id)}
+                    onTaskSelect={handleTaskSelect}
+                    onTaskStatusChange={handleStatusChange}
+                    onEditSection={handleEditSection}
+                    onDeleteSection={openDeleteSectionDialog}
+                  />
+                </div>
               ))}
-              <div className="min-w-[280px] max-w-[280px] shrink-0">
+              <div className="min-w-[85vw] max-w-[85vw] sm:min-w-[280px] sm:max-w-[280px] shrink-0 snap-center sm:snap-align-none">
                 <Button
                   variant="outline"
                   className="w-full h-12 border-dashed justify-center"

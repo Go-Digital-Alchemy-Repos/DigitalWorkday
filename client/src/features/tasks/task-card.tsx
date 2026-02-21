@@ -98,7 +98,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
       <div
         ref={ref}
         className={cn(
-          "group relative w-full rounded-lg border border-card-border bg-card p-3 hover-elevate cursor-pointer transition-premium",
+          "group relative w-full rounded-lg border border-card-border bg-card p-3 hover-elevate cursor-pointer transition-premium active:scale-[0.98] touch-manipulation",
           isCompleted && "opacity-60",
           isDragging && "opacity-50 shadow-lg",
           justCompleted && "task-complete-pulse"
@@ -113,19 +113,22 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
             {dragHandleProps && (
               <div
                 {...dragHandleProps}
-                className="cursor-grab opacity-0 group-hover:opacity-100 transition-opacity touch-none"
+                className="cursor-grab opacity-0 group-hover:opacity-100 transition-opacity touch-none min-h-8 min-w-6 flex items-center justify-center"
                 onClick={(e) => e.stopPropagation()}
               >
                 <GripVertical className="h-4 w-4 text-muted-foreground" />
               </div>
             )}
-            <Checkbox
-              checked={isCompleted}
-              onCheckedChange={(checked) => handleStatusChange(checked as boolean)}
+            <div
+              className="min-h-8 min-w-8 flex items-center justify-center -m-1"
               onClick={(e) => e.stopPropagation()}
-              className="mt-0.5"
-              data-testid={`checkbox-task-${task.id}`}
-            />
+            >
+              <Checkbox
+                checked={isCompleted}
+                onCheckedChange={(checked) => handleStatusChange(checked as boolean)}
+                data-testid={`checkbox-task-${task.id}`}
+              />
+            </div>
             <span
               className={cn(
                 "text-sm font-medium flex-1",
@@ -197,7 +200,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
       <div
         ref={ref}
         className={cn(
-          "group relative flex items-start gap-3 px-3 py-3 min-h-[56px] border-b border-border hover-elevate cursor-pointer transition-premium",
+          "group relative flex items-start gap-3 px-3 py-3 min-h-[56px] border-b border-border hover-elevate cursor-pointer transition-premium active:bg-muted/50 touch-manipulation",
           isCompleted && "opacity-60",
           isDragging && "opacity-50 shadow-lg bg-card",
           justCompleted && "task-complete-pulse"

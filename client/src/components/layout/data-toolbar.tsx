@@ -72,6 +72,14 @@ export function DataToolbar({
   const activeFilterCount = Object.values(filterValues).filter(v => v && v !== "all").length;
   const isMobile = useIsMobile();
   
+  const activeFilters = filters
+    .filter(f => filterValues[f.key] && filterValues[f.key] !== "all")
+    .map(f => ({
+      key: f.key,
+      label: f.label,
+      value: f.options.find(o => o.value === filterValues[f.key])?.label || filterValues[f.key],
+    }));
+
   return (
     <div className={cn("flex flex-col gap-2 md:flex-row md:flex-wrap md:items-center md:gap-3 mb-4", className)} data-testid="data-toolbar">
       {onSearchChange && (
@@ -102,11 +110,11 @@ export function DataToolbar({
         {filters.length > 0 && onFilterChange && (
           <Popover>
             <PopoverTrigger asChild>
-              <Button variant="outline" size="default" className="gap-2" data-testid="button-filters">
+              <Button variant="outline" size={isMobile ? "sm" : "default"} className="gap-1.5" data-testid="button-filters">
                 <Filter className="h-4 w-4" />
-                Filters
+                <span className="hidden sm:inline">Filters</span>
                 {activeFilterCount > 0 && (
-                  <Badge variant="secondary" className="ml-1 h-5 px-1.5">
+                  <Badge variant="secondary" className="ml-0.5 h-5 px-1.5">
                     {activeFilterCount}
                   </Badge>
                 )}
@@ -154,9 +162,9 @@ export function DataToolbar({
         
         {sortOptions.length > 0 && onSortChange && (
           <Select value={sortValue} onValueChange={onSortChange}>
-            <SelectTrigger className={cn(isMobile ? "w-[140px]" : "w-[180px]")} data-testid="select-sort">
-              <SortAsc className="h-4 w-4 mr-2" />
-              <SelectValue placeholder="Sort by..." />
+            <SelectTrigger className={cn(isMobile ? "w-[120px]" : "w-[180px]")} data-testid="select-sort">
+              <SortAsc className="h-4 w-4 mr-1" />
+              <SelectValue placeholder="Sort..." />
             </SelectTrigger>
             <SelectContent>
               {sortOptions.map((option) => (
@@ -197,6 +205,34 @@ export function DataToolbar({
           </div>
         )}
       </div>
+
+      {isMobile && activeFilters.length > 0 && onFilterChange && (
+        <div className="flex items-center gap-1.5 overflow-x-auto pb-1 -mx-1 px-1" data-testid="mobile-active-filters">
+          {activeFilters.map((af) => (
+            <Badge
+              key={af.key}
+              variant="secondary"
+              className="shrink-0 gap-1 pl-2 pr-1 py-1 text-xs cursor-pointer hover:bg-destructive/10 touch-manipulation"
+              onClick={() => onFilterChange(af.key, "all")}
+              data-testid={`filter-chip-${af.key}`}
+            >
+              {af.value}
+              <X className="h-3 w-3 ml-0.5" />
+            </Badge>
+          ))}
+          {onClearFilters && activeFilters.length > 1 && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="shrink-0 text-xs h-6 px-2"
+              onClick={onClearFilters}
+              data-testid="button-clear-all-chips"
+            >
+              Clear all
+            </Button>
+          )}
+        </div>
+      )}
     </div>
   );
 }

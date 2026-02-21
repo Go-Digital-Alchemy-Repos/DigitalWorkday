@@ -69,7 +69,7 @@ export function SectionColumn({
     <>
       <div
         className={cn(
-          "flex flex-col min-w-[280px] max-w-[320px] shrink-0 bg-card/50 rounded-lg transition-colors",
+          "flex flex-col min-w-[85vw] max-w-[85vw] sm:min-w-[280px] sm:max-w-[320px] shrink-0 bg-card/50 rounded-lg transition-colors",
           isOver && "ring-2 ring-primary/50 bg-primary/5"
         )}
         data-testid={`section-column-${section.id}`}

@@ -84,6 +84,7 @@ import {
   Sparkles,
   ListTodo,
   Zap,
+  Flame,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -958,6 +959,59 @@ export default function MyTasks() {
 
       <div className="flex-1 overflow-auto">
         <div className="px-3 sm:px-4 lg:px-6 py-4 md:py-6 space-y-6">
+          <div className="block md:hidden">
+            {!isLoading && (
+              <div className="flex gap-3 overflow-x-auto pb-2 snap-x snap-mandatory scroll-smooth -mx-1 px-1">
+                <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 min-w-fit snap-center shrink-0">
+                  <div className="h-8 w-8 rounded-full bg-blue-500/10 flex items-center justify-center">
+                    <TrendingUp className="h-4 w-4 text-blue-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Completion</p>
+                    <p className="text-sm font-semibold">{dashboardStats.completionRate}%</p>
+                  </div>
+                </div>
+                {dashboardStats.overdueCount > 0 && (
+                  <div className="flex items-center gap-2 bg-card border border-red-200 dark:border-red-800 rounded-lg px-3 py-2 min-w-fit snap-center shrink-0">
+                    <div className="h-8 w-8 rounded-full bg-red-500/10 flex items-center justify-center">
+                      <AlertCircle className="h-4 w-4 text-red-500" />
+                    </div>
+                    <div>
+                      <p className="text-xs text-muted-foreground">Overdue</p>
+                      <p className="text-sm font-semibold text-red-600 dark:text-red-400">{dashboardStats.overdueCount}</p>
+                    </div>
+                  </div>
+                )}
+                <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 min-w-fit snap-center shrink-0">
+                  <div className="h-8 w-8 rounded-full bg-amber-500/10 flex items-center justify-center">
+                    <Target className="h-4 w-4 text-amber-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">Today</p>
+                    <p className="text-sm font-semibold">{dashboardStats.todayCount}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 min-w-fit snap-center shrink-0">
+                  <div className="h-8 w-8 rounded-full bg-orange-500/10 flex items-center justify-center">
+                    <Flame className="h-4 w-4 text-orange-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">High Priority</p>
+                    <p className="text-sm font-semibold">{dashboardStats.highPriorityCount}</p>
+                  </div>
+                </div>
+                <div className="flex items-center gap-2 bg-card border border-border rounded-lg px-3 py-2 min-w-fit snap-center shrink-0">
+                  <div className="h-8 w-8 rounded-full bg-green-500/10 flex items-center justify-center">
+                    <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  </div>
+                  <div>
+                    <p className="text-xs text-muted-foreground">This Week</p>
+                    <p className="text-sm font-semibold">{dashboardStats.completedThisWeek}</p>
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
           <div className="hidden md:block">
             <DashboardSummary 
               stats={dashboardStats} 
