@@ -190,7 +190,7 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab, onUpdate }: 
       });
     },
     onSuccess: () => {
-      toast({ title: "Owner updated", description: "The client owner has been updated successfully." });
+      toast({ title: "Project Manager updated", description: "The client project manager has been updated successfully." });
       queryClient.invalidateQueries({ queryKey: [`/api/crm/clients/${clientId}/summary`] });
       if (onUpdate) onUpdate();
     },
@@ -244,7 +244,7 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab, onUpdate }: 
                 <div className="p-1 rounded-md bg-emerald-500/10">
                   <User className="h-4 w-4 text-emerald-500" />
                 </div>
-                <span className="text-sm text-muted-foreground">Owner</span>
+                <span className="text-sm text-muted-foreground">Project Manager</span>
               </div>
               <Select
                 value={summary.crm?.ownerUserId || "__unassigned__"}
@@ -252,7 +252,7 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab, onUpdate }: 
                 disabled={updateOwnerMutation.isPending}
               >
                 <SelectTrigger className="h-7 w-[130px] text-xs" data-testid="select-crm-owner">
-                  <SelectValue placeholder="Select owner" />
+                  <SelectValue placeholder="Select PM" />
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="__unassigned__">Unassigned</SelectItem>

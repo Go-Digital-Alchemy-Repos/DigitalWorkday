@@ -130,12 +130,10 @@ function FollowUpCard({
               )}
             </div>
 
-            {item.ownerName && (
-              <div className="flex items-center gap-1 text-xs text-muted-foreground">
+            <div className="flex items-center gap-1 text-xs text-muted-foreground">
                 <User className="h-3 w-3 shrink-0" />
-                <span data-testid={`text-owner-${item.clientId}`}>{item.ownerName}</span>
+                <span data-testid={`text-owner-${item.clientId}`}>PM: {item.ownerName}</span>
               </div>
-            )}
 
             {item.nextFollowUpAt && (
               <div className="flex items-center gap-1 text-xs text-muted-foreground">
@@ -403,7 +401,7 @@ export default function CrmFollowupsPage() {
             data-testid="button-bulk-assign"
           >
             <Users className="h-4 w-4 mr-2" />
-            Assign Owner
+            Assign Project Manager
           </Button>
           <Button
             variant="outline"
@@ -462,9 +460,9 @@ export default function CrmFollowupsPage() {
       <Dialog open={assignDialogOpen} onOpenChange={setAssignDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>Assign Owner</DialogTitle>
+            <DialogTitle>Assign Project Manager</DialogTitle>
             <DialogDescription>
-              Select a user to assign as the owner for {selectedIds.size} selected client(s).
+              Select a user to assign as the project manager for {selectedIds.size} selected client(s).
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">

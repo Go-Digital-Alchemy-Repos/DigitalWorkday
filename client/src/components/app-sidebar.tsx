@@ -413,7 +413,7 @@ export function AppSidebar() {
           <div className="flex flex-1 flex-col overflow-hidden">
             <span className="truncate text-sm font-medium">Demo User</span>
             <span className="truncate text-xs text-muted-foreground">
-              owner@demo.com
+              pm@demo.com
             </span>
           </div>
           <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="button-settings">

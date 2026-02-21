@@ -138,7 +138,7 @@ function SortableClientCard({
                     className="truncate"
                     data-testid={`text-owner-${client.clientId}`}
                   >
-                    {client.ownerName}
+                    PM: {client.ownerName}
                   </span>
                 </div>
               )}
@@ -432,10 +432,10 @@ export default function CrmPipelinePage() {
               className="w-48"
               data-testid="select-pipeline-owner"
             >
-              <SelectValue placeholder="All Owners" />
+              <SelectValue placeholder="All Project Managers" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="__all__">All Owners</SelectItem>
+              <SelectItem value="__all__">All Project Managers</SelectItem>
               {users.map((user) => (
                 <SelectItem key={user.id} value={String(user.id)}>
                   {user.name}
