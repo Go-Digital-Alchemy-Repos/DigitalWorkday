@@ -170,7 +170,7 @@ router.get("/crm/clients/:clientId/metrics", requireAuth, async (req: Request, r
       action: activityLog.action,
       entityType: activityLog.entityType,
       entityId: activityLog.entityId,
-      description: sql<string>`description`,
+      description: activityLog.description,
       actorUserId: activityLog.actorUserId,
       createdAt: activityLog.createdAt,
     })

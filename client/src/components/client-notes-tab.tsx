@@ -56,6 +56,7 @@ import {
   Tag,
   Settings,
   FolderOpen,
+  ArrowLeft,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatErrorForToast } from "@/lib/parseApiError";
@@ -580,6 +581,18 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
 
   return (
     <div className="space-y-4">
+      <div className="mb-2">
+        <Button
+          variant="ghost"
+          size="sm"
+          onClick={() => window.dispatchEvent(new CustomEvent("navigate-client-tab", { detail: "control-center" }))}
+          className="text-muted-foreground hover:text-foreground p-0 h-auto"
+          data-testid="button-back-to-control-center"
+        >
+          <ArrowLeft className="h-4 w-4 mr-1" />
+          Back to Control Center
+        </Button>
+      </div>
       {/* Dashboard Header */}
       <div className="flex items-center justify-between gap-3 flex-wrap">
         <h3 className="text-lg font-medium">Notes Dashboard</h3>

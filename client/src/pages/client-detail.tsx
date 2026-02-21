@@ -578,6 +578,16 @@ export default function ClientDetailPage() {
     updateClientMutation.mutate(data);
   };
 
+  useEffect(() => {
+    const handleNavigate = (e: any) => {
+      if (e.detail) {
+        setActiveSection(e.detail);
+      }
+    };
+    window.addEventListener("navigate-client-tab", handleNavigate);
+    return () => window.removeEventListener("navigate-client-tab", handleNavigate);
+  }, [setActiveSection]);
+
   const handleCreateProject = (data: CreateProjectForm) => {
     createProjectMutation.mutate(data);
   };

@@ -34,7 +34,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
-import { Users, X, Search, Loader2, Plus, FolderKanban, CheckSquare, Clock, MoreHorizontal } from "lucide-react";
+import { Users, X, Search, Loader2, Plus, FolderKanban, CheckSquare, Clock, MoreHorizontal, ArrowLeft } from "lucide-react";
 import type { ClientDivision, User, Project, Task } from "@shared/schema";
 
 const divisionSchema = z.object({
@@ -370,6 +370,18 @@ export function DivisionDrawer({
           </TabsList>
 
           <TabsContent value="details" className="space-y-6">
+            <div className="mb-2">
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={() => onOpenChange(false)}
+                className="text-muted-foreground hover:text-foreground p-0 h-auto"
+                data-testid="button-back-to-control-center"
+              >
+                <ArrowLeft className="h-4 w-4 mr-1" />
+                Back to Control Center
+              </Button>
+            </div>
             <DivisionDetailsForm form={form} colorOptions={colorOptions} />
           </TabsContent>
 
