@@ -35,7 +35,9 @@ import {
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { SectionColumn, TaskCard, ListSectionDroppable } from "@/features/tasks";
+import { SectionColumn } from "@/features/tasks/section-column";
+import { TaskCard } from "@/features/tasks/task-card";
+import { ListSectionDroppable } from "@/features/tasks/list-section-droppable";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { TaskCreateDrawer } from "@/features/tasks/task-create-drawer";
 import { ProjectCalendar, ProjectSettingsSheet, ProjectMembersSheet, ProjectActivityFeed, AIProjectPlanner } from "@/features/projects";

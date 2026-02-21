@@ -1,5 +1,5 @@
 import { lazy, Suspense } from "react";
-import { Switch, Route, useLocation, Redirect } from "wouter";
+import { useLocation, Redirect } from "wouter";
 import { queryClient } from "./lib/queryClient";
 import { QueryClientProvider } from "@tanstack/react-query";
 import { Toaster } from "@/components/ui/toaster";
@@ -13,19 +13,12 @@ import { PresenceProvider } from "@/hooks/use-presence";
 import { TypingProvider } from "@/hooks/use-typing";
 import { FeaturesProvider } from "@/contexts/features-context";
 import { FeaturesBanner } from "@/components/features-banner";
-import { ProtectedRoute } from "@/routing/guards";
+import { isAuthRoute, AuthRouter } from "@/routing/authRouter";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
 const TenantLayout = lazy(() => import("@/routing/tenantRouter").then(m => ({ default: m.TenantLayout })));
 const SuperLayout = lazy(() => import("@/routing/superRouter").then(m => ({ default: m.SuperLayout })));
 const ClientPortalLayout = lazy(() => import("@/routing/portalRouter").then(m => ({ default: m.ClientPortalLayout })));
-const LoginPage = lazy(() => import("@/pages/login"));
-const TenantOnboardingPage = lazy(() => import("@/pages/tenant-onboarding"));
-const AcceptTermsPage = lazy(() => import("@/pages/accept-terms"));
-const PlatformInvitePage = lazy(() => import("@/pages/platform-invite"));
-const AcceptInvitePage = lazy(() => import("@/pages/accept-invite"));
-const ForgotPasswordPage = lazy(() => import("@/pages/forgot-password"));
-const ResetPasswordPage = lazy(() => import("@/pages/reset-password"));
 
 function AppLayout() {
   const { isAuthenticated, isLoading, user } = useAuth();
@@ -34,24 +27,8 @@ function AppLayout() {
 
   const suspenseFallback = <PageSkeleton />;
 
-  if (location === "/login" || location === "/tenant-onboarding" || location === "/accept-terms" || location.startsWith("/auth/platform-invite") || location.startsWith("/accept-invite/") || location.startsWith("/auth/forgot-password") || location.startsWith("/auth/reset-password")) {
-    return (
-      <Suspense fallback={suspenseFallback}>
-        <Switch>
-          <Route path="/login" component={LoginPage} />
-          <Route path="/tenant-onboarding">
-            {() => <ProtectedRoute component={TenantOnboardingPage} />}
-          </Route>
-          <Route path="/accept-terms">
-            {() => <ProtectedRoute component={AcceptTermsPage} />}
-          </Route>
-          <Route path="/auth/platform-invite" component={PlatformInvitePage} />
-          <Route path="/accept-invite/:token" component={AcceptInvitePage} />
-          <Route path="/auth/forgot-password" component={ForgotPasswordPage} />
-          <Route path="/auth/reset-password" component={ResetPasswordPage} />
-        </Switch>
-      </Suspense>
-    );
+  if (isAuthRoute(location)) {
+    return <AuthRouter />;
   }
 
   if (isLoading) {

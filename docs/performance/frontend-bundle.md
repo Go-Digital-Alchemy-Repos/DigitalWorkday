@@ -169,9 +169,66 @@ The chat composer uses a plain `<Textarea>` wrapped by `ChatMessageInput`. There
 
 ---
 
+## Barrel Import Cleanup (2026-02-21)
+
+Barrel re-export files (`features/tasks/index.ts`, `features/timer/index.ts`) were causing all exports to be pulled into a single chunk even when only one export was needed. Consumers have been updated to import directly from the source module:
+
+**Before:**
+```ts
+import { TaskCard } from "@/features/tasks";               // pulls all 7 exports
+import { GlobalActiveTimer } from "@/features/timer";       // pulls both exports
+```
+
+**After:**
+```ts
+import { TaskCard } from "@/features/tasks/task-card";      // only task-card module
+import { GlobalActiveTimer } from "@/features/timer/global-active-timer";
+```
+
+**Files changed:**
+- `client/src/pages/home.tsx` — TaskCard direct import
+- `client/src/pages/my-tasks.tsx` — SortableTaskCard direct import
+- `client/src/pages/project.tsx` — SectionColumn, TaskCard, ListSectionDroppable direct imports
+- `client/src/routing/tenantRouter.tsx` — GlobalActiveTimer, MobileActiveTimerBar direct imports
+
+The barrel files are kept for backward compatibility but should not be used for new imports.
+
+---
+
+## Bundle Analysis
+
+Run `npx vite-bundle-visualizer` from the project root to generate an interactive treemap of the production bundle:
+
+```bash
+npx vite-bundle-visualizer
+```
+
+This generates `stats.html` in the project root showing chunk sizes, dependencies, and tree-shaking effectiveness.
+
+---
+
+## Manual Vendor Chunks (Planned)
+
+The following vendor chunk strategy is recommended when `vite.config.ts` modification is permitted:
+
+| Chunk | Packages |
+|---|---|
+| `vendor-react` | react, react-dom, wouter, @tanstack/react-query |
+| `vendor-radix` | @radix-ui/* (dialog, dropdown, popover, select, tabs, etc.) |
+| `vendor-dnd` | @dnd-kit/core, @dnd-kit/sortable, @dnd-kit/utilities, @dnd-kit/modifiers |
+| `vendor-charts` | recharts |
+| `vendor-editor` | @tiptap/core, @tiptap/react, @tiptap/starter-kit, extensions |
+| `vendor-socket` | socket.io-client |
+
+Benefits:
+- **Cache stability** — vendor chunks change rarely, giving browsers long cache hits
+- **Parallel loading** — multiple smaller chunks load faster than one monolith
+- **Deploy efficiency** — app code changes don't invalidate vendor cache
+
+---
+
 ## Future Optimisation Opportunities
 
-1. **Manual vendor chunks** — If `vite.config.ts` modification is permitted, `manualChunks` can group vendor libraries (recharts, fullcalendar, tiptap, dnd-kit) into dedicated cacheable chunks that persist across deploys.
-2. **Prefetching** — Predictive prefetch after login/session-restore is implemented (see `docs/performance/prefetch.md`). Further `<link rel="prefetch">` hints could be added for route chunks based on heuristics.
-3. **Icon library** — `react-icons` (83 MB on disk) is tree-shaken, but auditing for unused icon imports could further reduce bundle size.
-4. **CSS splitting** — The CSS is currently a single 148 kB file; CSS modules or route-level CSS splitting could improve first-paint metrics.
+1. **Prefetching** — Predictive prefetch after login/session-restore is implemented (see `docs/performance/prefetch.md`). Further `<link rel="prefetch">` hints could be added for route chunks based on heuristics.
+2. **Icon library** — `react-icons` (83 MB on disk) is tree-shaken, but auditing for unused icon imports could further reduce bundle size.
+3. **CSS splitting** — The CSS is currently a single 148 kB file; CSS modules or route-level CSS splitting could improve first-paint metrics.

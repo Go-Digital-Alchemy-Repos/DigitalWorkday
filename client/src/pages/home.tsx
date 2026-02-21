@@ -25,7 +25,7 @@ import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStorageUrl } from "@/lib/storageUrl";
-import { TaskCard } from "@/features/tasks";
+import { TaskCard } from "@/features/tasks/task-card";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { CreateProjectDialog } from "@/features/projects";
 import { TaskProgressBar } from "@/components/task-progress-bar";

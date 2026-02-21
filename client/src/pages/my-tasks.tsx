@@ -93,7 +93,7 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from "@/components/ui/collapsible";
-import { SortableTaskCard } from "@/features/tasks";
+import { SortableTaskCard } from "@/features/tasks/sortable-task-card";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { PersonalTaskCreateDrawer } from "@/features/tasks/personal-task-create-drawer";
 import { isToday, isPast, isFuture, subDays, isWithinInterval, addDays, startOfDay } from "date-fns";

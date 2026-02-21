@@ -114,3 +114,19 @@ export function ClientPortalRouteGuard({ component: Component }: { component: Re
 
   return createElement(Component);
 }
+
+export type GuardRole = "super_user" | "client" | "tenant" | "authenticated";
+
+const GUARD_MAP: Record<GuardRole, React.ComponentType<{ component: React.ComponentType }>> = {
+  super_user: SuperRouteGuard,
+  client: ClientPortalRouteGuard,
+  tenant: TenantRouteGuard,
+  authenticated: ProtectedRoute,
+};
+
+export function withRoleGuard(role: GuardRole) {
+  const Guard = GUARD_MAP[role];
+  return function GuardedRoute({ component }: { component: React.ComponentType }) {
+    return createElement(Guard, { component });
+  };
+}
