@@ -292,34 +292,32 @@ export function ChatContextPanel({
 
                 <Separator />
 
-                <div className="space-y-2">
-                  <p className="text-sm font-medium text-muted-foreground">
-                    Quick Actions
-                  </p>
+                <div className="bg-muted/30 rounded-lg p-3 border border-border/50 mx-4">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground mb-2">Quick Actions</h3>
                   <div className="space-y-1">
                     <Button
                       variant="ghost"
-                      className="w-full justify-start"
+                      className="w-full justify-start h-8 text-xs px-2"
                       asChild
                     >
                       <a
                         href={`/team?user=${otherMember.id}`}
                         data-testid="button-view-profile"
                       >
-                        <User className="h-4 w-4 mr-2" />
+                        <User className="h-3 w-3 mr-2" />
                         View Profile
                       </a>
                     </Button>
                     <Button
                       variant="ghost"
-                      className="w-full justify-start"
+                      className="w-full justify-start h-8 text-xs px-2"
                       asChild
                     >
                       <a
                         href={`mailto:${otherMember.email}`}
                         data-testid="button-send-email"
                       >
-                        <Mail className="h-4 w-4 mr-2" />
+                        <Mail className="h-3 w-3 mr-2" />
                         Send Email
                       </a>
                     </Button>

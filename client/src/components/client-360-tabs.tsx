@@ -320,53 +320,49 @@ export function CrmOverviewSection({ clientId, summary, isLoading, onNavigateTab
         </Card>
       </div>
 
-      <Card>
-        <CardHeader className="pb-3">
-          <CardTitle className="text-base">Quick Actions</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex flex-wrap gap-2">
-            <Button variant="outline" size="sm" onClick={() => onNavigateTab?.("projects")} data-testid="button-quick-add-project">
-              <FolderKanban className="h-4 w-4 mr-2 text-purple-500" />
-              Add Project
+      <div className="bg-muted/30 rounded-lg p-4 border border-border/50">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Quick Actions</h3>
+        <div className="flex flex-wrap gap-2">
+          <Button variant="outline" size="sm" onClick={() => onNavigateTab?.("projects")} data-testid="button-quick-add-project">
+            <FolderKanban className="h-4 w-4 mr-2 text-purple-500" />
+            Add Project
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => onNavigateTab?.("contacts")} data-testid="button-quick-add-contact">
+            <Users className="h-4 w-4 mr-2 text-emerald-500" />
+            Add Contact
+          </Button>
+          <Button variant="outline" size="sm" onClick={() => onNavigateTab?.("notes")} data-testid="button-quick-add-note">
+            <StickyNote className="h-4 w-4 mr-2 text-amber-500" />
+            Add Note
+          </Button>
+          {crmFlags.clientMessaging && (
+            <Button variant="outline" size="sm" onClick={() => onNavigateTab?.("messages")} data-testid="button-quick-message-client">
+              <MessageSquare className="h-4 w-4 mr-2 text-violet-500" />
+              Message Client
             </Button>
-            <Button variant="outline" size="sm" onClick={() => onNavigateTab?.("contacts")} data-testid="button-quick-add-contact">
-              <Users className="h-4 w-4 mr-2 text-emerald-500" />
-              Add Contact
+          )}
+          {crmFlags.files && (
+            <Button variant="outline" size="sm" data-testid="button-quick-upload-file">
+              <Upload className="h-4 w-4 mr-2 text-cyan-500" />
+              Upload File
             </Button>
-            <Button variant="outline" size="sm" onClick={() => onNavigateTab?.("notes")} data-testid="button-quick-add-note">
-              <StickyNote className="h-4 w-4 mr-2 text-amber-500" />
-              Add Note
+          )}
+          {crmFlags.approvals && (
+            <Button variant="outline" size="sm" onClick={() => setShowApprovalDialog(true)} data-testid="button-quick-request-approval">
+              <ClipboardCheck className="h-4 w-4 mr-2 text-blue-500" />
+              Request Approval
             </Button>
-            {crmFlags.clientMessaging && (
-              <Button variant="outline" size="sm" onClick={() => onNavigateTab?.("messages")} data-testid="button-quick-message-client">
-                <MessageSquare className="h-4 w-4 mr-2 text-violet-500" />
-                Message Client
+          )}
+          {crmFlags.portal && (
+            <Link href={`/clients/${clientId}`}>
+              <Button variant="outline" size="sm" data-testid="button-quick-invite-client">
+                <UserPlus className="h-4 w-4 mr-2 text-orange-500" />
+                Invite to Portal
               </Button>
-            )}
-            {crmFlags.files && (
-              <Button variant="outline" size="sm" data-testid="button-quick-upload-file">
-                <Upload className="h-4 w-4 mr-2 text-cyan-500" />
-                Upload File
-              </Button>
-            )}
-            {crmFlags.approvals && (
-              <Button variant="outline" size="sm" onClick={() => setShowApprovalDialog(true)} data-testid="button-quick-request-approval">
-                <ClipboardCheck className="h-4 w-4 mr-2 text-blue-500" />
-                Request Approval
-              </Button>
-            )}
-            {crmFlags.portal && (
-              <Link href={`/clients/${clientId}`}>
-                <Button variant="outline" size="sm" data-testid="button-quick-invite-client">
-                  <UserPlus className="h-4 w-4 mr-2 text-orange-500" />
-                  Invite to Portal
-                </Button>
-              </Link>
-            )}
-          </div>
-        </CardContent>
-      </Card>
+            </Link>
+          )}
+        </div>
+      </div>
 
       {showApprovalDialog && (
         <RequestApprovalDialog

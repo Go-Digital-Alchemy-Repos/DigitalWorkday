@@ -242,11 +242,9 @@ function QuickActions({ lastEntryId, onEditEntry, onStartTimer }: {
   onStartTimer: () => void;
 }) {
   return (
-    <Card data-testid="quick-actions">
-      <CardHeader className="pb-2">
-        <CardTitle className="font-medium">Quick Actions</CardTitle>
-      </CardHeader>
-      <CardContent className="flex flex-wrap gap-2">
+    <div className="bg-muted/30 rounded-lg p-4 border border-border/50" data-testid="quick-actions">
+      <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Quick Actions</h3>
+      <div className="flex flex-wrap gap-2">
         <Button 
           size="sm" 
           onClick={onStartTimer}
@@ -274,8 +272,8 @@ function QuickActions({ lastEntryId, onEditEntry, onStartTimer }: {
             My Calendar
           </Button>
         </Link>
-      </CardContent>
-    </Card>
+      </div>
+    </div>
   );
 }
 
