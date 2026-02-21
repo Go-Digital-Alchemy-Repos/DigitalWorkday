@@ -565,8 +565,8 @@ function ContactsTab({ clientId }: { clientId: string }) {
                           {[contact.firstName, contact.lastName].filter(Boolean).join(" ") || "Unnamed"}
                         </span>
                         {contact.isPrimary && (
-                          <Badge variant="default" className="text-xs" data-testid={`badge-primary-${contact.id}`}>
-                            <Star className="h-3 w-3 mr-1" />
+                          <Badge variant="default" className="bg-amber-500/10 text-amber-600 hover:bg-amber-500/20 border-amber-500/20 text-xs" data-testid={`badge-primary-${contact.id}`}>
+                            <Star className="h-3 w-3 mr-1 fill-current" />
                             Primary
                           </Badge>
                         )}
