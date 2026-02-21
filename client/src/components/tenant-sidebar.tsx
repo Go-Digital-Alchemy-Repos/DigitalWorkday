@@ -152,15 +152,15 @@ function SortableProjectItem({ project, isActive, clientName, divisionName }: So
 }
 
 const mainNavItems = [
-  { title: "Home", url: "/", icon: Home },
-  { title: "My Tasks", url: "/my-tasks", icon: CheckSquare },
-  { title: "My Time", url: "/my-time", icon: Clock },
+  { title: "Home", url: "/", icon: Home, color: "text-sky-500" },
+  { title: "My Tasks", url: "/my-tasks", icon: CheckSquare, color: "text-emerald-500" },
+  { title: "My Time", url: "/my-time", icon: Clock, color: "text-rose-500" },
   // { title: "My Calendar", url: "/my-calendar", icon: CalendarDays },
-  { title: "Projects", url: "/projects", icon: FolderKanban },
-  { title: "Clients", url: "/clients", icon: Briefcase },
+  { title: "Projects", url: "/projects", icon: FolderKanban, color: "text-amber-500" },
+  { title: "Clients", url: "/clients", icon: Briefcase, color: "text-indigo-500" },
   // { title: "Team Calendar", url: "/calendar", icon: CalendarDays },
-  { title: "Chat", url: "/chat", icon: MessageCircle },
-  { title: "Support", url: "/support", icon: LifeBuoy },
+  { title: "Chat", url: "/chat", icon: MessageCircle, color: "text-violet-500" },
+  { title: "Support", url: "/support", icon: LifeBuoy, color: "text-orange-500" },
 ];
 
 export function TenantSidebar() {
@@ -444,7 +444,7 @@ export function TenantSidebar() {
                         isActive={location === item.url || (item.url !== "/" && location.startsWith(item.url))}
                       >
                         <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s/g, "-")}`}>
-                          <item.icon className="h-4 w-4" />
+                          <item.icon className={cn("h-4 w-4", item.color)} />
                           <span className="relative flex items-center gap-2">
                             {item.title}
                             {item.title === "Chat" && (totalUnreadChat > 0 || unreadCount > 0) && (

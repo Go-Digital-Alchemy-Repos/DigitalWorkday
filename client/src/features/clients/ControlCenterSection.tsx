@@ -149,7 +149,7 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Settings2 className="h-5 w-5 text-muted-foreground" />
+            <Settings2 className="h-5 w-5 text-indigo-500" />
             Control Center
           </h2>
           <p className="text-sm text-muted-foreground mt-0.5">
@@ -179,7 +179,7 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
             data-testid="shortcut-activity"
             className="bg-background hover:bg-muted"
           >
-            <Activity className="h-4 w-4 mr-1.5" />
+            <Activity className="h-4 w-4 mr-1.5 text-blue-500" />
             View Activity
           </Button>
           <Button
@@ -189,7 +189,7 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
             data-testid="shortcut-projects"
             className="bg-background hover:bg-muted"
           >
-            <FolderKanban className="h-4 w-4 mr-1.5" />
+            <FolderKanban className="h-4 w-4 mr-1.5 text-purple-500" />
             View Projects
           </Button>
           <Button
@@ -199,7 +199,7 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
             data-testid="shortcut-new-message"
             className="bg-background hover:bg-muted"
           >
-            <Send className="h-4 w-4 mr-1.5" />
+            <Send className="h-4 w-4 mr-1.5 text-violet-500" />
             New Message
           </Button>
           <Button
@@ -209,7 +209,7 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
             data-testid="shortcut-upload-asset"
             className="bg-background hover:bg-muted"
           >
-            <Upload className="h-4 w-4 mr-1.5" />
+            <Upload className="h-4 w-4 mr-1.5 text-cyan-500" />
             Upload Asset
           </Button>
         </div>
@@ -344,6 +344,7 @@ interface WidgetRendererProps {
 
 function WidgetRenderer({ widgetId, def, clientId, onNavigateTab }: WidgetRendererProps) {
   const Icon = WIDGET_ICONS[widgetId] || Settings2;
+  const colorClass = WIDGET_ICON_COLORS[widgetId];
 
   const tabMap: Record<string, string> = {
     tiles_activity: "activity",
@@ -367,6 +368,7 @@ function WidgetRenderer({ widgetId, def, clientId, onNavigateTab }: WidgetRender
           description="Recent client activity"
           onClick={navigateTo ? () => onNavigateTab(navigateTo) : undefined}
           testId="widget-tiles-activity"
+          iconColorClass={colorClass}
         >
           <ActivityTileContent clientId={clientId} />
         </TileCard>
@@ -380,6 +382,7 @@ function WidgetRenderer({ widgetId, def, clientId, onNavigateTab }: WidgetRender
           onClick={navigateTo ? () => onNavigateTab(navigateTo) : undefined}
           badge="Admin"
           testId="widget-tiles-reports"
+          iconColorClass={colorClass}
         >
           <ReportsTileContent clientId={clientId} />
         </TileCard>
@@ -393,6 +396,7 @@ function WidgetRenderer({ widgetId, def, clientId, onNavigateTab }: WidgetRender
           onClick={navigateTo ? () => onNavigateTab(navigateTo) : undefined}
           badge="Admin"
           testId="widget-tiles-portal-users"
+          iconColorClass={colorClass}
         >
           <PortalUsersTileContent clientId={clientId} />
         </TileCard>
@@ -405,6 +409,7 @@ function WidgetRenderer({ widgetId, def, clientId, onNavigateTab }: WidgetRender
           description="Client division structure"
           onClick={navigateTo ? () => onNavigateTab(navigateTo) : undefined}
           testId="widget-tiles-divisions"
+          iconColorClass={colorClass}
         >
           <DivisionsTileContent clientId={clientId} />
         </TileCard>
@@ -416,6 +421,7 @@ function WidgetRenderer({ widgetId, def, clientId, onNavigateTab }: WidgetRender
           title="Health Snapshot"
           description="Key health indicators"
           testId="widget-health-snapshot"
+          iconColorClass={colorClass}
         >
           <HealthSnapshotContent clientId={clientId} />
         </TileCard>
@@ -427,32 +433,9 @@ function WidgetRenderer({ widgetId, def, clientId, onNavigateTab }: WidgetRender
           title="Operational Alerts"
           description="Issues requiring attention"
           testId="widget-operational-alerts"
+          iconColorClass={colorClass}
         >
           <OperationalAlertsContent clientId={clientId} />
-        </TileCard>
-      );
-    case "feed_recent_activity":
-      return (
-        <TileCard
-          icon={Icon}
-          title="Recent Activity"
-          description="Latest updates for this client"
-          onClick={navigateTo ? () => onNavigateTab(navigateTo) : undefined}
-          testId="widget-feed-recent-activity"
-        >
-          <RecentActivityContent clientId={clientId} />
-        </TileCard>
-      );
-    case "feed_recent_messages":
-      return (
-        <TileCard
-          icon={Icon}
-          title="Recent Messages"
-          description="Latest conversations"
-          onClick={navigateTo ? () => onNavigateTab(navigateTo) : undefined}
-          testId="widget-feed-recent-messages"
-        >
-          <RecentMessagesContent />
         </TileCard>
       );
     case "stats_assets_summary":
@@ -463,6 +446,7 @@ function WidgetRenderer({ widgetId, def, clientId, onNavigateTab }: WidgetRender
           description="Files and storage overview"
           onClick={navigateTo ? () => onNavigateTab(navigateTo) : undefined}
           testId="widget-assets-summary"
+          iconColorClass={colorClass}
         >
           <AssetsSummaryContent clientId={clientId} />
         </TileCard>
@@ -475,18 +459,58 @@ function WidgetRenderer({ widgetId, def, clientId, onNavigateTab }: WidgetRender
           description="Active projects overview"
           onClick={navigateTo ? () => onNavigateTab(navigateTo) : undefined}
           testId="widget-projects-summary"
+          iconColorClass={colorClass}
         >
           <ProjectsSummaryContent clientId={clientId} />
         </TileCard>
       );
+    case "feed_recent_activity":
+      return (
+        <TileCard
+          icon={Icon}
+          title="Recent Activity"
+          description="Latest updates for this client"
+          onClick={navigateTo ? () => onNavigateTab(navigateTo) : undefined}
+          testId="widget-feed-recent-activity"
+          iconColorClass={colorClass}
+        >
+          <RecentActivityContent clientId={clientId} />
+        </TileCard>
+      );
+    case "feed_recent_messages":
+      return (
+        <TileCard
+          icon={Icon}
+          title="Recent Messages"
+          description="Latest conversations"
+          onClick={navigateTo ? () => onNavigateTab(navigateTo) : undefined}
+          testId="widget-feed-recent-messages"
+          iconColorClass={colorClass}
+        >
+          <RecentMessagesContent />
+        </TileCard>
+      );
     default:
       return (
-        <TileCard icon={Icon} title={def.title} description={def.description} testId={`widget-${widgetId}`}>
+        <TileCard icon={Icon} title={def.title} description={def.description} testId={`widget-${widgetId}`} iconColorClass={colorClass}>
           <p className="text-sm text-muted-foreground">Widget coming soon</p>
         </TileCard>
       );
   }
 }
+
+const WIDGET_ICON_COLORS: Record<string, string> = {
+  tiles_activity: "text-blue-500 bg-blue-500/10",
+  tiles_reports: "text-amber-500 bg-amber-500/10",
+  tiles_portal_users: "text-emerald-500 bg-emerald-500/10",
+  tiles_divisions: "text-indigo-500 bg-indigo-500/10",
+  stats_health_snapshot: "text-rose-500 bg-rose-500/10",
+  stats_operational_alerts: "text-orange-500 bg-orange-500/10",
+  feed_recent_activity: "text-sky-500 bg-sky-500/10",
+  feed_recent_messages: "text-violet-500 bg-violet-500/10",
+  stats_assets_summary: "text-cyan-500 bg-cyan-500/10",
+  stats_projects_summary: "text-purple-500 bg-purple-500/10",
+};
 
 interface TileCardProps {
   icon: LucideIcon;
@@ -496,9 +520,10 @@ interface TileCardProps {
   badge?: string;
   testId: string;
   children: React.ReactNode;
+  iconColorClass?: string;
 }
 
-function TileCard({ icon: Icon, title, description, onClick, badge, testId, children }: TileCardProps) {
+function TileCard({ icon: Icon, title, description, onClick, badge, testId, children, iconColorClass }: TileCardProps) {
   return (
     <Card
       className={cn(
@@ -511,8 +536,8 @@ function TileCard({ icon: Icon, title, description, onClick, badge, testId, chil
       <CardHeader className="pb-2">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2">
-            <div className="p-1.5 rounded-md bg-muted">
-              <Icon className="h-4 w-4 text-muted-foreground" />
+            <div className={cn("p-1.5 rounded-md", iconColorClass || "bg-muted")}>
+              <Icon className={cn("h-4 w-4", !iconColorClass && "text-muted-foreground")} />
             </div>
             <CardTitle className="tracking-tight font-medium text-[16px]">{title}</CardTitle>
           </div>

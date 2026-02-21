@@ -54,12 +54,12 @@ import { ProjectDrawer } from "@/features/projects";
 import type { Project, Team, Workspace } from "@shared/schema";
 
 const mainNavItems = [
-  { title: "Home", url: "/", icon: Home },
-  { title: "My Tasks", url: "/my-tasks", icon: CheckSquare },
-  { title: "Projects", url: "/projects", icon: FolderKanban },
-  { title: "Clients", url: "/clients", icon: Briefcase },
-  { title: "My Time", url: "/my-time", icon: Clock },
-  { title: "Chat", url: "/chat", icon: MessageCircle },
+  { title: "Home", url: "/", icon: Home, color: "text-sky-500" },
+  { title: "My Tasks", url: "/my-tasks", icon: CheckSquare, color: "text-emerald-500" },
+  { title: "Projects", url: "/projects", icon: FolderKanban, color: "text-amber-500" },
+  { title: "Clients", url: "/clients", icon: Briefcase, color: "text-indigo-500" },
+  { title: "My Time", url: "/my-time", icon: Clock, color: "text-rose-500" },
+  { title: "Chat", url: "/chat", icon: MessageCircle, color: "text-violet-500" },
 ];
 
 export function AppSidebar() {
@@ -119,7 +119,7 @@ export function AppSidebar() {
                     isActive={location === item.url}
                   >
                     <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s/g, "-")}`}>
-                      <item.icon className="h-4 w-4" />
+                      <item.icon className={cn("h-4 w-4", item.color)} />
                       <span>{item.title}</span>
                     </Link>
                   </SidebarMenuButton>
