@@ -600,9 +600,18 @@ function ReportsTileContent({ clientId }: { clientId: string }) {
 }
 
 function PortalUsersTileContent({ clientId }: { clientId: string }) {
+  const { data: portalUsers = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/v1/clients", clientId, "portal-users"],
+    enabled: !!clientId,
+  });
+
+  if (isLoading) return <Skeleton className="h-12 w-full" />;
+  
+  const count = Array.isArray(portalUsers) ? portalUsers.length : 0;
+
   return (
     <div className="flex items-center gap-4">
-      <StatValue label="Portal Users" value="—" />
+      <StatValue label="Portal Users" value={count} />
       <p className="text-xs text-muted-foreground ml-auto">Manage access →</p>
     </div>
   );
@@ -613,12 +622,17 @@ function DivisionsTileContent({ clientId }: { clientId: string }) {
     queryKey: ["/api/v1/clients", clientId, "divisions"],
     enabled: !!clientId,
   });
+  
   if (isLoading) return <Skeleton className="h-12 w-full" />;
+  
+  // The API returns divisions with counts, so we check data.length
+  const divisionCount = Array.isArray(data) ? data.length : 0;
+  
   return (
     <div className="flex items-center gap-4">
-      <StatValue label="Divisions" value={data.length} />
+      <StatValue label="Divisions" value={divisionCount} />
       <p className="text-xs text-muted-foreground ml-auto">
-        {data.length > 0 ? "View all →" : "No divisions"}
+        {divisionCount > 0 ? "View all →" : "No divisions"}
       </p>
     </div>
   );
@@ -715,9 +729,18 @@ function RecentMessagesContent() {
 }
 
 function AssetsSummaryContent({ clientId }: { clientId: string }) {
+  const { data: assets = [], isLoading } = useQuery<any[]>({
+    queryKey: ["/api/v1/assets", { clientId }],
+    enabled: !!clientId,
+  });
+
+  if (isLoading) return <Skeleton className="h-12 w-full" />;
+  
+  const count = Array.isArray(assets) ? assets.length : (assets as any)?.assets?.length || 0;
+
   return (
     <div className="flex items-center gap-4">
-      <StatValue label="Assets" value="—" />
+      <StatValue label="Assets" value={count} />
       <p className="text-xs text-muted-foreground ml-auto">Manage files →</p>
     </div>
   );
