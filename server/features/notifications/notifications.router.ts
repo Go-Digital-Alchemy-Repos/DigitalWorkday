@@ -105,6 +105,36 @@ router.post("/notifications/dismiss-all", async (req, res) => {
   }
 });
 
+router.post("/notifications/group/read", async (req, res) => {
+  try {
+    const userId = getCurrentUserId(req);
+    const tenantId = getEffectiveTenantId(req);
+    const { dedupeKey } = req.body;
+    if (!dedupeKey || typeof dedupeKey !== "string") {
+      throw AppError.badRequest("dedupeKey is required");
+    }
+    const count = await storage.markGroupRead(dedupeKey, userId, tenantId);
+    res.json({ success: true, count });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /notifications/group/read", req);
+  }
+});
+
+router.post("/notifications/group/dismiss", async (req, res) => {
+  try {
+    const userId = getCurrentUserId(req);
+    const tenantId = getEffectiveTenantId(req);
+    const { dedupeKey } = req.body;
+    if (!dedupeKey || typeof dedupeKey !== "string") {
+      throw AppError.badRequest("dedupeKey is required");
+    }
+    const count = await storage.dismissGroup(dedupeKey, userId, tenantId);
+    res.json({ success: true, count });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /notifications/group/dismiss", req);
+  }
+});
+
 router.delete("/notifications/:id", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);

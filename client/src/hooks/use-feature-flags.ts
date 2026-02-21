@@ -8,6 +8,7 @@ export interface FeatureFlags {
   clientCommandPaletteV1: boolean;
   clientControlCenterPremium: boolean;
   clientControlCenterPinnedWidgets: boolean;
+  notificationsGroupingV1: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -18,6 +19,7 @@ const ALL_OFF: FeatureFlags = {
   clientCommandPaletteV1: false,
   clientControlCenterPremium: false,
   clientControlCenterPinnedWidgets: false,
+  notificationsGroupingV1: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

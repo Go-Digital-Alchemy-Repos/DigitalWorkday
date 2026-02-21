@@ -1,9 +1,9 @@
-import { useState, useEffect, useCallback, useRef } from "react";
+import { useState, useEffect, useCallback, useRef, useMemo } from "react";
 import { useQuery, useMutation, useQueryClient, useInfiniteQuery } from "@tanstack/react-query";
 import {
   Bell, Check, CheckCheck, Settings, Clock, MessageSquare,
   Users, FolderKanban, X, Headphones, FileText, Hash,
-  AlertTriangle, ChevronRight, Loader2,
+  AlertTriangle, ChevronRight, Loader2, Layers,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -22,6 +22,16 @@ import { prefersReducedMotion } from "@/lib/motion";
 import type { ServerToClientEvents } from "@shared/events";
 import { useTaskDrawerOptional } from "@/lib/task-drawer-context";
 import { useLocation } from "wouter";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
+
+interface GroupMeta {
+  count: number;
+  lastActorId?: string;
+  lastActorName?: string;
+  actorIds?: string[];
+  lastEntityId?: string;
+  lastMessagePreview?: string;
+}
 
 interface Notification {
   id: string;
@@ -35,9 +45,23 @@ interface Notification {
   entityType: string | null;
   entityId: string | null;
   href: string | null;
+  dedupeKey: string | null;
+  eventCount: number;
+  lastEventAt: string | null;
+  groupMeta: GroupMeta | null;
   isDismissed: boolean;
   readAt: Date | null;
   createdAt: Date;
+}
+
+interface NotificationGroup {
+  key: string;
+  dedupeKey: string;
+  type: string;
+  notifications: Notification[];
+  totalEventCount: number;
+  latestNotification: Notification;
+  isUnread: boolean;
 }
 
 interface PaginatedResponse {
@@ -152,6 +176,224 @@ const FILTER_TAB_CONFIG: { value: FilterTab; label: string; typeFilter?: string 
   { value: "tickets", label: "Tickets", typeFilter: "support_ticket,work_order" },
 ];
 
+const GROUPABLE_TYPES = new Set([
+  "chat_message", "client_message", "support_ticket", "work_order", "comment_added",
+]);
+
+function getEffectiveTimestamp(n: Notification): number {
+  return new Date(n.lastEventAt || n.createdAt).getTime();
+}
+
+function groupNotifications(notifications: Notification[]): (Notification | NotificationGroup)[] {
+  const result: (Notification | NotificationGroup)[] = [];
+  const grouped = new Map<string, Notification[]>();
+  const order: string[] = [];
+
+  for (const n of notifications) {
+    if (n.dedupeKey && GROUPABLE_TYPES.has(n.type) && n.eventCount > 1) {
+      const key = n.dedupeKey;
+      if (!grouped.has(key)) {
+        grouped.set(key, []);
+        order.push(key);
+      }
+      grouped.get(key)!.push(n);
+    } else {
+      result.push(n);
+    }
+  }
+
+  for (const key of order) {
+    const items = grouped.get(key)!;
+    items.sort((a, b) => getEffectiveTimestamp(b) - getEffectiveTimestamp(a));
+    const latest = items[0];
+    const totalEventCount = items.reduce((sum, n) => sum + n.eventCount, 0);
+    result.push({
+      key,
+      dedupeKey: key,
+      type: latest.type,
+      notifications: items,
+      totalEventCount,
+      latestNotification: latest,
+      isUnread: items.some(n => !n.readAt),
+    });
+  }
+
+  result.sort((a, b) => {
+    const aTime = isGroup(a) ? getEffectiveTimestamp(a.latestNotification) : getEffectiveTimestamp(a);
+    const bTime = isGroup(b) ? getEffectiveTimestamp(b.latestNotification) : getEffectiveTimestamp(b);
+    return bTime - aTime;
+  });
+
+  return result;
+}
+
+function isGroup(item: Notification | NotificationGroup): item is NotificationGroup {
+  return 'latestNotification' in item;
+}
+
+function NotificationGroupRow({
+  group,
+  onGroupRead,
+  onGroupDismiss,
+  onClick,
+  isGroupReadPending,
+  isGroupDismissPending,
+}: {
+  group: NotificationGroup;
+  onGroupRead: (dedupeKey: string) => void;
+  onGroupDismiss: (dedupeKey: string) => void;
+  onClick: (notification: Notification) => void;
+  isGroupReadPending: boolean;
+  isGroupDismissPending: boolean;
+}) {
+  const [expanded, setExpanded] = useState(false);
+  const latest = group.latestNotification;
+  const Icon = getNotificationIcon(latest.type);
+  const severityColor = getSeverityColor(latest.severity);
+  const meta = latest.groupMeta;
+
+  const summaryText = useMemo(() => {
+    if (meta?.lastActorName && group.totalEventCount > 1) {
+      const others = group.totalEventCount - 1;
+      return others > 0
+        ? `${meta.lastActorName} and ${others} other${others > 1 ? 's' : ''}`
+        : meta.lastActorName;
+    }
+    if (group.totalEventCount > 1) {
+      return `${group.totalEventCount} events`;
+    }
+    return null;
+  }, [meta, group.totalEventCount]);
+
+  return (
+    <div className="border-b" data-testid={`notification-group-${group.dedupeKey}`}>
+      <div
+        className={cn(
+          "px-3 py-2.5 hover:bg-muted/50 cursor-pointer relative notif-row-hover group",
+          group.isUnread && "bg-primary/5"
+        )}
+        onClick={() => setExpanded(!expanded)}
+      >
+        <div className="flex gap-2.5">
+          <div className={cn(
+            "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5",
+            group.isUnread ? "bg-primary/10" : "bg-muted"
+          )}>
+            <Icon className={cn(
+              "h-4 w-4",
+              group.isUnread ? severityColor : "text-muted-foreground"
+            )} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="flex items-start justify-between gap-1">
+              <p className={cn(
+                "text-sm leading-tight",
+                group.isUnread ? "font-medium" : "text-muted-foreground"
+              )}>
+                {latest.title}
+              </p>
+              <div className="flex items-center gap-0.5 shrink-0">
+                {group.isUnread && (
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={(e) => { e.stopPropagation(); onGroupRead(group.dedupeKey); }}
+                    disabled={isGroupReadPending}
+                    data-testid={`group-read-${group.dedupeKey}`}
+                  >
+                    <Check className="h-3 w-3" />
+                  </Button>
+                )}
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                  onClick={(e) => { e.stopPropagation(); onGroupDismiss(group.dedupeKey); }}
+                  disabled={isGroupDismissPending}
+                  data-testid={`group-dismiss-${group.dedupeKey}`}
+                >
+                  <X className="h-3 w-3" />
+                </Button>
+              </div>
+            </div>
+            {meta?.lastMessagePreview && (
+              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">
+                {meta.lastMessagePreview}
+              </p>
+            )}
+            <div className="flex items-center gap-2 mt-1">
+              <Badge variant="secondary" className="h-4 text-[10px] px-1.5 gap-0.5">
+                <Layers className="h-2.5 w-2.5" />
+                {group.totalEventCount}
+              </Badge>
+              {summaryText && (
+                <span className="text-[11px] text-muted-foreground">{summaryText}</span>
+              )}
+              <p className="text-[11px] text-muted-foreground">
+                {formatDistanceToNow(new Date(latest.lastEventAt || latest.createdAt), { addSuffix: true })}
+              </p>
+              <ChevronRight className={cn(
+                "h-3 w-3 text-muted-foreground/50 transition-transform",
+                expanded && "rotate-90"
+              )} />
+            </div>
+          </div>
+        </div>
+        {group.isUnread && (
+          <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-primary" />
+        )}
+      </div>
+
+      {expanded && (
+        <div className="border-t bg-muted/20">
+          {group.notifications.map((notification) => {
+            const NIcon = getNotificationIcon(notification.type);
+            const nSeverity = getSeverityColor(notification.severity);
+            return (
+              <div
+                key={notification.id}
+                className={cn(
+                  "pl-8 pr-3 py-2 hover:bg-muted/50 cursor-pointer relative notif-row-hover",
+                  !notification.readAt && "bg-primary/5"
+                )}
+                onClick={() => onClick(notification)}
+                data-testid={`notification-item-${notification.id}`}
+              >
+                <div className="flex gap-2">
+                  <NIcon className={cn(
+                    "h-3.5 w-3.5 mt-0.5 shrink-0",
+                    notification.readAt ? "text-muted-foreground" : nSeverity
+                  )} />
+                  <div className="flex-1 min-w-0">
+                    <p className={cn(
+                      "text-xs leading-tight",
+                      notification.readAt ? "text-muted-foreground" : "font-medium"
+                    )}>
+                      {notification.title}
+                    </p>
+                    {notification.message && (
+                      <p className="text-[11px] text-muted-foreground mt-0.5 line-clamp-1">
+                        {notification.message}
+                      </p>
+                    )}
+                    <p className="text-[10px] text-muted-foreground mt-0.5">
+                      {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                    </p>
+                  </div>
+                </div>
+                {!notification.readAt && (
+                  <div className="absolute left-4 top-1/2 -translate-y-1/2 w-1 h-1 rounded-full bg-primary" />
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function NotificationCenter() {
   const [isOpen, setIsOpen] = useState(false);
   const [activeTab, setActiveTab] = useState<"notifications" | "settings">("notifications");
@@ -199,6 +441,12 @@ export function NotificationCenter() {
   });
 
   const notifications = notificationPages?.pages.flatMap(p => p.items) ?? [];
+  const flags = useFeatureFlags();
+  const groupingEnabled = flags.notificationsGroupingV1 ?? false;
+  const groupedItems = useMemo(() => {
+    if (!groupingEnabled) return null;
+    return groupNotifications(notifications);
+  }, [notifications, groupingEnabled]);
 
   const { data: unreadData } = useQuery<{ count: number }>({
     queryKey: ["/api/notifications/unread-count"],
@@ -286,6 +534,26 @@ export function NotificationCenter() {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
       toast({ title: "All notifications dismissed" });
+    },
+  });
+
+  const groupReadMutation = useMutation({
+    mutationFn: async (dedupeKey: string) => {
+      await apiRequest("POST", "/api/notifications/group/read", { dedupeKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+    },
+  });
+
+  const groupDismissMutation = useMutation({
+    mutationFn: async (dedupeKey: string) => {
+      await apiRequest("POST", "/api/notifications/group/dismiss", { dedupeKey });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
     },
   });
 
@@ -440,18 +708,23 @@ export function NotificationCenter() {
           className="relative"
           data-testid="button-notification-center"
         >
-          <Bell className="h-5 w-5" />
+          <span className={cn("inline-flex", bellBounce && "animate-bell-bounce")}>
+            <Bell className="h-5 w-5" />
+          </span>
           {unreadCount > 0 && (
             <Badge
               variant="destructive"
-              className="absolute top-2 right-2 h-4 min-w-4 flex items-center justify-center p-0 text-[10px] ring-1 ring-background"
+              className={cn(
+                "absolute top-2 right-2 h-4 min-w-4 flex items-center justify-center p-0 text-[10px] ring-1 ring-background",
+                badgePop && "animate-badge-pop"
+              )}
             >
               {unreadCount > 99 ? "99+" : unreadCount}
             </Badge>
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[420px] p-0" align="end">
+      <PopoverContent className="w-[420px] p-0 notif-panel-motion origin-top-right" align="end">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "notifications" | "settings")}>
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <h3 className="font-semibold text-sm">Notifications</h3>
@@ -530,18 +803,127 @@ export function NotificationCenter() {
                     {filterTab === "unread" ? "No unread notifications" : "No notifications yet"}
                   </p>
                 </div>
+              ) : groupingEnabled && groupedItems ? (
+                <>
+                  {groupedItems.map((item) => {
+                    if (isGroup(item)) {
+                      return (
+                        <NotificationGroupRow
+                          key={item.key}
+                          group={item}
+                          onGroupRead={(k) => groupReadMutation.mutate(k)}
+                          onGroupDismiss={(k) => groupDismissMutation.mutate(k)}
+                          onClick={handleNotificationClick}
+                          isGroupReadPending={groupReadMutation.isPending}
+                          isGroupDismissPending={groupDismissMutation.isPending}
+                        />
+                      );
+                    }
+                    const notification = item;
+                    const Icon = getNotificationIcon(notification.type);
+                    const severityColor = getSeverityColor(notification.severity);
+                    const isNewlyArrived = newlyArrivedIds.has(notification.id);
+                    const isHighlightFaded = fadedHighlightIds.has(notification.id);
+                    return (
+                      <div
+                        key={notification.id}
+                        className={cn(
+                          "px-3 py-2.5 hover:bg-muted/50 cursor-pointer relative border-b notif-row-hover group",
+                          !notification.readAt && "bg-primary/5",
+                          isNewlyArrived && "animate-notif-item-enter notif-highlight-overlay",
+                          isHighlightFaded && "highlight-faded"
+                        )}
+                        onClick={() => handleNotificationClick(notification)}
+                        data-testid={`notification-item-${notification.id}`}
+                      >
+                        <div className="flex gap-2.5">
+                          <div className={cn(
+                            "flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center mt-0.5",
+                            notification.readAt ? "bg-muted" : "bg-primary/10"
+                          )}>
+                            <Icon className={cn(
+                              "h-4 w-4",
+                              notification.readAt ? "text-muted-foreground" : severityColor
+                            )} />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <div className="flex items-start justify-between gap-1">
+                              <p className={cn(
+                                "text-sm leading-tight",
+                                notification.readAt ? "text-muted-foreground" : "font-medium"
+                              )}>
+                                {notification.title}
+                              </p>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                onClick={(e) => {
+                                  e.stopPropagation();
+                                  dismissMutation.mutate(notification.id);
+                                }}
+                                data-testid={`dismiss-notification-${notification.id}`}
+                              >
+                                <X className="h-3 w-3" />
+                              </Button>
+                            </div>
+                            {notification.message && (
+                              <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
+                                {notification.message}
+                              </p>
+                            )}
+                            <div className="flex items-center gap-2 mt-1">
+                              <p className="text-[11px] text-muted-foreground">
+                                {formatDistanceToNow(new Date(notification.createdAt), { addSuffix: true })}
+                              </p>
+                              {notification.eventCount > 1 && (
+                                <Badge variant="secondary" className="h-4 text-[10px] px-1.5 gap-0.5">
+                                  <Layers className="h-2.5 w-2.5" />
+                                  {notification.eventCount}
+                                </Badge>
+                              )}
+                              {notification.href && (
+                                <ChevronRight className="h-3 w-3 text-muted-foreground/50" />
+                              )}
+                              {notification.severity === "urgent" && (
+                                <AlertTriangle className="h-3 w-3 text-destructive" />
+                              )}
+                            </div>
+                          </div>
+                        </div>
+                        {!notification.readAt && (
+                          <div className="absolute left-1 top-1/2 -translate-y-1/2 w-1.5 h-1.5 rounded-full bg-primary" />
+                        )}
+                      </div>
+                    );
+                  })}
+                  {isFetchingNextPage && (
+                    <div className="p-3 text-center">
+                      <Loader2 className="h-4 w-4 animate-spin mx-auto text-muted-foreground" />
+                    </div>
+                  )}
+                  {!hasNextPage && notifications.length > 0 && (
+                    <div className="p-3 text-center text-xs text-muted-foreground">
+                      No more notifications
+                    </div>
+                  )}
+                </>
               ) : (
                 <>
                   {notifications.map((notification) => {
                     const Icon = getNotificationIcon(notification.type);
                     const severityColor = getSeverityColor(notification.severity);
+                    const isNewlyArrived = newlyArrivedIds.has(notification.id);
+                    const isHighlightFaded = fadedHighlightIds.has(notification.id);
 
                     return (
                       <div
                         key={notification.id}
                         className={cn(
-                          "px-3 py-2.5 hover:bg-muted/50 cursor-pointer relative border-b transition-colors group",
-                          !notification.readAt && "bg-primary/5"
+                          "px-3 py-2.5 hover:bg-muted/50 cursor-pointer relative border-b notif-row-hover group",
+                          !notification.readAt && "bg-primary/5",
+                          isNewlyArrived && "animate-notif-item-enter notif-highlight-overlay",
+                          isHighlightFaded && "highlight-faded"
                         )}
                         onClick={() => handleNotificationClick(notification)}
                         data-testid={`notification-item-${notification.id}`}

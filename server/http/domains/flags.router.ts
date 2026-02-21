@@ -33,6 +33,7 @@ router.get("/features/flags", async (_req, res) => {
       clientCommandPaletteV1: config.features.clientCommandPaletteV1,
       clientControlCenterPremium: config.features.clientControlCenterPremium,
       clientControlCenterPinnedWidgets: config.features.clientControlCenterPinnedWidgets,
+      notificationsGroupingV1: config.features.notificationsGroupingV1,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

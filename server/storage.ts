@@ -554,14 +554,16 @@ export interface IStorage {
 
   // Notifications
   createNotification(notification: InsertNotification): Promise<Notification>;
-  createOrDedupeNotification(notification: InsertNotification): Promise<Notification>;
+  createOrDedupeNotification(notification: InsertNotification, coalesceMeta?: { actorId?: string; actorName?: string; entityId?: string; messagePreview?: string }): Promise<Notification>;
   getNotificationsByUser(userId: string, tenantId: string | null, options?: { unreadOnly?: boolean; limit?: number; offset?: number; typeFilter?: string }): Promise<Notification[]>;
   getNotificationsByUserPaginated(userId: string, tenantId: string | null, options?: { unreadOnly?: boolean; limit?: number; cursor?: string; typeFilter?: string }): Promise<{ items: Notification[]; nextCursor: string | null; hasMore: boolean }>;
   getUnreadNotificationCount(userId: string, tenantId: string | null): Promise<number>;
   markNotificationRead(id: string, userId: string, tenantId: string | null): Promise<Notification | undefined>;
   markAllNotificationsRead(userId: string, tenantId: string | null): Promise<void>;
+  markGroupRead(dedupeKey: string, userId: string, tenantId: string | null): Promise<number>;
   dismissNotification(id: string, userId: string, tenantId: string | null): Promise<Notification | undefined>;
   dismissAllNotifications(userId: string, tenantId: string | null): Promise<void>;
+  dismissGroup(dedupeKey: string, userId: string, tenantId: string | null): Promise<number>;
   deleteNotification(id: string, userId: string, tenantId: string | null): Promise<void>;
 
   // Notification Preferences
@@ -4075,8 +4077,8 @@ export class DatabaseStorage implements IStorage {
     return notificationsRepo.createNotification(notification);
   }
 
-  async createOrDedupeNotification(notification: InsertNotification): Promise<Notification> {
-    return notificationsRepo.createOrDedupeNotification(notification);
+  async createOrDedupeNotification(notification: InsertNotification, coalesceMeta?: { actorId?: string; actorName?: string; entityId?: string; messagePreview?: string }): Promise<Notification> {
+    return notificationsRepo.createOrDedupeNotification(notification, coalesceMeta);
   }
 
   async getNotificationsByUser(userId: string, tenantId: string | null, options?: { unreadOnly?: boolean; limit?: number; offset?: number; typeFilter?: string }): Promise<Notification[]> {
@@ -4105,6 +4107,14 @@ export class DatabaseStorage implements IStorage {
 
   async dismissAllNotifications(userId: string, tenantId: string | null): Promise<void> {
     return notificationsRepo.dismissAllNotifications(userId, tenantId);
+  }
+
+  async markGroupRead(dedupeKey: string, userId: string, tenantId: string | null): Promise<number> {
+    return notificationsRepo.markGroupRead(dedupeKey, userId, tenantId);
+  }
+
+  async dismissGroup(dedupeKey: string, userId: string, tenantId: string | null): Promise<number> {
+    return notificationsRepo.dismissGroup(dedupeKey, userId, tenantId);
   }
 
   async deleteNotification(id: string, userId: string, tenantId: string | null): Promise<void> {

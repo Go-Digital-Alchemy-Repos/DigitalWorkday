@@ -1,0 +1,248 @@
+REPLIT PROMPT — Notification Grouping + Coalescing (Slack-like, Fast, Non-Spammy)
+DigitalWorkday
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+OBJECTIVE:
+Implement Slack-like notification grouping/coalescing so the notification panel stays clean under bursts:
+- Multiple events from the same stream (e.g., same chat channel, same client thread, same ticket) coalesce into one “group row”
+- Group row shows:
+  - title (e.g., “#general” or “Acme Co — Messages” or “Ticket #123”)
+  - latest snippet
+  - count badge (“+3”)
+  - last timestamp
+  - optionally top 2 senders avatars (chat/messages)
+- Clicking group opens the correct context and, if applicable, scrolls to latest message
+- Mark-as-read rules handle grouped children correctly
+- Must remain tenant/user scoped and performant
+
+NON-DESTRUCTIVE:
+- Keep existing notification table/service working.
+- Add grouping as an additive layer (server & client).
+- Feature flag: NOTIFICATIONS_GROUPING_V1 (default true dev, false prod until verified).
+- Preserve dedupeKey logic already introduced (or add it if missing).
+
+KEY CONCEPT:
+Two levels:
+1) Server-level coalescing at insert-time via dedupeKey (reduces DB spam)
+2) Client-level grouping for display (even if DB has multiple rows)
+
+We will implement BOTH:
+- Insert-time coalesce for high-volume types
+- Display grouping for everything else
+
+================================================================================
+PHASE 1 — Define Group Keys and Policies
+================================================================================
+
+Create:
+server/features/notifications/notificationGrouping.ts
+client/src/features/notifications/grouping.ts
+
+Define “groupKey” rules (must match server and client):
+
+Chat messages:
+- groupKey = `chat:${channelId}` or `chatdm:${dmId}`
+- groupTitle = `New messages in #${channelName}` or `New messages` for DM
+- dedupe window: 10 minutes
+
+Client messages (portal inbox):
+- groupKey = `clientmsg:${clientId}:${threadId}`
+- title = `${clientName} — Messages`
+- dedupe window: 30 minutes
+
+Support tickets / work orders:
+- groupKey = `ticket:${ticketId}`
+- title = `Support Ticket: ${ticketNumberOrTitle}`
+- dedupe window: 60 minutes
+
+Mentions:
+- groupKey = `mention:${sourceType}:${sourceId}` OR do not group by default (safer)
+- If grouped, window: 10 minutes
+
+Other:
+- default no grouping unless explicitly safe
+
+Policy options per type:
+- allowCoalesce: true/false
+- windowMinutes
+- showSenders: true/false
+- showCount: true/false
+
+================================================================================
+PHASE 2 — Server Insert-Time Coalescing (DB Spam Reduction)
+================================================================================
+
+In notification.service.ts createNotification():
+If type supports coalescing AND dedupeKey is set:
+1) Query for an existing, non-dismissed, unread notification for same:
+- tenantId, userId, dedupeKey
+- createdAt within windowMinutes
+2) If found:
+- update that row:
+  - title/body may update to latest
+  - metaJson update:
+    - increment metaJson.count (default 1 -> 2 -> 3)
+    - track lastActorId (sender) and optionally actorIds ring buffer (max 3)
+    - store lastEntityId/messageId for deep link
+  - update createdAt or add updatedAt (prefer updatedAt)
+Return updated notification.
+3) If not found:
+- insert new with metaJson.count = 1
+
+DB changes (if needed):
+- Add updatedAt column to notifications
+- Index for lookup:
+  (tenantId, userId, dedupeKey, isDismissed)
+  and optionally (tenantId, userId, dedupeKey, updatedAt desc)
+
+IMPORTANT:
+- Don’t coalesce across different channels/threads/tickets
+- Always exclude sender from recipients at generation time (existing rules)
+
+================================================================================
+PHASE 3 — Server APIs for Group Read Behavior
+================================================================================
+
+We must handle “mark group as read”.
+
+Add endpoints (authTenant):
+POST /api/v1/notifications/group/read
+Body: { dedupeKey: string }
+- marks all notifications matching (tenantId,userId,dedupeKey) as read
+- if coalescing uses single row, this still works
+
+POST /api/v1/notifications/group/dismiss
+Body: { dedupeKey: string }
+- dismisses all rows for that group (or the single coalesced row)
+
+Return updated unread count.
+
+Add policy drift + integration tests:
+- group read affects only that user and tenant
+- group dismiss works
+- unread count updates
+
+================================================================================
+PHASE 4 — Client: Display Grouped Rows (Fast, Minimal Re-render)
+================================================================================
+
+In the Notification panel list renderer:
+
+1) Fetch notifications as usual (paged).
+2) If NOTIFICATIONS_GROUPING_V1 enabled:
+- transform raw notifications into “display items”:
+  type DisplayItem =
+    | { kind: 'single', notification }
+    | { kind: 'group', dedupeKey, type, title, latestBody, count, updatedAt, avatars?, href, meta }
+
+Grouping rules:
+- group by dedupeKey when present
+- within each dedupeKey:
+  - pick latest updatedAt/createdAt as display time
+  - count = sum(meta.count) or number of items
+  - avatars: collect actorIds (max 2) if available
+  - href/meta from latest
+
+IMPORTANT:
+- Do not reorder across groups incorrectly; use latest time.
+- Keep pagination stable (grouping happens after page merge).
+
+3) Insert-time socket updates:
+- If NOTIFICATIONS.UPDATED arrives for existing dedupeKey:
+  - update the grouped display item without re-rendering entire list
+- If NOTIFICATIONS.NEW arrives with dedupeKey:
+  - if group exists: bump its count and time
+  - else: create new group item
+
+Use React Query setQueryData carefully:
+- update only affected item/group
+- avoid rebuilding large arrays when possible
+
+================================================================================
+PHASE 5 — Group Row UI (Slack-like)
+================================================================================
+
+Create component:
+client/src/features/notifications/NotificationGroupRow.tsx
+
+UI:
+- Left: icon by type + optional avatars stack (2 max)
+- Middle: title + latest snippet (1 line)
+- Right: timestamp + count badge (“+3”)
+- Unread dot shown if group contains unread
+
+Actions:
+- clicking row:
+  - calls group read endpoint (dedupeKey)
+  - navigates to latest href/meta
+- overflow menu (kebab):
+  - Mark group read
+  - Mute this channel/thread/ticket (stub for later)
+  - Dismiss group
+
+Use shadcn/ui:
+- Button (ghost)
+- DropdownMenu
+- Avatar
+- Badge
+- Tooltip
+
+Motion:
+- If notification motion prompt exists:
+  - group count badge uses pop animation on increment
+  - group row uses “new item arrival” highlight when group first appears
+
+================================================================================
+PHASE 6 — Mark As Read Semantics (Correctness)
+================================================================================
+
+Rules:
+- Clicking a group marks the group read (dedupeKey) not just the one row
+- “Mark all read” still works globally
+- If coalescing is single-row, group-read is equivalent to mark-read, but keep endpoint for consistency
+
+Ensure server is source of truth for unread count.
+
+================================================================================
+PHASE 7 — Optional: Coalesced Copy Templates (Premium)
+================================================================================
+
+For grouped titles/body:
+Chat:
+- Title: “#general”
+- Body: “3 new messages · Last: Mike: ‘…’”
+Client messages:
+- Title: “Acme Co — Messages”
+- Body: “2 new messages · Last: Client: ‘…’”
+Tickets:
+- Title: “Ticket · Login Issue”
+- Body: “Updated · Last: ‘…’”
+
+Ensure copy is concise and not noisy.
+
+================================================================================
+PHASE 8 — Tests + Docs
+================================================================================
+
+Server tests:
+- coalescing updates count + updatedAt
+- group read marks correct rows
+- tenant isolation preserved
+
+Client tests (if infra exists):
+- grouping produces correct display items
+- socket update bumps only that group
+
+Docs:
+Create docs/UX/notification-grouping.md:
+- dedupeKey + groupKey concepts
+- which types coalesce
+- windows
+- APIs
+- how to add a new grouped type safely
+
+OUTPUT:
+- list of files changed
+- tests passing
+- confirm NOTIFICATIONS_GROUPING_V1 can be toggled off to revert to flat list

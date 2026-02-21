@@ -274,6 +274,13 @@
       "when": 1771559805086,
       "tag": "0038_cuddly_iron_lad",
       "breakpoints": true
+    },
+    {
+      "idx": 39,
+      "version": "7",
+      "when": 1771643625871,
+      "tag": "0039_quick_quasimodo",
+      "breakpoints": true
     }
   ]
 }

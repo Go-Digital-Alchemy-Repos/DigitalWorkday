@@ -4,7 +4,8 @@ import {
   notifications, notificationPreferences,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, isNull, sql, lt, ne, inArray } from "drizzle-orm";
+import { eq, and, desc, isNull, sql, lt, ne, inArray, gte } from "drizzle-orm";
+import { getGroupPolicy, buildGroupMeta, isGroupingEnabled, type GroupMeta } from "../features/notifications/notificationGrouping";
 
 export interface NotificationQueryOptions {
   unreadOnly?: boolean;
@@ -26,19 +27,57 @@ export class NotificationsRepository {
     return created;
   }
 
-  async createOrDedupeNotification(notification: InsertNotification): Promise<Notification> {
+  async createOrDedupeNotification(
+    notification: InsertNotification,
+    coalesceMeta?: { actorId?: string; actorName?: string; entityId?: string; messagePreview?: string }
+  ): Promise<Notification> {
     if (notification.dedupeKey && notification.tenantId && notification.userId) {
+      const policy = getGroupPolicy(notification.type);
+      const shouldCoalesce = isGroupingEnabled() && policy.allowCoalesce;
+
+      const windowConditions = [
+        eq(notifications.tenantId, notification.tenantId),
+        eq(notifications.userId, notification.userId),
+        eq(notifications.dedupeKey, notification.dedupeKey),
+        eq(notifications.isDismissed, false),
+      ];
+
+      if (shouldCoalesce && policy.windowMinutes > 0) {
+        const windowStart = new Date(Date.now() - policy.windowMinutes * 60 * 1000);
+        windowConditions.push(gte(notifications.lastEventAt, windowStart));
+      }
+
       const [existing] = await db.select()
         .from(notifications)
-        .where(and(
-          eq(notifications.tenantId, notification.tenantId),
-          eq(notifications.userId, notification.userId),
-          eq(notifications.dedupeKey, notification.dedupeKey),
-          eq(notifications.isDismissed, false),
-        ))
+        .where(and(...windowConditions))
+        .orderBy(desc(notifications.lastEventAt))
         .limit(1);
 
-      if (existing) {
+      if (existing && shouldCoalesce) {
+        const now = new Date();
+        const existingMeta = (existing.groupMeta as GroupMeta) || null;
+        const updatedMeta = buildGroupMeta(
+          existingMeta,
+          coalesceMeta?.actorId,
+          coalesceMeta?.actorName,
+          coalesceMeta?.entityId,
+          coalesceMeta?.messagePreview
+        );
+
+        const [updated] = await db.update(notifications)
+          .set({
+            title: notification.title,
+            message: notification.message,
+            payloadJson: notification.payloadJson,
+            readAt: null,
+            lastEventAt: now,
+            eventCount: sql`${notifications.eventCount} + 1`,
+            groupMeta: updatedMeta as Record<string, unknown>,
+          })
+          .where(eq(notifications.id, existing.id))
+          .returning();
+        return updated;
+      } else if (existing && !shouldCoalesce) {
         const [updated] = await db.update(notifications)
           .set({
             title: notification.title,
@@ -46,6 +85,7 @@ export class NotificationsRepository {
             payloadJson: notification.payloadJson,
             readAt: null,
             createdAt: new Date(),
+            lastEventAt: new Date(),
           })
           .where(eq(notifications.id, existing.id))
           .returning();
@@ -53,7 +93,15 @@ export class NotificationsRepository {
       }
     }
 
-    return this.createNotification(notification);
+    const insertData = {
+      ...notification,
+      eventCount: 1,
+      lastEventAt: new Date(),
+      groupMeta: coalesceMeta
+        ? (buildGroupMeta(null, coalesceMeta.actorId, coalesceMeta.actorName, coalesceMeta.entityId, coalesceMeta.messagePreview) as Record<string, unknown>)
+        : null,
+    };
+    return this.createNotification(insertData);
   }
 
   async getNotificationsByUser(userId: string, tenantId: string | null, options?: NotificationQueryOptions): Promise<Notification[]> {
@@ -288,6 +336,59 @@ export class NotificationsRepository {
       if (message.includes("does not exist") || message.includes("column") && message.includes("not")) {
         console.warn("[storage] dismissAllNotifications failed (schema issue):", message);
         return;
+      }
+      throw error;
+    }
+  }
+
+  async markGroupRead(dedupeKey: string, userId: string, tenantId: string | null): Promise<number> {
+    try {
+      const conditions = [
+        eq(notifications.userId, userId),
+        eq(notifications.dedupeKey, dedupeKey),
+        eq(notifications.isDismissed, false),
+        isNull(notifications.readAt),
+      ];
+      if (tenantId) {
+        conditions.push(
+          sql`(${notifications.tenantId} = ${tenantId} OR ${notifications.tenantId} IS NULL)`
+        );
+      }
+      const result = await db.update(notifications)
+        .set({ readAt: new Date() })
+        .where(and(...conditions))
+        .returning();
+      return result.length;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("does not exist")) {
+        return 0;
+      }
+      throw error;
+    }
+  }
+
+  async dismissGroup(dedupeKey: string, userId: string, tenantId: string | null): Promise<number> {
+    try {
+      const conditions = [
+        eq(notifications.userId, userId),
+        eq(notifications.dedupeKey, dedupeKey),
+        eq(notifications.isDismissed, false),
+      ];
+      if (tenantId) {
+        conditions.push(
+          sql`(${notifications.tenantId} = ${tenantId} OR ${notifications.tenantId} IS NULL)`
+        );
+      }
+      const result = await db.update(notifications)
+        .set({ isDismissed: true, readAt: new Date() })
+        .where(and(...conditions))
+        .returning();
+      return result.length;
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : String(error);
+      if (message.includes("does not exist")) {
+        return 0;
       }
       throw error;
     }

@@ -1539,6 +1539,9 @@ export const notifications = pgTable("notifications", {
   entityId: text("entity_id"),
   href: text("href"),
   dedupeKey: text("dedupe_key"),
+  eventCount: integer("event_count").default(1).notNull(),
+  lastEventAt: timestamp("last_event_at").defaultNow().notNull(),
+  groupMeta: jsonb("group_meta"),
   isDismissed: boolean("is_dismissed").default(false).notNull(),
   readAt: timestamp("read_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -1549,6 +1552,7 @@ export const notifications = pgTable("notifications", {
   index("notifications_user_read_idx").on(table.userId, table.readAt),
   index("notifications_tenant_user_idx").on(table.tenantId, table.userId),
   index("notifications_dedupe_idx").on(table.tenantId, table.userId, table.dedupeKey),
+  index("notifications_group_lookup_idx").on(table.tenantId, table.userId, table.dedupeKey, table.isDismissed),
 ]);
 
 // Notification preferences table
