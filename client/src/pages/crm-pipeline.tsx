@@ -256,7 +256,7 @@ export default function CrmPipelinePage() {
   const { toast } = useToast();
 
   const [search, setSearch] = useState("");
-  const [ownerFilter, setOwnerFilter] = useState("");
+  const [pmFilter, setPmFilter] = useState("");
   const [tagFilter, setTagFilter] = useState("");
   const [activeId, setActiveId] = useState<string | null>(null);
 
@@ -268,10 +268,10 @@ export default function CrmPipelinePage() {
   const queryParams = useMemo(() => {
     const params: Record<string, string> = {};
     if (search.trim()) params.search = search.trim();
-    if (ownerFilter) params.owner = ownerFilter;
+    if (pmFilter) params.owner = pmFilter;
     if (tagFilter.trim()) params.tag = tagFilter.trim();
     return params;
-  }, [search, ownerFilter, tagFilter]);
+  }, [search, pmFilter, tagFilter]);
 
   const queryKey = useMemo(() => {
     const hasParams = Object.keys(queryParams).length > 0;
@@ -423,14 +423,14 @@ export default function CrmPipelinePage() {
           </div>
 
           <Select
-            value={ownerFilter}
+            value={pmFilter}
             onValueChange={(val) =>
-              setOwnerFilter(val === "__all__" ? "" : val)
+              setPmFilter(val === "__all__" ? "" : val)
             }
           >
             <SelectTrigger
               className="w-48"
-              data-testid="select-pipeline-owner"
+              data-testid="select-pipeline-pm"
             >
               <SelectValue placeholder="All PMs" />
             </SelectTrigger>

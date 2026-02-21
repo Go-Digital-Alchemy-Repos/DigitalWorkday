@@ -237,7 +237,7 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab, onUpdate }: 
           </CardContent>
         </Card>
 
-        <Card data-testid="card-crm-owner">
+        <Card data-testid="card-crm-pm">
           <CardContent className="pt-5 pb-4 px-4">
             <div className="flex items-center justify-between mb-2">
               <div className="flex items-center gap-2">
@@ -251,7 +251,7 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab, onUpdate }: 
                 onValueChange={(val) => updateOwnerMutation.mutate(val)}
                 disabled={updateOwnerMutation.isPending}
               >
-                <SelectTrigger className="h-7 w-[130px] text-xs" data-testid="select-crm-owner">
+                <SelectTrigger className="h-7 w-[130px] text-xs" data-testid="select-crm-pm">
                   <SelectValue placeholder="Select PM" />
                 </SelectTrigger>
                 <SelectContent>
@@ -264,7 +264,7 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab, onUpdate }: 
                 </SelectContent>
               </Select>
             </div>
-            <span className="text-sm font-medium" data-testid="text-crm-owner">
+            <span className="text-sm font-medium" data-testid="text-crm-pm">
               {summary.ownerName || "Unassigned"}
             </span>
           </CardContent>

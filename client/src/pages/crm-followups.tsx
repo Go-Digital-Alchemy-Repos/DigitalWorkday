@@ -283,7 +283,7 @@ export default function CrmFollowupsPage() {
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [assignDialogOpen, setAssignDialogOpen] = useState(false);
   const [dateDialogOpen, setDateDialogOpen] = useState(false);
-  const [selectedOwner, setSelectedOwner] = useState("");
+  const [selectedPm, setSelectedPm] = useState("");
   const [selectedDate, setSelectedDate] = useState("");
 
   const { data, isLoading } = useQuery<FollowUpsData>({
@@ -340,15 +340,15 @@ export default function CrmFollowupsPage() {
     []
   );
 
-  const handleAssignOwner = useCallback(() => {
-    if (!selectedOwner || selectedIds.size === 0) return;
+  const handleAssignPm = useCallback(() => {
+    if (!selectedPm || selectedIds.size === 0) return;
     bulkUpdateMutation.mutate({
       clientIds: Array.from(selectedIds),
-      ownerUserId: selectedOwner,
+      ownerUserId: selectedPm,
     });
     setAssignDialogOpen(false);
-    setSelectedOwner("");
-  }, [selectedOwner, selectedIds, bulkUpdateMutation]);
+    setSelectedPm("");
+  }, [selectedPm, selectedIds, bulkUpdateMutation]);
 
   const handleSetDate = useCallback(() => {
     if (!selectedDate || selectedIds.size === 0) return;
@@ -466,8 +466,8 @@ export default function CrmFollowupsPage() {
             </DialogDescription>
           </DialogHeader>
           <div className="py-4">
-            <Select value={selectedOwner} onValueChange={setSelectedOwner}>
-              <SelectTrigger data-testid="select-bulk-owner">
+            <Select value={selectedPm} onValueChange={setSelectedPm}>
+              <SelectTrigger data-testid="select-bulk-pm">
                 <SelectValue placeholder="Select a user" />
               </SelectTrigger>
               <SelectContent>
@@ -484,15 +484,15 @@ export default function CrmFollowupsPage() {
               variant="outline"
               onClick={() => {
                 setAssignDialogOpen(false);
-                setSelectedOwner("");
+                setSelectedPm("");
               }}
               data-testid="button-cancel-assign"
             >
               Cancel
             </Button>
             <Button
-              onClick={handleAssignOwner}
-              disabled={!selectedOwner || bulkUpdateMutation.isPending}
+              onClick={handleAssignPm}
+              disabled={!selectedPm || bulkUpdateMutation.isPending}
               data-testid="button-confirm-assign"
             >
               {bulkUpdateMutation.isPending ? "Updating..." : "Assign"}
