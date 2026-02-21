@@ -24,4 +24,9 @@ export const Motion = {
   press: "active:scale-[0.98] transition-safe duration-motion-fast ease-out-premium",
   cardHover:
     "transition-safe duration-motion-base ease-out-premium hover:-translate-y-0.5 hover:shadow-soft",
+  bellBounce: "animate-bell-bounce",
+  badgePop: "animate-badge-pop",
+  notifPanel: "notif-panel-motion origin-top-right",
+  notifItemEnter: "animate-notif-item-enter",
+  notifRowHover: "notif-row-hover",
 } as const;

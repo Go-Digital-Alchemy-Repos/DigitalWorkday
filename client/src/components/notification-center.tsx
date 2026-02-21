@@ -18,6 +18,7 @@ import { apiRequest } from "@/lib/queryClient";
 import { getSocket } from "@/lib/realtime/socket";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
+import { prefersReducedMotion } from "@/lib/motion";
 import type { ServerToClientEvents } from "@shared/events";
 import { useTaskDrawerOptional } from "@/lib/task-drawer-context";
 import { useLocation } from "wouter";
@@ -162,6 +163,15 @@ export function NotificationCenter() {
   const [, setLocation] = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  const [bellBounce, setBellBounce] = useState(false);
+  const [badgePop, setBadgePop] = useState(false);
+  const prevUnreadRef = useRef<number | null>(null);
+  const lastBounceTimeRef = useRef(0);
+  const seenIdsRef = useRef<Set<string>>(new Set());
+  const initialLoadDoneRef = useRef(false);
+  const [newlyArrivedIds, setNewlyArrivedIds] = useState<Set<string>>(new Set());
+  const [fadedHighlightIds, setFadedHighlightIds] = useState<Set<string>>(new Set());
+
   const currentFilter = FILTER_TAB_CONFIG.find(f => f.value === filterTab);
   const queryParams = new URLSearchParams();
   if (filterTab === "unread") queryParams.set("unreadOnly", "true");
@@ -195,6 +205,25 @@ export function NotificationCenter() {
     refetchInterval: 30000,
   });
   const unreadCount = unreadData?.count ?? 0;
+
+  useEffect(() => {
+    if (prefersReducedMotion()) return;
+    if (prevUnreadRef.current === null) {
+      prevUnreadRef.current = unreadCount;
+      return;
+    }
+    if (unreadCount > prevUnreadRef.current) {
+      const now = Date.now();
+      if (now - lastBounceTimeRef.current > 1500) {
+        lastBounceTimeRef.current = now;
+        setBellBounce(true);
+        setTimeout(() => setBellBounce(false), 250);
+      }
+      setBadgePop(true);
+      setTimeout(() => setBadgePop(false), 200);
+    }
+    prevUnreadRef.current = unreadCount;
+  }, [unreadCount]);
 
   const defaultPreferences: NotificationPreferences = {
     id: "",
@@ -270,9 +299,36 @@ export function NotificationCenter() {
   });
 
   useEffect(() => {
+    if (notifications.length > 0 && !initialLoadDoneRef.current) {
+      initialLoadDoneRef.current = true;
+      notifications.forEach(n => seenIdsRef.current.add(n.id));
+    }
+  }, [notifications]);
+
+  useEffect(() => {
     const socket = getSocket();
 
     const handleNewNotification: ServerToClientEvents["notification:new"] = (payload) => {
+      const newId = payload.notification?.id;
+      if (newId && initialLoadDoneRef.current && !seenIdsRef.current.has(newId)) {
+        seenIdsRef.current.add(newId);
+        setNewlyArrivedIds(prev => new Set(prev).add(newId));
+        setTimeout(() => {
+          setFadedHighlightIds(prev => new Set(prev).add(newId));
+        }, 900);
+        setTimeout(() => {
+          setNewlyArrivedIds(prev => {
+            const next = new Set(prev);
+            next.delete(newId);
+            return next;
+          });
+          setFadedHighlightIds(prev => {
+            const next = new Set(prev);
+            next.delete(newId);
+            return next;
+          });
+        }, 3000);
+      }
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
       toast({

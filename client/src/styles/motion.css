@@ -114,6 +114,93 @@
   animation: motion-pop-out var(--motion-fast) var(--ease-out-premium) both;
 }
 
+/* ---------- NOTIFICATION KEYFRAMES ---------- */
+
+@keyframes bell-bounce {
+  0%   { transform: translateY(0) rotate(0deg); }
+  20%  { transform: translateY(-1px) rotate(-6deg); }
+  40%  { transform: translateY(0) rotate(6deg); }
+  60%  { transform: translateY(-1px) rotate(-4deg); }
+  100% { transform: translateY(0) rotate(0deg); }
+}
+
+@keyframes badge-pop {
+  0%   { transform: scale(0.9); opacity: 0.8; }
+  60%  { transform: scale(1.08); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+
+@keyframes slide-up-fade {
+  from { opacity: 1; transform: translateY(0); }
+  to   { opacity: 0; transform: translateY(-6px); }
+}
+
+@keyframes notif-item-enter {
+  from { opacity: 0; transform: translateY(-4px) scale(0.98); }
+  to   { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+@keyframes notif-highlight-fade {
+  from { opacity: 1; }
+  to   { opacity: 0; }
+}
+
+/* ---------- NOTIFICATION UTILITY CLASSES ---------- */
+
+.animate-bell-bounce {
+  animation: bell-bounce var(--motion-base) var(--ease-out-premium) both;
+}
+
+.animate-badge-pop {
+  animation: badge-pop var(--motion-fast) var(--ease-out-premium) both;
+}
+
+.animate-slide-up-fade {
+  animation: slide-up-fade var(--motion-base) var(--ease-out-premium) both;
+}
+
+.animate-notif-item-enter {
+  animation: notif-item-enter var(--motion-base) var(--ease-out-premium) both;
+}
+
+.notif-highlight-overlay {
+  position: relative;
+}
+.notif-highlight-overlay::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  border-radius: 0.375rem;
+  background: hsl(var(--primary) / 0.10);
+  opacity: 1;
+  transition: opacity var(--motion-slow) var(--ease-out-premium);
+  pointer-events: none;
+}
+.notif-highlight-overlay.highlight-faded::after {
+  opacity: 0;
+}
+
+/* Panel open/close via Radix data-state */
+.notif-panel-motion[data-state="open"] {
+  animation: motion-slide-down var(--motion-base) var(--ease-out-premium) both;
+}
+.notif-panel-motion[data-state="closed"] {
+  animation: slide-up-fade var(--motion-fast) var(--ease-out-premium) both;
+}
+
+/* Notification row hover polish */
+.notif-row-hover {
+  transition-property: transform, opacity;
+  transition-duration: var(--motion-fast);
+  transition-timing-function: var(--ease-out-premium);
+}
+.notif-row-hover:hover {
+  transform: translateX(2px);
+}
+.notif-row-hover:active {
+  transform: scale(0.995);
+}
+
 /* ---------- BUTTON PRESS MICRO-INTERACTION ---------- */
 .press-scale {
   transition-property: transform, opacity;
