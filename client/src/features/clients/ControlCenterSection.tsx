@@ -4,10 +4,21 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { useToast } from "@/hooks/use-toast";
+import { useLocation } from "wouter";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import {
   Sheet,
   SheetContent,
@@ -37,6 +48,7 @@ import {
   TicketCheck,
   Upload,
   Send,
+  Trash2,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import {
@@ -109,6 +121,7 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
   const isAdmin = useIsAdmin();
   const { user } = useAuth();
 
+  const canDeleteClient = user?.role === "super_user" || user?.role === "tenant_admin" || user?.role === "admin";
   const role = isAdmin ? "admin" : "employee";
   const layout = useMemo(() => {
     if (!layoutData) return getDefaultLayout(role);
@@ -221,6 +234,10 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
         </div>
       </div>
 
+      {canDeleteClient && (
+        <DangerZoneCard clientId={clientId} />
+      )}
+
       {customizeOpen && (
         <CustomizeSheet
           open={customizeOpen}
@@ -229,6 +246,87 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
           role={role}
         />
       )}
+    </div>
+  );
+}
+
+function DangerZoneCard({ clientId }: { clientId: string }) {
+  const [deleteOpen, setDeleteOpen] = useState(false);
+  const { toast } = useToast();
+  const [, navigate] = useLocation();
+
+  const { data: client } = useQuery<{ companyName: string }>({
+    queryKey: ["/api/clients", clientId],
+    enabled: !!clientId,
+  });
+
+  const deleteClientMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("DELETE", `/api/clients/${clientId}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Client deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      navigate("/clients");
+    },
+    onError: () => {
+      toast({ title: "Failed to delete client", variant: "destructive" });
+    },
+  });
+
+  return (
+    <div className="border-t pt-6">
+      <Card className="border-destructive/50 bg-destructive/5" data-testid="danger-zone-card">
+        <CardHeader className="pb-2">
+          <div className="flex items-center gap-2">
+            <div className="p-1.5 rounded-md bg-destructive/10">
+              <AlertTriangle className="h-4 w-4 text-destructive" />
+            </div>
+            <CardTitle className="text-sm font-medium text-destructive">Danger Zone</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Delete this client</p>
+              <p className="text-xs text-muted-foreground">
+                Permanently remove this client and all associated data. This cannot be undone.
+              </p>
+            </div>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setDeleteOpen(true)}
+              data-testid="button-delete-client"
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Delete Client
+            </Button>
+          </div>
+          <AlertDialog open={deleteOpen} onOpenChange={setDeleteOpen}>
+            <AlertDialogContent>
+              <AlertDialogHeader>
+                <AlertDialogTitle>Delete Client</AlertDialogTitle>
+                <AlertDialogDescription>
+                  Are you sure you want to delete "{client?.companyName}"? This action cannot be undone.
+                  All associated data will be removed, and any projects linked to this client will be unlinked.
+                </AlertDialogDescription>
+              </AlertDialogHeader>
+              <AlertDialogFooter>
+                <AlertDialogCancel data-testid="button-cancel-delete-client">Cancel</AlertDialogCancel>
+                <AlertDialogAction
+                  onClick={() => deleteClientMutation.mutate()}
+                  disabled={deleteClientMutation.isPending}
+                  className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  data-testid="button-confirm-delete-client"
+                >
+                  {deleteClientMutation.isPending ? "Deleting..." : "Delete Client"}
+                </AlertDialogAction>
+              </AlertDialogFooter>
+            </AlertDialogContent>
+          </AlertDialog>
+        </CardContent>
+      </Card>
     </div>
   );
 }

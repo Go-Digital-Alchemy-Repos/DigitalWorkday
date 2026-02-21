@@ -18,16 +18,6 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
-import {
   Sheet,
   SheetContent,
   SheetHeader,
@@ -286,7 +276,6 @@ export default function ClientDetailPage() {
   const [divisionDrawerOpen, setDivisionDrawerOpen] = useState(false);
   const [editingDivision, setEditingDivision] = useState<ClientDivision | null>(null);
   const [divisionMode, setDivisionMode] = useState<"create" | "edit">("create");
-  const [deleteClientOpen, setDeleteClientOpen] = useState(false);
   const [mailingSameAsPhysical, setMailingSameAsPhysical] = useState(true);
   const [portalInviteContact, setPortalInviteContact] = useState<ClientContact | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
@@ -314,7 +303,6 @@ export default function ClientDetailPage() {
   const { activeSection, setActiveSection } = useClientProfileSection(visibleSections, clientId || "");
   const cmdPalette = useClientCommandPaletteState();
   const useV2Layout = featureFlags.clientProfileLayoutV2;
-  const canDeleteClient = user?.role === "super_user" || user?.role === "tenant_admin" || user?.role === "admin";
 
   const { data: client, isLoading } = useQuery<ClientWithContacts>({
     queryKey: ["/api/clients", clientId],
@@ -498,20 +486,6 @@ export default function ClientDetailPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/projects/unassigned"] });
       setAddProjectOpen(false);
       setProjectView("options");
-    },
-  });
-
-  const deleteClientMutation = useMutation({
-    mutationFn: async () => {
-      return apiRequest("DELETE", `/api/clients/${clientId}`);
-    },
-    onSuccess: () => {
-      toast({ title: "Client deleted successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      navigate("/clients");
-    },
-    onError: () => {
-      toast({ title: "Failed to delete client", variant: "destructive" });
     },
   });
 
@@ -745,40 +719,6 @@ export default function ClientDetailPage() {
             <Play className="h-4 w-4 mr-2" />
             Start Timer
           </Button>
-          {canDeleteClient && (
-            <>
-              <Button
-                variant="destructive"
-                onClick={() => setDeleteClientOpen(true)}
-                data-testid="button-delete-client"
-              >
-                <Trash2 className="h-4 w-4 mr-2" />
-                Delete
-              </Button>
-              <AlertDialog open={deleteClientOpen} onOpenChange={setDeleteClientOpen}>
-                <AlertDialogContent>
-                  <AlertDialogHeader>
-                    <AlertDialogTitle>Delete Client</AlertDialogTitle>
-                    <AlertDialogDescription>
-                      Are you sure you want to delete "{client.companyName}"? This action cannot be undone. 
-                      All associated data will be removed, and any projects linked to this client will be unlinked.
-                    </AlertDialogDescription>
-                  </AlertDialogHeader>
-                  <AlertDialogFooter>
-                    <AlertDialogCancel data-testid="button-cancel-delete-client">Cancel</AlertDialogCancel>
-                    <AlertDialogAction
-                      onClick={() => deleteClientMutation.mutate()}
-                      disabled={deleteClientMutation.isPending}
-                      className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                      data-testid="button-confirm-delete-client"
-                    >
-                      {deleteClientMutation.isPending ? "Deleting..." : "Delete Client"}
-                    </AlertDialogAction>
-                  </AlertDialogFooter>
-                </AlertDialogContent>
-              </AlertDialog>
-            </>
-          )}
         </div>
       </div>
 
