@@ -95,7 +95,7 @@ export default function ResetPasswordPage() {
                 <XCircle className="h-6 w-6 text-destructive" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold">Invalid Reset Link</h2>
+                <h2 className="font-semibold">Invalid Reset Link</h2>
                 <p className="text-muted-foreground mt-1">The password reset link is missing or invalid.</p>
               </div>
               <Button variant="outline" onClick={() => setLocation("/login")} data-testid="button-go-login">
@@ -143,7 +143,7 @@ export default function ResetPasswordPage() {
                 )}
               </div>
               <div>
-                <h2 className="text-lg font-semibold">
+                <h2 className="font-semibold">
                   {isExpired ? "Link Expired" : isUsed ? "Link Already Used" : "Invalid Link"}
                 </h2>
                 <p className="text-muted-foreground mt-1">{errorMessage}</p>
@@ -178,7 +178,7 @@ export default function ResetPasswordPage() {
                 <CheckCircle className="h-6 w-6 text-green-500" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold">Password Reset Successfully</h2>
+                <h2 className="font-semibold">Password Reset Successfully</h2>
                 <p className="text-muted-foreground mt-1">
                   Your password has been updated. You can now log in with your new password.
                 </p>

@@ -175,7 +175,7 @@ export default function ClientPortalDashboard() {
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
+            <CardTitle className="font-medium">Active Projects</CardTitle>
             <FolderKanban className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -190,7 +190,7 @@ export default function ClientPortalDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Open Tasks</CardTitle>
+            <CardTitle className="font-medium">Open Tasks</CardTitle>
             <CheckSquare className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -205,7 +205,7 @@ export default function ClientPortalDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completion Rate</CardTitle>
+            <CardTitle className="font-medium">Completion Rate</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -223,7 +223,7 @@ export default function ClientPortalDashboard() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue Tasks</CardTitle>
+            <CardTitle className="font-medium">Overdue Tasks</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -249,21 +249,21 @@ export default function ClientPortalDashboard() {
                 <Link href="/portal/projects">
                   <div className="flex flex-col items-center gap-2 p-4 rounded-md hover-elevate text-center cursor-pointer" data-testid="guide-card-projects">
                     <FolderKanban className="h-6 w-6 text-muted-foreground" />
-                    <span className="text-sm font-medium">View Projects</span>
+                    <span className="font-medium">View Projects</span>
                     <span className="text-xs text-muted-foreground">Track progress on your active projects</span>
                   </div>
                 </Link>
                 <Link href="/portal/approvals">
                   <div className="flex flex-col items-center gap-2 p-4 rounded-md hover-elevate text-center cursor-pointer" data-testid="guide-card-approvals">
                     <ClipboardCheck className="h-6 w-6 text-muted-foreground" />
-                    <span className="text-sm font-medium">Approvals</span>
+                    <span className="font-medium">Approvals</span>
                     <span className="text-xs text-muted-foreground">Review and approve deliverables</span>
                   </div>
                 </Link>
                 <Link href="/portal/messages">
                   <div className="flex flex-col items-center gap-2 p-4 rounded-md hover-elevate text-center cursor-pointer" data-testid="guide-card-messages">
                     <MessageSquare className="h-6 w-6 text-muted-foreground" />
-                    <span className="text-sm font-medium">Messages</span>
+                    <span className="font-medium">Messages</span>
                     <span className="text-xs text-muted-foreground">Communicate with your team</span>
                   </div>
                 </Link>

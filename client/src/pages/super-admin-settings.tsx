@@ -1556,7 +1556,7 @@ export default function SuperAdminSettingsPage() {
                         data-testid="link-mailgun-section"
                       >
                         <Mail className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">Mailgun</span>
+                        <span className="font-medium">Mailgun</span>
                         <Badge variant={integrationStatus?.mailgun ? "default" : "secondary"} className="ml-2">
                           {integrationStatus?.mailgun ? "Configured" : "Not Configured"}
                         </Badge>
@@ -1571,7 +1571,7 @@ export default function SuperAdminSettingsPage() {
                         data-testid="link-r2-section"
                       >
                         <Cloud className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">R2 Storage</span>
+                        <span className="font-medium">R2 Storage</span>
                         <Badge variant={r2Settings?.status === "configured" ? "default" : "secondary"} className="ml-2">
                           {r2Settings?.status === "configured" ? "Configured" : "Not Configured"}
                         </Badge>
@@ -1586,7 +1586,7 @@ export default function SuperAdminSettingsPage() {
                         data-testid="link-stripe-section"
                       >
                         <CreditCard className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">Stripe</span>
+                        <span className="font-medium">Stripe</span>
                         <Badge variant={integrationStatus?.stripe ? "default" : "secondary"} className="ml-2">
                           {integrationStatus?.stripe ? "Configured" : "Not Configured"}
                         </Badge>
@@ -1601,7 +1601,7 @@ export default function SuperAdminSettingsPage() {
                         data-testid="link-google-sso-section"
                       >
                         <Globe className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm font-medium">Google SSO</span>
+                        <span className="font-medium">Google SSO</span>
                         <Badge variant={ssoGoogleSettings?.enabled ? "default" : "secondary"} className="ml-2">
                           {ssoGoogleSettings?.enabled ? "Enabled" : ssoGoogleSettings?.status === "configured" ? "Configured" : "Not Configured"}
                         </Badge>

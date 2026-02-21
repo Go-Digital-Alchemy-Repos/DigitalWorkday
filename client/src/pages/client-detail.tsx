@@ -841,7 +841,7 @@ export default function ClientDetailPage() {
             <Form {...clientForm}>
               <form onSubmit={clientForm.handleSubmit(handleUpdateClient)} className="space-y-6">
                 <div className="flex items-center justify-between gap-4">
-                  <h2 className="text-lg font-semibold">Client Profile</h2>
+                  <h2 className="font-semibold">Client Profile</h2>
                   <Button 
                     type="submit" 
                     disabled={updateClientMutation.isPending || !clientForm.formState.isDirty}
@@ -1795,7 +1795,7 @@ export default function ClientDetailPage() {
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div>
                       <div className="flex items-center gap-2 mb-3">
-                        <h3 className="text-sm font-medium">Active Projects</h3>
+                        <h3 className="font-medium">Active Projects</h3>
                         <Badge variant="secondary" className="text-xs">{activeProjects.length}</Badge>
                       </div>
                       {activeProjects.length > 0 ? (

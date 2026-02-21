@@ -1250,7 +1250,7 @@ export default function SuperAdminUsers() {
                     <div className="space-y-3">
                       {userWorkspaceData.memberships.length === 0 ? (
                         <div className="p-3 rounded-lg border border-destructive/50 bg-destructive/5">
-                          <div className="flex items-center gap-2 text-destructive text-sm font-medium">
+                          <div className="flex items-center gap-2 text-destructive font-medium">
                             <AlertCircle className="h-4 w-4" />
                             No workspace access
                           </div>

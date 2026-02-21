@@ -75,7 +75,7 @@ function StatCard({ title, stats, icon: Icon, description }: {
     <Card data-testid={`stat-card-${title.toLowerCase().replace(/\s+/g, '-')}`}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-2">
         <div>
-          <CardTitle className="text-sm font-medium">{title}</CardTitle>
+          <CardTitle className="font-medium">{title}</CardTitle>
           {description && <CardDescription className="text-xs">{description}</CardDescription>}
         </div>
         <Icon className="h-4 w-4 text-muted-foreground" />
@@ -108,7 +108,7 @@ function WeeklyChart({ data }: { data: DailyBreakdown[] }) {
   return (
     <Card data-testid="weekly-chart">
       <CardHeader>
-        <CardTitle className="text-sm font-medium">This Week</CardTitle>
+        <CardTitle className="font-medium">This Week</CardTitle>
         <CardDescription>Daily time breakdown</CardDescription>
       </CardHeader>
       <CardContent>
@@ -244,7 +244,7 @@ function QuickActions({ lastEntryId, onEditEntry, onStartTimer }: {
   return (
     <Card data-testid="quick-actions">
       <CardHeader className="pb-2">
-        <CardTitle className="text-sm font-medium">Quick Actions</CardTitle>
+        <CardTitle className="font-medium">Quick Actions</CardTitle>
       </CardHeader>
       <CardContent className="flex flex-wrap gap-2">
         <Button 

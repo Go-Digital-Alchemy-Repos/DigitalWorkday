@@ -135,7 +135,7 @@ function AdminDashboardSection({
           data-testid="card-active-projects"
         >
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Active Projects</CardTitle>
+            <CardTitle className="font-medium">Active Projects</CardTitle>
             <FolderKanban className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -156,7 +156,7 @@ function AdminDashboardSection({
           data-testid="card-overdue-tasks"
         >
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue Tasks</CardTitle>
+            <CardTitle className="font-medium">Overdue Tasks</CardTitle>
             <AlertTriangle className="h-4 w-4 text-amber-500" />
           </CardHeader>
           <CardContent>
@@ -173,7 +173,7 @@ function AdminDashboardSection({
 
         <Card data-testid="card-due-today">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Due Today</CardTitle>
+            <CardTitle className="font-medium">Due Today</CardTitle>
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -195,7 +195,7 @@ function AdminDashboardSection({
           data-testid="card-unassigned"
         >
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Unassigned</CardTitle>
+            <CardTitle className="font-medium">Unassigned</CardTitle>
             <UserCheck className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -451,7 +451,7 @@ function EmployeeDashboardSection({
           data-testid="card-overdue"
         >
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Overdue</CardTitle>
+            <CardTitle className="font-medium">Overdue</CardTitle>
             <AlertTriangle className={`h-4 w-4 ${taskBreakdown.overdue.length > 0 ? "text-red-500" : "text-muted-foreground"}`} />
           </CardHeader>
           <CardContent>
@@ -475,7 +475,7 @@ function EmployeeDashboardSection({
           data-testid="card-due-today"
         >
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Due Today</CardTitle>
+            <CardTitle className="font-medium">Due Today</CardTitle>
             <Target className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -497,7 +497,7 @@ function EmployeeDashboardSection({
           data-testid="card-time-today"
         >
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Time Today</CardTitle>
+            <CardTitle className="font-medium">Time Today</CardTitle>
             <Timer className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -525,7 +525,7 @@ function EmployeeDashboardSection({
           data-testid="card-completed-today"
         >
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Completed</CardTitle>
+            <CardTitle className="font-medium">Completed</CardTitle>
             <TrendingUp className="h-4 w-4 text-green-500" />
           </CardHeader>
           <CardContent>
@@ -662,15 +662,15 @@ function EmployeeDashboardSection({
               <div className="space-y-4">
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">Today</span>
-                  <span className="text-sm font-medium">{formatDuration(timeStats.today.total)}</span>
+                  <span className="font-medium">{formatDuration(timeStats.today.total)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">This Week</span>
-                  <span className="text-sm font-medium">{formatDuration(timeStats.thisWeek.total)}</span>
+                  <span className="font-medium">{formatDuration(timeStats.thisWeek.total)}</span>
                 </div>
                 <div className="flex items-center justify-between">
                   <span className="text-sm text-muted-foreground">This Month</span>
-                  <span className="text-sm font-medium">{formatDuration(timeStats.thisMonth.total)}</span>
+                  <span className="font-medium">{formatDuration(timeStats.thisMonth.total)}</span>
                 </div>
                 {timeStats.thisWeek.total > 0 && (
                   <div className="pt-2 border-t">

@@ -171,7 +171,7 @@ export function ClientReportsTab({ clientId }: { clientId: string }) {
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4" data-testid="grid-summary-cards">
         <Card data-testid="card-total-hours">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Hours</CardTitle>
+            <CardTitle className="font-medium">Total Hours</CardTitle>
             <Clock className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -186,7 +186,7 @@ export function ClientReportsTab({ clientId }: { clientId: string }) {
 
         <Card data-testid="card-billable-hours">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Billable Hours</CardTitle>
+            <CardTitle className="font-medium">Billable Hours</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -201,7 +201,7 @@ export function ClientReportsTab({ clientId }: { clientId: string }) {
 
         <Card data-testid="card-nonbillable-hours">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Non-Billable</CardTitle>
+            <CardTitle className="font-medium">Non-Billable</CardTitle>
             <TrendingUp className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
@@ -216,7 +216,7 @@ export function ClientReportsTab({ clientId }: { clientId: string }) {
 
         <Card data-testid="card-revenue-estimate">
           <CardHeader className="flex flex-row items-center justify-between gap-2 space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Revenue Est.</CardTitle>
+            <CardTitle className="font-medium">Revenue Est.</CardTitle>
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>

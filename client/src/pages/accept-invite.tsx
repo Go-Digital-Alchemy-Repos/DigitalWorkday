@@ -120,7 +120,7 @@ export default function AcceptInvitePage() {
                 <XCircle className="h-6 w-6 text-destructive" />
               </div>
               <div>
-                <h2 className="text-lg font-semibold">Invalid Invite Link</h2>
+                <h2 className="font-semibold">Invalid Invite Link</h2>
                 <p className="text-muted-foreground mt-1">The invite link is missing or invalid.</p>
               </div>
               <Button variant="outline" onClick={() => setLocation("/login")} data-testid="button-go-login">
@@ -171,7 +171,7 @@ export default function AcceptInvitePage() {
                 )}
               </div>
               <div>
-                <h2 className="text-lg font-semibold">
+                <h2 className="font-semibold">
                   {isExpired ? "Invite Expired" : isUsed ? "Invite Already Used" : isRevoked ? "Invite Revoked" : "Invalid Invite"}
                 </h2>
                 <p className="text-muted-foreground mt-1">{errorMessage}</p>

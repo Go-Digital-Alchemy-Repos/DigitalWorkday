@@ -1057,7 +1057,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
                             </AvatarFallback>
                           </Avatar>
                           <div>
-                            <span className="text-sm font-medium">
+                            <span className="font-medium">
                               Version {version.versionNumber}
                             </span>
                             <span className="text-xs text-muted-foreground ml-2">

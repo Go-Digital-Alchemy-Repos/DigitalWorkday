@@ -353,7 +353,7 @@ export default function SuperAdminDocs() {
         <div className="p-4 border-b">
           <div className="flex items-center gap-2 mb-3">
             <BookOpen className="h-5 w-5 text-primary" />
-            <h2 className="text-lg font-semibold">Documentation</h2>
+            <h2 className="font-semibold">Documentation</h2>
           </div>
           <div className="flex items-center gap-2 text-sm text-muted-foreground mb-3">
             <Badge variant="secondary">{stats.totalDocs} docs</Badge>
@@ -525,7 +525,7 @@ export default function SuperAdminDocs() {
                     <ArrowLeft className="h-4 w-4" />
                   </Button>
                   <div>
-                    <h1 className="text-xl font-semibold">{docContent.title}</h1>
+                    <h1 className="font-semibold">{docContent.title}</h1>
                     <div className="flex items-center gap-3 mt-1 text-sm text-muted-foreground">
                       <span className="flex items-center gap-1">
                         <HardDrive className="h-3.5 w-3.5" />

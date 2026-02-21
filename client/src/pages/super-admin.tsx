@@ -867,7 +867,7 @@ export default function SuperAdminPage() {
               <div className="border-2 border-dashed rounded-lg p-6 text-center">
                 <FileText className="h-10 w-10 mx-auto mb-3 text-muted-foreground" />
                 <Label htmlFor="csv-file" className="cursor-pointer">
-                  <span className="text-sm font-medium">Click to upload CSV file</span>
+                  <span className="font-medium">Click to upload CSV file</span>
                   <br />
                   <span className="text-xs text-muted-foreground">or drag and drop</span>
                 </Label>
@@ -967,7 +967,7 @@ export default function SuperAdminPage() {
       <TabsContent value="health" className="space-y-6 mt-6">
           <div className="flex items-center justify-between">
             <div>
-              <h2 className="text-lg font-semibold">Tenancy Enforcement Health</h2>
+              <h2 className="font-semibold">Tenancy Enforcement Health</h2>
               <p className="text-sm text-muted-foreground">Monitor tenant isolation readiness and data integrity</p>
             </div>
             <Button 
@@ -1061,7 +1061,7 @@ export default function SuperAdminPage() {
                       <div className="space-y-2">
                         {(healthData.missingTenantIds || []).filter(m => m.missingTenantIdCount > 0).map((item) => (
                           <div key={item.table} className="flex items-center justify-between">
-                            <span className="text-sm font-medium">{item.table}</span>
+                            <span className="font-medium">{item.table}</span>
                             <div className="flex items-center gap-4">
                               <span className="text-sm text-muted-foreground">
                                 {item.missingTenantIdCount} records

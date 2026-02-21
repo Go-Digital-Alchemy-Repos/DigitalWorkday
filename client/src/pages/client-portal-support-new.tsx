@@ -204,7 +204,7 @@ export default function ClientPortalSupportNew() {
                 <>
                   <Separator />
                   <div className="space-y-4" data-testid="section-custom-fields">
-                    <Label className="text-sm font-medium">Additional Information</Label>
+                    <Label className="font-medium">Additional Information</Label>
                     {dynamicFields.map((field) => (
                       <div key={field.key} className="space-y-2" data-testid={`custom-field-${field.key}`}>
                         <Label htmlFor={`custom-${field.key}`} className="text-sm">

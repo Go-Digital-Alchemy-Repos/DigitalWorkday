@@ -941,7 +941,7 @@ export default function ProjectPage() {
                 </PopoverTrigger>
                 <PopoverContent className="w-80 p-0" align="end">
                   <div className="p-3 border-b">
-                    <h4 className="text-sm font-medium">Apply Template</h4>
+                    <h4 className="font-medium">Apply Template</h4>
                     <p className="text-xs text-muted-foreground mt-1">Add sections and tasks from a template</p>
                   </div>
                   <ScrollArea className="max-h-[300px]">

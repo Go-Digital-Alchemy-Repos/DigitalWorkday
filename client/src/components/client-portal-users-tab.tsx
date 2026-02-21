@@ -322,7 +322,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
-          <h3 className="text-lg font-semibold">Portal Users</h3>
+          <h3 className="font-semibold">Portal Users</h3>
           <p className="text-sm text-muted-foreground">
             Manage client users who can access the client portal to view projects and tasks.
           </p>
@@ -511,7 +511,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                 <div className="border-t pt-5">
                   <div className="flex items-center gap-2 mb-4">
                     <KeyRound className="h-4 w-4 text-muted-foreground" />
-                    <Label className="text-sm font-medium">Login Credentials</Label>
+                    <Label className="font-medium">Login Credentials</Label>
                   </div>
                   <div className="space-y-4">
                     <FormField
@@ -722,7 +722,7 @@ export function ClientPortalUsersTab({ clientId }: ClientPortalUsersTabProps) {
                   <div className="border-t pt-5">
                     <div className="flex items-center gap-2 mb-4">
                       <KeyRound className="h-4 w-4 text-muted-foreground" />
-                      <Label className="text-sm font-medium">Change Password</Label>
+                      <Label className="font-medium">Change Password</Label>
                     </div>
                     <p className="text-sm text-muted-foreground mb-4">
                       Leave blank to keep the current password.

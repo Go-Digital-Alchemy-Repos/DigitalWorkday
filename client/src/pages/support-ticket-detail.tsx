@@ -289,7 +289,7 @@ export default function SupportTicketDetail() {
                         <AvatarFallback className="text-xs">{getInitials(createdBy.name, createdBy.email)}</AvatarFallback>
                       </Avatar>
                     )}
-                    <span className="text-sm font-medium">{createdBy?.name || createdBy?.email || "Unknown"}</span>
+                    <span className="font-medium">{createdBy?.name || createdBy?.email || "Unknown"}</span>
                     <span className="text-xs text-muted-foreground">{formatDate(ticket.createdAt)}</span>
                   </div>
                   <p className="text-sm whitespace-pre-wrap" data-testid="text-ticket-description">{ticket.description}</p>
@@ -317,7 +317,7 @@ export default function SupportTicketDetail() {
                             </Avatar>
                             <div className="flex-1 min-w-0">
                               <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-medium">{msg.author?.name || msg.author?.email || "Unknown"}</span>
+                                <span className="font-medium">{msg.author?.name || msg.author?.email || "Unknown"}</span>
                                 {isPortalUser && <Badge variant="secondary" className="text-xs">Client</Badge>}
                                 {isInternalNote && (
                                   <Badge variant="secondary" className="text-xs bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">

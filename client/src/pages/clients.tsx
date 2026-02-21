@@ -836,7 +836,7 @@ function BulkActionBar({
 }) {
   return (
     <div className="flex items-center gap-3 p-3 mb-4 rounded-md bg-primary/5 border border-primary/20">
-      <span className="text-sm font-medium">
+      <span className="font-medium">
         {count} client{count !== 1 ? "s" : ""} selected
       </span>
       <div className="flex items-center gap-2 ml-auto flex-wrap">
@@ -954,7 +954,7 @@ function ClientDetailSheet({
           <Separator />
 
           <div className="space-y-2">
-            <p className="text-sm font-medium">Contact Information</p>
+            <p className="font-medium">Contact Information</p>
             <div className="space-y-1.5">
               {client.email && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -984,7 +984,7 @@ function ClientDetailSheet({
             <>
               <Separator />
               <div className="space-y-2">
-                <p className="text-sm font-medium">Tags</p>
+                <p className="font-medium">Tags</p>
                 <div className="flex flex-wrap gap-1">
                   {client.tags.map((tag) => (
                     <Badge key={tag} variant="outline" className="text-xs">
@@ -1000,7 +1000,7 @@ function ClientDetailSheet({
             <>
               <Separator />
               <div className="space-y-2">
-                <p className="text-sm font-medium">Notes</p>
+                <p className="font-medium">Notes</p>
                 <p className="text-sm text-muted-foreground whitespace-pre-wrap">{client.notes}</p>
               </div>
             </>

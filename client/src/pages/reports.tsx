@@ -282,7 +282,7 @@ function PipelineReport() {
                 return groups.map((group) => (
                   <div key={group.label} className="flex items-center justify-between gap-3" data-testid={`report-pipeline-health-${group.label.toLowerCase().replace(/\s+/g, '-')}`}>
                     <div>
-                      <p className="text-sm font-medium">{group.label}</p>
+                      <p className="font-medium">{group.label}</p>
                       <p className="text-xs text-muted-foreground">{group.description}</p>
                     </div>
                     <div className="text-right">
