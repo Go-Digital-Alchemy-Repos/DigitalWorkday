@@ -169,6 +169,52 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
         )}
       </div>
 
+      <div className="bg-muted/30 rounded-lg p-4 border border-border/50">
+        <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">Quick Actions</h3>
+        <div className="flex flex-wrap gap-2">
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigateTab("activity")}
+            data-testid="shortcut-activity"
+            className="bg-background hover:bg-muted"
+          >
+            <Activity className="h-4 w-4 mr-1.5" />
+            View Activity
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigateTab("projects")}
+            data-testid="shortcut-projects"
+            className="bg-background hover:bg-muted"
+          >
+            <FolderKanban className="h-4 w-4 mr-1.5" />
+            View Projects
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigateTab("messages")}
+            data-testid="shortcut-new-message"
+            className="bg-background hover:bg-muted"
+          >
+            <Send className="h-4 w-4 mr-1.5" />
+            New Message
+          </Button>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => onNavigateTab("asset-library")}
+            data-testid="shortcut-upload-asset"
+            className="bg-background hover:bg-muted"
+          >
+            <Upload className="h-4 w-4 mr-1.5" />
+            Upload Asset
+          </Button>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-3 gap-4">
         {layout.map((item) => {
           const def = WIDGET_MAP.get(item.id);
@@ -190,48 +236,6 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
             </div>
           );
         })}
-      </div>
-
-      <div className="border-t pt-6">
-        <h3 className="text-sm font-medium text-muted-foreground mb-3">Quick Actions</h3>
-        <div className="flex flex-wrap gap-2">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onNavigateTab("activity")}
-            data-testid="shortcut-activity"
-          >
-            <Activity className="h-4 w-4 mr-1.5" />
-            View Activity
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onNavigateTab("projects")}
-            data-testid="shortcut-projects"
-          >
-            <FolderKanban className="h-4 w-4 mr-1.5" />
-            View Projects
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onNavigateTab("messages")}
-            data-testid="shortcut-new-message"
-          >
-            <Send className="h-4 w-4 mr-1.5" />
-            New Message
-          </Button>
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => onNavigateTab("asset-library")}
-            data-testid="shortcut-upload-asset"
-          >
-            <Upload className="h-4 w-4 mr-1.5" />
-            Upload Asset
-          </Button>
-        </div>
       </div>
 
       {canDeleteClient && (
