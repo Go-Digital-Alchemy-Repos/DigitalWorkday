@@ -210,7 +210,7 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
       <div className="flex items-center gap-1">
         <CollapsibleTrigger className="flex items-center gap-2 flex-1 py-2 hover-elevate rounded-md px-2">
           <section.icon className={`h-4 w-4 ${section.iconColor || "text-muted-foreground"}`} />
-          <span className="text-sm font-medium">{section.title}</span>
+          <span className="font-medium text-[16px]">{section.title}</span>
           <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
             {section.tasks.length}
           </span>
