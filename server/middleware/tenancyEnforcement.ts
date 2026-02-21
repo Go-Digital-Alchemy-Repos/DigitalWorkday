@@ -20,14 +20,14 @@
 import { Request, Response, NextFunction } from "express";
 import { tenancyHealthTracker } from "./tenancyHealthTracker";
 import { AppError } from "../lib/errors";
+import { config } from "../config";
 
 export type TenancyEnforcementMode = "off" | "soft" | "strict";
 
 export function getTenancyEnforcementMode(): TenancyEnforcementMode {
-  const mode = process.env.TENANCY_ENFORCEMENT?.toLowerCase();
-  if (mode === "strict") return "strict";
-  if (mode === "soft") return "soft";
-  return "off";
+  const envOverride = process.env.TENANCY_ENFORCEMENT?.toLowerCase();
+  if (envOverride === "strict" || envOverride === "soft" || envOverride === "off") return envOverride;
+  return config.tenancyEnforcement.mode;
 }
 
 export function isStrictMode(): boolean {

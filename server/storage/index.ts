@@ -5,3 +5,4 @@ export { TasksRepository, type CalendarTask, type ProjectActivityItem } from "./
 export { SupportRepository } from "./support.repo";
 export { ChatRepository } from "./chat.repo";
 export { NotificationsRepository } from "./notifications.repo";
+export { BaseTenantRepository } from "./baseTenantRepository";

@@ -6,6 +6,8 @@ declare global {
     interface Response {
       ok: (data: unknown, statusCode?: number) => Response;
       fail: (code: string, message: string, statusCode?: number, details?: unknown) => Response;
+      sendSuccess: (data: unknown, statusCode?: number) => Response;
+      sendError: (error: import("../../lib/errors").AppError) => Response;
     }
   }
 }
@@ -42,6 +44,32 @@ export function responseEnvelopeMiddleware(
       },
       message,
       code,
+    });
+  };
+
+  res.sendSuccess = function(data: unknown, statusCode = 200): Response {
+    return this.status(statusCode).json({
+      success: true,
+      data,
+      requestId: req.requestId || "unknown",
+    });
+  };
+
+  res.sendError = function(error: any): Response {
+    const requestId = req.requestId || "unknown";
+    const statusCode = error.statusCode || 500;
+    const code = error.code || "INTERNAL_ERROR";
+    const message = error.message || "Internal server error";
+    const details = error.details;
+
+    return this.status(statusCode).json({
+      success: false,
+      error: {
+        code,
+        message,
+        details,
+      },
+      requestId,
     });
   };
 

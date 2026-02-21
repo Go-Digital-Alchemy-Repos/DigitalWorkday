@@ -187,6 +187,14 @@ export const config = {
     notificationsGroupingV1: optionalEnvBool("NOTIFICATIONS_GROUPING_V1", true),
   },
 
+  tenancyEnforcement: {
+    mode: (() => {
+      const envVal = process.env.TENANCY_ENFORCEMENT;
+      if (envVal) return envVal.toLowerCase() as "off" | "soft" | "strict";
+      return isProduction ? "off" : "strict";
+    })(),
+  },
+
   // Git info for versioning
   git: {
     commitSha: process.env.RAILWAY_GIT_COMMIT_SHA || process.env.GIT_COMMIT_SHA || "unknown",

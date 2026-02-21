@@ -123,6 +123,18 @@ export class AppError extends Error {
       code: this.code,
     };
   }
+
+  toApiErrorEnvelope(requestId = "unknown"): ApiErrorEnvelope {
+    return {
+      success: false,
+      error: {
+        code: this.code,
+        message: this.message,
+        details: this.details,
+      },
+      requestId,
+    };
+  }
 }
 
 /**
@@ -234,6 +246,32 @@ export interface StandardErrorEnvelope {
   code?: string;
   details?: unknown;
 }
+
+/**
+ * Standardized API error envelope (v2).
+ * All new API endpoints should return this shape on failure.
+ */
+export interface ApiErrorEnvelope {
+  success: false;
+  error: {
+    code: string;
+    message: string;
+    details?: unknown;
+  };
+  requestId?: string;
+}
+
+/**
+ * Standardized API success envelope (v2).
+ * All new API endpoints should return this shape on success.
+ */
+export interface ApiSuccessEnvelope<T = unknown> {
+  success: true;
+  data: T;
+  requestId?: string;
+}
+
+export type ApiEnvelope<T = unknown> = ApiSuccessEnvelope<T> | ApiErrorEnvelope;
 
 /**
  * Converts an error to the standard envelope format.

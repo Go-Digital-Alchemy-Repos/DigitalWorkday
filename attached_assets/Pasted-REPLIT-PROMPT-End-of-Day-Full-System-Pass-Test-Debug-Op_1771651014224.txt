@@ -1,0 +1,211 @@
+REPLIT PROMPT — End-of-Day Full System Pass (Test + Debug + Optimize + Document)
+DigitalWorkday
+
+You are Replit AI working in the DigitalWorkday monorepo.
+
+MISSION:
+Run a comprehensive, non-destructive “end-of-day” stabilization pass:
+- test everything that can be tested
+- debug/fix high-confidence failures
+- optimize obvious performance/organization hotspots (low-risk only)
+- update documentation top-to-bottom (Docs Library + repo docs)
+- produce a clear report of what was done and what remains
+
+NON-DESTRUCTIVE RULES:
+- Do NOT do large refactors that risk regressions.
+- Prefer targeted fixes, guardrails, and documentation.
+- Use feature flags for any behavior change (default OFF in prod).
+- Preserve API contracts unless clearly broken today.
+- If a fix is risky or uncertain, document it instead of changing it.
+- Never introduce new UI libraries; keep shadcn/ui patterns.
+
+OUTPUT REQUIRED:
+1) A release-style report: docs/review/end-of-day-pass.md
+2) A list of fixes applied (with file paths)
+3) A list of test failures left unresolved (with hypotheses)
+4) A deploy checklist refresh (if anything changed)
+
+================================================================================
+PHASE 0 — Clean Baseline Snapshot
+================================================================================
+
+1) Record current state:
+- git status --short
+- node -v
+- npm -v
+- print env mode assumptions (dev)
+2) Create/Update doc header:
+docs/review/end-of-day-pass.md
+Include timestamp and branch.
+
+================================================================================
+PHASE 1 — Run All Core Checks (No Changes Yet)
+================================================================================
+
+Run in this order and capture results verbatim into the report:
+
+1) Typecheck / lint (whichever exists):
+- npm run check OR npm run typecheck OR tsc -p ...
+- npm run lint (if present)
+
+2) Unit tests:
+- npm test / npm run test / vitest
+
+3) Build:
+- npm run build
+Capture:
+- bundle sizes
+- chunk warnings
+- server build size
+- any errors
+
+4) Quick local smoke (server):
+- start dev server (existing command)
+- confirm health endpoints:
+  /health, /api/health, /ready, /healthz
+
+STOP and document results before fixing anything.
+
+================================================================================
+PHASE 2 — Triage Failures (Fix Only High-Confidence, Low-Risk)
+================================================================================
+
+Classify failures into:
+A) Deterministic regression (safe to fix now)
+B) Test-data/order/fixtures issues (safe)
+C) Environment/config missing (doc + optional guard)
+D) Risky business logic uncertainty (document only)
+
+For categories A and B only:
+- Fix with minimal change
+- Add/adjust test fixtures rather than weakening assertions
+- Prefer restoring intended behavior over changing expectations
+
+Typical safe fixes include:
+- broken imports / missing exports
+- stale test setup (FK constraint ordering, seed data)
+- incorrect route mount causing 404 in tests
+- agreement enforcement mismatch in tests (update test flow to accept agreement)
+- incorrect cache headers affecting test client (ensure test disables caching)
+- flaky timeouts (increase timeouts only if justified)
+
+Every fix must:
+- include a short “why” in the report
+- include a regression test when practical
+
+Re-run the smallest relevant suite after each fix:
+- targeted test file(s)
+Then re-run full test suite at end of Phase 2.
+
+================================================================================
+PHASE 3 — Performance Quick Wins (Low-Risk Only)
+================================================================================
+
+Do NOT do broad refactors.
+
+Perform a quick targeted audit and implement only low-risk improvements:
+
+1) Backend:
+- Identify endpoints with obvious N+1 patterns still present:
+  - tasks lists (assignees/watchers)
+  - time entries list
+  - attachments list
+If found:
+- add batch lookups in repositories
+- add minimal indexes if already planned and safe
+- ensure tenancy filters preserved
+
+2) Frontend:
+- Identify obvious re-render hotspots (React dev warnings, excessive memo misses):
+  - task list rows
+  - chat sidebar list
+Apply only:
+- React.memo for stable row components
+- move inline functions out of render where trivial
+- avoid creating new arrays/objects in render when not needed
+
+3) Bundle hygiene (no risky chunk surgery):
+- remove unused imports flagged by TypeScript
+- ensure route-level lazy imports remain correct
+
+Document all changes in the report.
+
+================================================================================
+PHASE 4 — Debug “Known Pain Points” Sweep
+================================================================================
+
+Search for open/recurring issues and verify they are not regressing:
+- task drawer description correctness
+- mentions in comments/descriptions
+- subtasks appearing immediately
+- notifications panel open + new item handling
+- client profile navigation responsiveness
+
+If a known issue is still present:
+- capture exact repro steps and file likely involved
+- do NOT attempt risky fixes unless obvious and isolated
+- add to “Next Actions” list with severity tag
+
+================================================================================
+PHASE 5 — Documentation Full Pass (Docs Library + Repo Docs)
+================================================================================
+
+1) Update/verify these docs exist and are current (edit only as needed):
+- docs/ARCHITECTURE_OVERVIEW.md
+- docs/KNOWN_ISSUES.md
+- docs/TESTING.md
+- docs/PERFORMANCE_NOTES.md
+- docs/performance/frontend-bundle.md
+- docs/UX/client-profile.md (if touched today)
+- docs/UX/notifications-motion.md (if touched today)
+- docs/review/end-of-day-pass.md (main report)
+
+2) Docs Library in Super Admin:
+- Ensure new features added today are present:
+  - Control Center
+  - Pinned Widgets
+  - Notification grouping/coalesce (if implemented)
+  - Motion system (if implemented)
+- Add a short “Release Notes (Today)” entry.
+
+3) Add/Update a “Runbook” section:
+docs/runbooks/common-issues.md
+Include:
+- how to diagnose test failures categories
+- how to diagnose tenant scoping leaks
+- how to diagnose cache/stale UI issues
+
+================================================================================
+PHASE 6 — Final Full Re-run + Final Report
+================================================================================
+
+1) Re-run:
+- npm run check / typecheck
+- npm test
+- npm run build
+
+2) Update report with:
+- Before vs After status
+- Tests: passed/failed/skipped
+- Build output sizes
+- Performance changes summary
+- Remaining known issues with severity:
+  P0 / P1 / P2
+- Next recommended prompts (max 5)
+
+================================================================================
+PHASE 7 — Deliverables
+================================================================================
+
+Ensure these files exist and are updated:
+- docs/review/end-of-day-pass.md
+- docs/KNOWN_ISSUES.md (updated)
+- docs/TESTING.md (if test flow changed)
+- docs/PERFORMANCE_NOTES.md (if perf changes added)
+
+OUTPUT IN CHAT:
+- A concise summary of what was fixed
+- The location of the report doc
+- The next 3 highest-value prompts to queue overnight (if any)
+
+END.
