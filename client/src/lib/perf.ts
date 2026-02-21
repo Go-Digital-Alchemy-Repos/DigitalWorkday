@@ -1,6 +1,6 @@
 const CLIENT_PERF_LOG = import.meta.env.VITE_CLIENT_PERF_LOG === "1";
 const PERF_TELEMETRY = import.meta.env.VITE_PERF_TELEMETRY === "1";
-const SAMPLE_RATE = 0.1;
+const SAMPLE_RATE = 0.05;
 
 interface PerfEntry {
   type: "navigation" | "chunk";
@@ -57,6 +57,9 @@ const activeTimers = new Map<string, number>();
 export function markNavigationStart(view: string): void {
   if (!CLIENT_PERF_LOG && !PERF_TELEMETRY) return;
   activeTimers.set(`nav:${view}`, performance.now());
+  try {
+    performance.mark(`mwd:nav:${view}:start`);
+  } catch {}
 }
 
 export function markNavigationEnd(view: string): void {
@@ -66,10 +69,17 @@ export function markNavigationEnd(view: string): void {
   if (start == null) return;
   activeTimers.delete(key);
 
+  const durationMs = Math.round((performance.now() - start) * 10) / 10;
+
+  try {
+    performance.mark(`mwd:nav:${view}:end`);
+    performance.measure(`mwd:nav:${view}`, `mwd:nav:${view}:start`, `mwd:nav:${view}:end`);
+  } catch {}
+
   log({
     type: "navigation",
     view,
-    durationMs: Math.round((performance.now() - start) * 10) / 10,
+    durationMs,
     timestamp: Date.now(),
   });
 }

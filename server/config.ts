@@ -186,6 +186,7 @@ export const config = {
     clientControlCenterPinnedWidgets: optionalEnvBool("CLIENT_CONTROL_CENTER_PINNED_WIDGETS", true),
     notificationsGroupingV1: optionalEnvBool("NOTIFICATIONS_GROUPING_V1", true),
     prefetchV1: optionalEnvBool("PREFETCH_V1", true),
+    virtualizationV1: optionalEnvBool("VIRTUALIZATION_V1", true),
   },
 
   tenancyEnforcement: {

@@ -37,6 +37,13 @@ if (process.env.PERF_TELEMETRY === "1" && databaseUrl) {
   });
 }
 
+// Unified perf logger: always-on DB instrumentation (sampled in production)
+if (databaseUrl) {
+  import("./lib/perfLogger").then(({ instrumentDbPool }) => {
+    instrumentDbPool(pool);
+  });
+}
+
 // Track if database is configured
 export const isDatabaseConfigured = !!databaseUrl;
 

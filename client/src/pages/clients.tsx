@@ -8,6 +8,8 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
+import { VirtualizedList } from "@/components/ui/virtualized-list";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ClientDrawer } from "@/features/clients";
 import {
   Sheet,
@@ -1139,6 +1141,115 @@ function exportClientsToCsv(clients: ClientWithHierarchy[]) {
   URL.revokeObjectURL(url);
 }
 
+const VIRTUALIZATION_THRESHOLD = 20;
+
+interface ClientViewProps {
+  groupedClients: { parent: ClientWithHierarchy; children: ClientWithHierarchy[] }[];
+  selectedIds: Set<string>;
+  onSelect: (id: string) => void;
+  onOpenProfile: (id: string) => void;
+}
+
+function ClientGridView({ groupedClients, selectedIds, onSelect, onOpenProfile }: ClientViewProps) {
+  const { virtualizationV1 } = useFeatureFlags();
+  const useVirtual = virtualizationV1 && groupedClients.length > VIRTUALIZATION_THRESHOLD;
+
+  if (useVirtual) {
+    return (
+      <div style={{ height: "calc(100vh - 340px)" }} data-testid="client-grid-virtualized">
+        <VirtualizedList
+          data={groupedClients}
+          style={{ height: "100%" }}
+          overscan={300}
+          itemContent={(_index, { parent, children }) => (
+            <div className="pb-4">
+              <ClientGroupCard
+                parent={parent}
+                children={children}
+                selectedIds={selectedIds}
+                onSelect={onSelect}
+                showCheckbox={selectedIds.size > 0}
+                onOpenProfile={onOpenProfile}
+              />
+            </div>
+          )}
+        />
+      </div>
+    );
+  }
+
+  return (
+    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="client-grid">
+      {groupedClients.map(({ parent, children }) => (
+        <ClientGroupCard
+          key={parent.id}
+          parent={parent}
+          children={children}
+          selectedIds={selectedIds}
+          onSelect={onSelect}
+          showCheckbox={selectedIds.size > 0}
+          onOpenProfile={onOpenProfile}
+        />
+      ))}
+    </div>
+  );
+}
+
+function ClientTableView({
+  groupedClients,
+  selectedIds,
+  onSelect,
+  onOpenProfile,
+  density,
+}: ClientViewProps & { density: "comfortable" | "compact" }) {
+  const { virtualizationV1 } = useFeatureFlags();
+  const useVirtual = virtualizationV1 && groupedClients.length > VIRTUALIZATION_THRESHOLD;
+
+  if (useVirtual) {
+    return (
+      <Card>
+        <TableHeader compact={density === "compact"} />
+        <div style={{ height: "calc(100vh - 380px)" }} data-testid="client-table-virtualized">
+          <VirtualizedList
+            data={groupedClients}
+            style={{ height: "100%" }}
+            overscan={300}
+            itemContent={(_index, { parent, children }) => (
+              <ClientGroupRows
+                parent={parent}
+                children={children}
+                selectedIds={selectedIds}
+                onSelect={onSelect}
+                showCheckbox={selectedIds.size > 0}
+                compact={density === "compact"}
+                onOpenProfile={onOpenProfile}
+              />
+            )}
+          />
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <TableHeader compact={density === "compact"} />
+      {groupedClients.map(({ parent, children }) => (
+        <ClientGroupRows
+          key={parent.id}
+          parent={parent}
+          children={children}
+          selectedIds={selectedIds}
+          onSelect={onSelect}
+          showCheckbox={selectedIds.size > 0}
+          compact={density === "compact"}
+          onOpenProfile={onOpenProfile}
+        />
+      ))}
+    </Card>
+  );
+}
+
 export default function ClientsPage() {
   const [createDrawerOpen, setCreateDrawerOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -1750,35 +1861,20 @@ export default function ClientsPage() {
 
       {filteredAndSortedClients.length > 0 ? (
         viewMode === "grid" ? (
-          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {groupedClients.map(({ parent, children }) => (
-              <ClientGroupCard
-                key={parent.id}
-                parent={parent}
-                children={children}
-                selectedIds={selectedIds}
-                onSelect={handleSelectClient}
-                showCheckbox={selectedIds.size > 0}
-                onOpenProfile={handleOpenClientSheet}
-              />
-            ))}
-          </div>
+          <ClientGridView
+            groupedClients={groupedClients}
+            selectedIds={selectedIds}
+            onSelect={handleSelectClient}
+            onOpenProfile={handleOpenClientSheet}
+          />
         ) : (
-          <Card>
-            <TableHeader compact={density === "compact"} />
-            {groupedClients.map(({ parent, children }) => (
-              <ClientGroupRows
-                key={parent.id}
-                parent={parent}
-                children={children}
-                selectedIds={selectedIds}
-                onSelect={handleSelectClient}
-                showCheckbox={selectedIds.size > 0}
-                compact={density === "compact"}
-                onOpenProfile={handleOpenClientSheet}
-              />
-            ))}
-          </Card>
+          <ClientTableView
+            groupedClients={groupedClients}
+            selectedIds={selectedIds}
+            onSelect={handleSelectClient}
+            onOpenProfile={handleOpenClientSheet}
+            density={density}
+          />
         )
       ) : (
         <EmptyState

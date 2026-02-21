@@ -18,6 +18,7 @@ import { apiJsonResponseGuard, apiNotFoundHandler } from "./middleware/apiJsonGu
 import { requestLogger } from "./middleware/requestLogger";
 import { requestPerfMiddleware } from "./middleware/perfTelemetry";
 import { instrumentPool } from "./middleware/queryTelemetry";
+import { perfLoggerMiddleware, getPerfStats } from "./lib/perfLogger";
 import { csrfProtection } from "./middleware/csrf";
 import { logMigrationStatus } from "./scripts/migration-status";
 import { ensureSchemaReady, getLastSchemaCheck } from "./startup/schemaReadiness";
@@ -178,6 +179,9 @@ app.use(requestLogger);
 // Performance telemetry middleware (after request logger, opt-in via PERF_TELEMETRY=1)
 app.use(requestPerfMiddleware);
 
+// Unified perf logger (always on — sampled at 5% in production, 100% in dev)
+app.use(perfLoggerMiddleware);
+
 // Setup agreement enforcement (must be after tenant context)
 app.use(agreementEnforcementGuard);
 
@@ -219,10 +223,12 @@ app.get("/api/v1/system/perf/stats", (req, res) => {
   }
   const { getRequestPerfStats } = require("./middleware/perfTelemetry");
   const { getQueryPerfStats } = require("./middleware/queryTelemetry");
+  const perfStats = getPerfStats();
   res.json({
     enabled: true,
     requests: getRequestPerfStats(),
     queries: getQueryPerfStats(),
+    unified: perfStats,
   });
 });
 

@@ -35,6 +35,7 @@ router.get("/features/flags", async (_req, res) => {
       clientControlCenterPinnedWidgets: config.features.clientControlCenterPinnedWidgets,
       notificationsGroupingV1: config.features.notificationsGroupingV1,
       prefetchV1: config.features.prefetchV1,
+      virtualizationV1: config.features.virtualizationV1,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

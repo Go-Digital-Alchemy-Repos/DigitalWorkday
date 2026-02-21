@@ -10,6 +10,7 @@ export interface FeatureFlags {
   clientControlCenterPinnedWidgets: boolean;
   notificationsGroupingV1: boolean;
   prefetchV1: boolean;
+  virtualizationV1: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -22,6 +23,7 @@ const ALL_OFF: FeatureFlags = {
   clientControlCenterPinnedWidgets: false,
   notificationsGroupingV1: false,
   prefetchV1: false,
+  virtualizationV1: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {
