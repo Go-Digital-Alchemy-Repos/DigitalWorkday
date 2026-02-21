@@ -514,7 +514,7 @@ function TileCard({ icon: Icon, title, description, onClick, badge, testId, chil
             <div className="p-1.5 rounded-md bg-muted">
               <Icon className="h-4 w-4 text-muted-foreground" />
             </div>
-            <CardTitle className="text-sm font-medium">{title}</CardTitle>
+            <CardTitle className="tracking-tight font-medium text-[16px]">{title}</CardTitle>
           </div>
           {badge && (
             <Badge variant="secondary" className="text-[10px]">
