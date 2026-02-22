@@ -56,6 +56,13 @@ CRM_CONTACTS_ENABLED = "true"
 CRM_TIMELINE_ENABLED = "true"
 APP_BASE_URL = "https://b34eec93-d6a1-451c-9ccb-646667f4acb9-00-22u50f2dj5ux7.janeway.replit.dev"
 ASSET_LIBRARY_V2 = "true"
+DEV_AUTO_LOGIN = "true"
+DEV_TEST_EMAIL_SUPER = "admin@myworkday.dev"
+DEV_TEST_PASSWORD_SUPER = "SuperAdmin123!"
+DEV_TEST_EMAIL_ADMIN = "alex@brightstudio.com"
+DEV_TEST_PASSWORD_ADMIN = "Password123!"
+DEV_TEST_EMAIL_MEMBER = "mike@brightstudio.com"
+DEV_TEST_PASSWORD_MEMBER = "Password123!"
 
 [userenv.production]
 FAST_STARTUP="true"

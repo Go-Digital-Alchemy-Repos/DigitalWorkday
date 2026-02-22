@@ -6,11 +6,40 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2, LogIn, UserPlus, Shield, Eye, EyeOff } from "lucide-react";
+import { Loader2, LogIn, UserPlus, Shield, Eye, EyeOff, FlaskConical, Crown, ShieldCheck, User } from "lucide-react";
 import { SiGoogle } from "react-icons/si";
 import { Separator } from "@/components/ui/separator";
 import { UserRole } from "@shared/schema";
 import { getStorageUrl } from "@/lib/storageUrl";
+
+const DEV_TEST_ACCOUNTS = [
+  {
+    label: "Super Admin",
+    email: "admin@myworkday.dev",
+    password: "SuperAdmin123!",
+    icon: Crown,
+    description: "Full system access",
+    variant: "outline" as const,
+  },
+  {
+    label: "Tenant Admin",
+    email: "alex@brightstudio.com",
+    password: "Password123!",
+    icon: ShieldCheck,
+    description: "Bright Studio owner",
+    variant: "outline" as const,
+  },
+  {
+    label: "Tenant Employee",
+    email: "mike@brightstudio.com",
+    password: "Password123!",
+    icon: User,
+    description: "Bright Studio member",
+    variant: "outline" as const,
+  },
+];
+
+const isDevMode = import.meta.env.DEV && import.meta.env.VITE_DEV_TEST_ACCOUNTS !== "false";
 
 interface BootstrapStatus {
   bootstrapRequired: boolean;
@@ -469,6 +498,73 @@ export default function LoginPage() {
           )}
         </CardContent>
       </Card>
+
+      {isDevMode && !showBootstrap && (
+        <Card className="w-full max-w-md mt-4 border-dashed border-muted-foreground/30" data-testid="card-dev-credentials">
+          <CardHeader className="pb-3 pt-4 px-4">
+            <div className="flex items-center gap-2">
+              <FlaskConical className="h-4 w-4 text-muted-foreground" />
+              <CardTitle className="text-sm font-medium text-muted-foreground">Dev Test Accounts</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent className="px-4 pb-4 pt-0 space-y-2">
+            {DEV_TEST_ACCOUNTS.map((account) => {
+              const Icon = account.icon;
+              const testId = account.label.toLowerCase().replace(/\s+/g, "-");
+              return (
+                <div key={account.email} className="flex items-center gap-2">
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="default"
+                    disabled={isSubmitting}
+                    className="flex-1 justify-start gap-2"
+                    onClick={() => {
+                      setEmail(account.email);
+                      setPassword(account.password);
+                    }}
+                    data-testid={`button-dev-fill-${testId}`}
+                  >
+                    <Icon className="h-4 w-4 shrink-0 text-muted-foreground" />
+                    <div className="flex flex-col items-start text-left">
+                      <span className="text-xs font-medium">{account.label}</span>
+                      <span className="text-[10px] text-muted-foreground font-mono">{account.email}</span>
+                    </div>
+                  </Button>
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="default"
+                    disabled={isSubmitting}
+                    className="shrink-0"
+                    onClick={async () => {
+                      setEmail(account.email);
+                      setPassword(account.password);
+                      setIsSubmitting(true);
+                      const result = await login(account.email, account.password);
+                      setIsSubmitting(false);
+                      if (result.success) {
+                        toast({ title: "Welcome!", description: `Logged in as ${account.label}` });
+                        const isSuperUser = result.user?.role === UserRole.SUPER_USER;
+                        setLocation(isSuperUser ? "/super-admin/dashboard" : "/my-tasks");
+                      } else {
+                        toast({ title: "Login failed", description: result.error || "Invalid credentials", variant: "destructive" });
+                      }
+                    }}
+                    data-testid={`button-dev-login-${testId}`}
+                  >
+                    <LogIn className="h-3 w-3 mr-1" />
+                    Login
+                  </Button>
+                </div>
+              );
+            })}
+            <p className="text-[10px] text-muted-foreground text-center pt-1">
+              Fill to populate form, Login to sign in directly
+            </p>
+          </CardContent>
+        </Card>
+      )}
     </div>
   );
 }

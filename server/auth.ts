@@ -444,6 +444,23 @@ export function setupBootstrapEndpoints(app: Express): void {
   });
 
   /**
+   * GET /api/v1/auth/dev-accounts
+   * Returns test account credentials for programmatic testing.
+   * Only available when DEV_AUTO_LOGIN is explicitly enabled.
+   */
+  if (process.env.DEV_AUTO_LOGIN === "true" && process.env.NODE_ENV !== "production") {
+    app.get("/api/v1/auth/dev-accounts", (_req, res) => {
+      res.json({
+        accounts: [
+          { role: "super_admin", email: "admin@myworkday.dev", password: "SuperAdmin123!", name: "Dev Super Admin" },
+          { role: "tenant_admin", email: "alex@brightstudio.com", password: "Password123!", name: "Alex Rivera" },
+          { role: "tenant_member", email: "mike@brightstudio.com", password: "Password123!", name: "Mike Johnson" },
+        ],
+      });
+    });
+  }
+
+  /**
    * POST /api/v1/auth/bootstrap-register
    * Creates the first super admin account (only when no users exist)
    * Logs the user in immediately after creation.

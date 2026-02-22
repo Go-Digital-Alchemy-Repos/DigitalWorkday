@@ -3,6 +3,15 @@
 ## Overview
 MyWorkDay is an Asana-inspired project management application designed to streamline project workflows and enhance team collaboration. It centralizes project and client management, offering tools for organizing projects, teams, and clients with features like workspaces, tasks, subtasks, tags, comments, and activity tracking. The application aims to improve productivity through robust reporting and real-time communication. Key capabilities include multi-tenancy, comprehensive client relationship management (CRM) with a client portal, workload management, and a focus on a professional, intuitive user experience.
 
+## Dev Test Accounts
+Three test accounts are available on the login screen (dev mode only, gated by `DEV_AUTO_LOGIN=true`):
+- **Super Admin**: admin@myworkday.dev / SuperAdmin123!
+- **Tenant Admin**: alex@brightstudio.com / Password123! (Bright Studio owner)
+- **Tenant Employee**: mike@brightstudio.com / Password123! (Bright Studio member)
+
+Programmatic access: `GET /api/v1/auth/dev-accounts` (dev mode only, requires `DEV_AUTO_LOGIN=true`)
+Programmatic login: `POST /api/auth/login` with `{"email":"...","password":"..."}`
+
 ## User Preferences
 - Professional, clean Asana-like design
 - Board view as primary view with list view and calendar view options
