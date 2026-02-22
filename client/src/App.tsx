@@ -15,6 +15,7 @@ import { FeaturesProvider } from "@/contexts/features-context";
 import { FeaturesBanner } from "@/components/features-banner";
 import { isAuthRoute, AuthRouter } from "@/routing/authRouter";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
+import { ErrorBoundary } from "@/components/error-boundary";
 
 const TenantLayout = lazy(() => import("@/routing/tenantRouter").then(m => ({ default: m.TenantLayout })));
 const SuperLayout = lazy(() => import("@/routing/superRouter").then(m => ({ default: m.SuperLayout })));
@@ -28,7 +29,7 @@ function AppLayout() {
   const suspenseFallback = <PageSkeleton />;
 
   if (isAuthRoute(location)) {
-    return <AuthRouter />;
+    return <ErrorBoundary><AuthRouter /></ErrorBoundary>;
   }
 
   if (isLoading) {

@@ -64,13 +64,25 @@ function isJsonResponse(res: Response): boolean {
 /**
  * Handle 401 Unauthorized - redirect to login with session expired message.
  * Only handles cases where we're NOT already on the login page.
+ * Only shows "session expired" if user was previously authenticated.
  */
 function handle401Redirect(): void {
   if (window.location.pathname !== "/login") {
-    // Store message in sessionStorage for login page to display
-    sessionStorage.setItem("authMessage", "Session expired. Please log in again.");
+    const wasAuthenticated = sessionStorage.getItem("wasAuthenticated") === "true";
+    if (wasAuthenticated) {
+      sessionStorage.setItem("authMessage", "Session expired. Please log in again.");
+      sessionStorage.removeItem("wasAuthenticated");
+    }
     window.location.href = "/login";
   }
+}
+
+export function markAuthenticated(): void {
+  sessionStorage.setItem("wasAuthenticated", "true");
+}
+
+export function clearAuthenticated(): void {
+  sessionStorage.removeItem("wasAuthenticated");
 }
 
 async function throwIfResNotOk(res: Response) {

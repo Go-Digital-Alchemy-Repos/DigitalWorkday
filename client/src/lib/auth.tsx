@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { type User, UserRole } from "@shared/schema";
-import { clearActingAsState, setSuperUserFlag, queryClient } from "./queryClient";
+import { clearActingAsState, setSuperUserFlag, queryClient, markAuthenticated, clearAuthenticated } from "./queryClient";
 import { prefetchPostLogin, resetPrefetchState, type PrefetchOptions } from "./prefetch";
 
 interface UserImpersonationData {
@@ -78,6 +78,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user);
         setUserImpersonation(data.impersonation || null);
         setSuperUserFlag(data.user?.role === UserRole.SUPER_USER);
+        markAuthenticated();
         triggerPrefetch(data.user?.role);
       } else {
         console.log("[Auth] /api/auth/me failed:", response.status);
@@ -148,6 +149,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
     } finally {
       clearActingAsState();
+      clearAuthenticated();
       queryClient.clear();
       resetPrefetchState();
       setUser(null);

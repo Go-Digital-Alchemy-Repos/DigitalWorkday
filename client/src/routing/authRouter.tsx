@@ -3,8 +3,8 @@ import { Switch, Route } from "wouter";
 import { ProtectedRoute } from "./guards";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { trackChunkLoad } from "@/lib/perf";
+import LoginPage from "@/pages/login";
 
-const LoginPage = lazy(trackChunkLoad("Login", () => import("@/pages/login")));
 const TenantOnboardingPage = lazy(trackChunkLoad("TenantOnboarding", () => import("@/pages/tenant-onboarding")));
 const AcceptTermsPage = lazy(trackChunkLoad("AcceptTerms", () => import("@/pages/accept-terms")));
 const PlatformInvitePage = lazy(trackChunkLoad("PlatformInvite", () => import("@/pages/platform-invite")));
