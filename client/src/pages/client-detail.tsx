@@ -1968,13 +1968,13 @@ export default function ClientDetailPage() {
                         <div className="space-y-3">
                           {archivedProjects.map((project: any) => (
                             <Link key={project.id} href={`/projects/${project.id}`}>
-                              <Card className="cursor-pointer hover-elevate opacity-75" data-testid={`card-project-${project.id}`}>
+                              <Card className="cursor-pointer hover-elevate opacity-60" data-testid={`card-project-${project.id}`}>
                                 <CardHeader className="pb-2">
                                   <div className="flex items-center justify-between gap-2 flex-wrap">
                                     <div className="flex items-center gap-2">
                                       <div
                                         className="h-3 w-3 rounded-sm shrink-0"
-                                        style={{ backgroundColor: project.color || "#3B82F6" }}
+                                        style={{ backgroundColor: "#9ca3af" }}
                                       />
                                       <CardTitle className="text-base">{project.name}</CardTitle>
                                     </div>

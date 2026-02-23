@@ -502,7 +502,7 @@ export default function ProjectsDashboard() {
               return (
                 <Card
                   key={project.id}
-                  className="hover-elevate cursor-pointer"
+                  className={`hover-elevate cursor-pointer ${project.status === "archived" ? "opacity-60" : ""}`}
                   onClick={() => handleRowClick(project)}
                   data-testid={`card-project-${project.id}`}
                 >
@@ -510,7 +510,7 @@ export default function ProjectsDashboard() {
                     <div className="flex items-start gap-3">
                       <div
                         className="h-8 w-8 rounded-md flex items-center justify-center text-white text-sm font-medium shrink-0"
-                        style={{ backgroundColor: project.color || "#3B82F6" }}
+                        style={{ backgroundColor: project.status === "archived" ? "#9ca3af" : (project.color || "#3B82F6") }}
                       >
                         {project.name.charAt(0).toUpperCase()}
                       </div>
@@ -600,7 +600,7 @@ export default function ProjectsDashboard() {
                 {filteredProjects.map((project) => (
                   <TableRow
                     key={project.id}
-                    className="cursor-pointer hover-elevate"
+                    className={`cursor-pointer hover-elevate ${project.status === "archived" ? "opacity-60" : ""}`}
                     onClick={() => handleRowClick(project)}
                     data-testid={`row-project-${project.id}`}
                   >
@@ -608,7 +608,7 @@ export default function ProjectsDashboard() {
                       <div className="flex items-center gap-3">
                         <div
                           className="h-3 w-3 rounded-sm shrink-0"
-                          style={{ backgroundColor: project.color || "#3B82F6" }}
+                          style={{ backgroundColor: project.status === "archived" ? "#9ca3af" : (project.color || "#3B82F6") }}
                         />
                         {project.stickyAt && (
                           <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
