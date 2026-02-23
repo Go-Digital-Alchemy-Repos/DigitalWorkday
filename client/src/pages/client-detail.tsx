@@ -847,7 +847,7 @@ export default function ClientDetailPage() {
           </div>
         )}
 
-        {useV2Layout && activeSection === "control-center" && (
+        {activeSection === "control-center" && (
           <div className="overflow-auto">
             <ControlCenterSection
               clientId={clientId || ""}
@@ -860,11 +860,9 @@ export default function ClientDetailPage() {
         )}
 
         <Tabs value={useV2Layout ? activeSection : activeTab} onValueChange={(val) => {
-          if (useV2Layout) {
-            setActiveSection(val);
-          }
+          setActiveSection(val);
           setActiveTab(val);
-        }} className={useV2Layout && activeSection === "control-center" ? "hidden" : "h-full"}>
+        }} className={activeSection === "control-center" ? "hidden" : "h-full"}>
           {!useV2Layout && (
             <div className="px-6 py-4 border-b border-border">
               <TabsList>
