@@ -41,6 +41,7 @@ import {
   ExternalLink,
   Users,
   TrendingUp,
+  Star,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import {
@@ -1626,6 +1627,13 @@ export default function ClientsPage() {
     return groups;
   }, [filteredAndSortedClients]);
 
+  const vipClients = useMemo(() => {
+    if (!filteredAndSortedClients) return [];
+    return filteredAndSortedClients.filter(
+      (c) => c.tags && c.tags.some((t) => t.toLowerCase() === "vip")
+    );
+  }, [filteredAndSortedClients]);
+
   const hasActiveFilters = Object.values(filterValues).some(
     (v) => v && v !== "all"
   );
@@ -1821,6 +1829,46 @@ export default function ClientsPage() {
           onBulkStatusChange={handleBulkStatusChange}
           onExportCsv={handleExportCsv}
         />
+      )}
+
+      {vipClients.length > 0 && (
+        <div className="mb-6" data-testid="vip-clients-section">
+          <div className="flex items-center gap-2 mb-3">
+            <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
+            <h3 className="font-medium">VIP Clients</h3>
+            <Badge variant="secondary" className="text-xs">{vipClients.length}</Badge>
+          </div>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+            {vipClients.map((client) => (
+              <Card
+                key={client.id}
+                className="cursor-pointer hover-elevate border-amber-200 dark:border-amber-500/30"
+                onClick={() => handleOpenClientSheet(client.id)}
+                data-testid={`vip-card-${client.id}`}
+              >
+                <CardContent className="p-3">
+                  <div className="flex items-center gap-2.5">
+                    <Avatar className="h-8 w-8 shrink-0">
+                      <AvatarFallback className="bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 text-xs">
+                        {getInitials(client.companyName)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{client.companyName}</p>
+                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                        <span>{client.projectCount} projects</span>
+                        <span>{client.openTasksCount} tasks</span>
+                      </div>
+                    </div>
+                    {client.needsAttention && (
+                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        </div>
       )}
 
       {filteredAndSortedClients.length > 0 ? (
