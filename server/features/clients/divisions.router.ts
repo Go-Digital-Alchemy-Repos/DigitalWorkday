@@ -16,6 +16,31 @@ const router = Router();
 // CLIENT DIVISIONS
 // =============================================================================
 
+router.get("/divisions/all", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) {
+      throw AppError.forbidden("Tenant context required");
+    }
+
+    const userId = getCurrentUserId(req);
+    const user = await storage.getUser(userId);
+    const canSeeAll = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+
+    let divisions = await storage.getClientDivisionsByTenant(tenantId);
+
+    if (!canSeeAll) {
+      const userDivisions = await storage.getUserDivisions(userId, tenantId);
+      const userDivisionIds = new Set(userDivisions.map(d => d.id));
+      divisions = divisions.filter(d => userDivisionIds.has(d.id));
+    }
+
+    res.json(divisions);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /divisions/all", req);
+  }
+});
+
 router.get("/clients/:clientId/divisions", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);

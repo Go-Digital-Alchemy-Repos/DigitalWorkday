@@ -1151,33 +1151,6 @@ interface ClientViewProps {
 }
 
 function ClientGridView({ groupedClients, selectedIds, onSelect, onOpenProfile }: ClientViewProps) {
-  const { virtualizationV1 } = useFeatureFlags();
-  const useVirtual = virtualizationV1 && groupedClients.length > VIRTUALIZATION_THRESHOLD;
-
-  if (useVirtual) {
-    return (
-      <div style={{ height: "calc(100vh - 340px)" }} data-testid="client-grid-virtualized">
-        <VirtualizedList
-          data={groupedClients}
-          style={{ height: "100%" }}
-          overscan={300}
-          itemContent={(_index, { parent, children }) => (
-            <div className="pb-4">
-              <ClientGroupCard
-                parent={parent}
-                children={children}
-                selectedIds={selectedIds}
-                onSelect={onSelect}
-                showCheckbox={selectedIds.size > 0}
-                onOpenProfile={onOpenProfile}
-              />
-            </div>
-          )}
-        />
-      </div>
-    );
-  }
-
   return (
     <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="client-grid">
       {groupedClients.map(({ parent, children }) => (

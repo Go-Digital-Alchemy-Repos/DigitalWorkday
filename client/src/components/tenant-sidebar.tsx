@@ -199,23 +199,7 @@ export function TenantSidebar() {
   });
 
   const { data: allDivisions = [] } = useQuery<ClientDivision[]>({
-    queryKey: ["/api/v1/divisions"],
-    queryFn: async () => {
-      if (!clients || clients.length === 0) return [];
-      const allDivs: ClientDivision[] = [];
-      for (const client of clients) {
-        try {
-          const res = await fetch(`/api/v1/clients/${client.id}/divisions`, { credentials: "include" });
-          if (res.ok) {
-            const divs = await res.json();
-            allDivs.push(...divs);
-          }
-        } catch {
-        }
-      }
-      return allDivs;
-    },
-    enabled: !!clients && clients.length > 0,
+    queryKey: ["/api/v1/divisions/all"],
   });
 
   const getClientName = (clientId: string | null) => {
