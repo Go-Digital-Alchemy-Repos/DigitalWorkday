@@ -797,20 +797,18 @@ export default function ClientDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {hasControlCenter && (
-            <Button
-              variant="default"
-              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-              onClick={() => {
-                setActiveSection("control-center");
-                setActiveTab("control-center");
-              }}
-              data-testid="button-control-center-client"
-            >
-              <Settings2 className="h-4 w-4 mr-2" />
-              Control Center
-            </Button>
-          )}
+          <Button
+            variant="default"
+            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
+            onClick={() => {
+              setActiveSection("control-center");
+              setActiveTab("control-center");
+            }}
+            data-testid="button-control-center-client"
+          >
+            <Settings2 className="h-4 w-4 mr-2" />
+            Control Center
+          </Button>
           <Button 
             variant="default" 
             className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
