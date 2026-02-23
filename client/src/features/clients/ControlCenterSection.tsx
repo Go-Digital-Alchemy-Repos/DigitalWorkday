@@ -125,8 +125,8 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
   const canDeleteClient = user?.role === "super_user" || user?.role === "tenant_admin" || user?.role === "admin";
   const role = isAdmin ? "admin" : "employee";
   const layout = useMemo(() => {
-    if (!layoutData) return getDefaultLayout(role);
-    return filterLayoutByRole(layoutData.layout, role);
+    const base = !layoutData ? getDefaultLayout(role) : filterLayoutByRole(layoutData.layout, role);
+    return base.filter((item) => item.id !== "tiles_divisions");
   }, [layoutData, role]);
 
   if (isLoading) {
@@ -786,6 +786,7 @@ function CustomizeSheet({ open, onOpenChange, currentLayout, role }: CustomizeSh
   const availableWidgets = useMemo(
     () =>
       WIDGET_CATALOG.filter((w) => {
+        if (w.id === "tiles_divisions") return false;
         if (pinnedIds.has(w.id)) return false;
         if (role !== "admin" && w.minRole === "admin") return false;
         return true;
