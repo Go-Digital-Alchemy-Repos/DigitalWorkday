@@ -796,6 +796,20 @@ export default function ClientDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
+          {hasControlCenter && (
+            <Button
+              variant="default"
+              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+              onClick={() => {
+                setActiveSection("control-center");
+                setActiveTab("control-center");
+              }}
+              data-testid="button-control-center-client"
+            >
+              <Settings2 className="h-4 w-4 mr-2" />
+              Control Center
+            </Button>
+          )}
           <Button 
             variant="default" 
             onClick={() => setTimerDrawerOpen(true)}
@@ -812,7 +826,7 @@ export default function ClientDetailPage() {
           <div className="px-6 py-4 border-b border-border">
             <ClientSectionSwitcher
               sections={tabBarSections}
-              activeSection={CONTROL_CENTER_CHILD_IDS.has(activeSection) ? "control-center" : activeSection}
+              activeSection={activeSection}
               onSectionChange={(id) => {
                 setActiveSection(id);
                 setActiveTab(id);

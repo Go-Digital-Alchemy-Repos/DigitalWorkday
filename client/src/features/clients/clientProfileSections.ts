@@ -48,7 +48,6 @@ export const CONTROL_CENTER_CHILD_IDS = new Set([
 
 export const ALL_CLIENT_PROFILE_SECTIONS: ClientProfileSection[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, testId: "tab-overview", primary: true },
-  { id: "control-center", label: "Control Center", icon: Settings2, testId: "tab-control-center", primary: true, isControlCenter: true, requiresFeatureFlag: "clientControlCenterPremium" },
   { id: "contacts", label: "Contacts", icon: Users, testId: "tab-contacts", primary: true },
   { id: "projects", label: "Projects", icon: FolderKanban, testId: "tab-projects", primary: true },
   { id: "divisions", label: "Divisions", icon: Layers, testId: "tab-divisions", primary: true },
