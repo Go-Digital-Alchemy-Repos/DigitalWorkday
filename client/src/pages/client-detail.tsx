@@ -92,6 +92,7 @@ import {
   KeyRound,
   Copy,
   Check,
+  Settings2,
   ShieldCheck,
 } from "lucide-react";
 import { useLocation } from "wouter";
