@@ -48,6 +48,7 @@ import {
   X,
   ArrowLeft,
   GripVertical,
+  FolderInput,
 } from "lucide-react";
 import {
   DndContext,
@@ -268,9 +269,10 @@ interface DraggableAssetRowProps {
   onRename: (id: string, title: string) => void;
   onDelete: (id: string) => void;
   onOpenInContext: (asset: Asset) => void;
+  onMove: (asset: Asset) => void;
 }
 
-function DraggableAssetRow({ asset, onSelect, onDownload, onRename, onDelete, onOpenInContext }: DraggableAssetRowProps) {
+function DraggableAssetRow({ asset, onSelect, onDownload, onRename, onDelete, onOpenInContext, onMove }: DraggableAssetRowProps) {
   const {
     attributes,
     listeners,
@@ -349,6 +351,13 @@ function DraggableAssetRow({ asset, onSelect, onDownload, onRename, onDelete, on
             <Pencil className="w-4 h-4 mr-2" />
             Rename
           </DropdownMenuItem>
+          <DropdownMenuItem
+            onClick={(e) => { e.stopPropagation(); onMove(asset); }}
+            data-testid={`asset-move-${asset.id}`}
+          >
+            <FolderInput className="w-4 h-4 mr-2" />
+            Move
+          </DropdownMenuItem>
           {asset.sourceContextJson && (
             <DropdownMenuItem
               onClick={(e) => { e.stopPropagation(); onOpenInContext(asset); }}
@@ -389,6 +398,8 @@ export function AssetLibraryPanel({ clientId }: Props) {
   const [renameFolderName, setRenameFolderName] = useState("");
   const [editAssetId, setEditAssetId] = useState<string | null>(null);
   const [editAssetTitle, setEditAssetTitle] = useState("");
+  const [moveAsset, setMoveAsset] = useState<Asset | null>(null);
+  const [moveTargetFolderId, setMoveTargetFolderId] = useState<string>("__root__");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const foldersQuery = useQuery<AssetFolder[]>({
@@ -810,6 +821,10 @@ export function AssetLibraryPanel({ clientId }: Props) {
                         }}
                         onDelete={(id) => deleteAssetMutation.mutate(id)}
                         onOpenInContext={handleOpenInContext}
+                        onMove={(a) => {
+                          setMoveAsset(a);
+                          setMoveTargetFolderId(a.folderId || "__root__");
+                        }}
                       />
                     ))}
                   </SortableContext>
@@ -922,6 +937,62 @@ export function AssetLibraryPanel({ clientId }: Props) {
               data-testid="button-confirm-rename-asset"
             >
               Save
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={!!moveAsset} onOpenChange={(open) => { if (!open) setMoveAsset(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Move File</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground mb-2">
+            Choose a destination folder for <span className="font-medium text-foreground">{moveAsset?.title}</span>
+          </p>
+          <div className="border rounded-md max-h-[300px] overflow-y-auto">
+            <button
+              type="button"
+              className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left hover:bg-muted/50 transition-colors ${moveTargetFolderId === "__root__" ? "bg-primary/10 text-primary font-medium" : ""}`}
+              onClick={() => setMoveTargetFolderId("__root__")}
+              data-testid="move-folder-root"
+            >
+              <Folder className="w-4 h-4 shrink-0" />
+              Root (All Files)
+            </button>
+            {folders.map((folder) => (
+              <button
+                type="button"
+                key={folder.id}
+                className={`w-full flex items-center gap-2 px-3 py-2.5 text-sm text-left hover:bg-muted/50 transition-colors ${moveTargetFolderId === folder.id ? "bg-primary/10 text-primary font-medium" : ""}`}
+                onClick={() => setMoveTargetFolderId(folder.id)}
+                data-testid={`move-folder-${folder.id}`}
+              >
+                <FolderOpen className="w-4 h-4 shrink-0" />
+                {folder.name}
+              </button>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setMoveAsset(null)}>Cancel</Button>
+            <Button
+              onClick={() => {
+                if (!moveAsset) return;
+                const targetId = moveTargetFolderId === "__root__" ? null : moveTargetFolderId;
+                updateAssetMutation.mutate(
+                  { id: moveAsset.id, updates: { folderId: targetId } },
+                  {
+                    onSuccess: () => {
+                      toast({ title: "File moved" });
+                      setMoveAsset(null);
+                    },
+                  }
+                );
+              }}
+              disabled={updateAssetMutation.isPending}
+              data-testid="button-confirm-move-asset"
+            >
+              {updateAssetMutation.isPending ? "Moving..." : "Move"}
             </Button>
           </DialogFooter>
         </DialogContent>
