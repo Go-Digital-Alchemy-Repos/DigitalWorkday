@@ -325,6 +325,12 @@ export default function ClientDetailPage() {
   const cmdPalette = useClientCommandPaletteState();
   const useV2Layout = featureFlags.clientProfileLayoutV2;
 
+  useEffect(() => {
+    if (activeSection === "control-center") {
+      setActiveTab("control-center");
+    }
+  }, [activeSection]);
+
   const { data: client, isLoading } = useQuery<ClientWithContacts>({
     queryKey: ["/api/clients", clientId],
     enabled: !!clientId,
