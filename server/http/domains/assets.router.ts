@@ -35,98 +35,7 @@ async function validateClientBelongsToTenant(clientId: string, tenantId: string)
 }
 
 // ============================================================================
-// ASSETS
-// ============================================================================
-
-const listAssetsSchema = z.object({
-  clientId: z.string().min(1),
-  folderId: z.string().optional(),
-  q: z.string().optional(),
-  sourceType: z.enum(ASSET_SOURCE_TYPES).optional(),
-  visibility: z.enum(ASSET_VISIBILITY).optional(),
-  cursor: z.string().optional(),
-  limit: z.coerce.number().min(1).max(100).optional(),
-});
-
-router.get("/assets", async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
-
-    const filters = listAssetsSchema.parse(req.query);
-    await validateClientBelongsToTenant(filters.clientId, tenantId);
-
-    const result = await assetService.listAssets({
-      tenantId,
-      clientId: filters.clientId,
-      folderId: filters.folderId,
-      q: filters.q,
-      sourceType: filters.sourceType,
-      visibility: filters.visibility,
-      cursor: filters.cursor,
-      limit: filters.limit,
-    });
-
-    res.json(result);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: "Validation failed", details: error.errors });
-    }
-    return handleRouteError(res, error, "GET /api/v1/assets", req);
-  }
-});
-
-router.get("/assets/:assetId", async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
-
-    const asset = await assetService.getAsset(tenantId, req.params.assetId);
-    if (!asset) return res.status(404).json({ error: "Asset not found" });
-
-    res.json(asset);
-  } catch (error) {
-    return handleRouteError(res, error, "GET /api/v1/assets/:assetId", req);
-  }
-});
-
-const updateAssetSchema = z.object({
-  title: z.string().min(1).optional(),
-  description: z.string().nullable().optional(),
-  folderId: z.string().nullable().optional(),
-  visibility: z.enum(ASSET_VISIBILITY).optional(),
-});
-
-router.patch("/assets/:assetId", async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
-
-    const updates = updateAssetSchema.parse(req.body);
-    const asset = await assetService.updateAssetMeta(tenantId, req.params.assetId, updates);
-    res.json(asset);
-  } catch (error) {
-    if (error instanceof z.ZodError) {
-      return res.status(400).json({ error: "Validation failed", details: error.errors });
-    }
-    return handleRouteError(res, error, "PATCH /api/v1/assets/:assetId", req);
-  }
-});
-
-router.delete("/assets/:assetId", async (req: Request, res: Response) => {
-  try {
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
-
-    await assetService.deleteAsset(tenantId, req.params.assetId);
-    res.json({ success: true });
-  } catch (error) {
-    return handleRouteError(res, error, "DELETE /api/v1/assets/:assetId", req);
-  }
-});
-
-// ============================================================================
-// FOLDERS
+// FOLDERS (must be defined before /assets/:assetId to avoid route shadowing)
 // ============================================================================
 
 router.get("/assets/folders", async (req: Request, res: Response) => {
@@ -219,6 +128,97 @@ router.delete("/assets/folders/:folderId", async (req: Request, res: Response) =
     res.json({ success: true });
   } catch (error) {
     return handleRouteError(res, error, "DELETE /api/v1/assets/folders/:folderId", req);
+  }
+});
+
+// ============================================================================
+// ASSETS
+// ============================================================================
+
+const listAssetsSchema = z.object({
+  clientId: z.string().min(1),
+  folderId: z.string().optional(),
+  q: z.string().optional(),
+  sourceType: z.enum(ASSET_SOURCE_TYPES).optional(),
+  visibility: z.enum(ASSET_VISIBILITY).optional(),
+  cursor: z.string().optional(),
+  limit: z.coerce.number().min(1).max(100).optional(),
+});
+
+router.get("/assets", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
+
+    const filters = listAssetsSchema.parse(req.query);
+    await validateClientBelongsToTenant(filters.clientId, tenantId);
+
+    const result = await assetService.listAssets({
+      tenantId,
+      clientId: filters.clientId,
+      folderId: filters.folderId,
+      q: filters.q,
+      sourceType: filters.sourceType,
+      visibility: filters.visibility,
+      cursor: filters.cursor,
+      limit: filters.limit,
+    });
+
+    res.json(result);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation failed", details: error.errors });
+    }
+    return handleRouteError(res, error, "GET /api/v1/assets", req);
+  }
+});
+
+router.get("/assets/:assetId", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
+
+    const asset = await assetService.getAsset(tenantId, req.params.assetId);
+    if (!asset) return res.status(404).json({ error: "Asset not found" });
+
+    res.json(asset);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/v1/assets/:assetId", req);
+  }
+});
+
+const updateAssetSchema = z.object({
+  title: z.string().min(1).optional(),
+  description: z.string().nullable().optional(),
+  folderId: z.string().nullable().optional(),
+  visibility: z.enum(ASSET_VISIBILITY).optional(),
+});
+
+router.patch("/assets/:assetId", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
+
+    const updates = updateAssetSchema.parse(req.body);
+    const asset = await assetService.updateAssetMeta(tenantId, req.params.assetId, updates);
+    res.json(asset);
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation failed", details: error.errors });
+    }
+    return handleRouteError(res, error, "PATCH /api/v1/assets/:assetId", req);
+  }
+});
+
+router.delete("/assets/:assetId", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
+
+    await assetService.deleteAsset(tenantId, req.params.assetId);
+    res.json({ success: true });
+  } catch (error) {
+    return handleRouteError(res, error, "DELETE /api/v1/assets/:assetId", req);
   }
 });
 
