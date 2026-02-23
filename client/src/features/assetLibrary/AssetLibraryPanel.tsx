@@ -565,269 +565,292 @@ export function AssetLibraryPanel({ clientId }: Props) {
     }
   }, []);
 
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    })
+  );
+
+  const [activeId, setActiveId] = useState<string | null>(null);
+  const [dropTargetId, setDropTargetId] = useState<string | null>(null);
+
+  const reorderFoldersMutation = useMutation({
+    mutationFn: async (updates: { id: string; sortOrder: number }[]) => {
+      return apiRequest("PUT", "/api/v1/assets/folders/reorder", { updates });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/assets/folders", { clientId }] });
+    },
+  });
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveId(event.active.id as string);
+  };
+
+  const handleDragOver = (event: DragOverEvent) => {
+    const { over } = event;
+    if (over && over.id.toString().startsWith("folder-")) {
+      setDropTargetId(over.id.toString().replace("folder-", ""));
+    } else {
+      setDropTargetId(null);
+    }
+  };
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    setActiveId(null);
+    setDropTargetId(null);
+
+    if (!over) return;
+
+    const activeData = active.data.current;
+    const overData = over.data.current;
+
+    // Case 1: Moving a file into a folder
+    if (activeData?.type === "asset" && overData?.type === "folder") {
+      const asset = activeData.asset as Asset;
+      const targetFolder = overData.folder as AssetFolder;
+      
+      if (asset.folderId !== targetFolder.id) {
+        updateAssetMutation.mutate({
+          id: asset.id,
+          updates: { folderId: targetFolder.id },
+        });
+      }
+    }
+    
+    // Case 2: Reordering folders
+    if (activeData?.type === "folder" && overData?.type === "folder" && active.id !== over.id) {
+      const oldIndex = currentFolders.findIndex((f) => `folder-${f.id}` === active.id);
+      const newIndex = currentFolders.findIndex((f) => `folder-${f.id}` === over.id);
+      
+      const newFolders = arrayMove(currentFolders, oldIndex, newIndex);
+      const updates = newFolders.map((f, index) => ({
+        id: f.id,
+        sortOrder: index,
+      }));
+      
+      reorderFoldersMutation.mutate(updates);
+    }
+  };
+
+  const activeFolder = activeId?.startsWith("folder-") 
+    ? folders.find(f => `folder-${f.id}` === activeId) 
+    : null;
+  
+  const activeAsset = activeId?.startsWith("asset-") 
+    ? assets_data.find(a => `asset-${a.id}` === activeId) 
+    : null;
+
   return (
     <div className="flex flex-col h-full" data-testid="asset-library-panel">
-      <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
-        <div className="flex items-center gap-2 flex-wrap">
-          {currentFolderId && (
+      <DndContext
+        sensors={sensors}
+        collisionDetection={pointerWithin}
+        onDragStart={handleDragStart}
+        onDragOver={handleDragOver}
+        onDragEnd={handleDragEnd}
+        modifiers={[restrictToWindowEdges]}
+      >
+        <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
+          <div className="flex items-center gap-2 flex-wrap">
+            {currentFolderId && (
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => setCurrentFolderId(currentFolder?.parentFolderId ?? null)}
+                data-testid="button-folder-back"
+              >
+                <ArrowLeft className="w-4 h-4" />
+              </Button>
+            )}
+            <div className="flex items-center gap-1 text-sm text-muted-foreground">
+              <button
+                onClick={() => setCurrentFolderId(null)}
+                className="hover:underline cursor-pointer"
+                data-testid="breadcrumb-root"
+              >
+                All Files
+              </button>
+              {breadcrumbs.map((bc) => (
+                <span key={bc.id} className="flex items-center gap-1">
+                  <ChevronRight className="w-3 h-3" />
+                  <button
+                    onClick={() => setCurrentFolderId(bc.id)}
+                    className="hover:underline cursor-pointer"
+                    data-testid={`breadcrumb-folder-${bc.id}`}
+                  >
+                    {bc.name}
+                  </button>
+                </span>
+              ))}
+            </div>
+          </div>
+
+          <div className="flex items-center gap-2 flex-wrap">
             <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => setCurrentFolderId(currentFolder?.parentFolderId ?? null)}
-              data-testid="button-folder-back"
+              variant="outline"
+              size="sm"
+              onClick={() => setCreateFolderOpen(true)}
+              data-testid="button-create-folder"
             >
-              <ArrowLeft className="w-4 h-4" />
+              <FolderPlus className="w-4 h-4 mr-1" />
+              New Folder
             </Button>
-          )}
-          <div className="flex items-center gap-1 text-sm text-muted-foreground">
-            <button
-              onClick={() => setCurrentFolderId(null)}
-              className="hover:underline cursor-pointer"
-              data-testid="breadcrumb-root"
+            <Button
+              size="sm"
+              onClick={() => fileInputRef.current?.click()}
+              disabled={uploading}
+              data-testid="button-upload-file"
             >
-              All Files
-            </button>
-            {breadcrumbs.map((bc) => (
-              <span key={bc.id} className="flex items-center gap-1">
-                <ChevronRight className="w-3 h-3" />
-                <button
-                  onClick={() => setCurrentFolderId(bc.id)}
-                  className="hover:underline cursor-pointer"
-                  data-testid={`breadcrumb-folder-${bc.id}`}
-                >
-                  {bc.name}
-                </button>
-              </span>
-            ))}
+              <Upload className="w-4 h-4 mr-1" />
+              {uploading ? "Uploading..." : "Upload"}
+            </Button>
+            <input
+              ref={fileInputRef}
+              type="file"
+              multiple
+              className="hidden"
+              onChange={(e) => handleFileUpload(e.target.files)}
+              data-testid="input-file-upload"
+            />
           </div>
         </div>
 
-        <div className="flex items-center gap-2 flex-wrap">
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={() => setCreateFolderOpen(true)}
-            data-testid="button-create-folder"
-          >
-            <FolderPlus className="w-4 h-4 mr-1" />
-            New Folder
-          </Button>
-          <Button
-            size="sm"
-            onClick={() => fileInputRef.current?.click()}
-            disabled={uploading}
-            data-testid="button-upload-file"
-          >
-            <Upload className="w-4 h-4 mr-1" />
-            {uploading ? "Uploading..." : "Upload"}
-          </Button>
-          <input
-            ref={fileInputRef}
-            type="file"
-            multiple
-            className="hidden"
-            onChange={(e) => handleFileUpload(e.target.files)}
-            data-testid="input-file-upload"
-          />
+        <div className="flex items-center gap-2 mb-4 flex-wrap">
+          <div className="relative flex-1 min-w-[200px]">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
+            <Input
+              placeholder="Search assets..."
+              value={searchQuery}
+              onChange={(e) => setSearchQuery(e.target.value)}
+              className="pl-9"
+              data-testid="input-search-assets"
+            />
+          </div>
+          <Select value={sourceFilter} onValueChange={setSourceFilter}>
+            <SelectTrigger className="w-[140px]" data-testid="select-source-filter">
+              <SelectValue placeholder="Source" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Sources</SelectItem>
+              <SelectItem value="manual">Uploads</SelectItem>
+              <SelectItem value="task">Task</SelectItem>
+              <SelectItem value="comment">Comment</SelectItem>
+              <SelectItem value="message">Message</SelectItem>
+              <SelectItem value="support_ticket">Support</SelectItem>
+              <SelectItem value="chat">Chat</SelectItem>
+            </SelectContent>
+          </Select>
+          <Select value={visibilityFilter} onValueChange={setVisibilityFilter}>
+            <SelectTrigger className="w-[140px]" data-testid="select-visibility-filter">
+              <SelectValue placeholder="Visibility" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All</SelectItem>
+              <SelectItem value="internal">Internal</SelectItem>
+              <SelectItem value="client_visible">Client Visible</SelectItem>
+            </SelectContent>
+          </Select>
         </div>
-      </div>
 
-      <div className="flex items-center gap-2 mb-4 flex-wrap">
-        <div className="relative flex-1 min-w-[200px]">
-          <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-          <Input
-            placeholder="Search assets..."
-            value={searchQuery}
-            onChange={(e) => setSearchQuery(e.target.value)}
-            className="pl-9"
-            data-testid="input-search-assets"
-          />
-        </div>
-        <Select value={sourceFilter} onValueChange={setSourceFilter}>
-          <SelectTrigger className="w-[140px]" data-testid="select-source-filter">
-            <SelectValue placeholder="Source" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All Sources</SelectItem>
-            <SelectItem value="manual">Uploads</SelectItem>
-            <SelectItem value="task">Task</SelectItem>
-            <SelectItem value="comment">Comment</SelectItem>
-            <SelectItem value="message">Message</SelectItem>
-            <SelectItem value="support_ticket">Support</SelectItem>
-            <SelectItem value="chat">Chat</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={visibilityFilter} onValueChange={setVisibilityFilter}>
-          <SelectTrigger className="w-[140px]" data-testid="select-visibility-filter">
-            <SelectValue placeholder="Visibility" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">All</SelectItem>
-            <SelectItem value="internal">Internal</SelectItem>
-            <SelectItem value="client_visible">Client Visible</SelectItem>
-          </SelectContent>
-        </Select>
-      </div>
-
-      {foldersQuery.isLoading || assetsQuery.isLoading ? (
-        <div className="space-y-2">
-          {Array.from({ length: 5 }).map((_, i) => (
-            <Skeleton key={i} className="h-12 w-full" />
-          ))}
-        </div>
-      ) : (
-        <ScrollArea className="flex-1">
-          {currentFolders.length > 0 && (
-            <div className="mb-4">
-              <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Folders</div>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
-                {currentFolders.map((folder) => (
-                  <Card
-                    key={folder.id}
-                    className="p-3 cursor-pointer hover-elevate flex items-center justify-between gap-2"
-                    onClick={() => setCurrentFolderId(folder.id)}
-                    data-testid={`folder-card-${folder.id}`}
+        {foldersQuery.isLoading || assetsQuery.isLoading ? (
+          <div className="space-y-2">
+            {Array.from({ length: 5 }).map((_, i) => (
+              <Skeleton key={i} className="h-12 w-full" />
+            ))}
+          </div>
+        ) : (
+          <ScrollArea className="flex-1">
+            {currentFolders.length > 0 && (
+              <div className="mb-4">
+                <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Folders</div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                  <SortableContext 
+                    items={currentFolders.map(f => `folder-${f.id}`)} 
+                    strategy={verticalListSortingStrategy}
                   >
-                    <div className="flex items-center gap-2 min-w-0">
-                      <FolderOpen className="w-5 h-5 text-muted-foreground shrink-0" />
-                      <span className="text-sm font-medium truncate">{folder.name}</span>
-                    </div>
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                        <Button variant="ghost" size="icon" className="shrink-0" data-testid={`folder-menu-${folder.id}`}>
-                          <MoreVertical className="w-4 h-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            setRenameFolderId(folder.id);
-                            setRenameFolderName(folder.name);
-                          }}
-                          data-testid={`folder-rename-${folder.id}`}
-                        >
-                          <Pencil className="w-4 h-4 mr-2" />
-                          Rename
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            deleteFolderMutation.mutate(folder.id);
-                          }}
-                          className="text-destructive"
-                          data-testid={`folder-delete-${folder.id}`}
-                        >
-                          <Trash2 className="w-4 h-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
-                  </Card>
-                ))}
+                    {currentFolders.map((folder) => (
+                      <SortableFolderCard
+                        key={folder.id}
+                        folder={folder}
+                        isDropTarget={dropTargetId === folder.id}
+                        onNavigate={setCurrentFolderId}
+                        onRename={(id, name) => {
+                          setRenameFolderId(id);
+                          setRenameFolderName(name);
+                        }}
+                        onDelete={(id) => deleteFolderMutation.mutate(id)}
+                      />
+                    ))}
+                  </SortableContext>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {assets_data.length > 0 && (
-            <div>
-              <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Files</div>
-              <div className="space-y-1">
-                {assets_data.map((asset) => {
-                  const Icon = getFileIcon(asset.mimeType);
-                  return (
-                    <div
-                      key={asset.id}
-                      className="flex items-center gap-3 p-2.5 rounded-md hover-elevate cursor-pointer"
-                      onClick={() => setSelectedAsset(asset)}
-                      data-testid={`asset-row-${asset.id}`}
-                    >
-                      <Icon className="w-5 h-5 text-muted-foreground shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <div className="text-sm font-medium truncate">{asset.title}</div>
-                        <div className="text-xs text-muted-foreground flex items-center gap-2 flex-wrap">
-                          <span>{formatFileSize(asset.sizeBytes)}</span>
-                          <span>{formatDate(asset.createdAt)}</span>
-                        </div>
-                      </div>
-                      <span
-                        className={`inline-flex items-center px-2 py-0.5 text-xs font-medium rounded-full shrink-0 ${SOURCE_COLORS[asset.sourceType] || SOURCE_COLORS.system}`}
-                        data-testid={`source-chip-${asset.id}`}
-                      >
-                        {SOURCE_LABELS[asset.sourceType] || asset.sourceType}
-                      </span>
-                      {asset.visibility === "client_visible" && (
-                        <Badge variant="outline" className="shrink-0 text-xs">
-                          <Eye className="w-3 h-3 mr-1" />
-                          Shared
-                        </Badge>
-                      )}
-                      <DropdownMenu>
-                        <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                          <Button variant="ghost" size="icon" className="shrink-0" data-testid={`asset-menu-${asset.id}`}>
-                            <MoreVertical className="w-4 h-4" />
-                          </Button>
-                        </DropdownMenuTrigger>
-                        <DropdownMenuContent align="end">
-                          <DropdownMenuItem
-                            onClick={(e) => { e.stopPropagation(); handleDownload(asset); }}
-                            data-testid={`asset-download-${asset.id}`}
-                          >
-                            <Download className="w-4 h-4 mr-2" />
-                            Download
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              setEditAssetId(asset.id);
-                              setEditAssetTitle(asset.title);
-                            }}
-                            data-testid={`asset-rename-${asset.id}`}
-                          >
-                            <Pencil className="w-4 h-4 mr-2" />
-                            Rename
-                          </DropdownMenuItem>
-                          {asset.sourceContextJson && (
-                            <DropdownMenuItem
-                              onClick={(e) => { e.stopPropagation(); handleOpenInContext(asset); }}
-                              data-testid={`asset-open-context-${asset.id}`}
-                            >
-                              <ExternalLink className="w-4 h-4 mr-2" />
-                              Open in Context
-                            </DropdownMenuItem>
-                          )}
-                          <DropdownMenuItem
-                            onClick={(e) => { e.stopPropagation(); deleteAssetMutation.mutate(asset.id); }}
-                            className="text-destructive"
-                            data-testid={`asset-delete-${asset.id}`}
-                          >
-                            <Trash2 className="w-4 h-4 mr-2" />
-                            Delete
-                          </DropdownMenuItem>
-                        </DropdownMenuContent>
-                      </DropdownMenu>
-                    </div>
-                  );
-                })}
+            {assets_data.length > 0 && (
+              <div>
+                <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Files</div>
+                <div className="space-y-1">
+                  <SortableContext 
+                    items={assets_data.map(a => `asset-${a.id}`)} 
+                    strategy={verticalListSortingStrategy}
+                  >
+                    {assets_data.map((asset) => (
+                      <DraggableAssetRow
+                        key={asset.id}
+                        asset={asset}
+                        onSelect={setSelectedAsset}
+                        onDownload={handleDownload}
+                        onRename={(id, title) => {
+                          setEditAssetId(id);
+                          setEditAssetTitle(title);
+                        }}
+                        onDelete={(id) => deleteAssetMutation.mutate(id)}
+                        onOpenInContext={handleOpenInContext}
+                      />
+                    ))}
+                  </SortableContext>
+                </div>
               </div>
-            </div>
-          )}
+            )}
 
-          {currentFolders.length === 0 && assets_data.length === 0 && (
-            <div className="flex flex-col items-center justify-center py-16 text-center">
-              <Folder className="w-12 h-12 text-muted-foreground/40 mb-3" />
-              <p className="text-sm text-muted-foreground mb-1">
-                {searchQuery || sourceFilter !== "all" || visibilityFilter !== "all"
-                  ? "No assets match your filters"
-                  : "This folder is empty"}
-              </p>
-              <p className="text-xs text-muted-foreground">
-                Upload files or create folders to get started
-              </p>
+            {currentFolders.length === 0 && assets_data.length === 0 && (
+              <div className="flex flex-col items-center justify-center py-16 text-center">
+                <Folder className="w-12 h-12 text-muted-foreground/40 mb-3" />
+                <p className="text-sm text-muted-foreground mb-1">
+                  {searchQuery || sourceFilter !== "all" || visibilityFilter !== "all"
+                    ? "No assets match your filters"
+                    : "This folder is empty"}
+                </p>
+                <p className="text-xs text-muted-foreground">
+                  Upload files or create folders to get started
+                </p>
+              </div>
+            )}
+          </ScrollArea>
+        )}
+
+        <DragOverlay adjustScale={true}>
+          {activeId ? (
+            <div className="pointer-events-none opacity-80">
+              {activeFolder ? (
+                <Card className="p-3 flex items-center gap-2 w-64 shadow-xl border-primary/50">
+                  <FolderOpen className="w-5 h-5 text-primary shrink-0" />
+                  <span className="text-sm font-medium truncate">{activeFolder.name}</span>
+                </Card>
+              ) : activeAsset ? (
+                <Card className="p-2.5 flex items-center gap-3 w-72 shadow-xl border-primary/50">
+                  {(() => { const Icon = getFileIcon(activeAsset.mimeType); return <Icon className="w-5 h-5 text-primary shrink-0" />; })()}
+                  <span className="text-sm font-medium truncate">{activeAsset.title}</span>
+                </Card>
+              ) : null}
             </div>
-          )}
-        </ScrollArea>
-      )}
+          ) : null}
+        </DragOverlay>
+      </DndContext>
 
       <Dialog open={createFolderOpen} onOpenChange={setCreateFolderOpen}>
         <DialogContent>

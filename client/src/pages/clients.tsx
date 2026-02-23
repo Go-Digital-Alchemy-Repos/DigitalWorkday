@@ -1670,15 +1670,6 @@ export default function ClientsPage() {
         actions={
           <div className="flex items-center gap-2 flex-wrap">
             <Button
-              variant="outline"
-              size="sm"
-              onClick={() => exportClientsToCsv(filteredAndSortedClients)}
-              data-testid="button-export-csv"
-            >
-              <Download className="h-4 w-4 mr-2" />
-              Export
-            </Button>
-            <Button
               onClick={() => setCreateDrawerOpen(true)}
               data-testid="button-add-client"
             >
