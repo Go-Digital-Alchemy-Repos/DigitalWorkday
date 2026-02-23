@@ -115,18 +115,16 @@ interface ProjectNotesTabProps {
 
 const DEFAULT_CATEGORIES = [
   { value: "general", label: "General", color: null },
-  { value: "project", label: "Project", color: "#3b82f6" },
-  { value: "feedback", label: "Feedback", color: "#eab308" },
-  { value: "meeting", label: "Meeting", color: "#a855f7" },
-  { value: "requirement", label: "Requirement", color: "#22c55e" },
+  { value: "account credentials", label: "Account Credentials", color: "#3b82f6" },
+  { value: "billing", label: "Billing", color: "#eab308" },
+  { value: "support", label: "Support", color: "#a855f7" },
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
   general: "bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300",
-  project: "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
-  feedback: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
-  meeting: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
-  requirement: "bg-green-100 text-green-700 dark:bg-green-900 dark:text-green-300",
+  "account credentials": "bg-blue-100 text-blue-700 dark:bg-blue-900 dark:text-blue-300",
+  billing: "bg-yellow-100 text-yellow-700 dark:bg-yellow-900 dark:text-yellow-300",
+  support: "bg-purple-100 text-purple-700 dark:bg-purple-900 dark:text-purple-300",
 };
 
 const COLOR_OPTIONS = [

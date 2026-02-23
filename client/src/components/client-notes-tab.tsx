@@ -122,18 +122,16 @@ interface ClientNotesTabProps {
 // Default categories (fallback when no custom categories exist)
 const DEFAULT_CATEGORIES = [
   { value: "general", label: "General", color: null },
-  { value: "project", label: "Project", color: "#3b82f6" },
-  { value: "feedback", label: "Feedback", color: "#eab308" },
-  { value: "meeting", label: "Meeting", color: "#a855f7" },
-  { value: "requirement", label: "Requirement", color: "#22c55e" },
+  { value: "account credentials", label: "Account Credentials", color: "#3b82f6" },
+  { value: "billing", label: "Billing", color: "#eab308" },
+  { value: "support", label: "Support", color: "#a855f7" },
 ];
 
 const CATEGORY_COLORS: Record<string, string> = {
   general: "bg-muted text-muted-foreground",
-  project: "bg-info/10 text-info dark:bg-info/15",
-  feedback: "bg-warning/10 text-warning dark:bg-warning/15",
-  meeting: "bg-accent text-accent-foreground",
-  requirement: "bg-success/10 text-success dark:bg-success/15",
+  "account credentials": "bg-info/10 text-info dark:bg-info/15",
+  billing: "bg-warning/10 text-warning dark:bg-warning/15",
+  support: "bg-accent text-accent-foreground",
 };
 
 const COLOR_OPTIONS = [

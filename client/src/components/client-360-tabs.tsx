@@ -811,9 +811,17 @@ export function ContactsTab({ clientId }: { clientId: string }) {
   );
 }
 
+const NOTE_DEFAULT_CATEGORIES = [
+  { value: "general", label: "General" },
+  { value: "account credentials", label: "Account Credentials" },
+  { value: "billing", label: "Billing" },
+  { value: "support", label: "Support" },
+];
+
 export function NotesTab({ clientId }: { clientId: string }) {
   const { toast } = useToast();
   const [noteBody, setNoteBody] = useState("");
+  const [noteCategory, setNoteCategory] = useState("general");
   const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
 
   const { data: notes = [], isLoading } = useQuery<CrmNote[]>({
@@ -821,13 +829,30 @@ export function NotesTab({ clientId }: { clientId: string }) {
     enabled: !!clientId,
   });
 
+  const { data: categoriesData } = useQuery<{ ok: boolean; categories: Array<{ id: string; name: string; color: string | null }> }>({
+    queryKey: [`/api/crm/clients/${clientId}/notes/categories`],
+    enabled: !!clientId,
+  });
+
+  const allCategoryOptions = useMemo(() => {
+    const options = [...NOTE_DEFAULT_CATEGORIES];
+    const customCats = categoriesData?.categories || [];
+    customCats.forEach(cat => {
+      if (!options.find(o => o.value.toLowerCase() === cat.name.toLowerCase())) {
+        options.push({ value: cat.name.toLowerCase(), label: cat.name });
+      }
+    });
+    return options;
+  }, [categoriesData]);
+
   const createNoteMutation = useMutation({
-    mutationFn: async (body: string) => {
-      return apiRequest("POST", `/api/crm/clients/${clientId}/notes`, { body });
+    mutationFn: async ({ body, category }: { body: string; category: string }) => {
+      return apiRequest("POST", `/api/crm/clients/${clientId}/notes`, { body, category });
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: [`/api/crm/clients/${clientId}/notes`] });
       setNoteBody("");
+      setNoteCategory("general");
       toast({ title: "Note added" });
     },
     onError: (error) => {
@@ -851,7 +876,7 @@ export function NotesTab({ clientId }: { clientId: string }) {
 
   function handleCreateNote() {
     if (!noteBody || noteBody.trim() === "" || noteBody === "<p></p>") return;
-    createNoteMutation.mutate(noteBody);
+    createNoteMutation.mutate({ body: noteBody, category: noteCategory });
   }
 
   if (isLoading) {
@@ -871,7 +896,17 @@ export function NotesTab({ clientId }: { clientId: string }) {
               showToolbar={true}
               data-testid="editor-360-note"
             />
-            <div className="flex justify-end">
+            <div className="flex items-center justify-between gap-3">
+              <Select value={noteCategory} onValueChange={setNoteCategory}>
+                <SelectTrigger className="w-[200px] h-9" data-testid="select-note-category-360">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  {allCategoryOptions.map((cat) => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Button
                 size="sm"
                 onClick={handleCreateNote}

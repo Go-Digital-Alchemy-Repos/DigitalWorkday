@@ -8,6 +8,7 @@ import { requireAuth } from "../../../auth";
 import {
   clientNotes,
   clientNoteVersions,
+  clientNoteCategories,
   users,
 } from "@shared/schema";
 import { getCurrentUserId } from "../../helpers";
@@ -107,6 +108,26 @@ router.delete("/crm/notes/:id", requireAuth, async (req: Request, res: Response)
     res.json({ success: true });
   } catch (error) {
     return handleRouteError(res, error, "DELETE /api/crm/notes/:id", req);
+  }
+});
+
+router.get("/crm/clients/:clientId/notes/categories", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const { clientId } = req.params;
+    const client = await verifyClientTenancy(clientId, tenantId);
+    if (!client) return sendError(res, AppError.notFound("Client"), req);
+
+    const categories = await db.select()
+      .from(clientNoteCategories)
+      .where(eq(clientNoteCategories.tenantId, tenantId))
+      .orderBy(clientNoteCategories.name);
+
+    res.json({ ok: true, categories });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/crm/clients/:clientId/notes/categories", req);
   }
 });
 
