@@ -308,14 +308,15 @@ export default function ClientDetailPage() {
     [crmFlags, featureFlags],
   );
 
-  const hasControlCenter = allVisibleSections.some((s) => s.id === "control-center");
+  const hasControlCenter = useMemo(
+    () => allVisibleSections.some((s) => s.id === "control-center"),
+    [allVisibleSections],
+  );
 
   const tabBarSections = useMemo(
     () =>
-      hasControlCenter
-        ? allVisibleSections.filter((s) => !CONTROL_CENTER_CHILD_IDS.has(s.id))
-        : allVisibleSections,
-    [allVisibleSections, hasControlCenter],
+      allVisibleSections.filter((s) => s.id !== "control-center" && !CONTROL_CENTER_CHILD_IDS.has(s.id)),
+    [allVisibleSections],
   );
 
   const visibleSections = allVisibleSections;
@@ -799,7 +800,7 @@ export default function ClientDetailPage() {
           {hasControlCenter && (
             <Button
               variant="default"
-              className="bg-primary hover:bg-primary/90 text-primary-foreground shadow-sm"
+              className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
               onClick={() => {
                 setActiveSection("control-center");
                 setActiveTab("control-center");
@@ -812,6 +813,7 @@ export default function ClientDetailPage() {
           )}
           <Button 
             variant="default" 
+            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
             onClick={() => setTimerDrawerOpen(true)}
             data-testid="button-start-timer-client"
           >
