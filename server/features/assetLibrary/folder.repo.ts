@@ -92,4 +92,13 @@ export const folderRepo = {
       .delete(assetFolders)
       .where(and(eq(assetFolders.id, id), eq(assetFolders.tenantId, tenantId)));
   },
+
+  async updateSortOrders(tenantId: string, updates: { id: string; sortOrder: number }[]) {
+    for (const u of updates) {
+      await db
+        .update(assetFolders)
+        .set({ sortOrder: u.sortOrder, updatedAt: new Date() })
+        .where(and(eq(assetFolders.id, u.id), eq(assetFolders.tenantId, tenantId)));
+    }
+  },
 };

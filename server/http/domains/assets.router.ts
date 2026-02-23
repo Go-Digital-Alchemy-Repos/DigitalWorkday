@@ -126,6 +126,29 @@ router.patch("/assets/folders/:folderId", async (req: Request, res: Response) =>
   }
 });
 
+const reorderFoldersSchema = z.object({
+  updates: z.array(z.object({
+    id: z.string().min(1),
+    sortOrder: z.number().int().min(0),
+  })).min(1),
+});
+
+router.put("/assets/folders/reorder", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
+
+    const { updates } = reorderFoldersSchema.parse(req.body);
+    await assetService.reorderFolders(tenantId, updates);
+    res.json({ success: true });
+  } catch (error) {
+    if (error instanceof z.ZodError) {
+      return res.status(400).json({ error: "Validation failed", details: error.errors });
+    }
+    return handleRouteError(res, error, "PUT /api/v1/assets/folders/reorder", req);
+  }
+});
+
 router.delete("/assets/folders/:folderId", async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);

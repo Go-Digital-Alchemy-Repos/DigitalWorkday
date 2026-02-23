@@ -49,6 +49,10 @@ export const assetService = {
     return folderRepo.remove(folderId, tenantId);
   },
 
+  async reorderFolders(tenantId: string, updates: { id: string; sortOrder: number }[]) {
+    return folderRepo.updateSortOrders(tenantId, updates);
+  },
+
   async listAssets(filters: ListAssetsFilters) {
     return assetRepo.list(filters);
   },
