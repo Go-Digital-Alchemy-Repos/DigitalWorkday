@@ -296,6 +296,7 @@ export default function ClientDetailPage() {
   const [mailingSameAsPhysical, setMailingSameAsPhysical] = useState(true);
   const [portalInviteContact, setPortalInviteContact] = useState<ClientContact | null>(null);
   const [activeTab, setActiveTab] = useState("overview");
+  const [editingCard, setEditingCard] = useState<string | null>(null);
   const [convertToPortalOpen, setConvertToPortalOpen] = useState(false);
   const [generatedCredentials, setGeneratedCredentials] = useState<{ email: string; password: string } | null>(null);
   const [copiedField, setCopiedField] = useState<"email" | "password" | null>(null);
@@ -432,6 +433,7 @@ export default function ClientDetailPage() {
     },
     onSuccess: () => {
       toast({ title: "Client updated successfully" });
+      setEditingCard(null);
     },
     onSettled: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
@@ -942,691 +944,908 @@ export default function ClientDetailPage() {
                 />
               </div>
             )}
-            <Form {...clientForm}>
-              <form onSubmit={clientForm.handleSubmit(handleUpdateClient)} className="space-y-6">
-                <div className="flex items-center justify-between gap-4">
-                  <h2 className="font-semibold">Client Profile</h2>
-                  <Button 
-                    type="submit" 
-                    disabled={updateClientMutation.isPending || !clientForm.formState.isDirty}
-                    data-testid="button-save-profile"
-                  >
-                    {updateClientMutation.isPending ? (
-                      <>
-                        <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                        Saving...
-                      </>
-                    ) : (
-                      <>
-                        <Save className="h-4 w-4 mr-2" />
-                        Save Changes
-                      </>
-                    )}
-                  </Button>
-                </div>
+            <div className="space-y-6">
+              <h2 className="font-semibold" data-testid="text-client-profile-heading">Client Profile</h2>
 
-                <div className="grid gap-6 md:grid-cols-3">
-                  <Card className="md:col-span-2">
-                    <CardHeader>
+              <div className="grid gap-6 md:grid-cols-3">
+                <Card className="md:col-span-2" data-testid="card-company-info">
+                  <CardHeader className="flex flex-row items-start justify-between gap-2">
+                    <div>
                       <CardTitle className="text-base flex items-center gap-2">
                         <Building2 className="h-4 w-4" />
                         Company Information
                       </CardTitle>
                       <CardDescription>Basic company details and identification</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={clientForm.control}
-                          name="companyName"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Company Name *</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Company name" data-testid="input-company-name" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="displayName"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Display Name</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Short name or abbreviation" data-testid="input-display-name" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="legalName"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Legal Name</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Legal company name" data-testid="input-legal-name" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="industry"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Industry</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="e.g. Technology, Healthcare" data-testid="input-industry" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="companySize"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Company Size</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value || ""}>
-                                <FormControl>
-                                  <SelectTrigger data-testid="select-company-size">
-                                    <SelectValue placeholder="Select size" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="1-10">1-10 employees</SelectItem>
-                                  <SelectItem value="11-50">11-50 employees</SelectItem>
-                                  <SelectItem value="51-200">51-200 employees</SelectItem>
-                                  <SelectItem value="201-500">201-500 employees</SelectItem>
-                                  <SelectItem value="501-1000">501-1000 employees</SelectItem>
-                                  <SelectItem value="1001+">1001+ employees</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="website"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Website</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="https://example.com" data-testid="input-website" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="taxId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Tax ID</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Tax identification number" data-testid="input-tax-id" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="foundedDate"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Founded</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="e.g. 2020" data-testid="input-founded-date" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="status"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Status</FormLabel>
-                              <Select onValueChange={field.onChange} value={field.value}>
-                                <FormControl>
-                                  <SelectTrigger data-testid="select-status">
-                                    <SelectValue placeholder="Select status" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="active">Active</SelectItem>
-                                  <SelectItem value="inactive">Inactive</SelectItem>
-                                  <SelectItem value="prospect">Prospect</SelectItem>
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="parentClientId"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Parent Client</FormLabel>
-                              <Select 
-                                onValueChange={(value) => field.onChange(value === "none" ? null : value)} 
-                                value={field.value || "none"}
-                              >
-                                <FormControl>
-                                  <SelectTrigger data-testid="select-parent-client">
-                                    <SelectValue placeholder="No parent (top-level client)" />
-                                  </SelectTrigger>
-                                </FormControl>
-                                <SelectContent>
-                                  <SelectItem value="none">No parent (top-level client)</SelectItem>
-                                  {allClients
-                                    .filter(c => c.id !== clientId)
-                                    .map((c) => (
-                                      <SelectItem key={c.id} value={c.id}>
-                                        {c.companyName}
-                                      </SelectItem>
-                                    ))}
-                                </SelectContent>
-                              </Select>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                      <FormField
-                        control={clientForm.control}
-                        name="description"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Description</FormLabel>
-                            <FormControl>
-                              <Textarea {...field} placeholder="Brief description of the company" rows={3} data-testid="input-description" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={clientForm.control}
-                        name="tags"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel className="flex items-center gap-1.5">
-                              <Tag className="h-3.5 w-3.5" />
-                              Tags
-                            </FormLabel>
-                            <div className="space-y-2">
-                              {(field.value || []).length > 0 && (
-                                <div className="flex flex-wrap gap-1.5">
-                                  {(field.value || []).map((tag, idx) => (
-                                    <Badge key={`${tag}-${idx}`} variant="secondary" className="gap-1">
-                                      {tag}
-                                      <button
-                                        type="button"
-                                        onClick={() => {
-                                          const updated = (field.value || []).filter((_, i) => i !== idx);
-                                          field.onChange(updated);
-                                        }}
-                                        className="ml-0.5 rounded-full"
-                                        data-testid={`button-remove-tag-${idx}`}
-                                      >
-                                        <X className="h-3 w-3" />
-                                      </button>
-                                    </Badge>
-                                  ))}
-                                </div>
+                    </div>
+                    {editingCard !== "company" && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setEditingCard("company")} data-testid="button-edit-company-info">
+                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    {editingCard === "company" ? (
+                      <Form {...clientForm}>
+                        <form onSubmit={clientForm.handleSubmit(handleUpdateClient)} className="space-y-4">
+                          <div className="grid grid-cols-2 gap-4">
+                            <FormField
+                              control={clientForm.control}
+                              name="companyName"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Company Name *</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Company name" data-testid="input-company-name" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
                               )}
-                              <FormControl>
-                                <Input
-                                  placeholder="Type a tag and press Enter"
-                                  data-testid="input-client-tag"
-                                  onKeyDown={(e) => {
-                                    if (e.key === "Enter") {
-                                      e.preventDefault();
-                                      const input = e.currentTarget;
-                                      const val = input.value.trim();
-                                      if (val && !(field.value || []).includes(val)) {
-                                        field.onChange([...(field.value || []), val]);
-                                        input.value = "";
-                                      }
-                                    }
-                                  }}
-                                />
-                              </FormControl>
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="displayName"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Display Name</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Short name or abbreviation" data-testid="input-display-name" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="legalName"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Legal Name</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Legal company name" data-testid="input-legal-name" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="industry"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Industry</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="e.g. Technology, Healthcare" data-testid="input-industry" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="companySize"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Company Size</FormLabel>
+                                  <Select onValueChange={field.onChange} value={field.value || ""}>
+                                    <FormControl>
+                                      <SelectTrigger data-testid="select-company-size">
+                                        <SelectValue placeholder="Select size" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value="1-10">1-10 employees</SelectItem>
+                                      <SelectItem value="11-50">11-50 employees</SelectItem>
+                                      <SelectItem value="51-200">51-200 employees</SelectItem>
+                                      <SelectItem value="201-500">201-500 employees</SelectItem>
+                                      <SelectItem value="501-1000">501-1000 employees</SelectItem>
+                                      <SelectItem value="1001+">1001+ employees</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="website"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Website</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="https://example.com" data-testid="input-website" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="taxId"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Tax ID</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Tax identification number" data-testid="input-tax-id" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="foundedDate"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Founded</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="e.g. 2020" data-testid="input-founded-date" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="status"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Status</FormLabel>
+                                  <Select onValueChange={field.onChange} value={field.value}>
+                                    <FormControl>
+                                      <SelectTrigger data-testid="select-status">
+                                        <SelectValue placeholder="Select status" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value="active">Active</SelectItem>
+                                      <SelectItem value="inactive">Inactive</SelectItem>
+                                      <SelectItem value="prospect">Prospect</SelectItem>
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="parentClientId"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Parent Client</FormLabel>
+                                  <Select
+                                    onValueChange={(value) => field.onChange(value === "none" ? null : value)}
+                                    value={field.value || "none"}
+                                  >
+                                    <FormControl>
+                                      <SelectTrigger data-testid="select-parent-client">
+                                        <SelectValue placeholder="No parent (top-level client)" />
+                                      </SelectTrigger>
+                                    </FormControl>
+                                    <SelectContent>
+                                      <SelectItem value="none">No parent (top-level client)</SelectItem>
+                                      {allClients
+                                        .filter(c => c.id !== clientId)
+                                        .map((c) => (
+                                          <SelectItem key={c.id} value={c.id}>
+                                            {c.companyName}
+                                          </SelectItem>
+                                        ))}
+                                    </SelectContent>
+                                  </Select>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <FormField
+                            control={clientForm.control}
+                            name="description"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Description</FormLabel>
+                                <FormControl>
+                                  <Textarea {...field} placeholder="Brief description of the company" rows={3} data-testid="input-description" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={clientForm.control}
+                            name="tags"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel className="flex items-center gap-1.5">
+                                  <Tag className="h-3.5 w-3.5" />
+                                  Tags
+                                </FormLabel>
+                                <div className="space-y-2">
+                                  {(field.value || []).length > 0 && (
+                                    <div className="flex flex-wrap gap-1.5">
+                                      {(field.value || []).map((tag, idx) => (
+                                        <Badge key={`${tag}-${idx}`} variant="secondary" className="gap-1">
+                                          {tag}
+                                          <button
+                                            type="button"
+                                            onClick={() => {
+                                              const updated = (field.value || []).filter((_, i) => i !== idx);
+                                              field.onChange(updated);
+                                            }}
+                                            className="ml-0.5 rounded-full"
+                                            data-testid={`button-remove-tag-${idx}`}
+                                          >
+                                            <X className="h-3 w-3" />
+                                          </button>
+                                        </Badge>
+                                      ))}
+                                    </div>
+                                  )}
+                                  <FormControl>
+                                    <Input
+                                      placeholder="Type a tag and press Enter"
+                                      data-testid="input-client-tag"
+                                      onKeyDown={(e) => {
+                                        if (e.key === "Enter") {
+                                          e.preventDefault();
+                                          const input = e.currentTarget;
+                                          const val = input.value.trim();
+                                          if (val && !(field.value || []).includes(val)) {
+                                            field.onChange([...(field.value || []), val]);
+                                            input.value = "";
+                                          }
+                                        }
+                                      }}
+                                    />
+                                  </FormControl>
+                                </div>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="flex justify-end gap-2 pt-2">
+                            <Button type="button" variant="outline" onClick={() => { clientForm.reset(); setEditingCard(null); }}>Cancel</Button>
+                            <Button type="submit" disabled={updateClientMutation.isPending} data-testid="button-save-company-info">
+                              {updateClientMutation.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Saving...</> : <><Save className="h-3.5 w-3.5 mr-1.5" />Save</>}
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    ) : (
+                      <div className="space-y-4">
+                        <div className="grid grid-cols-2 gap-x-6 gap-y-3">
+                          {client.companyName && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Company Name</p>
+                              <p className="text-sm" data-testid="value-company-name">{client.companyName}</p>
                             </div>
-                            <FormMessage />
-                          </FormItem>
+                          )}
+                          {client.displayName && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Display Name</p>
+                              <p className="text-sm" data-testid="value-display-name">{client.displayName}</p>
+                            </div>
+                          )}
+                          {client.legalName && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Legal Name</p>
+                              <p className="text-sm" data-testid="value-legal-name">{client.legalName}</p>
+                            </div>
+                          )}
+                          {client.industry && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Industry</p>
+                              <p className="text-sm" data-testid="value-industry">{client.industry}</p>
+                            </div>
+                          )}
+                          {client.companySize && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Company Size</p>
+                              <p className="text-sm" data-testid="value-company-size">{client.companySize}</p>
+                            </div>
+                          )}
+                          {client.website && client.website !== "https://" && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Website</p>
+                              <a href={client.website.startsWith("http") ? client.website : `https://${client.website}`} target="_blank" rel="noopener noreferrer" className="text-sm text-blue-600 dark:text-blue-400 flex items-center gap-1.5" data-testid="link-website">
+                                <Globe className="h-3.5 w-3.5" />
+                                {client.website}
+                              </a>
+                            </div>
+                          )}
+                          {client.taxId && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Tax ID</p>
+                              <p className="text-sm" data-testid="value-tax-id">{client.taxId}</p>
+                            </div>
+                          )}
+                          {client.foundedDate && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Founded</p>
+                              <p className="text-sm" data-testid="value-founded-date">{client.foundedDate}</p>
+                            </div>
+                          )}
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground">Status</p>
+                            <Badge className={`${getStatusColor(client.status)} no-default-hover-elevate no-default-active-elevate`} data-testid="value-status">
+                              {client.status.charAt(0).toUpperCase() + client.status.slice(1)}
+                            </Badge>
+                          </div>
+                          {client.parentClientId && (
+                            <div>
+                              <p className="text-xs font-medium text-muted-foreground">Parent Client</p>
+                              <Link href={`/clients/${client.parentClientId}`}>
+                                <span className="text-sm text-blue-600 dark:text-blue-400 cursor-pointer" data-testid="link-parent-client">
+                                  {allClients.find(c => c.id === client.parentClientId)?.companyName || "View parent"}
+                                </span>
+                              </Link>
+                            </div>
+                          )}
+                        </div>
+                        {client.description && (
+                          <div className="border rounded-md p-3">
+                            <p className="text-xs font-medium text-muted-foreground mb-1">Description</p>
+                            <p className="text-sm" data-testid="value-description">{client.description}</p>
+                          </div>
                         )}
-                      />
-                    </CardContent>
-                  </Card>
+                        {client.tags && client.tags.length > 0 && (
+                          <div>
+                            <p className="text-xs font-medium text-muted-foreground mb-1.5">Tags</p>
+                            <div className="flex flex-wrap gap-1.5">
+                              {client.tags.map((tag, idx) => (
+                                <Badge key={`${tag}-${idx}`} variant="secondary" data-testid={`badge-tag-${idx}`}>{tag}</Badge>
+                              ))}
+                            </div>
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
 
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base">Quick Stats</CardTitle>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <div className="text-center p-4 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-semibold">{client.projects?.length || 0}</p>
-                        <p className="text-xs text-muted-foreground">Projects</p>
-                      </div>
-                      <div className="text-center p-4 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-semibold">{client.contacts?.length || 0}</p>
-                        <p className="text-xs text-muted-foreground">Contacts</p>
-                      </div>
-                      <div className="text-center p-4 bg-muted/50 rounded-lg">
-                        <p className="text-2xl font-semibold">{divisions.length + childClients.length}</p>
-                        <p className="text-xs text-muted-foreground">Divisions</p>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-base">Quick Stats</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-4">
+                    <div className="text-center p-4 bg-muted/50 rounded-lg">
+                      <p className="text-2xl font-semibold" data-testid="stat-projects">{client.projects?.length || 0}</p>
+                      <p className="text-xs text-muted-foreground">Projects</p>
+                    </div>
+                    <div className="text-center p-4 bg-muted/50 rounded-lg">
+                      <p className="text-2xl font-semibold" data-testid="stat-contacts">{client.contacts?.length || 0}</p>
+                      <p className="text-xs text-muted-foreground">Contacts</p>
+                    </div>
+                    <div className="text-center p-4 bg-muted/50 rounded-lg">
+                      <p className="text-2xl font-semibold" data-testid="stat-divisions">{divisions.length + childClients.length}</p>
+                      <p className="text-xs text-muted-foreground">Divisions</p>
+                    </div>
+                  </CardContent>
+                </Card>
+              </div>
 
-                <div className="grid gap-6 md:grid-cols-2">
-                  <Card>
-                    <CardHeader>
+              <div className="grid gap-6 md:grid-cols-2">
+                <Card>
+                  <CardHeader className="flex flex-row items-start justify-between gap-2">
+                    <div>
                       <CardTitle className="text-base flex items-center gap-2">
                         <MapPin className="h-4 w-4" />
                         Physical Address
                       </CardTitle>
                       <CardDescription>Primary company location</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <FormField
-                        control={clientForm.control}
-                        name="addressLine1"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Address Line 1</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Street address" data-testid="input-address-1" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={clientForm.control}
-                        name="addressLine2"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Address Line 2</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Suite, floor, etc." data-testid="input-address-2" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={clientForm.control}
-                          name="city"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>City</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="City" data-testid="input-city" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="state"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>State / Province</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="State" data-testid="input-state" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="postalCode"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Postal Code</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="ZIP / Postal code" data-testid="input-postal-code" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="country"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Country</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Country" data-testid="input-country" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-
-                  <Card>
-                    <CardHeader>
-                      <CardTitle className="text-base flex items-center gap-2">
-                        <User className="h-4 w-4" />
-                        Primary Contact
-                      </CardTitle>
-                      <CardDescription>Main point of contact at this company</CardDescription>
-                    </CardHeader>
-                    <CardContent className="space-y-4">
-                      <FormField
-                        control={clientForm.control}
-                        name="primaryContactName"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Contact Name</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Full name" data-testid="input-primary-contact-name" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={clientForm.control}
-                        name="primaryContactEmail"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Contact Email</FormLabel>
-                            <FormControl>
-                              <Input {...field} type="email" placeholder="email@example.com" data-testid="input-primary-contact-email" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <FormField
-                        control={clientForm.control}
-                        name="primaryContactPhone"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Contact Phone</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="+1 (555) 000-0000" data-testid="input-primary-contact-phone" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-
-                      {primaryContactAlreadyPortalUser ? (
-                        <div className="flex items-center gap-2 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 px-3 py-2" data-testid="badge-portal-user-active">
-                          <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
-                          <span className="text-sm text-green-700 dark:text-green-300">Portal access enabled</span>
-                        </div>
-                      ) : primaryContactEmail ? (
-                        <Button
-                          type="button"
-                          variant="outline"
-                          size="sm"
-                          className="w-full gap-2"
-                          disabled={!portalUsersLoaded}
-                          onClick={() => setConvertToPortalOpen(true)}
-                          data-testid="button-convert-to-portal-user"
-                        >
-                          <UserPlus className="h-4 w-4" />
-                          Convert to Portal User
-                        </Button>
-                      ) : null}
-
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={clientForm.control}
-                          name="phone"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Company Phone</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Main phone" data-testid="input-phone" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="email"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Company Email</FormLabel>
-                              <FormControl>
-                                <Input {...field} type="email" placeholder="General email" data-testid="input-email" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                      </div>
-                    </CardContent>
-                  </Card>
-                </div>
-
-                <Card>
-                  <CardHeader>
-                    <div className="flex items-center justify-between gap-4">
-                      <div>
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <Mail className="h-4 w-4" />
-                          Mailing Address
-                        </CardTitle>
-                        <CardDescription>Separate mailing address if different from physical location</CardDescription>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <Checkbox
-                          id="mailing-same"
-                          checked={mailingSameAsPhysical}
-                          onCheckedChange={(checked) => {
-                            setMailingSameAsPhysical(!!checked);
-                            if (checked) {
-                              clientForm.setValue("mailingAddressLine1", "", { shouldDirty: true });
-                              clientForm.setValue("mailingAddressLine2", "", { shouldDirty: true });
-                              clientForm.setValue("mailingCity", "", { shouldDirty: true });
-                              clientForm.setValue("mailingState", "", { shouldDirty: true });
-                              clientForm.setValue("mailingPostalCode", "", { shouldDirty: true });
-                              clientForm.setValue("mailingCountry", "", { shouldDirty: true });
-                            }
-                          }}
-                          data-testid="checkbox-mailing-same"
-                        />
-                        <label htmlFor="mailing-same" className="text-sm text-muted-foreground cursor-pointer select-none">
-                          Same as physical address
-                        </label>
-                      </div>
                     </div>
+                    {editingCard !== "address" && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setEditingCard("address")} data-testid="button-edit-address">
+                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                    )}
                   </CardHeader>
-                  {!mailingSameAsPhysical && (
-                    <CardContent className="space-y-4">
-                      <FormField
-                        control={clientForm.control}
-                        name="mailingAddressLine1"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Address Line 1</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Mailing street address" data-testid="input-mailing-address-1" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
+                  <CardContent>
+                    {editingCard === "address" ? (
+                      <Form {...clientForm}>
+                        <form onSubmit={clientForm.handleSubmit(handleUpdateClient)} className="space-y-4">
+                          <FormField
+                            control={clientForm.control}
+                            name="addressLine1"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Address Line 1</FormLabel>
+                                <FormControl>
+                                  <Input {...field} placeholder="Street address" data-testid="input-address-1" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={clientForm.control}
+                            name="addressLine2"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Address Line 2</FormLabel>
+                                <FormControl>
+                                  <Input {...field} placeholder="Suite, floor, etc." data-testid="input-address-2" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="grid grid-cols-2 gap-4">
+                            <FormField
+                              control={clientForm.control}
+                              name="city"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>City</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="City" data-testid="input-city" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="state"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>State / Province</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="State" data-testid="input-state" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="postalCode"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Postal Code</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="ZIP / Postal code" data-testid="input-postal-code" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="country"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Country</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Country" data-testid="input-country" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2 pt-2">
+                            <Button type="button" variant="outline" onClick={() => { clientForm.reset(); setEditingCard(null); }}>Cancel</Button>
+                            <Button type="submit" disabled={updateClientMutation.isPending} data-testid="button-save-address">
+                              {updateClientMutation.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Saving...</> : <><Save className="h-3.5 w-3.5 mr-1.5" />Save</>}
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    ) : (
+                      <div className="text-sm space-y-1" data-testid="display-physical-address">
+                        {client.addressLine1 || client.city || client.state || client.postalCode || client.country ? (
+                          <>
+                            {client.addressLine1 && <p>{client.addressLine1}</p>}
+                            {client.addressLine2 && <p>{client.addressLine2}</p>}
+                            {(client.city || client.state || client.postalCode) && (
+                              <p>{[client.city, client.state].filter(Boolean).join(", ")} {client.postalCode || ""}</p>
+                            )}
+                            {client.country && <p>{client.country}</p>}
+                          </>
+                        ) : (
+                          <p className="italic text-muted-foreground">No address on file</p>
                         )}
-                      />
-                      <FormField
-                        control={clientForm.control}
-                        name="mailingAddressLine2"
-                        render={({ field }) => (
-                          <FormItem>
-                            <FormLabel>Address Line 2</FormLabel>
-                            <FormControl>
-                              <Input {...field} placeholder="Suite, P.O. Box, etc." data-testid="input-mailing-address-2" />
-                            </FormControl>
-                            <FormMessage />
-                          </FormItem>
-                        )}
-                      />
-                      <div className="grid grid-cols-2 gap-4">
-                        <FormField
-                          control={clientForm.control}
-                          name="mailingCity"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>City</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="City" data-testid="input-mailing-city" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="mailingState"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>State / Province</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="State" data-testid="input-mailing-state" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="mailingPostalCode"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Postal Code</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="ZIP / Postal code" data-testid="input-mailing-postal-code" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
-                        <FormField
-                          control={clientForm.control}
-                          name="mailingCountry"
-                          render={({ field }) => (
-                            <FormItem>
-                              <FormLabel>Country</FormLabel>
-                              <FormControl>
-                                <Input {...field} placeholder="Country" data-testid="input-mailing-country" />
-                              </FormControl>
-                              <FormMessage />
-                            </FormItem>
-                          )}
-                        />
                       </div>
-                    </CardContent>
-                  )}
+                    )}
+                  </CardContent>
                 </Card>
 
-                {(divisions.length > 0 || childClients.length > 0) && (
-                  <Card>
-                    <CardHeader className="flex flex-row items-center justify-between gap-2">
-                      <div>
-                        <CardTitle className="text-base flex items-center gap-2">
-                          <Layers className="h-4 w-4" />
-                          Divisions
-                        </CardTitle>
-                        <CardDescription>Subsidiary companies and organizational divisions</CardDescription>
-                      </div>
-                      <Badge variant="secondary">{divisions.length + childClients.length}</Badge>
-                    </CardHeader>
-                    <CardContent>
-                      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                        {childClients.map((child) => (
-                          <Card
-                            key={`child-${child.id}`}
-                            className="hover-elevate cursor-pointer"
-                            onClick={() => navigate(`/clients/${child.id}`)}
-                            data-testid={`subsidiary-card-${child.id}`}
-                          >
-                            <CardContent className="p-4">
-                              <div className="flex items-center gap-3">
-                                <Avatar className="h-8 w-8">
-                                  <AvatarFallback className="bg-primary/10 text-primary text-xs">
-                                    {child.companyName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
-                                  </AvatarFallback>
-                                </Avatar>
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium truncate">{child.companyName}</p>
-                                  <p className="text-xs text-muted-foreground">Subsidiary company</p>
-                                </div>
-                                <Badge className="shrink-0">{child.status}</Badge>
+                <Card>
+                  <CardHeader className="flex flex-row items-start justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <User className="h-4 w-4" />
+                        Primary Contact & Company Info
+                      </CardTitle>
+                      <CardDescription>Main point of contact at this company</CardDescription>
+                    </div>
+                    {editingCard !== "contact" && (
+                      <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setEditingCard("contact")} data-testid="button-edit-contact">
+                        <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                      </Button>
+                    )}
+                  </CardHeader>
+                  <CardContent>
+                    {editingCard === "contact" ? (
+                      <Form {...clientForm}>
+                        <form onSubmit={clientForm.handleSubmit(handleUpdateClient)} className="space-y-4">
+                          <FormField
+                            control={clientForm.control}
+                            name="primaryContactName"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Contact Name</FormLabel>
+                                <FormControl>
+                                  <Input {...field} placeholder="Full name" data-testid="input-primary-contact-name" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={clientForm.control}
+                            name="primaryContactEmail"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Contact Email</FormLabel>
+                                <FormControl>
+                                  <Input {...field} type="email" placeholder="email@example.com" data-testid="input-primary-contact-email" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <FormField
+                            control={clientForm.control}
+                            name="primaryContactPhone"
+                            render={({ field }) => (
+                              <FormItem>
+                                <FormLabel>Contact Phone</FormLabel>
+                                <FormControl>
+                                  <Input {...field} placeholder="+1 (555) 000-0000" data-testid="input-primary-contact-phone" />
+                                </FormControl>
+                                <FormMessage />
+                              </FormItem>
+                            )}
+                          />
+                          <div className="grid grid-cols-2 gap-4">
+                            <FormField
+                              control={clientForm.control}
+                              name="phone"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Company Phone</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Main phone" data-testid="input-phone" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="email"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Company Email</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} type="email" placeholder="General email" data-testid="input-email" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                          </div>
+                          <div className="flex justify-end gap-2 pt-2">
+                            <Button type="button" variant="outline" onClick={() => { clientForm.reset(); setEditingCard(null); }}>Cancel</Button>
+                            <Button type="submit" disabled={updateClientMutation.isPending} data-testid="button-save-contact">
+                              {updateClientMutation.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Saving...</> : <><Save className="h-3.5 w-3.5 mr-1.5" />Save</>}
+                            </Button>
+                          </div>
+                        </form>
+                      </Form>
+                    ) : (
+                      <div className="space-y-4">
+                        {client.primaryContactName || client.primaryContactEmail || client.primaryContactPhone ? (
+                          <div className="space-y-2">
+                            {client.primaryContactName && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <User className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span data-testid="value-primary-contact-name">{client.primaryContactName}</span>
                               </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                        {divisions.map((division) => (
-                          <Card
-                            key={division.id}
-                            className="hover-elevate cursor-pointer"
-                            onClick={() => {
-                              setEditingDivision(division);
-                              setDivisionMode("edit");
-                              setDivisionDrawerOpen(true);
+                            )}
+                            {client.primaryContactEmail && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                                <a href={`mailto:${client.primaryContactEmail}`} className="text-blue-600 dark:text-blue-400" data-testid="link-primary-contact-email">{client.primaryContactEmail}</a>
+                              </div>
+                            )}
+                            {client.primaryContactPhone && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span data-testid="value-primary-contact-phone">{client.primaryContactPhone}</span>
+                              </div>
+                            )}
+                          </div>
+                        ) : (
+                          <p className="text-sm italic text-muted-foreground">No primary contact set</p>
+                        )}
+
+                        {primaryContactAlreadyPortalUser ? (
+                          <div className="flex items-center gap-2 rounded-lg border border-green-200 dark:border-green-800 bg-green-50 dark:bg-green-950/30 px-3 py-2" data-testid="badge-portal-user-active">
+                            <ShieldCheck className="h-4 w-4 text-green-600 dark:text-green-400 shrink-0" />
+                            <span className="text-sm text-green-700 dark:text-green-300">Portal access enabled</span>
+                          </div>
+                        ) : primaryContactEmail ? (
+                          <Button
+                            type="button"
+                            variant="outline"
+                            size="sm"
+                            className="w-full gap-2"
+                            disabled={!portalUsersLoaded}
+                            onClick={() => setConvertToPortalOpen(true)}
+                            data-testid="button-convert-to-portal-user"
+                          >
+                            <UserPlus className="h-4 w-4" />
+                            Convert to Portal User
+                          </Button>
+                        ) : null}
+
+                        {(client.phone || client.email) && (
+                          <div className="border-t pt-3 space-y-2">
+                            <p className="text-xs font-medium text-muted-foreground">Company Contact</p>
+                            {client.phone && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <Phone className="h-3.5 w-3.5 text-muted-foreground" />
+                                <span data-testid="value-company-phone">{client.phone}</span>
+                              </div>
+                            )}
+                            {client.email && (
+                              <div className="flex items-center gap-2 text-sm">
+                                <Mail className="h-3.5 w-3.5 text-muted-foreground" />
+                                <a href={`mailto:${client.email}`} className="text-blue-600 dark:text-blue-400" data-testid="link-company-email">{client.email}</a>
+                              </div>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                    )}
+                  </CardContent>
+                </Card>
+              </div>
+
+              <Card>
+                <CardHeader className="flex flex-row items-start justify-between gap-2">
+                  <div>
+                    <CardTitle className="text-base flex items-center gap-2">
+                      <Mail className="h-4 w-4" />
+                      Mailing Address
+                    </CardTitle>
+                    <CardDescription>Separate mailing address if different from physical location</CardDescription>
+                  </div>
+                  {editingCard !== "mailing" && (
+                    <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={() => setEditingCard("mailing")} data-testid="button-edit-mailing">
+                      <Pencil className="h-3.5 w-3.5 text-muted-foreground" />
+                    </Button>
+                  )}
+                </CardHeader>
+                <CardContent>
+                  {editingCard === "mailing" ? (
+                    <Form {...clientForm}>
+                      <form onSubmit={clientForm.handleSubmit(handleUpdateClient)} className="space-y-4">
+                        <div className="flex items-center gap-2">
+                          <Checkbox
+                            id="mailing-same"
+                            checked={mailingSameAsPhysical}
+                            onCheckedChange={(checked) => {
+                              setMailingSameAsPhysical(!!checked);
+                              if (checked) {
+                                clientForm.setValue("mailingAddressLine1", "", { shouldDirty: true });
+                                clientForm.setValue("mailingAddressLine2", "", { shouldDirty: true });
+                                clientForm.setValue("mailingCity", "", { shouldDirty: true });
+                                clientForm.setValue("mailingState", "", { shouldDirty: true });
+                                clientForm.setValue("mailingPostalCode", "", { shouldDirty: true });
+                                clientForm.setValue("mailingCountry", "", { shouldDirty: true });
+                              }
                             }}
-                            data-testid={`division-card-${division.id}`}
-                          >
-                            <CardContent className="p-4">
-                              <div className="flex items-center gap-3">
-                                <div
-                                  className="h-3 w-3 rounded-full flex-shrink-0"
-                                  style={{ backgroundColor: division.color || "#3B82F6" }}
-                                />
-                                <div className="flex-1 min-w-0">
-                                  <p className="font-medium truncate">{division.name}</p>
-                                  {division.description && (
-                                    <p className="text-xs text-muted-foreground truncate">{division.description}</p>
-                                  )}
-                                </div>
+                            data-testid="checkbox-mailing-same"
+                          />
+                          <label htmlFor="mailing-same" className="text-sm text-muted-foreground cursor-pointer select-none">
+                            Same as physical address
+                          </label>
+                        </div>
+                        {!mailingSameAsPhysical && (
+                          <>
+                            <FormField
+                              control={clientForm.control}
+                              name="mailingAddressLine1"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Address Line 1</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Mailing street address" data-testid="input-mailing-address-1" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <FormField
+                              control={clientForm.control}
+                              name="mailingAddressLine2"
+                              render={({ field }) => (
+                                <FormItem>
+                                  <FormLabel>Address Line 2</FormLabel>
+                                  <FormControl>
+                                    <Input {...field} placeholder="Suite, P.O. Box, etc." data-testid="input-mailing-address-2" />
+                                  </FormControl>
+                                  <FormMessage />
+                                </FormItem>
+                              )}
+                            />
+                            <div className="grid grid-cols-2 gap-4">
+                              <FormField
+                                control={clientForm.control}
+                                name="mailingCity"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>City</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} placeholder="City" data-testid="input-mailing-city" />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={clientForm.control}
+                                name="mailingState"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>State / Province</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} placeholder="State" data-testid="input-mailing-state" />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={clientForm.control}
+                                name="mailingPostalCode"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Postal Code</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} placeholder="ZIP / Postal code" data-testid="input-mailing-postal-code" />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                              <FormField
+                                control={clientForm.control}
+                                name="mailingCountry"
+                                render={({ field }) => (
+                                  <FormItem>
+                                    <FormLabel>Country</FormLabel>
+                                    <FormControl>
+                                      <Input {...field} placeholder="Country" data-testid="input-mailing-country" />
+                                    </FormControl>
+                                    <FormMessage />
+                                  </FormItem>
+                                )}
+                              />
+                            </div>
+                          </>
+                        )}
+                        <div className="flex justify-end gap-2 pt-2">
+                          <Button type="button" variant="outline" onClick={() => { clientForm.reset(); setMailingSameAsPhysical(!client.mailingAddressLine1 && !client.mailingCity && !client.mailingCountry); setEditingCard(null); }}>Cancel</Button>
+                          <Button type="submit" disabled={updateClientMutation.isPending} data-testid="button-save-mailing">
+                            {updateClientMutation.isPending ? <><Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />Saving...</> : <><Save className="h-3.5 w-3.5 mr-1.5" />Save</>}
+                          </Button>
+                        </div>
+                      </form>
+                    </Form>
+                  ) : (
+                    <div className="text-sm" data-testid="display-mailing-address">
+                      {mailingSameAsPhysical ? (
+                        <p className="italic text-muted-foreground">Same as physical address</p>
+                      ) : client.mailingAddressLine1 || client.mailingCity || client.mailingState || client.mailingPostalCode || client.mailingCountry ? (
+                        <div className="space-y-1">
+                          {client.mailingAddressLine1 && <p>{client.mailingAddressLine1}</p>}
+                          {client.mailingAddressLine2 && <p>{client.mailingAddressLine2}</p>}
+                          {(client.mailingCity || client.mailingState || client.mailingPostalCode) && (
+                            <p>{[client.mailingCity, client.mailingState].filter(Boolean).join(", ")} {client.mailingPostalCode || ""}</p>
+                          )}
+                          {client.mailingCountry && <p>{client.mailingCountry}</p>}
+                        </div>
+                      ) : (
+                        <p className="italic text-muted-foreground">No mailing address on file</p>
+                      )}
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
+
+              {(divisions.length > 0 || childClients.length > 0) && (
+                <Card>
+                  <CardHeader className="flex flex-row items-center justify-between gap-2">
+                    <div>
+                      <CardTitle className="text-base flex items-center gap-2">
+                        <Layers className="h-4 w-4" />
+                        Divisions
+                      </CardTitle>
+                      <CardDescription>Subsidiary companies and organizational divisions</CardDescription>
+                    </div>
+                    <Badge variant="secondary">{divisions.length + childClients.length}</Badge>
+                  </CardHeader>
+                  <CardContent>
+                    <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                      {childClients.map((child) => (
+                        <Card
+                          key={`child-${child.id}`}
+                          className="hover-elevate cursor-pointer"
+                          onClick={() => navigate(`/clients/${child.id}`)}
+                          data-testid={`subsidiary-card-${child.id}`}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-3">
+                              <Avatar className="h-8 w-8">
+                                <AvatarFallback className="bg-primary/10 text-primary text-xs">
+                                  {child.companyName.split(" ").map((w: string) => w[0]).join("").slice(0, 2).toUpperCase()}
+                                </AvatarFallback>
+                              </Avatar>
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium truncate">{child.companyName}</p>
+                                <p className="text-xs text-muted-foreground">Subsidiary company</p>
                               </div>
-                              <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
-                                <span className="flex items-center gap-1">
-                                  <Users className="h-3 w-3" />
-                                  {division.memberCount} members
-                                </span>
-                                <span className="flex items-center gap-1">
-                                  <FolderKanban className="h-3 w-3" />
-                                  {division.projectCount} projects
-                                </span>
+                              <Badge className="shrink-0">{child.status}</Badge>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                      {divisions.map((division) => (
+                        <Card
+                          key={division.id}
+                          className="hover-elevate cursor-pointer"
+                          onClick={() => {
+                            setEditingDivision(division);
+                            setDivisionMode("edit");
+                            setDivisionDrawerOpen(true);
+                          }}
+                          data-testid={`division-card-${division.id}`}
+                        >
+                          <CardContent className="p-4">
+                            <div className="flex items-center gap-3">
+                              <div
+                                className="h-3 w-3 rounded-full flex-shrink-0"
+                                style={{ backgroundColor: division.color || "#3B82F6" }}
+                              />
+                              <div className="flex-1 min-w-0">
+                                <p className="font-medium truncate">{division.name}</p>
+                                {division.description && (
+                                  <p className="text-xs text-muted-foreground truncate">{division.description}</p>
+                                )}
                               </div>
-                            </CardContent>
-                          </Card>
-                        ))}
-                      </div>
-                    </CardContent>
-                  </Card>
-                )}
-              </form>
-            </Form>
+                            </div>
+                            <div className="flex items-center gap-4 mt-3 text-xs text-muted-foreground">
+                              <span className="flex items-center gap-1">
+                                <Users className="h-3 w-3" />
+                                {division.memberCount} members
+                              </span>
+                              <span className="flex items-center gap-1">
+                                <FolderKanban className="h-3 w-3" />
+                                {division.projectCount} projects
+                              </span>
+                            </div>
+                          </CardContent>
+                        </Card>
+                      ))}
+                    </div>
+                  </CardContent>
+                </Card>
+              )}
+            </div>
           </TabsContent>
 
           <TabsContent value="contacts" className="p-6">
