@@ -284,32 +284,26 @@ export function AssetLibraryPanel({ clientId }: Props) {
       for (let i = 0; i < files.length; i++) {
         const file = files[i];
 
-        const presignRes = await apiRequest("POST", "/api/v1/assets/upload/presign", {
-          clientId,
-          folderId: currentFolderId,
-          filename: file.name,
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-        });
-        const presignData = await presignRes.json();
+        const formData = new FormData();
+        formData.append("file", file);
+        formData.append("clientId", clientId);
+        if (currentFolderId) {
+          formData.append("folderId", currentFolderId);
+        }
 
-        await fetch(presignData.upload.url, {
-          method: presignData.upload.method,
-          headers: presignData.upload.headers,
-          body: file,
+        const uploadRes = await fetch("/api/v1/assets/upload/proxy", {
+          method: "POST",
+          credentials: "include",
+          body: formData,
         });
 
-        const completeRes = await apiRequest("POST", "/api/v1/assets/upload/complete", {
-          clientId,
-          folderId: currentFolderId,
-          r2Key: presignData.r2Key,
-          filename: file.name,
-          mimeType: file.type || "application/octet-stream",
-          sizeBytes: file.size,
-        });
+        if (!uploadRes.ok) {
+          const errData = await uploadRes.json().catch(() => ({}));
+          throw new Error(errData.error || `Upload failed (${uploadRes.status})`);
+        }
 
-        const completeData = await completeRes.json();
-        if (completeData.dedupe) {
+        const uploadData = await uploadRes.json();
+        if (uploadData.dedupe) {
           toast({ title: "File already exists", description: "Linked to this client." });
         }
       }

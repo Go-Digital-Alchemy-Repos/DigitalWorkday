@@ -1,5 +1,6 @@
 import crypto from "crypto";
 import { z } from "zod";
+import multer from "multer";
 import { createApiRouter } from "../routerFactory";
 import { assetService } from "../../features/assetLibrary/asset.service";
 import { AppError, handleRouteError } from "../../lib/errors";
@@ -7,6 +8,7 @@ import { getCurrentUserId } from "../../routes/helpers";
 import {
   isS3Configured,
   validateFile,
+  uploadToS3,
   createPresignedUploadUrl,
   createPresignedDownloadUrl,
   ALLOWED_MIME_TYPES,
@@ -15,6 +17,11 @@ import { validateUploadRequest, sanitizeFilename, isFilenameUnsafe } from "../mi
 import { storage } from "../../storage";
 import type { Request, Response } from "express";
 import { ASSET_SOURCE_TYPES, ASSET_VISIBILITY } from "@shared/schema";
+
+const assetUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
 
 const router = createApiRouter({
   policy: "authTenant",
@@ -324,6 +331,68 @@ router.post("/assets/upload/complete", async (req: Request, res: Response) => {
     return handleRouteError(res, error, "POST /api/v1/assets/upload/complete", req);
   }
 });
+
+// Server-proxied upload (avoids CORS issues with direct R2 uploads)
+router.post(
+  "/assets/upload/proxy",
+  assetUpload.single("file"),
+  async (req: Request, res: Response) => {
+    try {
+      const tenantId = getEffectiveTenantId(req);
+      if (!tenantId) return res.status(400).json({ error: "Tenant context required" });
+
+      if (!isS3Configured()) {
+        return res.status(503).json({ error: "File storage is not configured" });
+      }
+
+      const file = req.file;
+      if (!file) return res.status(400).json({ error: "No file provided" });
+
+      const clientId = req.body.clientId;
+      const folderId = req.body.folderId || null;
+      if (!clientId) return res.status(400).json({ error: "clientId is required" });
+
+      await validateClientBelongsToTenant(clientId, tenantId);
+
+      const mimeType = file.mimetype || "application/octet-stream";
+      const validation = validateFile(mimeType, file.size, file.originalname);
+      if (!validation.valid) {
+        return res.status(400).json({ error: validation.error });
+      }
+
+      if (isFilenameUnsafe(file.originalname)) {
+        return res.status(400).json({ error: "File type not allowed for security reasons" });
+      }
+
+      const safeFilename = sanitizeFilename(file.originalname);
+      const tempId = crypto.randomUUID();
+      const r2Key = `assets/${tenantId}/${clientId}/${tempId}-${safeFilename}`;
+
+      await uploadToS3(file.buffer, r2Key, mimeType, tenantId);
+
+      const userId = getCurrentUserId(req);
+
+      const { asset, dedupe } = await assetService.createAsset({
+        tenantId,
+        clientId,
+        folderId: folderId === "null" ? null : folderId,
+        title: file.originalname,
+        mimeType,
+        sizeBytes: file.size,
+        r2Key,
+        checksum: null,
+        sourceType: "manual",
+        visibility: "internal",
+        uploadedByType: "tenant_user",
+        uploadedByUserId: userId,
+      });
+
+      res.status(201).json({ asset, dedupe });
+    } catch (error) {
+      return handleRouteError(res, error, "POST /api/v1/assets/upload/proxy", req);
+    }
+  }
+);
 
 router.get("/assets/:assetId/download", async (req: Request, res: Response) => {
   try {
