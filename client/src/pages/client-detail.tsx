@@ -1961,7 +1961,7 @@ export default function ClientDetailPage() {
 
                     <div>
                       <div className="flex items-center gap-2 mb-3">
-                        <h3 className="text-sm font-medium text-muted-foreground">Archived Projects</h3>
+                        <h3 className="font-medium">Archived Projects</h3>
                         <Badge variant="secondary" className="text-xs">{archivedProjects.length}</Badge>
                       </div>
                       {archivedProjects.length > 0 ? (
