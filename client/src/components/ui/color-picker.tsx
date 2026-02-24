@@ -5,6 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Slider } from "@/components/ui/slider";
+import { Pipette } from "lucide-react";
 
 function hexToRgba(hex: string): RgbaColor {
   const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})?$/i.exec(hex);
@@ -34,6 +35,8 @@ function rgbaToString(rgba: RgbaColor): string {
   return `rgba(${rgba.r}, ${rgba.g}, ${rgba.b}, ${rgba.a.toFixed(2)})`;
 }
 
+const supportsEyeDropper = typeof window !== "undefined" && "EyeDropper" in window;
+
 interface ColorPickerProps {
   value?: string;
   defaultValue?: string;
@@ -56,6 +59,7 @@ export function ColorPicker({
     (value || defaultValue).toUpperCase()
   );
   const [isOpen, setIsOpen] = useState(false);
+  const [isSampling, setIsSampling] = useState(false);
 
   useEffect(() => {
     if (value) {
@@ -99,6 +103,31 @@ export function ColorPicker({
     [color, onChange]
   );
 
+  const handleEyeDropper = useCallback(async () => {
+    if (!supportsEyeDropper) return;
+    try {
+      setIsSampling(true);
+      // Close the popover so the eyedropper can sample the full page
+      setIsOpen(false);
+      // Small delay to let the popover close before the eyedropper activates
+      await new Promise((resolve) => setTimeout(resolve, 150));
+      // @ts-ignore — EyeDropper is not yet in the TS lib but is supported in Chrome/Edge
+      const eyeDropper = new window.EyeDropper();
+      const result = await eyeDropper.open();
+      const hex = result.sRGBHex;
+      const newColor = hexToRgba(hex);
+      setColor(newColor);
+      setHexInput(hex.toUpperCase());
+      onChange?.(hex);
+      // Re-open picker so user can see the sampled color
+      setIsOpen(true);
+    } catch {
+      // User cancelled or browser denied — no-op
+    } finally {
+      setIsSampling(false);
+    }
+  }, [onChange]);
+
   const displayColor = rgbaToString(color);
 
   return (
@@ -135,6 +164,21 @@ export function ColorPicker({
                   placeholder="#83BA3B"
                   data-testid={testId ? `${testId}-hex-input` : undefined}
                 />
+                {supportsEyeDropper && (
+                  <Button
+                    type="button"
+                    variant="outline"
+                    size="icon"
+                    className="h-8 w-8 flex-shrink-0"
+                    onClick={handleEyeDropper}
+                    disabled={isSampling}
+                    title="Pick a color from the screen"
+                    aria-label="Pick a color from the screen"
+                    data-testid={testId ? `${testId}-eyedropper` : undefined}
+                  >
+                    <Pipette className="h-3.5 w-3.5" />
+                  </Button>
+                )}
               </div>
               
               <div className="flex items-center gap-2">
