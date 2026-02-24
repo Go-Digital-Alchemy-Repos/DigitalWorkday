@@ -1261,6 +1261,8 @@ export default function SuperAdminSettingsPage() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/super/system-settings"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/branding"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/auth/login-branding"] });
       toast({ title: "Settings updated successfully" });
     },
     onError: (error: any) => {

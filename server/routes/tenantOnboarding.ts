@@ -316,16 +316,19 @@ router.post("/onboarding/complete", requireAuth, requireTenantAdmin, async (req,
 });
 
 // =============================================================================
-// GET /api/v1/tenant/branding - Get tenant branding (accessible by all tenant users)
+// GET /api/v1/tenant/branding - Get tenant branding (accessible by all authenticated users)
+// Super admins (no tenantId) receive system-level branding only.
 // =============================================================================
 
-router.get("/branding", requireAuth, requireTenantContext, async (req, res) => {
+router.get("/branding", requireAuth, async (req, res) => {
   try {
-    const tenantId = req.effectiveTenantId;
+    // Derive tenantId without hard-blocking super admins who have no tenant context
+    const user = req.user as any;
+    const tenantId: string | null = getEffectiveTenantId(req) || user?.tenantId || null;
 
-    const [settings, [sys]] = await Promise.all([
-      storage.getTenantSettings(tenantId),
+    const [[sys], settings] = await Promise.all([
       db.select().from(systemSettings).limit(1),
+      tenantId ? storage.getTenantSettings(tenantId) : Promise.resolve(null),
     ]);
 
     // Resolution: tenant value → system default → null
@@ -349,7 +352,7 @@ router.get("/branding", requireAuth, requireTenantContext, async (req, res) => {
         defaultThemePack: settings?.defaultThemePack || null,
         whiteLabelEnabled: settings?.whiteLabelEnabled ?? false,
         hideVendorBranding: settings?.hideVendorBranding ?? false,
-        hasSystemBranding: !!(sys?.defaultLogoUrl || sys?.defaultAppName || sys?.defaultPrimaryColor),
+        hasSystemBranding: !!(sys?.defaultLogoUrl || sys?.defaultIconUrl || sys?.defaultFaviconUrl || sys?.defaultAppName || sys?.defaultPrimaryColor),
       },
     });
   } catch (error) {
