@@ -9,7 +9,8 @@ import {
   clientNoteCategories, 
   clientNoteAttachments,
   users,
-  clients 
+  clients,
+  UserRole,
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../../auth";
@@ -29,6 +30,15 @@ const fileUpload = multer({
 });
 
 const router = Router();
+
+function rejectClientPortalUsers(req: Request, res: Response, next: import("express").NextFunction) {
+  if (req.user?.role === UserRole.CLIENT) {
+    return res.status(403).json({ success: false, error: { code: "FORBIDDEN", message: "Notes are internal only." } });
+  }
+  next();
+}
+
+router.use(rejectClientPortalUsers);
 
 const createNoteSchema = z.object({
   clientId: z.string().uuid(),

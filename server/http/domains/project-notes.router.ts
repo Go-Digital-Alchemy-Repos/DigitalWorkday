@@ -7,6 +7,7 @@ import {
   projectNoteCategories,
   projects,
   users,
+  UserRole,
 } from "@shared/schema";
 import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../../auth";
@@ -14,6 +15,15 @@ import { requireTenantContext, TenantRequest } from "../../middleware/tenantCont
 import { AppError, handleRouteError } from "../../lib/errors";
 
 const router = Router();
+
+function rejectClientPortalUsers(req: Request, res: Response, next: import("express").NextFunction) {
+  if (req.user?.role === UserRole.CLIENT) {
+    return res.status(403).json({ success: false, error: { code: "FORBIDDEN", message: "Notes are internal only." } });
+  }
+  next();
+}
+
+router.use(rejectClientPortalUsers);
 
 const createNoteSchema = z.object({
   body: z.any(),
