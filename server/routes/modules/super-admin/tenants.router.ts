@@ -44,6 +44,7 @@ import {
   appSettings,
   errorLogs,
   emailOutbox,
+  emailTemplates,
   sections,
   taskAssignees,
   taskWatchers,
@@ -547,6 +548,7 @@ tenantsRouter.delete("/tenants/:tenantId", requireSuperUser, async (req, res) =>
       await tx.delete(appSettings).where(eq(appSettings.tenantId, tenantId));
       await tx.delete(errorLogs).where(eq(errorLogs.tenantId, tenantId));
       await tx.delete(emailOutbox).where(eq(emailOutbox.tenantId, tenantId));
+      await tx.delete(emailTemplates).where(eq(emailTemplates.tenantId, tenantId));
       await tx.delete(tenancyWarnings).where(eq(tenancyWarnings.effectiveTenantId, tenantId));
 
       await tx.delete(userUiPreferences).where(eq(userUiPreferences.userId, sql`ANY(SELECT id FROM users WHERE tenant_id = ${tenantId})`));

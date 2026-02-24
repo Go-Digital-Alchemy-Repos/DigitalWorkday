@@ -359,12 +359,25 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
       if (mentionedUser.email && tenantId) {
         try {
           const { emailOutboxService } = await import("../../services/emailOutbox");
+          const { emailTemplateService } = await import("../../services/emailTemplates");
+          
+          const templateVars: Record<string, string> = {
+            userName: mentionedUser.name || mentionedUser.email,
+            mentionedByName: commenter?.name || commenter?.email || "Someone",
+            itemTitle: subtask.title || "a subtask",
+            commentText: plainTextBody,
+            appName: "MyWorkDay",
+          };
+          
+          const rendered = await emailTemplateService.renderByKey(tenantId, "mention_notification", templateVars);
+          
           await emailOutboxService.sendEmail({
             tenantId,
             messageType: "mention_notification",
             toEmail: mentionedUser.email,
-            subject: `${commenter?.name || 'Someone'} mentioned you in a comment`,
-            textBody: `${commenter?.name || 'Someone'} mentioned you in a comment on subtask "${subtask.title || 'a subtask'}":\n\n"${plainTextBody}"`,
+            subject: rendered?.subject || `${commenter?.name || 'Someone'} mentioned you in a comment`,
+            textBody: rendered?.textBody || `${commenter?.name || 'Someone'} mentioned you in a comment on subtask "${subtask.title || 'a subtask'}":\n\n"${plainTextBody}"`,
+            htmlBody: rendered?.htmlBody,
             metadata: {
               subtaskId: subtask.id,
               subtaskTitle: subtask.title,

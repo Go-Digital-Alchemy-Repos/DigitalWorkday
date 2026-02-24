@@ -647,7 +647,14 @@ httpServer.listen(port, host, () => {
         await bootstrapAdminUser();
       } catch (bootstrapErr) {
         console.error("[background] Bootstrap failed:", bootstrapErr instanceof Error ? bootstrapErr.message : bootstrapErr);
-        // Don't set startup error - app is already ready
+      }
+      
+      // Seed default email templates if not present
+      try {
+        const { emailTemplateService } = await import("./services/emailTemplates");
+        await emailTemplateService.seedDefaults();
+      } catch (seedErr) {
+        console.error("[background] Email template seed failed:", seedErr instanceof Error ? seedErr.message : seedErr);
       }
       
       console.log("[background] Diagnostic tasks completed");

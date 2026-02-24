@@ -1219,40 +1219,45 @@ export function setupPasswordResetEndpoints(app: Express): void {
         timestamp: new Date().toISOString(),
       }));
       
-      // Send password reset email via Mailgun if user has a tenant with email configured
       let emailSent = false;
       let emailError: string | null = null;
       
-      if (user.tenantId) {
-        try {
-          const { emailOutboxService } = await import("./services/emailOutbox");
-          const result = await emailOutboxService.sendEmail({
-            tenantId: user.tenantId,
-            messageType: "forgot_password",
-            toEmail: user.email,
-            subject: "Password Reset Request",
-            textBody: `You requested a password reset for your account.\n\nClick this link to reset your password:\n${resetUrl}\n\nThis link will expire in 1 hour.\n\nIf you did not request this reset, you can safely ignore this email.`,
-            htmlBody: `
-              <div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;">
-                <h2>Password Reset Request</h2>
-                <p>You requested a password reset for your account.</p>
-                <p><a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 6px;">Reset Password</a></p>
-                <p style="color: #666; font-size: 14px;">This link will expire in 1 hour.</p>
-                <p style="color: #666; font-size: 14px;">If you did not request this reset, you can safely ignore this email.</p>
-              </div>
-            `,
-            requestId: req.requestId,
-            metadata: { userId: user.id },
-          });
-          
-          emailSent = result.success;
-          if (!result.success) {
-            emailError = result.error || "Unknown error sending email";
-          }
-        } catch (error: any) {
-          emailError = error.message || "Failed to send email";
-          console.error("[auth] Password reset email error:", error);
+      try {
+        const { emailOutboxService } = await import("./services/emailOutbox");
+        const { emailTemplateService } = await import("./services/emailTemplates");
+        
+        const templateVars: Record<string, string> = {
+          userName: user.name || user.email,
+          userEmail: user.email,
+          resetUrl,
+          expiryMinutes: "30",
+          appName: "MyWorkDay",
+        };
+        
+        const rendered = await emailTemplateService.renderByKey(user.tenantId, "forgot_password", templateVars);
+        
+        const subject = rendered?.subject || "Password Reset Request";
+        const textBody = rendered?.textBody || `You requested a password reset.\n\nReset your password: ${resetUrl}\n\nThis link expires in 30 minutes.`;
+        const htmlBody = rendered?.htmlBody || `<div style="font-family: sans-serif; max-width: 600px; margin: 0 auto;"><h2>Password Reset Request</h2><p>You requested a password reset.</p><p><a href="${resetUrl}" style="display: inline-block; padding: 12px 24px; background-color: #3b82f6; color: white; text-decoration: none; border-radius: 6px;">Reset Password</a></p><p style="color: #666; font-size: 14px;">This link expires in 30 minutes.</p></div>`;
+        
+        const result = await emailOutboxService.sendEmail({
+          tenantId: user.tenantId,
+          messageType: "forgot_password",
+          toEmail: user.email,
+          subject,
+          textBody,
+          htmlBody,
+          requestId: req.requestId,
+          metadata: { userId: user.id },
+        });
+        
+        emailSent = result.success;
+        if (!result.success) {
+          emailError = result.error || "Unknown error sending email";
         }
+      } catch (error: any) {
+        emailError = error.message || "Failed to send email";
+        console.error("[auth] Password reset email error:", error);
       }
       
       // Only log reset URL in non-production when email wasn't sent

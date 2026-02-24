@@ -33,6 +33,7 @@ import automationRouter from "./domains/automation.router";
 import assetsRouter from "./domains/assets.router";
 import tenantDefaultDocsRouter from "./domains/tenantDefaultDocs.router";
 import controlCenterRouter from "./domains/controlCenter.router";
+import emailTemplatesRouter from "./domains/emailTemplates.router";
 import fileServeRouter from "./domains/fileServe.router";
 
 import usersRouter from "../routes/users.router";
@@ -72,6 +73,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "superUser",
     domain: "system-integrations",
     description: "System integration management.",
+  },
+  {
+    path: "/api/v1/system",
+    router: emailTemplatesRouter,
+    policy: "superUser",
+    domain: "email-templates",
+    description: "Email template management.",
   },
   {
     path: "/api",

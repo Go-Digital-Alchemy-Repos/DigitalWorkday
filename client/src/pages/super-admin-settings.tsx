@@ -22,6 +22,7 @@ import {
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { S3Dropzone } from "@/components/common/S3Dropzone";
 import { ColorPicker } from "@/components/ui/color-picker";
+import { EmailTemplatesTab } from "@/components/settings/email-templates-tab";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -1305,6 +1306,10 @@ export default function SuperAdminSettingsPage() {
               <Sparkles className="h-4 w-4 mr-2" />
               AI Integration
             </TabsTrigger>
+            <TabsTrigger value="email-templates" data-testid="tab-email-templates">
+              <Mail className="h-4 w-4 mr-2" />
+              Email Templates
+            </TabsTrigger>
           </TabsList>
 
           <TabsContent value="agreements">
@@ -2298,6 +2303,10 @@ export default function SuperAdminSettingsPage() {
 
           <TabsContent value="ai-integration">
             <AIIntegrationTab />
+          </TabsContent>
+
+          <TabsContent value="email-templates">
+            <EmailTemplatesTab />
           </TabsContent>
         </Tabs>
       </div>

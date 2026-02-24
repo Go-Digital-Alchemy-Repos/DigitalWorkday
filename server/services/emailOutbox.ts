@@ -71,16 +71,17 @@ export class EmailOutboxService {
 
     debugLog("Email queued", { emailId, tenantId, messageType, toEmail, subject });
 
-    if (!tenantId) {
-      await this.updateEmailStatus(emailId, "failed", null, "No tenant ID provided - cannot determine email provider");
-      return { success: false, emailId, error: "No tenant ID provided" };
-    }
-
     try {
-      const integrationData = await tenantIntegrationService.getIntegrationWithSecrets(tenantId, "mailgun");
-      
+      let integrationData = tenantId
+        ? await tenantIntegrationService.getIntegrationWithSecrets(tenantId, "mailgun")
+        : null;
+
       if (!integrationData?.publicConfig || !integrationData?.secretConfig) {
-        await this.updateEmailStatus(emailId, "failed", null, "Mailgun not configured for tenant");
+        integrationData = await tenantIntegrationService.getIntegrationWithSecrets(null, "mailgun");
+      }
+
+      if (!integrationData?.publicConfig || !integrationData?.secretConfig) {
+        await this.updateEmailStatus(emailId, "failed", null, "Mailgun not configured (checked tenant and system level)");
         return { success: false, emailId, error: "Mailgun not configured" };
       }
 

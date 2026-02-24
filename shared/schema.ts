@@ -305,6 +305,28 @@ export const emailOutbox = pgTable("email_outbox", {
   index("email_outbox_created_idx").on(table.createdAt),
 ]);
 
+export const emailTemplates = pgTable("email_templates", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  templateKey: text("template_key").notNull(),
+  name: text("name").notNull(),
+  subject: text("subject").notNull(),
+  htmlBody: text("html_body").notNull(),
+  textBody: text("text_body").notNull(),
+  variables: jsonb("variables"),
+  isActive: boolean("is_active").default(true).notNull(),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  updatedByUserId: varchar("updated_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("email_templates_tenant_key_idx").on(table.tenantId, table.templateKey),
+  index("email_templates_key_idx").on(table.templateKey),
+]);
+
+export type EmailTemplate = typeof emailTemplates.$inferSelect;
+export type InsertEmailTemplate = typeof emailTemplates.$inferInsert;
+
 // Agreement status enum
 export const AgreementStatus = {
   DRAFT: "draft",
