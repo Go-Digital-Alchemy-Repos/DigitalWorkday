@@ -12,7 +12,9 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import {
-  Loader2, Save, RotateCcw, Eye, Mail, Code, FileText, Variable, Copy, Check
+  Loader2, Save, RotateCcw, Eye, Mail, Code, FileText, Variable, Copy, Check,
+  KeyRound, AtSign, UserPlus, ClipboardList, Sparkles, ShieldAlert, ShieldCheck,
+  UserCheck, AlarmClock, Ticket, ClipboardCheck, type LucideIcon
 } from "lucide-react";
 
 interface TemplateVariable {
@@ -46,18 +48,18 @@ interface PreviewResult {
   sampleVariables: Record<string, string>;
 }
 
-const TEMPLATE_ICONS: Record<string, string> = {
-  forgot_password: "🔑",
-  mention_notification: "💬",
-  invitation: "✉️",
-  task_assignment: "📋",
-  welcome_email: "👋",
-  admin_password_reset: "🔐",
-  platform_admin_invite: "🛡️",
-  user_provision: "👤",
-  task_due_reminder: "⏰",
-  support_ticket_created: "🎫",
-  support_ticket_assigned: "📌",
+const TEMPLATE_ICONS: Record<string, LucideIcon> = {
+  forgot_password: KeyRound,
+  mention_notification: AtSign,
+  invitation: UserPlus,
+  task_assignment: ClipboardList,
+  welcome_email: Sparkles,
+  admin_password_reset: ShieldAlert,
+  platform_admin_invite: ShieldCheck,
+  user_provision: UserCheck,
+  task_due_reminder: AlarmClock,
+  support_ticket_created: Ticket,
+  support_ticket_assigned: ClipboardCheck,
 };
 
 const TEMPLATE_DESCRIPTIONS: Record<string, string> = {
@@ -73,6 +75,11 @@ const TEMPLATE_DESCRIPTIONS: Record<string, string> = {
   support_ticket_created: "Sent to confirm a support ticket has been created",
   support_ticket_assigned: "Sent when a support ticket is assigned to an agent",
 };
+
+function TemplateIcon({ templateKey, className }: { templateKey: string; className?: string }) {
+  const Icon = TEMPLATE_ICONS[templateKey] || Mail;
+  return <Icon className={className} />;
+}
 
 export function EmailTemplatesTab() {
   const { toast } = useToast();
@@ -206,7 +213,7 @@ export function EmailTemplatesTab() {
                   data-testid={`email-template-${template.templateKey}`}
                 >
                   <div className="flex items-center gap-3">
-                    <span className="text-2xl">{TEMPLATE_ICONS[template.templateKey] || "📧"}</span>
+                    <TemplateIcon templateKey={template.templateKey} className="h-5 w-5 text-muted-foreground shrink-0" />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{template.name}</span>
@@ -236,7 +243,7 @@ export function EmailTemplatesTab() {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              <span className="text-xl">{selectedTemplate ? TEMPLATE_ICONS[selectedTemplate.templateKey] || "📧" : ""}</span>
+              {selectedTemplate && <TemplateIcon templateKey={selectedTemplate.templateKey} className="h-5 w-5 text-muted-foreground" />}
               Edit: {editForm.name}
             </DialogTitle>
             <DialogDescription>
