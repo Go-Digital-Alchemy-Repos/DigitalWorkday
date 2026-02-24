@@ -87,7 +87,7 @@ export function MultiSelectWatchers({
   const isLoading = addWatcherMutation.isPending || removeWatcherMutation.isPending;
 
   return (
-    <Popover open={open} onOpenChange={setOpen}>
+    <Popover open={open} onOpenChange={setOpen} modal={false}>
       <PopoverTrigger asChild>
         <Button
           variant="ghost"
@@ -104,7 +104,12 @@ export function MultiSelectWatchers({
           <Plus className="h-3 w-3 text-muted-foreground" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-64 p-0" align="start">
+      <PopoverContent
+        className="w-64 p-0"
+        align="start"
+        onPointerDownOutside={(e) => e.preventDefault()}
+        onInteractOutside={(e) => e.preventDefault()}
+      >
         <div className="p-2 border-b">
           <Input
             placeholder="Search members..."

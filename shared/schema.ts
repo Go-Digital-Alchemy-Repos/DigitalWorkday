@@ -3319,7 +3319,7 @@ export const reorderTasksSchema = z.object({
 
 // Assignee/watcher add schema
 export const addAssigneeSchema = z.object({
-  userId: z.string().uuid(),
+  userId: z.string().min(1),
 });
 
 export const addTagToTaskSchema = z.object({
