@@ -819,6 +819,23 @@ const NOTE_DEFAULT_CATEGORIES = [
   { value: "support", label: "Support" },
 ];
 
+function extractNoteText(body: any): string {
+  if (!body) return "";
+  if (typeof body === "string") {
+    if (body.startsWith("<")) return body.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
+    try { return extractNoteText(JSON.parse(body)); } catch { return body; }
+  }
+  if (body.type === "doc" && Array.isArray(body.content)) {
+    const walk = (node: any): string => {
+      if (node.type === "text") return node.text || "";
+      if (Array.isArray(node.content)) return node.content.map(walk).join(" ");
+      return "";
+    };
+    return body.content.map(walk).join(" ").trim();
+  }
+  return "";
+}
+
 export function NotesTab({ clientId }: { clientId: string }) {
   const { toast } = useToast();
   const [noteBody, setNoteBody] = useState("");
@@ -827,6 +844,12 @@ export function NotesTab({ clientId }: { clientId: string }) {
   const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
   const [editBody, setEditBody] = useState("");
   const [editCategory, setEditCategory] = useState("general");
+
+  const [searchQuery, setSearchQuery] = useState("");
+  const [filterCategory, setFilterCategory] = useState("all");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "category">("newest");
+  const [dateFrom, setDateFrom] = useState("");
+  const [dateTo, setDateTo] = useState("");
 
   const { data: notes = [], isLoading } = useQuery<CrmNote[]>({
     queryKey: [`/api/crm/clients/${clientId}/notes`],
@@ -848,6 +871,59 @@ export function NotesTab({ clientId }: { clientId: string }) {
     });
     return options;
   }, [categoriesData]);
+
+  const hasActiveFilters = searchQuery !== "" || filterCategory !== "all" || dateFrom !== "" || dateTo !== "" || sortBy !== "newest";
+
+  const filteredNotes = useMemo(() => {
+    let result = [...notes];
+
+    if (searchQuery) {
+      const q = searchQuery.toLowerCase();
+      result = result.filter(note => {
+        const bodyText = extractNoteText(note.body).toLowerCase();
+        const author = (note.authorName || note.authorEmail || "").toLowerCase();
+        const cat = (note.category || "").toLowerCase();
+        return bodyText.includes(q) || author.includes(q) || cat.includes(q);
+      });
+    }
+
+    if (filterCategory !== "all") {
+      result = result.filter(note => (note.category || "general").toLowerCase() === filterCategory.toLowerCase());
+    }
+
+    if (dateFrom) {
+      const from = new Date(dateFrom);
+      from.setHours(0, 0, 0, 0);
+      result = result.filter(note => new Date(note.createdAt) >= from);
+    }
+    if (dateTo) {
+      const to = new Date(dateTo);
+      to.setHours(23, 59, 59, 999);
+      result = result.filter(note => new Date(note.createdAt) <= to);
+    }
+
+    result.sort((a, b) => {
+      switch (sortBy) {
+        case "oldest":
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case "category":
+          return (a.category || "").localeCompare(b.category || "");
+        case "newest":
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
+
+    return result;
+  }, [notes, searchQuery, filterCategory, sortBy, dateFrom, dateTo]);
+
+  const clearAllFilters = () => {
+    setSearchQuery("");
+    setFilterCategory("all");
+    setSortBy("newest");
+    setDateFrom("");
+    setDateTo("");
+  };
 
   const createNoteMutation = useMutation({
     mutationFn: async ({ body, category }: { body: string; category: string }) => {
@@ -1007,6 +1083,89 @@ export function NotesTab({ clientId }: { clientId: string }) {
         </CardContent>
       </Card>
 
+      {notes.length > 0 && (
+        <div className="space-y-2">
+          <div className="flex flex-col sm:flex-row gap-2">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search notes..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="pl-9 h-9"
+                data-testid="input-search-notes-360"
+              />
+              {searchQuery && (
+                <button
+                  onClick={() => setSearchQuery("")}
+                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  data-testid="button-clear-search-360"
+                >
+                  <X className="h-3.5 w-3.5" />
+                </button>
+              )}
+            </div>
+            <Select value={filterCategory} onValueChange={setFilterCategory}>
+              <SelectTrigger className="w-full sm:w-[160px] h-9" data-testid="select-filter-category-360">
+                <SelectValue placeholder="Category" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Categories</SelectItem>
+                {allCategoryOptions.map((cat) => (
+                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+              <SelectTrigger className="w-full sm:w-[150px] h-9" data-testid="select-sort-notes-360">
+                <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+                <SelectValue placeholder="Sort by" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="newest">Newest First</SelectItem>
+                <SelectItem value="oldest">Oldest First</SelectItem>
+                <SelectItem value="category">By Category</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
+            <div className="flex items-center gap-2">
+              <label className="text-xs text-muted-foreground whitespace-nowrap">From</label>
+              <Input
+                type="date"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                className="h-8 w-[140px] text-xs"
+                data-testid="input-date-from-360"
+              />
+              <label className="text-xs text-muted-foreground whitespace-nowrap">To</label>
+              <Input
+                type="date"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                className="h-8 w-[140px] text-xs"
+                data-testid="input-date-to-360"
+              />
+            </div>
+            {hasActiveFilters && (
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={clearAllFilters}
+                className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground"
+                data-testid="button-clear-filters-360"
+              >
+                <RotateCcw className="h-3 w-3 mr-1" />
+                Clear filters
+              </Button>
+            )}
+            <span className="text-xs text-muted-foreground ml-auto">
+              {filteredNotes.length} of {notes.length} note{notes.length !== 1 ? "s" : ""}
+            </span>
+          </div>
+        </div>
+      )}
+
       {notes.length === 0 ? (
         <EmptyState
           icon={<StickyNote className="h-10 w-10" />}
@@ -1014,9 +1173,18 @@ export function NotesTab({ clientId }: { clientId: string }) {
           description="Add notes to keep track of important information about this client."
           size="sm"
         />
+      ) : filteredNotes.length === 0 ? (
+        <div className="text-center py-8 text-muted-foreground">
+          <Search className="h-8 w-8 mx-auto mb-2 opacity-40" />
+          <p className="text-sm font-medium">No notes match your filters</p>
+          <p className="text-xs mt-1">Try adjusting your search or filter criteria</p>
+          <Button variant="ghost" size="sm" onClick={clearAllFilters} className="mt-3" data-testid="button-clear-filters-empty-360">
+            Clear all filters
+          </Button>
+        </div>
       ) : (
         <div className="space-y-3">
-          {notes.map((note) => (
+          {filteredNotes.map((note) => (
             <Card key={note.id} data-testid={`card-note-${note.id}`}>
               <CardContent className="py-4 px-4">
                 {editingNoteId === note.id ? (
