@@ -1832,13 +1832,13 @@ export default function ClientsPage() {
       )}
 
       {vipClients.length > 0 && (
-        <div className="mb-6" data-testid="vip-clients-section">
+        <div className="mb-6 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 p-4" data-testid="vip-clients-section">
           <div className="flex items-center gap-2 mb-3">
             <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
-            <h3 className="font-medium">VIP Clients</h3>
-            <Badge variant="secondary" className="text-xs">{vipClients.length}</Badge>
+            <h3 className="font-medium text-amber-900 dark:text-amber-200">VIP Clients</h3>
+            <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">{vipClients.length}</Badge>
           </div>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {vipClients.map((client) => (
               <Card
                 key={client.id}
@@ -1846,24 +1846,83 @@ export default function ClientsPage() {
                 onClick={() => handleOpenClientSheet(client.id)}
                 data-testid={`vip-card-${client.id}`}
               >
-                <CardContent className="p-3">
-                  <div className="flex items-center gap-2.5">
-                    <Avatar className="h-8 w-8 shrink-0">
-                      <AvatarFallback className="bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400 text-xs">
+                <CardHeader className="pb-3">
+                  <div className="flex items-start gap-3 min-w-0">
+                    <Avatar className="h-10 w-10 shrink-0">
+                      <AvatarFallback className="bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400">
                         {getInitials(client.companyName)}
                       </AvatarFallback>
                     </Avatar>
                     <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{client.companyName}</p>
-                      <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                        <span>{client.projectCount} projects</span>
-                        <span>{client.openTasksCount} tasks</span>
+                      <div className="flex items-start justify-between gap-2 min-w-0">
+                        <CardTitle className="text-base truncate min-w-0">
+                          {client.companyName}
+                        </CardTitle>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {client.needsAttention && (
+                            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                          )}
+                        </div>
+                      </div>
+                      {client.parentName ? (
+                        <p className="text-xs text-muted-foreground truncate">
+                          Sub-client of {client.parentName}
+                        </p>
+                      ) : (
+                        client.displayName && (
+                          <p className="text-xs text-muted-foreground truncate">
+                            {client.displayName}
+                          </p>
+                        )
+                      )}
+                      <div className="mt-1.5">
+                        <Badge variant="outline" className={cn("text-xs", STAGE_TEXT_COLORS[client.stage] || "")}>
+                          <span className={cn("h-1.5 w-1.5 rounded-full mr-1.5 shrink-0", STAGE_COLORS[client.stage] || "bg-muted")} />
+                          {CLIENT_STAGE_LABELS[client.stage as ClientStageType] || client.stage}
+                        </Badge>
                       </div>
                     </div>
-                    {client.needsAttention && (
-                      <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                  </div>
+                </CardHeader>
+                <CardContent className="pt-0">
+                  <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                    <div className="flex items-center gap-1">
+                      <FolderKanban className="h-3.5 w-3.5 shrink-0" />
+                      <span>{client.projectCount} projects</span>
+                    </div>
+                    <div className="flex items-center gap-1">
+                      <User className="h-3.5 w-3.5 shrink-0" />
+                      <span>{client.contactCount} contacts</span>
+                    </div>
+                    {client.openTasksCount > 0 && (
+                      <div className="flex items-center gap-1">
+                        <ListChecks className="h-3.5 w-3.5 shrink-0" />
+                        <span>{client.openTasksCount} tasks</span>
+                      </div>
                     )}
                   </div>
+                  {client.lastActivityAt && (
+                    <p className="text-xs text-muted-foreground mt-1.5 truncate">
+                      Last activity {formatDistanceToNow(new Date(client.lastActivityAt), { addSuffix: true })}
+                    </p>
+                  )}
+                  {client.industry && (
+                    <p className="text-xs text-muted-foreground mt-2 truncate">
+                      {client.industry}
+                    </p>
+                  )}
+                  {client.tags && client.tags.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-2">
+                      {client.tags.slice(0, 3).map((tag) => (
+                        <Badge key={tag} variant="outline" className="text-xs">
+                          {tag}
+                        </Badge>
+                      ))}
+                      {client.tags.length > 3 && (
+                        <span className="text-xs text-muted-foreground">+{client.tags.length - 3}</span>
+                      )}
+                    </div>
+                  )}
                 </CardContent>
               </Card>
             ))}
