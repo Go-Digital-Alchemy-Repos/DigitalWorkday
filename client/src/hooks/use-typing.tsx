@@ -9,7 +9,7 @@
  */
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo, ReactNode } from 'react';
-import { useAuth } from '@/lib/auth';
+import { useAuthSafe } from '@/lib/auth';
 import { getSocket, isSocketConnected, onConnectionChange } from '@/lib/realtime/socket';
 import { TYPING_EVENTS, CHAT_EVENTS, ChatTypingUpdatePayload } from '@shared/events';
 
@@ -25,7 +25,8 @@ const THROTTLE_MS = 1000; // Throttle typing start to max once per second
 const AUTO_STOP_MS = 1200; // Auto-stop typing after 1200ms inactivity
 
 export function TypingProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const auth = useAuthSafe();
+  const user = auth?.user;
   const [typingMap, setTypingMap] = useState<Map<string, Set<string>>>(new Map());
   const [isConnected, setIsConnected] = useState(() => isSocketConnected());
   

@@ -179,3 +179,7 @@ export function useAuth() {
   }
   return context;
 }
+
+export function useAuthSafe(): AuthContextType | null {
+  return useContext(AuthContext);
+}

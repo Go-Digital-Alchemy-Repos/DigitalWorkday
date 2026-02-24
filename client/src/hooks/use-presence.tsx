@@ -11,7 +11,7 @@
  */
 
 import { createContext, useContext, useEffect, useState, useCallback, useRef, useMemo, ReactNode } from 'react';
-import { useAuth } from '@/lib/auth';
+import { useAuthSafe } from '@/lib/auth';
 import { getSocket, isSocketConnected, onConnectionChange } from '@/lib/realtime/socket';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { PRESENCE_EVENTS, type PresenceState, type PresenceStatus, type PresenceUpdatePayload, type PresenceBulkUpdatePayload } from '@shared/events';
@@ -33,7 +33,8 @@ const PING_INTERVAL_MS = 25000; // 25 seconds
 const IDLE_TIMEOUT_MS = 5 * 60 * 1000; // 5 minutes
 
 export function PresenceProvider({ children }: { children: ReactNode }) {
-  const { user } = useAuth();
+  const auth = useAuthSafe();
+  const user = auth?.user;
   const queryClient = useQueryClient();
   const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [presenceMap, setPresenceMap] = useState<Map<string, PresenceState>>(new Map());
