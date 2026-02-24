@@ -6,10 +6,10 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Circle, Play, AlertTriangle, CheckCircle2 } from "lucide-react";
+import { Circle, Play, AlertTriangle, CheckCircle2, Eye } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 
-export type TaskStatus = "todo" | "in_progress" | "blocked" | "done";
+export type TaskStatus = "todo" | "in_progress" | "in_review" | "blocked" | "done" | "completed";
 
 interface StatusSelectorProps {
   value: TaskStatus;
@@ -31,6 +31,11 @@ const statusConfig: Record<TaskStatus, { label: string; icon: LucideIcon; color:
     icon: Play,
     color: "text-blue-500"
   },
+  in_review: {
+    label: "In Review",
+    icon: Eye,
+    color: "text-purple-500"
+  },
   blocked: { 
     label: "Blocked", 
     icon: AlertTriangle,
@@ -41,10 +46,15 @@ const statusConfig: Record<TaskStatus, { label: string; icon: LucideIcon; color:
     icon: CheckCircle2,
     color: "text-green-500"
   },
+  completed: {
+    label: "Completed",
+    icon: CheckCircle2,
+    color: "text-green-600"
+  },
 };
 
 function StatusIndicator({ status }: { status: TaskStatus }) {
-  const config = statusConfig[status];
+  const config = statusConfig[status] ?? statusConfig.todo;
   const Icon = config.icon;
   return (
     <span className="flex items-center gap-2">

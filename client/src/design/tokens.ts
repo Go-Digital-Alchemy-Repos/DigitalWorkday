@@ -108,14 +108,16 @@ export const PRIORITY_CLASSES: Record<PriorityLevel, string> = {
   urgent: "bg-destructive/10 text-destructive dark:bg-destructive/15",
 };
 
-export type TaskStatus = "backlog" | "todo" | "in_progress" | "blocked" | "done";
+export type TaskStatus = "backlog" | "todo" | "in_progress" | "in_review" | "blocked" | "done" | "completed";
 
 export const STATUS_CLASSES: Record<TaskStatus, string> = {
   backlog: "bg-muted text-muted-foreground",
   todo: "bg-info/10 text-info dark:bg-info/15",
   blocked: "bg-destructive/10 text-destructive dark:bg-destructive/15",
   in_progress: "bg-info/10 text-info dark:bg-info/15",
+  in_review: "bg-purple-100 text-purple-700 dark:bg-purple-900/20 dark:text-purple-400",
   done: "bg-success/10 text-success dark:bg-success/15",
+  completed: "bg-success/10 text-success dark:bg-success/15",
 };
 
 export type DueDateUrgency = "overdue" | "today" | "tomorrow" | "upcoming" | "none";
