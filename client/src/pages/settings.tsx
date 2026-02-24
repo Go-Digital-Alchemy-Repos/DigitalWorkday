@@ -2,13 +2,14 @@ import { useLocation, useRoute, Redirect } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings as SettingsIcon, Puzzle, FileText, Mail, UserCircle, MessageSquare, Zap } from "lucide-react";
+import { Settings as SettingsIcon, Puzzle, FileText, Mail, UserCircle, MessageSquare, Zap, FileArchive } from "lucide-react";
 import { ProfileTab } from "@/components/settings/profile-tab";
 import { IntegrationsTab } from "@/components/settings/integrations-tab";
 import { AgreementTab } from "@/components/settings/agreement-tab";
 import { EmailLogsTab } from "@/components/settings/email-logs-tab";
 import { MessagesTab } from "@/components/settings/messages-tab";
 import { PipelineAutomationTab } from "@/components/settings/pipeline-automation-tab";
+import { DefaultTenantDocumentsManager } from "@/features/tenantDefaultDocs";
 
 const SETTINGS_TABS = [
   { id: "profile", label: "Profile", icon: UserCircle },
@@ -17,6 +18,7 @@ const SETTINGS_TABS = [
   { id: "email-logs", label: "Email Logs", icon: Mail },
   { id: "automation", label: "Automation", icon: Zap },
   { id: "agreement", label: "Agreement", icon: FileText },
+  { id: "default-docs", label: "Default Docs", icon: FileArchive },
 ];
 
 export default function SettingsPage() {
@@ -49,7 +51,7 @@ export default function SettingsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-6 h-auto p-1 gap-1">
+          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7 h-auto p-1 gap-1">
             {SETTINGS_TABS.map((tab) => (
               <TabsTrigger
                 key={tab.id}
@@ -85,6 +87,14 @@ export default function SettingsPage() {
 
           <TabsContent value="agreement" className="mt-6">
             <AgreementTab />
+          </TabsContent>
+
+          <TabsContent value="default-docs" className="mt-6">
+            {user?.tenantId ? (
+              <DefaultTenantDocumentsManager tenantId={user.tenantId} mode="tenantAdmin" />
+            ) : (
+              <p className="text-muted-foreground">No tenant context available.</p>
+            )}
           </TabsContent>
         </Tabs>
       </div>

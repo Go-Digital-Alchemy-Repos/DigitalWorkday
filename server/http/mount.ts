@@ -31,6 +31,7 @@ import supportRouter from "./domains/support.router";
 import clientDocumentsRouter from "./domains/clientDocuments.router";
 import automationRouter from "./domains/automation.router";
 import assetsRouter from "./domains/assets.router";
+import tenantDefaultDocsRouter from "./domains/tenantDefaultDocs.router";
 import controlCenterRouter from "./domains/controlCenter.router";
 import fileServeRouter from "./domains/fileServe.router";
 
@@ -232,6 +233,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "assets",
     description: "Asset Library: unified asset management, folders, upload, download.",
+  },
+  {
+    path: "/api/v1",
+    router: tenantDefaultDocsRouter,
+    policy: "authTenant",
+    domain: "tenant-default-docs",
+    description: "Tenant Default Documents: canonical tenant-wide document library managed by admins.",
   },
   {
     path: "/api/v1",

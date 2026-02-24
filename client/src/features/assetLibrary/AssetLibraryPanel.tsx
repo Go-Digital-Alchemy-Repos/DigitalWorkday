@@ -2,6 +2,8 @@ import { useState, useCallback, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
+import { useAuth } from "@/lib/auth";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Badge } from "@/components/ui/badge";
@@ -506,8 +508,34 @@ interface Props {
   clientId: string;
 }
 
+interface TenantDefaultDoc {
+  id: string;
+  tenantId: string;
+  folderId: string | null;
+  title: string;
+  fileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  version: number;
+  updatedAt: string;
+}
+
+interface TenantDefaultFolder {
+  id: string;
+  tenantId: string;
+  parentFolderId: string | null;
+  name: string;
+}
+
+interface TenantDefaultsClientView {
+  folders: TenantDefaultFolder[];
+  documents: TenantDefaultDoc[];
+}
+
 export function AssetLibraryPanel({ clientId }: Props) {
   const { toast } = useToast();
+  const { user } = useAuth();
+  const { flags } = useFeatureFlags();
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
@@ -555,6 +583,38 @@ export function AssetLibraryPanel({ clientId }: Props) {
     },
     enabled: !!clientId,
   });
+
+  const tenantId = user?.tenantId;
+  const tenantDefaultsQuery = useQuery<TenantDefaultsClientView>({
+    queryKey: ["/api/v1/tenants", tenantId, "default-docs", "client-view"],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/tenants/${tenantId}/default-docs/client-view`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load tenant defaults");
+      return res.json();
+    },
+    enabled: !!tenantId && !!flags?.tenantDefaultDocs,
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const tenantDefaultDocs = tenantDefaultsQuery.data?.documents ?? [];
+  const tenantDefaultFolders = tenantDefaultsQuery.data?.folders ?? [];
+
+  const handleDefaultDocDownload = useCallback(
+    async (doc: TenantDefaultDoc) => {
+      try {
+        const res = await fetch(
+          `/api/v1/tenants/${tenantId}/default-docs/documents/${doc.id}/download`,
+          { credentials: "include" }
+        );
+        if (!res.ok) throw new Error("Download failed");
+        const { url } = await res.json();
+        window.open(url, "_blank");
+      } catch {
+        toast({ title: "Download failed", variant: "destructive" });
+      }
+    },
+    [tenantId, toast]
+  );
 
   const createFolderMutation = useMutation({
     mutationFn: async (name: string) => {
@@ -925,6 +985,51 @@ export function AssetLibraryPanel({ clientId }: Props) {
           )
         ) : (
           <ScrollArea className="flex-1">
+            {!currentFolderId && tenantDefaultDocs.length > 0 && (
+              <div className="mb-4" data-testid="tenant-defaults-section">
+                <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider flex items-center gap-2">
+                  Tenant Defaults
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">Read-only</Badge>
+                </div>
+                <div className="space-y-1">
+                  {tenantDefaultDocs.map((doc) => {
+                    const Icon = getFileIcon(doc.mimeType);
+                    const iconColor = getFileIconColor(doc.mimeType);
+                    return (
+                      <div
+                        key={doc.id}
+                        className="flex items-center justify-between p-2.5 rounded-lg border border-dashed hover:bg-muted/50 transition-colors"
+                        data-testid={`tenant-default-doc-${doc.id}`}
+                      >
+                        <div className="flex items-center gap-3 min-w-0 flex-1">
+                          <Icon className={`w-5 h-5 shrink-0 ${iconColor}`} />
+                          <div className="min-w-0 flex-1">
+                            <div className="flex items-center gap-2">
+                              <p className="text-sm font-medium truncate">{doc.title}</p>
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">Default</Badge>
+                            </div>
+                            <p className="text-xs text-muted-foreground mt-0.5">
+                              {formatFileSize(doc.fileSizeBytes)}
+                              {doc.version > 1 && ` · v${doc.version}`}
+                            </p>
+                          </div>
+                        </div>
+                        <Button
+                          variant="ghost"
+                          size="icon"
+                          className="h-8 w-8 shrink-0"
+                          onClick={() => handleDefaultDocDownload(doc)}
+                          data-testid={`tenant-default-download-${doc.id}`}
+                        >
+                          <Download className="w-4 h-4" />
+                        </Button>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+
             {currentFolders.length > 0 && (
               <div className="mb-4">
                 <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Folders</div>

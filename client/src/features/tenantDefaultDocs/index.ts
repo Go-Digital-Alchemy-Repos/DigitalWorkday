@@ -1,0 +1,1 @@
+export { DefaultTenantDocumentsManager } from "./DefaultTenantDocumentsManager";

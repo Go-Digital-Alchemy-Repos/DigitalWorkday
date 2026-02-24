@@ -807,6 +807,55 @@ export const insertAssetLinkSchema = createInsertSchema(assetLinks).omit({
   createdAt: true,
 });
 
+// =============================================================================
+// TENANT DEFAULT DOCUMENTS (Canonical tenant-wide document library)
+// =============================================================================
+
+export const tenantDefaultFolders = pgTable("tenant_default_folders", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  parentFolderId: varchar("parent_folder_id"),
+  name: text("name").notNull(),
+  sortOrder: integer("sort_order").notNull().default(0),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  isDeleted: boolean("is_deleted").notNull().default(false),
+}, (table) => [
+  index("tdf_tenant_parent_idx").on(table.tenantId, table.parentFolderId),
+  index("tdf_tenant_idx").on(table.tenantId),
+  index("tdf_tenant_deleted_idx").on(table.tenantId, table.isDeleted),
+]);
+
+export type TenantDefaultFolder = typeof tenantDefaultFolders.$inferSelect;
+export type InsertTenantDefaultFolder = typeof tenantDefaultFolders.$inferInsert;
+
+export const tenantDefaultDocuments = pgTable("tenant_default_documents", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  folderId: varchar("folder_id").references(() => tenantDefaultFolders.id),
+  title: text("title").notNull(),
+  description: text("description"),
+  r2Key: text("r2_key").notNull(),
+  fileName: text("file_name").notNull(),
+  mimeType: text("mime_type").notNull(),
+  fileSizeBytes: integer("file_size_bytes").notNull(),
+  version: integer("version").notNull().default(1),
+  effectiveYear: integer("effective_year"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  updatedByUserId: varchar("updated_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  isDeleted: boolean("is_deleted").notNull().default(false),
+}, (table) => [
+  index("tdd_tenant_folder_idx").on(table.tenantId, table.folderId),
+  index("tdd_tenant_deleted_idx").on(table.tenantId, table.isDeleted),
+  index("tdd_tenant_updated_idx").on(table.tenantId, table.updatedAt),
+]);
+
+export type TenantDefaultDocument = typeof tenantDefaultDocuments.$inferSelect;
+export type InsertTenantDefaultDocument = typeof tenantDefaultDocuments.$inferInsert;
+
 /**
  * Client Contacts table - represents people at client companies
  */

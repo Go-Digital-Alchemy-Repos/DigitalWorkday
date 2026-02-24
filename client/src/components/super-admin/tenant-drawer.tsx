@@ -46,6 +46,7 @@ import {
   FileSpreadsheet,
   Heart,
   FolderKanban,
+  FileArchive,
 } from "lucide-react";
 import { DataImportWizard as DataImportWizardComponent } from "@/components/super-admin/data-import-wizard";
 import { AsanaImportWizard } from "@/components/super-admin/asana-import-wizard";
@@ -68,6 +69,7 @@ import {
   getStatusBadge,
 } from "./tenant-drawer/index";
 import type { TenantWithDetails, TenantSettings, OnboardingProgress, IntegrationStatus } from "./tenant-drawer/types";
+import { DefaultTenantDocumentsManager } from "@/features/tenantDefaultDocs";
 
 interface TenantDrawerProps {
   tenant: TenantWithDetails | null;
@@ -921,7 +923,7 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
         </div>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="w-full">
-          <TabsList className="grid w-full grid-cols-10">
+          <TabsList className="grid w-full grid-cols-11">
             <TabsTrigger value="onboarding" data-testid="tab-onboarding">
               <Settings className="h-4 w-4 mr-2" />
               Setup
@@ -961,6 +963,10 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
             <TabsTrigger value="notes" data-testid="tab-notes">
               <MessageSquare className="h-4 w-4 mr-2" />
               Notes
+            </TabsTrigger>
+            <TabsTrigger value="default-docs" data-testid="tab-default-docs">
+              <FileArchive className="h-4 w-4 mr-2" />
+              Defaults
             </TabsTrigger>
           </TabsList>
 
@@ -1012,6 +1018,10 @@ export function TenantDrawer({ tenant, open, onOpenChange, onTenantUpdated, mode
 
           <TabsContent value="notes" className="mt-6">
             <TenantDrawerNotes activeTenant={activeTenant} open={open} />
+          </TabsContent>
+
+          <TabsContent value="default-docs" className="mt-6">
+            <DefaultTenantDocumentsManager tenantId={activeTenant.id} mode="superAdmin" />
           </TabsContent>
         </Tabs>
       </div>

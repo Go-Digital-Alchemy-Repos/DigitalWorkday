@@ -187,6 +187,7 @@ export const config = {
     notificationsGroupingV1: optionalEnvBool("NOTIFICATIONS_GROUPING_V1", true),
     prefetchV1: optionalEnvBool("PREFETCH_V1", true),
     virtualizationV1: optionalEnvBool("VIRTUALIZATION_V1", true),
+    tenantDefaultDocs: optionalEnvBool("TENANT_DEFAULT_DOCS", true),
   },
 
   tenancyEnforcement: {

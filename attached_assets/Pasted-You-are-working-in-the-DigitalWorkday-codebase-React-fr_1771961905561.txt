@@ -1,0 +1,304 @@
+You are working in the DigitalWorkday codebase (React frontend, Node/Express backend, Postgres + Drizzle ORM, file uploads already exist somewhere in the app).
+
+Implement a NEW feature: “Default Tenant Documents” with a single source of truth per tenant that is managed by BOTH Super Admins and Tenant Admins with equal power, and is visible to ALL clients in that tenant’s Assets Library as default items.
+
+THIS MUST BE NON-DESTRUCTIVE:
+- Do NOT break or change existing Assets Library behavior for client-owned uploads.
+- Do NOT change existing API response shapes in a breaking way.
+- Add new tables/endpoints/components rather than rewriting existing ones.
+- If you need to add fields to existing queries, do so additively and behind feature flags if necessary.
+- Keep legacy code paths intact.
+
+============================================================
+FEATURE SUMMARY
+============================================================
+
+1) Add a tenant-level canonical library:
+   - folders (nested)
+   - documents (files + metadata)
+   Managed by:
+   - Super Admin (for any tenant)
+   - Tenant Admin (only within their tenant)
+   BOTH have identical CRUD power; no precedence. Latest update wins.
+
+2) Expose management UI in TWO locations:
+   A) Super Admin → Tenants → Tenant Profile → New tab “Default Tenant Documents”
+   B) Tenant Admin → Tenant Settings/Profile (or equivalent) → “Default Tenant Documents”
+
+3) Client-facing behavior:
+   - All tenant clients’ Assets Libraries must display these default documents.
+   - Updates/renames/replacements must reflect instantly across all clients.
+   - Do NOT clone/copy these files into each client.
+   - Clients can view/download but cannot edit default tenant docs.
+
+4) Use case:
+   - Upload annual forms (W2/W9/etc). Updating a file updates it everywhere.
+
+============================================================
+PHASE 0 — DISCOVERY (DO FIRST, NO BEHAVIOR CHANGES)
+============================================================
+Find and note:
+- Existing “Assets Library” tables and API(s) used by client Asset views
+- Existing file storage/upload mechanism (S3/R2/local) and how file records are stored (fileKey/url/etc.)
+- Existing auth roles and how Super Admin vs Tenant Admin is determined
+- Existing UI location for:
+  - Super Admin Tenant Profile tabs
+  - Tenant Admin tenant settings area
+- Existing folder/tree logic (if any) for asset libraries
+
+Do not refactor during discovery; only integrate with existing patterns.
+
+============================================================
+PHASE 1 — DATABASE (ADDITIVE TABLES ONLY)
+============================================================
+
+Add two new tables for tenant defaults (names may align with existing conventions):
+
+1) tenant_default_folders
+- id (uuid / cuid / whatever the app uses)
+- tenant_id (FK)
+- parent_folder_id (nullable FK to tenant_default_folders.id)
+- name (text)
+- sort_order (int, default 0)
+- created_by_user_id (FK users, nullable if system)
+- created_at, updated_at
+- is_deleted (boolean default false) OR deleted_at (nullable timestamp)
+Indexes:
+- (tenant_id, parent_folder_id)
+- (tenant_id)
+- (tenant_id, is_deleted) if using is_deleted
+
+2) tenant_default_documents
+- id
+- tenant_id (FK)
+- folder_id (nullable FK to tenant_default_folders.id)
+- title (text)
+- description (text nullable)
+- file_key / storage_key (text) OR existing file reference model
+- file_name (text)
+- mime_type (text)
+- file_size_bytes (int/bigint)
+- checksum (text nullable) (optional)
+- version (int default 1) (optional but useful for replacements)
+- effective_year (int nullable) (optional metadata)
+- created_by_user_id
+- updated_by_user_id
+- created_at, updated_at
+- is_deleted (boolean default false) OR deleted_at
+Indexes:
+- (tenant_id, folder_id)
+- (tenant_id, is_deleted)
+- (tenant_id, updated_at)
+
+IMPORTANT:
+- These represent the canonical library. Do not copy into client tables.
+
+Add Drizzle schema + migrations following repo standards.
+
+============================================================
+PHASE 2 — BACKEND REPOSITORY + SERVICE LAYER (ADDITIVE)
+============================================================
+
+Create repository functions (new files) for tenant default docs:
+
+Repositories:
+- createTenantDefaultFolder(tenantId, parentFolderId, name, sortOrder, userId)
+- updateTenantDefaultFolder(folderId, tenantId, patch, userId) (rename/move/sort)
+- deleteTenantDefaultFolder(folderId, tenantId, userId) (soft delete)
+- listTenantDefaultFolderTree(tenantId) (returns nested or flat list with parent ids)
+
+- createTenantDefaultDocument(metadata + uploaded file info)
+- updateTenantDefaultDocument(documentId, tenantId, patch, userId) (rename/move/description)
+- replaceTenantDefaultDocumentFile(documentId, tenantId, new file info, userId)
+- deleteTenantDefaultDocument(documentId, tenantId, userId) (soft delete)
+- listTenantDefaultDocuments(tenantId, folderId?) (or combined tree endpoint)
+
+Services:
+- enforce permissions:
+  - Super Admin: can act on any tenantId
+  - Tenant Admin: can act only on their own tenantId
+  - Others: forbidden for management routes
+
+Auditing:
+- Always set updated_by_user_id and updated_at for any change.
+- Do NOT prioritize user type; last write wins automatically by updated_at.
+
+============================================================
+PHASE 3 — BACKEND ROUTES (ADDITIVE, STRICT AUTH)
+============================================================
+
+Add new endpoints (suggested):
+
+Management (Super Admin + Tenant Admin)
+- GET    /api/tenants/:tenantId/default-docs/tree
+- POST   /api/tenants/:tenantId/default-docs/folders
+- PATCH  /api/tenants/:tenantId/default-docs/folders/:folderId
+- DELETE /api/tenants/:tenantId/default-docs/folders/:folderId
+
+- POST   /api/tenants/:tenantId/default-docs/documents   (multipart upload)
+- PATCH  /api/tenants/:tenantId/default-docs/documents/:documentId
+- POST   /api/tenants/:tenantId/default-docs/documents/:documentId/replace (multipart upload)
+- DELETE /api/tenants/:tenantId/default-docs/documents/:documentId
+
+Client-facing (read-only)
+Option A (preferred additive):
+- Modify existing Assets Library “list” endpoint to INCLUDE tenant defaults as an additional section/root node (non-breaking)
+Option B (safer if existing endpoint is fragile):
+- Add a new endpoint:
+  GET /api/clients/:clientId/assets?includeTenantDefaults=true
+  or
+  GET /api/clients/:clientId/tenant-default-assets
+
+Choose the option that is LEAST RISK to existing UI:
+- If the existing Assets API already merges multiple sources, extend it additively.
+- Otherwise add a new endpoint and update UI carefully.
+
+Auth rules:
+- Management endpoints: require Super Admin OR Tenant Admin for that tenant.
+- Client endpoints: client users can read defaults if they belong to that tenant.
+
+============================================================
+PHASE 4 — FILE UPLOAD/REPLACEMENT (REUSE EXISTING SYSTEM)
+============================================================
+
+Integrate with the app’s existing upload mechanism:
+- Use the same storage (S3/R2/local) and file validation rules.
+- Store returned storage_key/file_key in tenant_default_documents.
+- For “replace”:
+  - Upload new file
+  - Update storage_key + file metadata
+  - Increment version (optional)
+  - Keep old storage object if your retention rules require; otherwise allow cleanup later.
+
+Do NOT implement a brand-new storage provider if one already exists.
+
+============================================================
+PHASE 5 — FRONTEND UI (TWO ENTRY POINTS, SAME COMPONENTS)
+============================================================
+
+Create one shared, reusable page/component:
+- <DefaultTenantDocumentsManager tenantId={...} mode="superAdmin"|"tenantAdmin" />
+
+Capabilities:
+- Folder tree on left (create/rename/move/delete)
+- Document list/grid on right
+- Upload document into current folder
+- Replace file for a document
+- Rename/move document
+- Soft delete (or archive)
+- Show updatedAt and updatedBy (optional but helpful)
+- Indicate “default docs are visible to all clients for this tenant”
+
+A) Super Admin integration
+- Add a new tab in:
+  Super Admin → Tenants → Tenant Profile
+  Tab label: “Default Tenant Documents”
+- When selected, render DefaultTenantDocumentsManager with tenantId from profile context.
+
+B) Tenant Admin integration
+- Add a new nav item or tab in Tenant Admin area:
+  Tenant Settings/Profile → “Default Tenant Documents”
+- Render the SAME component, but tenantId is derived from the logged-in tenant context.
+- Tenant Admin must NOT be able to switch tenantId.
+
+Frontend API usage:
+- Super Admin uses /api/tenants/:tenantId/default-docs/...
+- Tenant Admin uses same endpoints with their tenantId.
+
+============================================================
+PHASE 6 — CLIENT ASSETS LIBRARY DISPLAY (READ-ONLY DEFAULTS)
+============================================================
+
+In the client Assets Library UI, display tenant defaults automatically.
+
+Recommended UI approach (clear separation, minimal confusion):
+- Add a top-level root node: “Tenant Defaults”
+- Under it, show the folder tree from tenant_default_folders
+- Under folders, show tenant_default_documents
+
+Rules in UI:
+- Default items are read-only for clients:
+  - allow view/download
+  - disallow edit/move/delete
+- Add a small badge/icon “Default” on these items.
+- Search results should include defaults, but indicate they are defaults.
+
+Implementation detail:
+- Merge datasets at render time:
+  - client-owned assets (existing)
+  - tenant defaults (new)
+- Do NOT create per-client copies.
+- Ensure the client only sees defaults for their tenant.
+
+============================================================
+PHASE 7 — NON-DESTRUCTIVE SAFETY + ROLLOUT
+============================================================
+
+Add feature flag(s) (env or config):
+- ENABLE_TENANT_DEFAULT_DOCS_MANAGEMENT
+- ENABLE_TENANT_DEFAULT_DOCS_IN_CLIENT_ASSETS
+
+Default:
+- enabled in development
+- controlled in staging/prod
+
+Legacy behavior must remain unchanged when flags are off.
+
+============================================================
+PHASE 8 — TESTING CHECKLIST
+============================================================
+
+Add minimal tests where the repo supports them (or dev checklist if not):
+
+Permissions
+- Tenant Admin can manage defaults only for own tenant
+- Super Admin can manage for any tenant
+- Client user cannot manage defaults
+
+Behavior
+- Create folder + upload doc → visible in client assets immediately
+- Rename folder/doc → reflected in client assets
+- Replace file → client download returns latest file
+- Delete (soft) → removed from client assets
+- Two users (Super Admin and Tenant Admin) editing same doc:
+  - last update reflects, no precedence by role type
+
+Performance
+- Listing tenant defaults should be efficient and scoped by tenant.
+- No per-client propagation jobs.
+
+============================================================
+PHASE 9 — APP DOCS UPDATE (MANDATORY)
+============================================================
+
+Update App Docs with a new page/section:
+Title: “Default Tenant Documents (Tenant-wide canonical Assets)”
+
+Include:
+1) Purpose and use cases (W2/W9 annual updates)
+2) Single Source of Truth design (no cloning)
+3) Data model (tables + key columns)
+4) Permissions matrix:
+   - Super Admin: full CRUD any tenant
+   - Tenant Admin: full CRUD own tenant
+   - Client: read-only
+5) API routes (management + client read)
+6) UI entry points (Super Admin + Tenant Admin)
+7) Client Assets Library integration (Tenant Defaults root + read-only rules)
+8) Audit fields (updatedBy/updatedAt)
+9) Feature flags + rollback plan
+10) Known limitations + future ideas (version history, expiration/effective year filters)
+
+Do NOT overwrite unrelated docs. Add new section and cross-link where appropriate.
+
+============================================================
+DELIVERABLES
+============================================================
+- DB migrations + Drizzle schemas for tenant_default_folders and tenant_default_documents
+- Backend repos/services/routes with correct auth
+- Shared UI manager component used by BOTH Super Admin and Tenant Admin
+- Client Assets Library displays tenant defaults (read-only) under “Tenant Defaults”
+- Feature flags
+- App Docs update
+
+Proceed carefully and keep everything additive and reversible.

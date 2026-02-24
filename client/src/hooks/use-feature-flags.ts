@@ -11,6 +11,7 @@ export interface FeatureFlags {
   notificationsGroupingV1: boolean;
   prefetchV1: boolean;
   virtualizationV1: boolean;
+  tenantDefaultDocs: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -24,6 +25,7 @@ const ALL_OFF: FeatureFlags = {
   notificationsGroupingV1: false,
   prefetchV1: false,
   virtualizationV1: false,
+  tenantDefaultDocs: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {
