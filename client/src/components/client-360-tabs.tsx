@@ -77,6 +77,7 @@ import {
   Target,
   UserPlus,
   ArrowLeft,
+  Save,
 } from "lucide-react";
 import { ClipboardCheck, UserCheck, Eye, EyeOff, AlertTriangle, ShieldAlert, SlidersHorizontal, X, Search, XCircle, RotateCcw, ArrowUpDown, ChevronLeft, ChevronRight } from "lucide-react";
 import {
@@ -823,6 +824,9 @@ export function NotesTab({ clientId }: { clientId: string }) {
   const [noteBody, setNoteBody] = useState("");
   const [noteCategory, setNoteCategory] = useState("general");
   const [deleteNoteId, setDeleteNoteId] = useState<string | null>(null);
+  const [editingNoteId, setEditingNoteId] = useState<string | null>(null);
+  const [editBody, setEditBody] = useState("");
+  const [editCategory, setEditCategory] = useState("general");
 
   const { data: notes = [], isLoading } = useQuery<CrmNote[]>({
     queryKey: [`/api/crm/clients/${clientId}/notes`],
@@ -860,6 +864,22 @@ export function NotesTab({ clientId }: { clientId: string }) {
     },
   });
 
+  const updateNoteMutation = useMutation({
+    mutationFn: async ({ noteId, body, category }: { noteId: string; body: string; category: string }) => {
+      return apiRequest("PUT", `/api/crm/notes/${noteId}`, { body, category });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: [`/api/crm/clients/${clientId}/notes`] });
+      setEditingNoteId(null);
+      setEditBody("");
+      setEditCategory("general");
+      toast({ title: "Note updated" });
+    },
+    onError: (error) => {
+      toast(formatErrorForToast(error));
+    },
+  });
+
   const deleteNoteMutation = useMutation({
     mutationFn: async (noteId: string) => {
       return apiRequest("DELETE", `/api/crm/notes/${noteId}`);
@@ -877,6 +897,63 @@ export function NotesTab({ clientId }: { clientId: string }) {
   function handleCreateNote() {
     if (!noteBody || noteBody.trim() === "" || noteBody === "<p></p>") return;
     createNoteMutation.mutate({ body: noteBody, category: noteCategory });
+  }
+
+  function bodyToEditorValue(body: any): string {
+    if (!body) return "";
+    if (typeof body === "object" && body !== null) {
+      const doc = body as any;
+      if (doc.type === "doc" && Array.isArray(doc.content)) {
+        function nodesToHtml(nodes: any[]): string {
+          return nodes.map((node: any) => {
+            if (node.type === "text") {
+              let text = node.text || "";
+              if (node.marks) {
+                node.marks.forEach((mark: any) => {
+                  if (mark.type === "bold") text = `<strong>${text}</strong>`;
+                  if (mark.type === "italic") text = `<em>${text}</em>`;
+                  if (mark.type === "underline") text = `<u>${text}</u>`;
+                  if (mark.type === "link") text = `<a href="${mark.attrs?.href || ""}">${text}</a>`;
+                });
+              }
+              return text;
+            }
+            if (node.type === "paragraph") {
+              const inner = node.content ? nodesToHtml(node.content) : "";
+              return `<p>${inner}</p>`;
+            }
+            if (node.type === "bulletList") {
+              const inner = node.content ? nodesToHtml(node.content) : "";
+              return `<ul>${inner}</ul>`;
+            }
+            if (node.type === "orderedList") {
+              const inner = node.content ? nodesToHtml(node.content) : "";
+              return `<ol>${inner}</ol>`;
+            }
+            if (node.type === "listItem") {
+              const inner = node.content ? nodesToHtml(node.content) : "";
+              return `<li>${inner}</li>`;
+            }
+            if (node.content) return nodesToHtml(node.content);
+            return "";
+          }).join("");
+        }
+        return nodesToHtml(doc.content);
+      }
+    }
+    if (typeof body === "string") return body;
+    return "";
+  }
+
+  function startEditNote(note: CrmNote) {
+    setEditingNoteId(note.id);
+    setEditBody(bodyToEditorValue(note.body));
+    setEditCategory(note.category || "general");
+  }
+
+  function handleUpdateNote() {
+    if (!editingNoteId || !editBody || editBody.trim() === "" || editBody === "<p></p>") return;
+    updateNoteMutation.mutate({ noteId: editingNoteId, body: editBody, category: editCategory });
   }
 
   if (isLoading) {
@@ -942,53 +1019,92 @@ export function NotesTab({ clientId }: { clientId: string }) {
           {notes.map((note) => (
             <Card key={note.id} data-testid={`card-note-${note.id}`}>
               <CardContent className="py-4 px-4">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex items-start gap-3 min-w-0 flex-1">
-                    <Avatar className="h-8 w-8 shrink-0">
-                      <AvatarFallback className="text-xs">
-                        {(note.authorName?.[0] || note.authorEmail?.[0] || "?").toUpperCase()}
-                      </AvatarFallback>
-                    </Avatar>
-                    <div className="min-w-0 flex-1">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="text-sm font-medium" data-testid={`text-note-author-${note.id}`}>
-                          {note.authorName || note.authorEmail || "Unknown"}
-                        </span>
-                        <span className="text-xs text-muted-foreground" data-testid={`text-note-date-${note.id}`}>
-                          {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
-                        </span>
-                        {note.category && note.category !== "general" && (
-                          <Badge variant="secondary" className="text-xs">{note.category}</Badge>
-                        )}
-                      </div>
-                      <div className="text-sm" data-testid={`text-note-body-${note.id}`}>
-                        {typeof note.body === "string" ? (
-                          <RichTextViewer content={note.body} />
-                        ) : (
-                          <pre className="whitespace-pre-wrap text-sm">{JSON.stringify(note.body)}</pre>
-                        )}
+                {editingNoteId === note.id ? (
+                  <div className="space-y-3">
+                    <RichTextEditor
+                      value={editBody}
+                      onChange={setEditBody}
+                      placeholder="Edit your note..."
+                      minHeight="80px"
+                      showToolbar={true}
+                    />
+                    <div className="flex items-center justify-between gap-3">
+                      <Select value={editCategory} onValueChange={setEditCategory}>
+                        <SelectTrigger className="w-[200px] h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {allCategoryOptions.map((cat) => (
+                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <div className="flex gap-2">
+                        <Button size="sm" variant="ghost" onClick={() => setEditingNoteId(null)} data-testid="button-cancel-edit-note">
+                          Cancel
+                        </Button>
+                        <Button size="sm" onClick={handleUpdateNote} disabled={updateNoteMutation.isPending} data-testid="button-save-edit-note">
+                          {updateNoteMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                          Save
+                        </Button>
                       </div>
                     </div>
                   </div>
+                ) : (
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3 min-w-0 flex-1">
+                      <Avatar className="h-8 w-8 shrink-0">
+                        <AvatarFallback className="text-xs">
+                          {(note.authorName?.[0] || note.authorEmail?.[0] || "?").toUpperCase()}
+                        </AvatarFallback>
+                      </Avatar>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2 flex-wrap mb-1">
+                          <span className="text-sm font-medium" data-testid={`text-note-author-${note.id}`}>
+                            {note.authorName || note.authorEmail || "Unknown"}
+                          </span>
+                          <span className="text-xs text-muted-foreground" data-testid={`text-note-date-${note.id}`}>
+                            {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
+                          </span>
+                          {note.updatedAt && note.updatedAt !== note.createdAt && (
+                            <span className="text-xs text-muted-foreground italic">(edited)</span>
+                          )}
+                          {note.category && note.category !== "general" && (
+                            <Badge variant="secondary" className="text-xs">{note.category}</Badge>
+                          )}
+                        </div>
+                        <div className="text-sm" data-testid={`text-note-body-${note.id}`}>
+                          <RichTextViewer content={note.body} />
+                        </div>
+                      </div>
+                    </div>
 
-                  <DropdownMenu>
-                    <DropdownMenuTrigger asChild>
-                      <Button variant="ghost" size="icon" aria-label="Note options" data-testid={`button-note-menu-${note.id}`}>
-                        <MoreHorizontal className="h-4 w-4" />
-                      </Button>
-                    </DropdownMenuTrigger>
-                    <DropdownMenuContent align="end">
-                      <DropdownMenuItem
-                        className="text-destructive"
-                        onClick={() => setDeleteNoteId(note.id)}
-                        data-testid={`button-delete-note-${note.id}`}
-                      >
-                        <Trash2 className="h-4 w-4 mr-2" />
-                        Delete
-                      </DropdownMenuItem>
-                    </DropdownMenuContent>
-                  </DropdownMenu>
-                </div>
+                    <DropdownMenu>
+                      <DropdownMenuTrigger asChild>
+                        <Button variant="ghost" size="icon" aria-label="Note options" data-testid={`button-note-menu-${note.id}`}>
+                          <MoreHorizontal className="h-4 w-4" />
+                        </Button>
+                      </DropdownMenuTrigger>
+                      <DropdownMenuContent align="end">
+                        <DropdownMenuItem
+                          onClick={() => startEditNote(note)}
+                          data-testid={`button-edit-note-${note.id}`}
+                        >
+                          <Pencil className="h-4 w-4 mr-2" />
+                          Edit
+                        </DropdownMenuItem>
+                        <DropdownMenuItem
+                          className="text-destructive"
+                          onClick={() => setDeleteNoteId(note.id)}
+                          data-testid={`button-delete-note-${note.id}`}
+                        >
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Delete
+                        </DropdownMenuItem>
+                      </DropdownMenuContent>
+                    </DropdownMenu>
+                  </div>
+                )}
               </CardContent>
             </Card>
           ))}

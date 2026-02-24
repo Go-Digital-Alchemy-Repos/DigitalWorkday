@@ -1,7 +1,7 @@
 import { Router, Request, Response } from "express";
 import { z } from "zod";
 import { db } from "../../../db";
-import { eq, and, desc } from "drizzle-orm";
+import { eq, and, desc, sql } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../../../lib/errors";
 import { getEffectiveTenantId } from "../../../middleware/tenantContext";
 import { requireAuth } from "../../../auth";
@@ -81,6 +81,58 @@ router.post("/crm/clients/:clientId/notes", requireAuth, async (req: Request, re
     res.status(201).json(note);
   } catch (error) {
     return handleRouteError(res, error, "POST /api/crm/clients/:clientId/notes", req);
+  }
+});
+
+router.put("/crm/notes/:id", requireAuth, async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.tenantRequired(), req);
+
+    const { id } = req.params;
+
+    const [existing] = await db.select()
+      .from(clientNotes)
+      .where(and(eq(clientNotes.id, id), eq(clientNotes.tenantId, tenantId)))
+      .limit(1);
+    if (!existing) return sendError(res, AppError.notFound("Note"), req);
+
+    const userId = getCurrentUserId(req);
+    if (existing.authorUserId !== userId && !isAdminOrSuper(req)) {
+      return sendError(res, AppError.forbidden("Only the author or an admin can edit this note"), req);
+    }
+
+    const data = validateBody(req.body, crmNoteCreateSchema, res);
+    if (!data) return;
+
+    const [versionCountResult] = await db.select({ count: sql<number>`count(*)::int` })
+      .from(clientNoteVersions)
+      .where(and(eq(clientNoteVersions.noteId, id), eq(clientNoteVersions.tenantId, tenantId)));
+
+    await db.insert(clientNoteVersions).values({
+      noteId: id,
+      tenantId,
+      editorUserId: userId,
+      body: existing.body,
+      category: existing.category,
+      categoryId: existing.categoryId,
+      versionNumber: (versionCountResult?.count || 0) + 1,
+    });
+
+    const [updated] = await db.update(clientNotes)
+      .set({
+        body: data.body,
+        category: data.category ?? existing.category,
+        categoryId: data.categoryId ?? existing.categoryId,
+        lastEditedByUserId: userId,
+        updatedAt: new Date(),
+      })
+      .where(and(eq(clientNotes.id, id), eq(clientNotes.tenantId, tenantId)))
+      .returning();
+
+    res.json(updated);
+  } catch (error) {
+    return handleRouteError(res, error, "PUT /api/crm/notes/:id", req);
   }
 });
 

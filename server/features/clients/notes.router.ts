@@ -1,4 +1,6 @@
 import { Router, Request, Response } from "express";
+import crypto from "crypto";
+import multer from "multer";
 import { z } from "zod";
 import { db } from "../../db";
 import { 
@@ -13,6 +15,18 @@ import { eq, and, desc, sql } from "drizzle-orm";
 import { requireAuth } from "../../auth";
 import { requireTenantContext, TenantRequest } from "../../middleware/tenantContext";
 import { AppError, handleRouteError } from "../../lib/errors";
+import {
+  isS3Configured,
+  validateFile,
+  uploadToS3,
+  createPresignedDownloadUrl,
+  ALLOWED_MIME_TYPES,
+} from "../../s3";
+
+const fileUpload = multer({
+  storage: multer.memoryStorage(),
+  limits: { fileSize: 25 * 1024 * 1024 },
+});
 
 const router = Router();
 
@@ -452,6 +466,7 @@ router.get("/:clientId/notes/:noteId/versions", requireAuth, requireTenantContex
       editorUserId: clientNoteVersions.editorUserId,
       editorFirstName: users.firstName,
       editorLastName: users.lastName,
+      editorEmail: users.email,
     })
       .from(clientNoteVersions)
       .leftJoin(users, eq(clientNoteVersions.editorUserId, users.id))
@@ -461,9 +476,175 @@ router.get("/:clientId/notes/:noteId/versions", requireAuth, requireTenantContex
       ))
       .orderBy(desc(clientNoteVersions.versionNumber));
 
-    res.json({ ok: true, versions });
+    const currentNote = await db.select({
+      id: clientNotes.id,
+      clientId: clientNotes.clientId,
+      body: clientNotes.body,
+      category: clientNotes.category,
+      categoryId: clientNotes.categoryId,
+      createdAt: clientNotes.createdAt,
+      updatedAt: clientNotes.updatedAt,
+      authorUserId: clientNotes.authorUserId,
+      lastEditedByUserId: clientNotes.lastEditedByUserId,
+    })
+      .from(clientNotes)
+      .where(and(eq(clientNotes.id, noteId), eq(clientNotes.tenantId, tenantId)));
+
+    const transformedVersions = versions.map(v => ({
+      id: v.id,
+      noteId: v.noteId,
+      body: v.body,
+      category: v.category,
+      categoryId: v.categoryId,
+      versionNumber: v.versionNumber,
+      createdAt: v.createdAt,
+      editorUserId: v.editorUserId,
+      editor: {
+        firstName: v.editorFirstName,
+        lastName: v.editorLastName,
+        email: v.editorEmail,
+      },
+    }));
+
+    res.json({ 
+      ok: true, 
+      currentNote: currentNote[0] || null,
+      versions: transformedVersions,
+      totalVersions: transformedVersions.length,
+    });
   } catch (error: any) {
     handleRouteError(res, error, "clientNotes.getVersions", req);
+  }
+});
+
+// =============================================================================
+// NOTE ATTACHMENTS
+// =============================================================================
+
+router.post("/:clientId/notes/:noteId/attachments/upload", requireAuth, requireTenantContext, fileUpload.single("file"), async (req: Request, res: Response) => {
+  const tenantReq = req as TenantRequest;
+  const tenantId = tenantReq.tenant?.effectiveTenantId;
+  const userId = (req.user as any)?.id;
+  const { clientId, noteId } = req.params;
+
+  if (!tenantId || !userId) {
+    return res.status(400).json({ ok: false, error: "Tenant and user context required" });
+  }
+
+  try {
+    if (!isS3Configured()) {
+      throw new AppError(503, "INTERNAL_ERROR", "File storage is not configured.");
+    }
+
+    const file = (req as any).file;
+    if (!file) {
+      throw AppError.badRequest("No file provided");
+    }
+
+    const [existingNote] = await db.select()
+      .from(clientNotes)
+      .where(and(
+        eq(clientNotes.id, noteId),
+        eq(clientNotes.clientId, clientId),
+        eq(clientNotes.tenantId, tenantId)
+      ));
+
+    if (!existingNote) {
+      throw AppError.notFound("Note");
+    }
+
+    const mimeType = file.mimetype || "application/octet-stream";
+    const fileName = file.originalname || "untitled";
+    const fileSizeBytes = file.size;
+
+    const validation = validateFile(mimeType, fileSizeBytes);
+    if (!validation.valid) {
+      throw AppError.badRequest(validation.error || "Invalid file");
+    }
+
+    const fileId = crypto.randomUUID();
+    const storageKey = `tenants/${tenantId}/clients/${clientId}/notes/${noteId}/${fileId}/${fileName}`;
+
+    await uploadToS3(storageKey, file.buffer, mimeType);
+
+    const [attachment] = await db.insert(clientNoteAttachments).values({
+      tenantId,
+      noteId,
+      uploadedByUserId: userId,
+      originalFileName: fileName,
+      mimeType,
+      fileSizeBytes,
+      storageKey,
+      uploadStatus: "completed",
+    }).returning();
+
+    res.status(201).json({ ok: true, attachment });
+  } catch (error: any) {
+    handleRouteError(res, error, "clientNotes.uploadAttachment", req);
+  }
+});
+
+router.get("/:clientId/notes/:noteId/attachments/:attachmentId/download", requireAuth, requireTenantContext, async (req: Request, res: Response) => {
+  const tenantReq = req as TenantRequest;
+  const tenantId = tenantReq.tenant?.effectiveTenantId;
+  const { clientId, noteId, attachmentId } = req.params;
+
+  if (!tenantId) {
+    return res.status(400).json({ ok: false, error: "Tenant context required" });
+  }
+
+  try {
+    if (!isS3Configured()) {
+      throw new AppError(503, "INTERNAL_ERROR", "File storage is not configured.");
+    }
+
+    const [attachment] = await db.select()
+      .from(clientNoteAttachments)
+      .where(and(
+        eq(clientNoteAttachments.id, attachmentId),
+        eq(clientNoteAttachments.noteId, noteId),
+        eq(clientNoteAttachments.tenantId, tenantId)
+      ));
+
+    if (!attachment) {
+      throw AppError.notFound("Attachment");
+    }
+
+    const downloadUrl = await createPresignedDownloadUrl(attachment.storageKey, tenantId);
+    res.redirect(downloadUrl);
+  } catch (error: any) {
+    handleRouteError(res, error, "clientNotes.downloadAttachment", req);
+  }
+});
+
+router.delete("/:clientId/notes/:noteId/attachments/:attachmentId", requireAuth, requireTenantContext, async (req: Request, res: Response) => {
+  const tenantReq = req as TenantRequest;
+  const tenantId = tenantReq.tenant?.effectiveTenantId;
+  const { noteId, attachmentId } = req.params;
+
+  if (!tenantId) {
+    return res.status(400).json({ ok: false, error: "Tenant context required" });
+  }
+
+  try {
+    const [attachment] = await db.select()
+      .from(clientNoteAttachments)
+      .where(and(
+        eq(clientNoteAttachments.id, attachmentId),
+        eq(clientNoteAttachments.noteId, noteId),
+        eq(clientNoteAttachments.tenantId, tenantId)
+      ));
+
+    if (!attachment) {
+      throw AppError.notFound("Attachment");
+    }
+
+    await db.delete(clientNoteAttachments)
+      .where(eq(clientNoteAttachments.id, attachmentId));
+
+    res.json({ ok: true, message: "Attachment deleted" });
+  } catch (error: any) {
+    handleRouteError(res, error, "clientNotes.deleteAttachment", req);
   }
 });
 

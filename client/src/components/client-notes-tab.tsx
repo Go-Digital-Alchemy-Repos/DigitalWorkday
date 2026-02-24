@@ -57,6 +57,16 @@ import {
   Settings,
   FolderOpen,
   ArrowLeft,
+  Paperclip,
+  Download,
+  X,
+  FileText,
+  Image as ImageIcon,
+  File,
+  ArrowUpDown,
+  Calendar,
+  Clock,
+  Upload,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { formatErrorForToast } from "@/lib/parseApiError";
@@ -70,10 +80,21 @@ interface NoteAuthor {
   email: string | null;
 }
 
+interface NoteAttachment {
+  id: string;
+  noteId: string;
+  originalFileName: string;
+  mimeType: string;
+  fileSizeBytes: number;
+  storageKey: string;
+  createdAt: string;
+  uploadedByUserId: string;
+}
+
 interface ClientNote {
   id: string;
   clientId: string;
-  body: string;
+  body: any;
   category: string;
   categoryId: string | null;
   createdAt: string;
@@ -82,13 +103,14 @@ interface ClientNote {
   lastEditedByUserId: string | null;
   author: NoteAuthor;
   versionCount: number;
+  attachments?: NoteAttachment[];
 }
 
 interface NoteVersion {
   id: string;
   noteId: string;
   editorUserId: string;
-  body: string;
+  body: any;
   category: string;
   versionNumber: number;
   createdAt: string;
@@ -168,6 +190,12 @@ function getCategoryBadgeStyle(category: string, color: string | null): string {
   return CATEGORY_COLORS[category.toLowerCase()] || CATEGORY_COLORS.general;
 }
 
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
 function getCategoryInlineStyle(color: string | null): React.CSSProperties {
   if (!color) return {};
   return {
@@ -177,68 +205,82 @@ function getCategoryInlineStyle(color: string | null): React.CSSProperties {
   };
 }
 
-function convertBodyToHtml(body: any): string {
+function extractPlainText(body: any): string {
+  if (!body) return "";
   if (typeof body === "string") {
-    if (body.startsWith("<") || body.trim() === "") {
-      return body;
+    if (body.startsWith("<")) {
+      return body.replace(/<[^>]*>/g, " ").replace(/\s+/g, " ").trim();
     }
     if (body.startsWith("{") || body.startsWith("[")) {
       try {
-        const parsed = JSON.parse(body);
-        return convertBodyToHtml(parsed);
+        return extractPlainText(JSON.parse(body));
+      } catch {
+        return body;
+      }
+    }
+    return body;
+  }
+  if (body.type === "doc" && Array.isArray(body.content)) {
+    return body.content.map((node: any) => extractNodeText(node)).join(" ").trim();
+  }
+  return "";
+}
+
+function extractNodeText(node: any): string {
+  if (node.type === "text") return node.text || "";
+  if (Array.isArray(node.content)) {
+    return node.content.map((child: any) => extractNodeText(child)).join(" ");
+  }
+  return "";
+}
+
+function bodyToEditorHtml(body: any): string {
+  if (!body) return "";
+  if (typeof body === "string") {
+    if (body.startsWith("<")) return body;
+    if (body.startsWith("{") || body.startsWith("[")) {
+      try {
+        return bodyToEditorHtml(JSON.parse(body));
       } catch {
         return `<p>${body}</p>`;
       }
     }
     return `<p>${body}</p>`;
   }
-  if (!body) return "";
   if (body.type === "doc" && Array.isArray(body.content)) {
-    return body.content.map((node: any) => {
-      if (node.type === "paragraph") {
-        if (!node.content || node.content.length === 0) {
-          return "<p></p>";
-        }
-        const text = node.content.map((item: any) => {
-          if (item.type === "text") {
-            let result = item.text || "";
-            if (item.marks) {
-              item.marks.forEach((mark: any) => {
-                if (mark.type === "bold") result = `<strong>${result}</strong>`;
-                if (mark.type === "italic") result = `<em>${result}</em>`;
-                if (mark.type === "link" && mark.attrs?.href) {
-                  result = `<a href="${mark.attrs.href}">${result}</a>`;
-                }
-              });
-            }
-            return result;
-          }
-          return "";
-        }).join("");
-        return `<p>${text}</p>`;
-      }
-      if (node.type === "bulletList" && Array.isArray(node.content)) {
-        const items = node.content.map((li: any) => {
-          const text = li.content?.map((p: any) => 
-            p.content?.map((t: any) => t.text || "").join("") || ""
-          ).join("") || "";
-          return `<li>${text}</li>`;
-        }).join("");
-        return `<ul>${items}</ul>`;
-      }
-      if (node.type === "orderedList" && Array.isArray(node.content)) {
-        const items = node.content.map((li: any) => {
-          const text = li.content?.map((p: any) => 
-            p.content?.map((t: any) => t.text || "").join("") || ""
-          ).join("") || "";
-          return `<li>${text}</li>`;
-        }).join("");
-        return `<ol>${items}</ol>`;
-      }
-      return "";
-    }).join("");
+    return body.content.map((node: any) => nodeToHtml(node)).join("");
   }
-  return JSON.stringify(body);
+  return `<p>${JSON.stringify(body)}</p>`;
+}
+
+function nodeToHtml(node: any): string {
+  if (node.type === "paragraph") {
+    if (!node.content || node.content.length === 0) return "<p></p>";
+    return `<p>${node.content.map((item: any) => inlineToHtml(item)).join("")}</p>`;
+  }
+  if (node.type === "bulletList" && Array.isArray(node.content)) {
+    return `<ul>${node.content.map((li: any) => `<li>${li.content?.map((p: any) => p.content?.map((t: any) => inlineToHtml(t)).join("") || "").join("") || ""}</li>`).join("")}</ul>`;
+  }
+  if (node.type === "orderedList" && Array.isArray(node.content)) {
+    return `<ol>${node.content.map((li: any) => `<li>${li.content?.map((p: any) => p.content?.map((t: any) => inlineToHtml(t)).join("") || "").join("") || ""}</li>`).join("")}</ol>`;
+  }
+  return "";
+}
+
+function inlineToHtml(item: any): string {
+  if (item.type === "text") {
+    let result = item.text || "";
+    if (item.marks) {
+      item.marks.forEach((mark: any) => {
+        if (mark.type === "bold") result = `<strong>${result}</strong>`;
+        if (mark.type === "italic") result = `<em>${result}</em>`;
+        if (mark.type === "underline") result = `<u>${result}</u>`;
+        if (mark.type === "link" && mark.attrs?.href) result = `<a href="${mark.attrs.href}">${result}</a>`;
+      });
+    }
+    return result;
+  }
+  return "";
 }
 
 export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
@@ -255,8 +297,11 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
   
   const [searchQuery, setSearchQuery] = useState("");
   const [filterCategory, setFilterCategory] = useState("all");
+  const [sortBy, setSortBy] = useState<"newest" | "oldest" | "category" | "author">("newest");
   const [expandedVersions, setExpandedVersions] = useState<Set<string>>(new Set());
   const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
+  const [noteAttachments, setNoteAttachments] = useState<File[]>([]);
+  const [uploadingAttachments, setUploadingAttachments] = useState(false);
   
   // Category management state
   const [showCategoryManager, setShowCategoryManager] = useState(false);
@@ -284,12 +329,8 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
   // Mutations
   const createNoteMutation = useMutation({
     mutationFn: async (data: { body: string; category: string; categoryId?: string | null }) => {
-      return apiRequest("POST", `/api/clients/${clientId}/notes`, data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
-      closeDrawer();
-      toast({ title: "Note created", description: "Your note has been saved." });
+      const res = await apiRequest("POST", `/api/clients/${clientId}/notes`, data);
+      return res;
     },
     onError: (error) => {
       const { title, description } = formatErrorForToast(error);
@@ -299,15 +340,8 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
 
   const updateNoteMutation = useMutation({
     mutationFn: async ({ noteId, body, category, categoryId }: { noteId: string; body: string; category: string; categoryId?: string | null }) => {
-      return apiRequest("PUT", `/api/clients/${clientId}/notes/${noteId}`, { body, category, categoryId });
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
-      if (historyNote) {
-        queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes", historyNote.id, "versions"] });
-      }
-      closeDrawer();
-      toast({ title: "Note updated", description: "Your changes have been saved." });
+      const res = await apiRequest("PUT", `/api/clients/${clientId}/notes/${noteId}`, { body, category, categoryId });
+      return res;
     },
     onError: (error) => {
       const { title, description } = formatErrorForToast(error);
@@ -392,6 +426,8 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
     setNoteCategoryId(null);
     setExpandedVersions(new Set());
     setShowDiscardConfirm(false);
+    setNoteAttachments([]);
+    setUploadingAttachments(false);
   };
 
   const closeCategoryDialog = () => {
@@ -424,7 +460,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
 
   const openEditDrawer = (note: ClientNote) => {
     setEditingNote(note);
-    setNoteBody(convertBodyToHtml(note.body));
+    setNoteBody(bodyToEditorHtml(note.body));
     setNoteCategory(note.category);
     setNoteCategoryId(note.categoryId);
     setDrawerMode("edit");
@@ -451,22 +487,73 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
     setShowCategoryManager(true);
   };
 
-  const handleSaveNote = () => {
+  const uploadAttachmentsForNote = async (noteId: string) => {
+    if (noteAttachments.length === 0) return;
+    setUploadingAttachments(true);
+    const failures: string[] = [];
+    try {
+      for (const file of noteAttachments) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const res = await fetch(`/api/clients/${clientId}/notes/${noteId}/attachments/upload`, {
+          method: "POST",
+          body: formData,
+          credentials: "include",
+        });
+        if (!res.ok) {
+          failures.push(file.name);
+        }
+      }
+      if (failures.length > 0) {
+        toast({
+          title: "Some attachments failed to upload",
+          description: `Failed: ${failures.join(", ")}`,
+          variant: "destructive",
+        });
+      }
+    } finally {
+      setUploadingAttachments(false);
+    }
+  };
+
+  const handleSaveNote = async () => {
     if (!noteBody.trim() || noteBody === "<p></p>") return;
     
-    // Find the matching custom category to get its ID
     const customCat = customCategories.find(c => c.name.toLowerCase() === noteCategory.toLowerCase());
     const effectiveCategoryId = customCat ? customCat.id : null;
     
-    if (drawerMode === "create") {
-      createNoteMutation.mutate({ body: noteBody, category: noteCategory, categoryId: effectiveCategoryId });
-    } else if (drawerMode === "edit" && editingNote) {
-      updateNoteMutation.mutate({
-        noteId: editingNote.id,
-        body: noteBody,
-        category: noteCategory,
-        categoryId: effectiveCategoryId,
-      });
+    try {
+      if (drawerMode === "create") {
+        const response = await createNoteMutation.mutateAsync(
+          { body: noteBody, category: noteCategory, categoryId: effectiveCategoryId }
+        );
+        const json = await response.json();
+        const noteId = json?.note?.id;
+        if (noteId && noteAttachments.length > 0) {
+          await uploadAttachmentsForNote(noteId);
+        }
+        queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
+        closeDrawer();
+        toast({ title: "Note created", description: "Your note has been saved." });
+      } else if (drawerMode === "edit" && editingNote) {
+        await updateNoteMutation.mutateAsync({
+          noteId: editingNote.id,
+          body: noteBody,
+          category: noteCategory,
+          categoryId: effectiveCategoryId,
+        });
+        if (noteAttachments.length > 0) {
+          await uploadAttachmentsForNote(editingNote.id);
+        }
+        queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes"] });
+        if (historyNote) {
+          queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "notes", historyNote.id, "versions"] });
+        }
+        closeDrawer();
+        toast({ title: "Note updated", description: "Your changes have been saved." });
+      }
+    } catch {
+      // Error already handled by mutation onError
     }
   };
 
@@ -523,14 +610,31 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
   }, [notes]);
   
   const filteredNotes = useMemo(() => {
-    return notes.filter((note) => {
-      const bodyHtml = convertBodyToHtml(note.body);
+    const filtered = notes.filter((note) => {
+      const bodyText = extractPlainText(note.body);
+      const authorName = getAuthorDisplayName(note.author).toLowerCase();
       const matchesSearch = !searchQuery || 
-        bodyHtml.toLowerCase().includes(searchQuery.toLowerCase());
+        bodyText.toLowerCase().includes(searchQuery.toLowerCase()) ||
+        authorName.includes(searchQuery.toLowerCase()) ||
+        note.category.toLowerCase().includes(searchQuery.toLowerCase());
       const matchesCategory = filterCategory === "all" || note.category.toLowerCase() === filterCategory.toLowerCase();
       return matchesSearch && matchesCategory;
     });
-  }, [notes, searchQuery, filterCategory]);
+
+    return filtered.sort((a, b) => {
+      switch (sortBy) {
+        case "oldest":
+          return new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime();
+        case "category":
+          return a.category.localeCompare(b.category);
+        case "author":
+          return getAuthorDisplayName(a.author).localeCompare(getAuthorDisplayName(b.author));
+        case "newest":
+        default:
+          return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+      }
+    });
+  }, [notes, searchQuery, filterCategory, sortBy]);
 
   // Latest notes (top 3 most recent, explicitly sorted by createdAt desc)
   const latestNotes = useMemo(() => {
@@ -544,13 +648,13 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
       return noteBody.trim() !== "" && noteBody !== "<p></p>";
     }
     if (drawerMode === "edit" && editingNote) {
-      const originalBody = convertBodyToHtml(editingNote.body);
+      const originalBody = bodyToEditorHtml(editingNote.body);
       return noteBody !== originalBody || noteCategory !== editingNote.category;
     }
     return false;
   }, [drawerMode, noteBody, noteCategory, editingNote]);
 
-  const isLoading = createNoteMutation.isPending || updateNoteMutation.isPending;
+  const isLoading = createNoteMutation.isPending || updateNoteMutation.isPending || uploadingAttachments;
   const isCategoryLoading = createCategoryMutation.isPending || updateCategoryMutation.isPending;
   const canSave = noteBody.trim() !== "" && noteBody !== "<p></p>";
 
@@ -606,13 +710,13 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
         </div>
       </div>
 
-      {/* Search and Filter */}
+      {/* Search, Filter, and Sort */}
       {notes.length > 0 && (
         <div className="flex flex-col sm:flex-row gap-2">
           <div className="relative flex-1">
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              placeholder="Search notes..."
+              placeholder="Search notes by content, author, or category..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="pl-9"
@@ -628,6 +732,18 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
               {allCategoryOptions.map((cat) => (
                 <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
               ))}
+            </SelectContent>
+          </Select>
+          <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+            <SelectTrigger className="w-full sm:w-40" data-testid="select-sort-notes">
+              <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
+              <SelectValue placeholder="Sort by" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="newest">Newest First</SelectItem>
+              <SelectItem value="oldest">Oldest First</SelectItem>
+              <SelectItem value="category">By Category</SelectItem>
+              <SelectItem value="author">By Author</SelectItem>
             </SelectContent>
           </Select>
         </div>
@@ -674,7 +790,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
                         </span>
                       </div>
                       <div className="text-sm text-muted-foreground mt-1 line-clamp-2">
-                        <RichTextViewer content={convertBodyToHtml(note.body)} />
+                        <RichTextViewer content={note.body} />
                       </div>
                     </div>
                   </div>
@@ -743,13 +859,43 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
                               </Badge>
                             )}
                           </div>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
-                            {note.updatedAt !== note.createdAt && <span> (edited)</span>}
-                          </p>
-                          <div className="mt-2 text-sm">
-                            <RichTextViewer content={convertBodyToHtml(note.body)} />
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground mt-0.5 flex-wrap">
+                            <span className="flex items-center gap-1">
+                              <Calendar className="h-3 w-3" />
+                              {format(new Date(note.createdAt), "MMM d, yyyy")}
+                            </span>
+                            <span className="flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              {format(new Date(note.createdAt), "h:mm a")}
+                            </span>
+                            {note.updatedAt !== note.createdAt && (
+                              <span className="italic">
+                                (edited {formatDistanceToNow(new Date(note.updatedAt), { addSuffix: true })})
+                              </span>
+                            )}
                           </div>
+                          <div className="mt-2 text-sm">
+                            <RichTextViewer content={note.body} />
+                          </div>
+                          {note.attachments && note.attachments.length > 0 && (
+                            <div className="mt-2 flex flex-wrap gap-1.5">
+                              {note.attachments.map((att) => (
+                                <a
+                                  key={att.id}
+                                  href={`/api/clients/${clientId}/notes/${note.id}/attachments/${att.id}/download`}
+                                  target="_blank"
+                                  rel="noopener noreferrer"
+                                  className="inline-flex items-center gap-1 px-2 py-1 rounded-md bg-muted text-xs text-muted-foreground hover:text-foreground hover:bg-muted/80 transition-colors"
+                                  onClick={(e) => e.stopPropagation()}
+                                  data-testid={`note-attachment-${att.id}`}
+                                >
+                                  {att.mimeType.startsWith("image/") ? <ImageIcon className="h-3 w-3" /> : <FileText className="h-3 w-3" />}
+                                  <span className="max-w-[120px] truncate">{att.originalFileName}</span>
+                                  <Download className="h-3 w-3" />
+                                </a>
+                              ))}
+                            </div>
+                          )}
                         </div>
                       </div>
                       <DropdownMenu>
@@ -1015,6 +1161,66 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
               data-testid="editor-note-content"
             />
           </div>
+          <div className="space-y-2">
+            <Label>Attachments</Label>
+            {editingNote?.attachments && editingNote.attachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {editingNote.attachments.map((att) => (
+                  <div key={att.id} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-muted text-xs">
+                    {att.mimeType.startsWith("image/") ? <ImageIcon className="h-3.5 w-3.5" /> : <FileText className="h-3.5 w-3.5" />}
+                    <span className="max-w-[150px] truncate">{att.originalFileName}</span>
+                    <span className="text-muted-foreground">({formatFileSize(att.fileSizeBytes)})</span>
+                  </div>
+                ))}
+              </div>
+            )}
+            {noteAttachments.length > 0 && (
+              <div className="flex flex-wrap gap-2 mb-2">
+                {noteAttachments.map((file, i) => (
+                  <div key={i} className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-primary/10 text-xs border border-primary/20">
+                    <Paperclip className="h-3.5 w-3.5" />
+                    <span className="max-w-[150px] truncate">{file.name}</span>
+                    <span className="text-muted-foreground">({formatFileSize(file.size)})</span>
+                    <button
+                      type="button"
+                      onClick={() => setNoteAttachments(prev => prev.filter((_, j) => j !== i))}
+                      className="text-muted-foreground hover:text-destructive"
+                      data-testid={`button-remove-attachment-${i}`}
+                    >
+                      <X className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+            <div className="flex items-center gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => {
+                  const input = document.createElement("input");
+                  input.type = "file";
+                  input.multiple = true;
+                  input.accept = "image/*,.pdf,.doc,.docx,.xls,.xlsx,.txt,.csv,.zip";
+                  input.onchange = (e) => {
+                    const files = Array.from((e.target as HTMLInputElement).files || []);
+                    setNoteAttachments(prev => [...prev, ...files]);
+                  };
+                  input.click();
+                }}
+                data-testid="button-add-attachment"
+              >
+                <Paperclip className="h-4 w-4 mr-1.5" />
+                Add Files
+              </Button>
+              {noteAttachments.length > 0 && (
+                <span className="text-xs text-muted-foreground">
+                  {noteAttachments.length} file{noteAttachments.length > 1 ? "s" : ""} pending upload
+                </span>
+              )}
+            </div>
+          </div>
         </div>
       </FullScreenDrawer>
 
@@ -1042,7 +1248,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
                 </Badge>
               </div>
               <div className="text-sm">
-                <RichTextViewer content={convertBodyToHtml(versionHistoryData.currentNote.body)} />
+                <RichTextViewer content={versionHistoryData.currentNote.body} />
               </div>
               <p className="text-xs text-muted-foreground mt-2">
                 Last updated {formatDistanceToNow(new Date(versionHistoryData.currentNote.updatedAt), { addSuffix: true })}
@@ -1093,7 +1299,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
                         <div className="mt-3 pt-3 border-t">
                           <Badge variant="outline" className="mb-2" data-testid={`badge-version-category-${version.id}`}>{version.category}</Badge>
                           <div className="text-sm">
-                            <RichTextViewer content={convertBodyToHtml(version.body)} />
+                            <RichTextViewer content={version.body} />
                           </div>
                         </div>
                       )}
