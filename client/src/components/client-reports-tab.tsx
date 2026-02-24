@@ -30,6 +30,7 @@ import {
   Download,
   CalendarIcon,
   ArrowLeft,
+  BarChart3,
 } from "lucide-react";
 import { format } from "date-fns";
 
@@ -136,12 +137,16 @@ export function ClientReportsTab({ clientId }: { clientId: string }) {
 
   return (
     <div className="space-y-6">
-      <div className="mb-2">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-lg font-medium flex items-center gap-2">
+          <BarChart3 className="h-5 w-5 text-muted-foreground" />
+          Reports
+        </h2>
         <Button
           variant="ghost"
           size="sm"
           onClick={() => window.dispatchEvent(new CustomEvent("navigate-client-tab", { detail: "control-center" }))}
-          className="text-muted-foreground hover:text-foreground p-0 h-auto"
+          className="text-muted-foreground hover:text-foreground"
           data-testid="button-back-to-control-center"
         >
           <ArrowLeft className="h-4 w-4 mr-1" />
