@@ -9,6 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, LogIn, UserPlus, Shield, Eye, EyeOff, FlaskConical, Crown, ShieldCheck, User } from "lucide-react";
 import { UserRole } from "@shared/schema";
 import { getStorageUrl } from "@/lib/storageUrl";
+import appIcon from "@assets/Symbol_1767994625714.png";
 
 const DEV_TEST_ACCOUNTS = [
   {
@@ -289,16 +290,14 @@ export default function LoginPage() {
     <div className="min-h-screen flex items-center justify-center bg-background px-4">
       <Card className="w-full max-w-md">
         <CardHeader className="space-y-1">
-          {branding.logoUrl && (
-            <div className="flex justify-center mb-2">
-              <img 
-                src={branding.logoUrl} 
-                alt={branding.appName || "Logo"} 
-                className="h-10 w-auto object-contain"
-                data-testid="img-login-logo"
-              />
-            </div>
-          )}
+          <div className="flex justify-center mb-2">
+            <img
+              src={branding.iconUrl || appIcon}
+              alt={branding.appName || "App icon"}
+              className="h-14 w-14 object-contain"
+              data-testid="img-login-icon"
+            />
+          </div>
           <CardTitle className="text-2xl font-bold text-center" data-testid="text-login-title">
             {branding.appName || "MyWorkDay"}
           </CardTitle>
