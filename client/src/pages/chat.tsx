@@ -2277,7 +2277,7 @@ export default function ChatPage() {
           Team
         </TabsTrigger>
       </TabsList>
-      <TabsContent value="chats" className="flex-1 flex flex-col overflow-hidden mt-0 p-0">
+      <TabsContent value="chats" className="flex-1 flex flex-col overflow-hidden mt-0 p-0 data-[state=inactive]:hidden">
         <ConversationListPanel
           channels={channels}
           dmThreads={dmThreads}
@@ -2291,7 +2291,7 @@ export default function ChatPage() {
           className="flex-1"
         />
       </TabsContent>
-      <TabsContent value="team" className="flex-1 flex flex-col overflow-hidden mt-0 p-0">
+      <TabsContent value="team" className="flex-1 flex flex-col overflow-hidden mt-0 p-0 data-[state=inactive]:hidden">
         <div className="p-4 border-b">
           <Input
             placeholder="Search team members..."
