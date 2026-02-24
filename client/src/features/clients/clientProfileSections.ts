@@ -42,7 +42,6 @@ export const CONTROL_CENTER_CHILD_IDS = new Set([
   "activity",
   "reports",
   "portal",
-  "notes",
 ]);
 
 export const ALL_CLIENT_PROFILE_SECTIONS: ClientProfileSection[] = [
