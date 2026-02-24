@@ -1583,12 +1583,22 @@ export default function ClientsPage() {
     return result;
   }, [hierarchyClients, searchQuery, filterValues, sortValue, activeSegment]);
 
+  const vipClients = useMemo(() => {
+    if (!filteredAndSortedClients) return [];
+    return filteredAndSortedClients.filter(
+      (c) => c.tags && c.tags.some((t) => t.toLowerCase() === "vip")
+    );
+  }, [filteredAndSortedClients]);
+
+  const vipClientIds = useMemo(() => new Set(vipClients.map((c) => c.id)), [vipClients]);
+
   const groupedClients = useMemo(() => {
+    const nonVipClients = filteredAndSortedClients.filter((c) => !vipClientIds.has(c.id));
     const groups: { parent: ClientWithHierarchy; children: ClientWithHierarchy[] }[] = [];
     const clientMap = new Map<string, ClientWithHierarchy>();
     const childrenByParent = new Map<string, ClientWithHierarchy[]>();
 
-    for (const client of filteredAndSortedClients) {
+    for (const client of nonVipClients) {
       clientMap.set(client.id, client);
     }
 
@@ -1599,7 +1609,7 @@ export default function ClientsPage() {
       return client.id;
     };
 
-    for (const client of filteredAndSortedClients) {
+    for (const client of nonVipClients) {
       if (!client.parentClientId) continue;
       const rootId = findRoot(client);
       if (rootId === client.id) continue;
@@ -1616,7 +1626,7 @@ export default function ClientsPage() {
       }
     }
 
-    for (const client of filteredAndSortedClients) {
+    for (const client of nonVipClients) {
       if (assignedIds.has(client.id)) continue;
       groups.push({
         parent: client,
@@ -1625,14 +1635,7 @@ export default function ClientsPage() {
     }
 
     return groups;
-  }, [filteredAndSortedClients]);
-
-  const vipClients = useMemo(() => {
-    if (!filteredAndSortedClients) return [];
-    return filteredAndSortedClients.filter(
-      (c) => c.tags && c.tags.some((t) => t.toLowerCase() === "vip")
-    );
-  }, [filteredAndSortedClients]);
+  }, [filteredAndSortedClients, vipClientIds]);
 
   const hasActiveFilters = Object.values(filterValues).some(
     (v) => v && v !== "all"
@@ -1931,7 +1934,7 @@ export default function ClientsPage() {
         </div>
       )}
 
-      {filteredAndSortedClients.length > 0 ? (
+      {groupedClients.length > 0 ? (
         viewMode === "grid" ? (
           <ClientGridView
             groupedClients={groupedClients}
@@ -1948,7 +1951,7 @@ export default function ClientsPage() {
             density={density}
           />
         )
-      ) : (
+      ) : vipClients.length === 0 ? (
         <EmptyState
           icon={<Building2 className="h-16 w-16" />}
           title={
@@ -1985,7 +1988,7 @@ export default function ClientsPage() {
             )
           }
         />
-      )}
+      ) : null}
 
       <ClientDetailSheet
         client={detailSheetClient}
