@@ -20,7 +20,7 @@ import { scrypt, randomBytes, timingSafeEqual } from "crypto";
 import { promisify } from "util";
 import { storage } from "./storage";
 import { db } from "./db";
-import { users, UserRole, platformInvitations, platformAuditEvents, invitations, tenants, tenantSettings, workspaces, passwordResetTokens } from "@shared/schema";
+import { users, UserRole, platformInvitations, platformAuditEvents, invitations, tenants, tenantSettings, systemSettings, workspaces, passwordResetTokens } from "@shared/schema";
 import { eq, sql, and, desc } from "drizzle-orm";
 import { createHash } from "crypto";
 import type { User } from "@shared/schema";
@@ -418,27 +418,45 @@ export function setupBootstrapEndpoints(app: Express): void {
    */
   app.get("/api/v1/auth/login-branding", async (_req, res) => {
     try {
-      const result = await db
+      // Fetch system-level defaults first
+      const [sys] = await db.select().from(systemSettings).limit(1);
+
+      // Fetch the first active tenant's branding overrides
+      const tenantResult = await db
         .select({
           appName: tenantSettings.appName,
+          displayName: tenantSettings.displayName,
           loginMessage: tenantSettings.loginMessage,
           logoUrl: tenantSettings.logoUrl,
-          displayName: tenantSettings.displayName,
+          iconUrl: tenantSettings.iconUrl,
+          faviconUrl: tenantSettings.faviconUrl,
+          primaryColor: tenantSettings.primaryColor,
         })
         .from(tenantSettings)
         .innerJoin(tenants, eq(tenants.id, tenantSettings.tenantId))
         .where(eq(tenants.status, "active"))
         .limit(1);
 
-      const settings = result[0] || null;
+      const tenant = tenantResult[0] || null;
+
+      // Resolution chain: tenant setting → system default → null
+      const appName    = tenant?.appName || tenant?.displayName || sys?.defaultAppName || null;
+      const logoUrl    = tenant?.logoUrl    || sys?.defaultLogoUrl    || null;
+      const iconUrl    = tenant?.iconUrl    || sys?.defaultIconUrl    || null;
+      const faviconUrl = tenant?.faviconUrl || sys?.defaultFaviconUrl || null;
+      const primaryColor = tenant?.primaryColor || sys?.defaultPrimaryColor || null;
+
       res.json({
-        appName: settings?.appName || settings?.displayName || null,
-        loginMessage: settings?.loginMessage || null,
-        logoUrl: settings?.logoUrl || null,
+        appName,
+        loginMessage: tenant?.loginMessage || null,
+        logoUrl,
+        iconUrl,
+        faviconUrl,
+        primaryColor,
       });
     } catch (error) {
       console.error("[auth] login-branding error:", error);
-      res.json({ appName: null, loginMessage: null, logoUrl: null });
+      res.json({ appName: null, loginMessage: null, logoUrl: null, iconUrl: null, faviconUrl: null, primaryColor: null });
     }
   });
 

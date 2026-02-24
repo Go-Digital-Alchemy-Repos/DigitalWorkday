@@ -47,6 +47,9 @@ interface LoginBranding {
   appName: string | null;
   loginMessage: string | null;
   logoUrl: string | null;
+  iconUrl: string | null;
+  faviconUrl: string | null;
+  primaryColor: string | null;
 }
 
 export default function LoginPage() {
@@ -59,7 +62,7 @@ export default function LoginPage() {
   const [showBootstrap, setShowBootstrap] = useState(false);
   const [bootstrapRequired, setBootstrapRequired] = useState(false);
   const [isCheckingBootstrap, setIsCheckingBootstrap] = useState(true);
-  const [branding, setBranding] = useState<LoginBranding>({ appName: null, loginMessage: null, logoUrl: null });
+  const [branding, setBranding] = useState<LoginBranding>({ appName: null, loginMessage: null, logoUrl: null, iconUrl: null, faviconUrl: null, primaryColor: null });
   const { login } = useAuth();
   const { toast } = useToast();
   const [, setLocation] = useLocation();
@@ -121,7 +124,53 @@ export default function LoginPage() {
           setBranding({
             ...data,
             logoUrl: getStorageUrl(data.logoUrl) || data.logoUrl,
+            iconUrl: getStorageUrl(data.iconUrl) || data.iconUrl,
+            faviconUrl: getStorageUrl(data.faviconUrl) || data.faviconUrl,
           });
+
+          // Apply favicon
+          if (data.faviconUrl) {
+            const faviconHref = getStorageUrl(data.faviconUrl) || data.faviconUrl;
+            let link = document.querySelector("link[rel='icon']") as HTMLLinkElement | null;
+            if (!link) {
+              link = document.createElement("link");
+              link.rel = "icon";
+              document.head.appendChild(link);
+            }
+            link.href = faviconHref;
+          }
+
+          // Apply primary color as CSS variable
+          if (data.primaryColor) {
+            const hex = data.primaryColor;
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            if (result) {
+              let r = parseInt(result[1], 16) / 255;
+              let g = parseInt(result[2], 16) / 255;
+              let b = parseInt(result[3], 16) / 255;
+              const max = Math.max(r, g, b), min = Math.min(r, g, b);
+              let h = 0, s = 0;
+              const l = (max + min) / 2;
+              if (max !== min) {
+                const d = max - min;
+                s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+                switch (max) {
+                  case r: h = ((g - b) / d + (g < b ? 6 : 0)) / 6; break;
+                  case g: h = ((b - r) / d + 2) / 6; break;
+                  case b: h = ((r - g) / d + 4) / 6; break;
+                }
+              }
+              const hsl = `${Math.round(h * 360)} ${Math.round(s * 100)}% ${Math.round(l * 100)}%`;
+              document.documentElement.style.setProperty("--primary", hsl);
+              document.documentElement.style.setProperty("--primary-foreground", "0 0% 100%");
+              document.documentElement.style.setProperty("--ring", hsl);
+            }
+          }
+
+          // Update document title
+          if (data.appName) {
+            document.title = data.appName;
+          }
         }
       } catch (error) {
         console.error("Failed to fetch login branding:", error);

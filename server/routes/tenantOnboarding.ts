@@ -22,7 +22,7 @@ import crypto from "crypto";
 import { storage } from "../storage";
 import { z } from "zod";
 import { db } from "../db";
-import { tenants, TenantStatus, UserRole, messagePermissionsSchema, DEFAULT_MESSAGE_PERMISSIONS } from "@shared/schema";
+import { tenants, TenantStatus, UserRole, messagePermissionsSchema, DEFAULT_MESSAGE_PERMISSIONS, systemSettings } from "@shared/schema";
 import { eq } from "drizzle-orm";
 import { requireAuth } from "../auth";
 import { getEffectiveTenantId } from "../middleware/tenantContext";
@@ -323,25 +323,33 @@ router.get("/branding", requireAuth, requireTenantContext, async (req, res) => {
   try {
     const tenantId = req.effectiveTenantId;
 
-    const settings = await storage.getTenantSettings(tenantId);
-    
-    if (!settings) {
-      return res.json({ tenantSettings: null });
-    }
+    const [settings, [sys]] = await Promise.all([
+      storage.getTenantSettings(tenantId),
+      db.select().from(systemSettings).limit(1),
+    ]);
+
+    // Resolution: tenant value → system default → null
+    const appName      = settings?.appName      || sys?.defaultAppName    || null;
+    const logoUrl      = settings?.logoUrl      || sys?.defaultLogoUrl    || null;
+    const iconUrl      = settings?.iconUrl      || sys?.defaultIconUrl    || null;
+    const faviconUrl   = settings?.faviconUrl   || sys?.defaultFaviconUrl || null;
+    const primaryColor = settings?.primaryColor || sys?.defaultPrimaryColor || null;
 
     res.json({
       tenantSettings: {
-        displayName: settings.displayName,
-        appName: settings.appName,
-        logoUrl: settings.logoUrl,
-        faviconUrl: settings.faviconUrl,
-        primaryColor: settings.primaryColor,
-        secondaryColor: settings.secondaryColor,
-        accentColor: settings.accentColor,
-        defaultThemeAccent: settings.defaultThemeAccent,
-        defaultThemePack: settings.defaultThemePack,
-        whiteLabelEnabled: settings.whiteLabelEnabled,
-        hideVendorBranding: settings.hideVendorBranding,
+        displayName: settings?.displayName || null,
+        appName,
+        logoUrl,
+        iconUrl,
+        faviconUrl,
+        primaryColor,
+        secondaryColor: settings?.secondaryColor || null,
+        accentColor: settings?.accentColor || null,
+        defaultThemeAccent: settings?.defaultThemeAccent || null,
+        defaultThemePack: settings?.defaultThemePack || null,
+        whiteLabelEnabled: settings?.whiteLabelEnabled ?? false,
+        hideVendorBranding: settings?.hideVendorBranding ?? false,
+        hasSystemBranding: !!(sys?.defaultLogoUrl || sys?.defaultAppName || sys?.defaultPrimaryColor),
       },
     });
   } catch (error) {

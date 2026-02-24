@@ -8,6 +8,7 @@ interface TenantSettings {
   displayName?: string;
   appName?: string | null;
   logoUrl?: string | null;
+  iconUrl?: string | null;
   faviconUrl?: string | null;
   primaryColor?: string | null;
   secondaryColor?: string | null;
@@ -17,6 +18,7 @@ interface TenantSettings {
   supportEmail?: string | null;
   whiteLabelEnabled?: boolean;
   hideVendorBranding?: boolean;
+  hasSystemBranding?: boolean;
 }
 
 interface TenantSettingsResponse {
@@ -90,15 +92,28 @@ export function useTenantTheme() {
 
   useEffect(() => {
     const settings = data?.tenantSettings;
-    if (!settings || !settings.whiteLabelEnabled) {
-      document.documentElement.style.removeProperty("--tenant-primary");
-      document.documentElement.style.removeProperty("--tenant-secondary");
-      document.documentElement.style.removeProperty("--tenant-accent");
-      return;
-    }
+    if (!settings) return;
+
+    // Apply branding when: tenant has white-label enabled OR system-level branding exists.
+    // System branding is the global default and always applies; whiteLabelEnabled gates
+    // tenant-specific color overrides on top of that.
+    const hasAnyBranding = settings.whiteLabelEnabled || settings.hasSystemBranding ||
+      !!(settings.logoUrl || settings.faviconUrl || settings.primaryColor || settings.appName);
 
     const root = document.documentElement;
 
+    if (!hasAnyBranding) {
+      root.style.removeProperty("--primary");
+      root.style.removeProperty("--primary-foreground");
+      root.style.removeProperty("--secondary");
+      root.style.removeProperty("--secondary-foreground");
+      root.style.removeProperty("--accent");
+      root.style.removeProperty("--accent-foreground");
+      root.style.removeProperty("--ring");
+      return;
+    }
+
+    // Primary color — from tenant (if whiteLabelEnabled) or system default
     if (settings.primaryColor) {
       const primaryHSL = hexToHSL(settings.primaryColor);
       if (primaryHSL) {
@@ -108,19 +123,22 @@ export function useTenantTheme() {
       }
     }
 
-    if (settings.secondaryColor) {
-      const secondaryHSL = hexToHSL(settings.secondaryColor);
-      if (secondaryHSL) {
-        root.style.setProperty("--secondary", secondaryHSL);
-        root.style.setProperty("--secondary-foreground", "0 0% 100%");
+    // Secondary and accent — tenant-only (whiteLabelEnabled gates deeper customisation)
+    if (settings.whiteLabelEnabled) {
+      if (settings.secondaryColor) {
+        const secondaryHSL = hexToHSL(settings.secondaryColor);
+        if (secondaryHSL) {
+          root.style.setProperty("--secondary", secondaryHSL);
+          root.style.setProperty("--secondary-foreground", "0 0% 100%");
+        }
       }
-    }
 
-    if (settings.accentColor) {
-      const accentHSL = hexToHSL(settings.accentColor);
-      if (accentHSL) {
-        root.style.setProperty("--accent", accentHSL);
-        root.style.setProperty("--accent-foreground", "0 0% 100%");
+      if (settings.accentColor) {
+        const accentHSL = hexToHSL(settings.accentColor);
+        if (accentHSL) {
+          root.style.setProperty("--accent", accentHSL);
+          root.style.setProperty("--accent-foreground", "0 0% 100%");
+        }
       }
     }
 
