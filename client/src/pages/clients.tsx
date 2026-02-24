@@ -1307,7 +1307,7 @@ function VipCarousel({
             <Button
               variant="outline"
               size="icon"
-              className="h-7 w-7"
+              className="h-7 w-7 bg-[#ffffff] dark:bg-transparent"
               disabled={!canScrollRight}
               onClick={() => scroll("right")}
               data-testid="vip-carousel-next"
