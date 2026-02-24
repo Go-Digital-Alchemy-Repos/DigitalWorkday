@@ -1,9 +1,60 @@
 import { db } from "../db";
-import { emailOutbox, users, InsertEmailOutbox, EmailOutbox } from "@shared/schema";
+import { emailOutbox, users, systemSettings, InsertEmailOutbox, EmailOutbox } from "@shared/schema";
 import { eq, and, desc, sql, gte, lte } from "drizzle-orm";
 import { tenantIntegrationService } from "./tenantIntegrations";
+import { decryptValue, isEncryptionAvailable } from "../lib/encryption";
 import Mailgun from "mailgun.js";
 import FormData from "form-data";
+
+interface ResolvedMailgunConfig {
+  domain: string;
+  fromEmail: string;
+  region?: string;
+  apiKey: string;
+}
+
+async function resolveMailgunConfig(tenantId: string | null): Promise<ResolvedMailgunConfig | null> {
+  // 1. Try tenant-specific config from tenantIntegrations
+  if (tenantId) {
+    const data = await tenantIntegrationService.getIntegrationWithSecrets(tenantId, "mailgun");
+    const cfg = data?.publicConfig as { domain?: string; fromEmail?: string; region?: string } | null;
+    const sec = data?.secretConfig as { apiKey?: string } | null;
+    if (cfg?.domain && cfg?.fromEmail && sec?.apiKey) {
+      return { domain: cfg.domain, fromEmail: cfg.fromEmail, region: cfg.region, apiKey: sec.apiKey };
+    }
+  }
+
+  // 2. Try system-level config from tenantIntegrations (tenantId = null row)
+  const sysData = await tenantIntegrationService.getIntegrationWithSecrets(null, "mailgun");
+  const sysCfg = sysData?.publicConfig as { domain?: string; fromEmail?: string; region?: string } | null;
+  const sysSec = sysData?.secretConfig as { apiKey?: string } | null;
+  if (sysCfg?.domain && sysCfg?.fromEmail && sysSec?.apiKey) {
+    return { domain: sysCfg.domain, fromEmail: sysCfg.fromEmail, region: sysCfg.region, apiKey: sysSec.apiKey };
+  }
+
+  // 3. Final fallback: system_settings table (set via Super Admin > Integrations UI)
+  if (!isEncryptionAvailable()) return null;
+  const [settings] = await db.select().from(systemSettings).limit(1);
+  if (
+    settings?.mailgunDomain &&
+    settings?.mailgunFromEmail &&
+    settings?.mailgunApiKeyEncrypted
+  ) {
+    try {
+      const apiKey = decryptValue(settings.mailgunApiKeyEncrypted);
+      return {
+        domain: settings.mailgunDomain,
+        fromEmail: settings.mailgunFromEmail,
+        region: settings.mailgunRegion ?? undefined,
+        apiKey,
+      };
+    } catch {
+      console.error("[EmailOutbox] Failed to decrypt system-level Mailgun API key");
+    }
+  }
+
+  return null;
+}
 
 export type EmailMessageType = 
   | "invitation"
@@ -72,32 +123,20 @@ export class EmailOutboxService {
     debugLog("Email queued", { emailId, tenantId, messageType, toEmail, subject });
 
     try {
-      let integrationData = tenantId
-        ? await tenantIntegrationService.getIntegrationWithSecrets(tenantId, "mailgun")
-        : null;
+      const mailgunConfig = await resolveMailgunConfig(tenantId);
 
-      if (!integrationData?.publicConfig || !integrationData?.secretConfig) {
-        integrationData = await tenantIntegrationService.getIntegrationWithSecrets(null, "mailgun");
-      }
-
-      if (!integrationData?.publicConfig || !integrationData?.secretConfig) {
-        await this.updateEmailStatus(emailId, "failed", null, "Mailgun not configured (checked tenant and system level)");
+      if (!mailgunConfig) {
+        await this.updateEmailStatus(emailId, "failed", null, "Mailgun not configured (checked tenant config, system tenantIntegrations, and system_settings)");
         return { success: false, emailId, error: "Mailgun not configured" };
       }
 
-      const config = integrationData.publicConfig as { domain: string; fromEmail: string };
-      const secrets = integrationData.secretConfig as { apiKey: string };
-
-      if (!secrets.apiKey || !config.domain || !config.fromEmail) {
-        await this.updateEmailStatus(emailId, "failed", null, "Mailgun configuration incomplete");
-        return { success: false, emailId, error: "Mailgun configuration incomplete" };
-      }
-
       const mailgun = new Mailgun(FormData);
-      const mg = mailgun.client({ username: "api", key: secrets.apiKey });
+      const clientOpts: Record<string, string> = { username: "api", key: mailgunConfig.apiKey };
+      if (mailgunConfig.region === "EU") clientOpts.url = "https://api.eu.mailgun.net";
+      const mg = mailgun.client(clientOpts as any);
 
       const messageData: any = {
-        from: config.fromEmail,
+        from: mailgunConfig.fromEmail,
         to: [toEmail],
         subject,
         text: textBody,
@@ -107,7 +146,7 @@ export class EmailOutboxService {
         messageData.html = htmlBody;
       }
 
-      const response = await mg.messages.create(config.domain, messageData);
+      const response = await mg.messages.create(mailgunConfig.domain, messageData);
 
       debugLog("Email sent successfully", { emailId, tenantId, providerMessageId: response.id });
 

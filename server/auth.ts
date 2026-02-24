@@ -1278,12 +1278,20 @@ export function setupPasswordResetEndpoints(app: Express): void {
         console.error("[auth] Password reset email error:", error);
       }
       
-      // Only log reset URL in non-production when email wasn't sent
+      // Always log email delivery outcome (never log reset URL in production)
+      if (!emailSent) {
+        console.error(JSON.stringify({
+          level: "error",
+          component: "auth",
+          event: "password_reset_email_failed",
+          userId: user.id,
+          email: user.email,
+          error: emailError,
+          timestamp: new Date().toISOString(),
+        }));
+      }
       if (process.env.NODE_ENV !== "production" && !emailSent) {
         console.log(`[auth] Password reset URL for ${email}: ${resetUrl}`);
-        if (emailError) {
-          console.log(`[auth] Email not sent: ${emailError}`);
-        }
       }
       
       res.json(genericResponse);

@@ -10,7 +10,15 @@ export type IntegrationProvider = "mailgun" | "s3" | "r2" | "openai" | "asana";
 interface MailgunPublicConfig {
   domain: string;
   fromEmail: string;
+  region?: "US" | "EU";
   replyTo?: string;
+}
+
+function mailgunClient(apiKey: string, region?: string) {
+  const mailgun = new Mailgun(FormData);
+  const opts: Record<string, string> = { username: "api", key: apiKey };
+  if (region === "EU") opts.url = "https://api.eu.mailgun.net";
+  return mailgun.client(opts as any);
 }
 
 interface MailgunSecretConfig {
@@ -507,10 +515,9 @@ export class TenantIntegrationService {
     }
 
     try {
-      const mailgun = new Mailgun(FormData);
-      const mg = mailgun.client({ username: "api", key: secrets.apiKey });
+      const mg = mailgunClient(secrets.apiKey, config.region);
       await mg.domains.get(config.domain);
-      debugLog("testMailgun - domain validated", { tenantId, domain: config.domain });
+      debugLog("testMailgun - domain validated", { tenantId, domain: config.domain, region: config.region });
       return { success: true, message: "Mailgun configuration is valid" };
     } catch (error: any) {
       debugLog("testMailgun - failed", { tenantId, error: error.message });
@@ -553,8 +560,7 @@ export class TenantIntegrationService {
     const config = integration.publicConfig as MailgunPublicConfig;
 
     try {
-      const mailgun = new Mailgun(FormData);
-      const mg = mailgun.client({ username: "api", key: secrets.apiKey });
+      const mg = mailgunClient(secrets.apiKey, config.region);
 
       const timestamp = new Date().toISOString();
       await mg.messages.create(config.domain, {
