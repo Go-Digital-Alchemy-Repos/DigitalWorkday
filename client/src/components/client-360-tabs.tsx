@@ -1083,89 +1083,6 @@ export function NotesTab({ clientId }: { clientId: string }) {
         </CardContent>
       </Card>
 
-      {notes.length > 0 && (
-        <div className="space-y-2">
-          <div className="flex flex-col sm:flex-row gap-2">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                placeholder="Search notes..."
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                className="pl-9 h-9"
-                data-testid="input-search-notes-360"
-              />
-              {searchQuery && (
-                <button
-                  onClick={() => setSearchQuery("")}
-                  className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
-                  data-testid="button-clear-search-360"
-                >
-                  <X className="h-3.5 w-3.5" />
-                </button>
-              )}
-            </div>
-            <Select value={filterCategory} onValueChange={setFilterCategory}>
-              <SelectTrigger className="w-full sm:w-[160px] h-9" data-testid="select-filter-category-360">
-                <SelectValue placeholder="Category" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Categories</SelectItem>
-                {allCategoryOptions.map((cat) => (
-                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
-              <SelectTrigger className="w-full sm:w-[150px] h-9" data-testid="select-sort-notes-360">
-                <ArrowUpDown className="h-3.5 w-3.5 mr-1.5 text-muted-foreground" />
-                <SelectValue placeholder="Sort by" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="newest">Newest First</SelectItem>
-                <SelectItem value="oldest">Oldest First</SelectItem>
-                <SelectItem value="category">By Category</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div className="flex flex-col sm:flex-row gap-2 items-start sm:items-center">
-            <div className="flex items-center gap-2">
-              <label className="text-xs text-muted-foreground whitespace-nowrap">From</label>
-              <Input
-                type="date"
-                value={dateFrom}
-                onChange={(e) => setDateFrom(e.target.value)}
-                className="h-8 w-[140px] text-xs"
-                data-testid="input-date-from-360"
-              />
-              <label className="text-xs text-muted-foreground whitespace-nowrap">To</label>
-              <Input
-                type="date"
-                value={dateTo}
-                onChange={(e) => setDateTo(e.target.value)}
-                className="h-8 w-[140px] text-xs"
-                data-testid="input-date-to-360"
-              />
-            </div>
-            {hasActiveFilters && (
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={clearAllFilters}
-                className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground"
-                data-testid="button-clear-filters-360"
-              >
-                <RotateCcw className="h-3 w-3 mr-1" />
-                Clear filters
-              </Button>
-            )}
-            <span className="text-xs text-muted-foreground ml-auto">
-              {filteredNotes.length} of {notes.length} note{notes.length !== 1 ? "s" : ""}
-            </span>
-          </div>
-        </div>
-      )}
-
       {notes.length === 0 ? (
         <EmptyState
           icon={<StickyNote className="h-10 w-10" />}
@@ -1173,109 +1090,213 @@ export function NotesTab({ clientId }: { clientId: string }) {
           description="Add notes to keep track of important information about this client."
           size="sm"
         />
-      ) : filteredNotes.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
-          <Search className="h-8 w-8 mx-auto mb-2 opacity-40" />
-          <p className="text-sm font-medium">No notes match your filters</p>
-          <p className="text-xs mt-1">Try adjusting your search or filter criteria</p>
-          <Button variant="ghost" size="sm" onClick={clearAllFilters} className="mt-3" data-testid="button-clear-filters-empty-360">
-            Clear all filters
-          </Button>
-        </div>
       ) : (
-        <div className="space-y-3">
-          {filteredNotes.map((note) => (
-            <Card key={note.id} data-testid={`card-note-${note.id}`}>
-              <CardContent className="py-4 px-4">
-                {editingNoteId === note.id ? (
-                  <div className="space-y-3">
-                    <RichTextEditor
-                      value={editBody}
-                      onChange={setEditBody}
-                      placeholder="Edit your note..."
-                      minHeight="80px"
-                      showToolbar={true}
-                    />
-                    <div className="flex items-center justify-between gap-3">
-                      <Select value={editCategory} onValueChange={setEditCategory}>
-                        <SelectTrigger className="w-[200px] h-9">
-                          <SelectValue />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {allCategoryOptions.map((cat) => (
-                            <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <div className="flex gap-2">
-                        <Button size="sm" variant="ghost" onClick={() => setEditingNoteId(null)} data-testid="button-cancel-edit-note">
-                          Cancel
-                        </Button>
-                        <Button size="sm" onClick={handleUpdateNote} disabled={updateNoteMutation.isPending} data-testid="button-save-edit-note">
-                          {updateNoteMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
-                          Save
-                        </Button>
-                      </div>
-                    </div>
-                  </div>
-                ) : (
-                  <div className="flex items-start justify-between gap-3">
-                    <div className="flex items-start gap-3 min-w-0 flex-1">
-                      <Avatar className="h-8 w-8 shrink-0">
-                        <AvatarFallback className="text-xs">
-                          {(note.authorName?.[0] || note.authorEmail?.[0] || "?").toUpperCase()}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2 flex-wrap mb-1">
-                          <span className="text-sm font-medium" data-testid={`text-note-author-${note.id}`}>
-                            {note.authorName || note.authorEmail || "Unknown"}
-                          </span>
-                          <span className="text-xs text-muted-foreground" data-testid={`text-note-date-${note.id}`}>
-                            {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
-                          </span>
-                          {note.updatedAt && note.updatedAt !== note.createdAt && (
-                            <span className="text-xs text-muted-foreground italic">(edited)</span>
-                          )}
-                          {note.category && note.category !== "general" && (
-                            <Badge variant="secondary" className="text-xs">{note.category}</Badge>
-                          )}
+        <div className="flex flex-col lg:flex-row gap-4">
+          <div className="flex-1 min-w-0">
+            {filteredNotes.length === 0 ? (
+              <div className="text-center py-8 text-muted-foreground">
+                <Search className="h-8 w-8 mx-auto mb-2 opacity-40" />
+                <p className="text-sm font-medium">No notes match your filters</p>
+                <p className="text-xs mt-1">Try adjusting your search or filter criteria</p>
+                <Button variant="ghost" size="sm" onClick={clearAllFilters} className="mt-3" data-testid="button-clear-filters-empty-360">
+                  Clear all filters
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-3">
+                {filteredNotes.map((note) => (
+                  <Card key={note.id} data-testid={`card-note-${note.id}`}>
+                    <CardContent className="py-4 px-4">
+                      {editingNoteId === note.id ? (
+                        <div className="space-y-3">
+                          <RichTextEditor
+                            value={editBody}
+                            onChange={setEditBody}
+                            placeholder="Edit your note..."
+                            minHeight="80px"
+                            showToolbar={true}
+                          />
+                          <div className="flex items-center justify-between gap-3">
+                            <Select value={editCategory} onValueChange={setEditCategory}>
+                              <SelectTrigger className="w-[200px] h-9">
+                                <SelectValue />
+                              </SelectTrigger>
+                              <SelectContent>
+                                {allCategoryOptions.map((cat) => (
+                                  <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                                ))}
+                              </SelectContent>
+                            </Select>
+                            <div className="flex gap-2">
+                              <Button size="sm" variant="ghost" onClick={() => setEditingNoteId(null)} data-testid="button-cancel-edit-note">
+                                Cancel
+                              </Button>
+                              <Button size="sm" onClick={handleUpdateNote} disabled={updateNoteMutation.isPending} data-testid="button-save-edit-note">
+                                {updateNoteMutation.isPending ? <Loader2 className="h-4 w-4 mr-1 animate-spin" /> : <Save className="h-4 w-4 mr-1" />}
+                                Save
+                              </Button>
+                            </div>
+                          </div>
                         </div>
-                        <div className="text-sm" data-testid={`text-note-body-${note.id}`}>
-                          <RichTextViewer content={note.body} />
+                      ) : (
+                        <div className="flex items-start justify-between gap-3">
+                          <div className="flex items-start gap-3 min-w-0 flex-1">
+                            <Avatar className="h-8 w-8 shrink-0">
+                              <AvatarFallback className="text-xs">
+                                {(note.authorName?.[0] || note.authorEmail?.[0] || "?").toUpperCase()}
+                              </AvatarFallback>
+                            </Avatar>
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2 flex-wrap mb-1">
+                                <span className="text-sm font-medium" data-testid={`text-note-author-${note.id}`}>
+                                  {note.authorName || note.authorEmail || "Unknown"}
+                                </span>
+                                <span className="text-xs text-muted-foreground" data-testid={`text-note-date-${note.id}`}>
+                                  {formatDistanceToNow(new Date(note.createdAt), { addSuffix: true })}
+                                </span>
+                                {note.updatedAt && note.updatedAt !== note.createdAt && (
+                                  <span className="text-xs text-muted-foreground italic">(edited)</span>
+                                )}
+                                {note.category && note.category !== "general" && (
+                                  <Badge variant="secondary" className="text-xs">{note.category}</Badge>
+                                )}
+                              </div>
+                              <div className="text-sm" data-testid={`text-note-body-${note.id}`}>
+                                <RichTextViewer content={note.body} />
+                              </div>
+                            </div>
+                          </div>
+                          <DropdownMenu>
+                            <DropdownMenuTrigger asChild>
+                              <Button variant="ghost" size="icon" aria-label="Note options" data-testid={`button-note-menu-${note.id}`}>
+                                <MoreHorizontal className="h-4 w-4" />
+                              </Button>
+                            </DropdownMenuTrigger>
+                            <DropdownMenuContent align="end">
+                              <DropdownMenuItem onClick={() => startEditNote(note)} data-testid={`button-edit-note-${note.id}`}>
+                                <Pencil className="h-4 w-4 mr-2" />
+                                Edit
+                              </DropdownMenuItem>
+                              <DropdownMenuItem className="text-destructive" onClick={() => setDeleteNoteId(note.id)} data-testid={`button-delete-note-${note.id}`}>
+                                <Trash2 className="h-4 w-4 mr-2" />
+                                Delete
+                              </DropdownMenuItem>
+                            </DropdownMenuContent>
+                          </DropdownMenu>
                         </div>
-                      </div>
-                    </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            )}
+          </div>
 
-                    <DropdownMenu>
-                      <DropdownMenuTrigger asChild>
-                        <Button variant="ghost" size="icon" aria-label="Note options" data-testid={`button-note-menu-${note.id}`}>
-                          <MoreHorizontal className="h-4 w-4" />
-                        </Button>
-                      </DropdownMenuTrigger>
-                      <DropdownMenuContent align="end">
-                        <DropdownMenuItem
-                          onClick={() => startEditNote(note)}
-                          data-testid={`button-edit-note-${note.id}`}
-                        >
-                          <Pencil className="h-4 w-4 mr-2" />
-                          Edit
-                        </DropdownMenuItem>
-                        <DropdownMenuItem
-                          className="text-destructive"
-                          onClick={() => setDeleteNoteId(note.id)}
-                          data-testid={`button-delete-note-${note.id}`}
-                        >
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Delete
-                        </DropdownMenuItem>
-                      </DropdownMenuContent>
-                    </DropdownMenu>
+          <div className="w-full lg:w-72 shrink-0">
+            <Card className="sticky top-4 z-10">
+              <CardHeader className="pb-3 pt-4 px-4">
+                <CardTitle className="text-sm flex items-center gap-2">
+                  <SlidersHorizontal className="h-4 w-4" />
+                  Search & Filters
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="px-4 pb-4 space-y-3">
+                <div className="relative">
+                  <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+                  <Input
+                    placeholder="Search notes..."
+                    value={searchQuery}
+                    onChange={(e) => setSearchQuery(e.target.value)}
+                    className="pl-8 h-8 text-sm"
+                    data-testid="input-search-notes-360"
+                  />
+                  {searchQuery && (
+                    <button
+                      onClick={() => setSearchQuery("")}
+                      className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                      data-testid="button-clear-search-360"
+                    >
+                      <X className="h-3 w-3" />
+                    </button>
+                  )}
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Category</label>
+                  <Select value={filterCategory} onValueChange={setFilterCategory}>
+                    <SelectTrigger className="h-8 text-sm" data-testid="select-filter-category-360">
+                      <SelectValue placeholder="All Categories" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All Categories</SelectItem>
+                      {allCategoryOptions.map((cat) => (
+                        <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Sort By</label>
+                  <Select value={sortBy} onValueChange={(v) => setSortBy(v as any)}>
+                    <SelectTrigger className="h-8 text-sm" data-testid="select-sort-notes-360">
+                      <ArrowUpDown className="h-3 w-3 mr-1.5 text-muted-foreground" />
+                      <SelectValue placeholder="Sort by" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="newest">Newest First</SelectItem>
+                      <SelectItem value="oldest">Oldest First</SelectItem>
+                      <SelectItem value="category">By Category</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+
+                <div className="space-y-1.5">
+                  <label className="text-xs font-medium text-muted-foreground">Date Range</label>
+                  <div className="space-y-1.5">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-10">From</span>
+                      <Input
+                        type="date"
+                        value={dateFrom}
+                        onChange={(e) => setDateFrom(e.target.value)}
+                        className="h-8 text-xs flex-1"
+                        data-testid="input-date-from-360"
+                      />
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-muted-foreground w-10">To</span>
+                      <Input
+                        type="date"
+                        value={dateTo}
+                        onChange={(e) => setDateTo(e.target.value)}
+                        className="h-8 text-xs flex-1"
+                        data-testid="input-date-to-360"
+                      />
+                    </div>
                   </div>
-                )}
+                </div>
+
+                <div className="pt-1 flex items-center justify-between">
+                  <span className="text-xs text-muted-foreground">
+                    {filteredNotes.length} of {notes.length} note{notes.length !== 1 ? "s" : ""}
+                  </span>
+                  {hasActiveFilters && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={clearAllFilters}
+                      className="text-xs h-7 px-2 text-muted-foreground hover:text-foreground"
+                      data-testid="button-clear-filters-360"
+                    >
+                      <RotateCcw className="h-3 w-3 mr-1" />
+                      Clear
+                    </Button>
+                  )}
+                </div>
               </CardContent>
             </Card>
-          ))}
+          </div>
         </div>
       )}
 
