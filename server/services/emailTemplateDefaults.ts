@@ -26,6 +26,7 @@ const baseHtmlWrapper = (content: string) => `<!DOCTYPE html>
     <tr>
       <td align="center" style="padding: 40px 20px;">
         <table role="presentation" width="600" cellspacing="0" cellpadding="0" style="background-color: #ffffff; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1);">
+          {{logoBlock}}
           <tr>
             <td style="padding: 40px;">
               ${content}

@@ -1,5 +1,5 @@
 import { db } from "../db";
-import { emailTemplates, type EmailTemplate } from "@shared/schema";
+import { emailTemplates, systemSettings, tenantSettings, type EmailTemplate } from "@shared/schema";
 import { eq, and, isNull } from "drizzle-orm";
 import { DEFAULT_TEMPLATES, getDefaultTemplate, type DefaultTemplate, type TemplateVariable } from "./emailTemplateDefaults";
 
@@ -50,7 +50,38 @@ export class EmailTemplateService {
     };
   }
 
+  async resolveLogoUrl(tenantId: string | null): Promise<string | null> {
+    // Tenant logo takes priority; fall back to system-level default logo
+    if (tenantId) {
+      const [ts] = await db.select({ logoUrl: tenantSettings.logoUrl })
+        .from(tenantSettings)
+        .where(eq(tenantSettings.tenantId, tenantId))
+        .limit(1);
+      if (ts?.logoUrl) return ts.logoUrl;
+    }
+
+    const [sys] = await db.select({ defaultLogoUrl: systemSettings.defaultLogoUrl })
+      .from(systemSettings)
+      .limit(1);
+    return sys?.defaultLogoUrl || null;
+  }
+
+  buildLogoBlock(logoUrl: string | null): string {
+    if (!logoUrl) return "";
+    return `<tr>
+            <td style="padding: 24px 40px 0; text-align: center;">
+              <img src="${logoUrl}" alt="Logo" style="max-height: 60px; max-width: 220px; object-fit: contain; display: block; margin: 0 auto;" />
+            </td>
+          </tr>`;
+  }
+
   async renderByKey(tenantId: string | null, templateKey: string, variables: Record<string, string>): Promise<RenderedEmail | null> {
+    // Auto-inject logoBlock unless caller has already provided it
+    if (!("logoBlock" in variables)) {
+      const logoUrl = await this.resolveLogoUrl(tenantId);
+      variables = { ...variables, logoBlock: this.buildLogoBlock(logoUrl) };
+    }
+
     const template = await this.getTemplate(tenantId, templateKey);
     if (template) {
       return this.renderTemplate(template, variables);
