@@ -62,6 +62,20 @@ const TEMPLATE_ICONS: Record<string, LucideIcon> = {
   support_ticket_assigned: ClipboardCheck,
 };
 
+const TEMPLATE_COLORS: Record<string, { bg: string; icon: string }> = {
+  forgot_password:       { bg: "bg-blue-100 dark:bg-blue-900/30",   icon: "text-blue-600 dark:text-blue-400" },
+  mention_notification:  { bg: "bg-purple-100 dark:bg-purple-900/30", icon: "text-purple-600 dark:text-purple-400" },
+  invitation:            { bg: "bg-green-100 dark:bg-green-900/30",  icon: "text-green-600 dark:text-green-400" },
+  task_assignment:       { bg: "bg-orange-100 dark:bg-orange-900/30", icon: "text-orange-600 dark:text-orange-400" },
+  welcome_email:         { bg: "bg-amber-100 dark:bg-amber-900/30",  icon: "text-amber-600 dark:text-amber-400" },
+  admin_password_reset:  { bg: "bg-red-100 dark:bg-red-900/30",     icon: "text-red-600 dark:text-red-400" },
+  platform_admin_invite: { bg: "bg-indigo-100 dark:bg-indigo-900/30", icon: "text-indigo-600 dark:text-indigo-400" },
+  user_provision:        { bg: "bg-teal-100 dark:bg-teal-900/30",   icon: "text-teal-600 dark:text-teal-400" },
+  task_due_reminder:     { bg: "bg-rose-100 dark:bg-rose-900/30",   icon: "text-rose-600 dark:text-rose-400" },
+  support_ticket_created:  { bg: "bg-cyan-100 dark:bg-cyan-900/30", icon: "text-cyan-600 dark:text-cyan-400" },
+  support_ticket_assigned: { bg: "bg-violet-100 dark:bg-violet-900/30", icon: "text-violet-600 dark:text-violet-400" },
+};
+
 const TEMPLATE_DESCRIPTIONS: Record<string, string> = {
   forgot_password: "Sent when a user requests a password reset",
   mention_notification: "Sent when a user is @mentioned in a comment",
@@ -76,9 +90,18 @@ const TEMPLATE_DESCRIPTIONS: Record<string, string> = {
   support_ticket_assigned: "Sent when a support ticket is assigned to an agent",
 };
 
-function TemplateIcon({ templateKey, className }: { templateKey: string; className?: string }) {
+function TemplateIcon({ templateKey, size = "md" }: { templateKey: string; size?: "sm" | "md" }) {
   const Icon = TEMPLATE_ICONS[templateKey] || Mail;
-  return <Icon className={className} />;
+  const colors = TEMPLATE_COLORS[templateKey] || { bg: "bg-muted", icon: "text-muted-foreground" };
+  const sizeClasses = size === "sm"
+    ? "h-7 w-7 rounded-md"
+    : "h-9 w-9 rounded-lg";
+  const iconSize = size === "sm" ? "h-3.5 w-3.5" : "h-4 w-4";
+  return (
+    <div className={`shrink-0 flex items-center justify-center ${sizeClasses} ${colors.bg}`}>
+      <Icon className={`${iconSize} ${colors.icon}`} />
+    </div>
+  );
 }
 
 export function EmailTemplatesTab() {
@@ -213,7 +236,7 @@ export function EmailTemplatesTab() {
                   data-testid={`email-template-${template.templateKey}`}
                 >
                   <div className="flex items-center gap-3">
-                    <TemplateIcon templateKey={template.templateKey} className="h-5 w-5 text-muted-foreground shrink-0" />
+                    <TemplateIcon templateKey={template.templateKey} />
                     <div>
                       <div className="flex items-center gap-2">
                         <span className="font-medium">{template.name}</span>
@@ -243,7 +266,7 @@ export function EmailTemplatesTab() {
         <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
-              {selectedTemplate && <TemplateIcon templateKey={selectedTemplate.templateKey} className="h-5 w-5 text-muted-foreground" />}
+              {selectedTemplate && <TemplateIcon templateKey={selectedTemplate.templateKey} size="sm" />}
               Edit: {editForm.name}
             </DialogTitle>
             <DialogDescription>
