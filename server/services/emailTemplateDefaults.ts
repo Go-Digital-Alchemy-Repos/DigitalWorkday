@@ -207,6 +207,211 @@ If you have any questions, reach out to your administrator.`,
       { name: "appName", description: "Application name", example: "MyWorkDay" },
     ],
   },
+  {
+    templateKey: "admin_password_reset",
+    name: "Admin Password Reset",
+    subject: "Password Reset — {{appName}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">Password Reset</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <p style="margin: 0 0 24px; font-size: 15px; color: #3f3f46;">A password reset has been requested for your account by an administrator.</p>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{resetUrl}}" style="${buttonStyle}">Set New Password</a>
+              </p>
+              <p style="margin: 0 0 8px; font-size: 13px; color: #71717a;">This link will expire in {{expiryHours}} hours.</p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">If you did not expect this, please contact your administrator.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+A password reset has been requested for your account by an administrator.
+
+Click this link to set your new password:
+{{resetUrl}}
+
+This link will expire in {{expiryHours}} hours.
+
+If you did not expect this, please contact your administrator.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Alex Rivera" },
+      { name: "userEmail", description: "The recipient's email address", example: "alex@example.com" },
+      { name: "resetUrl", description: "The password reset URL with token", example: "https://app.example.com/auth/reset-password?token=abc123" },
+      { name: "expiryHours", description: "Hours until the reset link expires", example: "24" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "platform_admin_invite",
+    name: "Platform Admin Invitation",
+    subject: "You've been invited as a Platform Administrator — {{appName}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">Platform Administrator Invitation</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <p style="margin: 0 0 24px; font-size: 15px; color: #3f3f46;">You've been invited to become a platform administrator for {{appName}}.</p>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{inviteUrl}}" style="${buttonStyle}">Set Password &amp; Activate</a>
+              </p>
+              <p style="margin: 0 0 8px; font-size: 13px; color: #71717a;">This invitation will expire in {{expiryDays}} day(s).</p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">If you did not expect this invitation, you can safely ignore this email.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+You've been invited to become a platform administrator for {{appName}}.
+
+Click this link to set your password and activate your account:
+{{inviteUrl}}
+
+This invitation will expire in {{expiryDays}} day(s).
+
+If you did not expect this invitation, you can safely ignore this email.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name or email", example: "admin@example.com" },
+      { name: "inviteUrl", description: "The invitation URL with token", example: "https://app.example.com/auth/platform-invite?token=abc123" },
+      { name: "expiryDays", description: "Days until the invitation expires", example: "7" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "user_provision",
+    name: "Account Provisioned",
+    subject: "Your account has been created — {{tenantName}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">Welcome to {{tenantName}}</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <p style="margin: 0 0 24px; font-size: 15px; color: #3f3f46;">Your account has been created. Click the button below to set your password and get started.</p>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{resetUrl}}" style="${buttonStyle}">Set Your Password</a>
+              </p>
+              <p style="margin: 0 0 8px; font-size: 13px; color: #71717a;">This link will expire in {{expiryHours}} hours.</p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">If you have any questions, reach out to your administrator.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+Your account on {{tenantName}} has been created.
+
+Click this link to set your password:
+{{resetUrl}}
+
+This link will expire in {{expiryHours}} hours.
+
+If you have any questions, reach out to your administrator.`,
+    variables: [
+      { name: "userName", description: "The new user's display name or email", example: "sarah@example.com" },
+      { name: "userEmail", description: "The new user's email address", example: "sarah@example.com" },
+      { name: "tenantName", description: "Name of the organization", example: "Bright Studio" },
+      { name: "resetUrl", description: "The password set URL with token", example: "https://app.example.com/auth/reset-password?token=abc123" },
+      { name: "expiryHours", description: "Hours until the link expires", example: "24" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "task_due_reminder",
+    name: "Task Due Reminder",
+    subject: "Reminder: {{taskTitle}} is due {{dueDescription}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">Task Due Reminder</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <p style="margin: 0 0 16px; font-size: 15px; color: #3f3f46;">This is a reminder that the following task is due {{dueDescription}}:</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #f4f4f5; border-radius: 6px;">
+                <p style="margin: 0 0 8px; font-size: 16px; font-weight: 600; color: #18181b;">{{taskTitle}}</p>
+                <p style="margin: 0 0 4px; font-size: 13px; color: #71717a;">Project: {{projectName}}</p>
+                <p style="margin: 0 0 4px; font-size: 13px; color: #71717a;">Due: {{dueDate}}</p>
+                <p style="margin: 0; font-size: 13px; color: #71717a;">Priority: {{priority}}</p>
+              </div>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">Log in to view the task and update its status.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+This is a reminder that the following task is due {{dueDescription}}:
+
+Task: {{taskTitle}}
+Project: {{projectName}}
+Due: {{dueDate}}
+Priority: {{priority}}
+
+Log in to view the task and update its status.`,
+    variables: [
+      { name: "userName", description: "The assignee's display name", example: "Mike Johnson" },
+      { name: "taskTitle", description: "Title of the task", example: "Design homepage mockup" },
+      { name: "projectName", description: "Name of the project", example: "Website Redesign" },
+      { name: "dueDate", description: "The task due date", example: "March 15, 2026" },
+      { name: "dueDescription", description: "Relative due description", example: "tomorrow" },
+      { name: "priority", description: "Task priority level", example: "High" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "support_ticket_created",
+    name: "Support Ticket Confirmation",
+    subject: "Ticket #{{ticketNumber}}: {{ticketSubject}} — {{appName}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">Support Ticket Created</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <p style="margin: 0 0 16px; font-size: 15px; color: #3f3f46;">Your support ticket has been created and our team will review it shortly.</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #f4f4f5; border-radius: 6px;">
+                <p style="margin: 0 0 8px; font-size: 16px; font-weight: 600; color: #18181b;">{{ticketSubject}}</p>
+                <p style="margin: 0 0 4px; font-size: 13px; color: #71717a;">Ticket #: {{ticketNumber}}</p>
+                <p style="margin: 0 0 4px; font-size: 13px; color: #71717a;">Category: {{category}}</p>
+                <p style="margin: 0; font-size: 13px; color: #71717a;">Priority: {{priority}}</p>
+              </div>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You can track the status of your ticket by logging into the client portal.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+Your support ticket has been created and our team will review it shortly.
+
+Subject: {{ticketSubject}}
+Ticket #: {{ticketNumber}}
+Category: {{category}}
+Priority: {{priority}}
+
+You can track the status of your ticket by logging into the client portal.`,
+    variables: [
+      { name: "userName", description: "The ticket creator's display name", example: "Client User" },
+      { name: "ticketSubject", description: "The ticket subject/title", example: "Cannot access dashboard" },
+      { name: "ticketNumber", description: "The ticket reference number", example: "TK-001234" },
+      { name: "category", description: "Ticket category", example: "Technical Support" },
+      { name: "priority", description: "Ticket priority", example: "Medium" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "support_ticket_assigned",
+    name: "Support Ticket Assigned",
+    subject: "You've been assigned to Ticket #{{ticketNumber}}: {{ticketSubject}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">Ticket Assigned to You</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <p style="margin: 0 0 16px; font-size: 15px; color: #3f3f46;">You've been assigned to the following support ticket:</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #f4f4f5; border-radius: 6px;">
+                <p style="margin: 0 0 8px; font-size: 16px; font-weight: 600; color: #18181b;">{{ticketSubject}}</p>
+                <p style="margin: 0 0 4px; font-size: 13px; color: #71717a;">Ticket #: {{ticketNumber}}</p>
+                <p style="margin: 0 0 4px; font-size: 13px; color: #71717a;">Client: {{clientName}}</p>
+                <p style="margin: 0 0 4px; font-size: 13px; color: #71717a;">Priority: {{priority}}</p>
+                <p style="margin: 0; font-size: 13px; color: #71717a;">Assigned by: {{assignedByName}}</p>
+              </div>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">Log in to view the ticket details and respond.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+You've been assigned to the following support ticket:
+
+Subject: {{ticketSubject}}
+Ticket #: {{ticketNumber}}
+Client: {{clientName}}
+Priority: {{priority}}
+Assigned by: {{assignedByName}}
+
+Log in to view the ticket details and respond.`,
+    variables: [
+      { name: "userName", description: "The assignee's display name", example: "Support Agent" },
+      { name: "ticketSubject", description: "The ticket subject/title", example: "Cannot access dashboard" },
+      { name: "ticketNumber", description: "The ticket reference number", example: "TK-001234" },
+      { name: "clientName", description: "Name of the client who submitted the ticket", example: "Acme Corp" },
+      { name: "priority", description: "Ticket priority", example: "High" },
+      { name: "assignedByName", description: "Name of the person who made the assignment", example: "Alex Rivera" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
 ];
 
 export function getDefaultTemplate(templateKey: string): DefaultTemplate | undefined {

@@ -51,13 +51,9 @@ import {
   workspaces,
   tenantAgreements,
   errorLogs,
-  systemSettings,
 } from '@shared/schema';
 import * as schema from '@shared/schema';
 import { cleanupUserReferences } from '../../../utils/userDeletion';
-import { encryptValue, decryptValue, isEncryptionAvailable } from '../../../lib/encryption';
-import Mailgun from 'mailgun.js';
-import FormData from 'form-data';
 
 export const adminsRouter = Router();
 
@@ -433,39 +429,32 @@ adminsRouter.post("/admins/:id/invite", requireSuperUser, async (req, res) => {
     let emailSent = false;
     if (body.sendEmail) {
       try {
-        const mailgunConfigured = !!(process.env.MAILGUN_API_KEY && process.env.MAILGUN_DOMAIN);
-        if (mailgunConfigured) {
-          const formData = (await import("form-data")).default;
-          const Mailgun = (await import("mailgun.js")).default;
-          const mailgun = new Mailgun(formData);
-          const mg = mailgun.client({
-            username: "api",
-            key: process.env.MAILGUN_API_KEY!,
-          });
-          
-          await mg.messages.create(process.env.MAILGUN_DOMAIN!, {
-            from: process.env.MAILGUN_FROM_EMAIL || `noreply@${process.env.MAILGUN_DOMAIN}`,
-            to: admin.email,
-            subject: "You've been invited as a Platform Administrator",
-            html: `
-              <h1>Platform Administrator Invitation</h1>
-              <p>You've been invited to become a platform administrator for MyWorkDay.</p>
-              <p>Click the link below to set your password and activate your account:</p>
-              <p><a href="${inviteUrl}" style="background-color: #3B82F6; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; display: inline-block;">Set Password & Activate</a></p>
-              <p>This link will expire in ${body.expiresInDays} day(s).</p>
-              <p>If you did not expect this invitation, you can safely ignore this email.</p>
-            `,
-          });
-          
-          emailSent = true;
-          
-          await db.insert(platformAuditEvents).values({
-            actorUserId: actor.id,
-            targetUserId: id,
-            eventType: "platform_admin_invite_emailed",
-            message: `Invite email sent to ${admin.email}`,
-          });
-        }
+        const { emailTemplateService } = await import("../../../services/emailTemplates");
+        const { emailOutboxService } = await import("../../../services/emailOutbox");
+        const templateVars = {
+          userName: admin.name || admin.email,
+          inviteUrl,
+          expiryDays: String(body.expiresInDays),
+          appName: "MyWorkDay",
+        };
+        const rendered = await emailTemplateService.renderByKey(null, "platform_admin_invite", templateVars);
+        await emailOutboxService.sendEmail({
+          tenantId: null,
+          messageType: "platform_admin_invite",
+          toEmail: admin.email,
+          subject: rendered?.subject || "You've been invited as a Platform Administrator",
+          textBody: rendered?.textBody || `You've been invited as a platform administrator.\n\nSet your password: ${inviteUrl}\n\nThis link expires in ${body.expiresInDays} day(s).`,
+          htmlBody: rendered?.htmlBody,
+          metadata: { inviteId: invite.id },
+        });
+        emailSent = true;
+
+        await db.insert(platformAuditEvents).values({
+          actorUserId: actor.id,
+          targetUserId: id,
+          eventType: "platform_admin_invite_emailed",
+          message: `Invite email sent to ${admin.email}`,
+        });
       } catch (emailError) {
         console.error("[admins] Failed to send invite email:", emailError);
       }
@@ -649,37 +638,33 @@ adminsRouter.post("/admins/:id/provision", requireSuperUser, async (req, res) =>
       
       if (data.sendEmail) {
         try {
-          const [settings] = await db.select().from(systemSettings).limit(1);
-          
-          if (settings?.mailgunDomain && settings?.mailgunFromEmail && settings?.mailgunApiKeyEncrypted && isEncryptionAvailable()) {
-            const apiKey = decryptValue(settings.mailgunApiKeyEncrypted);
-            const mailgun = new Mailgun(FormData);
-            const mgUrl = settings.mailgunRegion === "EU" ? "https://api.eu.mailgun.net" : "https://api.mailgun.net";
-            const mg = mailgun.client({ username: "api", key: apiKey, url: mgUrl });
-            
-            await mg.messages.create(settings.mailgunDomain, {
-              from: settings.mailgunFromEmail,
-              to: [admin.email],
-              subject: "Reset Your Platform Admin Password",
-              html: `
-                <h2>Password Reset</h2>
-                <p>A password reset has been requested for your Platform Admin account.</p>
-                <p><a href="${resetUrl}">Click here to set your password</a></p>
-                <p>This link expires in 24 hours.</p>
-                <p>If you did not request this, please contact your administrator.</p>
-              `,
-            });
-            
-            await db.insert(platformAuditEvents).values({
-              actorUserId: actor.id,
-              targetUserId: id,
-              eventType: "platform_admin_reset_email_sent",
-              message: `Reset email sent to platform admin ${admin.email}`,
-              metadata: { requestId },
-            });
-          } else {
-            console.warn(`[platform-admin-provision] requestId=${requestId} Mailgun not configured, email not sent`);
-          }
+          const { emailTemplateService } = await import("../../../services/emailTemplates");
+          const { emailOutboxService } = await import("../../../services/emailOutbox");
+          const templateVars = {
+            userName: admin.name || admin.email,
+            userEmail: admin.email,
+            resetUrl,
+            expiryHours: "24",
+            appName: "MyWorkDay",
+          };
+          const rendered = await emailTemplateService.renderByKey(null, "admin_password_reset", templateVars);
+          await emailOutboxService.sendEmail({
+            tenantId: null,
+            messageType: "admin_password_reset",
+            toEmail: admin.email,
+            subject: rendered?.subject || "Reset Your Platform Admin Password",
+            textBody: rendered?.textBody || `A password reset has been requested for your account.\n\nReset your password: ${resetUrl}\n\nThis link expires in 24 hours.`,
+            htmlBody: rendered?.htmlBody,
+            metadata: { adminId: id, requestId },
+          });
+
+          await db.insert(platformAuditEvents).values({
+            actorUserId: actor.id,
+            targetUserId: id,
+            eventType: "platform_admin_reset_email_sent",
+            message: `Reset email sent to platform admin ${admin.email}`,
+            metadata: { requestId },
+          });
         } catch (emailError) {
           console.error(`[platform-admin-provision] requestId=${requestId} Failed to send email:`, emailError);
         }

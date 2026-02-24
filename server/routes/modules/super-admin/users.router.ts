@@ -575,21 +575,26 @@ superUsersRouter.post("/users/:userId/generate-reset-link", requireSuperUser, as
     let emailSent = false;
     if (sendEmail) {
       try {
-        const emailService = (await import("../../../services/email")).default;
-        const isConfigured = await emailService.verifyConfiguration();
-        if (isConfigured) {
-          await emailService.sendEmail({
-            to: existingUser.email,
-            subject: "Reset Your Password",
-            html: `
-              <h2>Password Reset</h2>
-              <p>A password reset has been requested for your account.</p>
-              <p><a href="${resetUrl}">Click here to set your new password</a></p>
-              <p>This link expires in 24 hours.</p>
-            `,
-          });
-          emailSent = true;
-        }
+        const { emailTemplateService } = await import("../../../services/emailTemplates");
+        const { emailOutboxService } = await import("../../../services/emailOutbox");
+        const templateVars = {
+          userName: existingUser.name || existingUser.email,
+          userEmail: existingUser.email,
+          resetUrl,
+          expiryHours: "24",
+          appName: "MyWorkDay",
+        };
+        const rendered = await emailTemplateService.renderByKey(existingUser.tenantId, "admin_password_reset", templateVars);
+        await emailOutboxService.sendEmail({
+          tenantId: existingUser.tenantId,
+          messageType: "admin_password_reset",
+          toEmail: existingUser.email,
+          subject: rendered?.subject || "Reset Your Password",
+          textBody: rendered?.textBody || `A password reset has been requested for your account.\n\nReset your password: ${resetUrl}\n\nThis link expires in 24 hours.`,
+          htmlBody: rendered?.htmlBody,
+          metadata: { userId: existingUser.id },
+        });
+        emailSent = true;
       } catch (emailError) {
         console.warn("[generate-reset-link] Could not send email:", emailError);
       }

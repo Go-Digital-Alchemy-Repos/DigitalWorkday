@@ -368,36 +368,26 @@ tenantUsersRouter.post("/tenants/:tenantId/users/provision", requireSuperUser, a
 
 async function sendProvisionResetEmail(tenantId: string, email: string, resetUrl: string, tenantName: string): Promise<boolean> {
   try {
-    const integration = await tenantIntegrationService.getIntegration(tenantId, "mailgun");
-    if (!integration || integration.status !== "configured" || !integration.publicConfig) {
-      return false;
-    }
-    
-    const publicConfig = integration.publicConfig as { domain?: string; fromEmail?: string };
-    if (!publicConfig.domain) {
-      return false;
-    }
-    
-    const secretConfig = await tenantIntegrationService.getDecryptedSecrets(tenantId, "mailgun") as { apiKey?: string } | null;
-    if (!secretConfig?.apiKey) {
-      return false;
-    }
-    
-    const mailgun = new Mailgun(FormData);
-    const mg = mailgun.client({ username: "api", key: secretConfig.apiKey });
-    
-    await mg.messages.create(publicConfig.domain, {
-      from: publicConfig.fromEmail || `noreply@${publicConfig.domain}`,
-      to: email,
-      subject: `Set Your Password for ${tenantName}`,
-      html: `
-        <h2>Welcome to ${tenantName}</h2>
-        <p>Your account has been created. Click the link below to set your password:</p>
-        <p><a href="${resetUrl}">Set Your Password</a></p>
-        <p>This link expires in 24 hours.</p>
-      `,
+    const { emailTemplateService } = await import("../../../services/emailTemplates");
+    const { emailOutboxService } = await import("../../../services/emailOutbox");
+    const templateVars = {
+      userName: email,
+      userEmail: email,
+      tenantName,
+      resetUrl,
+      expiryHours: "24",
+      appName: "MyWorkDay",
+    };
+    const rendered = await emailTemplateService.renderByKey(tenantId, "user_provision", templateVars);
+    await emailOutboxService.sendEmail({
+      tenantId,
+      messageType: "user_provision",
+      toEmail: email,
+      subject: rendered?.subject || `Set Your Password for ${tenantName}`,
+      textBody: rendered?.textBody || `Your account on ${tenantName} has been created.\n\nSet your password: ${resetUrl}\n\nThis link expires in 24 hours.`,
+      htmlBody: rendered?.htmlBody,
+      metadata: { tenantId, email },
     });
-    
     return true;
   } catch {
     return false;
