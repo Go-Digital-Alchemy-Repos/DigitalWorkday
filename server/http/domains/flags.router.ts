@@ -37,6 +37,14 @@ router.get("/features/flags", async (_req, res) => {
       prefetchV1: config.features.prefetchV1,
       virtualizationV1: config.features.virtualizationV1,
       tenantDefaultDocs: config.features.tenantDefaultDocs,
+      reportingEngineEnabled: config.features.reportingEngineEnabled,
+      reportWorkloadV2: config.features.reportWorkloadV2,
+      reportTaskAnalysisV2: config.features.reportTaskAnalysisV2,
+      reportClientAnalyticsV2: config.features.reportClientAnalyticsV2,
+      reportTimeTrackingV2: config.features.reportTimeTrackingV2,
+      reportProjectAnalysisV2: config.features.reportProjectAnalysisV2,
+      reportMessagesV2: config.features.reportMessagesV2,
+      reportPipelineV2: config.features.reportPipelineV2,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

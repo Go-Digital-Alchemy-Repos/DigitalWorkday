@@ -12,6 +12,14 @@ export interface FeatureFlags {
   prefetchV1: boolean;
   virtualizationV1: boolean;
   tenantDefaultDocs: boolean;
+  reportingEngineEnabled: boolean;
+  reportWorkloadV2: boolean;
+  reportTaskAnalysisV2: boolean;
+  reportClientAnalyticsV2: boolean;
+  reportTimeTrackingV2: boolean;
+  reportProjectAnalysisV2: boolean;
+  reportMessagesV2: boolean;
+  reportPipelineV2: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -26,6 +34,14 @@ const ALL_OFF: FeatureFlags = {
   prefetchV1: false,
   virtualizationV1: false,
   tenantDefaultDocs: false,
+  reportingEngineEnabled: false,
+  reportWorkloadV2: false,
+  reportTaskAnalysisV2: false,
+  reportClientAnalyticsV2: false,
+  reportTimeTrackingV2: false,
+  reportProjectAnalysisV2: false,
+  reportMessagesV2: false,
+  reportPipelineV2: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

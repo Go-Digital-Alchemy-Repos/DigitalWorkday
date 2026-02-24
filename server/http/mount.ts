@@ -26,6 +26,7 @@ import workspacesRouter from "./domains/workspaces.router";
 import teamsRouter from "./domains/teams.router";
 import workloadReportsRouter from "./domains/workload-reports.router";
 import analyticsReportsRouter from "./domains/analytics-reports.router";
+import reportsV2WorkloadRouter from "./domains/reports-v2-workload.router";
 import { jobsRouter } from "../jobs/jobs.router";
 import supportRouter from "./domains/support.router";
 import clientDocumentsRouter from "./domains/clientDocuments.router";
@@ -206,6 +207,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "analytics-reports",
     description: "Analytics reports: overview KPIs, task analytics, client analytics dashboards.",
+  },
+  {
+    path: "/api/reports/v2",
+    router: reportsV2WorkloadRouter,
+    policy: "authTenant",
+    domain: "reports-v2-workload",
+    description: "Workload Reports V2: team summary, employee drilldown, capacity planning, risk flags.",
   },
   {
     path: "/api",

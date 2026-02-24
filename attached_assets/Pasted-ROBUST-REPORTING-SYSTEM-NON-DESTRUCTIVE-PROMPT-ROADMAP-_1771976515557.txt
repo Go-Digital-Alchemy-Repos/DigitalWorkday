@@ -1,0 +1,414 @@
+ROBUST REPORTING SYSTEM — NON-DESTRUCTIVE PROMPT ROADMAP (WITH APP DOCS UPDATES)
+
+You are working in the DigitalWorkday codebase (React frontend, Node/Express backend, PostgreSQL + Drizzle). Implement a comprehensive reporting system for Tenant Admins across these areas:
+
+Reports sections (existing):
+- Overview
+- Task Analysis
+- Client Analytics
+- Workload Reports (PRIORITY)
+- Time Tracking
+- Project Analysis
+- Messages
+- Client Pipeline
+
+This roadmap is NON-DESTRUCTIVE:
+- Do NOT break existing Reports pages or existing endpoints.
+- Add new endpoints, new UI routes, new components, and feature flags.
+- Keep old report queries intact; we will progressively migrate each page behind flags.
+- All new report calculations must be server-side for scalability.
+- Add App Docs updates after each phase.
+
+========================================================
+CORE PRINCIPLES
+========================================================
+1) Reporting Engine, not “static pages”
+   - global date range + filters
+   - server-side aggregation
+   - drill-down and export readiness
+2) Performance first
+   - avoid client-side filtering/sorting over large arrays
+   - build aggregated endpoints (SQL group-by) with pagination
+3) Safety first
+   - feature flags per report area
+   - additive routes and components
+4) Documentation as you go
+   - App Docs updated per phase
+
+========================================================
+PHASE 0 — DISCOVERY + BASELINE (NO FEATURE CHANGES)
+========================================================
+A) Locate existing Reports UI routes + components for each report area.
+B) Locate existing task, time entry, projects, clients, messages, pipeline data models.
+C) Identify what “employee/user” means (workspace member table, roles, employment status).
+D) Identify existing time tracking tables, task status fields, completed_at fields, due dates, estimates.
+E) Identify existing permissions model for Tenant Admin.
+F) Establish baseline performance:
+   - Add a temporary dev-only log around existing report endpoints to capture response sizes and ms.
+   - Do NOT change behavior.
+
+Deliverable:
+- Notes in App Docs (internal) titled: “Reporting System Baseline (Pre-Engine)”
+- Include which tables power which report areas today, and biggest current bottlenecks.
+
+========================================================
+PHASE 1 — REPORTING FOUNDATION (ENGINE SCAFFOLD)
+========================================================
+
+1.1 Add Feature Flags (config/env)
+- ENABLE_REPORTING_ENGINE (master)
+- ENABLE_REPORT_OVERVIEW_V2
+- ENABLE_REPORT_TASK_ANALYSIS_V2
+- ENABLE_REPORT_CLIENT_ANALYTICS_V2
+- ENABLE_REPORT_WORKLOAD_V2
+- ENABLE_REPORT_TIME_TRACKING_V2
+- ENABLE_REPORT_PROJECT_ANALYSIS_V2
+- ENABLE_REPORT_MESSAGES_V2
+- ENABLE_REPORT_PIPELINE_V2
+Default:
+- Enabled in dev
+- Disabled in prod until rollout
+
+1.2 Create shared “Report Query Contract”
+Define a standard set of query params used by all report endpoints:
+- startDate, endDate (required; server validates)
+- timezone (optional; default tenant timezone)
+- workspaceId/tenantId derived from auth context (never trusted from client)
+- filters:
+  - userIds[]
+  - teamIds[] (if applicable)
+  - clientIds[]
+  - projectIds[]
+  - status[]
+  - search
+- pagination:
+  - limit, cursor/page
+- sorting:
+  - sortBy, sortDir
+
+1.3 Create shared server utilities (additive)
+- parseReportRange()
+- normalizeFilters()
+- safePagination()
+- “reportingGuard” middleware that ensures tenant scoping + role checks
+- add strict input validation (zod or existing validator)
+
+1.4 Create shared frontend Report Shell (additive)
+A common report layout component used by every report:
+- global date range picker
+- filter bar (users/clients/projects/status)
+- saved view placeholder (future)
+- export placeholder (future)
+- consistent loading/error states
+
+Deliverables:
+- New report foundation utilities (server + client)
+- No existing report page replaced yet
+
+App Docs Update:
+- “Reporting Engine v1 — Foundations”
+  - flags
+  - shared query params
+  - scoping rules
+  - UI shell
+
+========================================================
+PHASE 2 — WORKLOAD REPORTS V2 (PRIORITY, HUBSTAFF-LIKE)
+========================================================
+
+2.1 Data Definitions (write down in code + docs)
+Define what metrics mean (consistent across UI):
+Task Metrics:
+- assignedCount
+- completedCount
+- overdueCount
+- dueSoonCount (next 7 days)
+- avgCompletionTime (created→completed)
+- completionRate (completed / assigned in range)
+- reopenedCount (if supported)
+Time Metrics:
+- totalHours
+- billableHours (if supported)
+- nonBillableHours
+- avgHoursPerDay
+- overtimeHours (if tenant has business hours policy)
+Productivity/Load:
+- activeTasksNow
+- utilizationPct (allocated/available)
+- efficiencyRatio (actualHours / estimatedHours) if estimates exist
+- throughputTrend series
+
+2.2 Create NEW server endpoints (additive)
+Under /api/reports/v2/workload (or consistent v2 namespace):
+
+A) Team Summary Table (sortable)
+GET /api/reports/v2/workload/team
+Returns rows:
+- userId, userName
+- activeTasksNow, overdueCount, completedCount(range)
+- totalHours(range), utilizationPct, efficiencyRatio
+Supports filters + sorting + pagination.
+
+B) Single Employee Drilldown
+GET /api/reports/v2/workload/users/:userId
+Returns:
+- summary metrics
+- time series (daily/weekly) for tasks + hours
+- top clients/projects by time
+- overdue task list sample (paginated)
+
+C) Capacity Planning Grid
+GET /api/reports/v2/workload/capacity
+Returns per user per week:
+- availableHours
+- estimatedAssignedHours (from tasks/project allocations if exist)
+- actualHours (from time entries)
+- utilizationPct
+If allocation data doesn’t exist yet, compute a v1 approximation:
+- estimatedAssignedHours = sum(task.estimateHours for active tasks within range)
+
+D) Risk / Burnout Flags
+GET /api/reports/v2/workload/risk
+Returns:
+- userId
+- reasons[] (overutilization, high overdue %, consistent overtime, no time logs)
+- scores
+
+IMPORTANT:
+- All heavy aggregation is done in SQL (Drizzle query builders).
+- No “load everything then filter in memory”.
+- Ensure indexes exist for query fields (Phase 8 covers this if missing).
+
+2.3 Frontend Workload Reports V2 UI (additive)
+- Keep existing Workload Reports page.
+- Add a toggle/flag: if ENABLE_REPORT_WORKLOAD_V2 show new UI.
+New UI tabs inside Workload V2:
+1) Team Comparison (table)
+2) Employee Detail (select user → drilldown)
+3) Capacity Planning (weekly grid)
+4) Risk Flags (alerts + filters)
+
+2.4 Drilldowns and Export readiness (v1)
+- Each row should allow “view underlying tasks” (opens drawer with paginated list).
+- Add “Export CSV” button placeholder that calls a backend CSV endpoint later (Phase 7).
+
+App Docs Update:
+- “Workload Reports V2”
+  - metrics definitions
+  - endpoint specs
+  - scoping and filters
+  - UI screenshots/notes
+  - known approximations (if allocation is estimate-based)
+
+========================================================
+PHASE 3 — TASK ANALYSIS V2
+========================================================
+
+3.1 Add endpoints
+GET /api/reports/v2/tasks/summary
+- tasksCreated, tasksCompleted, backlogDelta
+- overdueRate, reopenedRate, avgCycleTime, avgLeadTime
+
+GET /api/reports/v2/tasks/trends
+- time series: created vs completed vs overdue
+
+GET /api/reports/v2/tasks/distribution
+- by priority
+- by tags
+- by status
+- aging buckets (0–7, 8–30, 30+)
+
+GET /api/reports/v2/tasks/overdue
+- paginated list with filters (user/client/project)
+
+3.2 UI
+- Replace existing Task Analysis page behind ENABLE_REPORT_TASK_ANALYSIS_V2
+- Add drilldown drawers for lists
+
+App Docs Update:
+- “Task Analysis V2” with metric definitions + endpoints
+
+========================================================
+PHASE 4 — TIME TRACKING V2 (HUBSTAFF-LIKE)
+========================================================
+
+4.1 Endpoints
+GET /api/reports/v2/time/summary
+- totalHours, billable/nonbillable, avg/day, compliance %, gaps
+
+GET /api/reports/v2/time/by-user
+GET /api/reports/v2/time/by-client
+GET /api/reports/v2/time/by-project
+GET /api/reports/v2/time/by-task
+(all paginated, sortable)
+
+GET /api/reports/v2/time/variance
+- estimated vs actual by project/task/user
+
+GET /api/reports/v2/time/anomalies
+- outside business hours
+- missing days
+- large entries
+- suspicious patterns (optional)
+
+4.2 UI
+- Replace Time Tracking reports behind ENABLE_REPORT_TIME_TRACKING_V2
+- Add export placeholders + drilldown
+
+App Docs Update:
+- “Time Tracking Reports V2”
+
+========================================================
+PHASE 5 — PROJECT ANALYSIS V2
+========================================================
+
+5.1 Endpoints
+GET /api/reports/v2/projects/portfolio
+- progress %, overdue tasks, burn rate, deadline risk score
+
+GET /api/reports/v2/projects/budget
+- estimated vs actual hours, remaining
+
+GET /api/reports/v2/projects/resource-allocation
+- hours by user/team
+
+5.2 UI
+- Replace Project Analysis behind flag
+- Add “risk scoring” explanation tooltip
+
+App Docs Update:
+- “Project Analysis V2”
+
+========================================================
+PHASE 6 — CLIENT ANALYTICS V2
+========================================================
+
+6.1 Endpoints
+GET /api/reports/v2/clients/health
+- activity index, time spent, task volume, response times, inactivity
+
+GET /api/reports/v2/clients/top
+- top clients by time, tasks, messages
+
+GET /api/reports/v2/clients/inactive
+- no activity in X days
+
+6.2 UI
+- Replace Client Analytics behind flag
+- Add client drilldowns
+
+App Docs Update:
+- “Client Analytics V2”
+
+========================================================
+PHASE 7 — MESSAGES REPORTS V2 + PIPELINE V2
+========================================================
+
+7.1 Messages endpoints
+GET /api/reports/v2/messages/summary
+- total messages, avg response time, first response SLA, unanswered threads
+
+GET /api/reports/v2/messages/by-client
+GET /api/reports/v2/messages/by-user
+
+7.2 Pipeline endpoints
+GET /api/reports/v2/pipeline/summary
+- leads by stage, conversion, stage velocity, dropoff
+
+GET /api/reports/v2/pipeline/trends
+
+7.3 UI
+- Replace each behind flags
+- Include drilldown tables
+
+App Docs Update:
+- “Messages Reports V2”
+- “Client Pipeline V2”
+
+========================================================
+PHASE 8 — PERFORMANCE + INDEXING + OPTIONAL SUMMARIES
+========================================================
+
+8.1 Index audit
+For every v2 report query, ensure indexes exist on:
+- tasks: tenant_id/workspace_id, assignee_id, status, due_date, completed_at, created_at, project_id, client_id, estimate_hours
+- time_entries: tenant_id/workspace_id, user_id, date/start_time, project_id, client_id, task_id, billable
+- messages: tenant_id/workspace_id, thread_id, created_at, client_id, user_id
+- pipeline: tenant_id/workspace_id, stage_id, updated_at, created_at
+
+Add only missing indexes via migrations (additive).
+
+8.2 Query plan verification
+For the heaviest endpoints (Workload team + capacity):
+- run EXPLAIN ANALYZE in dev/staging dataset
+- adjust query shapes to avoid nested loops
+
+8.3 Optional: Daily summary tables (ONLY if needed at scale)
+If tenants are large and queries still heavy:
+- create additive daily summary tables or materialized views:
+  - report_user_daily (tasks completed, hours tracked, overdue count)
+  - report_client_daily (time, tasks, messages)
+Populate via:
+- nightly job OR incremental updates when records change (later phase)
+Do not block V2 launch on this unless required.
+
+App Docs Update:
+- “Reporting Performance & Indexing”
+
+========================================================
+PHASE 9 — EXPORTS + SAVED VIEWS + SCHEDULED REPORTS (ENHANCEMENT)
+========================================================
+
+9.1 Exports (CSV first, XLSX later)
+Add endpoints:
+- /api/reports/v2/.../export?format=csv
+Ensure:
+- respects filters
+- streams output for large exports
+
+9.2 Saved Report Views
+Add tables:
+- report_saved_views (tenant_id, user_id, report_key, name, json_filters, created_at)
+UI:
+- Save current filter set
+- Load saved views
+
+9.3 Scheduled Reports (email)
+If email system exists:
+- report_schedules (tenant_id, user_id, report_key, cron, recipients, filters)
+Background job:
+- generate export and email link/attachment
+
+App Docs Update:
+- “Exports, Saved Views, Scheduled Reports”
+
+========================================================
+IMPLEMENTATION GUIDELINES (CRITICAL)
+========================================================
+- All v2 report endpoints must be tenant-scoped from auth context.
+- Never accept tenantId/workspaceId from the client as truth.
+- All list endpoints must paginate.
+- All sorting/filtering should be server-side.
+- Frontend should not compute heavy aggregations from raw lists.
+- Use shared ReportShell and query param contract everywhere.
+- Keep legacy reports intact; only switch per-page behind flags.
+
+========================================================
+FINAL ACCEPTANCE CRITERIA
+========================================================
+- Every report area has a V2 version behind a feature flag
+- Workload V2 includes:
+  - Team comparison table
+  - Employee drilldown
+  - Capacity planning grid
+  - Risk flags
+- All report endpoints aggregate in SQL and paginate
+- App Docs updated after each phase with endpoints, metrics, and usage
+- No regression to existing reports when flags are off
+
+========================================================
+NOW EXECUTE THIS ROADMAP
+========================================================
+Start with Phase 0 and Phase 1 in this run.
+Then implement Phase 2 (Workload Reports V2) next, end-to-end.
+After Phase 2 is stable, proceed sequentially through Phases 3–9.

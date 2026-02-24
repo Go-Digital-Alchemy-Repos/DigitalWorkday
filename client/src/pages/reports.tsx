@@ -2,6 +2,8 @@ import { useState, lazy, Suspense, useMemo } from "react";
 import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { Redirect } from "wouter";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
+import { WorkloadReportsV2 } from "@/components/reports/workload-reports-v2";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -322,6 +324,7 @@ function PipelineReport() {
 export default function ReportsPage() {
   const { user, isLoading } = useAuth();
   const [currentView, setCurrentView] = useState<ReportView>("landing");
+  const flags = useFeatureFlags();
 
   const isAdmin = user?.role === "admin";
   const isSuperUser = user?.role === "super_user";
@@ -555,6 +558,8 @@ export default function ReportsPage() {
             <MessagesReports />
           ) : currentView === "pipeline" ? (
             <PipelineReport />
+          ) : currentView === "workload" && flags?.reportWorkloadV2 ? (
+            <WorkloadReportsV2 />
           ) : (
             <ReportsTab defaultTab={currentView === "workload" ? "workload" : currentView === "time" ? "time" : undefined} />
           )}

@@ -181,6 +181,15 @@ export const config = {
     prefetchV1: optionalEnvBool("PREFETCH_V1", true),
     virtualizationV1: optionalEnvBool("VIRTUALIZATION_V1", true),
     tenantDefaultDocs: optionalEnvBool("TENANT_DEFAULT_DOCS", true),
+    // Reporting Engine V2 — default ON in dev, OFF in prod until rollout
+    reportingEngineEnabled: optionalEnvBool("REPORTING_ENGINE", isDevelopment),
+    reportWorkloadV2: optionalEnvBool("REPORT_WORKLOAD_V2", isDevelopment),
+    reportTaskAnalysisV2: optionalEnvBool("REPORT_TASK_ANALYSIS_V2", false),
+    reportClientAnalyticsV2: optionalEnvBool("REPORT_CLIENT_ANALYTICS_V2", false),
+    reportTimeTrackingV2: optionalEnvBool("REPORT_TIME_TRACKING_V2", false),
+    reportProjectAnalysisV2: optionalEnvBool("REPORT_PROJECT_ANALYSIS_V2", false),
+    reportMessagesV2: optionalEnvBool("REPORT_MESSAGES_V2", false),
+    reportPipelineV2: optionalEnvBool("REPORT_PIPELINE_V2", false),
   },
 
   tenancyEnforcement: {
