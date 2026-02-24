@@ -1071,6 +1071,12 @@ export function ActivityTab({ clientId }: { clientId: string }) {
 
   return (
     <div className="space-y-4">
+      <div className="flex items-center justify-between mb-2">
+        <h2 className="text-lg font-medium flex items-center gap-2">
+          <Activity className="h-5 w-5 text-muted-foreground" />
+          Activity
+        </h2>
+      </div>
       <div className="flex items-center gap-2 flex-wrap" data-testid="activity-type-filters">
         <Button
           size="sm"
