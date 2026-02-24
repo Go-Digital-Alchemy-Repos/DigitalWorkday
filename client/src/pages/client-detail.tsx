@@ -72,6 +72,7 @@ import {
   Send,
   FileText,
   Link as LinkIcon,
+  Link2,
   Search,
   Play,
   Users,
@@ -803,6 +804,21 @@ export default function ClientDetailPage() {
                 ))}
               </SelectContent>
             </Select>
+            <Button
+              variant="ghost"
+              size="icon"
+              className="h-8 w-8 text-muted-foreground hover:text-foreground"
+              onClick={() => {
+                const url = `${window.location.origin}/clients/${clientId}`;
+                navigator.clipboard.writeText(url).then(() => {
+                  toast({ title: "Link copied", description: "Client profile link copied to clipboard" });
+                });
+              }}
+              title="Copy client link"
+              data-testid="button-copy-client-link"
+            >
+              <Link2 className="h-4 w-4" />
+            </Button>
           </div>
         </div>
         <div className="flex items-center gap-2">
