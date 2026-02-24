@@ -72,7 +72,6 @@ import {
   ArrowLeft,
   Pin,
   Menu,
-  Camera,
 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
@@ -891,37 +890,117 @@ export default function ChatPage() {
     messageInputRef.current?.focus();
   };
 
-  const renderMessageBody = (body: string) => {
-    const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
-    const parts = [];
+  const renderFormattedText = useCallback((text: string, keyPrefix: string = "ft"): React.ReactNode[] => {
+    const parts: React.ReactNode[] = [];
+    const regex = /(\*\*(.+?)\*\*)|(_(.+?)_)/g;
     let lastIndex = 0;
     let match;
-    
+    let idx = 0;
+
+    while ((match = regex.exec(text)) !== null) {
+      if (match.index > lastIndex) {
+        parts.push(text.slice(lastIndex, match.index));
+      }
+      if (match[1]) {
+        parts.push(<strong key={`${keyPrefix}-b-${idx}`}>{match[2]}</strong>);
+      } else if (match[3]) {
+        parts.push(<em key={`${keyPrefix}-i-${idx}`}>{match[4]}</em>);
+      }
+      lastIndex = regex.lastIndex;
+      idx++;
+    }
+    if (lastIndex < text.length) {
+      parts.push(text.slice(lastIndex));
+    }
+    return parts;
+  }, []);
+
+  const renderMessageBody = useCallback((body: string) => {
+    const mentionRegex = /@\[([^\]]+)\]\(([^)]+)\)/g;
+    const segments: { type: "text" | "mention"; value: string; display?: string; id?: string }[] = [];
+    let lastIndex = 0;
+    let match;
+
     while ((match = mentionRegex.exec(body)) !== null) {
       if (match.index > lastIndex) {
-        parts.push(body.slice(lastIndex, match.index));
+        segments.push({ type: "text", value: body.slice(lastIndex, match.index) });
       }
-      const displayName = match[1];
-      const userId = match[2];
-      parts.push(
-        <Badge 
-          key={`${userId}-${match.index}`} 
-          variant="secondary" 
-          className="cursor-pointer text-xs py-0 px-1"
-        >
-          <AtSign className="h-3 w-3 mr-0.5" />
-          {displayName}
-        </Badge>
-      );
+      segments.push({ type: "mention", value: match[0], display: match[1], id: match[2] });
       lastIndex = mentionRegex.lastIndex;
     }
-    
     if (lastIndex < body.length) {
-      parts.push(body.slice(lastIndex));
+      segments.push({ type: "text", value: body.slice(lastIndex) });
     }
-    
-    return parts.length > 0 ? parts : body;
-  };
+
+    const result: React.ReactNode[] = [];
+    let segIdx = 0;
+
+    for (const seg of segments) {
+      if (seg.type === "mention") {
+        result.push(
+          <Badge
+            key={`mention-${seg.id}-${segIdx}`}
+            variant="secondary"
+            className="cursor-pointer text-xs py-0 px-1"
+          >
+            <AtSign className="h-3 w-3 mr-0.5" />
+            {seg.display}
+          </Badge>
+        );
+      } else {
+        const lines = seg.value.split("\n");
+        const lineNodes: React.ReactNode[] = [];
+        let currentListItems: React.ReactNode[] = [];
+        let currentListType: "bullet" | "numbered" | null = null;
+
+        const flushList = () => {
+          if (currentListItems.length > 0 && currentListType) {
+            if (currentListType === "bullet") {
+              lineNodes.push(<ul key={`${segIdx}-ul-${lineNodes.length}`} className="ml-4 list-disc my-0.5">{currentListItems}</ul>);
+            } else {
+              lineNodes.push(<ol key={`${segIdx}-ol-${lineNodes.length}`} className="ml-4 list-decimal my-0.5">{currentListItems}</ol>);
+            }
+            currentListItems = [];
+            currentListType = null;
+          }
+        };
+
+        for (let li = 0; li < lines.length; li++) {
+          const line = lines[li];
+          const bulletMatch = line.match(/^- (.+)/);
+          const numberedMatch = line.match(/^(\d+)\.\s(.+)/);
+
+          if (bulletMatch) {
+            if (currentListType !== "bullet") { flushList(); currentListType = "bullet"; }
+            currentListItems.push(
+              <li key={`${segIdx}-li-${li}`}>
+                {renderFormattedText(bulletMatch[1], `${segIdx}-${li}`)}
+              </li>
+            );
+          } else if (numberedMatch) {
+            if (currentListType !== "numbered") { flushList(); currentListType = "numbered"; }
+            currentListItems.push(
+              <li key={`${segIdx}-li-${li}`}>
+                {renderFormattedText(numberedMatch[2], `${segIdx}-${li}`)}
+              </li>
+            );
+          } else {
+            flushList();
+            const formatted = renderFormattedText(line, `${segIdx}-${li}`);
+            lineNodes.push(...formatted);
+            if (li < lines.length - 1) {
+              lineNodes.push(<br key={`${segIdx}-br-${li}`} />);
+            }
+          }
+        }
+        flushList();
+        result.push(<span key={`seg-${segIdx}`}>{lineNodes}</span>);
+      }
+      segIdx++;
+    }
+
+    return result.length > 0 ? result : body;
+  }, [renderFormattedText]);
 
   // Sort messages by createdAt with ID fallback for consistent ordering
   const sortMessages = (msgs: ChatMessage[]): ChatMessage[] => {
@@ -2771,36 +2850,6 @@ export default function ChatPage() {
                   onChange={handleFileSelect}
                   data-testid="input-camera-capture"
                 />
-                <Button
-                  type="button"
-                  size="icon"
-                  variant="ghost"
-                  onClick={() => fileInputRef.current?.click()}
-                  disabled={isUploading || sendMessageMutation.isPending}
-                  aria-label="Attach file"
-                  title="Attach file"
-                  data-testid="button-attach-file"
-                >
-                  {isUploading ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <Paperclip className="h-4 w-4" />
-                  )}
-                </Button>
-                {isMobile && (
-                  <Button
-                    type="button"
-                    size="icon"
-                    variant="ghost"
-                    onClick={() => cameraInputRef.current?.click()}
-                    disabled={isUploading || sendMessageMutation.isPending}
-                    aria-label="Take photo"
-                    title="Take photo"
-                    data-testid="button-camera-capture"
-                  >
-                    <Camera className="h-4 w-4" />
-                  </Button>
-                )}
                 <div className="relative flex-1">
                   <ChatMessageInput
                     ref={messageInputRef}
@@ -2810,6 +2859,9 @@ export default function ChatPage() {
                     placeholder={`Message ${selectedChannel ? "#" + selectedChannel.name : getDmDisplayName(selectedDm!)}`}
                     disabled={sendMessageMutation.isPending}
                     data-testid="input-message"
+                    onAttachClick={() => fileInputRef.current?.click()}
+                    isUploading={isUploading}
+                    attachDisabled={isUploading || sendMessageMutation.isPending}
                   />
                   <SlashCommandDropdown
                     commands={slashCommandMatches}
