@@ -218,7 +218,8 @@ export function DefaultTenantDocumentsManager({ tenantId, mode }: Props) {
           );
           if (!res.ok) {
             const err = await res.json().catch(() => ({}));
-            throw new Error(err.error || "Upload failed");
+            const msg = typeof err.error === "string" ? err.error : err.error?.message || err.message || "Upload failed";
+            throw new Error(msg);
           }
         }
         toast({ title: `${files.length} file(s) uploaded` });
@@ -248,7 +249,8 @@ export function DefaultTenantDocumentsManager({ tenantId, mode }: Props) {
         );
         if (!res.ok) {
           const err = await res.json().catch(() => ({}));
-          throw new Error(err.error || "Replace failed");
+          const msg = typeof err.error === "string" ? err.error : err.error?.message || err.message || "Replace failed";
+          throw new Error(msg);
         }
         toast({ title: "File replaced successfully" });
         invalidate();

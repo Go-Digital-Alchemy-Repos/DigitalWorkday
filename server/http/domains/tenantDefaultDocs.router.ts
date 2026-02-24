@@ -228,7 +228,7 @@ router.post("/tenants/:tenantId/default-docs/documents/upload/proxy", requireAdm
     }
 
     const storageKey = generateDocStorageKey(tenantId, file.originalname);
-    await uploadToS3(storageKey, file.buffer, file.mimetype, tenantId);
+    await uploadToS3(file.buffer, storageKey, file.mimetype, tenantId);
 
     const title = req.body.title || file.originalname;
     const folderId = req.body.folderId || null;
@@ -296,7 +296,7 @@ router.post("/tenants/:tenantId/default-docs/documents/:documentId/replace", req
     if (!existing) return res.status(404).json({ error: "Document not found" });
 
     const storageKey = generateDocStorageKey(tenantId, file.originalname);
-    await uploadToS3(storageKey, file.buffer, file.mimetype, tenantId);
+    await uploadToS3(file.buffer, storageKey, file.mimetype, tenantId);
 
     const userId = getCurrentUserId(req);
     const doc = await tenantDefaultDocsRepo.replaceDocumentFile(documentId, tenantId, {
