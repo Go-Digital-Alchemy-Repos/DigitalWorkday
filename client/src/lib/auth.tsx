@@ -56,7 +56,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [userImpersonation, setUserImpersonation] = useState<UserImpersonationData | null>(null);
   const [, setLocation] = useLocation();
 
-  const fetchUser = useCallback(async () => {
+  const fetchUser = useCallback(async (retries = 2) => {
     try {
       const response = await fetch("/api/auth/me", {
         credentials: "include",
@@ -64,7 +64,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.ok) {
         const data = await response.json();
         
-        // Debug logging for tenant context issues
         if (import.meta.env.DEV || import.meta.env.VITE_DEBUG_AUTH === "true") {
           console.log("[Auth] /api/auth/me response:", {
             userId: data.user?.id,
@@ -84,14 +83,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         console.log("[Auth] /api/auth/me failed:", response.status);
         setUser(null);
         setUserImpersonation(null);
-        // Clear super user state when not authenticated
         clearActingAsState();
       }
     } catch (err) {
+      if (retries > 0) {
+        await new Promise(r => setTimeout(r, 1000));
+        return fetchUser(retries - 1);
+      }
       console.error("[Auth] /api/auth/me error:", err);
       setUser(null);
       setUserImpersonation(null);
-      // Clear super user state on error
       clearActingAsState();
     } finally {
       setIsLoading(false);
@@ -104,7 +105,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = async (email: string, password: string) => {
     try {
-      // Clear any acting tenant state from previous session
       clearActingAsState();
       
       const response = await fetch("/api/auth/login", {
@@ -115,11 +115,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       });
       const data = await response.json();
       if (response.ok && data.user) {
-        // Set user state immediately
         setUser(data.user);
+        markAuthenticated();
         
-        // Verify session is established by re-fetching from /me
-        // This ensures the cookie is properly set before navigation
         const meResponse = await fetch("/api/auth/me", {
           credentials: "include",
         });
@@ -128,7 +126,6 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUser(meData.user);
           setUserImpersonation(meData.impersonation || null);
           setIsLoading(false);
-          // Set super user flag based on user role
           setSuperUserFlag(meData.user?.role === UserRole.SUPER_USER);
           triggerPrefetch(meData.user?.role);
         }

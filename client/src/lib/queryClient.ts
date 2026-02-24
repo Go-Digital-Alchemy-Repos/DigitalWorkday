@@ -61,28 +61,36 @@ function isJsonResponse(res: Response): boolean {
   return contentType.includes("application/json");
 }
 
+let _loginTimestamp = 0;
+
 /**
  * Handle 401 Unauthorized - redirect to login with session expired message.
- * Only handles cases where we're NOT already on the login page.
- * Only shows "session expired" if user was previously authenticated.
+ * Only redirects if the user was previously authenticated (has an active session).
+ * Skips redirect during a grace period after login to avoid race conditions
+ * where parallel API requests may briefly return 401 before the session propagates.
  */
 function handle401Redirect(): void {
-  if (window.location.pathname !== "/login") {
-    const wasAuthenticated = sessionStorage.getItem("wasAuthenticated") === "true";
-    if (wasAuthenticated) {
-      sessionStorage.setItem("authMessage", "Session expired. Please log in again.");
-      sessionStorage.removeItem("wasAuthenticated");
-    }
-    window.location.href = "/login";
-  }
+  if (window.location.pathname === "/login") return;
+
+  const wasAuthenticated = sessionStorage.getItem("wasAuthenticated") === "true";
+  if (!wasAuthenticated) return;
+
+  const gracePeriodMs = 5_000;
+  if (_loginTimestamp && Date.now() - _loginTimestamp < gracePeriodMs) return;
+
+  sessionStorage.setItem("authMessage", "Session expired. Please log in again.");
+  sessionStorage.removeItem("wasAuthenticated");
+  window.location.href = "/login";
 }
 
 export function markAuthenticated(): void {
   sessionStorage.setItem("wasAuthenticated", "true");
+  _loginTimestamp = Date.now();
 }
 
 export function clearAuthenticated(): void {
   sessionStorage.removeItem("wasAuthenticated");
+  _loginTimestamp = 0;
 }
 
 async function throwIfResNotOk(res: Response) {
