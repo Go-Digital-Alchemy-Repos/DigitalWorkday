@@ -775,6 +775,33 @@ router.delete("/tasks/:id", async (req, res) => {
   }
 });
 
+router.delete("/sections/:sectionId/tasks", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const currentUserId = getCurrentUserId(req);
+    const currentUser = await storage.getUser(currentUserId);
+
+    if (!currentUser) {
+      return sendError(res, AppError.unauthorized("User not found"), req);
+    }
+
+    const isAdmin = currentUser.role === "admin" || isSuperUser(req);
+    if (!isAdmin) {
+      return sendError(res, AppError.forbidden("Only admins can bulk delete tasks"), req);
+    }
+
+    if (!tenantId) {
+      return sendError(res, AppError.internal("Tenant context required"), req);
+    }
+
+    const deletedCount = await storage.deleteAllTasksInSection(req.params.sectionId, tenantId);
+
+    sendSuccess(res, { deletedCount }, req);
+  } catch (error) {
+    return handleRouteError(res, error, "DELETE /api/sections/:sectionId/tasks", req);
+  }
+});
+
 router.post("/tasks/:id/move", async (req, res) => {
   try {
     const { sectionId, targetIndex } = req.body;

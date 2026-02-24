@@ -349,6 +349,7 @@ export interface IStorage {
   createTaskWithTenant(task: InsertTask, tenantId: string): Promise<Task>;
   updateTaskWithTenant(id: string, tenantId: string, task: Partial<InsertTask>): Promise<Task | undefined>;
   deleteTaskWithTenant(id: string, tenantId: string): Promise<boolean>;
+  deleteAllTasksInSection(sectionId: string, tenantId: string): Promise<number>;
 
   getUserByIdAndTenant(id: string, tenantId: string): Promise<User | undefined>;
   getUserByEmailAndTenant(email: string, tenantId: string): Promise<User | undefined>;
@@ -2818,6 +2819,17 @@ export class DatabaseStorage implements IStorage {
     await db.delete(comments).where(eq(comments.taskId, id));
     await db.delete(tasks).where(eq(tasks.id, id));
     return true;
+  }
+
+  async deleteAllTasksInSection(sectionId: string, tenantId: string): Promise<number> {
+    const sectionTasks = await db.select({ id: tasks.id }).from(tasks)
+      .where(and(eq(tasks.sectionId, sectionId), eq(tasks.tenantId, tenantId)));
+
+    for (const task of sectionTasks) {
+      await this.deleteTask(task.id);
+    }
+
+    return sectionTasks.length;
   }
 
   // Users - tenant scoped

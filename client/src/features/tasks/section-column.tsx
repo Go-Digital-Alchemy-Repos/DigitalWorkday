@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
-import { Plus, MoreHorizontal, Pencil, Trash2 } from "lucide-react";
+import { Plus, MoreHorizontal, Pencil, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -31,6 +31,7 @@ interface SectionColumnProps {
   onTaskStatusChange?: (taskId: string, completed: boolean) => void;
   onEditSection?: (sectionId: string, name: string) => void;
   onDeleteSection?: (sectionId: string) => void;
+  onClearSectionTasks?: (sectionId: string) => void;
 }
 
 export function SectionColumn({
@@ -40,8 +41,10 @@ export function SectionColumn({
   onTaskStatusChange,
   onEditSection,
   onDeleteSection,
+  onClearSectionTasks,
 }: SectionColumnProps) {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
+  const [clearDialogOpen, setClearDialogOpen] = useState(false);
   const [editName, setEditName] = useState(section.name);
   
   const tasks = section.tasks || [];
@@ -110,6 +113,19 @@ export function SectionColumn({
                   <Pencil className="h-4 w-4 mr-2" />
                   Edit Section
                 </DropdownMenuItem>
+                {onClearSectionTasks && tasks.length > 0 && (
+                  <>
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem
+                      onClick={() => setClearDialogOpen(true)}
+                      className="text-destructive focus:text-destructive"
+                      data-testid={`menu-item-clear-tasks-${section.id}`}
+                    >
+                      <XCircle className="h-4 w-4 mr-2" />
+                      Clear All Tasks
+                    </DropdownMenuItem>
+                  </>
+                )}
                 {onDeleteSection && (
                   <>
                     <DropdownMenuSeparator />
@@ -213,6 +229,36 @@ export function SectionColumn({
               data-testid="button-save-section"
             >
               Save Changes
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      <Dialog open={clearDialogOpen} onOpenChange={setClearDialogOpen}>
+        <DialogContent className="sm:max-w-[400px]" data-testid="dialog-clear-section-tasks">
+          <DialogHeader>
+            <DialogTitle>Clear All Tasks</DialogTitle>
+            <DialogDescription>
+              This will permanently delete all {taskCount} task{taskCount !== 1 ? "s" : ""} in "{section.name}". This action cannot be undone.
+            </DialogDescription>
+          </DialogHeader>
+          <DialogFooter>
+            <Button
+              variant="ghost"
+              onClick={() => setClearDialogOpen(false)}
+              data-testid="button-cancel-clear-tasks"
+            >
+              Cancel
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={() => {
+                onClearSectionTasks?.(section.id);
+                setClearDialogOpen(false);
+              }}
+              data-testid="button-confirm-clear-tasks"
+            >
+              Delete All Tasks
             </Button>
           </DialogFooter>
         </DialogContent>

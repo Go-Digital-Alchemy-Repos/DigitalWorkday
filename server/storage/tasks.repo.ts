@@ -854,6 +854,17 @@ export class TasksRepository {
     return true;
   }
 
+  async deleteAllTasksInSection(sectionId: string, tenantId: string): Promise<number> {
+    const sectionTasks = await db.select({ id: tasks.id }).from(tasks)
+      .where(and(eq(tasks.sectionId, sectionId), eq(tasks.tenantId, tenantId)));
+
+    for (const task of sectionTasks) {
+      await this.deleteTask(task.id);
+    }
+
+    return sectionTasks.length;
+  }
+
   async getTaskAttachmentByIdAndTenant(id: string, tenantId: string): Promise<TaskAttachment | undefined> {
     const attachment = await this.getTaskAttachment(id);
     if (!attachment) return undefined;

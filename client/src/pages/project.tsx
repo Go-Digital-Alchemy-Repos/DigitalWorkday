@@ -294,6 +294,19 @@ export default function ProjectPage() {
     },
   });
 
+  const clearSectionTasksMutation = useMutation({
+    mutationFn: async (sectionId: string) => {
+      return apiRequest("DELETE", `/api/sections/${sectionId}/tasks`);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      toast({ title: "All tasks in section cleared" });
+    },
+    onError: () => {
+      toast({ title: "Failed to clear section tasks", variant: "destructive" });
+    },
+  });
+
   const reorderMutation = useMutation({
     mutationFn: async (moves: { itemType: string; taskId: string; toSectionId: string; toIndex: number }[]) => {
       return apiRequest("PATCH", `/api/projects/${projectId}/tasks/reorder`, { moves });
@@ -1047,6 +1060,7 @@ export default function ProjectPage() {
                     onTaskStatusChange={handleStatusChange}
                     onEditSection={handleEditSection}
                     onDeleteSection={openDeleteSectionDialog}
+                    onClearSectionTasks={(sectionId) => clearSectionTasksMutation.mutate(sectionId)}
                   />
                 </div>
               ))}
