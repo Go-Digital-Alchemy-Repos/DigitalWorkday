@@ -26,6 +26,8 @@ import { logAppInfo } from "./startup/appInfo";
 import { logNullTenantIdWarnings } from "./startup/tenantIdHealthCheck";
 import { repairDemoWorkspaceMembers } from "./startup/repairWorkspaceMembers";
 import { storage } from "./storage";
+import { evaluateSlaPolicies } from "./http/domains/support.router";
+import { evaluateConversationSla } from "./routes/modules/crm/conversations.router";
 
 export const app = express();
 const httpServer = createServer(app);
@@ -603,7 +605,6 @@ httpServer.listen(port, host, () => {
     const SLA_CHECK_INTERVAL_MS = 5 * 60_000;
     setInterval(async () => {
       try {
-        const { evaluateSlaPolicies } = require("./http/domains/support.router");
         const result = await evaluateSlaPolicies();
         if (result.firstResponseBreaches > 0 || result.resolutionBreaches > 0) {
           console.log(`[sla-evaluator] Checked ${result.checked} tickets: ${result.firstResponseBreaches} first-response breaches, ${result.resolutionBreaches} resolution breaches`);
@@ -612,7 +613,6 @@ httpServer.listen(port, host, () => {
         console.error("[sla-evaluator] Error:", err);
       }
       try {
-        const { evaluateConversationSla } = require("./routes/modules/crm/conversations.router");
         const result = await evaluateConversationSla();
         if (result.firstResponseBreaches > 0 || result.resolutionBreaches > 0) {
           console.log(`[conversation-sla] Checked ${result.checked} conversations: ${result.firstResponseBreaches} first-response breaches, ${result.resolutionBreaches} resolution breaches`);
