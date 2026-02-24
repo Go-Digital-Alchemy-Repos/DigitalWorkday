@@ -1285,7 +1285,8 @@ export default function SuperAdminSettingsPage() {
 
       <div className="flex-1 overflow-auto p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6" data-testid="settings-tabs">
+          <div className="overflow-x-auto scrollbar-hide mb-6">
+          <TabsList className="w-max min-w-full" data-testid="settings-tabs">
             <TabsTrigger value="agreements" data-testid="tab-agreements">
               <FileText className="h-4 w-4 mr-2" />
               Agreements
@@ -1311,6 +1312,7 @@ export default function SuperAdminSettingsPage() {
               Email Templates
             </TabsTrigger>
           </TabsList>
+          </div>
 
           <TabsContent value="agreements">
             <AgreementsManagementTab 
