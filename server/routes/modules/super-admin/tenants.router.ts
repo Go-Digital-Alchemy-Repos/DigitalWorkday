@@ -490,6 +490,7 @@ tenantsRouter.delete("/tenants/:tenantId", requireSuperUser, async (req, res) =>
       await tx.delete(projectNoteCategories).where(eq(projectNoteCategories.tenantId, tenantId));
       await tx.delete(projectTemplates).where(eq(projectTemplates.tenantId, tenantId));
       await tx.delete(projects).where(eq(projects.tenantId, tenantId));
+      await tx.execute(sql`UPDATE projects SET client_id = NULL WHERE client_id IN (SELECT id FROM clients WHERE tenant_id = ${tenantId})`);
 
       await tx.delete(clientNoteAttachments).where(eq(clientNoteAttachments.noteId, sql`ANY(SELECT id FROM client_notes WHERE client_id IN (SELECT id FROM clients WHERE tenant_id = ${tenantId}))`));
       await tx.delete(clientNoteVersions).where(eq(clientNoteVersions.noteId, sql`ANY(SELECT id FROM client_notes WHERE client_id IN (SELECT id FROM clients WHERE tenant_id = ${tenantId}))`));

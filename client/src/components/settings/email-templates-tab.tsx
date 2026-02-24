@@ -52,6 +52,12 @@ const TEMPLATE_ICONS: Record<string, string> = {
   invitation: "✉️",
   task_assignment: "📋",
   welcome_email: "👋",
+  admin_password_reset: "🔐",
+  platform_admin_invite: "🛡️",
+  user_provision: "👤",
+  task_due_reminder: "⏰",
+  support_ticket_created: "🎫",
+  support_ticket_assigned: "📌",
 };
 
 const TEMPLATE_DESCRIPTIONS: Record<string, string> = {
@@ -60,6 +66,12 @@ const TEMPLATE_DESCRIPTIONS: Record<string, string> = {
   invitation: "Sent when a user is invited to join the platform",
   task_assignment: "Sent when a task is assigned to a user",
   welcome_email: "Sent to new users after account creation",
+  admin_password_reset: "Sent when a super admin resets a user's password",
+  platform_admin_invite: "Sent when inviting a new platform administrator",
+  user_provision: "Sent when a new user account is provisioned by an admin",
+  task_due_reminder: "Sent to remind assignees about upcoming task deadlines",
+  support_ticket_created: "Sent to confirm a support ticket has been created",
+  support_ticket_assigned: "Sent when a support ticket is assigned to an agent",
 };
 
 export function EmailTemplatesTab() {

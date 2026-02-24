@@ -27,7 +27,7 @@ router.get("/email-templates", requireSuperUser, async (req: Request, res: Respo
     
     const templates = dbTemplates.map(t => ({
       ...t,
-      isCustomized: true,
+      isCustomized: !!t.updatedByUserId,
       availableVariables: emailTemplateService.getAvailableVariables(t.templateKey),
     }));
 

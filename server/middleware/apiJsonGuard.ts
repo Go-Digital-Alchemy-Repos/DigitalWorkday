@@ -61,8 +61,14 @@ export function apiJsonResponseGuard(
   const originalSend = res.send;
   
   res.send = function(body: any): Response {
-    // If response is a string that looks like HTML, convert to JSON error
-    if (typeof body === "string" && (body.includes("<!DOCTYPE") || body.includes("<html"))) {
+    const contentType = res.getHeader("content-type");
+    const isJsonContentType = typeof contentType === "string" && contentType.includes("application/json");
+
+    if (
+      !isJsonContentType &&
+      typeof body === "string" &&
+      (body.includes("<!DOCTYPE") || body.includes("<html"))
+    ) {
       const requestId = req.requestId || "unknown";
       const statusCode = res.statusCode || 500;
       
