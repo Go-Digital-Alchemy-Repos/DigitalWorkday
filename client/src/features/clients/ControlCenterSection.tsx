@@ -35,7 +35,6 @@ import {
   Layers,
   HeartPulse,
   AlertTriangle,
-  Clock,
   MessageSquare,
   FolderOpen,
   FolderKanban,
@@ -87,7 +86,6 @@ const WIDGET_ICONS: Record<string, LucideIcon> = {
   tiles_divisions: Layers,
   stats_health_snapshot: HeartPulse,
   stats_operational_alerts: AlertTriangle,
-  feed_recent_activity: Clock,
   feed_recent_messages: MessageSquare,
   stats_assets_summary: FolderOpen,
   stats_projects_summary: FolderKanban,
@@ -362,7 +360,6 @@ function WidgetRenderer({ widgetId, def, clientId, onNavigateTab }: WidgetRender
     tiles_reports: "reports",
     tiles_portal_users: "portal",
     tiles_divisions: "divisions",
-    feed_recent_activity: "activity",
     feed_recent_messages: "messages",
     stats_assets_summary: "asset-library",
     stats_projects_summary: "projects",
@@ -475,19 +472,6 @@ function WidgetRenderer({ widgetId, def, clientId, onNavigateTab }: WidgetRender
           <ProjectsSummaryContent clientId={clientId} />
         </TileCard>
       );
-    case "feed_recent_activity":
-      return (
-        <TileCard
-          icon={Icon}
-          title="Recent Activity"
-          description="Latest updates for this client"
-          onClick={navigateTo ? () => onNavigateTab(navigateTo) : undefined}
-          testId="widget-feed-recent-activity"
-          iconColorClass={colorClass}
-        >
-          <RecentActivityContent clientId={clientId} />
-        </TileCard>
-      );
     case "feed_recent_messages":
       return (
         <TileCard
@@ -517,7 +501,6 @@ const WIDGET_ICON_COLORS: Record<string, string> = {
   tiles_divisions: "text-indigo-500 bg-indigo-500/10",
   stats_health_snapshot: "text-rose-500 bg-rose-500/10",
   stats_operational_alerts: "text-orange-500 bg-orange-500/10",
-  feed_recent_activity: "text-sky-500 bg-sky-500/10",
   feed_recent_messages: "text-violet-500 bg-violet-500/10",
   stats_assets_summary: "text-cyan-500 bg-cyan-500/10",
   stats_projects_summary: "text-purple-500 bg-purple-500/10",
@@ -692,29 +675,6 @@ function OperationalAlertsContent({ clientId }: { clientId: string }) {
       {openTickets === 0 && (
         <p className="text-xs text-muted-foreground">No open issues — all clear!</p>
       )}
-    </div>
-  );
-}
-
-function RecentActivityContent({ clientId }: { clientId: string }) {
-  const { data = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/activity-log", "client", clientId],
-    enabled: !!clientId,
-  });
-  if (isLoading) return <Skeleton className="h-20 w-full" />;
-  if (data.length === 0) {
-    return <p className="text-sm text-muted-foreground">No recent activity</p>;
-  }
-  return (
-    <div className="space-y-2">
-      {data.slice(0, 4).map((item: any, idx: number) => (
-        <div key={item.id || idx} className="flex items-start gap-2 text-sm">
-          <Clock className="h-3.5 w-3.5 mt-0.5 text-muted-foreground shrink-0" />
-          <span className="text-muted-foreground line-clamp-1">
-            {item.description || item.action || "Activity event"}
-          </span>
-        </div>
-      ))}
     </div>
   );
 }

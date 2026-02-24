@@ -87,17 +87,6 @@ export const WIDGET_CATALOG: WidgetDefinition[] = [
     category: "stats",
   },
   {
-    id: "feed_recent_activity",
-    title: "Recent Activity",
-    description: "Latest activity feed for this client",
-    minRole: "employee",
-    defaultPinned: true,
-    defaultOrder: 6,
-    sizeOptions: ["md", "lg"],
-    defaultSize: "lg",
-    category: "feed",
-  },
-  {
     id: "feed_recent_messages",
     title: "Recent Messages",
     description: "Latest messages and conversations",
