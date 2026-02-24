@@ -796,7 +796,7 @@ router.delete("/sections/:sectionId/tasks", async (req, res) => {
 
     const deletedCount = await storage.deleteAllTasksInSection(req.params.sectionId, tenantId);
 
-    sendSuccess(res, { deletedCount }, req);
+    res.json({ ok: true, deletedCount });
   } catch (error) {
     return handleRouteError(res, error, "DELETE /api/sections/:sectionId/tasks", req);
   }

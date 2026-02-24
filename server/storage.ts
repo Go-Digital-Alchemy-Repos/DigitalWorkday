@@ -1302,16 +1302,29 @@ export class DatabaseStorage implements IStorage {
   async deleteTask(id: string): Promise<void> {
     const childTasksList = await db.select().from(tasks).where(eq(tasks.parentTaskId, id));
     for (const childTask of childTasksList) {
-      await db.delete(taskAssignees).where(eq(taskAssignees.taskId, childTask.id));
-      await db.delete(taskTags).where(eq(taskTags.taskId, childTask.id));
-      await db.delete(comments).where(eq(comments.taskId, childTask.id));
+      await this.deleteTask(childTask.id);
     }
-    await db.delete(tasks).where(eq(tasks.parentTaskId, id));
-    
+
+    const taskSubtasks = await db.select({ id: subtasks.id }).from(subtasks).where(eq(subtasks.taskId, id));
+    for (const st of taskSubtasks) {
+      await db.delete(subtaskAssignees).where(eq(subtaskAssignees.subtaskId, st.id));
+      await db.delete(subtaskTags).where(eq(subtaskTags.subtaskId, st.id));
+    }
     await db.delete(subtasks).where(eq(subtasks.taskId, id));
-    await db.delete(taskAssignees).where(eq(taskAssignees.taskId, id));
-    await db.delete(taskTags).where(eq(taskTags.taskId, id));
+
+    const taskComments = await db.select({ id: comments.id }).from(comments).where(eq(comments.taskId, id));
+    for (const c of taskComments) {
+      await db.delete(commentMentions).where(eq(commentMentions.commentId, c.id));
+    }
     await db.delete(comments).where(eq(comments.taskId, id));
+
+    await db.delete(timeEntries).where(eq(timeEntries.taskId, id));
+    await db.delete(activeTimers).where(eq(activeTimers.taskId, id));
+    await db.delete(taskAssignees).where(eq(taskAssignees.taskId, id));
+    await db.delete(taskWatchers).where(eq(taskWatchers.taskId, id));
+    await db.delete(taskTags).where(eq(taskTags.taskId, id));
+    await db.delete(taskAttachments).where(eq(taskAttachments.taskId, id));
+    await db.execute(sql`UPDATE approval_requests SET task_id = NULL WHERE task_id = ${id}`);
     await db.delete(tasks).where(eq(tasks.id, id));
   }
 
@@ -2813,11 +2826,7 @@ export class DatabaseStorage implements IStorage {
     const existing = await this.getTaskByIdAndTenant(id, tenantId);
     if (!existing) return false;
     
-    await db.delete(subtasks).where(eq(subtasks.taskId, id));
-    await db.delete(taskAssignees).where(eq(taskAssignees.taskId, id));
-    await db.delete(taskTags).where(eq(taskTags.taskId, id));
-    await db.delete(comments).where(eq(comments.taskId, id));
-    await db.delete(tasks).where(eq(tasks.id, id));
+    await this.deleteTask(id);
     return true;
   }
 
