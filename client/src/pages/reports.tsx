@@ -34,6 +34,17 @@ const ClientAnalytics = lazy(() => import("@/components/reports/client-analytics
 
 type ReportView = "landing" | "overview" | "workload" | "time" | "projects" | "messages" | "pipeline" | "task-analytics" | "client-analytics";
 
+const REPORT_TABS: Array<{ view: Exclude<ReportView, "landing">; label: string; Icon: React.ElementType }> = [
+  { view: "overview",        label: "Overview",          Icon: LayoutDashboard },
+  { view: "task-analytics",  label: "Task Analysis",     Icon: CheckSquare },
+  { view: "client-analytics",label: "Client Analytics",  Icon: PieChart },
+  { view: "workload",        label: "Workload Reports",  Icon: Users },
+  { view: "time",            label: "Time Tracking",     Icon: Clock },
+  { view: "projects",        label: "Project Analysis",  Icon: Target },
+  { view: "messages",        label: "Messages",          Icon: MessageSquare },
+  { view: "pipeline",        label: "Client Pipeline",   Icon: Building2 },
+];
+
 interface StageSummaryItem {
   stage: string;
   clientCount: number;
@@ -475,23 +486,46 @@ export default function ReportsPage() {
   return (
     <ScrollArea className="h-full">
       <div className="container max-w-7xl p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <Button 
-            variant="ghost" 
-            size="icon" 
-            onClick={() => setCurrentView("landing")}
-            data-testid="button-back-to-reports"
-          >
-            <ArrowLeft className="h-5 w-5" />
-          </Button>
-          <div className="w-10 h-10 rounded-lg bg-primary/10 flex items-center justify-center">
-            {getViewIcon()}
+        <div className="mb-6">
+          <div className="flex items-center gap-2 mb-3">
+            <button
+              onClick={() => setCurrentView("landing")}
+              data-testid="button-back-to-reports"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+            >
+              <ArrowLeft className="h-3 w-3" />
+              All Reports
+            </button>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">{getViewTitle()}</h1>
-            <p className="text-muted-foreground text-sm">
-              {getViewDescription()}
-            </p>
+          <div className="flex items-center gap-3 mb-4">
+            <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              {getViewIcon()}
+            </div>
+            <div>
+              <h1 className="text-xl font-bold leading-tight">{getViewTitle()}</h1>
+              <p className="text-muted-foreground text-xs">{getViewDescription()}</p>
+            </div>
+          </div>
+          <div className="flex items-center border-b overflow-x-auto">
+            {REPORT_TABS.map((tab) => {
+              const isActive = currentView === tab.view;
+              return (
+                <button
+                  key={tab.view}
+                  onClick={() => setCurrentView(tab.view)}
+                  data-testid={`tab-report-${tab.view}`}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors shrink-0",
+                    isActive
+                      ? "border-primary text-primary"
+                      : "border-transparent text-muted-foreground hover:text-foreground hover:border-muted-foreground/40"
+                  )}
+                >
+                  <tab.Icon className="h-3.5 w-3.5" />
+                  {tab.label}
+                </button>
+              );
+            })}
           </div>
         </div>
 
