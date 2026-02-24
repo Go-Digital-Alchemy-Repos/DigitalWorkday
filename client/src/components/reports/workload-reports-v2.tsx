@@ -1,7 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -11,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import {
   LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid,
-  Tooltip, ResponsiveContainer, Cell,
+  Tooltip, ResponsiveContainer,
 } from "recharts";
 import {
   Users, Clock, CheckSquare, AlertTriangle, TrendingUp,
@@ -213,7 +212,7 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
                   <TableCell>
                     <div className="flex items-center gap-2">
                       <Avatar className="h-7 w-7 shrink-0">
-                        {m.avatarUrl && <AvatarFallback><img src={getStorageUrl(m.avatarUrl)} alt="" className="h-full w-full object-cover rounded-full" /></AvatarFallback>}
+                        <AvatarImage src={getStorageUrl(m.avatarUrl) ?? ""} alt={userName(m)} />
                         <AvatarFallback className="text-xs">{userInitials(m)}</AvatarFallback>
                       </Avatar>
                       <span className="text-sm font-medium truncate max-w-[140px]">{userName(m)}</span>
@@ -595,7 +594,7 @@ function RiskFlagsTab({ rangeDays }: { rangeDays: number }) {
             <CardContent className="p-4">
               <div className="flex items-start gap-3">
                 <Avatar className="h-9 w-9 shrink-0">
-                  {u.avatarUrl && <AvatarFallback><img src={getStorageUrl(u.avatarUrl)} alt="" className="h-full w-full object-cover rounded-full" /></AvatarFallback>}
+                  <AvatarImage src={getStorageUrl(u.avatarUrl) ?? ""} alt={userName(u)} />
                   <AvatarFallback className="text-xs">{userInitials(u)}</AvatarFallback>
                 </Avatar>
                 <div className="flex-1 min-w-0">
