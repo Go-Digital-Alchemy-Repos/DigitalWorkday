@@ -171,6 +171,7 @@ export function useTenantTheme() {
     settings: data?.tenantSettings,
     appName: data?.tenantSettings?.appName || "MyWorkDay",
     logoUrl: getStorageUrl(data?.tenantSettings?.logoUrl),
+    iconUrl: getStorageUrl(data?.tenantSettings?.iconUrl),
     hideVendorBranding: data?.tenantSettings?.hideVendorBranding || false,
   };
 }

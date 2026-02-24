@@ -178,7 +178,7 @@ export function TenantSidebar() {
   const PROJECTS_PAGE_SIZE = 10;
   const { user } = useAuth();
   const { toast } = useToast();
-  const { appName, logoUrl } = useTenantTheme();
+  const { appName, iconUrl, logoUrl } = useTenantTheme();
   const isAdmin = user?.role === "admin";
   const isSuperUser = user?.role === "super_user";
 
@@ -382,9 +382,9 @@ export function TenantSidebar() {
   return (
     <Sidebar>
       <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
-        <div className="flex items-center gap-3">
-          <img src={logoUrl || appLogo} alt={appName} className="h-8 w-8" />
-          <span className="text-lg font-semibold text-sidebar-foreground" data-testid="text-app-name">
+        <div className="flex items-center gap-3 min-w-0">
+          <img src={iconUrl || logoUrl || appLogo} alt={appName} className="h-8 w-8 flex-shrink-0 rounded-sm object-contain" />
+          <span className="font-['Inter',sans-serif] text-base font-semibold text-sidebar-foreground leading-tight truncate" data-testid="text-app-name">
             {appName}
           </span>
         </div>
