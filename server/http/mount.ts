@@ -25,6 +25,7 @@ import projectNotesRouter from "./domains/project-notes.router";
 import workspacesRouter from "./domains/workspaces.router";
 import teamsRouter from "./domains/teams.router";
 import workloadReportsRouter from "./domains/workload-reports.router";
+import analyticsReportsRouter from "./domains/analytics-reports.router";
 import { jobsRouter } from "../jobs/jobs.router";
 import supportRouter from "./domains/support.router";
 import clientDocumentsRouter from "./domains/clientDocuments.router";
@@ -189,6 +190,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "workload-reports",
     description: "Workload reports: tasks-by-employee, unassigned, by-status, by-priority, summary.",
+  },
+  {
+    path: "/api/v1",
+    router: analyticsReportsRouter,
+    policy: "authTenant",
+    domain: "analytics-reports",
+    description: "Analytics reports: overview KPIs, task analytics, client analytics dashboards.",
   },
   {
     path: "/api",

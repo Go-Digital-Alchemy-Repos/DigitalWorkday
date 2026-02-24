@@ -19,14 +19,20 @@ import {
   MessageSquare,
   Building2,
   FolderKanban,
+  LayoutDashboard,
+  CheckSquare,
+  PieChart,
 } from "lucide-react";
 import { ReportsTab } from "@/components/settings/reports-tab";
 import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
 const MessagesReports = lazy(() => import("@/components/reports/messages-reports"));
+const OverviewDashboard = lazy(() => import("@/components/reports/overview-dashboard"));
+const TaskAnalytics = lazy(() => import("@/components/reports/task-analytics"));
+const ClientAnalytics = lazy(() => import("@/components/reports/client-analytics"));
 
-type ReportView = "landing" | "workload" | "time" | "projects" | "messages" | "pipeline";
+type ReportView = "landing" | "overview" | "workload" | "time" | "projects" | "messages" | "pipeline" | "task-analytics" | "client-analytics";
 
 interface StageSummaryItem {
   stage: string;
@@ -323,6 +329,27 @@ export default function ReportsPage() {
 
   const reportCategories = [
     {
+      icon: <LayoutDashboard className="h-6 w-6 text-white" />,
+      title: "Overview",
+      description: "Executive dashboard with KPIs across tasks, projects, time, clients, and tickets",
+      view: "overview" as ReportView,
+      color: "bg-slate-700",
+    },
+    {
+      icon: <CheckSquare className="h-6 w-6 text-white" />,
+      title: "Task Analytics",
+      description: "Completion rates, overdue analysis, priority & status distribution, assignee workload",
+      view: "task-analytics" as ReportView,
+      color: "bg-emerald-500",
+    },
+    {
+      icon: <PieChart className="h-6 w-6 text-white" />,
+      title: "Client Analytics",
+      description: "Client profitability, budget utilization, project metrics, and activity breakdown",
+      view: "client-analytics" as ReportView,
+      color: "bg-rose-500",
+    },
+    {
       icon: <Users className="h-6 w-6 text-white" />,
       title: "Workload Reports",
       description: "View task distribution and workload across your team members with completion metrics",
@@ -375,7 +402,7 @@ export default function ReportsPage() {
             </div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5 mb-8">
+          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-8">
             {reportCategories.map((category) => (
               <ReportCard
                 key={category.title}
@@ -411,6 +438,9 @@ export default function ReportsPage() {
 
   const getViewTitle = () => {
     switch (currentView) {
+      case "overview": return "Overview Dashboard";
+      case "task-analytics": return "Task Analytics";
+      case "client-analytics": return "Client Analytics";
       case "workload": return "Workload Reports";
       case "time": return "Time Tracking Reports";
       case "projects": return "Project Analytics";
@@ -422,6 +452,9 @@ export default function ReportsPage() {
 
   const getViewDescription = () => {
     switch (currentView) {
+      case "overview": return "Executive KPIs and trends across your entire organization";
+      case "task-analytics": return "Task completion rates, overdue analysis, and distribution metrics";
+      case "client-analytics": return "Client profitability, budget utilization, and activity breakdown";
       case "messages": return "Response times, SLA compliance, and conversation analytics";
       case "pipeline": return "Pipeline stage distribution and client progression";
       default: return "Detailed analytics and exportable reports";
@@ -430,6 +463,9 @@ export default function ReportsPage() {
 
   const getViewIcon = () => {
     switch (currentView) {
+      case "overview": return <LayoutDashboard className="h-5 w-5 text-primary" />;
+      case "task-analytics": return <CheckSquare className="h-5 w-5 text-primary" />;
+      case "client-analytics": return <PieChart className="h-5 w-5 text-primary" />;
       case "messages": return <MessageSquare className="h-5 w-5 text-primary" />;
       case "pipeline": return <Building2 className="h-5 w-5 text-primary" />;
       default: return <BarChart3 className="h-5 w-5 text-primary" />;
@@ -459,30 +495,36 @@ export default function ReportsPage() {
           </div>
         </div>
 
-        {currentView === "messages" ? (
-          <Suspense
-            fallback={
-              <div className="space-y-4">
-                <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-6">
-                  {Array.from({ length: 6 }).map((_, i) => (
-                    <Card key={i}>
-                      <CardContent className="p-4">
-                        <Skeleton className="h-3 w-20 mb-2" />
-                        <Skeleton className="h-7 w-16" />
-                      </CardContent>
-                    </Card>
-                  ))}
-                </div>
+        <Suspense
+          fallback={
+            <div className="space-y-4">
+              <div className="grid gap-4 grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
+                {Array.from({ length: 8 }).map((_, i) => (
+                  <Card key={i}>
+                    <CardContent className="p-4">
+                      <Skeleton className="h-3 w-20 mb-2" />
+                      <Skeleton className="h-7 w-16" />
+                    </CardContent>
+                  </Card>
+                ))}
               </div>
-            }
-          >
+            </div>
+          }
+        >
+          {currentView === "overview" ? (
+            <OverviewDashboard />
+          ) : currentView === "task-analytics" ? (
+            <TaskAnalytics />
+          ) : currentView === "client-analytics" ? (
+            <ClientAnalytics />
+          ) : currentView === "messages" ? (
             <MessagesReports />
-          </Suspense>
-        ) : currentView === "pipeline" ? (
-          <PipelineReport />
-        ) : (
-          <ReportsTab defaultTab={currentView === "workload" ? "workload" : currentView === "time" ? "time" : undefined} />
-        )}
+          ) : currentView === "pipeline" ? (
+            <PipelineReport />
+          ) : (
+            <ReportsTab defaultTab={currentView === "workload" ? "workload" : currentView === "time" ? "time" : undefined} />
+          )}
+        </Suspense>
       </div>
     </ScrollArea>
   );
