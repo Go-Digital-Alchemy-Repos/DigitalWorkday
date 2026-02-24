@@ -214,26 +214,6 @@ export function TenantSidebar() {
     return division?.name || null;
   };
 
-  const { data: chatChannels } = useQuery<{ id: string; unreadCount: number }[]>({
-    queryKey: ["/api/chat/channels"],
-    refetchInterval: 30000,
-  });
-
-  const { data: chatDmThreads } = useQuery<{ id: string; unreadCount: number }[]>({
-    queryKey: ["/api/chat/dm"],
-    refetchInterval: 30000,
-  });
-
-  const totalUnreadChat = useMemo(() => {
-    let count = 0;
-    if (chatChannels) {
-      for (const ch of chatChannels) count += ch.unreadCount || 0;
-    }
-    if (chatDmThreads) {
-      for (const dm of chatDmThreads) count += dm.unreadCount || 0;
-    }
-    return count;
-  }, [chatChannels, chatDmThreads]);
 
   const { data: uiPrefs } = useQuery<UiPreferences>({
     queryKey: ["/api/users/me/ui-preferences"],
@@ -432,13 +412,13 @@ export function TenantSidebar() {
                           <item.icon className={cn("h-4 w-4", item.color)} />
                           <span className="relative flex items-center gap-2">
                             {item.title}
-                            {item.title === "Chat" && (totalUnreadChat > 0 || unreadCount > 0) && (
+                            {item.title === "Chat" && unreadCount > 0 && (
                               <Badge 
                                 variant="destructive" 
                                 className="h-4 min-w-[16px] px-1 text-[10px] flex items-center justify-center rounded-full"
                                 data-testid="badge-chat-unread"
                               >
-                                {(totalUnreadChat + unreadCount) > 99 ? "99+" : (totalUnreadChat + unreadCount)}
+                                {unreadCount > 99 ? "99+" : unreadCount}
                               </Badge>
                             )}
                           </span>

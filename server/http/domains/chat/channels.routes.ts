@@ -15,6 +15,33 @@ import { extractChatContext, requireChannelMember, requireChannelMemberStrict, l
 const router = Router();
 
 router.get(
+  "/unread-count",
+  asyncHandler(async (req: Request, res: Response) => {
+    const tenantId = getCurrentTenantId(req);
+    const userId = getCurrentUserId(req);
+    if (!tenantId) throw AppError.forbidden("Tenant context required");
+
+    const allChannels = await storage.getChatChannelsByTenant(tenantId);
+    const myMemberships = await storage.getUserChatChannels(tenantId, userId);
+    const myChannelIds = new Set(myMemberships.map(m => m.channelId));
+    const memberChannelIds = allChannels
+      .filter(ch => myChannelIds.has(ch.id))
+      .map(ch => ch.id);
+    const channelUnreads = await storage.getUnreadCountsForChannels(userId, memberChannelIds);
+
+    const dmThreads = await storage.getUserChatDmThreads(tenantId, userId);
+    const dmThreadIds = dmThreads.map(t => t.id);
+    const dmUnreads = await storage.getUnreadCountsForDmThreads(userId, dmThreadIds);
+
+    let total = 0;
+    for (const c of channelUnreads.values()) total += c;
+    for (const d of dmUnreads.values()) total += d;
+
+    res.json(total);
+  })
+);
+
+router.get(
   "/channels",
   asyncHandler(async (req: Request, res: Response) => {
     const tenantId = getCurrentTenantId(req);
