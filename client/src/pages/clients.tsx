@@ -1832,24 +1832,25 @@ export default function ClientsPage() {
       )}
 
       {vipClients.length > 0 && (
-        <div className="mb-6 rounded-lg border border-amber-200 dark:border-amber-500/30 bg-amber-50/50 dark:bg-amber-950/20 p-4" data-testid="vip-clients-section">
+        <div className="mb-6 rounded-lg border border-border/60 bg-muted/30 p-4" style={{ borderColor: 'hsl(var(--primary) / 0.15)', backgroundColor: 'hsl(var(--primary) / 0.04)' }} data-testid="vip-clients-section">
           <div className="flex items-center gap-2 mb-3">
-            <Star className="h-4 w-4 text-amber-500 fill-amber-500" />
-            <h3 className="font-medium text-amber-900 dark:text-amber-200">VIP Clients</h3>
-            <Badge variant="secondary" className="text-xs bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-300">{vipClients.length}</Badge>
+            <Star className="h-4 w-4 text-primary fill-primary" />
+            <h3 className="font-medium text-foreground">VIP Clients</h3>
+            <Badge variant="secondary" className="text-xs" style={{ backgroundColor: 'hsl(var(--primary) / 0.12)', color: 'hsl(var(--primary))' }}>{vipClients.length}</Badge>
           </div>
           <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             {vipClients.map((client) => (
               <Card
                 key={client.id}
-                className="cursor-pointer hover-elevate border-amber-200 dark:border-amber-500/30"
+                className="cursor-pointer hover-elevate"
+                style={{ borderColor: 'hsl(var(--primary) / 0.15)' }}
                 onClick={() => handleOpenClientSheet(client.id)}
                 data-testid={`vip-card-${client.id}`}
               >
                 <CardHeader className="pb-3">
                   <div className="flex items-start gap-3 min-w-0">
                     <Avatar className="h-10 w-10 shrink-0">
-                      <AvatarFallback className="bg-amber-100 text-amber-700 dark:bg-amber-500/20 dark:text-amber-400">
+                      <AvatarFallback style={{ backgroundColor: 'hsl(var(--primary) / 0.12)', color: 'hsl(var(--primary))' }}>
                         {getInitials(client.companyName)}
                       </AvatarFallback>
                     </Avatar>
@@ -1860,7 +1861,7 @@ export default function ClientsPage() {
                         </CardTitle>
                         <div className="flex items-center gap-1.5 shrink-0">
                           {client.needsAttention && (
-                            <AlertTriangle className="h-4 w-4 text-amber-500 shrink-0" />
+                            <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
                           )}
                         </div>
                       </div>
