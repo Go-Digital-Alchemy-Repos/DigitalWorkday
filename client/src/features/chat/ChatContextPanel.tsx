@@ -111,7 +111,7 @@ export function ChatContextPanel({
   return (
     <div
       className={cn(
-        "border-l bg-background transition-all duration-300 flex flex-col overflow-hidden",
+        "bg-background border border-border/50 rounded-xl transition-all duration-300 flex flex-col overflow-hidden shadow-sm",
         isOpen ? "w-72" : "w-0",
         className
       )}

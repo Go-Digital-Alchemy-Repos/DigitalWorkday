@@ -2448,7 +2448,7 @@ export default function ChatPage() {
   );
 
   return (
-    <div className="flex h-full" data-testid="chat-page">
+    <div className="flex h-full bg-muted/40 p-2 gap-2" data-testid="chat-page">
       {isMobile ? (
         <Sheet open={mobileDrawerOpen} onOpenChange={setMobileDrawerOpen}>
           <SheetContent side="left" className="w-[85vw] max-w-sm p-0 flex flex-col" data-testid="mobile-channel-drawer">
@@ -2460,13 +2460,13 @@ export default function ChatPage() {
           </SheetContent>
         </Sheet>
       ) : (
-        <div className="w-64 border-r bg-sidebar flex flex-col">
+        <div className="w-64 bg-background border border-border/50 rounded-xl flex flex-col overflow-hidden shadow-sm">
           {sidebarContent}
         </div>
       )}
 
       <div 
-        className="flex-1 flex flex-col relative"
+        className="flex-1 flex flex-col relative bg-background border border-border/50 rounded-xl overflow-hidden shadow-sm"
         onDragEnter={handleDragEnter}
         onDragOver={handleDragOver}
         onDragLeave={handleDragLeave}
@@ -2997,12 +2997,12 @@ export default function ChatPage() {
         ) : (
           <Suspense
             fallback={
-              <div className="w-80 border-l bg-background flex items-center justify-center">
+              <div className="w-80 bg-background border border-border/50 rounded-xl flex items-center justify-center shadow-sm">
                 <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
               </div>
             }
           >
-            <div className="w-80 flex-shrink-0" data-testid="thread-panel-container">
+            <div className="w-80 flex-shrink-0 bg-background border border-border/50 rounded-xl overflow-hidden shadow-sm" data-testid="thread-panel-container">
               <LazyThreadPanel
                 parentMessage={threadParentMessage}
                 conversationType={selectedChannel ? "channel" : "dm"}
@@ -3020,7 +3020,7 @@ export default function ChatPage() {
       {(selectedChannel || selectedDm) && contextPanelOpen && !threadPanelOpen && (
         <Suspense
           fallback={
-            <div className="w-72 border-l bg-background flex items-center justify-center">
+            <div className="w-72 bg-background border border-border/50 rounded-xl flex items-center justify-center shadow-sm">
               <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
             </div>
           }
