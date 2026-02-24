@@ -144,13 +144,6 @@ export const config = {
     debug: optionalEnvBool("MAILGUN_DEBUG", false),
   },
   
-  // Google OAuth (optional - SSO disabled if not set)
-  google: {
-    clientId: process.env.GOOGLE_CLIENT_ID || "",
-    clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
-    isConfigured: !!(process.env.GOOGLE_CLIENT_ID && process.env.GOOGLE_CLIENT_SECRET),
-  },
-  
   // Stripe (optional - billing features disabled if not set)
   stripe: {
     secretKey: process.env.STRIPE_SECRET_KEY || "",
@@ -242,11 +235,6 @@ export function validateConfig(): ConfigValidationResult {
     warnings.push("Email sending is disabled");
   }
   
-  if (!config.google.isConfigured) {
-    optionalMissing.push("Google OAuth (GOOGLE_CLIENT_ID, GOOGLE_CLIENT_SECRET)");
-    warnings.push("Google SSO is disabled");
-  }
-  
   if (!config.stripe.isConfigured) {
     optionalMissing.push("Stripe (STRIPE_SECRET_KEY)");
     warnings.push("Billing features are disabled");
@@ -272,7 +260,6 @@ export function logConfigStatus(): void {
   console.log(`[config] Fast Startup: ${config.fastStartup}`);
   console.log(`[config] R2 Storage: ${config.r2.isConfigured ? "configured" : "not configured"}`);
   console.log(`[config] Mailgun: ${config.mailgun.isConfigured ? "configured" : "disabled"}`);
-  console.log(`[config] Google OAuth: ${config.google.isConfigured ? "configured" : "disabled"}`);
   console.log(`[config] Stripe: ${config.stripe.isConfigured ? "configured" : "disabled"}`);
   console.log(`[config] Rate Limiting: ${config.rateLimiting.enabled ? "enabled" : "disabled"}`);
 }

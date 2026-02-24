@@ -35,7 +35,7 @@ Programmatic login: `POST /api/auth/login` with `{"email":"...","password":"..."
 
 ### Core Features and Design Patterns
 - **Multi-Tenancy**: Supports multiple tenants with an admin dashboard and per-tenant user management.
-- **Authentication**: Session-based authentication using Passport.js (email/password, Google OAuth).
+- **Authentication**: Session-based authentication using Passport.js (email/password).
 - **Real-time Communication**: Socket.IO for live updates, supporting tenant-scoped chat, threaded replies, typing indicators, and notifications.
 - **Project & Task Management**: Includes workspaces, teams, clients, projects, tasks with subtasks, activity logs, and time tracking. Supports project templates and rich text comments with @mentions.
 - **Client Relationship Management (CRM)**: Comprehensive client detail pages with notes, documents, client pipeline tracking, contacts, and an external client portal. Features Client 360 View, profitability reports, approval workflows, client-safe messaging, and thread merging/duplicate detection for conversations.

@@ -58,7 +58,6 @@ interface IntegrationStatus {
   s3: boolean;
   stripe: boolean;
   encryptionConfigured: boolean;
-  ssoGoogle?: boolean;
 }
 
 interface InviteResponse {

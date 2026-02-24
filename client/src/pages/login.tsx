@@ -7,8 +7,6 @@ import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, LogIn, UserPlus, Shield, Eye, EyeOff, FlaskConical, Crown, ShieldCheck, User } from "lucide-react";
-import { SiGoogle } from "react-icons/si";
-import { Separator } from "@/components/ui/separator";
 import { UserRole } from "@shared/schema";
 import { getStorageUrl } from "@/lib/storageUrl";
 
@@ -45,10 +43,6 @@ interface BootstrapStatus {
   bootstrapRequired: boolean;
 }
 
-interface GoogleAuthStatus {
-  enabled: boolean;
-}
-
 interface LoginBranding {
   appName: string | null;
   loginMessage: string | null;
@@ -65,7 +59,6 @@ export default function LoginPage() {
   const [showBootstrap, setShowBootstrap] = useState(false);
   const [bootstrapRequired, setBootstrapRequired] = useState(false);
   const [isCheckingBootstrap, setIsCheckingBootstrap] = useState(true);
-  const [googleAuthEnabled, setGoogleAuthEnabled] = useState(false);
   const [branding, setBranding] = useState<LoginBranding>({ appName: null, loginMessage: null, logoUrl: null });
   const { login } = useAuth();
   const { toast } = useToast();
@@ -115,23 +108,6 @@ export default function LoginPage() {
       }
     }
     checkBootstrapStatus();
-  }, []);
-
-  useEffect(() => {
-    async function checkGoogleAuthStatus() {
-      try {
-        const response = await fetch("/api/v1/auth/google/status", {
-          credentials: "include",
-        });
-        if (response.ok) {
-          const data: GoogleAuthStatus = await response.json();
-          setGoogleAuthEnabled(data.enabled);
-        }
-      } catch (error) {
-        console.error("Failed to check Google auth status:", error);
-      }
-    }
-    checkGoogleAuthStatus();
   }, []);
 
   useEffect(() => {
@@ -387,35 +363,6 @@ export default function LoginPage() {
             </form>
           ) : (
             <div className="space-y-4">
-              {googleAuthEnabled && (
-                <>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    className="w-full"
-                    onClick={() => {
-                      window.location.href = "/api/v1/auth/google";
-                    }}
-                    disabled={isSubmitting}
-                    data-testid="button-google-login"
-                  >
-                    <SiGoogle className="mr-2 h-4 w-4" />
-                    Continue with Google
-                  </Button>
-                  
-                  <div className="relative">
-                    <div className="absolute inset-0 flex items-center">
-                      <Separator className="w-full" />
-                    </div>
-                    <div className="relative flex justify-center text-xs uppercase">
-                      <span className="bg-background px-2 text-muted-foreground">
-                        Or continue with email
-                      </span>
-                    </div>
-                  </div>
-                </>
-              )}
-              
               <form onSubmit={handleLogin} className="space-y-4">
                 <div className="space-y-2">
                   <Label htmlFor="email">Email</Label>

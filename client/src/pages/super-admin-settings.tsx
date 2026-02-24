@@ -70,21 +70,6 @@ interface IntegrationStatus {
   r2: boolean;
   stripe: boolean;
   encryptionConfigured: boolean;
-  ssoGoogle?: boolean;
-}
-
-interface SsoGoogleSettings {
-  status: "configured" | "not_configured";
-  enabled: boolean;
-  clientId: string | null;
-  redirectUri: string | null;
-  config?: {
-    source?: "database" | "environment" | "none";
-  } | null;
-  secretMasked: {
-    clientSecretMasked: string | null;
-  } | null;
-  lastTestedAt: string | null;
 }
 
 interface MailgunSettings {
@@ -1057,11 +1042,6 @@ export default function SuperAdminSettingsPage() {
     enabled: activeTab === "integrations",
   });
 
-  const { data: ssoGoogleSettings, isLoading: ssoGoogleLoading } = useQuery<SsoGoogleSettings>({
-    queryKey: ["/api/v1/system/integrations/sso/google"],
-    enabled: activeTab === "integrations",
-  });
-
   const [mailgunForm, setMailgunForm] = useState({
     domain: "",
     fromEmail: "",
@@ -1104,15 +1084,6 @@ export default function SuperAdminSettingsPage() {
   const [testEmailAddress, setTestEmailAddress] = useState("");
   const [testEmailDialogOpen, setTestEmailDialogOpen] = useState(false);
 
-  const [ssoGoogleForm, setSsoGoogleForm] = useState({
-    enabled: false,
-    clientId: "",
-    clientSecret: "",
-    redirectUri: "",
-  });
-  const [showGoogleClientSecret, setShowGoogleClientSecret] = useState(false);
-
-  const [ssoGoogleDirty, setSsoGoogleDirty] = useState(false);
   const [r2Dirty, setR2Dirty] = useState(false);
 
   useEffect(() => {
@@ -1127,20 +1098,6 @@ export default function SuperAdminSettingsPage() {
       });
     }
   }, [r2Settings, r2Dirty]);
-
-  useEffect(() => {
-    if (ssoGoogleSettings && !ssoGoogleDirty) {
-      const apiRedirectUri = ssoGoogleSettings.redirectUri || "";
-      const clientRedirectUri = `${window.location.origin}/api/v1/auth/google/callback`;
-      const useClientUri = !apiRedirectUri || apiRedirectUri.includes("localhost");
-      setSsoGoogleForm({
-        enabled: ssoGoogleSettings.enabled || false,
-        clientId: ssoGoogleSettings.clientId || "",
-        clientSecret: "",
-        redirectUri: useClientUri ? clientRedirectUri : apiRedirectUri,
-      });
-    }
-  }, [ssoGoogleSettings, ssoGoogleDirty]);
 
   const saveMailgunMutation = useMutation({
     mutationFn: async (data: any) => {
@@ -1294,42 +1251,6 @@ export default function SuperAdminSettingsPage() {
     onError: (error: any) => {
       const parsed = parseApiError(error);
       toast({ title: "Failed to clear secret", description: parsed.message, variant: "destructive" });
-    },
-  });
-
-  const saveSsoGoogleMutation = useMutation({
-    mutationFn: async (data: any) => {
-      return apiRequest("PUT", "/api/v1/system/integrations/sso/google", data);
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/system/integrations/sso/google"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/super/integrations/status"] });
-      toast({ title: "Google SSO settings saved successfully" });
-      setSsoGoogleForm(prev => ({ ...prev, clientSecret: "" }));
-      setSsoGoogleDirty(false);
-    },
-    onError: (error: any) => {
-      const parsed = parseApiError(error);
-      toast({ title: "Failed to save Google SSO settings", description: parsed.message, variant: "destructive" });
-    },
-  });
-
-  const testSsoGoogleMutation = useMutation({
-    mutationFn: async () => {
-      const response = await apiRequest("POST", "/api/v1/system/integrations/sso/google/test", {});
-      return response.json();
-    },
-    onSuccess: (data: { ok: boolean; error?: { code: string; message: string } }) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/system/integrations/sso/google"] });
-      if (data.ok) {
-        toast({ title: "Google SSO configuration valid" });
-      } else {
-        toast({ title: "Google SSO test failed", description: data.error?.message || "Unknown error", variant: "destructive" });
-      }
-    },
-    onError: (error: any) => {
-      const parsed = parseApiError(error);
-      toast({ title: "Google SSO test failed", description: parsed.message, variant: "destructive" });
     },
   });
 
@@ -1589,21 +1510,6 @@ export default function SuperAdminSettingsPage() {
                         <span className="font-medium">Stripe</span>
                         <Badge variant={integrationStatus?.stripe ? "default" : "secondary"} className="ml-2">
                           {integrationStatus?.stripe ? "Configured" : "Not Configured"}
-                        </Badge>
-                      </a>
-                      <a 
-                        href="#section-google-sso" 
-                        className="flex items-center gap-2 p-3 border rounded-lg hover-elevate cursor-pointer"
-                        onClick={(e) => {
-                          e.preventDefault();
-                          document.getElementById("section-google-sso")?.scrollIntoView({ behavior: "smooth" });
-                        }}
-                        data-testid="link-google-sso-section"
-                      >
-                        <Globe className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">Google SSO</span>
-                        <Badge variant={ssoGoogleSettings?.enabled ? "default" : "secondary"} className="ml-2">
-                          {ssoGoogleSettings?.enabled ? "Enabled" : ssoGoogleSettings?.status === "configured" ? "Configured" : "Not Configured"}
                         </Badge>
                       </a>
                     </div>
@@ -2225,172 +2131,6 @@ export default function SuperAdminSettingsPage() {
                 </CardContent>
               </Card>
 
-              {/* SSO Providers Configuration */}
-              <Card>
-                <CardHeader>
-                  <div className="flex items-center justify-between">
-                    <div>
-                      <CardTitle className="flex items-center gap-2">
-                        <Globe className="h-5 w-5" />
-                        SSO Providers
-                      </CardTitle>
-                      <CardDescription>Configure single sign-on providers for platform authentication</CardDescription>
-                    </div>
-                  </div>
-                </CardHeader>
-                <CardContent>
-                  <div className="space-y-6">
-                    {/* Google SSO */}
-                    <div id="section-google-sso" className="border rounded-lg p-4 space-y-4">
-                      <div className="flex items-center justify-between">
-                        <div className="flex items-center gap-3">
-                          <div className="p-2 bg-muted rounded-lg">
-                            <svg className="h-5 w-5" viewBox="0 0 24 24">
-                              <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"/>
-                              <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"/>
-                              <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.07H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.93l2.85-2.22.81-.62z"/>
-                              <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.07l3.66 2.84c.87-2.6 3.3-4.53 6.16-4.53z"/>
-                            </svg>
-                          </div>
-                          <div>
-                            <h4 className="font-medium">Google SSO</h4>
-                            <p className="text-sm text-muted-foreground">Allow users to sign in with their Google account</p>
-                          </div>
-                        </div>
-                        <Badge variant={ssoGoogleSettings?.status === "configured" ? "default" : "secondary"}>
-                          {ssoGoogleSettings?.status === "configured" ? (ssoGoogleSettings?.enabled ? "Enabled" : "Configured") : "Not Configured"}
-                        </Badge>
-                      </div>
-
-                      {ssoGoogleLoading ? (
-                        <div className="flex items-center justify-center py-4">
-                          <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                        </div>
-                      ) : (
-                        <div className="space-y-4">
-                          {ssoGoogleSettings?.config?.source === "environment" && (
-                            <div className="bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
-                              <p className="text-sm text-blue-700 dark:text-blue-300">
-                                Currently using environment variables. Save new settings to override with database configuration.
-                              </p>
-                            </div>
-                          )}
-
-                          <div className="flex items-center space-x-2">
-                            <Checkbox
-                              id="google-sso-enabled"
-                              checked={ssoGoogleForm.enabled}
-                              onCheckedChange={(checked) => { setSsoGoogleForm({ ...ssoGoogleForm, enabled: !!checked }); setSsoGoogleDirty(true); }}
-                              data-testid="checkbox-google-sso-enabled"
-                            />
-                            <Label htmlFor="google-sso-enabled" className="font-normal">Enable Google SSO</Label>
-                          </div>
-
-                          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                            <div className="space-y-2">
-                              <Label htmlFor="google-client-id">Client ID</Label>
-                              <Input
-                                id="google-client-id"
-                                value={ssoGoogleForm.clientId}
-                                onChange={(e) => { setSsoGoogleForm({ ...ssoGoogleForm, clientId: e.target.value }); setSsoGoogleDirty(true); }}
-                                placeholder="Enter Google Client ID"
-                                data-testid="input-google-client-id"
-                              />
-                            </div>
-                            <div className="space-y-2">
-                              <Label htmlFor="google-redirect-uri">Redirect URI (read-only)</Label>
-                              <div className="flex gap-2">
-                                <Input
-                                  id="google-redirect-uri"
-                                  value={ssoGoogleForm.redirectUri}
-                                  readOnly
-                                  className="bg-muted"
-                                  data-testid="input-google-redirect-uri"
-                                />
-                                <Button
-                                  type="button"
-                                  variant="outline"
-                                  size="icon"
-                                  aria-label="Copy redirect URI"
-                                  onClick={() => {
-                                    navigator.clipboard.writeText(ssoGoogleForm.redirectUri);
-                                    toast({ title: "Copied to clipboard" });
-                                  }}
-                                  data-testid="button-copy-google-redirect"
-                                >
-                                  <Copy className="h-4 w-4" />
-                                </Button>
-                              </div>
-                              <p className="text-xs text-muted-foreground">Add this URL to your Google OAuth credentials</p>
-                            </div>
-                          </div>
-
-                          <div className="space-y-2">
-                            <Label htmlFor="google-client-secret">Client Secret</Label>
-                            <div className="flex gap-2">
-                              <div className="relative flex-1">
-                                <Input
-                                  id="google-client-secret"
-                                  type={showGoogleClientSecret ? "text" : "password"}
-                                  value={ssoGoogleForm.clientSecret}
-                                  onChange={(e) => { setSsoGoogleForm({ ...ssoGoogleForm, clientSecret: e.target.value }); setSsoGoogleDirty(true); }}
-                                  placeholder={ssoGoogleSettings?.secretMasked?.clientSecretMasked || "Enter Client Secret"}
-                                  data-testid="input-google-client-secret"
-                                />
-                                <Button
-                                  type="button"
-                                  variant="ghost"
-                                  size="icon"
-                                  className="absolute right-0 top-0 h-full"
-                                  aria-label="Toggle client secret visibility"
-                                  onClick={() => setShowGoogleClientSecret(!showGoogleClientSecret)}
-                                >
-                                  {showGoogleClientSecret ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                                </Button>
-                              </div>
-                            </div>
-                          </div>
-
-                          <div className="flex gap-2 pt-2">
-                            <Button
-                              variant="outline"
-                              onClick={() => testSsoGoogleMutation.mutate()}
-                              disabled={testSsoGoogleMutation.isPending || ssoGoogleSettings?.status !== "configured"}
-                              data-testid="button-test-google-sso"
-                            >
-                              {testSsoGoogleMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              ) : (
-                                <TestTube className="h-4 w-4 mr-2" />
-                              )}
-                              Test Configuration
-                            </Button>
-                            <Button
-                              onClick={() => {
-                                const data: any = {
-                                  enabled: ssoGoogleForm.enabled,
-                                  clientId: ssoGoogleForm.clientId,
-                                };
-                                if (ssoGoogleForm.clientSecret) data.clientSecret = ssoGoogleForm.clientSecret;
-                                saveSsoGoogleMutation.mutate(data);
-                              }}
-                              disabled={saveSsoGoogleMutation.isPending}
-                              data-testid="button-save-google-sso"
-                            >
-                              {saveSsoGoogleMutation.isPending ? (
-                                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                              ) : (
-                                <Save className="h-4 w-4 mr-2" />
-                              )}
-                              Save Google SSO
-                            </Button>
-                          </div>
-                        </div>
-                      )}
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
             </div>
           </TabsContent>
 
