@@ -1229,8 +1229,8 @@ function VipCarousel({
   vipClients,
   onOpenClient,
 }: {
-  vipClients: ClientWithRelations[];
-  onOpenClient: (id: number) => void;
+  vipClients: ClientWithHierarchy[];
+  onOpenClient: (id: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
