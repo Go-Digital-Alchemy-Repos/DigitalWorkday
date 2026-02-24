@@ -247,6 +247,7 @@ function QuickActions({ lastEntryId, onEditEntry, onStartTimer }: {
       <div className="flex flex-wrap gap-2">
         <Button 
           size="sm" 
+          variant="outline"
           onClick={onStartTimer}
           data-testid="button-start-timer"
           className="bg-background hover:bg-muted"
