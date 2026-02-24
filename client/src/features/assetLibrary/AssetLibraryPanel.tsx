@@ -37,6 +37,10 @@ import {
   FileText,
   FileImage,
   FileArchive,
+  FileSpreadsheet,
+  FileVideo,
+  FileAudio,
+  FileCode,
   File,
   MoreVertical,
   Pencil,
@@ -49,6 +53,8 @@ import {
   ArrowLeft,
   GripVertical,
   FolderInput,
+  LayoutGrid,
+  List,
 } from "lucide-react";
 import {
   DndContext,
@@ -128,10 +134,26 @@ const SOURCE_COLORS: Record<string, string> = {
 
 function getFileIcon(mimeType: string) {
   if (mimeType.startsWith("image/")) return FileImage;
+  if (mimeType.startsWith("video/")) return FileVideo;
+  if (mimeType.startsWith("audio/")) return FileAudio;
   if (mimeType.includes("pdf")) return FileText;
   if (mimeType.includes("zip") || mimeType.includes("archive") || mimeType.includes("compressed")) return FileArchive;
-  if (mimeType.includes("text") || mimeType.includes("document") || mimeType.includes("word") || mimeType.includes("spreadsheet") || mimeType.includes("excel")) return FileText;
+  if (mimeType.includes("spreadsheet") || mimeType.includes("excel") || mimeType.includes("csv")) return FileSpreadsheet;
+  if (mimeType.includes("text") || mimeType.includes("document") || mimeType.includes("word")) return FileText;
+  if (mimeType.includes("json") || mimeType.includes("xml") || mimeType.includes("html") || mimeType.includes("javascript") || mimeType.includes("css")) return FileCode;
   return File;
+}
+
+function getFileIconColor(mimeType: string): string {
+  if (mimeType.startsWith("image/")) return "text-blue-500";
+  if (mimeType.startsWith("video/")) return "text-purple-500";
+  if (mimeType.startsWith("audio/")) return "text-pink-500";
+  if (mimeType.includes("pdf")) return "text-red-500";
+  if (mimeType.includes("zip") || mimeType.includes("archive") || mimeType.includes("compressed")) return "text-amber-500";
+  if (mimeType.includes("spreadsheet") || mimeType.includes("excel") || mimeType.includes("csv")) return "text-green-600";
+  if (mimeType.includes("document") || mimeType.includes("word")) return "text-blue-600";
+  if (mimeType.includes("presentation") || mimeType.includes("powerpoint")) return "text-orange-500";
+  return "text-muted-foreground";
 }
 
 function formatFileSize(bytes: number): string {
@@ -180,6 +202,105 @@ function AssetImagePreview({ assetId, title }: { assetId: string; title: string 
     </div>
   );
 }
+
+function AssetGridThumbnail({ asset, onSelect, onDownload, onRename, onDelete, onOpenInContext, onMove }: DraggableAssetRowProps) {
+  const isImage = asset.mimeType.startsWith("image/");
+  const Icon = getFileIcon(asset.mimeType);
+  const iconColor = getFileIconColor(asset.mimeType);
+
+  const { data: previewData } = useQuery<{ url: string }>({
+    queryKey: ["/api/v1/assets", asset.id, "download-url"],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/assets/${asset.id}/download`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to get preview URL");
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+    retry: 1,
+    enabled: isImage,
+  });
+
+  const [imgError, setImgError] = useState(false);
+
+  return (
+    <Card
+      className="group overflow-hidden cursor-pointer hover-elevate transition-all"
+      onClick={() => onSelect(asset)}
+      data-testid={`asset-grid-card-${asset.id}`}
+    >
+      <div className="aspect-square bg-muted/30 flex items-center justify-center relative overflow-hidden">
+        {isImage && previewData?.url && !imgError ? (
+          <img
+            src={previewData.url}
+            alt={asset.title}
+            className="w-full h-full object-cover"
+            onError={() => setImgError(true)}
+            loading="lazy"
+          />
+        ) : (
+          <div className="flex flex-col items-center justify-center gap-2">
+            <Icon className={`w-10 h-10 ${iconColor}`} />
+            <span className="text-[10px] uppercase tracking-wider text-muted-foreground font-medium">
+              {asset.mimeType.split("/").pop()?.split("+")[0]?.split(".").pop() || "file"}
+            </span>
+          </div>
+        )}
+        {asset.visibility === "client_visible" && (
+          <Badge variant="outline" className="absolute top-1.5 left-1.5 text-[10px] bg-background/80 backdrop-blur-sm">
+            <Eye className="w-2.5 h-2.5 mr-0.5" />
+            Shared
+          </Badge>
+        )}
+        <div className="absolute top-1 right-1 opacity-0 group-hover:opacity-100 transition-opacity">
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+              <Button variant="secondary" size="icon" className="h-7 w-7 shadow-sm" data-testid={`asset-grid-menu-${asset.id}`}>
+                <MoreVertical className="w-3.5 h-3.5" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end">
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDownload(asset); }}>
+                <Download className="w-4 h-4 mr-2" />
+                Download
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onRename(asset.id, asset.title); }}>
+                <Pencil className="w-4 h-4 mr-2" />
+                Rename
+              </DropdownMenuItem>
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onMove(asset); }}>
+                <FolderInput className="w-4 h-4 mr-2" />
+                Move
+              </DropdownMenuItem>
+              {asset.sourceContextJson && (
+                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onOpenInContext(asset); }}>
+                  <ExternalLink className="w-4 h-4 mr-2" />
+                  Open in Context
+                </DropdownMenuItem>
+              )}
+              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); onDelete(asset.id); }} className="text-destructive">
+                <Trash2 className="w-4 h-4 mr-2" />
+                Delete
+              </DropdownMenuItem>
+            </DropdownMenuContent>
+          </DropdownMenu>
+        </div>
+      </div>
+      <div className="p-2">
+        <p className="text-xs font-medium truncate" title={asset.title}>{asset.title}</p>
+        <div className="flex items-center justify-between mt-0.5">
+          <span className="text-[10px] text-muted-foreground">{formatFileSize(asset.sizeBytes)}</span>
+          <span
+            className={`inline-flex items-center px-1.5 py-0 text-[10px] font-medium rounded-full ${SOURCE_COLORS[asset.sourceType] || SOURCE_COLORS.system}`}
+          >
+            {SOURCE_LABELS[asset.sourceType] || asset.sourceType}
+          </span>
+        </div>
+      </div>
+    </Card>
+  );
+}
+
+type ViewMode = "list" | "grid";
 
 interface SortableFolderCardProps {
   folder: AssetFolder;
@@ -400,6 +521,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
   const [editAssetTitle, setEditAssetTitle] = useState("");
   const [moveAsset, setMoveAsset] = useState<Asset | null>(null);
   const [moveTargetFolderId, setMoveTargetFolderId] = useState<string>("__root__");
+  const [viewMode, setViewMode] = useState<ViewMode>("list");
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const foldersQuery = useQuery<AssetFolder[]>({
@@ -765,14 +887,42 @@ export function AssetLibraryPanel({ clientId }: Props) {
               <SelectItem value="client_visible">Client Visible</SelectItem>
             </SelectContent>
           </Select>
+          <div className="flex items-center border rounded-md overflow-hidden" data-testid="view-mode-toggle">
+            <Button
+              variant={viewMode === "list" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-9 w-9 rounded-none"
+              onClick={() => setViewMode("list")}
+              data-testid="button-view-list"
+            >
+              <List className="w-4 h-4" />
+            </Button>
+            <Button
+              variant={viewMode === "grid" ? "secondary" : "ghost"}
+              size="icon"
+              className="h-9 w-9 rounded-none"
+              onClick={() => setViewMode("grid")}
+              data-testid="button-view-grid"
+            >
+              <LayoutGrid className="w-4 h-4" />
+            </Button>
+          </div>
         </div>
 
         {foldersQuery.isLoading || assetsQuery.isLoading ? (
-          <div className="space-y-2">
-            {Array.from({ length: 5 }).map((_, i) => (
-              <Skeleton key={i} className="h-12 w-full" />
-            ))}
-          </div>
+          viewMode === "grid" ? (
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
+              {Array.from({ length: 8 }).map((_, i) => (
+                <Skeleton key={i} className="aspect-square rounded-md" />
+              ))}
+            </div>
+          ) : (
+            <div className="space-y-2">
+              {Array.from({ length: 5 }).map((_, i) => (
+                <Skeleton key={i} className="h-12 w-full" />
+              ))}
+            </div>
+          )
         ) : (
           <ScrollArea className="flex-1">
             {currentFolders.length > 0 && (
@@ -804,13 +954,36 @@ export function AssetLibraryPanel({ clientId }: Props) {
             {assets_data.length > 0 && (
               <div>
                 <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Files</div>
-                <div className="space-y-1">
-                  <SortableContext 
-                    items={assets_data.map(a => `asset-${a.id}`)} 
-                    strategy={verticalListSortingStrategy}
-                  >
+                {viewMode === "list" ? (
+                  <div className="space-y-1">
+                    <SortableContext 
+                      items={assets_data.map(a => `asset-${a.id}`)} 
+                      strategy={verticalListSortingStrategy}
+                    >
+                      {assets_data.map((asset) => (
+                        <DraggableAssetRow
+                          key={asset.id}
+                          asset={asset}
+                          onSelect={setSelectedAsset}
+                          onDownload={handleDownload}
+                          onRename={(id, title) => {
+                            setEditAssetId(id);
+                            setEditAssetTitle(title);
+                          }}
+                          onDelete={(id) => deleteAssetMutation.mutate(id)}
+                          onOpenInContext={handleOpenInContext}
+                          onMove={(a) => {
+                            setMoveAsset(a);
+                            setMoveTargetFolderId(a.folderId || "__root__");
+                          }}
+                        />
+                      ))}
+                    </SortableContext>
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-3">
                     {assets_data.map((asset) => (
-                      <DraggableAssetRow
+                      <AssetGridThumbnail
                         key={asset.id}
                         asset={asset}
                         onSelect={setSelectedAsset}
@@ -827,8 +1000,8 @@ export function AssetLibraryPanel({ clientId }: Props) {
                         }}
                       />
                     ))}
-                  </SortableContext>
-                </div>
+                  </div>
+                )}
               </div>
             )}
 
