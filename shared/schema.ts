@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, date, integer, boolean, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -4260,3 +4260,32 @@ export const insertDataRetentionPolicySchema = createInsertSchema(dataRetentionP
 });
 export type InsertDataRetentionPolicy = z.infer<typeof insertDataRetentionPolicySchema>;
 export type DataRetentionPolicy = typeof dataRetentionPolicies.$inferSelect;
+
+// ============================================================
+// AI SUMMARIES — cached AI-generated content per entity
+// ============================================================
+
+export const aiSummaries = pgTable("ai_summaries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  entityType: text("entity_type").notNull().default("employee"),
+  entityId: varchar("entity_id").notNull(),
+  viewerScope: text("viewer_scope").notNull().default("tenant_admins"),
+  rangeStart: date("range_start").notNull(),
+  rangeEnd: date("range_end").notNull(),
+  inputHash: text("input_hash").notNull(),
+  model: text("model").notNull(),
+  summaryVersion: text("summary_version").notNull().default("1.0"),
+  headline: text("headline"),
+  summaryMarkdown: text("summary_markdown"),
+  bulletsJson: jsonb("bullets_json"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+}, (table) => [
+  index("ai_summaries_entity_idx").on(table.tenantId, table.entityType, table.entityId, table.rangeStart, table.rangeEnd),
+  index("ai_summaries_tenant_created_idx").on(table.tenantId, table.createdAt),
+  index("ai_summaries_expires_idx").on(table.expiresAt),
+]);
+
+export type AiSummary = typeof aiSummaries.$inferSelect;

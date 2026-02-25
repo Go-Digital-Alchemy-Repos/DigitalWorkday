@@ -263,6 +263,7 @@ export async function getEmployeeProfileReport({
     },
     workload: {
       activeTasks,
+      completedInRange,
       overdueTasks: overdueCount,
       dueSoon: Number(workload.due_soon),
       backlog: Number(workload.backlog),

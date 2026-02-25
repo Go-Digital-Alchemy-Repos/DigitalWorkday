@@ -1,5 +1,6 @@
 import { useParams, useLocation, Link } from "wouter";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
+import { useState } from "react";
 import { 
   ChevronLeft, 
   Users, 
@@ -11,7 +12,14 @@ import {
   Award,
   CalendarRange,
   ShieldAlert,
-  Target
+  Target,
+  Sparkles,
+  RefreshCw,
+  Copy,
+  ChevronDown,
+  ChevronUp,
+  Info,
+  Loader2,
 } from "lucide-react";
 import { 
   Card, 
@@ -40,9 +48,19 @@ import {
   TableHeader, 
   TableRow 
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+  DialogTrigger,
+} from "@/components/ui/dialog";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { cn } from "@/lib/utils";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 
 interface ProfileData {
   employee: {
@@ -102,6 +120,22 @@ interface ProfileData {
   };
 }
 
+interface AiSummaryData {
+  cached: boolean;
+  headline: string;
+  markdown: string;
+  wins: string[];
+  risks: string[];
+  notableChanges: string[];
+  recommendedActions: string[];
+  confidence: "Low" | "Medium" | "High";
+  supportingMetrics: Array<{ metric: string; value: string }>;
+  model: string;
+  summaryVersion: string;
+  generatedAt: string;
+  expiresAt: string;
+}
+
 function MetricCard({ title, value, subValue, icon: Icon, description, testId }: { 
   title: string; 
   value: string | number; 
@@ -133,11 +167,316 @@ function MetricCard({ title, value, subValue, icon: Icon, description, testId }:
   );
 }
 
+function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number }) {
+  const { toast } = useToast();
+  const queryClient = useQueryClient();
+  const [showMetrics, setShowMetrics] = useState(false);
+
+  const queryKey = ["/api/v1/ai/employee", employeeId, "summary", days];
+
+  const { data, isLoading, error } = useQuery<AiSummaryData>({
+    queryKey,
+    queryFn: async () => {
+      const res = await fetch(
+        `/api/v1/ai/employee/${employeeId}/summary?days=${days}`,
+        { credentials: "include" }
+      );
+      if (!res.ok) {
+        const body = await res.json().catch(() => ({}));
+        const err = Object.assign(new Error(body.error || `Request failed: ${res.status}`), { code: body.code });
+        throw err;
+      }
+      return res.json();
+    },
+    enabled: !!employeeId,
+    retry: false,
+  });
+
+  const refreshMutation = useMutation({
+    mutationFn: async () => {
+      const res = await apiRequest(
+        "POST",
+        `/api/v1/ai/employee/${employeeId}/summary/refresh?days=${days}`
+      );
+      return res.json();
+    },
+    onSuccess: (newData) => {
+      queryClient.setQueryData(queryKey, newData);
+      toast({ title: "AI summary refreshed" });
+    },
+    onError: (err: any) => {
+      toast({
+        title: "Failed to refresh summary",
+        description: err?.message || "An error occurred",
+        variant: "destructive",
+      });
+    },
+  });
+
+  const handleCopy = () => {
+    if (!data?.markdown) return;
+    navigator.clipboard.writeText(data.markdown).then(() => {
+      toast({ title: "Summary copied to clipboard" });
+    });
+  };
+
+  const confidenceColor = (c: string) => {
+    if (c === "High") return "bg-green-500";
+    if (c === "Low") return "bg-amber-500";
+    return "bg-blue-500";
+  };
+
+  const generatedAt = data?.generatedAt
+    ? new Date(data.generatedAt).toLocaleString()
+    : null;
+
+  if (isLoading) {
+    return (
+      <Card data-testid="section-ai-summary">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-primary animate-pulse" />
+            AI Summary
+          </CardTitle>
+          <CardDescription>Generating performance insights...</CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <Skeleton className="h-5 w-3/4" />
+          <Skeleton className="h-4 w-full" />
+          <Skeleton className="h-4 w-5/6" />
+          <Skeleton className="h-4 w-2/3" />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (error) {
+    const err = error as any;
+    const msg = err?.message || err?.error || "Failed to generate AI summary.";
+    const code = err?.code || "";
+    const isRateLimit = code === "RATE_LIMITED" || msg.toLowerCase().includes("limit");
+    const isNotConfigured = code === "FEATURE_DISABLED" || code === "AI_DISABLED" || msg.toLowerCase().includes("not configured") || msg.toLowerCase().includes("not enabled");
+    return (
+      <Card data-testid="section-ai-summary">
+        <CardHeader>
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Sparkles className="h-5 w-5 text-muted-foreground" />
+            AI Summary
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Alert variant={isRateLimit || isNotConfigured ? "default" : "destructive"}>
+            <Info className="h-4 w-4" />
+            <AlertTitle>{isNotConfigured ? "AI Not Configured" : isRateLimit ? "Rate Limit Reached" : "Summary Unavailable"}</AlertTitle>
+            <AlertDescription className="text-sm">{msg}</AlertDescription>
+          </Alert>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  if (!data) return null;
+
+  return (
+    <Card data-testid="section-ai-summary">
+      <CardHeader>
+        <div className="flex items-start justify-between flex-wrap gap-3">
+          <div>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Sparkles className="h-5 w-5 text-primary" />
+              AI Summary
+              {data.cached && (
+                <Badge variant="outline" className="text-[10px] px-1.5 h-4 font-normal">cached</Badge>
+              )}
+            </CardTitle>
+            <CardDescription className="mt-1">
+              Grounded in aggregated metrics only — no task or message content.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={handleCopy}
+              disabled={!data.markdown}
+              data-testid="button-ai-copy"
+              className="h-8 gap-1.5"
+            >
+              <Copy className="h-3.5 w-3.5" />
+              Copy
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => refreshMutation.mutate()}
+              disabled={refreshMutation.isPending}
+              data-testid="button-ai-refresh"
+              className="h-8 gap-1.5"
+            >
+              {refreshMutation.isPending ? (
+                <Loader2 className="h-3.5 w-3.5 animate-spin" />
+              ) : (
+                <RefreshCw className="h-3.5 w-3.5" />
+              )}
+              Refresh
+            </Button>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="space-y-5">
+        <div className="flex items-start gap-3">
+          <div className="flex-1">
+            <p className="font-medium text-sm leading-relaxed" data-testid="text-ai-headline">
+              {data.headline}
+            </p>
+          </div>
+          <Badge className={cn("text-white text-[10px] shrink-0 mt-0.5", confidenceColor(data.confidence))} data-testid="badge-ai-confidence">
+            {data.confidence} confidence
+          </Badge>
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          {data.wins.length > 0 && (
+            <div className="space-y-2" data-testid="section-ai-wins">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-green-600 dark:text-green-400">Key Wins</h4>
+              <ul className="space-y-1.5">
+                {data.wins.map((win, i) => (
+                  <li key={i} className="text-sm flex gap-2">
+                    <span className="text-green-500 shrink-0 mt-0.5">✓</span>
+                    <span>{win}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {data.risks.length > 0 && (
+            <div className="space-y-2" data-testid="section-ai-risks">
+              <h4 className="text-xs font-semibold uppercase tracking-wider text-destructive">Risks</h4>
+              <ul className="space-y-1.5">
+                {data.risks.map((risk, i) => (
+                  <li key={i} className="text-sm flex gap-2">
+                    <span className="text-destructive shrink-0 mt-0.5">!</span>
+                    <span>{risk}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+        </div>
+
+        {data.notableChanges.length > 0 && (
+          <div className="space-y-2" data-testid="section-ai-changes">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Notable Changes</h4>
+            <ul className="space-y-1.5">
+              {data.notableChanges.map((change, i) => (
+                <li key={i} className="text-sm flex gap-2">
+                  <span className="text-blue-500 shrink-0 mt-0.5">→</span>
+                  <span>{change}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        {data.recommendedActions.length > 0 && (
+          <div className="space-y-2 border-t pt-4" data-testid="section-ai-actions">
+            <h4 className="text-xs font-semibold uppercase tracking-wider text-primary">Recommended Actions</h4>
+            <ul className="space-y-1.5">
+              {data.recommendedActions.map((action, i) => (
+                <li key={i} className="text-sm flex gap-2">
+                  <span className="font-bold text-primary shrink-0 mt-0.5">{i + 1}.</span>
+                  <span>{action}</span>
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+
+        <div className="border-t pt-3 flex items-center justify-between flex-wrap gap-2">
+          <div className="flex items-center gap-3">
+            <Dialog>
+              <DialogTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-7 text-xs gap-1 text-muted-foreground" data-testid="button-ai-basis">
+                  <Info className="h-3 w-3" />
+                  What is this based on?
+                </Button>
+              </DialogTrigger>
+              <DialogContent className="max-w-md">
+                <DialogHeader>
+                  <DialogTitle>AI Summary Data Sources</DialogTitle>
+                  <DialogDescription>
+                    This summary is generated from aggregated metrics only. No task titles, message contents, or client names are included.
+                  </DialogDescription>
+                </DialogHeader>
+                <div className="space-y-3">
+                  <p className="text-sm text-muted-foreground">Data sources used:</p>
+                  <ul className="text-sm space-y-1 list-disc list-inside text-muted-foreground">
+                    <li>Employee Performance Index (EPI) score and tier</li>
+                    <li>Task completion rate and overdue rate</li>
+                    <li>Workload pressure metrics (active, overdue, backlog)</li>
+                    <li>Time tracking totals and daily averages</li>
+                    <li>Weekly capacity utilization percentages</li>
+                    <li>Automated risk flags</li>
+                  </ul>
+                  {data.supportingMetrics.length > 0 && (
+                    <>
+                      <p className="text-sm font-medium pt-2">Supporting metrics used in this summary:</p>
+                      <div className="space-y-1">
+                        {data.supportingMetrics.map((m, i) => (
+                          <div key={i} className="flex justify-between text-sm">
+                            <span className="text-muted-foreground">{m.metric}</span>
+                            <span className="font-medium">{m.value}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </>
+                  )}
+                  <p className="text-xs text-muted-foreground border-t pt-2">
+                    Model: {data.model} · Version: {data.summaryVersion}
+                  </p>
+                </div>
+              </DialogContent>
+            </Dialog>
+
+            <button
+              onClick={() => setShowMetrics(!showMetrics)}
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              data-testid="button-ai-toggle-metrics"
+            >
+              {showMetrics ? <ChevronUp className="h-3 w-3" /> : <ChevronDown className="h-3 w-3" />}
+              {showMetrics ? "Hide" : "Show"} supporting metrics
+            </button>
+          </div>
+
+          {generatedAt && (
+            <span className="text-xs text-muted-foreground">
+              Updated {generatedAt}
+            </span>
+          )}
+        </div>
+
+        {showMetrics && data.supportingMetrics.length > 0 && (
+          <div className="rounded-lg bg-muted/50 p-3 space-y-1.5" data-testid="section-ai-supporting-metrics">
+            {data.supportingMetrics.map((m, i) => (
+              <div key={i} className="flex justify-between text-xs">
+                <span className="text-muted-foreground">{m.metric}</span>
+                <span className="font-medium">{m.value}</span>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function EmployeeProfileReportPage() {
   const { employeeId } = useParams<{ employeeId: string }>();
   const [, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const range = searchParams.get("range") || "30d";
+  const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
 
   const { data, isLoading, error, refetch } = useQuery<ProfileData>({
     queryKey: ["/api/reports/v2/employee", employeeId, "profile", range],
@@ -198,7 +537,7 @@ export default function EmployeeProfileReportPage() {
   const getSeverityVariant = (severity: string) => {
     switch (severity.toLowerCase()) {
       case "high": return "destructive";
-      case "medium": return "default"; // Amber would be better but shadcn default works
+      case "medium": return "default";
       case "low": return "secondary";
       default: return "outline";
     }
@@ -244,6 +583,7 @@ export default function EmployeeProfileReportPage() {
                   <Skeleton key={i} className="h-[100px] w-full" />
                 ))}
               </div>
+              <Skeleton className="h-[200px] w-full" />
               <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
                 <Skeleton className="h-[300px] w-full" />
                 <Skeleton className="h-[300px] w-full" />
@@ -338,6 +678,11 @@ export default function EmployeeProfileReportPage() {
                   testId="metric-total-hours"
                 />
               </div>
+
+              {/* AI Summary Card */}
+              {employeeId && (
+                <AiSummaryCard employeeId={employeeId} days={days} />
+              )}
 
               <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                 {/* Workload Section */}
@@ -533,7 +878,7 @@ export default function EmployeeProfileReportPage() {
                   </CardContent>
                 </Card>
 
-                {/* Trend Section */}
+                {/* Project Focus Section */}
                 <Card data-testid="section-trend">
                   <CardHeader>
                     <CardTitle className="text-lg flex items-center gap-2">
