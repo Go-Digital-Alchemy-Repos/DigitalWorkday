@@ -3,6 +3,14 @@ import { sql } from "drizzle-orm";
 import { formatMinutesToHours } from "./utils";
 import { calculateEmployeePerformance } from "./performance/calculateEmployeePerformance";
 
+function toRows<T>(result: unknown): T[] {
+  if (Array.isArray(result)) return result as T[];
+  if (result && typeof result === "object" && "rows" in result) {
+    return (result as { rows: T[] }).rows;
+  }
+  return result as unknown as T[];
+}
+
 export interface EmployeeProfileParams {
   tenantId: string;
   employeeId: string;
@@ -42,7 +50,7 @@ export async function getEmployeeProfileReport({
       u.is_active,
       t.name as team_name
     FROM users u
-    LEFT JOIN team_members tm ON tm.user_id = u.id AND tm.tenant_id = ${tenantId}
+    LEFT JOIN team_members tm ON tm.user_id = u.id
     LEFT JOIN teams t ON t.id = tm.team_id AND t.tenant_id = ${tenantId}
     WHERE u.id = ${employeeId} AND u.tenant_id = ${tenantId}
     LIMIT 1
@@ -201,11 +209,18 @@ export async function getEmployeeProfileReport({
     performancePromise,
   ]);
 
-  const employee = employeeInfoResult[0];
+  const employeeRows = toRows<typeof employeeInfoResult extends (infer U)[] ? U : any>(employeeInfoResult);
+  const employee = employeeRows[0];
   if (!employee) return null;
 
-  const workload = workloadResult[0];
-  const time = timeTrackingResult[0];
+  const workloadRows = toRows<any>(workloadResult);
+  const workload = workloadRows[0];
+  const timeRows = toRows<any>(timeTrackingResult);
+  const time = timeRows[0];
+  const capacityRows = toRows<any>(capacityResult);
+  const statusRows = toRows<any>(breakdownStatus);
+  const priorityRows = toRows<any>(breakdownPriority);
+  const projectRows = toRows<any>(breakdownProject);
   const perf = performance.results[0];
 
   const totalHours = Math.round(Number(time.total_seconds) / 3600 * 10) / 10;
@@ -221,7 +236,7 @@ export async function getEmployeeProfileReport({
   const overdueCount = Number(workload.overdue_tasks);
   const overdueRate = activeTasks > 0 ? Math.round((overdueCount / activeTasks) * 100) : 0;
 
-  const weeklyData = capacityResult.map(r => {
+  const weeklyData = capacityRows.map(r => {
     const actHours = Math.round(Number(r.actual_seconds) / 3600 * 10) / 10;
     const planHours = Math.round(Number(r.planned_minutes) / 60 * 10) / 10;
     return {
@@ -282,13 +297,13 @@ export async function getEmployeeProfileReport({
     },
     riskIndicators,
     taskBreakdown: {
-      byStatus: breakdownStatus.map(r => ({ label: r.status, value: Number(r.count) })),
-      byPriority: breakdownPriority.map(r => ({ label: r.priority, value: Number(r.count) })),
-      byProject: breakdownProject.map(r => ({ label: r.project_name, value: Number(r.count) })),
+      byStatus: statusRows.map(r => ({ label: r.status, value: Number(r.count) })),
+      byPriority: priorityRows.map(r => ({ label: r.priority, value: Number(r.count) })),
+      byProject: projectRows.map(r => ({ label: r.project_name, value: Number(r.count) })),
     },
     trend: {
-      weeklyCompletion: capacityResult.map(r => ({ week: r.week_start, count: 0 })), // Placeholder if needed
-      weeklyTimeTracked: capacityResult.map(r => ({ week: r.week_start, hours: Math.round(Number(r.actual_seconds) / 3600 * 10) / 10 })),
+      weeklyCompletion: capacityRows.map(r => ({ week: r.week_start, count: 0 })),
+      weeklyTimeTracked: capacityRows.map(r => ({ week: r.week_start, hours: Math.round(Number(r.actual_seconds) / 3600 * 10) / 10 })),
     },
   };
 }

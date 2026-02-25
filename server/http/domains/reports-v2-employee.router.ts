@@ -650,7 +650,7 @@ router.get("/employee/performance", async (req: Request, res: Response) => {
 
 router.get("/employee/:employeeId/profile", async (req: Request, res: Response) => {
   try {
-    const { config } = await import("../../../config");
+    const { config } = await import("../../config");
     if (!config.features.enableEmployeeProfileReport) {
       return res.status(403).json({ message: "Employee profile report feature is disabled" });
     }
