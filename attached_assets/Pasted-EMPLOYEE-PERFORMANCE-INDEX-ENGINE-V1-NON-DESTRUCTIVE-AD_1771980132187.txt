@@ -1,0 +1,139 @@
+EMPLOYEE PERFORMANCE INDEX ENGINE (V1)
+NON-DESTRUCTIVE • ADDITIVE • GOVERNED • FEATURE-FLAGGED
+
+You are working in the DigitalWorkday codebase.
+
+We are implementing a standardized Employee Performance Index (EPI) system that aggregates existing reporting metrics into a composite operational score.
+
+This must be:
+- 100% NON-DESTRUCTIVE
+- Additive only
+- Fully tenant-scoped
+- Feature flagged
+- Built on existing Metric Governance layer
+- Fully documented in App Docs
+
+Feature flag:
+ENABLE_EMPLOYEE_PERFORMANCE_INDEX
+
+===========================================================
+PHASE 1 — DEFINE PERFORMANCE MODEL
+===========================================================
+
+Create file:
+server/src/reporting/performance/employeePerformanceModel.ts
+
+Define scoring structure:
+
+PerformanceComponents = {
+  completionRateWeight: 0.25,
+  overdueWeight: 0.20,
+  utilizationWeight: 0.20,
+  efficiencyWeight: 0.20,
+  timeComplianceWeight: 0.15
+}
+
+Score range: 0–100
+
+Standardize component normalization:
+
+completionRateScore:
+  min 0%, max 100%
+
+overdueScore:
+  inverse scaled (lower overdue = higher score)
+
+utilizationScore:
+  optimal band 70–95%
+  below 50% or above 120% reduces score
+
+efficiencyScore:
+  optimal band 0.9–1.2
+  below 0.7 penalized
+
+timeComplianceScore:
+  % of working days with time logged
+
+===========================================================
+PHASE 2 — CALCULATION ENGINE
+===========================================================
+
+Create:
+server/src/reporting/performance/calculateEmployeePerformance.ts
+
+Function:
+
+calculateEmployeePerformance({
+  tenantId,
+  userId,
+  startDate,
+  endDate
+})
+
+Uses standardized metric endpoints internally (NOT raw DB duplication).
+
+Returns:
+
+{
+  overallScore,
+  componentScores: {
+    completion,
+    overdue,
+    utilization,
+    efficiency,
+    compliance
+  },
+  riskFlags: [],
+  performanceTier: "High" | "Stable" | "Needs Attention" | "Critical"
+}
+
+Tier thresholds:
+- 85+ High
+- 70–84 Stable
+- 50–69 Needs Attention
+- <50 Critical
+
+===========================================================
+PHASE 3 — ENDPOINT
+===========================================================
+
+GET /api/reports/v2/employee/performance
+
+Returns per user:
+- overallScore
+- component breakdown
+- tier
+- risk flags
+
+Paginated, filterable.
+
+===========================================================
+PHASE 4 — UI INTEGRATION
+===========================================================
+
+Add new tab under Employee Command Center:
+
+“Performance”
+
+Display:
+- sortable performance table
+- component breakdown bars
+- tier color indicators
+- drilldown per employee
+
+===========================================================
+PHASE 5 — APP DOCS UPDATE
+===========================================================
+
+New section:
+“Employee Performance Index (EPI)”
+
+Include:
+- Formula
+- Weights
+- Tier definitions
+- Governance rules
+- Limitations
+
+STOP after implementation.
+Do not modify client reports in this phase.

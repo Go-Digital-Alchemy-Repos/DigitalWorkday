@@ -1,4 +1,4 @@
-import { forwardRef, memo, useState, useRef, useEffect } from "react";
+import { forwardRef, memo, useState, useRef, useEffect, useCallback } from "react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -32,6 +32,7 @@ import type { TaskWithRelations, User, Tag } from "@shared/schema";
 import { getPreviewText } from "@/components/richtext/richTextUtils";
 import { usePrefetchTask } from "@/hooks/use-prefetch";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { LogTimeOnCompleteDialog } from "@/components/log-time-on-complete-dialog";
 
 interface TaskCardProps {
   task: TaskWithRelations;
@@ -70,6 +71,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
   const isMobile = useIsMobile();
   const { copyLink, hasProject } = useTaskLink(task, projectId);
   const [justCompleted, setJustCompleted] = useState(false);
+  const [showTimeDialog, setShowTimeDialog] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
   const assigneeUsers: Partial<User>[] = task.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [];
   const taskTags: Tag[] = task.tags?.map((tt) => tt.tag).filter(Boolean) as Tag[] || [];
@@ -85,16 +87,39 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
     };
   }, [cancelPrefetch]);
 
+  const triggerComplete = useCallback(() => {
+    setJustCompleted(true);
+    timeoutRef.current = setTimeout(() => setJustCompleted(false), 400);
+    onStatusChange?.(true);
+  }, [onStatusChange]);
+
   const handleStatusChange = (checked: boolean) => {
     if (checked && !isCompleted) {
-      setJustCompleted(true);
-      timeoutRef.current = setTimeout(() => setJustCompleted(false), 400);
+      setShowTimeDialog(true);
+    } else {
+      onStatusChange?.(checked);
     }
-    onStatusChange?.(checked);
   };
+
+  const timeDialog = (
+    <LogTimeOnCompleteDialog
+      open={showTimeDialog}
+      onOpenChange={setShowTimeDialog}
+      itemType="task"
+      itemId={task.id}
+      itemTitle={task.title}
+      taskId={task.id}
+      projectId={task.projectId ?? null}
+      clientId={task.project?.clientId ?? null}
+      workspaceId={task.project?.workspaceId ?? ""}
+      onComplete={async () => { triggerComplete(); }}
+      onSkip={async () => { triggerComplete(); }}
+    />
+  );
 
   if (view === "board") {
     return (
+      <>
       <div
         ref={ref}
         className={cn(
@@ -192,11 +217,14 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
           )}
         </div>
       </div>
+      {timeDialog}
+      </>
     );
   }
 
   if (isMobile) {
     return (
+      <>
       <div
         ref={ref}
         className={cn(
@@ -287,10 +315,13 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
           )}
         </div>
       </div>
+      {timeDialog}
+      </>
     );
   }
 
   return (
+    <>
     <div
       ref={ref}
       className={cn(
@@ -476,5 +507,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
         </div>
       )}
     </div>
+    {timeDialog}
+    </>
   );
 }));
