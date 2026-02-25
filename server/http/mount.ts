@@ -30,6 +30,11 @@ import reportsV2WorkloadRouter from "./domains/reports-v2-workload.router";
 import reportsV2EmployeeRouter from "./domains/reports-v2-employee.router";
 import reportsV2ClientRouter from "./domains/reports-v2-client.router";
 import reportsV2ForecastingRouter from "./domains/reports-v2-forecasting.router";
+import reportsV2SnapshotsRouter from "./domains/reports-v2-snapshots.router";
+import reportsV2AlertsRouter from "./domains/reports-v2-alerts.router";
+import reportsV2DigestRouter from "./domains/reports-v2-digest.router";
+import { startAlertScheduler, stopAlertScheduler } from "../alerts/alertScheduler";
+import { startDigestScheduler, stopDigestScheduler } from "../digests/digestScheduler";
 import { jobsRouter } from "../jobs/jobs.router";
 import supportRouter from "./domains/support.router";
 import clientDocumentsRouter from "./domains/clientDocuments.router";
@@ -238,6 +243,27 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "reports-v2-forecasting",
     description: "Forecasting Layer V1: capacity overload, project deadline risk, client risk trend.",
+  },
+  {
+    path: "/api/reports/v2",
+    router: reportsV2SnapshotsRouter,
+    policy: "authTenant",
+    domain: "reports-v2-snapshots",
+    description: "Forecast snapshots: create, list, export persistent forecast snapshots.",
+  },
+  {
+    path: "/api/reports/v2",
+    router: reportsV2AlertsRouter,
+    policy: "authTenant",
+    domain: "reports-v2-alerts",
+    description: "Alert automation: rules CRUD, alert events, acknowledge.",
+  },
+  {
+    path: "/api/reports/v2",
+    router: reportsV2DigestRouter,
+    policy: "authTenant",
+    domain: "reports-v2-digest",
+    description: "Weekly ops digest: schedule config and preview.",
   },
   {
     path: "/api",
@@ -472,6 +498,8 @@ export async function mountAllRoutes(
 
   startDeadlineChecker();
   startFollowUpChecker();
+  startAlertScheduler();
+  startDigestScheduler();
 
   return httpServer;
 }

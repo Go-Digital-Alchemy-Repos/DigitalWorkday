@@ -4005,3 +4005,132 @@ export const insertConversationSlaPolicySchema = createInsertSchema(conversation
 });
 export type InsertConversationSlaPolicy = z.infer<typeof insertConversationSlaPolicySchema>;
 export type ConversationSlaPolicy = typeof conversationSlaPolicies.$inferSelect;
+
+// ── FORECAST SNAPSHOTS ────────────────────────────────────────────────────────
+export const forecastSnapshots = pgTable("forecast_snapshots", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  snapshotType: text("snapshot_type").notNull(),
+  horizonWeeks: integer("horizon_weeks").notNull().default(4),
+  asOfDate: timestamp("as_of_date").notNull(),
+  rangeStart: timestamp("range_start").notNull(),
+  rangeEnd: timestamp("range_end").notNull(),
+  entityScope: text("entity_scope").notNull().default("tenant"),
+  entityId: varchar("entity_id"),
+  payloadJson: jsonb("payload_json").notNull().default({}),
+  confidence: text("confidence").notNull().default("Medium"),
+  dataQualityFlags: jsonb("data_quality_flags").notNull().default([]),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  isDeleted: boolean("is_deleted").notNull().default(false),
+}, (table) => [
+  index("forecast_snapshots_tenant_type_date_idx").on(table.tenantId, table.snapshotType, table.asOfDate),
+  index("forecast_snapshots_tenant_scope_entity_idx").on(table.tenantId, table.entityScope, table.entityId),
+  index("forecast_snapshots_tenant_created_idx").on(table.tenantId, table.createdAt),
+]);
+
+export const insertForecastSnapshotSchema = createInsertSchema(forecastSnapshots).omit({
+  id: true,
+  createdAt: true,
+  isDeleted: true,
+});
+export type InsertForecastSnapshot = z.infer<typeof insertForecastSnapshotSchema>;
+export type ForecastSnapshot = typeof forecastSnapshots.$inferSelect;
+
+// ── ALERT RULES ───────────────────────────────────────────────────────────────
+export const alertRules = pgTable("alert_rules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  ruleType: text("rule_type").notNull(),
+  severity: text("severity").notNull().default("warning"),
+  schedule: text("schedule").notNull().default("daily"),
+  parametersJson: jsonb("parameters_json").notNull().default({}),
+  targetUserScope: text("target_user_scope").notNull().default("tenant_admins"),
+  targetUserIds: jsonb("target_user_ids"),
+  deliveryChannels: jsonb("delivery_channels").notNull().default(["in_app"]),
+  throttleMinutes: integer("throttle_minutes").notNull().default(1440),
+  lastRunAt: timestamp("last_run_at"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id).notNull(),
+  updatedByUserId: varchar("updated_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("alert_rules_tenant_idx").on(table.tenantId),
+  index("alert_rules_tenant_type_idx").on(table.tenantId, table.ruleType),
+  index("alert_rules_tenant_enabled_idx").on(table.tenantId, table.isEnabled),
+]);
+
+export const insertAlertRuleSchema = createInsertSchema(alertRules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastRunAt: true,
+});
+export type InsertAlertRule = z.infer<typeof insertAlertRuleSchema>;
+export type AlertRule = typeof alertRules.$inferSelect;
+
+// ── ALERT EVENTS ──────────────────────────────────────────────────────────────
+export const alertEvents = pgTable("alert_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  ruleId: varchar("rule_id").references(() => alertRules.id).notNull(),
+  eventKey: text("event_key").notNull(),
+  entityScope: text("entity_scope").notNull(),
+  entityId: varchar("entity_id").notNull(),
+  severity: text("severity").notNull().default("warning"),
+  title: text("title").notNull(),
+  message: text("message").notNull(),
+  payloadJson: jsonb("payload_json").notNull().default({}),
+  snapshotId: varchar("snapshot_id").references(() => forecastSnapshots.id),
+  triggeredAt: timestamp("triggered_at").defaultNow().notNull(),
+  deliveredChannels: jsonb("delivered_channels").notNull().default([]),
+  isAcknowledged: boolean("is_acknowledged").notNull().default(false),
+  acknowledgedByUserId: varchar("acknowledged_by_user_id").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at"),
+}, (table) => [
+  index("alert_events_tenant_rule_triggered_idx").on(table.tenantId, table.ruleId, table.triggeredAt),
+  index("alert_events_tenant_scope_entity_idx").on(table.tenantId, table.entityScope, table.entityId, table.triggeredAt),
+  uniqueIndex("alert_events_tenant_event_key_idx").on(table.tenantId, table.eventKey),
+]);
+
+export const insertAlertEventSchema = createInsertSchema(alertEvents).omit({
+  id: true,
+  triggeredAt: true,
+  isAcknowledged: true,
+  acknowledgedByUserId: true,
+  acknowledgedAt: true,
+});
+export type InsertAlertEvent = z.infer<typeof insertAlertEventSchema>;
+export type AlertEvent = typeof alertEvents.$inferSelect;
+
+// ── OPS DIGEST SCHEDULES ──────────────────────────────────────────────────────
+export const opsDigestSchedules = pgTable("ops_digest_schedules", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  isEnabled: boolean("is_enabled").notNull().default(true),
+  frequency: text("frequency").notNull().default("weekly"),
+  dayOfWeek: integer("day_of_week").notNull().default(1),
+  hourLocal: integer("hour_local").notNull().default(9),
+  timezone: text("timezone").notNull().default("UTC"),
+  recipientsScope: text("recipients_scope").notNull().default("tenant_admins"),
+  recipientUserIds: jsonb("recipient_user_ids"),
+  includeSections: jsonb("include_sections").notNull().default(["top_overloads", "projects_at_risk", "clients_at_risk", "team_throughput"]),
+  lastSentAt: timestamp("last_sent_at"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id).notNull(),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("ops_digest_schedules_tenant_idx").on(table.tenantId),
+]);
+
+export const insertOpsDigestScheduleSchema = createInsertSchema(opsDigestSchedules).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  lastSentAt: true,
+});
+export type InsertOpsDigestSchedule = z.infer<typeof insertOpsDigestScheduleSchema>;
+export type OpsDigestSchedule = typeof opsDigestSchedules.$inferSelect;

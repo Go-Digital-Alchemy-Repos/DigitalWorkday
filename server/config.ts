@@ -196,6 +196,9 @@ export const config = {
     enableClientHealthIndex: optionalEnvBool("ENABLE_CLIENT_HEALTH_INDEX", true),
     enableForecastingLayer: optionalEnvBool("ENABLE_FORECASTING_LAYER", true),
     enableForecastingAlerts: optionalEnvBool("ENABLE_FORECASTING_ALERTS", false),
+    enableForecastSnapshots: optionalEnvBool("ENABLE_FORECAST_SNAPSHOTS", true),
+    enableAlertAutomation: optionalEnvBool("ENABLE_ALERT_AUTOMATION", true),
+    enableWeeklyOpsDigest: optionalEnvBool("ENABLE_WEEKLY_OPS_DIGEST", true),
   },
 
   tenancyEnforcement: {

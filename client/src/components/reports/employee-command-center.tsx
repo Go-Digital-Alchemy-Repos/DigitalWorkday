@@ -15,12 +15,13 @@ import {
 import {
   Users, Clock, CheckSquare, AlertTriangle, TrendingUp,
   ChevronUp, ChevronDown, ArrowUpDown, CalendarRange, Activity,
-  ShieldAlert, User, Award, Sparkles, FolderKanban, Info,
+  ShieldAlert, User, Award, Sparkles, FolderKanban, Info, Camera,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
+import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 
 function userName(u: { firstName?: string | null; lastName?: string | null; email: string }) {
   if (u.firstName || u.lastName) return `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
@@ -1381,20 +1382,41 @@ export function EmployeeCommandCenter() {
         )}
         {flags.enableForecastingLayer && (
           <TabsContent value="forecasts" className="mt-4">
-            <div className="flex items-center gap-3 mb-4 flex-wrap">
-              <span className="text-sm text-muted-foreground">Forecast horizon:</span>
-              <Select value={String(horizonWeeks)} onValueChange={(v) => setHorizonWeeks(Number(v) as 2 | 4 | 8)}>
-                <SelectTrigger className="w-32 h-8 text-xs" data-testid="forecast-horizon-select">
-                  <SelectValue />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="2">2 weeks</SelectItem>
-                  <SelectItem value="4">4 weeks</SelectItem>
-                  <SelectItem value="8">8 weeks</SelectItem>
-                </SelectContent>
-              </Select>
-            </div>
-            <ForecastsTab horizonWeeks={horizonWeeks} />
+            <Tabs defaultValue="analysis">
+              <TabsList className="h-8 mb-4">
+                <TabsTrigger value="analysis" className="text-xs gap-1.5" data-testid="tab-forecast-analysis">
+                  <Sparkles className="h-3.5 w-3.5" />
+                  Analysis
+                </TabsTrigger>
+                {flags.enableForecastSnapshots && (
+                  <TabsTrigger value="snapshots" className="text-xs gap-1.5" data-testid="tab-forecast-snapshots">
+                    <Camera className="h-3.5 w-3.5" />
+                    Snapshots
+                  </TabsTrigger>
+                )}
+              </TabsList>
+              <TabsContent value="analysis">
+                <div className="flex items-center gap-3 mb-4 flex-wrap">
+                  <span className="text-sm text-muted-foreground">Forecast horizon:</span>
+                  <Select value={String(horizonWeeks)} onValueChange={(v) => setHorizonWeeks(Number(v) as 2 | 4 | 8)}>
+                    <SelectTrigger className="w-32 h-8 text-xs" data-testid="forecast-horizon-select">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="2">2 weeks</SelectItem>
+                      <SelectItem value="4">4 weeks</SelectItem>
+                      <SelectItem value="8">8 weeks</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <ForecastsTab horizonWeeks={horizonWeeks} />
+              </TabsContent>
+              {flags.enableForecastSnapshots && (
+                <TabsContent value="snapshots">
+                  <ForecastSnapshotsTab />
+                </TabsContent>
+              )}
+            </Tabs>
           </TabsContent>
         )}
       </Tabs>

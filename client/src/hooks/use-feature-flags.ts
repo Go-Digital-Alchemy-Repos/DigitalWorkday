@@ -26,6 +26,9 @@ export interface FeatureFlags {
   enableClientHealthIndex: boolean;
   enableForecastingLayer: boolean;
   enableForecastingAlerts: boolean;
+  enableForecastSnapshots: boolean;
+  enableAlertAutomation: boolean;
+  enableWeeklyOpsDigest: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -54,6 +57,9 @@ const ALL_OFF: FeatureFlags = {
   enableClientHealthIndex: false,
   enableForecastingLayer: false,
   enableForecastingAlerts: false,
+  enableForecastSnapshots: false,
+  enableAlertAutomation: false,
+  enableWeeklyOpsDigest: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

@@ -2,7 +2,7 @@ import { useLocation, useRoute, Redirect } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings as SettingsIcon, Puzzle, FileText, Mail, UserCircle, MessageSquare, Zap, FileArchive } from "lucide-react";
+import { Settings as SettingsIcon, Puzzle, FileText, Mail, UserCircle, MessageSquare, Zap, FileArchive, Bell, Newspaper } from "lucide-react";
 import { ProfileTab } from "@/components/settings/profile-tab";
 import { IntegrationsTab } from "@/components/settings/integrations-tab";
 import { AgreementTab } from "@/components/settings/agreement-tab";
@@ -10,26 +10,36 @@ import { EmailLogsTab } from "@/components/settings/email-logs-tab";
 import { MessagesTab } from "@/components/settings/messages-tab";
 import { PipelineAutomationTab } from "@/components/settings/pipeline-automation-tab";
 import { DefaultTenantDocumentsManager } from "@/features/tenantDefaultDocs";
+import AlertRulesPage from "@/pages/settings-alerts";
+import DigestConfigPage from "@/pages/settings-digest";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
 
-const SETTINGS_TABS = [
-  { id: "profile", label: "Profile", icon: UserCircle },
-  { id: "integrations", label: "Integrations", icon: Puzzle },
-  { id: "messages", label: "Messages", icon: MessageSquare },
-  { id: "email-logs", label: "Email Logs", icon: Mail },
-  { id: "automation", label: "Automation", icon: Zap },
-  { id: "agreement", label: "Agreement", icon: FileText },
-  { id: "default-docs", label: "Default Docs", icon: FileArchive },
+const BASE_SETTINGS_TABS = [
+  { id: "profile", label: "Profile", icon: UserCircle, flag: null },
+  { id: "integrations", label: "Integrations", icon: Puzzle, flag: null },
+  { id: "messages", label: "Messages", icon: MessageSquare, flag: null },
+  { id: "email-logs", label: "Email Logs", icon: Mail, flag: null },
+  { id: "automation", label: "Automation", icon: Zap, flag: null },
+  { id: "agreement", label: "Agreement", icon: FileText, flag: null },
+  { id: "default-docs", label: "Default Docs", icon: FileArchive, flag: null },
+  { id: "alerts", label: "Alerts", icon: Bell, flag: "enableAlertAutomation" as const },
+  { id: "digest", label: "Ops Digest", icon: Newspaper, flag: "enableWeeklyOpsDigest" as const },
 ];
 
 export default function SettingsPage() {
   const { user } = useAuth();
   const [location, setLocation] = useLocation();
   const [, params] = useRoute("/settings/:tab");
+  const flags = useFeatureFlags();
 
-  // Only allow admin or super_user roles to access settings
   if (user?.role !== "admin" && user?.role !== "super_user") {
     return <Redirect to="/" />;
   }
+
+  const SETTINGS_TABS = BASE_SETTINGS_TABS.filter((tab) => {
+    if (!tab.flag) return true;
+    return flags[tab.flag];
+  });
 
   const activeTab = params?.tab || "profile";
 
@@ -51,7 +61,7 @@ export default function SettingsPage() {
         </div>
 
         <Tabs value={activeTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7 h-auto p-1 gap-1">
+          <TabsList className="flex flex-wrap w-full h-auto p-1 gap-1">
             {SETTINGS_TABS.map((tab) => (
               <TabsTrigger
                 key={tab.id}
@@ -96,6 +106,18 @@ export default function SettingsPage() {
               <p className="text-muted-foreground">No tenant context available.</p>
             )}
           </TabsContent>
+
+          {flags.enableAlertAutomation && (
+            <TabsContent value="alerts" className="mt-6">
+              <AlertRulesPage />
+            </TabsContent>
+          )}
+
+          {flags.enableWeeklyOpsDigest && (
+            <TabsContent value="digest" className="mt-6">
+              <DigestConfigPage />
+            </TabsContent>
+          )}
         </Tabs>
       </div>
     </div>

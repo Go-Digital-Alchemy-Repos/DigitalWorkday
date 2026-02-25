@@ -51,6 +51,9 @@ router.get("/features/flags", async (_req, res) => {
       enableClientHealthIndex: config.features.enableClientHealthIndex,
       enableForecastingLayer: config.features.enableForecastingLayer,
       enableForecastingAlerts: config.features.enableForecastingAlerts,
+      enableForecastSnapshots: config.features.enableForecastSnapshots,
+      enableAlertAutomation: config.features.enableAlertAutomation,
+      enableWeeklyOpsDigest: config.features.enableWeeklyOpsDigest,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);
