@@ -190,6 +190,8 @@ export const config = {
     reportProjectAnalysisV2: optionalEnvBool("REPORT_PROJECT_ANALYSIS_V2", false),
     reportMessagesV2: optionalEnvBool("REPORT_MESSAGES_V2", false),
     reportPipelineV2: optionalEnvBool("REPORT_PIPELINE_V2", false),
+    enableEmployeeCommandCenter: optionalEnvBool("ENABLE_EMPLOYEE_COMMAND_CENTER", isDevelopment),
+    enableClientCommandCenter: optionalEnvBool("ENABLE_CLIENT_COMMAND_CENTER", isDevelopment),
   },
 
   tenancyEnforcement: {

@@ -20,6 +20,8 @@ export interface FeatureFlags {
   reportProjectAnalysisV2: boolean;
   reportMessagesV2: boolean;
   reportPipelineV2: boolean;
+  enableEmployeeCommandCenter: boolean;
+  enableClientCommandCenter: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -42,6 +44,8 @@ const ALL_OFF: FeatureFlags = {
   reportProjectAnalysisV2: false,
   reportMessagesV2: false,
   reportPipelineV2: false,
+  enableEmployeeCommandCenter: false,
+  enableClientCommandCenter: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

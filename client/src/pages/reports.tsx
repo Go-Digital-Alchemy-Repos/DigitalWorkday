@@ -33,18 +33,22 @@ const MessagesReports = lazy(() => import("@/components/reports/messages-reports
 const OverviewDashboard = lazy(() => import("@/components/reports/overview-dashboard"));
 const TaskAnalytics = lazy(() => import("@/components/reports/task-analytics"));
 const ClientAnalytics = lazy(() => import("@/components/reports/client-analytics"));
+const EmployeeCommandCenter = lazy(() => import("@/components/reports/employee-command-center").then(m => ({ default: m.EmployeeCommandCenter })));
+const ClientCommandCenter = lazy(() => import("@/components/reports/client-command-center").then(m => ({ default: m.ClientCommandCenter })));
 
-type ReportView = "landing" | "overview" | "workload" | "time" | "projects" | "messages" | "pipeline" | "task-analytics" | "client-analytics";
+type ReportView = "landing" | "overview" | "workload" | "time" | "projects" | "messages" | "pipeline" | "task-analytics" | "client-analytics" | "employee-cc" | "client-cc";
 
-const REPORT_TABS: Array<{ view: Exclude<ReportView, "landing">; label: string; Icon: React.ElementType }> = [
-  { view: "overview",        label: "Overview",          Icon: LayoutDashboard },
-  { view: "task-analytics",  label: "Task Analysis",     Icon: CheckSquare },
-  { view: "client-analytics",label: "Client Analytics",  Icon: PieChart },
-  { view: "workload",        label: "Workload Reports",  Icon: Users },
-  { view: "time",            label: "Time Tracking",     Icon: Clock },
-  { view: "projects",        label: "Project Analysis",  Icon: Target },
-  { view: "messages",        label: "Messages",          Icon: MessageSquare },
-  { view: "pipeline",        label: "Client Pipeline",   Icon: Building2 },
+const REPORT_TABS: Array<{ view: Exclude<ReportView, "landing">; label: string; Icon: React.ElementType; flag?: keyof import("@/hooks/use-feature-flags").FeatureFlags }> = [
+  { view: "employee-cc",     label: "Employee Command Center", Icon: Users,          flag: "enableEmployeeCommandCenter" },
+  { view: "client-cc",       label: "Client Command Center",   Icon: Building2,      flag: "enableClientCommandCenter" },
+  { view: "overview",        label: "Overview",                Icon: LayoutDashboard },
+  { view: "task-analytics",  label: "Task Analysis",           Icon: CheckSquare },
+  { view: "client-analytics",label: "Client Analytics",        Icon: PieChart },
+  { view: "workload",        label: "Workload Reports",        Icon: Users },
+  { view: "time",            label: "Time Tracking",           Icon: Clock },
+  { view: "projects",        label: "Project Analysis",        Icon: Target },
+  { view: "messages",        label: "Messages",                Icon: MessageSquare },
+  { view: "pipeline",        label: "Client Pipeline",         Icon: Building2 },
 ];
 
 interface StageSummaryItem {
@@ -342,6 +346,20 @@ export default function ReportsPage() {
   }
 
   const reportCategories = [
+    ...(flags.enableEmployeeCommandCenter ? [{
+      icon: <Users className="h-6 w-6 text-white" />,
+      title: "Employee Command Center",
+      description: "Comprehensive workload, time, capacity, risk and trend analysis per employee",
+      view: "employee-cc" as ReportView,
+      color: "bg-blue-600",
+    }] : []),
+    ...(flags.enableClientCommandCenter ? [{
+      icon: <Building2 className="h-6 w-6 text-white" />,
+      title: "Client Command Center",
+      description: "Client engagement, time, task load, SLA and risk analysis per client",
+      view: "client-cc" as ReportView,
+      color: "bg-violet-600",
+    }] : []),
     {
       icon: <LayoutDashboard className="h-6 w-6 text-white" />,
       title: "Overview",
@@ -452,6 +470,8 @@ export default function ReportsPage() {
 
   const getViewTitle = () => {
     switch (currentView) {
+      case "employee-cc": return "Employee Command Center";
+      case "client-cc": return "Client Command Center";
       case "overview": return "Overview Dashboard";
       case "task-analytics": return "Task Analytics";
       case "client-analytics": return "Client Analytics";
@@ -466,6 +486,8 @@ export default function ReportsPage() {
 
   const getViewDescription = () => {
     switch (currentView) {
+      case "employee-cc": return "Workload, time, capacity, risk and trend analysis per employee";
+      case "client-cc": return "Client engagement, time, task load, SLA and risk analysis per client";
       case "overview": return "Executive KPIs and trends across your entire organization";
       case "task-analytics": return "Task completion rates, overdue analysis, and distribution metrics";
       case "client-analytics": return "Client profitability, budget utilization, and activity breakdown";
@@ -477,6 +499,8 @@ export default function ReportsPage() {
 
   const getViewIcon = () => {
     switch (currentView) {
+      case "employee-cc": return <Users className="h-5 w-5 text-primary" />;
+      case "client-cc": return <Building2 className="h-5 w-5 text-primary" />;
       case "overview": return <LayoutDashboard className="h-5 w-5 text-primary" />;
       case "task-analytics": return <CheckSquare className="h-5 w-5 text-primary" />;
       case "client-analytics": return <PieChart className="h-5 w-5 text-primary" />;
@@ -510,7 +534,7 @@ export default function ReportsPage() {
             </div>
           </div>
           <div className="flex items-center border-b overflow-x-auto">
-            {REPORT_TABS.map((tab) => {
+            {REPORT_TABS.filter(tab => !tab.flag || flags[tab.flag]).map((tab) => {
               const isActive = currentView === tab.view;
               return (
                 <button
@@ -548,7 +572,11 @@ export default function ReportsPage() {
             </div>
           }
         >
-          {currentView === "overview" ? (
+          {currentView === "employee-cc" && flags.enableEmployeeCommandCenter ? (
+            <EmployeeCommandCenter />
+          ) : currentView === "client-cc" && flags.enableClientCommandCenter ? (
+            <ClientCommandCenter />
+          ) : currentView === "overview" ? (
             <OverviewDashboard />
           ) : currentView === "task-analytics" ? (
             <TaskAnalytics />

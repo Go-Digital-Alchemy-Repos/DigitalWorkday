@@ -45,6 +45,8 @@ router.get("/features/flags", async (_req, res) => {
       reportProjectAnalysisV2: config.features.reportProjectAnalysisV2,
       reportMessagesV2: config.features.reportMessagesV2,
       reportPipelineV2: config.features.reportPipelineV2,
+      enableEmployeeCommandCenter: config.features.enableEmployeeCommandCenter,
+      enableClientCommandCenter: config.features.enableClientCommandCenter,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

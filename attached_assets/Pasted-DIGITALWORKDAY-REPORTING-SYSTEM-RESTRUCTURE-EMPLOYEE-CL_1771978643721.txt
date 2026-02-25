@@ -1,0 +1,406 @@
+DIGITALWORKDAY REPORTING SYSTEM RESTRUCTURE
+EMPLOYEE + CLIENT COMMAND CENTER ARCHITECTURE (V2)
+NON-DESTRUCTIVE • ADDITIVE • FEATURE-FLAGGED • DOCUMENTED
+
+You are working in the DigitalWorkday codebase (React frontend, Node/Express backend, PostgreSQL + Drizzle ORM).
+
+We are restructuring the reporting system into two primary operational pillars:
+
+1) Employee Command Center
+2) Client Command Center
+
+This builds on the existing Reporting Engine foundation (feature flags, V2 namespace, query contract). DO NOT revert or remove prior scaffolding.
+
+This implementation must be:
+- 100% NON-DESTRUCTIVE
+- Additive only
+- Behind feature flags
+- Backward compatible
+- Fully documented in App Docs
+- Server-side aggregated (no heavy client-side computation)
+
+============================================================
+ARCHITECTURAL GOAL
+============================================================
+
+Replace fragmented report categories with two persona-driven command centers optimized for:
+
+- Operations Managers
+- Project Managers
+
+Keep V2 endpoints modular internally, but group them in the UI under:
+
+- Employee Command Center
+- Client Command Center
+
+Existing report pages remain intact behind legacy flags.
+
+============================================================
+PHASE 1 — INFORMATION ARCHITECTURE (UI + ROUTING)
+============================================================
+
+1.1 Add new primary navigation under Reports:
+
+Reports
+ ├── Employee Command Center
+ ├── Client Command Center
+ ├── Project Intelligence
+ ├── Task Intelligence
+ └── Executive Overview
+
+Use feature flags:
+- ENABLE_EMPLOYEE_COMMAND_CENTER
+- ENABLE_CLIENT_COMMAND_CENTER
+
+Do NOT remove legacy navigation yet.
+
+1.2 Create shared ReportCommandCenterLayout component
+Features:
+- Global date range picker
+- Filter bar (users, clients, projects, status)
+- Saved view placeholder (future)
+- Export placeholder (future)
+- Consistent loading/error states
+
+============================================================
+PHASE 2 — EMPLOYEE COMMAND CENTER (PRIMARY FOCUS)
+============================================================
+
+Create new UI route:
+ /reports/employee
+
+Subsections (tabs or vertical nav):
+
+A) Overview
+B) Workload
+C) Time & Utilization
+D) Capacity Planning
+E) Risk & Alerts
+F) Historical Trends
+
+------------------------------------------------------------
+2A — Employee Overview
+------------------------------------------------------------
+
+Endpoint:
+GET /api/reports/v2/employee/overview
+
+Returns per user:
+- activeTasks
+- overdueTasks
+- completedInRange
+- totalHours
+- billableHours
+- utilizationPct
+- efficiencyRatio
+- completionRate
+- reopenedCount
+
+Supports filters + pagination.
+
+------------------------------------------------------------
+2B — Workload (Assignments + Task Pressure)
+------------------------------------------------------------
+
+Endpoint:
+GET /api/reports/v2/employee/workload
+
+Metrics:
+- assignedCount (range + active)
+- dueSoonCount
+- overdueCount
+- taskAgingBuckets
+- backlogDelta
+- avgCompletionTime
+
+------------------------------------------------------------
+2C — Time & Utilization
+------------------------------------------------------------
+
+Endpoint:
+GET /api/reports/v2/employee/time
+
+Metrics:
+- totalHours
+- avgHoursPerDay
+- overtimeHours
+- billable vs non-billable
+- variance vs estimates
+- timeLoggedOutsideBusinessHours
+
+------------------------------------------------------------
+2D — Capacity Planning
+------------------------------------------------------------
+
+If ENABLE_RESOURCE_ALLOCATION:
+
+Endpoint:
+GET /api/reports/v2/employee/capacity
+
+Returns per user per week:
+- availableHours (default 40 if not configured)
+- plannedHours (from resource_allocations)
+- actualHours
+- utilizationPct
+- overAllocated
+
+If allocation disabled:
+- fallback to estimated task hours approximation.
+
+------------------------------------------------------------
+2E — Risk & Alerts
+------------------------------------------------------------
+
+Endpoint:
+GET /api/reports/v2/employee/risk
+
+Flags:
+- overutilization
+- high overdue %
+- consistent overtime
+- low time logging compliance
+- low completion rate
+
+------------------------------------------------------------
+2F — Historical Trends
+------------------------------------------------------------
+
+Endpoint:
+GET /api/reports/v2/employee/trends
+
+Time series:
+- tasks completed per week
+- hours tracked per week
+- utilization trend
+- efficiency trend
+
+All heavy aggregation must be SQL group-by queries.
+All endpoints tenant-scoped via auth context.
+
+============================================================
+PHASE 3 — CLIENT COMMAND CENTER
+============================================================
+
+Create new UI route:
+ /reports/client
+
+Subsections:
+
+A) Client Overview
+B) Engagement & Activity
+C) Time & Cost
+D) Task Load
+E) SLA & Responsiveness
+F) Risk Indicators
+
+------------------------------------------------------------
+3A — Client Overview
+------------------------------------------------------------
+
+Endpoint:
+GET /api/reports/v2/client/overview
+
+Returns per client:
+- activeProjects
+- openTasks
+- overdueTasks
+- totalHoursInRange
+- billableHours
+- lastActivityDate
+- engagementScore
+
+------------------------------------------------------------
+3B — Engagement & Activity
+------------------------------------------------------------
+
+Endpoint:
+GET /api/reports/v2/client/activity
+
+Metrics:
+- messagesCount
+- avgResponseTime
+- firstResponseTime
+- tasksCreatedInRange
+- timeLoggedInRange
+- inactivityDays
+
+------------------------------------------------------------
+3C — Time & Cost
+------------------------------------------------------------
+
+Endpoint:
+GET /api/reports/v2/client/time
+
+Metrics:
+- totalHours
+- billable vs non-billable
+- timeByProject
+- timeByUser
+- variance vs estimates
+
+------------------------------------------------------------
+3D — Task Load
+------------------------------------------------------------
+
+Endpoint:
+GET /api/reports/v2/client/tasks
+
+Metrics:
+- openTaskCount
+- overdueCount
+- backlogTrend
+- taskAgingBuckets
+- completionVelocity
+
+------------------------------------------------------------
+3E — SLA & Responsiveness
+------------------------------------------------------------
+
+Endpoint:
+GET /api/reports/v2/client/sla
+
+Metrics:
+- avgResponseTime
+- firstResponseSLA %
+- overdueTasks %
+- taskCompletionWithinDue %
+
+------------------------------------------------------------
+3F — Risk Indicators
+------------------------------------------------------------
+
+Endpoint:
+GET /api/reports/v2/client/risk
+
+Flags:
+- high overdue %
+- low engagement
+- high time overrun
+- stalled projects
+
+============================================================
+PHASE 4 — PROJECT INTELLIGENCE
+============================================================
+
+Route:
+ /reports/project
+
+Endpoints:
+- portfolio summary
+- burn rate
+- resource allocation by project
+- deadline risk score
+- estimated vs actual hours
+
+============================================================
+PHASE 5 — TASK INTELLIGENCE
+============================================================
+
+Route:
+ /reports/task
+
+Endpoints:
+- backlog growth
+- aging analysis
+- completion velocity
+- reopen rate
+- priority distribution
+
+============================================================
+PHASE 6 — PERFORMANCE & INDEXING
+============================================================
+
+Audit and add indexes only if missing:
+
+tasks:
+- tenant_id
+- assignee_id
+- status
+- due_date
+- completed_at
+- project_id
+- client_id
+
+time_entries:
+- tenant_id
+- user_id
+- date
+- project_id
+- client_id
+
+messages:
+- tenant_id
+- client_id
+- created_at
+
+resource_allocations:
+- tenant_id
+- user_id
+- week_start_date
+
+Run EXPLAIN ANALYZE for:
+- employee overview
+- employee capacity
+- client overview
+
+============================================================
+PHASE 7 — EXPORTS (PREPARE, DO NOT OVERBUILD)
+============================================================
+
+Add CSV export endpoints:
+- /api/reports/v2/.../export?format=csv
+
+Ensure streaming for large datasets.
+
+============================================================
+PHASE 8 — APP DOCS UPDATE (MANDATORY)
+============================================================
+
+Create new App Docs sections:
+
+1) “Reporting Architecture V2 — Command Center Model”
+   - Persona-driven design
+   - Employee vs Client pillars
+   - Modular endpoint structure
+
+2) “Employee Command Center”
+   - Metrics definitions
+   - Endpoint specs
+   - Calculation formulas
+   - Risk logic
+
+3) “Client Command Center”
+   - Metrics definitions
+   - Endpoint specs
+   - Engagement scoring logic
+
+4) “Reporting Performance Strategy”
+   - Aggregation rules
+   - Pagination requirements
+   - Index strategy
+
+Do NOT overwrite unrelated documentation.
+
+============================================================
+ACCEPTANCE CRITERIA
+============================================================
+
+- Employee Command Center functional behind flag
+- Client Command Center functional behind flag
+- All endpoints server-side aggregated
+- No legacy report pages broken
+- Performance verified
+- App Docs updated
+- Feature flags allow rollback
+
+============================================================
+STOP CONDITION
+============================================================
+
+Stop after:
+- Employee + Client Command Center routes exist
+- Core overview endpoints operational
+- Docs updated
+
+Do NOT remove legacy reports yet.
+Migration to new structure will happen gradually.

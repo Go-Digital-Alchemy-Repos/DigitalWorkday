@@ -27,6 +27,8 @@ import teamsRouter from "./domains/teams.router";
 import workloadReportsRouter from "./domains/workload-reports.router";
 import analyticsReportsRouter from "./domains/analytics-reports.router";
 import reportsV2WorkloadRouter from "./domains/reports-v2-workload.router";
+import reportsV2EmployeeRouter from "./domains/reports-v2-employee.router";
+import reportsV2ClientRouter from "./domains/reports-v2-client.router";
 import { jobsRouter } from "../jobs/jobs.router";
 import supportRouter from "./domains/support.router";
 import clientDocumentsRouter from "./domains/clientDocuments.router";
@@ -214,6 +216,20 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "reports-v2-workload",
     description: "Workload Reports V2: team summary, employee drilldown, capacity planning, risk flags.",
+  },
+  {
+    path: "/api/reports/v2",
+    router: reportsV2EmployeeRouter,
+    policy: "authTenant",
+    domain: "reports-v2-employee",
+    description: "Employee Command Center: overview, workload, time, capacity, risk, trends.",
+  },
+  {
+    path: "/api/reports/v2",
+    router: reportsV2ClientRouter,
+    policy: "authTenant",
+    domain: "reports-v2-client",
+    description: "Client Command Center: overview, activity, time, tasks, SLA, risk.",
   },
   {
     path: "/api",
