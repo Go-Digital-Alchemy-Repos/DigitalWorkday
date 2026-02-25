@@ -94,7 +94,8 @@ router.get("/projects/:projectId/tasks", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req) ?? "";
-    let projectTasks = await storage.getTasksByProject(req.params.projectId);
+    const includeArchived = req.query.includeArchived === "true" && isSuperUser(req);
+    let projectTasks = await (storage as any).getTasksByProject(req.params.projectId, includeArchived);
     if (config.features.enablePrivateTasks) {
       const accessibleIds = await getAccessiblePrivateTaskIds(userId, tenantId);
       const accessibleSet = new Set(accessibleIds);
@@ -221,12 +222,13 @@ router.get("/projects/:projectId/activity", async (req, res) => {
 router.get("/tasks/my", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
+    const includeArchived = req.query.includeArchived === "true" && isSuperUser(req);
     let tasks;
     if (config.features.enableTasksBatchHydration) {
       const tenantId = getEffectiveTenantId(req) ?? "";
-      tasks = await getTasksByUserBatched(userId, tenantId);
+      tasks = await getTasksByUserBatched(userId, tenantId, includeArchived);
     } else {
-      tasks = await storage.getTasksByUser(userId);
+      tasks = await (storage as any).getTasksByUser(userId, includeArchived);
     }
     res.json(tasks);
   } catch (error) {

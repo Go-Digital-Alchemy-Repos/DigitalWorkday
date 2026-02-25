@@ -1,6 +1,6 @@
 import { db } from "../../db";
 import { tasks, taskAssignees, taskWatchers, taskTags, tags, sections, projects } from "@shared/schema";
-import { eq, inArray, and } from "drizzle-orm";
+import { eq, inArray, and, isNull } from "drizzle-orm";
 import type { TaskWithRelations, Subtask } from "@shared/schema";
 import { getAccessiblePrivateTaskIds } from "../../lib/privateVisibility";
 import { config } from "../../config";
@@ -11,15 +11,20 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return result;
 }
 
-export async function getTasksByUserBatched(userId: string, tenantId: string): Promise<TaskWithRelations[]> {
+export async function getTasksByUserBatched(userId: string, tenantId: string, includeArchived = false): Promise<TaskWithRelations[]> {
   const assigneeRows = await db.select({ taskId: taskAssignees.taskId })
     .from(taskAssignees)
     .where(eq(taskAssignees.userId, userId));
   const assignedIds = assigneeRows.map(r => r.taskId);
 
+  const personalConditions = [eq(tasks.isPersonal, true), eq(tasks.createdBy, userId)];
+  if (!includeArchived) {
+    personalConditions.push(isNull(tasks.archivedAt));
+  }
+
   const personalRows = await db.select({ id: tasks.id })
     .from(tasks)
-    .where(and(eq(tasks.isPersonal, true), eq(tasks.createdBy, userId)));
+    .where(and(...personalConditions));
   const personalIds = personalRows.map(r => r.id);
 
   const allTaskIds = Array.from(new Set([...assignedIds, ...personalIds]));
@@ -27,7 +32,11 @@ export async function getTasksByUserBatched(userId: string, tenantId: string): P
 
   const baseTasks: typeof tasks.$inferSelect[] = [];
   for (const batch of chunk(allTaskIds, 500)) {
-    const rows = await db.select().from(tasks).where(inArray(tasks.id, batch));
+    const conditions = [inArray(tasks.id, batch)];
+    if (!includeArchived) {
+      conditions.push(isNull(tasks.archivedAt));
+    }
+    const rows = await db.select().from(tasks).where(and(...conditions));
     baseTasks.push(...rows);
   }
   if (baseTasks.length === 0) return [];

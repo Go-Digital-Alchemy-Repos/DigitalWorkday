@@ -35,6 +35,7 @@ import reportsV2AlertsRouter from "./domains/reports-v2-alerts.router";
 import reportsV2DigestRouter from "./domains/reports-v2-digest.router";
 import { startAlertScheduler, stopAlertScheduler } from "../alerts/alertScheduler";
 import { startDigestScheduler, stopDigestScheduler } from "../digests/digestScheduler";
+import { startRetentionScheduler, stopRetentionScheduler } from "../retention/retentionScheduler";
 import { jobsRouter } from "../jobs/jobs.router";
 import supportRouter from "./domains/support.router";
 import clientDocumentsRouter from "./domains/clientDocuments.router";
@@ -45,6 +46,7 @@ import controlCenterRouter from "./domains/controlCenter.router";
 import emailTemplatesRouter from "./domains/emailTemplates.router";
 import fileServeRouter from "./domains/fileServe.router";
 import accessRouter from "./domains/access.router";
+import retentionRouter from "./domains/retention.router";
 
 import usersRouter from "../routes/users.router";
 import crmRouter from "../routes/crm.router";
@@ -358,6 +360,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     description: "Global search for command palette and quick navigation.",
   },
   {
+    path: "/api/v1/super/retention",
+    router: retentionRouter,
+    policy: "superUser",
+    domain: "data-retention",
+    description: "Data retention: audit, run, and policy management.",
+  },
+  {
     path: "/api",
     router: featuresRoutes,
     policy: "authTenant",
@@ -508,6 +517,7 @@ export async function mountAllRoutes(
   startFollowUpChecker();
   startAlertScheduler();
   startDigestScheduler();
+  startRetentionScheduler();
 
   return httpServer;
 }

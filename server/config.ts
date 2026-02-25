@@ -214,6 +214,10 @@ export const config = {
     enableHealthEndpoints: optionalEnvBool("ENABLE_HEALTH_ENDPOINTS", true),
     enableLogSampling: optionalEnvBool("ENABLE_LOG_SAMPLING", true),
     enableErrorReporting: optionalEnvBool("ENABLE_ERROR_REPORTING", true),
+    // Data retention flags
+    enableDataRetention: optionalEnvBool("ENABLE_DATA_RETENTION", false),
+    enableSoftArchive: optionalEnvBool("ENABLE_SOFT_ARCHIVE", false),
+    enableRetentionAuditUi: optionalEnvBool("ENABLE_RETENTION_AUDIT_UI", true),
   },
 
   tenancyEnforcement: {

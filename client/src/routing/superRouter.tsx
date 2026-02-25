@@ -19,6 +19,7 @@ const SuperAdminDocsPage = lazy(trackChunkLoad("SuperDocs", () => import("@/page
 const SuperAdminDocsCoveragePage = lazy(trackChunkLoad("SuperDocsCoverage", () => import("@/pages/super-admin-docs-coverage")));
 const SuperChatMonitoringPage = lazy(trackChunkLoad("SuperChat", () => import("@/pages/super-chat-monitoring")));
 const SuperAdminUsersPage = lazy(trackChunkLoad("SuperUsers", () => import("@/pages/super-admin-users")));
+const SuperAdminRetentionPage = lazy(trackChunkLoad("SuperRetention", () => import("@/pages/super-admin-retention")));
 const UserProfilePage = lazy(trackChunkLoad("SuperProfile", () => import("@/pages/user-profile")));
 
 function SuperAdminRouter() {
@@ -39,6 +40,9 @@ function SuperAdminRouter() {
         </Route>
         <Route path="/super-admin/settings">
           {() => <SuperRouteGuard component={SuperAdminSettingsPage} />}
+        </Route>
+        <Route path="/super-admin/retention">
+          {() => <SuperRouteGuard component={SuperAdminRetentionPage} />}
         </Route>
         <Route path="/super-admin/status">
           {() => <SuperRouteGuard component={SuperAdminStatusPage} />}

@@ -10,6 +10,7 @@ import {
   MessageSquareText,
   Users,
   PieChart,
+  Database,
 } from "lucide-react";
 import appLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -32,6 +33,7 @@ const superAdminNavItems = [
   { title: "Chat System", url: "/super-admin/chat", icon: MessageSquareText, exact: false },
   { title: "User Manager", url: "/super-admin/users", icon: Users, exact: false },
   { title: "System Settings", url: "/super-admin/settings", icon: Wrench, exact: false },
+  { title: "Data Retention", url: "/super-admin/retention", icon: Database, exact: false },
   { title: "System Health", url: "/super-admin/status", icon: Activity, exact: false },
   { title: "App Docs", url: "/super-admin/docs", icon: FileText, exact: true },
   { title: "Docs Coverage", url: "/super-admin/docs-coverage", icon: PieChart, exact: false },

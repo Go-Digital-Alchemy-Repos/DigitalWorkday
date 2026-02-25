@@ -192,7 +192,10 @@ export class ChatRepository {
     const perfStart = process.env.CHAT_PERF_LOG === '1' ? performance.now() : 0;
     const targetColumn = targetType === 'channel' ? chatMessages.channelId : chatMessages.dmThreadId;
     
-    const conditions: SQL[] = [eq(targetColumn, targetId)];
+    const conditions: SQL[] = [
+      eq(targetColumn, targetId),
+      isNull(chatMessages.archivedAt)
+    ];
     if (before) {
       conditions.push(lt(chatMessages.createdAt, before));
     }
@@ -467,7 +470,7 @@ export class ChatRepository {
     const accessibleChannelIds = (await this.getUserChatChannels(tenantId, userId)).map(m => m.channelId);
     const accessibleDmIds = (await this.getUserChatDmThreads(tenantId, userId)).map(dm => dm.id);
 
-    const conditions = [
+    const conditions: any[] = [
       eq(chatMessages.tenantId, tenantId),
       isNull(chatMessages.deletedAt),
       isNull(chatMessages.archivedAt),

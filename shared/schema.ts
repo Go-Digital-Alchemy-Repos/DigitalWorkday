@@ -1430,6 +1430,8 @@ export const tasks = pgTable("tasks", {
   personalSortOrder: integer("personal_sort_order"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  archivedAt: timestamp("archived_at"),
+  archivedReason: text("archived_reason"),
 }, (table) => [
   index("tasks_project_section_order").on(table.projectId, table.sectionId, table.orderIndex),
   index("tasks_due_date").on(table.dueDate),
@@ -1445,6 +1447,8 @@ export const tasks = pgTable("tasks", {
   index("tasks_project_status_idx").on(table.projectId, table.status),
   index("tasks_status_priority_idx").on(table.status, table.priority),
   index("tasks_tenant_visibility_idx").on(table.tenantId, table.visibility),
+  index("tasks_tenant_archived_idx").on(table.tenantId, table.archivedAt),
+  index("tasks_tenant_status_archived_idx").on(table.tenantId, table.status, table.archivedAt),
 ]);
 
 // Task Assignees table (for multiple assignees)
@@ -4224,3 +4228,35 @@ export const insertOpsDigestScheduleSchema = createInsertSchema(opsDigestSchedul
 });
 export type InsertOpsDigestSchedule = z.infer<typeof insertOpsDigestScheduleSchema>;
 export type OpsDigestSchedule = typeof opsDigestSchedules.$inferSelect;
+
+// ============================================================
+// Data Retention System
+// ============================================================
+
+/**
+ * Data Retention Policies — per-tenant or global (tenant_id = null) retention rules.
+ * is_enabled defaults to false (preview-only in Phase 0).
+ */
+export const dataRetentionPolicies = pgTable("data_retention_policies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  entityType: text("entity_type").notNull(),
+  retentionDays: integer("retention_days").notNull().default(365),
+  isEnabled: boolean("is_enabled").notNull().default(false),
+  archiveMode: text("archive_mode").notNull().default("soft"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  updatedByUserId: varchar("updated_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("data_retention_policies_tenant_entity_idx").on(table.tenantId, table.entityType),
+  index("data_retention_policies_entity_idx").on(table.entityType),
+]);
+
+export const insertDataRetentionPolicySchema = createInsertSchema(dataRetentionPolicies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertDataRetentionPolicy = z.infer<typeof insertDataRetentionPolicySchema>;
+export type DataRetentionPolicy = typeof dataRetentionPolicies.$inferSelect;

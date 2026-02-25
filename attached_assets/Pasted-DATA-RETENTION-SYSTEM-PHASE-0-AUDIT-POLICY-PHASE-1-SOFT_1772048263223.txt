@@ -1,0 +1,318 @@
+DATA RETENTION SYSTEM — PHASE 0 (AUDIT + POLICY) + PHASE 1 (SOFT ARCHIVE)
+NON-DESTRUCTIVE • PREVIEW-FIRST • TENANT-SCOPED • FEATURE-FLAGGED • DOCUMENTED
+
+You are working in the DigitalWorkday codebase (React frontend, Node/Express backend, PostgreSQL + Drizzle ORM).
+
+We are implementing a safe, preview-first Data Retention system to prevent unbounded database growth over time.
+
+This sprint includes:
+
+PHASE 0 — Retention Audit + Policy Configuration (NO DATA MOVEMENT)
+PHASE 1 — Soft Archive (archived_at) for Tasks + Messages (non-destructive)
+
+CRITICAL RULES
+- NON-DESTRUCTIVE: No hard deletes in this phase.
+- No breaking API response changes.
+- Archived records remain in the same tables.
+- Archived records excluded from list endpoints by default.
+- Must be tenant-scoped and Super Admin governed.
+- Fully documented in App Docs.
+- Must not break performance optimizations recently implemented.
+
+Feature flags:
+- ENABLE_DATA_RETENTION
+- ENABLE_SOFT_ARCHIVE
+- ENABLE_RETENTION_AUDIT_UI
+
+============================================================
+PHASE 0 — RETENTION AUDIT + POLICY (NO DATA CHANGES)
+============================================================
+
+GOAL:
+Give Super Admin visibility into database growth and allow preview of archival impact before enabling retention.
+
+------------------------------------------------------------
+0.1 Add Retention Policy Table (Additive)
+------------------------------------------------------------
+
+Create table: data_retention_policies
+
+Columns:
+- id
+- tenant_id (nullable; null = global default policy)
+- entity_type (enum/text):
+    "tasks"
+  | "messages"
+  | "notifications"
+  | "time_entries"
+  | "activity_logs"
+- retention_days (int)  // e.g. 180, 365, etc.
+- is_enabled (boolean default false)
+- archive_mode (enum/text): "soft"  // hard not allowed in Phase 1
+- created_by_user_id
+- updated_by_user_id
+- created_at
+- updated_at
+
+Indexes:
+- (tenant_id, entity_type)
+
+Rules:
+- Super Admin can create/update global default policy.
+- Tenant Admin can override within allowed bounds (if enabled later).
+- In Phase 0, is_enabled should default false.
+
+------------------------------------------------------------
+0.2 Retention Audit Endpoint (Preview Only)
+------------------------------------------------------------
+
+Create service:
+server/src/retention/retentionAudit.ts
+
+Function:
+getRetentionAuditSummary({ tenantId? })
+
+Returns:
+{
+  entities: [
+    {
+      entityType: "tasks",
+      totalCount,
+      olderThanPolicyCount,
+      oldestRecordDate,
+      estimatedArchiveImpactBytes (optional approximation)
+    },
+    ...
+  ],
+  databaseSummary: {
+    tasksCount,
+    messagesCount,
+    totalRowEstimate,
+    approximateSizeMb (if retrievable)
+  }
+}
+
+Implementation:
+- Use COUNT + date comparisons (e.g., completed_at, created_at).
+- Do NOT scan entire table without index.
+- Use indexed date fields only.
+- For tasks: use completed_at or updated_at as policy anchor.
+- For messages: use created_at.
+
+Endpoint:
+GET /api/admin/retention/audit?tenantId=
+
+Access:
+- Super Admin only.
+- Tenant Admin can view their own tenant only.
+
+------------------------------------------------------------
+0.3 Super Admin UI — Retention Dashboard
+------------------------------------------------------------
+
+Route:
+Super Admin → System → Data Retention
+
+Features:
+- Table of entity types
+- Total records
+- Records eligible for archive under current policy
+- Oldest record date
+- Policy configuration form:
+  - retention days
+  - enable/disable toggle
+  - archive mode (only "soft" available)
+
+IMPORTANT:
+No “Run Archive” button yet in Phase 0.
+Only preview.
+
+------------------------------------------------------------
+0.4 App Docs Update (Phase 0)
+------------------------------------------------------------
+
+Add section:
+“Data Retention System — Phase 0 (Audit & Policy)”
+
+Include:
+- Policy structure
+- Entity types
+- Preview logic
+- No deletion guarantees
+- Safety-first rollout strategy
+
+============================================================
+PHASE 1 — SOFT ARCHIVE (NON-DESTRUCTIVE)
+============================================================
+
+GOAL:
+Allow archival of old records using archived_at timestamp.
+Archived records:
+- Remain in table
+- Excluded from list queries by default
+- Can be optionally included by admin filter
+- No hard deletes
+
+------------------------------------------------------------
+1.1 Schema Changes (Additive)
+------------------------------------------------------------
+
+Add to tasks table:
+- archived_at (timestamp nullable)
+- archived_reason (text nullable)
+
+Add to messages table:
+- archived_at (timestamp nullable)
+- archived_reason (text nullable)
+
+Indexes:
+- tasks(tenant_id, archived_at)
+- messages(tenant_id, archived_at)
+- tasks(tenant_id, completed_at, archived_at)
+- messages(tenant_id, created_at, archived_at)
+
+------------------------------------------------------------
+1.2 Archival Service
+------------------------------------------------------------
+
+Create:
+server/src/retention/softArchiveRunner.ts
+
+Function:
+runSoftArchive({ tenantId? })
+
+Logic:
+For each enabled policy:
+- Determine cutoffDate = NOW() - retention_days
+- For tasks:
+  - archive only if:
+    completed_at < cutoffDate
+    AND archived_at IS NULL
+  - Update archived_at = NOW(), archived_reason = "retention_policy"
+- For messages:
+  - archive if:
+    created_at < cutoffDate
+    AND archived_at IS NULL
+
+IMPORTANT:
+- Run in batches (e.g., 1000 rows per batch).
+- Use indexed date fields.
+- Never lock full table.
+- Log count archived.
+
+------------------------------------------------------------
+1.3 Scheduler Integration
+------------------------------------------------------------
+
+If job runner exists:
+- Schedule daily retention job (off-peak hour).
+- Super Admin can also trigger manual archive run.
+
+Add endpoint:
+POST /api/admin/retention/run
+- Super Admin only
+- Returns counts per entity archived
+
+------------------------------------------------------------
+1.4 Query Adjustments (CRITICAL)
+------------------------------------------------------------
+
+Update all list endpoints for tasks and messages:
+
+Default WHERE clause must include:
+- archived_at IS NULL
+
+Add optional query param:
+- includeArchived=true (admin only)
+
+Detail endpoints:
+- Allow fetching archived record by ID (for audit purposes).
+
+Counts/summaries:
+- Must exclude archived_at IS NOT NULL by default.
+
+Private visibility logic:
+- Must still apply AFTER archived filter.
+
+------------------------------------------------------------
+1.5 UI Adjustments
+------------------------------------------------------------
+
+Tasks UI:
+- Add filter toggle (Admin only):
+  “Show archived”
+- Archived tasks show muted styling + “Archived” badge.
+- No editing allowed unless explicitly unarchived (optional).
+
+Messages UI:
+- Archived messages excluded by default.
+- Optional admin view to include archived.
+
+------------------------------------------------------------
+1.6 Safety Controls
+------------------------------------------------------------
+
+- Soft archive only (no delete).
+- Cannot archive:
+  - open tasks
+  - tasks without completed_at
+- Add guard:
+  - do not archive tasks updated within last 7 days even if completed long ago (safety buffer, optional).
+
+------------------------------------------------------------
+1.7 Performance Validation
+------------------------------------------------------------
+
+After enabling:
+- Ensure list queries use archived_at IS NULL index.
+- Verify no regression in p95 for:
+  /api/tasks/my
+  /api/messages
+- Ensure batch job does not spike DB load.
+
+------------------------------------------------------------
+1.8 App Docs Update (Phase 1)
+------------------------------------------------------------
+
+Add:
+“Data Retention — Soft Archive Model”
+
+Include:
+- archived_at logic
+- default query behavior
+- scheduler behavior
+- rollback strategy (disable policy)
+- safety buffer explanation
+- how to restore archived records (optional future feature)
+
+============================================================
+ACCEPTANCE CRITERIA
+============================================================
+
+Phase 0:
+- Super Admin can view retention audit dashboard.
+- Policy can be configured but not enforced until enabled.
+- No data moved.
+
+Phase 1:
+- archived_at added safely.
+- runSoftArchive archives eligible tasks/messages.
+- List endpoints exclude archived by default.
+- No data deletion.
+- No performance regressions.
+- Docs updated.
+
+============================================================
+STOP CONDITION
+============================================================
+
+Stop after:
+- Audit dashboard working
+- Soft archive implemented
+- Scheduler wired
+- Queries updated safely
+- App Docs updated
+
+DO NOT implement hard deletes.
+DO NOT move records to archive tables.
+DO NOT implement cold storage in this sprint.

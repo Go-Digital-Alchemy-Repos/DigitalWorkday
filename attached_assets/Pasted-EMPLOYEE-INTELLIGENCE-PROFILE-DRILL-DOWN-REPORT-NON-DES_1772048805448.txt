@@ -1,0 +1,218 @@
+EMPLOYEE INTELLIGENCE PROFILE (DRILL-DOWN REPORT)
+NON-DESTRUCTIVE • ADDITIVE • BUILT ON EXISTING METRIC ENGINE • DOCUMENTED
+
+You are working in the DigitalWorkday codebase.
+
+GOAL:
+Add a drill-down Employee Intelligence Profile page that aggregates all employee metrics into a unified, comprehensive report.
+
+DO NOT redesign or remove the existing Employee Command Center.
+We are only adding a drill-down layer.
+
+Feature flag:
+ENABLE_EMPLOYEE_PROFILE_REPORT
+
+============================================================
+PHASE 1 — ROUTING
+============================================================
+
+1.1 Add new route:
+Frontend:
+  /tenant/reports/employees/:employeeId
+
+Backend:
+  GET /api/reports/v2/employee/:employeeId/profile
+
+This route must:
+- Respect tenant isolation
+- Enforce visibility/permissions
+- Be accessible from any Employee Command Center table row
+
+============================================================
+PHASE 2 — DRILL-DOWN LINKING
+============================================================
+
+2.1 In all Employee Command Center tables:
+- Employee Overview
+- Workload
+- Time
+- Capacity
+- Risk
+- Performance Index
+
+Make employee name clickable.
+
+On click:
+- Navigate to /tenant/reports/employees/:employeeId
+
+Do not change existing tables or remove any features.
+
+============================================================
+PHASE 3 — BACKEND AGGREGATION ENGINE
+============================================================
+
+Create:
+server/src/reporting/employeeProfileAggregator.ts
+
+Function:
+getEmployeeProfileReport({
+  tenantId,
+  employeeId,
+  startDate?,
+  endDate?
+})
+
+Must reuse existing metric services:
+- Performance Index (EPI)
+- Workload metrics
+- Time tracking metrics
+- Capacity metrics
+- Risk flags
+- Task completion rates
+- Overdue stats
+- Efficiency metrics
+- Utilization metrics
+- Active projects
+- Task distribution by status
+- Historical trend (if available)
+
+Return unified structure:
+
+{
+  employee: {
+    id,
+    name,
+    role,
+    team,
+    avatar?,
+    status
+  },
+  summary: {
+    performanceScore,
+    performanceTier,
+    riskLevel,
+    utilization,
+    capacityUsage,
+    completionRate,
+    overdueRate
+  },
+  workload: {...},
+  timeTracking: {...},
+  capacity: {...},
+  riskIndicators: [...],
+  taskBreakdown: {
+    byStatus: [...],
+    byProject: [...],
+    byPriority: [...]
+  },
+  trend: {
+    weeklyCompletion,
+    weeklyTimeTracked,
+    workloadTrend
+  }
+}
+
+IMPORTANT:
+- Do NOT duplicate business logic.
+- Reuse existing metric services.
+- Keep query count controlled (use batched queries if needed).
+- Paginate heavy lists (projects/tasks) if included.
+
+============================================================
+PHASE 4 — FRONTEND EMPLOYEE PROFILE PAGE
+============================================================
+
+Create:
+EmployeeProfileReportPage.tsx
+
+Layout sections:
+
+1) Header Card
+   - Avatar
+   - Name
+   - Role
+   - Team
+   - Performance Score badge
+   - Risk badge
+   - Utilization gauge
+
+2) Summary Metrics Grid
+   - Performance Index
+   - Completion Rate
+   - Overdue %
+   - Utilization %
+   - Efficiency
+   - Capacity %
+
+3) Workload Section
+   - Active tasks
+   - Overdue tasks
+   - Task breakdown chart
+
+4) Time Tracking Section
+   - Total hours (range)
+   - Avg hours/day
+   - Estimated vs actual
+
+5) Capacity Section
+   - Assigned vs available
+   - Over-allocation indicator
+
+6) Risk Section
+   - Flags list
+   - Contributing metrics
+
+7) Trend Section (if available)
+   - Weekly performance
+   - Time trend chart
+
+Use existing UI system:
+- shadcn/ui
+- Tailwind
+- Reuse metric components where possible.
+
+============================================================
+PHASE 5 — DATE RANGE CONTROL
+============================================================
+
+Add global date range selector at top of profile page:
+- Last 7 days
+- Last 30 days
+- Custom range
+
+Pass range to backend endpoint.
+
+============================================================
+PHASE 6 — PERFORMANCE SAFETY
+============================================================
+
+- Use batched queries.
+- Keep payload < 500KB.
+- Exclude archived data by default.
+- Respect private task visibility.
+- Avoid N+1 relation hydration.
+
+============================================================
+PHASE 7 — APP DOCS UPDATE
+============================================================
+
+Add section:
+“Employee Intelligence Profile”
+
+Include:
+- Data sources
+- Metrics included
+- How drill-down integrates with Command Center
+- Performance considerations
+- Future extensibility (export, PDF, performance reviews)
+
+============================================================
+STOP CONDITION
+============================================================
+
+Stop after:
+- Drill-down links active
+- Backend aggregator stable
+- Employee profile page rendering correctly
+- No regression in existing Command Center pages
+- Docs updated
