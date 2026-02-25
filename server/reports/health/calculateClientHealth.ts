@@ -111,7 +111,7 @@ export async function calculateClientHealth(
     LEFT JOIN projects p ON p.client_id = c.id AND p.tenant_id = ${tenantId}
     LEFT JOIN tasks t ON t.project_id = p.id AND t.tenant_id = ${tenantId}
     LEFT JOIN time_entries te ON te.task_id = t.id AND te.tenant_id = ${tenantId}
-    LEFT JOIN comments cm ON cm.task_id = t.id AND cm.tenant_id = ${tenantId}
+    LEFT JOIN comments cm ON cm.task_id = t.id
     WHERE c.tenant_id = ${tenantId}
       ${clientFilter}
     GROUP BY c.id, c.company_name
@@ -119,9 +119,11 @@ export async function calculateClientHealth(
     LIMIT ${limit} OFFSET ${offset}
   `);
 
-  const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+  const rawRows: any = rows;
+  const dataRows: any[] = Array.isArray(rawRows) ? rawRows : (rawRows?.rows ?? []);
+  const total = dataRows.length > 0 ? Number(dataRows[0].total_count) : 0;
 
-  const results: ClientHealthResult[] = rows.map((row) => {
+  const results: ClientHealthResult[] = dataRows.map((row: any) => {
     const totalTasks = Number(row.total_tasks);
     const overdueCount = Number(row.overdue_count);
     const completedOnTime = Number(row.completed_on_time);

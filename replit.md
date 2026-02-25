@@ -40,20 +40,10 @@ MyWorkDay is an Asana-inspired project management application designed to centra
 - **Notifications**: Enhanced Notification Center with pagination, filters, deep-linking, and severity levels.
 - **User Experience**: Global command palette, keyboard shortcuts, dark mode, CSS-variable-based theming, Framer Motion animations, mobile-first responsive design, and consistent drawer UI.
 - **Modular Architecture**: API routes with policy enforcement, centralized query key builders, and role-based frontend routing with lazy-loaded components.
-- **Standardized API Error Handling**: Consistent `ApiErrorEnvelope` for error responses.
-- **Tenant Scope Hardening**: `BaseTenantRepository` with tenant ID enforcement and DB indexes.
-- **Super Admin Components**: Dedicated architecture for system and tenant status management.
-- **Performance & Robustness**: DB performance indexes, optimized React Query, list virtualization, error boundaries, graceful shutdown, route-based code splitting, and telemetry.
-- **Security Hardening**: Tenancy enforcement, defense-in-depth tenant scoping, rate limiting, CSRF protection, and secret redaction.
-- **Background Job Queue**: DB-backed, in-process job queue for long-running operations.
-- **Support Ticketing System**: Multi-tenant support with dual interfaces, CRUD, status transitions, priority management, assignee assignment, and dynamic forms.
-- **Email Templates**: Customizable email templates managed via Super Admin, with tenant-first resolution.
 - **Reporting Engine V2**: Rebuilt reporting system with feature flags, including workload, task analysis, time tracking, project analysis, client analytics, messages, pipeline, and overview reports. Features Employee/Client Command Centers, Health Indexes, Forecasting, and Alert Automation.
-- **Observability**: Request IDs, structured logging, error logging to DB, and health endpoints.
 - **Asset Library (Beta)**: Centralized asset management with folders, assets, links, presigned R2 upload/download, source tracking, and deduplication.
-- **Documents → Asset Library Unification**: Adapter layer for existing Documents API to use Asset Library with a feature flag.
 - **Default Tenant Documents**: Canonical tenant-wide document library managed by Super Admins and Tenant Admins, visible read-only to clients in the Asset Library.
-- **Private Visibility (Tasks & Projects)**: Creator-only visibility with invite-based sharing via `task_access` / `project_access` tables. Permissions helpers (`canViewTask`, `canViewProject`) and filtering applied across all list endpoints, search, calendar, dashboard, and client portal.
+- **Private Visibility (Tasks & Projects)**: Creator-only visibility with invite-based sharing via `task_access` / `project_access` tables. Permissions helpers (`canViewTask`, `canViewProject`) and filtering applied across all list endpoints, search, calendar, dashboard, and client portal. On project creation, private projects only add creator + explicit members (not all tenant users). `addUserToAllTenantProjects` and `backfillProjectMembership` skip private projects.
 - **Data Retention System**: Non-destructive soft-archive system for tasks and chat messages.
 
 ## External Dependencies

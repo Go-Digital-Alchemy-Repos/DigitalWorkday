@@ -26,8 +26,8 @@ export async function getClientProfileReport({
   const clientInfoPromise = db.execute<{
     id: string;
     company_name: string;
-    contact_name: string | null;
-    contact_email: string | null;
+    primary_contact_name: string | null;
+    primary_contact_email: string | null;
     phone: string | null;
     status: string | null;
     industry: string | null;
@@ -37,8 +37,8 @@ export async function getClientProfileReport({
     SELECT
       c.id,
       c.company_name,
-      c.contact_name,
-      c.contact_email,
+      c.primary_contact_name,
+      c.primary_contact_email,
       c.phone,
       c.status,
       c.industry,
@@ -84,7 +84,7 @@ export async function getClientProfileReport({
     LEFT JOIN projects p ON p.client_id = c.id AND p.tenant_id = ${tenantId}
     LEFT JOIN tasks t ON t.project_id = p.id AND t.tenant_id = ${tenantId} AND t.archived_at IS NULL
     LEFT JOIN time_entries te ON te.project_id = p.id AND te.tenant_id = ${tenantId}
-    LEFT JOIN comments cm ON cm.task_id = t.id AND cm.tenant_id = ${tenantId}
+    LEFT JOIN comments cm ON cm.task_id = t.id
     WHERE c.id = ${clientId} AND c.tenant_id = ${tenantId}
   `);
 
@@ -296,8 +296,8 @@ export async function getClientProfileReport({
     client: {
       id: client.id,
       companyName: client.company_name,
-      contactName: client.contact_name,
-      contactEmail: client.contact_email,
+      contactName: client.primary_contact_name,
+      contactEmail: client.primary_contact_email,
       phone: client.phone,
       status: client.status || "active",
       industry: client.industry,

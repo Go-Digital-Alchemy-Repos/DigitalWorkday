@@ -859,7 +859,7 @@ export class DatabaseStorage implements IStorage {
   async addUserToAllTenantProjects(userId: string, tenantId: string): Promise<void> {
     const tenantProjects = await db.select({ id: projects.id })
       .from(projects)
-      .where(eq(projects.tenantId, tenantId));
+      .where(and(eq(projects.tenantId, tenantId), sql`${projects.visibility} != 'private'`));
 
     if (tenantProjects.length === 0) return;
 
@@ -877,7 +877,7 @@ export class DatabaseStorage implements IStorage {
   async backfillProjectMembership(tenantId: string): Promise<{ projectsProcessed: number; membershipsAdded: number }> {
     const tenantProjects = await db.select({ id: projects.id })
       .from(projects)
-      .where(eq(projects.tenantId, tenantId));
+      .where(and(eq(projects.tenantId, tenantId), sql`${projects.visibility} != 'private'`));
 
     const tenantUsers = await db.select({ id: users.id })
       .from(users)

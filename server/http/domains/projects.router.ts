@@ -312,8 +312,15 @@ router.post("/projects", async (req: Request, res: Response) => {
       return sendError(res, AppError.badRequest("Tenant context required - user not associated with a tenant"), req);
     }
 
-    if (tenantId) {
+    if (tenantId && project.visibility !== 'private') {
       await storage.addAllTenantUsersToProject(project.id, tenantId, creatorId);
+    } else if (tenantId && project.visibility === 'private') {
+      await storage.addProjectMember({ projectId: project.id, userId: creatorId, role: "owner" });
+      for (const memberId of memberIds) {
+        if (memberId !== creatorId) {
+          await storage.addProjectMember({ projectId: project.id, userId: memberId, role: "member" });
+        }
+      }
     } else {
       await storage.addProjectMember({ projectId: project.id, userId: creatorId, role: "owner" });
       for (const memberId of memberIds) {
