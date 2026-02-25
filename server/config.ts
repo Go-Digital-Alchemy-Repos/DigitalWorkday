@@ -193,6 +193,7 @@ export const config = {
     enableEmployeeCommandCenter: optionalEnvBool("ENABLE_EMPLOYEE_COMMAND_CENTER", isDevelopment),
     enableClientCommandCenter: optionalEnvBool("ENABLE_CLIENT_COMMAND_CENTER", isDevelopment),
     enableEmployeePerformanceIndex: optionalEnvBool("ENABLE_EMPLOYEE_PERFORMANCE_INDEX", isDevelopment),
+    enableClientHealthIndex: optionalEnvBool("ENABLE_CLIENT_HEALTH_INDEX", isDevelopment),
   },
 
   tenancyEnforcement: {

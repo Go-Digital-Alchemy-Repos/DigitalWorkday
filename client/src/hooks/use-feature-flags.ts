@@ -23,6 +23,7 @@ export interface FeatureFlags {
   enableEmployeeCommandCenter: boolean;
   enableClientCommandCenter: boolean;
   enableEmployeePerformanceIndex: boolean;
+  enableClientHealthIndex: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -48,6 +49,7 @@ const ALL_OFF: FeatureFlags = {
   enableEmployeeCommandCenter: false,
   enableClientCommandCenter: false,
   enableEmployeePerformanceIndex: false,
+  enableClientHealthIndex: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {
