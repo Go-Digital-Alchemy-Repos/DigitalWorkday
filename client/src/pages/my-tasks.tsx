@@ -515,6 +515,7 @@ export default function MyTasks() {
 
   const { data: tasks, isLoading } = useQuery<TaskWithRelations[]>({
     queryKey: ["/api/tasks/my"],
+    staleTime: 30 * 1000,
   });
 
   const { data: pendingTaskTimeEntries = [] } = useQuery<TimeEntry[]>({

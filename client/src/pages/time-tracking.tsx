@@ -145,10 +145,12 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
 
   const { data: projects = [] } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/projects"],
+    staleTime: 60 * 1000,
   });
 
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
     queryKey: ["/api/clients"],
+    staleTime: 60 * 1000,
   });
 
   const startMutation = useMutation({

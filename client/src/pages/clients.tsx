@@ -1526,18 +1526,22 @@ export default function ClientsPage() {
     refetch,
   } = useQuery<ClientWithHierarchy[]>({
     queryKey: ["/api/v1/clients/hierarchy/list"],
+    staleTime: 60 * 1000,
   });
 
   const { data: summary, isLoading: summaryLoading } = useQuery<ClientSummary>({
     queryKey: ["/api/v1/clients/summary"],
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: stageSummary, isLoading: stageSummaryLoading } = useQuery<StageSummaryItem[]>({
     queryKey: ["/api/v1/clients/stages/summary"],
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: clients } = useQuery<ClientWithContacts[]>({
     queryKey: ["/api/clients"],
+    staleTime: 60 * 1000,
   });
 
   const industries = useMemo(() => {
