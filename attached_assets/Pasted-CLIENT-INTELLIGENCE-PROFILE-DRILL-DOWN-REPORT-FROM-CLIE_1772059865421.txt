@@ -1,0 +1,250 @@
+CLIENT INTELLIGENCE PROFILE (DRILL-DOWN REPORT FROM CLIENT COMMAND CENTER)
+NON-DESTRUCTIVE • ADDITIVE • BUILT ON EXISTING REPORTING/HEALTH METRICS • DOCUMENTED
+
+You are working in the DigitalWorkday codebase.
+
+GOAL:
+Add a drill-down “Client Intelligence Profile” page that aggregates all client-related metrics into a single, comprehensive report screen.
+
+DO NOT redesign or remove the existing Client Command Center.
+We are only adding a drill-down layer:
+- Any client name in any Client Command Center table becomes clickable
+- Clicking opens a dedicated client profile report page
+- Page shows all key client metrics and related breakdowns in one place
+
+Feature flag:
+ENABLE_CLIENT_PROFILE_REPORT
+
+============================================================
+PHASE 1 — ROUTING
+============================================================
+
+1.1 Add new frontend route:
+  /tenant/reports/clients/:clientId
+
+1.2 Add backend endpoint:
+  GET /api/reports/v2/client/:clientId/profile
+
+This must:
+- Respect tenant isolation
+- Enforce permissions (Tenant Admin / allowed roles per existing client access rules)
+- Respect private visibility rules (private tasks/projects must not leak)
+- Exclude archived data by default (if retention/archiving exists)
+
+============================================================
+PHASE 2 — DRILL-DOWN LINKING
+============================================================
+
+2.1 In all Client Command Center tables and lists, make client name clickable:
+- Client Overview list
+- Health Index list
+- Risk/Forecast tables
+- Pipeline/Stage tables
+- Any “Top clients at risk” widgets
+
+On click:
+- Navigate to /tenant/reports/clients/:clientId
+
+Do not change existing layouts or remove anything.
+
+============================================================
+PHASE 3 — BACKEND AGGREGATION ENGINE (SINGLE SOURCE OF TRUTH)
+============================================================
+
+Create:
+server/src/reporting/clientProfileAggregator.ts
+
+Function:
+getClientProfileReport({
+  tenantId,
+  clientId,
+  startDate?,
+  endDate?,
+  viewerUserId
+})
+
+Must reuse existing services (do not duplicate formulas):
+- Client Health Index (CHI) current + trend
+- Client risk trend forecast (if forecasting exists)
+- Client analytics metrics (tasks/projects/time/messages/activity)
+- Pipeline/stage data (current stage, stage history if available)
+- Last activity metrics (if available cheaply; otherwise omit or compute safely)
+
+Return unified structure:
+
+{
+  client: {
+    id,
+    name,
+    stage,
+    status,
+    industry?,  // if exists
+    ownerUserId?, // if exists
+    createdAt,
+    updatedAt
+  },
+  summary: {
+    healthScore,
+    healthTier,
+    riskTrend,              // Improving/Stable/Worsening
+    openProjectsCount,
+    activeTasksCount,
+    overdueTasksCount,
+    completionRatePct,
+    totalHoursTracked,      // range based
+    engagementScore?        // if exists
+  },
+  health: {
+    overallScore,
+    componentScores,
+    riskFlags
+  },
+  forecasting: {
+    predictedHealthScore?,
+    predictedTrend?,
+    confidence?,
+    explanations?
+  },
+  projects: {
+    list: [
+      { projectId, name, status, dueDate?, openTasksCount?, overdueTasksCount?, hoursActual?, hoursEstimated? }
+    ],
+    countsByStatus: [...]
+  },
+  tasks: {
+    countsByStatus: [...],
+    countsByPriority: [...],
+    overdueByWeek: [...],
+    topRiskTasks?: (OPTIONAL; DO NOT include task titles if private visibility is uncertain)
+  },
+  timeTracking: {
+    totalHours,
+    avgHoursPerWeek,
+    hoursByProject: [...],
+    hoursByUser: [...]   // optional, may be admin-only
+  },
+  communication: {
+    messageCount,         // aggregated only
+    responseTimeSlaPct?,  // if exists
+    lastMessageAt?        // if allowed
+  },
+  activity: {
+    lastActivityAt?,
+    activityVolumeByWeek: [...]
+  },
+  trend: {
+    weeks: [...],
+    healthScore: [...],
+    overdueTasks: [...],
+    hours: [...]
+  }
+}
+
+IMPORTANT:
+- Keep query counts controlled using batched queries.
+- Paginate heavy arrays (projects list, task lists) if needed:
+  - include only top N (e.g., 10–25) and provide optional “view more” endpoints later.
+- Never leak private tasks/projects the viewer cannot access.
+- Exclude archived records by default.
+
+============================================================
+PHASE 4 — FRONTEND CLIENT PROFILE PAGE
+============================================================
+
+Create:
+ClientProfileReportPage.tsx
+
+Layout sections:
+
+1) Header Card
+   - Client name
+   - Stage/status badges
+   - Health score + tier badge
+   - Risk trend badge
+   - Last activity (if available)
+
+2) Summary Metrics Grid
+   - Health Score
+   - Overdue Tasks
+   - Active Projects
+   - Completion Rate
+   - Hours (range)
+   - Engagement (if available)
+
+3) Health Breakdown
+   - Component score bars
+   - Risk flags list with tooltips
+
+4) Projects Section
+   - Table of projects (top N)
+   - Counts by status
+   - Deadline risk indicator if available
+
+5) Tasks Section
+   - Counts by status/priority
+   - Overdue trend
+
+6) Time Tracking Section
+   - Hours by project
+   - Weekly hours trend
+
+7) Communication/Engagement Section
+   - Message volume trend
+   - SLA/response metrics (if available)
+
+8) Trend Section
+   - Health score trend chart
+   - Overdue/hours overlay (simple, readable)
+
+UI requirements:
+- Use shadcn/ui + Tailwind
+- Responsive (mobile/tablet friendly)
+- Keep charts light (lazy-load chart libs if needed)
+- Provide “Explain” tooltips for computed metrics
+
+Gate the whole page behind:
+ENABLE_CLIENT_PROFILE_REPORT
+
+============================================================
+PHASE 5 — DATE RANGE CONTROL
+============================================================
+
+Add date range selector at top of Client Profile page:
+- Last 7 days / 30 / 90 / Custom
+Pass to backend.
+
+============================================================
+PHASE 6 — PERFORMANCE SAFETY
+============================================================
+
+- Use your batched hydration patterns
+- Avoid N+1 for projects/tasks relations
+- Keep payload < 500KB
+- If data is heavy, return only aggregated metrics and top lists
+- Defer detail-heavy data to on-demand calls (future)
+
+============================================================
+PHASE 7 — APP DOCS UPDATE
+============================================================
+
+Add section:
+“Client Intelligence Profile”
+
+Include:
+- Route and endpoint
+- Data contract / fields
+- Permission/visibility rules (private items, archived exclusion)
+- Trend + forecasting integration
+- Performance considerations
+- Future add-ons (exports, AI summary, coaching notes)
+
+============================================================
+STOP CONDITION
+============================================================
+
+Stop after:
+- Client name drill-down links working from Client Command Center
+- Backend aggregator stable
+- Client profile page renders all sections with correct metrics
+- No regressions to existing Command Center views
+- Docs updated
