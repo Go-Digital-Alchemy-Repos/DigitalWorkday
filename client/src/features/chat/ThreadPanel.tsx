@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect, useCallback } from "react";
+import { useStickyComposerFocus } from "@/hooks/useStickyComposerFocus";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -58,6 +59,7 @@ export function ThreadPanel({
   const [replyInput, setReplyInput] = useState("");
   const scrollRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { compositionHandlers, handleSendSuccess, isSendKey } = useStickyComposerFocus(textareaRef);
 
   const apiBase = conversationType === "channel"
     ? `/api/v1/chat/channels/${conversationId}`
@@ -83,6 +85,7 @@ export function ThreadPanel({
     },
     onSuccess: () => {
       setReplyInput("");
+      handleSendSuccess();
       queryClient.invalidateQueries({ queryKey: threadQueryKey });
       queryClient.invalidateQueries({ queryKey: summariesQueryKey });
     },
@@ -113,7 +116,7 @@ export function ThreadPanel({
   }, []);
 
   const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (isSendKey(e)) {
       e.preventDefault();
       handleSendReply();
     }
@@ -226,6 +229,7 @@ export function ThreadPanel({
             value={replyInput}
             onChange={(e) => setReplyInput(e.target.value)}
             onKeyDown={handleKeyDown}
+            {...compositionHandlers}
             placeholder="Reply in thread..."
             className="min-h-[60px] resize-none"
             data-testid="thread-reply-input"

@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useStickyComposerFocus } from "@/hooks/useStickyComposerFocus";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -113,6 +114,7 @@ export function GlobalChatDrawer() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastMarkedReadRef = useRef<string | null>(null);
+  const { compositionHandlers, handleSendSuccess, isSendKey } = useStickyComposerFocus(textareaRef);
 
   const { data: channels = [] } = useQuery<ChatChannel[]>({
     queryKey: ["/api/v1/chat/channels"],
@@ -281,6 +283,7 @@ export function GlobalChatDrawer() {
     onSuccess: () => {
       setMessageInput("");
       setPendingAttachments([]);
+      handleSendSuccess();
       chatSounds.play("messageSent");
     },
   });
@@ -451,7 +454,7 @@ export function GlobalChatDrawer() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (isSendKey(e)) {
       e.preventDefault();
       if (messageInput.trim() || pendingAttachments.length > 0) {
         sendMessageMutation.mutate({
