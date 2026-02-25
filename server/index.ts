@@ -495,7 +495,9 @@ app.get("/ready", async (_req, res) => {
 // Bind to 0.0.0.0 explicitly for Replit Autoscale deployment
 const port = parseInt(process.env.PORT || "5000", 10);
 const host = "0.0.0.0";
-const PHASE_TIMEOUT_MS = 1000; // Warn if any phase takes >1 second (health checks must respond within 4s total)
+// Phase timeout is purely diagnostic — health checks pass immediately via appReady=true on listen.
+// Set to 10s to avoid false-positive error logs on the schema phase (~1s on SSL databases).
+const PHASE_TIMEOUT_MS = 10000;
 
 // Helper to run a phase with timing and timeout warning
 async function runPhase<T>(
