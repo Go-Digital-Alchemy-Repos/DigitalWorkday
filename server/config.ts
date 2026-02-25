@@ -205,6 +205,15 @@ export const config = {
     enableProjectsSqlFiltering: optionalEnvBool("ENABLE_PROJECTS_SQL_FILTERING", true),
     enablePrivateTasks: optionalEnvBool("ENABLE_PRIVATE_TASKS", true),
     enablePrivateProjects: optionalEnvBool("ENABLE_PRIVATE_PROJECTS", true),
+    // Observability & stability flags
+    enableObservability: optionalEnvBool("ENABLE_OBSERVABILITY", true),
+    enablePerfProfiling: optionalEnvBool("ENABLE_PERF_PROFILING", false),
+    enableDbPoolMetrics: optionalEnvBool("ENABLE_DB_POOL_METRICS", true),
+    enablePayloadGuards: optionalEnvBool("ENABLE_PAYLOAD_GUARDS", true),
+    enableRegressionSmokeTests: optionalEnvBool("ENABLE_REGRESSION_SMOKE_TESTS", false),
+    enableHealthEndpoints: optionalEnvBool("ENABLE_HEALTH_ENDPOINTS", true),
+    enableLogSampling: optionalEnvBool("ENABLE_LOG_SAMPLING", true),
+    enableErrorReporting: optionalEnvBool("ENABLE_ERROR_REPORTING", true),
   },
 
   tenancyEnforcement: {

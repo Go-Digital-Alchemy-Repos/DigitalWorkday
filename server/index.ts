@@ -20,6 +20,7 @@ import { requestPerfMiddleware } from "./middleware/perfTelemetry";
 import { instrumentPool } from "./middleware/queryTelemetry";
 import { perfLoggerMiddleware, getPerfStats } from "./lib/perfLogger";
 import { csrfProtection } from "./middleware/csrf";
+import { payloadGuardMiddleware } from "./middleware/payloadGuard";
 import { logMigrationStatus } from "./scripts/migration-status";
 import { ensureSchemaReady, getLastSchemaCheck } from "./startup/schemaReadiness";
 import { logAppInfo } from "./startup/appInfo";
@@ -129,6 +130,24 @@ app.get("/healthz", (_req, res) => {
   res.status(200).send("ok");
 });
 
+app.get("/livez", (_req, res) => {
+  res.status(200).json({ ok: true, ts: new Date().toISOString() });
+});
+
+app.get("/readyz", async (_req, res) => {
+  try {
+    const { checkDbHealth } = await import("./db");
+    const dbHealth = await checkDbHealth();
+    if (dbHealth.connected) {
+      res.status(200).json({ ok: true, db: "ok", ts: new Date().toISOString() });
+    } else {
+      res.status(503).json({ ok: false, db: "degraded", ts: new Date().toISOString(), detail: dbHealth.error });
+    }
+  } catch (err: any) {
+    res.status(503).json({ ok: false, db: "degraded", ts: new Date().toISOString(), detail: err?.message });
+  }
+});
+
 // ============================================================================
 // Now register middleware after health checks
 // ============================================================================
@@ -190,6 +209,9 @@ app.use(csrfProtection);
 // API JSON response guard - ensures all /api routes return JSON, never HTML
 app.use(apiJsonResponseGuard);
 
+// Payload size guard - warns on oversized API responses (gated by ENABLE_PAYLOAD_GUARDS)
+app.use(payloadGuardMiddleware);
+
 import { log } from "./lib/log";
 export { log };
 
@@ -228,6 +250,34 @@ app.get("/api/v1/system/perf/stats", (req, res) => {
     requests: getRequestPerfStats(),
     queries: getQueryPerfStats(),
     unified: perfStats,
+  });
+});
+
+// Observability stats endpoint (dev/admin only) — pool metrics + perf stats + budgets
+app.get("/api/v1/system/observability", async (req: any, res) => {
+  if (!config.features.enableObservability) {
+    return res.status(404).json({ error: "Observability not enabled" });
+  }
+  const { getPoolStats } = await import("./db");
+  const { getRequestPerfStats } = await import("./middleware/perfTelemetry");
+  const { getQueryPerfStats } = await import("./middleware/queryTelemetry");
+  const { PERF_BUDGETS } = await import("./observability/perfBudgets");
+  const perfStats = getPerfStats();
+  res.json({
+    enabled: true,
+    pool: config.features.enableDbPoolMetrics ? getPoolStats() : null,
+    requests: getRequestPerfStats(),
+    queries: getQueryPerfStats(),
+    unified: perfStats,
+    budgets: PERF_BUDGETS,
+    flags: {
+      enableObservability: config.features.enableObservability,
+      enablePerfProfiling: config.features.enablePerfProfiling,
+      enableDbPoolMetrics: config.features.enableDbPoolMetrics,
+      enablePayloadGuards: config.features.enablePayloadGuards,
+      enableLogSampling: config.features.enableLogSampling,
+    },
+    ts: new Date().toISOString(),
   });
 });
 

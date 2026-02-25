@@ -1,7 +1,7 @@
 # MyWorkDay - Project Management Application
 
 ## Overview
-MyWorkDay is an Asana-inspired project management application designed to streamline project workflows and enhance team collaboration. It centralizes project and client management, offering tools for organizing projects, teams, and clients with features like workspaces, tasks, subtasks, tags, comments, and activity tracking. The application aims to improve productivity through robust reporting and real-time communication. Key capabilities include multi-tenancy, comprehensive client relationship management (CRM) with a client portal, workload management, and a focus on a professional, intuitive user experience. The business vision is to provide a comprehensive solution that improves project delivery and client satisfaction.
+MyWorkDay is an Asana-inspired project management application centralizing project and client management to streamline workflows and enhance team collaboration. It offers features like workspaces, tasks, subtasks, tags, comments, activity tracking, and robust reporting. The application supports multi-tenancy, comprehensive CRM with a client portal, and workload management, aiming to improve productivity and client satisfaction through an intuitive user experience.
 
 ## User Preferences
 - Professional, clean Asana-like design
@@ -27,35 +27,29 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **Real-time**: Socket.IO
 
 ### Core Features and Design Patterns
-- **Multi-Tenancy**: Supports multiple tenants with an admin dashboard and per-tenant user management.
-- **Authentication**: Session-based authentication using Passport.js (email/password).
-- **Real-time Communication**: Socket.IO for live updates, supporting tenant-scoped chat, threaded replies, typing indicators, and notifications. Includes emoji reactions, message editing, and soft delete functionality with audit trails.
+- **Multi-Tenancy**: Supports multiple tenants with admin dashboard and per-tenant user management.
+- **Authentication**: Session-based authentication using Passport.js.
+- **Real-time Communication**: Socket.IO for live updates, supporting tenant-scoped chat, notifications, message editing, and soft delete.
 - **Project & Task Management**: Includes workspaces, teams, clients, projects, tasks with subtasks, activity logs, and time tracking. Supports project templates and rich text comments with @mentions.
-- **Client Relationship Management (CRM)**: Comprehensive client detail pages with notes, documents, client pipeline tracking, contacts, and an external client portal. Features Client 360 View, profitability reports, approval workflows, client-safe messaging, and thread merging/duplicate detection for conversations.
-- **Workload Management**: Provides workload forecasting and reporting based on task distribution and budget utilization.
-- **Notifications**: Enhanced Notification Center with cursor-based pagination, filter tabs, dismiss/clear-all functionality, deep-link navigation, deduplication, and severity levels. Supports notification grouping.
+- **Client Relationship Management (CRM)**: Client detail pages, notes, documents, pipeline tracking, contacts, and an external client portal. Features Client 360 View, profitability reports, and approval workflows.
+- **Workload Management**: Provides forecasting and reporting based on task distribution and budget utilization.
+- **Notifications**: Enhanced Notification Center with cursor-based pagination, filters, deep-linking, deduplication, and severity levels.
 - **User Experience**: Global command palette, keyboard shortcuts, dark mode, CSS-variable-based accent color theming, Framer Motion animations, mobile-first responsive design, and consistent drawer UI.
-- **Modular Architecture**: API routes use `createApiRouter` with policy enforcement, registered via `server/http/mount.ts` route registry. Centralized query key builders and role-based frontend routing with lazy-loaded components. Storage layer uses domain-specific repositories.
-- **Standardized API Error Envelope**: `ApiErrorEnvelope` type with `{ success: false, error: { code, message, details? }, requestId }`.
-- **Tenant Scope Hardening**: `BaseTenantRepository` abstract class with `requireTenantId()` and `assertTenantMatch()`. DB indexes on `tenant_id` for key tables.
-- **Super Admin Components**: Dedicated architecture for super admin functionalities, including tenant management and system status dashboards.
-- **Performance & Robustness**: Utilizes DB performance indexes, optimized React Query usage, list virtualization, error boundaries, graceful shutdown, and route-based code splitting. Includes telemetry for performance monitoring.
-- **Security Hardening**: Features tenancy enforcement, defense-in-depth tenant scoping, standardized API error handling, rate limiting, CSRF protection, and secret redaction in logs.
-- **Background Job Queue**: DB-backed, in-process job queue for long-running operations with concurrency limits and progress tracking.
-- **Support Ticketing System**: Multi-tenant support ticket and work order system with dual interfaces (tenant console and client portal), including full CRUD, status transitions, priority management, and assignee assignment. Dynamic forms for category-specific tickets using JSON schemas.
-- **Email Templates**: Customizable email templates managed via Super Admin, with tenant-first resolution. Default templates are seeded on startup.
-- **Reporting Engine V2**: A phased rebuild of the reports system with feature flags, including workload reports, task analysis, time tracking, project analysis, client analytics, messages, pipeline, and overview. It features Employee Command Center, Client Command Center, Employee Performance Index (EPI), Client Health Index (CHI), Forecasting Layer V1 (Capacity Overload, Project Deadline Risk, Client Risk Trend), Forecast Snapshots, Alert Automation, and a Weekly Ops Digest.
-- **Observability**: Implements request IDs for end-to-end correlation, structured logging, and error logging to the database, along with health endpoints.
-- **Asset Library (Beta)**: Centralized asset management system with folders, assets, links, presigned R2 upload/download, source tracking, and deduplication.
-- **Documents → Asset Library Unification**: An adapter layer allows existing Documents API to use Asset Library infrastructure with a feature flag for backward compatibility and migration.
+- **Modular Architecture**: API routes use `createApiRouter` with policy enforcement. Centralized query key builders and role-based frontend routing with lazy-loaded components.
+- **Standardized API Error Envelope**: `ApiErrorEnvelope` type for consistent error handling.
+- **Tenant Scope Hardening**: `BaseTenantRepository` with `requireTenantId()` and `assertTenantMatch()`, and DB indexes on `tenant_id`.
+- **Super Admin Components**: Dedicated architecture for tenant and system status management.
+- **Performance & Robustness**: DB performance indexes, optimized React Query, list virtualization, error boundaries, graceful shutdown, route-based code splitting, and telemetry.
+- **Security Hardening**: Tenancy enforcement, defense-in-depth tenant scoping, standardized API error handling, rate limiting, CSRF protection, and secret redaction in logs.
+- **Background Job Queue**: DB-backed, in-process job queue for long-running operations.
+- **Support Ticketing System**: Multi-tenant support ticket and work order system with dual interfaces, CRUD, status transitions, priority management, assignee assignment, and dynamic forms.
+- **Email Templates**: Customizable email templates managed via Super Admin, with tenant-first resolution.
+- **Reporting Engine V2**: Phased rebuild of the reports system with feature flags, including workload reports, task analysis, time tracking, project analysis, client analytics, messages, pipeline, and overview. Features Employee/Client Command Centers, Employee/Client Health Indexes, Forecasting Layer V1, Forecast Snapshots, Alert Automation, and Weekly Ops Digest.
+- **Observability**: Request IDs for correlation, structured logging, error logging to DB, and health endpoints.
+- **Asset Library (Beta)**: Centralized asset management with folders, assets, links, presigned R2 upload/download, source tracking, and deduplication.
+- **Documents → Asset Library Unification**: Adapter layer for existing Documents API to use Asset Library with a feature flag.
 - **Default Tenant Documents**: Canonical tenant-wide document library managed by Super Admins and Tenant Admins, visible read-only to clients in the Asset Library.
-- **Private Visibility (Tasks & Projects)**: Creator-only visibility with invite-based sharing. Tasks and projects support `visibility: 'workspace' | 'private'` (default `'workspace'`). Private items are only visible to the creator and explicitly invited members via `task_access` / `project_access` tables. Centralized permission helpers in `server/lib/privateVisibility.ts` (`canViewTask`, `canViewProject`, `taskVisibilityFilter`, `projectVisibilityFilter`). Sharing CRUD via `server/http/domains/access.router.ts` (`GET/POST/PATCH/DELETE /api/tasks/:id/access` and `/api/projects/:id/access`). Roles: `viewer`, `editor`, `admin`. Project access cascades to tasks within that project. Read paths enforced across all list endpoints, search, calendar, dashboard, and client portal. UI includes private toggle in create dialogs, lock icons in cards/lists, share modal (`client/src/features/sharing/share-modal.tsx`), and privacy badges in detail views. Gated by `ENABLE_PRIVATE_TASKS` and `ENABLE_PRIVATE_PROJECTS` env vars (both default `true`).
-
-## Performance Optimizations
-- **Tasks Batch Hydration**: `getTasksByUserBatched()` in `server/http/services/taskBatchHydrator.ts` eliminates the N+1 pattern in `GET /tasks/my`. Reduces queries from 2+7N to ~9 flat queries (inArray batch fetches for assignees, watchers, tags, subtasks, sections, projects) with in-memory stitching. Gated by `ENABLE_TASKS_BATCH_HYDRATION` env var (default `true`).
-- **Clients Batch Expansion**: `getClientsByTenantBatched()` in `server/storage.ts` eliminates the N+1 pattern in `GET /clients`. Reduces queries from 1+2N to 3 flat queries (clients, all contacts, all projects) with in-memory grouping. Gated by `ENABLE_CLIENTS_BATCH_EXPANSION` env var (default `true`).
-- **Projects SQL Filtering**: The `GET /projects` endpoint accepts `status`, `clientId`, `teamId`, `search`, `sortBy`, `sortDir`, `limit`, `offset` query params and applies them as SQL WHERE clauses instead of loading all projects then filtering in memory. Gated by `ENABLE_PROJECTS_SQL_FILTERING` env var (default `true`).
-- **DB Indexes**: Comprehensive indexes on all hot-path columns. Two additional indexes added: `tasks(tenant_id, updated_at)` and `task_assignees(tenant_id, user_id)` for time-ordered queries and batch hydration. All feature flags are server-side only (no frontend changes needed).
+- **Private Visibility (Tasks & Projects)**: Creator-only visibility with invite-based sharing via `task_access` / `project_access` tables. Permissions helpers (`canViewTask`, `canViewProject`) and filtering applied across all list endpoints, search, calendar, dashboard, and client portal.
 
 ## External Dependencies
 - **PostgreSQL**: Primary database.

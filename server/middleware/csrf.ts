@@ -57,7 +57,7 @@ export function csrfProtection(req: Request, res: Response, next: NextFunction):
     return;
   }
 
-  if (req.path === "/health" || req.path === "/healthz" || req.path === "/ready") {
+  if (req.path === "/health" || req.path === "/healthz" || req.path === "/ready" || req.path === "/readyz" || req.path === "/livez") {
     next();
     return;
   }
