@@ -1,6 +1,5 @@
 import { useEffect, useRef } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { useAuth } from "@/lib/auth";
 import { useTheme } from "@/lib/theme-provider";
 import { apiRequest, queryClient } from "@/lib/queryClient";
 import { getThemePack } from "@/theme/themePacks";
@@ -19,7 +18,6 @@ interface TenantBrandingResponse {
 }
 
 export function useThemeSync() {
-  const { isAuthenticated } = useAuth();
   const { hydrateFromServer, packId, isSystemMode, accent } = useTheme();
   const hydrated = useRef(false);
   const prevPackId = useRef<string>(packId);
@@ -28,14 +26,14 @@ export function useThemeSync() {
 
   const { data: prefs, isFetched: prefsFetched } = useQuery<UiPreferences>({
     queryKey: ["/api/users/me/ui-preferences"],
-    enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5,
+    retry: false,
   });
 
   const { data: branding, isFetched: brandingFetched } = useQuery<TenantBrandingResponse>({
     queryKey: ["/api/v1/tenant/branding"],
-    enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5,
+    retry: false,
   });
 
   useEffect(() => {
@@ -64,7 +62,7 @@ export function useThemeSync() {
   });
 
   useEffect(() => {
-    if (!isAuthenticated || !hydrated.current) return;
+    if (!hydrated.current) return;
 
     const serverValue = isSystemMode ? "system" : packId;
     const prevServerValue = prevIsSystem.current ? "system" : prevPackId.current;
@@ -80,5 +78,5 @@ export function useThemeSync() {
         ...(accentChanged ? { themeAccent: accent } : {}),
       });
     }
-  }, [packId, isSystemMode, accent, isAuthenticated]);
+  }, [packId, isSystemMode, accent]);
 }

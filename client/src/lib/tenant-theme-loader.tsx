@@ -1,6 +1,5 @@
 import { useEffect } from "react";
 import { useQuery } from "@tanstack/react-query";
-import { useAuth } from "@/lib/auth";
 import { useThemeSync } from "@/hooks/use-theme-sync";
 import { getStorageUrl } from "@/lib/storageUrl";
 
@@ -82,12 +81,10 @@ function lightenHSL(hsl: string, amount: number): string {
 }
 
 export function useTenantTheme() {
-  const { isAuthenticated } = useAuth();
-
   const { data } = useQuery<TenantSettingsResponse>({
     queryKey: ["/api/v1/tenant/branding"],
-    enabled: isAuthenticated,
     staleTime: 1000 * 60 * 5,
+    retry: false,
   });
 
   useEffect(() => {

@@ -1226,16 +1226,16 @@ function ClientTableView({
 }
 
 function VipCarousel({
-  vipClients,
+  vipGrouped,
   onOpenClient,
 }: {
-  vipClients: ClientWithHierarchy[];
+  vipGrouped: { client: ClientWithHierarchy; children: ClientWithHierarchy[] }[];
   onOpenClient: (id: string) => void;
 }) {
   const scrollRef = useRef<HTMLDivElement>(null);
   const [canScrollLeft, setCanScrollLeft] = useState(false);
   const [canScrollRight, setCanScrollRight] = useState(false);
-  const showArrows = vipClients.length > 3;
+  const showArrows = vipGrouped.length > 3;
 
   const updateScrollState = useCallback(() => {
     const el = scrollRef.current;
@@ -1255,7 +1255,7 @@ function VipCarousel({
       el.removeEventListener("scroll", updateScrollState);
       observer.disconnect();
     };
-  }, [updateScrollState, vipClients.length]);
+  }, [updateScrollState, vipGrouped.length]);
 
   const scroll = (direction: "left" | "right") => {
     const el = scrollRef.current;
@@ -1289,7 +1289,7 @@ function VipCarousel({
               color: "hsl(var(--primary))",
             }}
           >
-            {vipClients.length}
+            {vipGrouped.length}
           </Badge>
         </div>
         {showArrows && (
@@ -1324,119 +1324,165 @@ function VipCarousel({
         style={{ scrollbarWidth: "none", msOverflowStyle: "none" }}
       >
         <style>{`[data-vip-scroll]::-webkit-scrollbar { display: none; }`}</style>
-        {vipClients.map((client) => (
+        {vipGrouped.map(({ client, children }) => (
           <Card
             key={client.id}
             data-vip-card
-            className="cursor-pointer hover-elevate shrink-0"
+            className="shrink-0 overflow-hidden"
             style={{
               borderColor: "hsl(var(--primary) / 0.15)",
               width: "calc((100% - 2rem) / 3)",
               minWidth: "280px",
             }}
-            onClick={() => onOpenClient(client.id)}
             data-testid={`vip-card-${client.id}`}
           >
-            <CardHeader className="pb-3">
-              <div className="flex items-start gap-3 min-w-0">
-                <Avatar className="h-10 w-10 shrink-0">
-                  <AvatarFallback
-                    style={{
-                      backgroundColor: "hsl(var(--primary) / 0.12)",
-                      color: "hsl(var(--primary))",
-                    }}
-                  >
-                    {getInitials(client.companyName)}
-                  </AvatarFallback>
-                </Avatar>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-start justify-between gap-2 min-w-0">
-                    <CardTitle className="text-base truncate min-w-0">
-                      {client.companyName}
-                    </CardTitle>
-                    <div className="flex items-center gap-1.5 shrink-0">
-                      {client.needsAttention && (
-                        <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
-                      )}
+            <div
+              className="cursor-pointer hover-elevate rounded-t-md"
+              onClick={() => onOpenClient(client.id)}
+            >
+              <CardHeader className="pb-3">
+                <div className="flex items-start gap-3 min-w-0">
+                  <Avatar className="h-10 w-10 shrink-0">
+                    <AvatarFallback
+                      style={{
+                        backgroundColor: "hsl(var(--primary) / 0.12)",
+                        color: "hsl(var(--primary))",
+                      }}
+                    >
+                      {getInitials(client.companyName)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-start justify-between gap-2 min-w-0">
+                      <CardTitle className="text-base truncate min-w-0">
+                        {client.companyName}
+                      </CardTitle>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        {client.needsAttention && (
+                          <AlertTriangle className="h-4 w-4 text-destructive shrink-0" />
+                        )}
+                      </div>
+                    </div>
+                    {client.parentName ? (
+                      <p className="text-xs text-muted-foreground truncate">
+                        Sub-client of {client.parentName}
+                      </p>
+                    ) : (
+                      client.displayName && (
+                        <p className="text-xs text-muted-foreground truncate">
+                          {client.displayName}
+                        </p>
+                      )
+                    )}
+                    <div className="mt-1.5">
+                      <Badge
+                        variant="outline"
+                        className={cn(
+                          "text-xs",
+                          STAGE_TEXT_COLORS[client.stage] || ""
+                        )}
+                      >
+                        <span
+                          className={cn(
+                            "h-1.5 w-1.5 rounded-full mr-1.5 shrink-0",
+                            STAGE_COLORS[client.stage] || "bg-muted"
+                          )}
+                        />
+                        {CLIENT_STAGE_LABELS[client.stage as ClientStageType] ||
+                          client.stage}
+                      </Badge>
                     </div>
                   </div>
-                  {client.parentName ? (
-                    <p className="text-xs text-muted-foreground truncate">
-                      Sub-client of {client.parentName}
-                    </p>
-                  ) : (
-                    client.displayName && (
-                      <p className="text-xs text-muted-foreground truncate">
-                        {client.displayName}
-                      </p>
-                    )
-                  )}
-                  <div className="mt-1.5">
-                    <Badge
-                      variant="outline"
-                      className={cn(
-                        "text-xs",
-                        STAGE_TEXT_COLORS[client.stage] || ""
-                      )}
-                    >
-                      <span
-                        className={cn(
-                          "h-1.5 w-1.5 rounded-full mr-1.5 shrink-0",
-                          STAGE_COLORS[client.stage] || "bg-muted"
-                        )}
-                      />
-                      {CLIENT_STAGE_LABELS[client.stage as ClientStageType] ||
-                        client.stage}
-                    </Badge>
-                  </div>
                 </div>
-              </div>
-            </CardHeader>
-            <CardContent className="pt-0">
-              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                <div className="flex items-center gap-1">
-                  <FolderKanban className="h-3.5 w-3.5 shrink-0" />
-                  <span>{client.projectCount} projects</span>
-                </div>
-                <div className="flex items-center gap-1">
-                  <User className="h-3.5 w-3.5 shrink-0" />
-                  <span>{client.contactCount} contacts</span>
-                </div>
-                {client.openTasksCount > 0 && (
+              </CardHeader>
+              <CardContent className="pt-0 pb-3">
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                   <div className="flex items-center gap-1">
-                    <ListChecks className="h-3.5 w-3.5 shrink-0" />
-                    <span>{client.openTasksCount} tasks</span>
+                    <FolderKanban className="h-3.5 w-3.5 shrink-0" />
+                    <span>{client.projectCount} projects</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <User className="h-3.5 w-3.5 shrink-0" />
+                    <span>{client.contactCount} contacts</span>
+                  </div>
+                  {client.openTasksCount > 0 && (
+                    <div className="flex items-center gap-1">
+                      <ListChecks className="h-3.5 w-3.5 shrink-0" />
+                      <span>{client.openTasksCount} tasks</span>
+                    </div>
+                  )}
+                </div>
+                {client.lastActivityAt && (
+                  <p className="text-xs text-muted-foreground mt-1.5 truncate">
+                    Last activity{" "}
+                    {formatDistanceToNow(new Date(client.lastActivityAt), {
+                      addSuffix: true,
+                    })}
+                  </p>
+                )}
+                {client.industry && (
+                  <p className="text-xs text-muted-foreground mt-2 truncate">
+                    {client.industry}
+                  </p>
+                )}
+                {client.tags && client.tags.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mt-2">
+                    {client.tags.slice(0, 3).map((tag) => (
+                      <Badge key={tag} variant="outline" className="text-xs">
+                        {tag}
+                      </Badge>
+                    ))}
+                    {client.tags.length > 3 && (
+                      <span className="text-xs text-muted-foreground">
+                        +{client.tags.length - 3}
+                      </span>
+                    )}
                   </div>
                 )}
-              </div>
-              {client.lastActivityAt && (
-                <p className="text-xs text-muted-foreground mt-1.5 truncate">
-                  Last activity{" "}
-                  {formatDistanceToNow(new Date(client.lastActivityAt), {
-                    addSuffix: true,
-                  })}
-                </p>
-              )}
-              {client.industry && (
-                <p className="text-xs text-muted-foreground mt-2 truncate">
-                  {client.industry}
-                </p>
-              )}
-              {client.tags && client.tags.length > 0 && (
-                <div className="flex flex-wrap gap-1 mt-2">
-                  {client.tags.slice(0, 3).map((tag) => (
-                    <Badge key={tag} variant="outline" className="text-xs">
-                      {tag}
-                    </Badge>
-                  ))}
-                  {client.tags.length > 3 && (
-                    <span className="text-xs text-muted-foreground">
-                      +{client.tags.length - 3}
-                    </span>
-                  )}
+              </CardContent>
+            </div>
+            {children.length > 0 && (
+              <>
+                <div className="border-t border-border mx-4" />
+                <div className="px-4 py-2">
+                  <p className="text-xs font-medium text-muted-foreground uppercase tracking-wider mb-1">
+                    Divisions ({children.length})
+                  </p>
+                  <div className="space-y-0.5">
+                    {children.map((child) => (
+                      <div
+                        key={child.id}
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          onOpenClient(child.id);
+                        }}
+                        className="flex items-center gap-2 px-2 py-1.5 rounded-md cursor-pointer hover-elevate min-w-0"
+                        data-testid={`vip-card-division-${child.id}`}
+                      >
+                        <Avatar className="h-6 w-6 shrink-0">
+                          <AvatarFallback className="bg-muted text-muted-foreground text-xs">
+                            {getInitials(child.companyName)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm truncate flex-1 min-w-0">
+                          {child.companyName}
+                        </span>
+                        <div className="flex items-center gap-1.5 shrink-0">
+                          {child.needsAttention && (
+                            <AlertTriangle className="h-3.5 w-3.5 text-amber-500 shrink-0" />
+                          )}
+                          <Badge
+                            className={cn(getStatusColor(child.status), "text-xs")}
+                          >
+                            {child.status}
+                          </Badge>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
                 </div>
-              )}
-            </CardContent>
+              </>
+            )}
           </Card>
         ))}
       </div>
@@ -1812,6 +1858,14 @@ export default function ClientsPage() {
 
   const vipClientIds = useMemo(() => new Set(vipClients.map((c) => c.id)), [vipClients]);
 
+  const vipGrouped = useMemo(() => {
+    if (!hierarchyClients) return [];
+    return vipClients.map((vipClient) => ({
+      client: vipClient,
+      children: hierarchyClients.filter((c) => c.parentClientId === vipClient.id),
+    }));
+  }, [vipClients, hierarchyClients]);
+
   const groupedClients = useMemo(() => {
     const clientsToGroup = viewMode === "table"
       ? filteredAndSortedClients
@@ -2056,9 +2110,9 @@ export default function ClientsPage() {
         />
       )}
 
-      {vipClients.length > 0 && (
+      {vipGrouped.length > 0 && (
         <VipCarousel
-          vipClients={vipClients}
+          vipGrouped={vipGrouped}
           onOpenClient={handleOpenClientSheet}
         />
       )}
