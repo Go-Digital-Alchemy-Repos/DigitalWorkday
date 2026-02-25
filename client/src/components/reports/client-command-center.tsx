@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -112,7 +113,7 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
             <Card key={c.clientId} data-testid={`mobile-card-client-${c.clientId}`}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <span className="font-semibold text-sm">{c.companyName}</span>
+                  <Link href={`/reports/clients/${c.clientId}`} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-mobile-${c.clientId}`}>{c.companyName}</Link>
                   <Badge variant={engagementBadgeVariant(c.engagementScore)} data-testid={`engagement-mobile-${c.clientId}`}>
                     {c.engagementScore}%
                   </Badge>
@@ -148,7 +149,7 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                 <TableBody>
                   {data?.clients.map((c) => (
                     <TableRow key={c.clientId} data-testid={`row-client-${c.clientId}`}>
-                      <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
+                      <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-overview-${c.clientId}`}>{c.companyName}</Link></TableCell>
                       <TableCell className="text-sm">{c.activeProjects}</TableCell>
                       <TableCell className="text-sm">{c.openTasks}</TableCell>
                       <TableCell>
@@ -223,7 +224,7 @@ function ActivityTab({ rangeDays }: { rangeDays: number }) {
             <TableBody>
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-activity-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
+                  <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-activity-${c.clientId}`}>{c.companyName}</Link></TableCell>
                   <TableCell className="text-sm">{c.tasksCreatedInRange}</TableCell>
                   <TableCell className="text-sm">{Math.round(c.timeLoggedInRange * 10) / 10}h</TableCell>
                   <TableCell className="text-sm">{c.commentsInRange}</TableCell>
@@ -297,7 +298,7 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
             <TableBody>
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-time-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
+                  <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-time-${c.clientId}`}>{c.companyName}</Link></TableCell>
                   <TableCell className="text-sm">{c.totalHours}h</TableCell>
                   <TableCell className="text-sm">{c.billableHours}h</TableCell>
                   <TableCell className="text-sm">{c.nonBillableHours}h</TableCell>
@@ -389,7 +390,7 @@ function TasksTab({ rangeDays }: { rangeDays: number }) {
               <TableBody>
                 {data?.clients.map((c) => (
                   <TableRow key={c.clientId} data-testid={`row-tasks-${c.clientId}`}>
-                    <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
+                    <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-tasks-${c.clientId}`}>{c.companyName}</Link></TableCell>
                     <TableCell className="text-sm">{c.openTaskCount}</TableCell>
                     <TableCell>
                       <span className={cn("text-sm font-medium", c.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
@@ -466,7 +467,7 @@ function SlaTab({ rangeDays }: { rangeDays: number }) {
             <TableBody>
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-sla-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
+                  <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-sla-${c.clientId}`}>{c.companyName}</Link></TableCell>
                   <TableCell className="text-sm">{c.totalTasks}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2 min-w-[140px]">
@@ -568,7 +569,7 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-2">
                     <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <span className="font-semibold text-sm">{c.companyName}</span>
+                    <Link href={`/reports/clients/${c.clientId}`} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-risk-${c.clientId}`}>{c.companyName}</Link>
                     <Badge variant={variant}>{label}</Badge>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3 flex-wrap">
@@ -762,7 +763,7 @@ function HealthTab({ rangeDays }: { rangeDays: number }) {
                 return (
                   <TableRow key={c.clientId} data-testid={`row-client-health-${c.clientId}`}>
                     <TableCell>
-                      <span className="text-sm font-medium">{c.companyName}</span>
+                      <Link href={`/reports/clients/${c.clientId}`} className="text-sm font-medium hover:underline text-primary cursor-pointer" data-testid={`link-client-health-${c.clientId}`}>{c.companyName}</Link>
                     </TableCell>
                     <TableCell>
                       <span className={cn(
@@ -1008,7 +1009,7 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
                         data-testid={`forecast-client-row-${c.clientId}`}
                       >
                         <TableCell className="font-medium max-w-[160px]">
-                          <span className="truncate block">{c.companyName}</span>
+                          <Link href={`/reports/clients/${c.clientId}`} className="truncate block hover:underline text-primary cursor-pointer" data-testid={`link-client-forecast-${c.clientId}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>{c.companyName}</Link>
                         </TableCell>
                         <TableCell className="text-center">
                           <ScoreBar current={c.currentHealthScore} predicted={c.predictedHealthScore} />

@@ -196,6 +196,7 @@ export const config = {
     enableAiSummaryCache: optionalEnvBool("ENABLE_AI_SUMMARY_CACHE", true),
     enableAiSummaryRedaction: optionalEnvBool("ENABLE_AI_SUMMARY_REDACTION", true),
     enableClientCommandCenter: optionalEnvBool("ENABLE_CLIENT_COMMAND_CENTER", true),
+    enableClientProfileReport: optionalEnvBool("ENABLE_CLIENT_PROFILE_REPORT", true),
     enableEmployeePerformanceIndex: optionalEnvBool("ENABLE_EMPLOYEE_PERFORMANCE_INDEX", true),
     enableClientHealthIndex: optionalEnvBool("ENABLE_CLIENT_HEALTH_INDEX", true),
     enableForecastingLayer: optionalEnvBool("ENABLE_FORECASTING_LAYER", true),
