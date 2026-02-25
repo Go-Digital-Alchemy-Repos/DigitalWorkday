@@ -155,7 +155,8 @@ export function IntegrationsTab() {
 
   const testMailgunMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", "/api/v1/tenant/integrations/mailgun/test", {});
+      const res = await apiRequest("POST", "/api/v1/tenant/integrations/mailgun/test", {});
+      return await res.json();
     },
     onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
@@ -218,7 +219,8 @@ export function IntegrationsTab() {
 
   const testS3Mutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", "/api/v1/tenant/integrations/s3/test", {});
+      const res = await apiRequest("POST", "/api/v1/tenant/integrations/s3/test", {});
+      return await res.json();
     },
     onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
@@ -261,7 +263,8 @@ export function IntegrationsTab() {
 
   const testR2Mutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", "/api/v1/tenant/integrations/r2/test", {});
+      const res = await apiRequest("POST", "/api/v1/tenant/integrations/r2/test", {});
+      return await res.json();
     },
     onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
@@ -302,7 +305,8 @@ export function IntegrationsTab() {
 
   const testOpenAIMutation = useMutation({
     mutationFn: async () => {
-      return apiRequest("POST", "/api/v1/tenant/integrations/openai/test", {});
+      const res = await apiRequest("POST", "/api/v1/tenant/integrations/openai/test", {});
+      return await res.json();
     },
     onSuccess: (response: any) => {
       queryClient.invalidateQueries({ queryKey: ["/api/v1/tenant/integrations"] });
