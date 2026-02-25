@@ -2056,7 +2056,7 @@ export default function ClientsPage() {
         />
       )}
 
-      {vipClients.length > 0 && viewMode === "grid" && (
+      {vipClients.length > 0 && (
         <VipCarousel
           vipClients={vipClients}
           onOpenClient={handleOpenClientSheet}
