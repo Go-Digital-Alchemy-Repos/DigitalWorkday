@@ -196,6 +196,7 @@ export function TenantSidebar() {
 
   const { data: clients } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
+    staleTime: 60 * 1000,
   });
 
   const { data: allDivisions = [] } = useQuery<ClientDivision[]>({

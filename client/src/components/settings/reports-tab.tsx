@@ -369,6 +369,7 @@ export function ReportsTab({ defaultTab }: ReportsTabProps = {}) {
 
   const { data: projects } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
+    staleTime: 60 * 1000,
   });
 
   const { data: teams } = useQuery<Team[]>({

@@ -578,6 +578,7 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
     queryKey: ["/api/clients"],
     enabled: open,
+    staleTime: 60 * 1000,
   });
 
   const { data: clientDivisions = [] } = useQuery<Array<{ id: string; name: string }>>({
@@ -970,6 +971,7 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
     queryKey: ["/api/clients"],
     enabled: open,
+    staleTime: 60 * 1000,
   });
 
   const { data: clientDivisions = [], isLoading: divisionsLoading } = useQuery<Array<{ id: string; name: string; color?: string | null }>>({

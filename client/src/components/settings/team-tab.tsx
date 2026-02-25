@@ -122,6 +122,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
   const { data: clients } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
     enabled: isAdmin,
+    staleTime: 60 * 1000,
   });
 
   const createUserMutation = useMutation({

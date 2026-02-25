@@ -78,6 +78,7 @@ export function AppSidebar() {
 
   const { data: projects } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
+    staleTime: 60 * 1000,
   });
 
   const { data: teams } = useQuery<Team[]>({
