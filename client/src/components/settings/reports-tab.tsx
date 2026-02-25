@@ -54,10 +54,12 @@ interface WorkloadSummary {
 function WorkloadContent() {
   const { data: workloadData, isLoading: workloadLoading } = useQuery<EmployeeWorkload[]>({
     queryKey: ["/api/v1/workload/tasks-by-employee"],
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data: summary, isLoading: summaryLoading } = useQuery<WorkloadSummary>({
     queryKey: ["/api/v1/workload/summary"],
+    staleTime: 2 * 60 * 1000,
   });
 
   const handleExportWorkloadCSV = () => {
@@ -365,6 +367,7 @@ export function ReportsTab({ defaultTab }: ReportsTabProps = {}) {
 
   const { data: timeEntries } = useQuery<TimeEntryWithRelations[]>({
     queryKey: ["/api/time-entries"],
+    staleTime: 30 * 1000,
   });
 
   const { data: projects } = useQuery<Project[]>({
@@ -374,14 +377,17 @@ export function ReportsTab({ defaultTab }: ReportsTabProps = {}) {
 
   const { data: teams } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: workspaceMembers } = useQuery<(WorkspaceMember & { user?: UserType })[]>({
     queryKey: ["/api/workspace-members"],
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: timeSummary } = useQuery<any>({
     queryKey: ["/api/time-entries/summary", { groupBy }],
+    staleTime: 2 * 60 * 1000,
   });
 
   const totalSeconds = timeEntries?.reduce((acc, entry) => acc + (entry.durationSeconds || 0), 0) || 0;

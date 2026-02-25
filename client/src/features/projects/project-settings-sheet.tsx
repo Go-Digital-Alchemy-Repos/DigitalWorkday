@@ -89,10 +89,12 @@ export function ProjectSettingsSheet({
 
   const { data: clients = [] } = useQuery<ClientWithContacts[]>({
     queryKey: ["/api/clients"],
+    staleTime: 60 * 1000,
   });
 
   const { data: teams = [] } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
+    staleTime: 5 * 60 * 1000,
   });
 
   const filteredClients = clients.filter(

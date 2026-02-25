@@ -5,6 +5,19 @@ import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import type { Request } from "express";
 import { handleRouteError, AppError } from "../../lib/errors";
 
+const UNREAD_CACHE_TTL_MS = parseInt(process.env.UNREAD_COUNT_CACHE_TTL_MS || "5000", 10);
+const CACHE_ENABLED = process.env.ENABLE_UNREAD_COUNT_CACHE !== "false";
+
+const unreadCountCache = new Map<string, { count: number; expiresAt: number }>();
+
+function getUnreadCacheKey(userId: string, tenantId: string | null) {
+  return `${userId}:${tenantId ?? "null"}`;
+}
+
+export function invalidateUnreadCountCache(userId: string, tenantId: string | null) {
+  unreadCountCache.delete(getUnreadCacheKey(userId, tenantId));
+}
+
 function getCurrentUserId(req: Request): string {
   return req.user?.id || "demo-user-id";
 }
@@ -42,7 +55,33 @@ router.get("/notifications/unread-count", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
+    const cacheKey = getUnreadCacheKey(userId, tenantId);
+    const t0 = Date.now();
+
+    if (CACHE_ENABLED) {
+      const cached = unreadCountCache.get(cacheKey);
+      if (cached && cached.expiresAt > Date.now()) {
+        res.set("X-Cache", "HIT");
+        return res.json({ count: cached.count });
+      }
+    }
+
     const count = await storage.getUnreadNotificationCount(userId, tenantId);
+
+    if (CACHE_ENABLED) {
+      unreadCountCache.set(cacheKey, { count, expiresAt: Date.now() + UNREAD_CACHE_TTL_MS });
+      if (unreadCountCache.size > 10000) {
+        const now = Date.now();
+        for (const [k, v] of unreadCountCache) {
+          if (v.expiresAt < now) unreadCountCache.delete(k);
+        }
+      }
+    }
+
+    if (process.env.NODE_ENV !== "production") {
+      res.set("X-Response-Time", `${Date.now() - t0}ms`);
+    }
+    res.set("X-Cache", "MISS");
     res.json({ count });
   } catch (error) {
     return handleRouteError(res, error, "GET /notifications/unread-count", req);
@@ -54,12 +93,11 @@ router.patch("/notifications/:id/read", async (req, res) => {
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
     const { id } = req.params;
-    
     const notification = await storage.markNotificationRead(id, userId, tenantId);
     if (!notification) {
       throw AppError.notFound("Notification");
     }
-    
+    invalidateUnreadCountCache(userId, tenantId);
     res.json(notification);
   } catch (error) {
     return handleRouteError(res, error, "PATCH /notifications/:id/read", req);
@@ -71,6 +109,7 @@ router.post("/notifications/mark-all-read", async (req, res) => {
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
     await storage.markAllNotificationsRead(userId, tenantId);
+    invalidateUnreadCountCache(userId, tenantId);
     res.json({ success: true });
   } catch (error) {
     return handleRouteError(res, error, "POST /notifications/mark-all-read", req);
@@ -82,12 +121,11 @@ router.patch("/notifications/:id/dismiss", async (req, res) => {
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
     const { id } = req.params;
-
     const notification = await storage.dismissNotification(id, userId, tenantId);
     if (!notification) {
       throw AppError.notFound("Notification");
     }
-
+    invalidateUnreadCountCache(userId, tenantId);
     res.json(notification);
   } catch (error) {
     return handleRouteError(res, error, "PATCH /notifications/:id/dismiss", req);
@@ -99,6 +137,7 @@ router.post("/notifications/dismiss-all", async (req, res) => {
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
     await storage.dismissAllNotifications(userId, tenantId);
+    invalidateUnreadCountCache(userId, tenantId);
     res.json({ success: true });
   } catch (error) {
     return handleRouteError(res, error, "POST /notifications/dismiss-all", req);
@@ -114,6 +153,7 @@ router.post("/notifications/group/read", async (req, res) => {
       throw AppError.badRequest("dedupeKey is required");
     }
     const count = await storage.markGroupRead(dedupeKey, userId, tenantId);
+    invalidateUnreadCountCache(userId, tenantId);
     res.json({ success: true, count });
   } catch (error) {
     return handleRouteError(res, error, "POST /notifications/group/read", req);
@@ -129,6 +169,7 @@ router.post("/notifications/group/dismiss", async (req, res) => {
       throw AppError.badRequest("dedupeKey is required");
     }
     const count = await storage.dismissGroup(dedupeKey, userId, tenantId);
+    invalidateUnreadCountCache(userId, tenantId);
     res.json({ success: true, count });
   } catch (error) {
     return handleRouteError(res, error, "POST /notifications/group/dismiss", req);
@@ -140,8 +181,8 @@ router.delete("/notifications/:id", async (req, res) => {
     const userId = getCurrentUserId(req);
     const tenantId = getEffectiveTenantId(req);
     const { id } = req.params;
-    
     await storage.deleteNotification(id, userId, tenantId);
+    invalidateUnreadCountCache(userId, tenantId);
     res.json({ success: true });
   } catch (error) {
     return handleRouteError(res, error, "DELETE /notifications/:id", req);

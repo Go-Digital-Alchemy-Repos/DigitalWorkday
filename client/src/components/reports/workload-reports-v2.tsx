@@ -126,6 +126,7 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
       if (!res.ok) throw new Error("Failed to load team data");
       return res.json();
     },
+    staleTime: 2 * 60 * 1000,
   });
 
   const totals = useMemo(() => {
@@ -269,6 +270,7 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
+    staleTime: 2 * 60 * 1000,
   });
 
   const { data, isLoading } = useQuery<{
@@ -285,6 +287,7 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
       return res.json();
     },
     enabled: !!selectedUserId,
+    staleTime: 2 * 60 * 1000,
   });
 
   const PRIORITY_COLORS: Record<string, string> = {
@@ -445,6 +448,7 @@ function CapacityPlanningTab({ rangeDays }: { rangeDays: number }) {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
+    staleTime: 2 * 60 * 1000,
   });
 
   if (isLoading) return (
@@ -553,6 +557,7 @@ function RiskFlagsTab({ rangeDays }: { rangeDays: number }) {
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
+    staleTime: 2 * 60 * 1000,
   });
 
   if (isLoading) return (

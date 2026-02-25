@@ -112,6 +112,7 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
 
   const { data: teams } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
+    staleTime: 5 * 60 * 1000,
   });
 
   const { data: invitations } = useQuery<Invitation[]>({
