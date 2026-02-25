@@ -1,9 +1,7 @@
 import { useLocation, useRoute, Redirect } from "wouter";
 import { useAuth } from "@/lib/auth";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Settings as SettingsIcon, Puzzle, FileText, Mail, UserCircle, MessageSquare, Zap, FileArchive, Bell, Newspaper } from "lucide-react";
-import { ProfileTab } from "@/components/settings/profile-tab";
+import { Settings as SettingsIcon, Puzzle, FileText, Mail, MessageSquare, Zap, FileArchive, Bell, Newspaper } from "lucide-react";
 import { IntegrationsTab } from "@/components/settings/integrations-tab";
 import { AgreementTab } from "@/components/settings/agreement-tab";
 import { EmailLogsTab } from "@/components/settings/email-logs-tab";
@@ -15,7 +13,6 @@ import DigestConfigPage from "@/pages/settings-digest";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 
 const BASE_SETTINGS_TABS = [
-  { id: "profile", label: "Profile", icon: UserCircle, flag: null },
   { id: "integrations", label: "Integrations", icon: Puzzle, flag: null },
   { id: "messages", label: "Messages", icon: MessageSquare, flag: null },
   { id: "email-logs", label: "Email Logs", icon: Mail, flag: null },
@@ -41,7 +38,7 @@ export default function SettingsPage() {
     return flags[tab.flag];
   });
 
-  const activeTab = params?.tab || "profile";
+  const activeTab = params?.tab || "integrations";
 
   const handleTabChange = (value: string) => {
     setLocation(`/settings/${value}`);
@@ -74,10 +71,6 @@ export default function SettingsPage() {
               </TabsTrigger>
             ))}
           </TabsList>
-
-          <TabsContent value="profile" className="mt-6">
-            <ProfileTab />
-          </TabsContent>
 
           <TabsContent value="integrations" className="mt-6">
             <IntegrationsTab />
