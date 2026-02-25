@@ -238,6 +238,7 @@ export default function ClientAnalytics() {
           <CardDescription>Comprehensive client metrics overview</CardDescription>
         </CardHeader>
         <CardContent>
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -294,6 +295,7 @@ export default function ClientAnalytics() {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>

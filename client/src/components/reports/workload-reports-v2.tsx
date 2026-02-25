@@ -5,6 +5,7 @@ import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { MobileTabSelect } from "@/components/reports/mobile-tab-select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
@@ -194,6 +195,7 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
 
       <Card>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -250,6 +252,7 @@ function TeamOverviewTab({ rangeDays }: { rangeDays: number }) {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -297,9 +300,9 @@ function EmployeeDetailTab({ rangeDays }: { rangeDays: number }) {
       <Card>
         <CardContent className="p-4">
           <div className="flex items-center gap-3">
-            <User className="h-4 w-4 text-muted-foreground" />
+            <User className="h-4 w-4 text-muted-foreground shrink-0" />
             <Select value={selectedUserId} onValueChange={setSelectedUserId}>
-              <SelectTrigger className="w-64" data-testid="select-employee">
+              <SelectTrigger className="w-full sm:w-64" data-testid="select-employee">
                 <SelectValue placeholder="Select an employee…" />
               </SelectTrigger>
               <SelectContent>
@@ -656,6 +659,18 @@ export function WorkloadReportsV2() {
       </div>
 
       <Tabs value={tab} onValueChange={setTab}>
+        <MobileTabSelect
+          tabs={[
+            { value: "team", label: "Team Overview" },
+            { value: "employee", label: "Employee Detail" },
+            { value: "capacity", label: "Capacity Planning" },
+            { value: "risk", label: "Risk Flags" },
+          ]}
+          value={tab}
+          onValueChange={setTab}
+          className="mb-3"
+        />
+        <div className="hidden md:block">
         <TabsList className="h-9">
           <TabsTrigger value="team" className="text-xs gap-1.5" data-testid="tab-workload-team">
             <Users className="h-3.5 w-3.5" />
@@ -674,6 +689,7 @@ export function WorkloadReportsV2() {
             Risk Flags
           </TabsTrigger>
         </TabsList>
+        </div>
 
         <TabsContent value="team" className="mt-4">
           <TeamOverviewTab rangeDays={rangeDays} />

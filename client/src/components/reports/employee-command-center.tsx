@@ -22,6 +22,7 @@ import { getStorageUrl } from "@/lib/storageUrl";
 import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
+import { MobileTabSelect } from "./mobile-tab-select";
 
 function userName(u: { firstName?: string | null; lastName?: string | null; email: string }) {
   if (u.firstName || u.lastName) return `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
@@ -172,66 +173,114 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
           <MetricCard label="Avg Utilization" value={`${totals.avgUtilization}%`} icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" />
         </div>
       )}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <Th field="name">Employee</Th>
-                <Th field="activeTasksNow">Active</Th>
-                <Th field="overdueCount">Overdue</Th>
-                <Th field="completedInRange">Completed</Th>
-                <Th field="totalHours">Hours</Th>
-                <Th field="utilizationPct">Utilization%</Th>
-                <Th field="efficiencyRatio">Efficiency</Th>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {sorted.map((e) => (
-                <TableRow key={e.userId} data-testid={`row-employee-overview-${e.userId}`}>
-                  <TableCell>
-                    <div className="flex items-center gap-2">
-                      <Avatar className="h-7 w-7 shrink-0">
-                        <AvatarImage src={getStorageUrl(e.avatarUrl) ?? ""} alt={userName(e)} />
-                        <AvatarFallback className="text-xs">{userInitials(e)}</AvatarFallback>
-                      </Avatar>
-                      <span className="text-sm font-medium truncate max-w-[140px]">{userName(e)}</span>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-sm font-medium">{e.activeTasksNow}</TableCell>
-                  <TableCell>
-                    <span className={cn("text-sm font-medium", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                      {e.overdueCount}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">{e.completedInRange}</TableCell>
-                  <TableCell className="text-sm">{e.totalHours}h</TableCell>
-                  <TableCell>
-                    <div className="flex items-center gap-2 min-w-[80px]">
-                      <Progress value={e.utilizationPct ?? 0} className="h-1.5 flex-1" />
-                      <span className="text-xs text-muted-foreground w-10 text-right">{e.utilizationPct ?? 0}%</span>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    {e.efficiencyRatio !== null ? (
-                      <Badge variant={e.efficiencyRatio > 1.2 ? "destructive" : e.efficiencyRatio > 0.8 ? "default" : "secondary"}>
-                        {(e.efficiencyRatio * 100).toFixed(0)}%
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">—</span>
-                    )}
-                  </TableCell>
-                </TableRow>
-              ))}
-              {sorted.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">No employee data found</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      <div className="md:hidden space-y-3">
+        {sorted.map((e) => (
+          <Card key={e.userId} data-testid={`card-employee-overview-mobile-${e.userId}`}>
+            <CardContent className="p-4">
+              <div className="flex items-center gap-3 mb-3">
+                <Avatar className="h-9 w-9 shrink-0">
+                  <AvatarImage src={getStorageUrl(e.avatarUrl) ?? ""} alt={userName(e)} />
+                  <AvatarFallback className="text-xs">{userInitials(e)}</AvatarFallback>
+                </Avatar>
+                <span className="text-sm font-semibold truncate">{userName(e)}</span>
+              </div>
+              <div className="grid grid-cols-2 gap-2 text-xs">
+                <div>
+                  <span className="text-muted-foreground">Active</span>
+                  <p className="font-medium">{e.activeTasksNow}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Overdue</span>
+                  <p className={cn("font-medium", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "")}>{e.overdueCount}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Completed</span>
+                  <p className="font-medium text-green-600 dark:text-green-400">{e.completedInRange}</p>
+                </div>
+                <div>
+                  <span className="text-muted-foreground">Hours</span>
+                  <p className="font-medium">{e.totalHours}h</p>
+                </div>
+              </div>
+              <div className="mt-3">
+                <div className="flex items-center justify-between text-xs mb-1">
+                  <span className="text-muted-foreground">Utilization</span>
+                  <span>{e.utilizationPct ?? 0}%</span>
+                </div>
+                <Progress value={e.utilizationPct ?? 0} className="h-1.5" />
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+        {sorted.length === 0 && (
+          <p className="text-center text-muted-foreground text-sm py-8">No employee data found</p>
+        )}
+      </div>
+
+      <div className="hidden md:block">
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <Th field="name">Employee</Th>
+                    <Th field="activeTasksNow">Active</Th>
+                    <Th field="overdueCount">Overdue</Th>
+                    <Th field="completedInRange">Completed</Th>
+                    <Th field="totalHours">Hours</Th>
+                    <Th field="utilizationPct">Utilization%</Th>
+                    <Th field="efficiencyRatio">Efficiency</Th>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {sorted.map((e) => (
+                    <TableRow key={e.userId} data-testid={`row-employee-overview-${e.userId}`}>
+                      <TableCell>
+                        <div className="flex items-center gap-2">
+                          <Avatar className="h-7 w-7 shrink-0">
+                            <AvatarImage src={getStorageUrl(e.avatarUrl) ?? ""} alt={userName(e)} />
+                            <AvatarFallback className="text-xs">{userInitials(e)}</AvatarFallback>
+                          </Avatar>
+                          <span className="text-sm font-medium truncate max-w-[140px]">{userName(e)}</span>
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-sm font-medium">{e.activeTasksNow}</TableCell>
+                      <TableCell>
+                        <span className={cn("text-sm font-medium", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+                          {e.overdueCount}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">{e.completedInRange}</TableCell>
+                      <TableCell className="text-sm">{e.totalHours}h</TableCell>
+                      <TableCell>
+                        <div className="flex items-center gap-2 min-w-[80px]">
+                          <Progress value={e.utilizationPct ?? 0} className="h-1.5 flex-1" />
+                          <span className="text-xs text-muted-foreground w-10 text-right">{e.utilizationPct ?? 0}%</span>
+                        </div>
+                      </TableCell>
+                      <TableCell>
+                        {e.efficiencyRatio !== null ? (
+                          <Badge variant={e.efficiencyRatio > 1.2 ? "destructive" : e.efficiencyRatio > 0.8 ? "default" : "secondary"}>
+                            {(e.efficiencyRatio * 100).toFixed(0)}%
+                          </Badge>
+                        ) : (
+                          <span className="text-xs text-muted-foreground">—</span>
+                        )}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {sorted.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">No employee data found</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
@@ -272,59 +321,61 @@ function WorkloadTab({ rangeDays }: { rangeDays: number }) {
   return (
     <Card>
       <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Employee</TableHead>
-              <TableHead>Assigned</TableHead>
-              <TableHead>Due Soon</TableHead>
-              <TableHead>Overdue</TableHead>
-              <TableHead>Avg Completion Days</TableHead>
-              <TableHead>Backlog</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(data?.employees ?? []).map((e) => (
-              <TableRow key={e.userId} data-testid={`row-employee-workload-${e.userId}`}>
-                <TableCell>
-                  <span className="text-sm font-medium">{userName(e)}</span>
-                </TableCell>
-                <TableCell className="text-sm">{e.assignedCount}</TableCell>
-                <TableCell>
-                  {e.dueSoonCount > 0 ? (
-                    <Badge variant="secondary" className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">
-                      {e.dueSoonCount}
-                    </Badge>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">{e.dueSoonCount}</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <span className={cn("text-sm font-medium", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                    {e.overdueCount}
-                  </span>
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">
-                  {e.avgCompletionDays !== null ? `${Math.round(e.avgCompletionDays * 10) / 10}d` : "—"}
-                </TableCell>
-                <TableCell>
-                  {e.backlogCount >= 5 ? (
-                    <Badge variant="destructive">{e.backlogCount}</Badge>
-                  ) : e.backlogCount >= 3 ? (
-                    <Badge variant="default" className="bg-orange-500">{e.backlogCount}</Badge>
-                  ) : (
-                    <span className="text-sm text-muted-foreground">{e.backlogCount}</span>
-                  )}
-                </TableCell>
-              </TableRow>
-            ))}
-            {(data?.employees ?? []).length === 0 && !isLoading && (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No workload data found</TableCell>
+                <TableHead>Employee</TableHead>
+                <TableHead>Assigned</TableHead>
+                <TableHead>Due Soon</TableHead>
+                <TableHead>Overdue</TableHead>
+                <TableHead>Avg Completion Days</TableHead>
+                <TableHead>Backlog</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {(data?.employees ?? []).map((e) => (
+                <TableRow key={e.userId} data-testid={`row-employee-workload-${e.userId}`}>
+                  <TableCell>
+                    <span className="text-sm font-medium">{userName(e)}</span>
+                  </TableCell>
+                  <TableCell className="text-sm">{e.assignedCount}</TableCell>
+                  <TableCell>
+                    {e.dueSoonCount > 0 ? (
+                      <Badge variant="secondary" className="bg-yellow-100 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-300">
+                        {e.dueSoonCount}
+                      </Badge>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">{e.dueSoonCount}</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <span className={cn("text-sm font-medium", e.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+                      {e.overdueCount}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">
+                    {e.avgCompletionDays !== null ? `${Math.round(e.avgCompletionDays * 10) / 10}d` : "—"}
+                  </TableCell>
+                  <TableCell>
+                    {e.backlogCount >= 5 ? (
+                      <Badge variant="destructive">{e.backlogCount}</Badge>
+                    ) : e.backlogCount >= 3 ? (
+                      <Badge variant="default" className="bg-orange-500">{e.backlogCount}</Badge>
+                    ) : (
+                      <span className="text-sm text-muted-foreground">{e.backlogCount}</span>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+              {(data?.employees ?? []).length === 0 && !isLoading && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No workload data found</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );
@@ -367,53 +418,55 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
   return (
     <Card>
       <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Employee</TableHead>
-              <TableHead>Total Hrs</TableHead>
-              <TableHead>Billable</TableHead>
-              <TableHead>Non-Bill</TableHead>
-              <TableHead>Avg/Day</TableHead>
-              <TableHead>Est Hrs</TableHead>
-              <TableHead>Variance</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {(data?.employees ?? []).map((e) => (
-              <TableRow key={e.userId} data-testid={`row-employee-time-${e.userId}`}>
-                <TableCell>
-                  <span className="text-sm font-medium">{userName(e)}</span>
-                </TableCell>
-                <TableCell className="text-sm font-medium">{e.totalHours}h</TableCell>
-                <TableCell>
-                  <div className="space-y-1 min-w-[80px]">
-                    <span className="text-sm">{e.billableHours}h</span>
-                    {e.totalHours > 0 && (
-                      <Progress value={Math.round(e.billableHours / e.totalHours * 100)} className="h-1" />
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="text-sm text-muted-foreground">{e.nonBillableHours}h</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{e.avgHoursPerDay}h</TableCell>
-                <TableCell className="text-sm text-muted-foreground">{e.estimatedHours}h</TableCell>
-                <TableCell>
-                  <span className={cn(
-                    "text-sm font-medium",
-                    e.varianceHours > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
-                  )}>
-                    {e.varianceHours > 0 ? "+" : ""}{e.varianceHours}h
-                  </span>
-                </TableCell>
-              </TableRow>
-            ))}
-            {(data?.employees ?? []).length === 0 && !isLoading && (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={7} className="text-center text-muted-foreground py-8">No time data found</TableCell>
+                <TableHead>Employee</TableHead>
+                <TableHead>Total Hrs</TableHead>
+                <TableHead>Billable</TableHead>
+                <TableHead>Non-Bill</TableHead>
+                <TableHead>Avg/Day</TableHead>
+                <TableHead>Est Hrs</TableHead>
+                <TableHead>Variance</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {(data?.employees ?? []).map((e) => (
+                <TableRow key={e.userId} data-testid={`row-employee-time-${e.userId}`}>
+                  <TableCell>
+                    <span className="text-sm font-medium">{userName(e)}</span>
+                  </TableCell>
+                  <TableCell className="text-sm font-medium">{e.totalHours}h</TableCell>
+                  <TableCell>
+                    <div className="space-y-1 min-w-[80px]">
+                      <span className="text-sm">{e.billableHours}h</span>
+                      {e.totalHours > 0 && (
+                        <Progress value={Math.round(e.billableHours / e.totalHours * 100)} className="h-1" />
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{e.nonBillableHours}h</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{e.avgHoursPerDay}h</TableCell>
+                  <TableCell className="text-sm text-muted-foreground">{e.estimatedHours}h</TableCell>
+                  <TableCell>
+                    <span className={cn(
+                      "text-sm font-medium",
+                      e.varianceHours > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400"
+                    )}>
+                      {e.varianceHours > 0 ? "+" : ""}{e.varianceHours}h
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {(data?.employees ?? []).length === 0 && !isLoading && (
+                <TableRow>
+                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">No time data found</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );
@@ -478,6 +531,7 @@ function CapacityTab({ rangeDays }: { rangeDays: number }) {
           </CardDescription>
         </CardHeader>
         <CardContent className="p-0">
+          <p className="text-xs text-muted-foreground md:hidden px-3 pt-2 pb-1">Scroll to see all weeks</p>
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
@@ -889,6 +943,7 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
 
       <Card>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -970,6 +1025,7 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -1227,68 +1283,70 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
           {!projData?.projects.length ? (
             <p className="text-sm text-muted-foreground py-4 text-center">No active projects found</p>
           ) : (
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Project</TableHead>
-                  <TableHead className="text-center">Due</TableHead>
-                  <TableHead className="text-center">Open</TableHead>
-                  <TableHead className="text-center">Overdue</TableHead>
-                  <TableHead className="text-center">Throughput/wk</TableHead>
-                  <TableHead className="text-center">Weeks to Clear</TableHead>
-                  <TableHead className="text-center">Risk</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {projData.projects.map(p => (
-                  <>
-                    <TableRow
-                      key={p.projectId}
-                      className="cursor-pointer hover:bg-muted/30"
-                      onClick={() => setExpandedProject(expandedProject === p.projectId ? null : p.projectId)}
-                      data-testid={`forecast-project-row-${p.projectId}`}
-                    >
-                      <TableCell className="font-medium max-w-[160px] truncate">
-                        <div className="flex items-center gap-1.5">
-                          <FolderKanban className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
-                          {p.projectName}
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-center text-xs">
-                        {p.dueDate ? (
-                          <span className={p.weeksUntilDue !== null && p.weeksUntilDue < 0 ? "text-red-600 font-medium" : ""}>
-                            {new Date(p.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
-                            {p.weeksUntilDue !== null && (
-                              <span className="text-muted-foreground ml-1">
-                                ({p.weeksUntilDue < 0 ? "past" : `${Math.round(p.weeksUntilDue)}w`})
-                              </span>
-                            )}
-                          </span>
-                        ) : <span className="text-muted-foreground">—</span>}
-                      </TableCell>
-                      <TableCell className="text-center">{p.openTaskCount}</TableCell>
-                      <TableCell className="text-center">
-                        <span className={p.overdueCount > 0 ? "text-red-600 font-medium" : ""}>{p.overdueCount}</span>
-                      </TableCell>
-                      <TableCell className="text-center">{p.throughputPerWeek}</TableCell>
-                      <TableCell className="text-center">{p.predictedWeeksToClear}</TableCell>
-                      <TableCell className="text-center">
-                        <Badge className={cn("text-xs", RISK_COLORS[p.deadlineRisk])}>
-                          {p.deadlineRisk}
-                        </Badge>
-                      </TableCell>
-                    </TableRow>
-                    {expandedProject === p.projectId && (
-                      <TableRow key={`${p.projectId}-exp`} className="bg-muted/20">
-                        <TableCell colSpan={7} className="text-xs text-muted-foreground py-2">
-                          {p.explanation.join(" • ")}
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Project</TableHead>
+                    <TableHead className="text-center">Due</TableHead>
+                    <TableHead className="text-center">Open</TableHead>
+                    <TableHead className="text-center">Overdue</TableHead>
+                    <TableHead className="text-center">Throughput/wk</TableHead>
+                    <TableHead className="text-center">Weeks to Clear</TableHead>
+                    <TableHead className="text-center">Risk</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {projData.projects.map(p => (
+                    <>
+                      <TableRow
+                        key={p.projectId}
+                        className="cursor-pointer hover:bg-muted/30"
+                        onClick={() => setExpandedProject(expandedProject === p.projectId ? null : p.projectId)}
+                        data-testid={`forecast-project-row-${p.projectId}`}
+                      >
+                        <TableCell className="font-medium max-w-[160px] truncate">
+                          <div className="flex items-center gap-1.5">
+                            <FolderKanban className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                            {p.projectName}
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-center text-xs">
+                          {p.dueDate ? (
+                            <span className={p.weeksUntilDue !== null && p.weeksUntilDue < 0 ? "text-red-600 font-medium" : ""}>
+                              {new Date(p.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                              {p.weeksUntilDue !== null && (
+                                <span className="text-muted-foreground ml-1">
+                                  ({p.weeksUntilDue < 0 ? "past" : `${Math.round(p.weeksUntilDue)}w`})
+                                </span>
+                              )}
+                            </span>
+                          ) : <span className="text-muted-foreground">—</span>}
+                        </TableCell>
+                        <TableCell className="text-center">{p.openTaskCount}</TableCell>
+                        <TableCell className="text-center">
+                          <span className={p.overdueCount > 0 ? "text-red-600 font-medium" : ""}>{p.overdueCount}</span>
+                        </TableCell>
+                        <TableCell className="text-center">{p.throughputPerWeek}</TableCell>
+                        <TableCell className="text-center">{p.predictedWeeksToClear}</TableCell>
+                        <TableCell className="text-center">
+                          <Badge className={cn("text-xs", RISK_COLORS[p.deadlineRisk])}>
+                            {p.deadlineRisk}
+                          </Badge>
                         </TableCell>
                       </TableRow>
-                    )}
-                  </>
-                ))}
-              </TableBody>
-            </Table>
+                      {expandedProject === p.projectId && (
+                        <TableRow key={`${p.projectId}-exp`} className="bg-muted/20">
+                          <TableCell colSpan={7} className="text-xs text-muted-foreground py-2">
+                            {p.explanation.join(" • ")}
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
           )}
           {projData && (
             <div className="mt-3">
@@ -1318,6 +1376,22 @@ export function EmployeeCommandCenter() {
       onRangeChange={setRangeDays}
     >
       <Tabs value={activeTab} onValueChange={setActiveTab} data-testid="employee-cc-tabs">
+        <MobileTabSelect
+          tabs={[
+            { value: "overview", label: "Overview" },
+            { value: "workload", label: "Workload" },
+            { value: "time", label: "Time" },
+            { value: "capacity", label: "Capacity" },
+            { value: "risk", label: "Risk" },
+            { value: "trends", label: "Trends" },
+            ...(flags.enableEmployeePerformanceIndex ? [{ value: "performance", label: "Performance" }] : []),
+            ...(flags.enableForecastingLayer ? [{ value: "forecasts", label: "Forecasts" }] : []),
+          ]}
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="mb-3"
+        />
+        <div className="hidden md:block">
         <TabsList className="h-9 flex-wrap">
           <TabsTrigger value="overview" className="text-xs gap-1.5" data-testid="tab-employee-overview">
             <Users className="h-3.5 w-3.5" />
@@ -1356,6 +1430,7 @@ export function EmployeeCommandCenter() {
             </TabsTrigger>
           )}
         </TabsList>
+        </div>
 
         <TabsContent value="overview" className="mt-4">
           <OverviewTab rangeDays={rangeDays} />

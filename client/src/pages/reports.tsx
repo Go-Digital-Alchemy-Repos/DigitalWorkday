@@ -26,6 +26,7 @@ import {
   PieChart,
 } from "lucide-react";
 import { ReportsTab } from "@/components/settings/reports-tab";
+import { MobileTabSelect } from "@/components/reports/mobile-tab-select";
 import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
 import { cn } from "@/lib/utils";
 
@@ -421,20 +422,20 @@ export default function ReportsPage() {
   if (currentView === "landing") {
     return (
       <ScrollArea className="h-full">
-        <div className="container max-w-7xl p-6">
-          <div className="flex items-center gap-3 mb-6">
-            <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-              <BarChart3 className="h-6 w-6 text-primary" />
+        <div className="container max-w-7xl p-3 sm:p-6">
+          <div className="flex items-center gap-3 mb-4 sm:mb-6">
+            <div className="w-10 h-10 sm:w-12 sm:h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <BarChart3 className="h-5 w-5 sm:h-6 sm:w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Reports & Analytics</h1>
-              <p className="text-muted-foreground text-sm">
+              <h1 className="text-xl sm:text-2xl font-bold">Reports & Analytics</h1>
+              <p className="text-muted-foreground text-xs sm:text-sm">
                 Comprehensive insights into time tracking, workload, and project performance
               </p>
             </div>
           </div>
 
-          <div className="grid gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-8">
+          <div className="grid gap-3 sm:gap-6 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4 mb-6 sm:mb-8">
             {reportCategories.map((category) => (
               <ReportCard
                 key={category.title}
@@ -512,19 +513,19 @@ export default function ReportsPage() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="container max-w-7xl p-6">
-        <div className="mb-6">
-          <div className="flex items-center gap-2 mb-3">
+      <div className="container max-w-7xl p-3 sm:p-4 lg:p-6">
+        <div className="mb-4 sm:mb-6">
+          <div className="flex items-center gap-2 mb-2 sm:mb-3">
             <button
               onClick={() => setCurrentView("landing")}
               data-testid="button-back-to-reports"
-              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+              className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors min-h-[44px] sm:min-h-0"
             >
               <ArrowLeft className="h-3 w-3" />
               All Reports
             </button>
           </div>
-          <div className="flex items-center gap-3 mb-4">
+          <div className="flex items-center gap-3 mb-3 sm:mb-4">
             <div className="w-9 h-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
               {getViewIcon()}
             </div>
@@ -533,7 +534,15 @@ export default function ReportsPage() {
               <p className="text-muted-foreground text-xs">{getViewDescription()}</p>
             </div>
           </div>
-          <div className="flex items-center border-b overflow-x-auto">
+          <MobileTabSelect
+            tabs={REPORT_TABS.filter(tab => !tab.flag || flags[tab.flag]).map(tab => ({
+              value: tab.view,
+              label: tab.label,
+            }))}
+            value={currentView}
+            onValueChange={(v) => setCurrentView(v as ReportView)}
+          />
+          <div className="hidden md:flex items-center border-b overflow-x-auto">
             {REPORT_TABS.filter(tab => !tab.flag || flags[tab.flag]).map((tab) => {
               const isActive = currentView === tab.view;
               return (

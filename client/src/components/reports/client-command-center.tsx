@@ -12,6 +12,7 @@ import { cn } from "@/lib/utils";
 import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
+import { MobileTabSelect } from "./mobile-tab-select";
 
 interface MetricCardProps {
   label: string;
@@ -105,49 +106,76 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
           <MetricCard label="Avg Engagement" value={`${totals.avgEngagement}%`} icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-orange-500" />
         </div>
       )}
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Company</TableHead>
-                <TableHead>Active Projects</TableHead>
-                <TableHead>Open Tasks</TableHead>
-                <TableHead>Overdue</TableHead>
-                <TableHead>Hours</TableHead>
-                <TableHead>Last Activity</TableHead>
-                <TableHead>Engagement</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data?.clients.map((c) => (
-                <TableRow key={c.clientId} data-testid={`row-client-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
-                  <TableCell className="text-sm">{c.activeProjects}</TableCell>
-                  <TableCell className="text-sm">{c.openTasks}</TableCell>
-                  <TableCell>
-                    <span className={cn("text-sm font-medium", c.overdueTasks > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                      {c.overdueTasks}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-sm">{c.totalHours}h</TableCell>
-                  <TableCell className="text-xs text-muted-foreground">{relativeDate(c.lastActivityDate)}</TableCell>
-                  <TableCell>
-                    <Badge variant={engagementBadgeVariant(c.engagementScore)} data-testid={`engagement-${c.clientId}`}>
-                      {c.engagementScore}%
-                    </Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-              {data?.clients.length === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center text-muted-foreground py-8">No clients found</TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {data?.clients && data.clients.length > 0 && (
+        <div className="md:hidden space-y-3">
+          {data.clients.map((c) => (
+            <Card key={c.clientId} data-testid={`mobile-card-client-${c.clientId}`}>
+              <CardContent className="p-4">
+                <div className="flex items-start justify-between gap-2 mb-2">
+                  <span className="font-semibold text-sm">{c.companyName}</span>
+                  <Badge variant={engagementBadgeVariant(c.engagementScore)} data-testid={`engagement-mobile-${c.clientId}`}>
+                    {c.engagementScore}%
+                  </Badge>
+                </div>
+                <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  <span>Active Projects: <span className="text-foreground font-medium">{c.activeProjects}</span></span>
+                  <span>Open Tasks: <span className="text-foreground font-medium">{c.openTasks}</span></span>
+                  <span>Overdue: <span className={cn("font-medium", c.overdueTasks > 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>{c.overdueTasks}</span></span>
+                  <span>Hours: <span className="text-foreground font-medium">{c.totalHours}h</span></span>
+                  <span className="col-span-2">Last Activity: <span className="text-foreground font-medium">{relativeDate(c.lastActivityDate)}</span></span>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+      <div className="hidden md:block">
+        <Card>
+          <CardContent className="p-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Company</TableHead>
+                    <TableHead>Active Projects</TableHead>
+                    <TableHead>Open Tasks</TableHead>
+                    <TableHead>Overdue</TableHead>
+                    <TableHead>Hours</TableHead>
+                    <TableHead>Last Activity</TableHead>
+                    <TableHead>Engagement</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data?.clients.map((c) => (
+                    <TableRow key={c.clientId} data-testid={`row-client-${c.clientId}`}>
+                      <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
+                      <TableCell className="text-sm">{c.activeProjects}</TableCell>
+                      <TableCell className="text-sm">{c.openTasks}</TableCell>
+                      <TableCell>
+                        <span className={cn("text-sm font-medium", c.overdueTasks > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+                          {c.overdueTasks}
+                        </span>
+                      </TableCell>
+                      <TableCell className="text-sm">{c.totalHours}h</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">{relativeDate(c.lastActivityDate)}</TableCell>
+                      <TableCell>
+                        <Badge variant={engagementBadgeVariant(c.engagementScore)} data-testid={`engagement-${c.clientId}`}>
+                          {c.engagementScore}%
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                  {data?.clients.length === 0 && (
+                    <TableRow>
+                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">No clients found</TableCell>
+                    </TableRow>
+                  )}
+                </TableBody>
+              </Table>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
@@ -181,37 +209,39 @@ function ActivityTab({ rangeDays }: { rangeDays: number }) {
   return (
     <Card>
       <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Company</TableHead>
-              <TableHead>Tasks Created</TableHead>
-              <TableHead>Hours Logged</TableHead>
-              <TableHead>Comments</TableHead>
-              <TableHead>Inactivity Days</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data?.clients.map((c) => (
-              <TableRow key={c.clientId} data-testid={`row-activity-${c.clientId}`}>
-                <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
-                <TableCell className="text-sm">{c.tasksCreatedInRange}</TableCell>
-                <TableCell className="text-sm">{Math.round(c.timeLoggedInRange * 10) / 10}h</TableCell>
-                <TableCell className="text-sm">{c.commentsInRange}</TableCell>
-                <TableCell>
-                  <span className={cn("text-sm font-medium", c.inactivityDays > 14 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                    {c.inactivityDays}d
-                  </span>
-                </TableCell>
-              </TableRow>
-            ))}
-            {data?.clients.length === 0 && (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No activity data</TableCell>
+                <TableHead>Company</TableHead>
+                <TableHead>Tasks Created</TableHead>
+                <TableHead>Hours Logged</TableHead>
+                <TableHead>Comments</TableHead>
+                <TableHead>Inactivity Days</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {data?.clients.map((c) => (
+                <TableRow key={c.clientId} data-testid={`row-activity-${c.clientId}`}>
+                  <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
+                  <TableCell className="text-sm">{c.tasksCreatedInRange}</TableCell>
+                  <TableCell className="text-sm">{Math.round(c.timeLoggedInRange * 10) / 10}h</TableCell>
+                  <TableCell className="text-sm">{c.commentsInRange}</TableCell>
+                  <TableCell>
+                    <span className={cn("text-sm font-medium", c.inactivityDays > 14 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+                      {c.inactivityDays}d
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {data?.clients.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No activity data</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );
@@ -252,39 +282,41 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
   return (
     <Card>
       <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Company</TableHead>
-              <TableHead>Total Hrs</TableHead>
-              <TableHead>Billable</TableHead>
-              <TableHead>Non-Bill</TableHead>
-              <TableHead>Estimated</TableHead>
-              <TableHead>Variance</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data?.clients.map((c) => (
-              <TableRow key={c.clientId} data-testid={`row-time-${c.clientId}`}>
-                <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
-                <TableCell className="text-sm">{c.totalHours}h</TableCell>
-                <TableCell className="text-sm">{c.billableHours}h</TableCell>
-                <TableCell className="text-sm">{c.nonBillableHours}h</TableCell>
-                <TableCell className="text-sm">{c.estimatedHours}h</TableCell>
-                <TableCell>
-                  <span className={cn("text-sm font-medium", c.varianceHours > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
-                    {formatVariance(c.varianceHours)}
-                  </span>
-                </TableCell>
-              </TableRow>
-            ))}
-            {data?.clients.length === 0 && (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No time data</TableCell>
+                <TableHead>Company</TableHead>
+                <TableHead>Total Hrs</TableHead>
+                <TableHead>Billable</TableHead>
+                <TableHead>Non-Bill</TableHead>
+                <TableHead>Estimated</TableHead>
+                <TableHead>Variance</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {data?.clients.map((c) => (
+                <TableRow key={c.clientId} data-testid={`row-time-${c.clientId}`}>
+                  <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
+                  <TableCell className="text-sm">{c.totalHours}h</TableCell>
+                  <TableCell className="text-sm">{c.billableHours}h</TableCell>
+                  <TableCell className="text-sm">{c.nonBillableHours}h</TableCell>
+                  <TableCell className="text-sm">{c.estimatedHours}h</TableCell>
+                  <TableCell>
+                    <span className={cn("text-sm font-medium", c.varianceHours > 0 ? "text-red-600 dark:text-red-400" : "text-green-600 dark:text-green-400")}>
+                      {formatVariance(c.varianceHours)}
+                    </span>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {data?.clients.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={6} className="text-center text-muted-foreground py-8">No time data</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );
@@ -343,37 +375,39 @@ function TasksTab({ rangeDays }: { rangeDays: number }) {
       </div>
       <Card>
         <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Company</TableHead>
-                <TableHead>Open</TableHead>
-                <TableHead>Overdue</TableHead>
-                <TableHead>Completed</TableHead>
-                <TableHead>Aging</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {data?.clients.map((c) => (
-                <TableRow key={c.clientId} data-testid={`row-tasks-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
-                  <TableCell className="text-sm">{c.openTaskCount}</TableCell>
-                  <TableCell>
-                    <span className={cn("text-sm font-medium", c.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
-                      {c.overdueCount}
-                    </span>
-                  </TableCell>
-                  <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">{c.completedInRange}</TableCell>
-                  <TableCell><AgingBar item={c} /></TableCell>
-                </TableRow>
-              ))}
-              {data?.clients.length === 0 && (
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
                 <TableRow>
-                  <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No task data</TableCell>
+                  <TableHead>Company</TableHead>
+                  <TableHead>Open</TableHead>
+                  <TableHead>Overdue</TableHead>
+                  <TableHead>Completed</TableHead>
+                  <TableHead>Aging</TableHead>
                 </TableRow>
-              )}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {data?.clients.map((c) => (
+                  <TableRow key={c.clientId} data-testid={`row-tasks-${c.clientId}`}>
+                    <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
+                    <TableCell className="text-sm">{c.openTaskCount}</TableCell>
+                    <TableCell>
+                      <span className={cn("text-sm font-medium", c.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
+                        {c.overdueCount}
+                      </span>
+                    </TableCell>
+                    <TableCell className="text-sm text-green-600 dark:text-green-400 font-medium">{c.completedInRange}</TableCell>
+                    <TableCell><AgingBar item={c} /></TableCell>
+                  </TableRow>
+                ))}
+                {data?.clients.length === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={5} className="text-center text-muted-foreground py-8">No task data</TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -419,45 +453,47 @@ function SlaTab({ rangeDays }: { rangeDays: number }) {
   return (
     <Card>
       <CardContent className="p-0">
-        <Table>
-          <TableHeader>
-            <TableRow>
-              <TableHead>Company</TableHead>
-              <TableHead>Total Tasks</TableHead>
-              <TableHead className="min-w-[160px]">Overdue %</TableHead>
-              <TableHead className="min-w-[160px]">Completed On-Time %</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {data?.clients.map((c) => (
-              <TableRow key={c.clientId} data-testid={`row-sla-${c.clientId}`}>
-                <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
-                <TableCell className="text-sm">{c.totalTasks}</TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2 min-w-[140px]">
-                    <Progress value={c.overdueTaskPct} className="h-1.5 flex-1" />
-                    <span className={cn("text-xs font-medium w-10 text-right", progressColor(c.overdueTaskPct, true))}>
-                      {Math.round(c.overdueTaskPct)}%
-                    </span>
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex items-center gap-2 min-w-[140px]">
-                    <Progress value={c.completedWithinDuePct} className="h-1.5 flex-1" />
-                    <span className={cn("text-xs font-medium w-10 text-right", progressColor(c.completedWithinDuePct))}>
-                      {Math.round(c.completedWithinDuePct)}%
-                    </span>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-            {data?.clients.length === 0 && (
+        <div className="overflow-x-auto">
+          <Table>
+            <TableHeader>
               <TableRow>
-                <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No SLA data</TableCell>
+                <TableHead>Company</TableHead>
+                <TableHead>Total Tasks</TableHead>
+                <TableHead className="min-w-[160px]">Overdue %</TableHead>
+                <TableHead className="min-w-[160px]">Completed On-Time %</TableHead>
               </TableRow>
-            )}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {data?.clients.map((c) => (
+                <TableRow key={c.clientId} data-testid={`row-sla-${c.clientId}`}>
+                  <TableCell className="font-medium text-sm">{c.companyName}</TableCell>
+                  <TableCell className="text-sm">{c.totalTasks}</TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2 min-w-[140px]">
+                      <Progress value={c.overdueTaskPct} className="h-1.5 flex-1" />
+                      <span className={cn("text-xs font-medium w-10 text-right", progressColor(c.overdueTaskPct, true))}>
+                        {Math.round(c.overdueTaskPct)}%
+                      </span>
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2 min-w-[140px]">
+                      <Progress value={c.completedWithinDuePct} className="h-1.5 flex-1" />
+                      <span className={cn("text-xs font-medium w-10 text-right", progressColor(c.completedWithinDuePct))}>
+                        {Math.round(c.completedWithinDuePct)}%
+                      </span>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+              {data?.clients.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={4} className="text-center text-muted-foreground py-8">No SLA data</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </div>
       </CardContent>
     </Card>
   );
@@ -705,6 +741,7 @@ function HealthTab({ rangeDays }: { rangeDays: number }) {
 
       <Card>
         <CardContent className="p-0">
+          <div className="overflow-x-auto">
           <Table>
             <TableHeader>
               <TableRow>
@@ -780,6 +817,7 @@ function HealthTab({ rangeDays }: { rangeDays: number }) {
               )}
             </TableBody>
           </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
@@ -947,6 +985,7 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
             <p className="text-sm text-muted-foreground py-4 text-center">No client data found</p>
           ) : (
             <>
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -1016,6 +1055,7 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
                   ))}
                 </TableBody>
               </Table>
+              </div>
               <p className="text-xs text-muted-foreground mt-2">Click a row to see the full explanation</p>
             </>
           )}
@@ -1047,6 +1087,22 @@ export function ClientCommandCenter() {
       onRangeChange={setRangeDays}
     >
       <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <MobileTabSelect
+          tabs={[
+            { value: "overview", label: "Overview" },
+            { value: "activity", label: "Activity" },
+            { value: "time", label: "Time" },
+            { value: "tasks", label: "Tasks" },
+            { value: "sla", label: "SLA" },
+            { value: "risk", label: "Risk" },
+            ...(flags.enableClientHealthIndex ? [{ value: "health", label: "Health" }] : []),
+            ...(flags.enableForecastingLayer ? [{ value: "forecasts", label: "Forecasts" }] : []),
+          ]}
+          value={activeTab}
+          onValueChange={setActiveTab}
+          className="mb-3"
+        />
+        <div className="hidden md:block">
         <TabsList className="h-9 flex-wrap">
           <TabsTrigger value="overview" className="text-xs gap-1.5" data-testid="tab-client-overview">
             <Users className="h-3.5 w-3.5" />
@@ -1085,6 +1141,7 @@ export function ClientCommandCenter() {
             </TabsTrigger>
           )}
         </TabsList>
+        </div>
 
         <TabsContent value="overview" className="mt-4">
           <OverviewTab rangeDays={rangeDays} />

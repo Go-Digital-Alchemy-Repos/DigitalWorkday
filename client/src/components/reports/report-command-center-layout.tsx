@@ -38,18 +38,18 @@ export function ReportCommandCenterLayout({
   onRangeChange,
 }: ReportCommandCenterLayoutProps) {
   return (
-    <div className="space-y-4" data-testid="report-command-center-layout">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div className="flex items-center gap-2 min-w-0">
+    <div className="space-y-3 sm:space-y-4" data-testid="report-command-center-layout">
+      <div className="flex items-start sm:items-center justify-between gap-3 flex-wrap">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <span className="text-primary shrink-0">{icon}</span>
           <div className="min-w-0">
-            <h2 className="text-base font-semibold leading-tight">{title}</h2>
-            <p className="text-xs text-muted-foreground mt-0.5">{description}</p>
+            <h2 className="text-sm sm:text-base font-semibold leading-tight">{title}</h2>
+            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2 sm:line-clamp-none">{description}</p>
           </div>
         </div>
         <Select value={String(rangeDays)} onValueChange={(v) => onRangeChange(Number(v))}>
-          <SelectTrigger className="w-44" data-testid="select-date-range">
-            <CalendarRange className="h-3.5 w-3.5 mr-1.5" />
+          <SelectTrigger className="w-full sm:w-44 shrink-0" data-testid="select-date-range">
+            <CalendarRange className="h-3.5 w-3.5 mr-1.5 shrink-0" />
             <SelectValue />
           </SelectTrigger>
           <SelectContent>
