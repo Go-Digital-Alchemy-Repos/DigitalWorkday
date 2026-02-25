@@ -824,6 +824,7 @@ export function GlobalChatDrawer() {
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  {...compositionHandlers}
                   placeholder={`Message ${selectedChannel ? "#" + selectedChannel.name : selectedDm ? getDmDisplayName(selectedDm) : ""}... (Enter to send, Shift+Enter for new line)`}
                   disabled={sendMessageMutation.isPending}
                   className="min-h-[60px] max-h-[120px] resize-none text-sm"
