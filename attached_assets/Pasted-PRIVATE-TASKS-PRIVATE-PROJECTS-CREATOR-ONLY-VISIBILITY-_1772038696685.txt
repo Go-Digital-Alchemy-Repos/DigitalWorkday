@@ -1,0 +1,281 @@
+PRIVATE TASKS + PRIVATE PROJECTS (CREATOR-ONLY VISIBILITY + INVITE SHARING)
+NON-DESTRUCTIVE • ADDITIVE • TENANT-SCOPED • DOCUMENTED
+
+You are working in the DigitalWorkday codebase (React frontend, Node/Express backend, PostgreSQL + Drizzle ORM).
+Implement “Private Tasks” and “Private Projects” so that:
+
+- A task or project can be marked PRIVATE at creation (or toggled later, if allowed).
+- PRIVATE means: only the creator can see it by default.
+- The creator can explicitly INVITE/SHARE with other tenant members.
+- Invited members can then view (and possibly edit) depending on permission rules.
+- This must not break existing multi-tenant isolation.
+
+CRITICAL NON-DESTRUCTIVE RULES
+- Do NOT change the meaning of existing permissions for non-private items.
+- Private visibility must be implemented as an additive constraint on reads.
+- Keep old endpoints and response shapes working.
+- If you add fields to API responses, they must be additive and safe.
+- Add feature flags to allow rollback:
+  - ENABLE_PRIVATE_TASKS
+  - ENABLE_PRIVATE_PROJECTS
+
+============================================================
+PHASE 0 — DISCOVERY (NO BEHAVIOR CHANGES)
+============================================================
+0.1 Identify current tables and relationships:
+- tasks table fields and current visibility rules
+- projects table fields and visibility rules
+- membership tables (project_members? task_assignees? watchers?)
+- how tenant users are represented (users/workspace_members)
+0.2 Identify all list endpoints:
+- /api/tasks/my, /api/tasks, /api/projects, any dashboard queries
+0.3 Identify all “can view” checks (middleware/service layer).
+
+DO NOT refactor yet—just prepare integration points.
+
+============================================================
+PHASE 1 — DATA MODEL (ADDITIVE)
+============================================================
+
+1.1 Add columns (additive migrations + Drizzle schema updates)
+
+A) tasks table add:
+- visibility (text enum) default 'workspace' OR boolean is_private default false
+- created_by_user_id (if not already present; required for private)
+If created_by_user_id exists already, reuse it.
+
+Recommended:
+- visibility: 'workspace' | 'private'
+Default: 'workspace'
+
+B) projects table add:
+- visibility (text enum) default 'workspace'
+- created_by_user_id (if not already present)
+
+1.2 Add membership tables for private sharing (additive)
+
+A) project_access (or project_members) table (if not already suitable)
+- id
+- tenant_id
+- project_id
+- user_id
+- role (text): 'viewer' | 'editor' | 'admin'  (keep simple)
+- invited_by_user_id
+- created_at
+Unique index: (tenant_id, project_id, user_id)
+
+B) task_access table (NEW)
+- id
+- tenant_id
+- task_id
+- user_id
+- role (text): 'viewer' | 'editor'  (keep simple)
+- invited_by_user_id
+- created_at
+Unique index: (tenant_id, task_id, user_id)
+
+NOTES:
+- For non-private tasks/projects, you may still use existing assignment/watchers membership models.
+- For PRIVATE items, access is determined by:
+  - creator
+  - explicit access rows
+  - (optionally) assignees/watchers if you choose to treat assignment as an implicit share; by default do NOT (keep explicit share to avoid surprise).
+
+Indexes:
+- tasks(tenant_id, visibility)
+- projects(tenant_id, visibility)
+- task_access(tenant_id, task_id)
+- project_access(tenant_id, project_id)
+
+============================================================
+PHASE 2 — AUTHORIZATION RULES (SINGLE SOURCE OF TRUTH)
+============================================================
+
+2.1 Create centralized permission helpers (additive)
+
+server/src/permissions/privateVisibility.ts
+
+Functions:
+- canViewTask({ tenantId, taskId, userId }): boolean
+- canEditTask(...)
+- canViewProject(...)
+- canEditProject(...)
+
+Rules (V1):
+Task:
+- if visibility != 'private' => existing rules (unchanged)
+- if visibility == 'private':
+  - creator can view/edit
+  - users in task_access can view/edit based on role
+  - optionally: if task belongs to project that is private and user has project_access, they can view (recommended)
+Project:
+- if visibility != 'private' => existing rules (unchanged)
+- if private:
+  - creator can view/edit/admin
+  - users in project_access can view/edit/admin based on role
+
+IMPORTANT:
+- Implement these checks in SERVICE layer (not in routes directly) to ensure consistency.
+
+============================================================
+PHASE 3 — READ PATH UPDATES (ELIMINATE LEAKS)
+============================================================
+
+Update all relevant task/project list queries to enforce private visibility.
+
+3.1 Tasks list endpoints (examples; match your code)
+- getTasksByUser / /api/tasks/my
+- /api/tasks (workspace tasks)
+Ensure WHERE clause includes:
+- (tasks.visibility != 'private')
+  OR
+- (tasks.visibility == 'private' AND tasks.created_by_user_id = currentUserId)
+  OR
+- (tasks.visibility == 'private' AND EXISTS task_access for currentUserId)
+  OR
+- (tasks.visibility == 'private' AND task.project_id is not null AND EXISTS project_access for currentUserId)  (recommended)
+
+Do this server-side in SQL (Drizzle).
+
+3.2 Task detail endpoint
+When fetching a task by ID:
+- run canViewTask
+- if forbidden, return 404 (preferred to avoid data leak) or 403 per app convention.
+
+3.3 Projects list endpoints
+Apply similar filter:
+- public/workspace projects unchanged
+- private projects only when:
+  - created_by_user_id = currentUserId OR EXISTS project_access for currentUserId
+
+3.4 Project detail endpoint
+Enforce canViewProject.
+
+3.5 Ensure search endpoints also respect these constraints.
+Any “global search” must not return private items unless user has access.
+
+============================================================
+PHASE 4 — WRITE PATH (CREATE/UPDATE)
+============================================================
+
+4.1 Create task/project
+Add ability to set visibility:
+- visibility: 'workspace' (default) or 'private'
+Only Tenant Employees/Admins can create private items (same as task creation permission).
+
+On creation if visibility == 'private':
+- created_by_user_id must be set to current user
+- automatically create access row for creator:
+  - project_access/task_access with role 'admin'/'editor'
+(This makes membership logic consistent.)
+
+4.2 Toggle privacy (optional but recommended)
+Allow creator (or private admin) to change visibility:
+- workspace → private
+- private → workspace (warn: this exposes it to broader users)
+This should be guarded:
+- Only creator or 'admin' role can change.
+
+If you think toggling is risky, ship V1 with privacy set only at creation; add toggle later.
+
+============================================================
+PHASE 5 — SHARING / INVITES
+============================================================
+
+5.1 Add endpoints (additive)
+Tasks:
+- GET    /api/tasks/:taskId/access
+- POST   /api/tasks/:taskId/access   (invite user(s))
+- PATCH  /api/tasks/:taskId/access/:userId (change role)
+- DELETE /api/tasks/:taskId/access/:userId (remove)
+
+Projects:
+- GET    /api/projects/:projectId/access
+- POST   /api/projects/:projectId/access
+- PATCH  /api/projects/:projectId/access/:userId
+- DELETE /api/projects/:projectId/access/:userId
+
+Rules:
+- Only creator/admin can manage access.
+- Invite only users in same tenant.
+- Optionally send notification/email on invite (use existing notifications).
+
+5.2 UX: “Share” modal
+Add “Private” toggle on create forms:
+- Create Task modal/page
+- Create Project modal/page
+
+If private:
+- show “Share” button in header (task/project detail view)
+- Share modal:
+  - search/select tenant users
+  - assign role (viewer/editor)
+  - list current members
+  - remove member
+
+============================================================
+PHASE 6 — UI INDICATORS + FILTERS
+============================================================
+
+6.1 Add privacy indicators
+- Show a lock icon + tooltip “Private: only invited members can view”
+- In list rows/cards show lock icon for private items user can see.
+
+6.2 Add list filters (optional)
+- “Show private only”
+- “Show workspace only”
+Default: show both that user has access to.
+
+6.3 Ensure that users without access never see private items anywhere (lists, counts, search).
+
+============================================================
+PHASE 7 — COUNTS / SUMMARIES (IMPORTANT)
+============================================================
+Any counts used in dashboards (task counts, overdue counts, unread counts, etc.) must respect visibility rules.
+Update aggregation queries to include the same visibility filters as list queries.
+
+============================================================
+PHASE 8 — TESTING (MINIMUM REQUIRED)
+============================================================
+
+Add tests or dev verification checklist:
+
+- User A creates private task => only A sees it
+- User B cannot retrieve task by ID (404/403)
+- A shares with B => B can now see task in lists and by ID
+- A removes B => B loses access immediately
+- Private project:
+  - project visibility respected in project list
+  - tasks under private project are not visible unless user has project access (recommended)
+- Search does not leak private items
+- Counts do not include inaccessible private items
+
+============================================================
+PHASE 9 — APP DOCS UPDATE (MANDATORY)
+============================================================
+
+Add App Docs pages/sections:
+- “Private Visibility Model (Tasks & Projects)”
+  - Definitions: workspace vs private
+  - Access rules
+  - Membership roles
+  - How project access cascades to tasks
+  - API endpoints
+  - UI behaviors
+  - Security notes (404 vs 403)
+  - Feature flags & rollback
+
+============================================================
+STOP CONDITION
+============================================================
+Stop after:
+- DB migrations complete
+- Read filters enforced everywhere
+- Sharing endpoints + UI share modal implemented
+- Private toggles added to create flows
+- Docs updated
+- Feature flags allow rollback
+
+Do NOT implement external guest sharing in this phase.
+Do NOT implement complex RBAC beyond viewer/editor/admin.
+Keep it simple and secure.
