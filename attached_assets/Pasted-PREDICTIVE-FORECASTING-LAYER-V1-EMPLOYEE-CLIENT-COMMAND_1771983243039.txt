@@ -1,0 +1,301 @@
+PREDICTIVE FORECASTING LAYER (V1)
+EMPLOYEE + CLIENT COMMAND CENTER FORECASTS
+NON-DESTRUCTIVE • ADDITIVE • FEATURE-FLAGGED • DOCUMENTED
+
+You are working in the DigitalWorkday codebase (React frontend, Node/Express backend, PostgreSQL + Drizzle ORM).
+
+We are implementing a Forecasting Layer that produces near-term operational predictions using existing data:
+- tasks (due dates, status, estimates)
+- time_entries (actual hours)
+- resource_allocations (planned hours) if enabled
+- Employee Performance Index (EPI)
+- Client Health Index (CHI)
+
+This must be:
+- 100% NON-DESTRUCTIVE
+- Additive only
+- Behind feature flags
+- Transparent + explainable outputs (no “black box”)
+- Server-side computation (SQL aggregation + deterministic heuristics)
+- Fully documented in App Docs
+
+Feature flags:
+- ENABLE_FORECASTING_LAYER
+- ENABLE_FORECASTING_ALERTS (placeholder; alerts can be Phase 2)
+
+============================================================
+GOALS (V1)
+============================================================
+
+Deliver reliable, explainable forecasts for Operations Managers & Project Managers:
+
+A) Capacity Overload Forecast (by user, next 2–8 weeks)
+B) Project Deadline Risk Forecast (by project, next 2–8 weeks)
+C) Client Risk Trend Forecast (by client, next 2–8 weeks)
+D) Team Throughput Forecast (tasks/week) (optional v1 if data is sufficient)
+
+IMPORTANT:
+V1 uses deterministic models and historical trends.
+Do NOT implement ML training pipelines yet.
+
+============================================================
+PHASE 1 — FORECASTING DATA CONTRACT (COMMON TYPES)
+============================================================
+
+Create:
+server/src/reporting/forecasting/types.ts
+
+Define shared types:
+
+ForecastHorizon:
+- horizonWeeks: 2 | 4 | 8 (default 4)
+
+ForecastResultEnvelope:
+{
+  asOfDate,
+  startDate,
+  endDate,
+  horizonWeeks,
+  confidence: "Low"|"Medium"|"High",
+  modelVersion: "v1.0",
+  explanations: string[],
+  dataQualityFlags: string[]
+}
+
+============================================================
+PHASE 2 — DATA QUALITY + NORMALIZATION
+============================================================
+
+Create:
+server/src/reporting/forecasting/dataQuality.ts
+
+Functions:
+- assessTimeTrackingCoverage(tenantId, startDate, endDate) -> %
+- assessEstimateCoverage(tenantId, startDate, endDate) -> %
+- assessAllocationCoverage(tenantId, startDate, endDate) -> % (if allocation enabled)
+
+Return dataQualityFlags like:
+- "LOW_TIME_TRACKING_COVERAGE"
+- "LOW_ESTIMATE_COVERAGE"
+- "NO_RESOURCE_ALLOCATIONS"
+- "SPARSE_HISTORY"
+
+Use these flags to set confidence.
+
+============================================================
+PHASE 3 — CAPACITY OVERLOAD FORECAST (EMPLOYEES)
+============================================================
+
+Create:
+server/src/reporting/forecasting/capacityOverload.ts
+
+Endpoint:
+GET /api/reports/v2/forecasting/capacity-overload?weeks=2|4|8
+
+Returns per user per week:
+{
+  userId,
+  weekStart,
+  availableHours,          // default 40 unless tenant config exists
+  plannedHours,            // from resource_allocations if enabled
+  predictedActualHours,    // derived from historical actual + planned + workload pressure
+  predictedUtilizationPct,
+  overloadRisk: "Low"|"Medium"|"High",
+  explanation: string[]
+}
+
+V1 Prediction logic (deterministic, explainable):
+1) Base predictedActualHours = average(actualHours) over the last 4 equivalent weeks.
+2) If resource_allocations enabled:
+   - adjust toward plannedHours:
+     predicted = 0.6*plannedHours + 0.4*historicalAvg
+3) Add workload pressure factor:
+   - compute open estimated hours due in that week (from tasks.due_date, estimate_hours)
+   - if dueEstimatedHours is high, increase predicted up to a capped %.
+4) Confidence:
+   - High if time coverage >= 80% AND (allocations or estimates coverage >= 60%)
+   - Medium if time coverage >= 50%
+   - Low otherwise
+
+Overload thresholds:
+- predictedUtilizationPct >= 110% => High risk
+- 90–109% => Medium
+- <90% => Low
+
+Must be tenant-scoped via auth context.
+All aggregation must be SQL group-bys with pagination when necessary.
+
+============================================================
+PHASE 4 — PROJECT DEADLINE RISK FORECAST
+============================================================
+
+Create:
+server/src/reporting/forecasting/projectDeadlineRisk.ts
+
+Endpoint:
+GET /api/reports/v2/forecasting/project-deadline-risk?weeks=2|4|8
+
+Returns per project:
+{
+  projectId,
+  dueDate (if exists),
+  openTaskCount,
+  overdueTaskCount,
+  openEstimatedHours,
+  recentThroughputTasksPerWeek,
+  predictedWeeksToClearBacklog,
+  deadlineRisk: "Low"|"Medium"|"High",
+  explanation: string[],
+  confidence
+}
+
+V1 Logic:
+- recentThroughputTasksPerWeek = average(completed tasks per week) for project over last 4 weeks
+- predictedWeeksToClearBacklog = openTaskCount / max(throughput, 1)
+- If project has a dueDate:
+  - compute weeksUntilDue
+  - High risk if predictedWeeksToClearBacklog > weeksUntilDue OR overdueTaskCount high
+  - Medium risk if close to due
+  - Low risk otherwise
+- If dueDate missing:
+  - risk is based on backlog trend + overdue ratio
+
+Optionally include "burn rate" if estimates/time exist:
+- openEstimatedHours vs recentActualHours/week
+
+============================================================
+PHASE 5 — CLIENT RISK TREND FORECAST
+============================================================
+
+Create:
+server/src/reporting/forecasting/clientRiskTrend.ts
+
+Endpoint:
+GET /api/reports/v2/forecasting/client-risk-trend?weeks=2|4|8
+
+Returns per client:
+{
+  clientId,
+  currentHealthScore (CHI),
+  healthScoreTrend (last 4 weeks),
+  predictedHealthScore (next horizon),
+  riskTrend: "Improving"|"Stable"|"Worsening",
+  clientRisk: "Low"|"Medium"|"High",
+  explanation: string[],
+  confidence
+}
+
+V1 Logic:
+- Use CHI history if stored/derivable; if not, compute CHI snapshots weekly (server-side) for last 4 weeks.
+- Trend = linear slope of weekly scores
+- Predict next horizon with slope-capped projection
+- High risk if:
+  - current tier is At Risk/Critical OR slope strongly negative
+  - AND engagement/activity is dropping or overdue tasks rising
+
+============================================================
+PHASE 6 — OPTIONAL: TEAM THROUGHPUT FORECAST (IF FEASIBLE)
+============================================================
+
+Create only if fast:
+server/src/reporting/forecasting/teamThroughput.ts
+
+Endpoint:
+GET /api/reports/v2/forecasting/team-throughput?weeks=2|4|8
+
+Returns:
+- predictedTasksCompletedPerWeek
+- predictedHoursPerWeek
+- confidence + explanations
+
+Logic:
+- historical throughput over last 8 weeks
+- cap projections, include data quality flags
+
+If this is not feasible quickly, skip and document as “Phase 2”.
+
+============================================================
+PHASE 7 — FRONTEND INTEGRATION (COMMAND CENTERS)
+============================================================
+
+Employee Command Center:
+- Add tab: “Forecasts”
+  - capacity overload forecast table + weekly heatmap
+  - filter by team/user
+  - show explanation drawer per row
+
+Client Command Center:
+- Add tab: “Forecasts”
+  - risk trend forecast
+  - show recent CHI sparkline (simple)
+
+Project Intelligence:
+- Add widget: “Deadline Risk Forecast”
+  - list top 10 high risk projects
+  - drilldown details
+
+UI Rules:
+- Always show confidence badge + “Why” explanations.
+- Do NOT imply certainty when confidence is Low.
+
+Guard behind:
+ENABLE_FORECASTING_LAYER
+
+============================================================
+PHASE 8 — PERSISTENCE (OPTIONAL, LIGHTWEIGHT)
+============================================================
+
+V1 can compute forecasts on-demand.
+
+If performance becomes an issue, add an OPTIONAL table:
+forecast_snapshots
+- tenant_id
+- forecast_type
+- entity_id (user/project/client)
+- as_of_date
+- payload_json
+- created_at
+
+But do not require this for initial release.
+
+============================================================
+PHASE 9 — APP DOCS UPDATE (MANDATORY)
+============================================================
+
+Add new App Docs section:
+“Forecasting Layer V1 (Explainable Operational Forecasts)”
+
+Include:
+1) What forecasts exist (capacity, project deadline risk, client risk trend)
+2) Horizon options (2/4/8 weeks)
+3) Inputs and data dependencies (time entries, allocations, estimates, EPI, CHI)
+4) Confidence rules and data quality flags
+5) Exact formulas / heuristics for each forecast
+6) UI placement + interpretation guidance
+7) Limitations and Phase 2 roadmap:
+   - alerts/notifications
+   - saved snapshots
+   - more robust allocation planning
+   - optional ML enhancements (later)
+
+============================================================
+ACCEPTANCE CRITERIA
+============================================================
+
+- New forecasting endpoints exist under /api/reports/v2/forecasting/*
+- Forecasts are explainable (explanations included)
+- Confidence + dataQualityFlags included in every response
+- UI tabs added behind flag
+- No legacy reporting broken
+- App Docs updated
+
+============================================================
+STOP CONDITION
+============================================================
+
+Stop after:
+- Capacity overload forecast + Project deadline risk forecast + Client risk trend forecast are implemented
+- UI integration is complete behind flag
+- Docs updated
+
+Do NOT implement alerting/scheduling in this prompt (that is next phase).
