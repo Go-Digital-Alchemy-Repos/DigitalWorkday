@@ -85,17 +85,14 @@ export default function ProjectsDashboard() {
 
   const { data: projects, isLoading: projectsLoading, error: projectsError, refetch: refetchProjects } = useQuery<ProjectWithCounts[]>({
     queryKey: ["/api/v1/projects", { includeCounts: true }],
-    staleTime: 60 * 1000,
   });
 
   const { data: clients } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
-    staleTime: 60 * 1000,
   });
 
   const { data: teams } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
-    staleTime: 5 * 60 * 1000,
   });
 
   const { data: clientDivisions = [] } = useQuery<ClientDivision[]>({

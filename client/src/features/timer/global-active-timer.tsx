@@ -84,7 +84,6 @@ export function GlobalActiveTimer() {
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
     queryKey: ["/api/clients"],
     enabled: isEligible,
-    staleTime: 60 * 1000,
   });
 
   const invalidateTimer = useCallback(() => {

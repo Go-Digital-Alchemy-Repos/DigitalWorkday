@@ -1,4 +1,5 @@
 import "dotenv/config";
+// Import config early to validate env vars before anything else runs
 import { config, logConfigStatus } from "./config";
 import express, { type Request, Response, NextFunction } from "express";
 import { mountAllRoutes } from "./http/mount";
@@ -29,8 +30,9 @@ import { evaluateSlaPolicies } from "./http/domains/support.router";
 import { evaluateConversationSla } from "./routes/modules/crm/conversations.router";
 
 export const app = express();
-let httpServer: ReturnType<typeof createServer>;
+const httpServer = createServer(app);
 
+// Trust the reverse proxy (needed for secure cookies in production)
 app.set("trust proxy", 1);
 
 declare module "http" {
@@ -44,29 +46,31 @@ declare module "http" {
 // to ensure immediate responses during startup for deployment health checks
 // ============================================================================
 
+// Track application readiness for health checks (must be before health endpoints)
 let appReady = false;
 let startupError: Error | null = null;
 
+// Root endpoint - CRITICAL: Return 200 immediately WITHOUT any checks
+// Cloud Run health checks have very strict timeouts (4s default) - must respond instantly
 app.head("/", (_req, res) => {
+  // Simplest possible response - no body, no checks, just 200
   res.status(200).end();
 });
 
-let cachedIndexHtml: string | null = null;
-
-app.get("/", (_req, res, next) => {
-  if (process.env.NODE_ENV === "production") {
-    if (!cachedIndexHtml) {
-      try {
-        const p = require("path");
-        const f = require("fs");
-        cachedIndexHtml = f.readFileSync(p.resolve(__dirname, "public", "index.html"), "utf-8");
-      } catch {
-        return res.status(200).set("Content-Type", "text/html")
-          .send('<!DOCTYPE html><html><head><meta charset="utf-8"><title>MyWorkDay</title></head><body>OK</body></html>');
-      }
-    }
-    return res.status(200).set("Content-Type", "text/html").send(cachedIndexHtml);
+app.get("/", (req, res, next) => {
+  // Check if it's a health check vs browser request FIRST
+  const acceptHeader = req.headers.accept || "";
+  const userAgent = req.headers["user-agent"] || "";
+  
+  const isBrowser = acceptHeader.includes("text/html") && 
+                    (userAgent.includes("Mozilla") || userAgent.includes("Chrome") || userAgent.includes("Safari"));
+  
+  // For health checks (non-browser), return 200 immediately - don't wait for app readiness
+  if (!isBrowser) {
+    return res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
   }
+  
+  // For browser requests, let it fall through to static file serving for the React app
   next();
 });
 
@@ -143,7 +147,11 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
+// Setup authentication middleware (session + passport) - must be before Socket.IO
 setupAuth(app);
+
+// Initialize Socket.IO server for real-time updates (after auth for session access)
+initializeSocketIO(httpServer);
 
 // Setup bootstrap endpoints (first-user registration)
 setupBootstrapEndpoints(app);
@@ -473,9 +481,7 @@ app.get("/ready", async (_req, res) => {
 // Bind to 0.0.0.0 explicitly for Replit Autoscale deployment
 const port = parseInt(process.env.PORT || "5000", 10);
 const host = "0.0.0.0";
-// Phase timeout is purely diagnostic — health checks pass immediately via appReady=true on listen.
-// Set to 10s to avoid false-positive error logs on the schema phase (~1s on SSL databases).
-const PHASE_TIMEOUT_MS = 10000;
+const PHASE_TIMEOUT_MS = 2000; // Warn if any phase takes >2 seconds (Cloud Run default health check timeout is 4s)
 
 // Helper to run a phase with timing and timeout warning
 async function runPhase<T>(
@@ -506,26 +512,14 @@ async function runPhase<T>(
   }
 }
 
-export function boot(
-  server: ReturnType<typeof createServer>,
-  setHandler: (handler: (req: import("http").IncomingMessage, res: import("http").ServerResponse) => void) => void,
-) {
-  httpServer = server;
+httpServer.listen(port, host, () => {
   serverStartTime = Date.now();
-  appReady = true;
+  console.log(`[startup] Phase 1/6: Server listening started at ${new Date(serverStartTime).toISOString()}`);
+  console.log(`[startup] Server listening on ${host}:${port}`);
+});
 
-  initializeSocketIO(httpServer);
-
-  setHandler(app);
-
-  runAsyncInit().catch((err) => {
-    setPhase("error");
-    console.error("[boot] Unhandled startup error:", err);
-    startupError = err instanceof Error ? err : new Error(String(err));
-  });
-}
-
-async function runAsyncInit() {
+// Run async initialization in the background
+(async () => {
   // Boot logging for deployment verification
   const env = process.env.NODE_ENV || "development";
   const version = process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) 
@@ -574,7 +568,6 @@ async function runAsyncInit() {
         const { setupVite } = await import("./vite");
         await setupVite(httpServer, app);
       }
-      console.log("[boot] Static file serving registered");
     });
   } catch (routesErr) {
     setPhase("error");
@@ -583,10 +576,12 @@ async function runAsyncInit() {
     return;
   }
 
-  // Phase 4: All routes and static serving are ready
+  // Phase 4: Mark app as READY immediately after routes are registered
+  // This ensures health checks pass quickly - diagnostics run in background
   setPhase("ready");
+  appReady = true;
   const totalDuration = Date.now() - serverStartTime;
-  console.log(`[startup] Phase 4/4: Fully ready in ${totalDuration}ms`);
+  console.log(`[startup] Phase 4/4: App READY in ${totalDuration}ms`);
   log(`[boot] Application ready - running background diagnostics...`);
   
   // ============================================================================
@@ -668,7 +663,11 @@ async function runAsyncInit() {
       // Don't fail - these are non-critical
     }
   });
-}
+})().catch((err) => {
+  setPhase("error");
+  console.error("[boot] Unhandled startup error:", err);
+  startupError = err instanceof Error ? err : new Error(String(err));
+});
 
 // ============================================================================
 // Graceful Shutdown
@@ -734,19 +733,3 @@ async function gracefulShutdown(signal: string) {
 
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
-
-if (!(globalThis as any).__ENTRY_BOOT) {
-  httpServer = createServer(app);
-  const port = parseInt(process.env.PORT || "5000", 10);
-  httpServer.listen(port, "0.0.0.0", () => {
-    serverStartTime = Date.now();
-    appReady = true;
-    initializeSocketIO(httpServer);
-    console.log(`[startup] Phase 1: Server listening on 0.0.0.0:${port} — health checks passing`);
-    runAsyncInit().catch((err) => {
-      setPhase("error");
-      console.error("[boot] Unhandled startup error:", err);
-      startupError = err instanceof Error ? err : new Error(String(err));
-    });
-  });
-}

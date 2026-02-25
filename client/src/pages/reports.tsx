@@ -111,7 +111,6 @@ function ReportCard({ icon, title, description, onClick, color }: ReportCardProp
 function PipelineReport() {
   const { data: stageSummary, isLoading } = useQuery<StageSummaryItem[]>({
     queryKey: ["/api/v1/clients/stages/summary"],
-    staleTime: 2 * 60 * 1000,
   });
 
   const totalClients = useMemo(() => {

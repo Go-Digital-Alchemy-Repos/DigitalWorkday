@@ -152,32 +152,27 @@ export default function ProjectPage() {
   const { data: project, isLoading: projectLoading } = useQuery<Project>({
     queryKey: ["/api/projects", projectId],
     enabled: !!projectId,
-    staleTime: 60 * 1000,
   });
 
   // Fetch client for breadcrumbs
   const { data: client } = useQuery<Client>({
     queryKey: ["/api/clients", project?.clientId],
     enabled: !!project?.clientId,
-    staleTime: 60 * 1000,
   });
 
   const { data: sections, isLoading: sectionsLoading } = useQuery<SectionWithTasks[]>({
     queryKey: ["/api/projects", projectId, "sections"],
     enabled: !!projectId,
-    staleTime: 30 * 1000,
   });
 
   const { data: tasks } = useQuery<TaskWithRelations[]>({
     queryKey: ["/api/projects", projectId, "tasks"],
     enabled: !!projectId,
-    staleTime: 30 * 1000,
   });
   
   const { data: tenantUsers = [] } = useQuery<{ id: string; email: string; firstName?: string | null; lastName?: string | null }[]>({
     queryKey: ["/api/users"],
     enabled: !!projectId,
-    staleTime: 5 * 60 * 1000,
   });
 
   const displaySections = localSections || sections;

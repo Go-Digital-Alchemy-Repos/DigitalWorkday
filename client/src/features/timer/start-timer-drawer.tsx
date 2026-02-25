@@ -80,7 +80,6 @@ export function StartTimerDrawer({
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
     queryKey: ["/api/clients"],
     enabled: open,
-    staleTime: 60 * 1000,
   });
 
   const { data: clientDivisions = [], isLoading: divisionsLoading } = useQuery<Array<{ id: string; name: string; color?: string | null }>>({

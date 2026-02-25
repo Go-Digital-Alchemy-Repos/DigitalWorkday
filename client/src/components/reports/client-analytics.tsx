@@ -92,7 +92,6 @@ function formatMinutesToHours(minutes: number) {
 export default function ClientAnalytics() {
   const { data, isLoading } = useQuery<ClientAnalyticsData>({
     queryKey: ["/api/v1/reports/clients/analytics"],
-    staleTime: 2 * 60 * 1000,
   });
 
   if (isLoading || !data) return <LoadingSkeleton />;

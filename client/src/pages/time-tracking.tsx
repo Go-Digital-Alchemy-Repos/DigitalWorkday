@@ -145,12 +145,10 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
 
   const { data: projects = [] } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/projects"],
-    staleTime: 60 * 1000,
   });
 
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
     queryKey: ["/api/clients"],
-    staleTime: 60 * 1000,
   });
 
   const startMutation = useMutation({
@@ -578,7 +576,6 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
     queryKey: ["/api/clients"],
     enabled: open,
-    staleTime: 60 * 1000,
   });
 
   const { data: clientDivisions = [] } = useQuery<Array<{ id: string; name: string }>>({
@@ -971,7 +968,6 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
   const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
     queryKey: ["/api/clients"],
     enabled: open,
-    staleTime: 60 * 1000,
   });
 
   const { data: clientDivisions = [], isLoading: divisionsLoading } = useQuery<Array<{ id: string; name: string; color?: string | null }>>({

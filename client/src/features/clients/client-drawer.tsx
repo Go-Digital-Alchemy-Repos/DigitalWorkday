@@ -60,7 +60,6 @@ export function ClientDrawer({
   const { data: potentialParents } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
     enabled: open,
-    staleTime: 60 * 1000,
   });
 
   const topLevelClients = potentialParents?.filter(

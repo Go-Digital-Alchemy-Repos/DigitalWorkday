@@ -719,57 +719,47 @@ export default function Home() {
 
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
-    staleTime: 60 * 1000,
   });
 
   const { data: myTasks, isLoading: tasksLoading } = useQuery<TaskWithRelations[]>({
     queryKey: ["/api/tasks/my"],
-    staleTime: 30 * 1000,
   });
 
   const { data: teams } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
-    staleTime: 5 * 60 * 1000,
   });
 
   const { data: clients } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
-    staleTime: 60 * 1000,
   });
 
   const { data: currentWorkspace } = useQuery<Workspace>({
     queryKey: ["/api/workspaces/current"],
-    staleTime: 5 * 60 * 1000,
   });
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsSummary>({
     queryKey: ["/api/v1/projects/analytics/summary"],
     enabled: !!user && isAdmin,
-    staleTime: 2 * 60 * 1000,
   });
 
   const { data: workload, isLoading: workloadLoading } = useQuery<EmployeeWorkload[]>({
     queryKey: ["/api/v1/workload/tasks-by-employee"],
     enabled: !!user && isAdmin,
-    staleTime: 2 * 60 * 1000,
   });
 
   const { data: unassigned, isLoading: unassignedLoading } = useQuery<{ tasks: UnassignedTask[]; totalCount: number }>({
     queryKey: ["/api/v1/workload/unassigned"],
     enabled: !!user && isAdmin,
-    staleTime: 2 * 60 * 1000,
   });
 
   const { data: recentMessages, isLoading: messagesLoading } = useQuery<any[]>({
     queryKey: ["/api/v1/chat/messages/recent-since-login"],
     enabled: !!user && isAdmin,
-    staleTime: 30 * 1000,
   });
 
   const { data: timeStats, isLoading: timeStatsLoading } = useQuery<MyTimeStats>({
     queryKey: ["/api/time-entries/my/stats"],
     enabled: !!user && !isAdmin,
-    staleTime: 60 * 1000,
   });
 
   const createProjectMutation = useMutation({

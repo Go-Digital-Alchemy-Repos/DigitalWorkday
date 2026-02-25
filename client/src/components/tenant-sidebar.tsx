@@ -192,12 +192,10 @@ export function TenantSidebar() {
 
   const { data: teams } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
-    staleTime: 5 * 60 * 1000,
   });
 
   const { data: clients } = useQuery<Client[]>({
     queryKey: ["/api/clients"],
-    staleTime: 60 * 1000,
   });
 
   const { data: allDivisions = [] } = useQuery<ClientDivision[]>({

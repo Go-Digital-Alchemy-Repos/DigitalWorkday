@@ -135,7 +135,6 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
   const { data: teams } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
     enabled: open,
-    staleTime: 5 * 60 * 1000,
   });
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery<ProjectAnalytics>({

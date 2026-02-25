@@ -179,7 +179,6 @@ export function RequestApprovalFromClientDialog({
   const { data: clients = [] } = useQuery<ClientOption[]>({
     queryKey: ["/api/clients"],
     enabled: open,
-    staleTime: 60 * 1000,
     select: (data: any) => {
       if (Array.isArray(data)) return data;
       if (data?.clients) return data.clients;
