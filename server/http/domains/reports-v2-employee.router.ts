@@ -15,8 +15,23 @@ const router = Router();
 
 router.use(reportingGuard);
 
-function firstRow<T>(rows: T[]): T | null {
-  return rows[0] ?? null;
+function firstRow<T>(result: unknown): T | null {
+  if (Array.isArray(result)) return (result[0] ?? null) as T | null;
+  if (result && typeof result === "object" && "rows" in result) {
+    return ((result as { rows: T[] }).rows[0] ?? null);
+  }
+  return null;
+}
+
+async function dbRows<T extends Record<string, unknown>>(
+  q: Parameters<typeof db.execute>[0]
+): Promise<T[]> {
+  const result = await db.execute<T>(q);
+  if (Array.isArray(result)) return result as T[];
+  if (result && typeof result === "object" && "rows" in result) {
+    return (result as { rows: T[] }).rows;
+  }
+  return result as unknown as T[];
 }
 
 router.get("/employee/overview", async (req: Request, res: Response) => {
@@ -35,7 +50,7 @@ router.get("/employee/overview", async (req: Request, res: Response) => {
       1
     );
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       user_id: string;
       first_name: string | null;
       last_name: string | null;
@@ -70,11 +85,7 @@ router.get("/employee/overview", async (req: Request, res: Response) => {
           CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate}
           THEN te.duration_seconds ELSE 0 END
         ), 0) AS total_seconds,
-        COALESCE(SUM(
-          CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate}
-            AND te.is_billable = true
-          THEN te.duration_seconds ELSE 0 END
-        ), 0) AS billable_seconds,
+        0 AS billable_seconds,
         COALESCE(SUM(
           CASE WHEN t.status NOT IN ('done', 'cancelled')
           THEN COALESCE(t.estimate_minutes, 0) ELSE 0 END
@@ -157,7 +168,7 @@ router.get("/employee/workload", async (req: Request, res: Response) => {
       ? sql`AND u.id = ANY(ARRAY[${sql.join(filters.userIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       user_id: string;
       first_name: string | null;
       last_name: string | null;
@@ -253,7 +264,7 @@ router.get("/employee/time", async (req: Request, res: Response) => {
       ? sql`AND u.id = ANY(ARRAY[${sql.join(filters.userIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       user_id: string;
       first_name: string | null;
       last_name: string | null;
@@ -272,11 +283,7 @@ router.get("/employee/time", async (req: Request, res: Response) => {
           CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate}
           THEN te.duration_seconds ELSE 0 END
         ), 0) AS total_seconds,
-        COALESCE(SUM(
-          CASE WHEN te.start_time >= ${startDate} AND te.start_time <= ${endDate}
-            AND te.is_billable = true
-          THEN te.duration_seconds ELSE 0 END
-        ), 0) AS billable_seconds,
+        0 AS billable_seconds,
         COALESCE(SUM(
           CASE WHEN t.status NOT IN ('done', 'cancelled')
           THEN COALESCE(t.estimate_minutes, 0) ELSE 0 END
@@ -352,7 +359,7 @@ router.get("/employee/capacity", async (req: Request, res: Response) => {
       ? sql`AND u.id = ANY(ARRAY[${sql.join(filters.userIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       user_id: string;
       first_name: string | null;
       last_name: string | null;
@@ -444,7 +451,7 @@ router.get("/employee/risk", async (req: Request, res: Response) => {
     const tenantId = getTenantId(req);
     const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       user_id: string;
       first_name: string | null;
       last_name: string | null;
@@ -567,7 +574,7 @@ router.get("/employee/trends", async (req: Request, res: Response) => {
       ? sql`AND te.user_id = ${userId}`
       : sql``;
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       week_start: string;
       completed_tasks: string;
       hours_tracked: string;

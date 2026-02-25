@@ -634,7 +634,7 @@ interface TrendWeek {
 }
 
 function TrendsTab({ rangeDays }: { rangeDays: number }) {
-  const [selectedUserId, setSelectedUserId] = useState<string>("");
+  const [selectedUserId, setSelectedUserId] = useState<string>("__all__");
 
   const { data: teamData } = useQuery<{ employees: Array<{ userId: string; firstName: string | null; lastName: string | null; email: string }> }>({
     queryKey: ["/api/reports/v2/employee/overview", rangeDays],
@@ -646,7 +646,7 @@ function TrendsTab({ rangeDays }: { rangeDays: number }) {
     staleTime: 2 * 60 * 1000,
   });
 
-  const trendsUrl = selectedUserId
+  const trendsUrl = selectedUserId && selectedUserId !== "__all__"
     ? `/api/reports/v2/employee/trends?${buildDateParams(rangeDays)}&userId=${selectedUserId}`
     : `/api/reports/v2/employee/trends?${buildDateParams(rangeDays)}`;
 
@@ -675,7 +675,7 @@ function TrendsTab({ rangeDays }: { rangeDays: number }) {
                 <SelectValue placeholder="All Team" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="" data-testid="option-trends-all">All Team</SelectItem>
+                <SelectItem value="__all__" data-testid="option-trends-all">All Team</SelectItem>
                 {(teamData?.employees ?? []).map((e) => (
                   <SelectItem key={e.userId} value={e.userId} data-testid={`option-trends-${e.userId}`}>
                     {userName(e)}

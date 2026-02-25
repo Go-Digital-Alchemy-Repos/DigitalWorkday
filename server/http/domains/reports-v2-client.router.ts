@@ -14,8 +14,23 @@ const router = Router();
 
 router.use(reportingGuard);
 
-function firstRow<T>(rows: T[]): T | null {
-  return rows[0] ?? null;
+function firstRow<T>(result: unknown): T | null {
+  if (Array.isArray(result)) return (result[0] ?? null) as T | null;
+  if (result && typeof result === "object" && "rows" in result) {
+    return ((result as { rows: T[] }).rows[0] ?? null);
+  }
+  return null;
+}
+
+async function dbRows<T extends Record<string, unknown>>(
+  q: Parameters<typeof db.execute>[0]
+): Promise<T[]> {
+  const result = await db.execute<T>(q);
+  if (Array.isArray(result)) return result as T[];
+  if (result && typeof result === "object" && "rows" in result) {
+    return (result as { rows: T[] }).rows;
+  }
+  return result as unknown as T[];
 }
 
 router.get("/client/overview", async (req: Request, res: Response) => {
@@ -29,7 +44,7 @@ router.get("/client/overview", async (req: Request, res: Response) => {
       ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       client_id: string;
       company_name: string;
       active_projects: string;
@@ -116,7 +131,7 @@ router.get("/client/activity", async (req: Request, res: Response) => {
       ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       client_id: string;
       company_name: string;
       tasks_created_in_range: string;
@@ -189,7 +204,7 @@ router.get("/client/time", async (req: Request, res: Response) => {
       ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       client_id: string;
       company_name: string;
       total_seconds: string;
@@ -211,7 +226,7 @@ router.get("/client/time", async (req: Request, res: Response) => {
       LIMIT ${limit} OFFSET ${offset}
     `);
 
-    const topProjectsRows = await db.execute<{
+    const topProjectsRows = await dbRows<{
       client_id: string;
       project_id: string;
       project_name: string;
@@ -299,7 +314,7 @@ router.get("/client/tasks", async (req: Request, res: Response) => {
       ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       client_id: string;
       company_name: string;
       open_task_count: string;
@@ -384,7 +399,7 @@ router.get("/client/sla", async (req: Request, res: Response) => {
       ? sql`AND c.id = ANY(ARRAY[${sql.join(filters.clientIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       client_id: string;
       company_name: string;
       total_tasks: string;
@@ -462,7 +477,7 @@ router.get("/client/risk", async (req: Request, res: Response) => {
     const tenantId = getTenantId(req);
     const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       client_id: string;
       company_name: string;
       total_tasks: string;
