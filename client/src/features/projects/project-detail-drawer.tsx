@@ -246,16 +246,18 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
         <Separator className="my-4" />
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className={`grid w-full ${isSuperUser ? "grid-cols-6" : "grid-cols-5"}`}>
-            <TabsTrigger value="overview" data-testid="tab-overview">Overview</TabsTrigger>
-            <TabsTrigger value="tasks" data-testid="tab-tasks">Tasks</TabsTrigger>
-            <TabsTrigger value="notes" data-testid="tab-notes">Notes</TabsTrigger>
-            <TabsTrigger value="insights" data-testid="tab-insights">Insights</TabsTrigger>
-            <TabsTrigger value="forecast" data-testid="tab-forecast">Forecast</TabsTrigger>
-            {isSuperUser && (
-              <TabsTrigger value="admin" data-testid="tab-admin">Admin</TabsTrigger>
-            )}
-          </TabsList>
+          <div className="overflow-x-auto -mx-2 px-2">
+            <TabsList className={`inline-flex w-auto min-w-full ${isSuperUser ? "sm:grid sm:grid-cols-6" : "sm:grid sm:grid-cols-5"}`}>
+              <TabsTrigger value="overview" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-overview">Overview</TabsTrigger>
+              <TabsTrigger value="tasks" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tasks">Tasks</TabsTrigger>
+              <TabsTrigger value="notes" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-notes">Notes</TabsTrigger>
+              <TabsTrigger value="insights" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-insights">Insights</TabsTrigger>
+              <TabsTrigger value="forecast" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-forecast">Forecast</TabsTrigger>
+              {isSuperUser && (
+                <TabsTrigger value="admin" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-admin">Admin</TabsTrigger>
+              )}
+            </TabsList>
+          </div>
 
           <TabsContent value="overview" className="mt-4 space-y-4">
             <div className="grid grid-cols-2 gap-4">

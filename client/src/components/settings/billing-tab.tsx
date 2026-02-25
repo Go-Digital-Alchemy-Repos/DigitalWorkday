@@ -327,6 +327,7 @@ export function BillingTab() {
                 No invoices yet
               </div>
             ) : (
+              <div className="overflow-x-auto">
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -380,6 +381,7 @@ export function BillingTab() {
                   ))}
                 </TableBody>
               </Table>
+              </div>
             )}
           </CardContent>
         </Card>

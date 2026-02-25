@@ -1,6 +1,7 @@
 import { useLocation } from "wouter";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useAuth } from "@/lib/auth";
 import { Redirect } from "wouter";
 import { Building2, Palette, CreditCard, UserCog, Layers, HardDrive } from "lucide-react";
@@ -10,6 +11,14 @@ import { WorkspacesTab } from "@/components/settings/workspaces-tab";
 import { BillingTab } from "@/components/settings/billing-tab";
 import { DataTab } from "@/components/settings/data-tab";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
+
+const ACCOUNT_TABS = [
+  { id: "profile", label: "Profile", icon: Building2 },
+  { id: "workspaces", label: "Workspaces", icon: Layers },
+  { id: "branding", label: "Branding", icon: Palette },
+  { id: "billing", label: "Billing", icon: CreditCard },
+  { id: "data", label: "Data", icon: HardDrive },
+];
 
 export default function AccountPage() {
   const [location, setLocation] = useLocation();
@@ -36,11 +45,11 @@ export default function AccountPage() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="container max-w-5xl p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <UserCog className="h-8 w-8 text-primary" />
+      <div className="container max-w-5xl p-3 sm:p-4 lg:p-6">
+        <div className="flex items-center gap-3 mb-4 md:mb-6">
+          <UserCog className="h-7 w-7 md:h-8 md:w-8 text-primary" />
           <div>
-            <h1 className="text-2xl font-semibold">Account</h1>
+            <h1 className="text-xl md:text-2xl font-semibold">Account</h1>
             <p className="text-muted-foreground text-sm">
               Manage your organization profile, workspaces, branding, and billing
             </p>
@@ -48,27 +57,27 @@ export default function AccountPage() {
         </div>
 
         <Tabs value={currentTab} onValueChange={handleTabChange} className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
-            <TabsTrigger value="profile" className="gap-2" data-testid="tab-profile">
-              <Building2 className="h-4 w-4" />
-              <span className="hidden sm:inline">Profile</span>
-            </TabsTrigger>
-            <TabsTrigger value="workspaces" className="gap-2" data-testid="tab-workspaces">
-              <Layers className="h-4 w-4" />
-              <span className="hidden sm:inline">Workspaces</span>
-            </TabsTrigger>
-            <TabsTrigger value="branding" className="gap-2" data-testid="tab-branding">
-              <Palette className="h-4 w-4" />
-              <span className="hidden sm:inline">Branding</span>
-            </TabsTrigger>
-            <TabsTrigger value="billing" className="gap-2" data-testid="tab-billing">
-              <CreditCard className="h-4 w-4" />
-              <span className="hidden sm:inline">Billing</span>
-            </TabsTrigger>
-            <TabsTrigger value="data" className="gap-2" data-testid="tab-data">
-              <HardDrive className="h-4 w-4" />
-              <span className="hidden sm:inline">Data</span>
-            </TabsTrigger>
+          <div className="md:hidden">
+            <Select value={currentTab} onValueChange={handleTabChange}>
+              <SelectTrigger className="w-full" data-testid="mobile-account-tab-select">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {ACCOUNT_TABS.map((tab) => (
+                  <SelectItem key={tab.id} value={tab.id} data-testid={`mobile-tab-${tab.id}`}>
+                    {tab.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <TabsList className="hidden md:inline-grid grid-cols-5 w-auto">
+            {ACCOUNT_TABS.map((tab) => (
+              <TabsTrigger key={tab.id} value={tab.id} className="gap-2" data-testid={`tab-${tab.id}`}>
+                <tab.icon className="h-4 w-4" />
+                {tab.label}
+              </TabsTrigger>
+            ))}
           </TabsList>
 
           <TabsContent value="profile" className="mt-6">

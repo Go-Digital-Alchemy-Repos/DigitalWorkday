@@ -93,7 +93,7 @@ export function DetailDrawer({
   isEmpty = false,
   emptyMessage = "No data available",
   className,
-  width = "sm:max-w-[80vw] min-w-[600px]",
+  width = "w-full sm:max-w-[80vw] sm:min-w-[600px]",
 }: DetailDrawerProps) {
   const [, setLocation] = useLocation();
   const search = useSearch();

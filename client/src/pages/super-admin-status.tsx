@@ -70,31 +70,33 @@ export default function SuperAdminStatusPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="p-6 border-b shrink-0">
-        <h1 className="text-2xl font-bold">System Health</h1>
-        <p className="text-muted-foreground mt-1">Health checks, logs, and debugging tools</p>
+      <div className="p-3 sm:p-4 lg:p-6 border-b shrink-0">
+        <h1 className="text-xl md:text-2xl font-bold">System Health</h1>
+        <p className="text-muted-foreground mt-1 text-sm">Health checks, logs, and debugging tools</p>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6" data-testid="status-tabs">
-            <TabsTrigger value="health" data-testid="tab-health">
-              <Activity className="h-4 w-4 mr-2" />
-              System Health
-            </TabsTrigger>
-            <TabsTrigger value="tenant-health" data-testid="tab-tenant-health">
-              <Building2 className="h-4 w-4 mr-2" />
-              Tenant Health
-            </TabsTrigger>
-            <TabsTrigger value="logs" data-testid="tab-logs">
-              <ExternalLink className="h-4 w-4 mr-2" />
-              Logs
-            </TabsTrigger>
-            <TabsTrigger value="tools" data-testid="tab-tools">
-              <Wrench className="h-4 w-4 mr-2" />
-              Tools & Diagnostics
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 mb-6">
+            <TabsList className="inline-flex w-auto min-w-full sm:min-w-0" data-testid="status-tabs">
+              <TabsTrigger value="health" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-health">
+                <Activity className="h-4 w-4 mr-1.5 sm:mr-2" />
+                <span className="hidden sm:inline">System </span>Health
+              </TabsTrigger>
+              <TabsTrigger value="tenant-health" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tenant-health">
+                <Building2 className="h-4 w-4 mr-1.5 sm:mr-2" />
+                <span className="hidden sm:inline">Tenant </span>Health
+              </TabsTrigger>
+              <TabsTrigger value="logs" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-logs">
+                <ExternalLink className="h-4 w-4 mr-1.5 sm:mr-2" />
+                Logs
+              </TabsTrigger>
+              <TabsTrigger value="tools" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tools">
+                <Wrench className="h-4 w-4 mr-1.5 sm:mr-2" />
+                <span className="hidden sm:inline">Tools & </span>Diagnostics
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="health">
             <SystemHealthSection
@@ -115,20 +117,22 @@ export default function SuperAdminStatusPage() {
           <TabsContent value="logs">
             <div className="space-y-4">
               <Tabs value={logsSubTab} onValueChange={setLogsSubTab}>
-                <TabsList data-testid="logs-sub-tabs">
-                  <TabsTrigger value="app" data-testid="tab-logs-app">
-                    <Server className="h-4 w-4 mr-2" />
-                    Application Logs
-                  </TabsTrigger>
-                  <TabsTrigger value="email" data-testid="tab-logs-email">
-                    <Mail className="h-4 w-4 mr-2" />
-                    Email Logs
-                  </TabsTrigger>
-                  <TabsTrigger value="error" data-testid="tab-logs-error">
-                    <AlertCircle className="h-4 w-4 mr-2" />
-                    Error Logs
-                  </TabsTrigger>
-                </TabsList>
+                <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+                  <TabsList className="inline-flex w-auto min-w-full sm:min-w-0" data-testid="logs-sub-tabs">
+                    <TabsTrigger value="app" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-logs-app">
+                      <Server className="h-4 w-4 mr-1.5 sm:mr-2" />
+                      <span className="hidden sm:inline">Application </span>Logs
+                    </TabsTrigger>
+                    <TabsTrigger value="email" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-logs-email">
+                      <Mail className="h-4 w-4 mr-1.5 sm:mr-2" />
+                      <span className="hidden sm:inline">Email </span>Logs
+                    </TabsTrigger>
+                    <TabsTrigger value="error" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-logs-error">
+                      <AlertCircle className="h-4 w-4 mr-1.5 sm:mr-2" />
+                      <span className="hidden sm:inline">Error </span>Logs
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
 
                 <TabsContent value="app" className="mt-4">
                   <Card>
@@ -165,28 +169,30 @@ export default function SuperAdminStatusPage() {
           <TabsContent value="tools">
             <div className="space-y-4">
               <Tabs value={toolsSubTab} onValueChange={setToolsSubTab}>
-                <TabsList data-testid="tools-sub-tabs">
-                  <TabsTrigger value="auth" data-testid="tab-tools-auth">
-                    <KeyRound className="h-4 w-4 mr-2" />
-                    Auth Diagnostics
-                  </TabsTrigger>
-                  <TabsTrigger value="debug" data-testid="tab-tools-debug">
-                    <Wrench className="h-4 w-4 mr-2" />
-                    Debug Tools
-                  </TabsTrigger>
-                  <TabsTrigger value="repair" data-testid="tab-tools-repair">
-                    <Shield className="h-4 w-4 mr-2" />
-                    Repair Tools
-                  </TabsTrigger>
-                  <TabsTrigger value="chat" data-testid="tab-tools-chat">
-                    <MessageSquare className="h-4 w-4 mr-2" />
-                    Chat Debug
-                  </TabsTrigger>
-                  <TabsTrigger value="db" data-testid="tab-tools-db">
-                    <Database className="h-4 w-4 mr-2" />
-                    DB Introspect
-                  </TabsTrigger>
-                </TabsList>
+                <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0">
+                  <TabsList className="inline-flex w-auto min-w-full sm:min-w-0" data-testid="tools-sub-tabs">
+                    <TabsTrigger value="auth" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tools-auth">
+                      <KeyRound className="h-4 w-4 mr-1.5 sm:mr-2" />
+                      Auth
+                    </TabsTrigger>
+                    <TabsTrigger value="debug" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tools-debug">
+                      <Wrench className="h-4 w-4 mr-1.5 sm:mr-2" />
+                      Debug
+                    </TabsTrigger>
+                    <TabsTrigger value="repair" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tools-repair">
+                      <Shield className="h-4 w-4 mr-1.5 sm:mr-2" />
+                      Repair
+                    </TabsTrigger>
+                    <TabsTrigger value="chat" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tools-chat">
+                      <MessageSquare className="h-4 w-4 mr-1.5 sm:mr-2" />
+                      Chat
+                    </TabsTrigger>
+                    <TabsTrigger value="db" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tools-db">
+                      <Database className="h-4 w-4 mr-1.5 sm:mr-2" />
+                      DB
+                    </TabsTrigger>
+                  </TabsList>
+                </div>
 
                 <TabsContent value="auth" className="mt-4">
                   <AuthDiagnosticsPanel />

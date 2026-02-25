@@ -23,11 +23,11 @@ export default function UserManagerPage() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="container max-w-6xl p-6">
-        <div className="flex items-center gap-3 mb-6">
-          <UsersRound className="h-8 w-8 text-primary" />
+      <div className="container max-w-6xl p-3 sm:p-4 lg:p-6">
+        <div className="flex items-center gap-3 mb-4 md:mb-6">
+          <UsersRound className="h-7 w-7 md:h-8 md:w-8 text-primary" />
           <div>
-            <h1 className="text-2xl font-bold">{isAdmin || isSuperUser ? "User Manager" : "Team Manager"}</h1>
+            <h1 className="text-xl md:text-2xl font-bold">{isAdmin || isSuperUser ? "User Manager" : "Team Manager"}</h1>
             <p className="text-muted-foreground text-sm">
               {isAdmin || isSuperUser 
                 ? "Manage your organization's users and teams" 

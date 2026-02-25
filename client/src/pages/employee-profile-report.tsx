@@ -500,7 +500,7 @@ export default function EmployeeProfileReportPage() {
 
   if (error) {
     return (
-      <div className="container max-w-7xl p-6">
+      <div className="container max-w-7xl p-3 sm:p-4 lg:p-6">
         <Alert variant="destructive">
           <AlertTriangle className="h-4 w-4" />
           <AlertTitle>Error</AlertTitle>
@@ -914,7 +914,7 @@ export default function EmployeeProfileReportPage() {
               </div>
             </>
           ) : (
-            <div className="container max-w-7xl p-6 text-center">
+            <div className="container max-w-7xl p-3 sm:p-4 lg:p-6 text-center">
               <p>Employee profile not found.</p>
             </div>
           )}
