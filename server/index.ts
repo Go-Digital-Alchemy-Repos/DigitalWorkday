@@ -4,8 +4,6 @@ import express, { type Request, Response, NextFunction } from "express";
 import { mountAllRoutes } from "./http/mount";
 import { serveStatic } from "./static";
 import { createServer } from "http";
-import path from "path";
-import fs from "fs";
 import { initializeSocketIO } from "./realtime/socket";
 import { setupAuth, setupBootstrapEndpoints, setupPlatformInviteEndpoints, setupTenantInviteEndpoints, setupPasswordResetEndpoints } from "./auth";
 import { bootstrapAdminUser } from "./bootstrap";
@@ -47,43 +45,18 @@ declare module "http" {
 // to ensure immediate responses during startup for deployment health checks
 // ============================================================================
 
-// appReady = true as soon as the server is listening — health checks pass immediately.
-// staticMounted = true once static file serving / Vite dev middleware is registered,
-// which allows browser requests to GET / to fall through to the React app.
 let appReady = false;
-let staticMounted = false;
 let startupError: Error | null = null;
 
-// Root endpoint - CRITICAL: Return 200 immediately WITHOUT any checks
-// Cloud Run health checks have very strict timeouts (4s default) - must respond instantly
 app.head("/", (_req, res) => {
-  // Simplest possible response - no body, no checks, just 200
   res.status(200).end();
 });
 
-let cachedIndexHtml: string | null = null;
-
 app.get("/", (_req, res) => {
-  if (!staticMounted) {
-    return res.status(200)
-      .set("Content-Type", "text/html")
-      .send(
-        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Starting\u2026</title>' +
-        '<meta http-equiv="refresh" content="2"><style>body{font-family:sans-serif;display:flex;' +
-        'align-items:center;justify-content:center;height:100vh;margin:0;color:#555}' +
-        '</style></head><body><p>Starting up, please wait\u2026</p></body></html>'
-      );
-  }
-
-  if (!cachedIndexHtml) {
-    try {
-      const indexPath = path.resolve(__dirname, "public", "index.html");
-      cachedIndexHtml = fs.readFileSync(indexPath, "utf-8");
-    } catch {
-      return res.status(200).send("OK");
-    }
-  }
-  res.status(200).set("Content-Type", "text/html").send(cachedIndexHtml);
+  res.status(200).set("Content-Type", "text/html").send(
+    '<!DOCTYPE html><html><head><meta charset="utf-8"><title>MyWorkDay</title></head>' +
+    '<body>OK</body></html>'
+  );
 });
 
 // Main health endpoint - always responds 200 for load balancer health checks
@@ -587,8 +560,7 @@ async function runAsyncInit() {
         const { setupVite } = await import("./vite");
         await setupVite(httpServer, app);
       }
-      // Static file server is now registered — browser requests to / can be served
-      staticMounted = true;
+      console.log("[boot] Static file serving registered");
     });
   } catch (routesErr) {
     setPhase("error");
