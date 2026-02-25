@@ -1813,12 +1813,14 @@ export default function ClientsPage() {
   const vipClientIds = useMemo(() => new Set(vipClients.map((c) => c.id)), [vipClients]);
 
   const groupedClients = useMemo(() => {
-    const nonVipClients = filteredAndSortedClients.filter((c) => !vipClientIds.has(c.id));
+    const clientsToGroup = viewMode === "table"
+      ? filteredAndSortedClients
+      : filteredAndSortedClients.filter((c) => !vipClientIds.has(c.id));
     const groups: { parent: ClientWithHierarchy; children: ClientWithHierarchy[] }[] = [];
     const clientMap = new Map<string, ClientWithHierarchy>();
     const childrenByParent = new Map<string, ClientWithHierarchy[]>();
 
-    for (const client of nonVipClients) {
+    for (const client of clientsToGroup) {
       clientMap.set(client.id, client);
     }
 
@@ -1829,7 +1831,7 @@ export default function ClientsPage() {
       return client.id;
     };
 
-    for (const client of nonVipClients) {
+    for (const client of clientsToGroup) {
       if (!client.parentClientId) continue;
       const rootId = findRoot(client);
       if (rootId === client.id) continue;
@@ -1846,7 +1848,7 @@ export default function ClientsPage() {
       }
     }
 
-    for (const client of nonVipClients) {
+    for (const client of clientsToGroup) {
       if (assignedIds.has(client.id)) continue;
       groups.push({
         parent: client,
@@ -1855,7 +1857,7 @@ export default function ClientsPage() {
     }
 
     return groups;
-  }, [filteredAndSortedClients, vipClientIds]);
+  }, [filteredAndSortedClients, vipClientIds, viewMode]);
 
   const hasActiveFilters = Object.values(filterValues).some(
     (v) => v && v !== "all"
@@ -2054,7 +2056,7 @@ export default function ClientsPage() {
         />
       )}
 
-      {vipClients.length > 0 && (
+      {vipClients.length > 0 && viewMode === "grid" && (
         <VipCarousel
           vipClients={vipClients}
           onOpenClient={handleOpenClientSheet}
