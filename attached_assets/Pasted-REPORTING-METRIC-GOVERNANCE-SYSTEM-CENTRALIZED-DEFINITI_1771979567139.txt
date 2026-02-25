@@ -1,0 +1,165 @@
+REPORTING METRIC GOVERNANCE SYSTEM
+(CENTRALIZED DEFINITIONS + DATA CONSISTENCY LAYER)
+
+You are working in the DigitalWorkday codebase.
+
+We are implementing a centralized metric governance system to ensure:
+
+- All Employee Command Center metrics are consistent
+- All Client Command Center metrics are consistent
+- No duplicate or conflicting formulas exist
+- All metrics are documented automatically in App Docs
+- Future features reuse standardized definitions
+
+This must be:
+- 100% NON-DESTRUCTIVE
+- Additive only
+- No breaking changes
+- No UI rewrites
+- Internal consistency layer only
+
+===========================================================
+PHASE 1 — CREATE METRIC DEFINITION REGISTRY
+===========================================================
+
+Create new file:
+
+server/src/reporting/metricDefinitions.ts
+
+Export structured object:
+
+export const MetricDefinitions = {
+
+  assignedCount: {
+    description: "Number of tasks assigned to a user within the selected date range",
+    calculation: "COUNT(tasks WHERE assignee_id = userId AND created_at BETWEEN startDate AND endDate)",
+    type: "range_based"
+  },
+
+  completedCount: {
+    description: "Tasks completed within date range",
+    calculation: "COUNT(tasks WHERE completed_at BETWEEN startDate AND endDate)",
+    type: "range_based"
+  },
+
+  activeTasks: {
+    description: "Tasks currently open",
+    calculation: "COUNT(tasks WHERE status NOT IN ('completed','archived'))",
+    type: "current_state"
+  },
+
+  overdueTasks: {
+    description: "Open tasks with due_date < NOW()",
+    calculation: "COUNT(tasks WHERE due_date < NOW() AND status != 'completed')",
+    type: "current_state"
+  },
+
+  totalHours: {
+    description: "Sum of time entries within date range",
+    calculation: "SUM(time_entries.hours WHERE date BETWEEN startDate AND endDate)",
+    type: "range_based"
+  },
+
+  utilizationPct: {
+    description: "Actual hours divided by available hours",
+    calculation: "actualHours / availableHours",
+    type: "derived"
+  },
+
+  efficiencyRatio: {
+    description: "Actual hours divided by estimated task hours",
+    calculation: "SUM(actualHours) / SUM(estimatedHours)",
+    type: "derived"
+  }
+
+};
+
+Add all major metrics used in:
+- Employee Overview
+- Workload
+- Time
+- Capacity
+- Client Overview
+- Client Risk
+- Project Intelligence
+
+===========================================================
+PHASE 2 — DATE RANGE NORMALIZATION
+===========================================================
+
+Create utility:
+
+server/src/reporting/dateRangeResolver.ts
+
+Standardize:
+
+- All range-based metrics use:
+  - completed_at for completions
+  - created_at for task creation
+  - time_entries.date for time
+- No mixing created_at and updated_at
+- Timezone aware
+- Default fallback to tenant timezone
+
+All V2 endpoints must use this resolver.
+
+===========================================================
+PHASE 3 — NULL & EDGE CASE RULES
+===========================================================
+
+Standardize:
+
+- If estimatedHours is null → exclude from efficiency calculation
+- If availableHours = 0 → utilizationPct = null (not 0)
+- If no data → return 0, not null (except ratios)
+
+Document these in metricDefinitions.
+
+===========================================================
+PHASE 4 — VALIDATION HELPER
+===========================================================
+
+Create:
+
+validateMetricConsistency(metricKey, dataset)
+
+This ensures:
+- Derived metrics never divide by zero
+- Negative values flagged
+- Over 200% utilization flagged
+
+Used internally in dev mode.
+
+===========================================================
+PHASE 5 — APP DOCS UPDATE (MANDATORY)
+===========================================================
+
+Create new section:
+
+Title:
+“Reporting Metric Definitions & Governance”
+
+Include:
+
+- Table of all metrics
+- Calculation formulas
+- Date fields used
+- Null handling rules
+- Ratio handling rules
+- Timezone logic
+- Range vs current-state definitions
+
+This becomes your single source of truth for reporting math.
+
+===========================================================
+ACCEPTANCE CRITERIA
+===========================================================
+
+- Metric registry file exists
+- Date resolver standardized
+- No V2 endpoint calculates metrics ad hoc
+- App Docs updated
+- No existing report behavior broken
+
+STOP after governance layer is complete.
+Do NOT add new UI in this phase.
