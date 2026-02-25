@@ -29,9 +29,8 @@ import { evaluateSlaPolicies } from "./http/domains/support.router";
 import { evaluateConversationSla } from "./routes/modules/crm/conversations.router";
 
 export const app = express();
-const httpServer = createServer(app);
+let httpServer: ReturnType<typeof createServer>;
 
-// Trust the reverse proxy (needed for secure cookies in production)
 app.set("trust proxy", 1);
 
 declare module "http" {
@@ -52,11 +51,23 @@ app.head("/", (_req, res) => {
   res.status(200).end();
 });
 
-app.get("/", (_req, res) => {
-  res.status(200).set("Content-Type", "text/html").send(
-    '<!DOCTYPE html><html><head><meta charset="utf-8"><title>MyWorkDay</title></head>' +
-    '<body>OK</body></html>'
-  );
+let cachedIndexHtml: string | null = null;
+
+app.get("/", (_req, res, next) => {
+  if (process.env.NODE_ENV === "production") {
+    if (!cachedIndexHtml) {
+      try {
+        const p = require("path");
+        const f = require("fs");
+        cachedIndexHtml = f.readFileSync(p.resolve(__dirname, "public", "index.html"), "utf-8");
+      } catch {
+        return res.status(200).set("Content-Type", "text/html")
+          .send('<!DOCTYPE html><html><head><meta charset="utf-8"><title>MyWorkDay</title></head><body>OK</body></html>');
+      }
+    }
+    return res.status(200).set("Content-Type", "text/html").send(cachedIndexHtml);
+  }
+  next();
 });
 
 // Main health endpoint - always responds 200 for load balancer health checks
@@ -132,11 +143,7 @@ app.use(
 
 app.use(express.urlencoded({ extended: false }));
 
-// Setup authentication middleware (session + passport) - must be before Socket.IO
 setupAuth(app);
-
-// Initialize Socket.IO server for real-time updates (after auth for session access)
-initializeSocketIO(httpServer);
 
 // Setup bootstrap endpoints (first-user registration)
 setupBootstrapEndpoints(app);
@@ -499,17 +506,24 @@ async function runPhase<T>(
   }
 }
 
-httpServer.listen(port, host, () => {
+export function boot(
+  server: ReturnType<typeof createServer>,
+  setHandler: (handler: (req: import("http").IncomingMessage, res: import("http").ServerResponse) => void) => void,
+) {
+  httpServer = server;
   serverStartTime = Date.now();
   appReady = true;
-  console.log(`[startup] Phase 1: Server listening on ${host}:${port} — health checks passing`);
+
+  initializeSocketIO(httpServer);
+
+  setHandler(app);
 
   runAsyncInit().catch((err) => {
     setPhase("error");
     console.error("[boot] Unhandled startup error:", err);
     startupError = err instanceof Error ? err : new Error(String(err));
   });
-});
+}
 
 async function runAsyncInit() {
   // Boot logging for deployment verification
@@ -721,10 +735,18 @@ async function gracefulShutdown(signal: string) {
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
 
-process.on("uncaughtException", (err) => {
-  console.error("[fatal] Uncaught exception:", err);
-});
-
-process.on("unhandledRejection", (reason) => {
-  console.error("[fatal] Unhandled rejection:", reason);
-});
+if (!(globalThis as any).__ENTRY_BOOT) {
+  httpServer = createServer(app);
+  const port = parseInt(process.env.PORT || "5000", 10);
+  httpServer.listen(port, "0.0.0.0", () => {
+    serverStartTime = Date.now();
+    appReady = true;
+    initializeSocketIO(httpServer);
+    console.log(`[startup] Phase 1: Server listening on 0.0.0.0:${port} — health checks passing`);
+    runAsyncInit().catch((err) => {
+      setPhase("error");
+      console.error("[boot] Unhandled startup error:", err);
+      startupError = err instanceof Error ? err : new Error(String(err));
+    });
+  });
+}
