@@ -1,0 +1,116 @@
+CHAT COMPOSER “STICKY FOCUS” FIX
+NON-DESTRUCTIVE • ACCESSIBLE • NO UX REGRESSIONS
+
+Goal:
+After sending a chat message (Enter), keep keyboard focus in the chat text input/textarea so users can keep typing without clicking back into the field. Focus should only leave if the user intentionally clicks elsewhere or navigates away.
+
+Scope:
+- Chat message composer component(s) across the app (tenant chat, client chat, project chat, etc.)
+- Works for both single-line input and multi-line textarea modes.
+- Must not break “Shift+Enter” newline behavior (if supported).
+- Must respect accessibility and IME composition.
+
+============================================================
+PHASE 1 — FIND THE CAUSE
+============================================================
+1) Locate the chat composer component(s) used to send messages.
+2) Identify why focus is lost:
+   - form submit causing rerender/remount
+   - key handler calling blur()
+   - state change causing conditional rendering key change
+   - controlled input being re-created due to changing key props
+   - route/query invalidation causing component unmount
+3) Add minimal console/dev logging (dev only) to confirm:
+   - does the input element get replaced in the DOM after send?
+   - does a parent rerender remount the composer (key change)?
+
+============================================================
+PHASE 2 — IMPLEMENT STICKY FOCUS (ROBUST)
+============================================================
+Implement these rules in the composer:
+
+A) Maintain a stable ref to the input/textarea:
+- const inputRef = useRef<HTMLInputElement | HTMLTextAreaElement>(null)
+
+B) On successful send:
+- Clear input value
+- Immediately restore focus to the inputRef
+- Place caret at end (or start if desired)
+- Use requestAnimationFrame to handle rerender timing:
+  requestAnimationFrame(() => inputRef.current?.focus())
+
+C) Prevent default form submit navigation:
+- If wrapping in <form>, ensure onSubmit calls event.preventDefault()
+- Send message in JS without causing page reload or implicit submit side effects
+
+D) Preserve IME / composition correctness:
+- Do NOT send on Enter while composing:
+  - Track composition state via onCompositionStart/End
+  - If isComposing, ignore Enter send shortcut
+
+E) Preserve newline behavior:
+- Enter: send (if not composing)
+- Shift+Enter: newline (if multiline enabled)
+- Cmd/Ctrl+Enter optionally send if you support that
+
+F) Do NOT steal focus if user intentionally clicked away during send:
+- If the activeElement is not the composer at send-time, do not refocus.
+Implement:
+- const hadFocus = document.activeElement === inputRef.current
+- only refocus if hadFocus is true
+
+============================================================
+PHASE 3 — FIX REMOUNTING (MOST COMMON ROOT CAUSE)
+============================================================
+If the composer is being remounted after send:
+
+- Ensure the composer component does NOT change its React key when message list updates.
+- Do not key the composer by:
+  - message count
+  - selected thread object identity
+  - last message id
+Instead key by stable conversation/thread id only.
+
+If the composer sits inside a conditional render that flips during sending/loading:
+- Keep the composer mounted and disable it instead of unmounting.
+- Use a loading state to disable send button, not hide the composer.
+
+============================================================
+PHASE 4 — ADD A SHARED HOOK (REUSE ACROSS CHAT AREAS)
+============================================================
+Create a small shared hook to standardize behavior:
+client/src/hooks/useStickyComposerFocus.ts
+
+Returns:
+- inputRef
+- registerComposition handlers
+- handleSendSuccess() -> clears value + focuses using rAF (only if hadFocus)
+
+Use the hook in all chat composer implementations so behavior is consistent.
+
+============================================================
+PHASE 5 — QA CHECKLIST
+============================================================
+Verify:
+- Send with Enter keeps focus
+- Shift+Enter makes newline (if applicable)
+- IME (e.g., Japanese) composing does not accidentally send
+- After send, user can type immediately
+- Clicking elsewhere before sending does not get focus stolen back
+- Works on mobile (soft keyboard should remain active after send when possible)
+- No infinite focus loops
+
+============================================================
+PHASE 6 — APP DOCS UPDATE
+============================================================
+Add a short App Docs note:
+“Chat Composer UX Standards”
+- Enter to send
+- Shift+Enter newline
+- Sticky focus behavior
+- IME rules
+
+STOP when:
+- All chat composers keep focus after send without stealing focus unintentionally
+- No regressions to newline behavior or accessibility
+- Docs updated
