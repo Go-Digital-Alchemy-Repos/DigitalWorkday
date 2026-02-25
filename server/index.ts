@@ -58,19 +58,25 @@ app.head("/", (_req, res) => {
 });
 
 app.get("/", (req, res, next) => {
-  // Check if it's a health check vs browser request FIRST
+  // During startup (before routes + static serving are mounted), return 200 immediately
+  // for ALL requests. Health check probes must never wait for app readiness.
+  if (!appReady) {
+    return res.status(200).json({ status: "ok", starting: true, timestamp: new Date().toISOString() });
+  }
+
+  // App is ready — distinguish health checks from browser requests
   const acceptHeader = req.headers.accept || "";
   const userAgent = req.headers["user-agent"] || "";
-  
-  const isBrowser = acceptHeader.includes("text/html") && 
+
+  const isBrowser = acceptHeader.includes("text/html") &&
                     (userAgent.includes("Mozilla") || userAgent.includes("Chrome") || userAgent.includes("Safari"));
-  
-  // For health checks (non-browser), return 200 immediately - don't wait for app readiness
+
+  // Non-browser (health check / curl): respond immediately
   if (!isBrowser) {
     return res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
   }
-  
-  // For browser requests, let it fall through to static file serving for the React app
+
+  // Browser request: fall through to the static file server (registered during Phase 3)
   next();
 });
 
@@ -481,7 +487,7 @@ app.get("/ready", async (_req, res) => {
 // Bind to 0.0.0.0 explicitly for Replit Autoscale deployment
 const port = parseInt(process.env.PORT || "5000", 10);
 const host = "0.0.0.0";
-const PHASE_TIMEOUT_MS = 2000; // Warn if any phase takes >2 seconds (Cloud Run default health check timeout is 4s)
+const PHASE_TIMEOUT_MS = 1000; // Warn if any phase takes >1 second (health checks must respond within 4s total)
 
 // Helper to run a phase with timing and timeout warning
 async function runPhase<T>(
