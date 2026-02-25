@@ -610,4 +610,35 @@ router.get("/employee/trends", async (req: Request, res: Response) => {
   }
 });
 
+// ── EPI: Employee Performance Index ──────────────────────────────────────────
+
+router.get("/employee/performance", async (req: Request, res: Response) => {
+  try {
+    const { calculateEmployeePerformance } = await import("../../reports/performance/calculateEmployeePerformance");
+    const tenantId = getTenantId(req);
+    const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
+    const filters = normalizeFilters(params);
+    const { limit, offset } = safePagination(params);
+
+    const userId = filters.userIds.length === 1 ? filters.userIds[0] : null;
+
+    const { results, total } = await calculateEmployeePerformance({
+      tenantId,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      userId,
+      limit,
+      offset,
+    });
+
+    res.json({
+      employees: results,
+      pagination: { total, limit, offset },
+      range: { startDate, endDate },
+    });
+  } catch (error) {
+    handleRouteError(res, error, "reports-v2/employee/performance", req);
+  }
+});
+
 export default router;

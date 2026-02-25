@@ -15,11 +15,12 @@ import {
 import {
   Users, Clock, CheckSquare, AlertTriangle, TrendingUp,
   ChevronUp, ChevronDown, ArrowUpDown, CalendarRange, Activity,
-  ShieldAlert, User,
+  ShieldAlert, User, Award,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
 
 function userName(u: { firstName?: string | null; lastName?: string | null; email: string }) {
   if (u.firstName || u.lastName) return `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
@@ -719,9 +720,267 @@ function TrendsTab({ rangeDays }: { rangeDays: number }) {
   );
 }
 
+// ── TYPES ─────────────────────────────────────────────────────────────────────
+
+interface ComponentScores {
+  completion: number;
+  overdue: number;
+  utilization: number;
+  efficiency: number;
+  compliance: number;
+}
+
+interface EpiEmployee {
+  userId: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  avatarUrl: string | null;
+  overallScore: number;
+  performanceTier: "High" | "Stable" | "Needs Attention" | "Critical";
+  componentScores: ComponentScores;
+  riskFlags: string[];
+  rawMetrics: {
+    activeTasks: number;
+    overdueCount: number;
+    completedInRange: number;
+    totalHours: number;
+    estimatedHours: number;
+    loggedDays: number;
+    daysInRange: number;
+    utilizationPct: number | null;
+    efficiencyRatio: number | null;
+    completionRate: number | null;
+    overdueRate: number | null;
+    timeCompliancePct: number;
+  };
+}
+
+type EpiSortField = "name" | "overallScore" | "completion" | "overdue" | "utilization" | "efficiency" | "compliance";
+
+// ── PERFORMANCE TAB ────────────────────────────────────────────────────────────
+
+function tierConfig(tier: EpiEmployee["performanceTier"]) {
+  switch (tier) {
+    case "High":             return { label: "High",             variant: "default" as const,      className: "bg-green-500 text-white border-transparent" };
+    case "Stable":           return { label: "Stable",           variant: "secondary" as const,    className: "bg-blue-500 text-white border-transparent" };
+    case "Needs Attention":  return { label: "Needs Attention",  variant: "default" as const,      className: "bg-orange-500 text-white border-transparent" };
+    case "Critical":         return { label: "Critical",         variant: "destructive" as const,  className: "" };
+  }
+}
+
+function ScoreBar({ value, color }: { value: number; color: string }) {
+  return (
+    <div className="flex items-center gap-1.5">
+      <Progress value={value} className={cn("h-1.5 flex-1", color)} />
+      <span className="text-xs text-muted-foreground w-7 text-right tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function PerformanceTab({ rangeDays }: { rangeDays: number }) {
+  const [sortBy, setSortBy] = useState<EpiSortField>("overallScore");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const { data, isLoading } = useQuery<{
+    employees: EpiEmployee[];
+    pagination: { total: number; limit: number; offset: number };
+    range: { startDate: string; endDate: string };
+  }>({
+    queryKey: ["/api/reports/v2/employee/performance", rangeDays],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/v2/employee/performance?${buildDateParams(rangeDays, { limit: "100" })}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const sorted = useMemo(() => {
+    if (!data?.employees) return [];
+    return [...data.employees].sort((a, b) => {
+      let av: number | string = 0, bv: number | string = 0;
+      if (sortBy === "name")         { av = userName(a); bv = userName(b); }
+      else if (sortBy === "overallScore")  { av = a.overallScore; bv = b.overallScore; }
+      else if (sortBy === "completion")    { av = a.componentScores.completion; bv = b.componentScores.completion; }
+      else if (sortBy === "overdue")       { av = a.componentScores.overdue; bv = b.componentScores.overdue; }
+      else if (sortBy === "utilization")   { av = a.componentScores.utilization; bv = b.componentScores.utilization; }
+      else if (sortBy === "efficiency")    { av = a.componentScores.efficiency; bv = b.componentScores.efficiency; }
+      else if (sortBy === "compliance")    { av = a.componentScores.compliance; bv = b.componentScores.compliance; }
+      if (typeof av === "string") {
+        return sortDir === "asc" ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
+      }
+      return sortDir === "asc" ? av - (bv as number) : (bv as number) - av;
+    });
+  }, [data?.employees, sortBy, sortDir]);
+
+  function toggleSort(field: EpiSortField) {
+    if (sortBy === field) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortBy(field); setSortDir("desc"); }
+  }
+
+  function Th({ field, children }: { field: EpiSortField; children: React.ReactNode }) {
+    return (
+      <TableHead
+        className="cursor-pointer select-none whitespace-nowrap"
+        onClick={() => toggleSort(field)}
+        data-testid={`th-perf-${field}`}
+      >
+        <div className="flex items-center">
+          {children}
+          <SortIcon field={field} sortBy={sortBy} sortDir={sortDir} />
+        </div>
+      </TableHead>
+    );
+  }
+
+  const teamAvg = useMemo(() => {
+    if (!data?.employees.length) return null;
+    const emps = data.employees;
+    return {
+      score: Math.round(emps.reduce((s, e) => s + e.overallScore, 0) / emps.length),
+      high: emps.filter(e => e.performanceTier === "High").length,
+      critical: emps.filter(e => e.performanceTier === "Critical").length,
+      atRisk: emps.filter(e => e.riskFlags.length > 0).length,
+    };
+  }, [data?.employees]);
+
+  if (isLoading) return (
+    <div className="space-y-3">
+      {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {teamAvg && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <MetricCard
+            label="Team Avg EPI Score"
+            value={teamAvg.score}
+            sub="out of 100"
+            icon={<Award className="h-4 w-4 text-white" />}
+            color="bg-violet-500"
+          />
+          <MetricCard
+            label="High Performers"
+            value={teamAvg.high}
+            sub="score ≥ 85"
+            icon={<TrendingUp className="h-4 w-4 text-white" />}
+            color="bg-green-500"
+          />
+          <MetricCard
+            label="Critical"
+            value={teamAvg.critical}
+            sub="score < 50"
+            icon={<AlertTriangle className="h-4 w-4 text-white" />}
+            color="bg-red-500"
+          />
+          <MetricCard
+            label="With Risk Flags"
+            value={teamAvg.atRisk}
+            sub="one or more flags"
+            icon={<ShieldAlert className="h-4 w-4 text-white" />}
+            color="bg-orange-500"
+          />
+        </div>
+      )}
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <Th field="name">Employee</Th>
+                <Th field="overallScore">EPI Score</Th>
+                <TableHead className="text-xs text-muted-foreground">Tier</TableHead>
+                <Th field="completion">Completion</Th>
+                <Th field="overdue">Overdue</Th>
+                <Th field="utilization">Utilization</Th>
+                <Th field="efficiency">Efficiency</Th>
+                <Th field="compliance">Compliance</Th>
+                <TableHead className="text-xs text-muted-foreground">Flags</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sorted.map((e) => {
+                const { label, className } = tierConfig(e.performanceTier);
+                return (
+                  <TableRow key={e.userId} data-testid={`row-employee-perf-${e.userId}`}>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        <Avatar className="h-7 w-7 shrink-0">
+                          <AvatarImage src={getStorageUrl(e.avatarUrl) ?? ""} alt={userName(e)} />
+                          <AvatarFallback className="text-xs">{userInitials(e)}</AvatarFallback>
+                        </Avatar>
+                        <span className="text-sm font-medium truncate max-w-[130px]">{userName(e)}</span>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className={cn(
+                        "text-base font-bold tabular-nums",
+                        e.overallScore >= 85 ? "text-green-600 dark:text-green-400" :
+                        e.overallScore >= 70 ? "text-blue-600 dark:text-blue-400" :
+                        e.overallScore >= 50 ? "text-orange-600 dark:text-orange-400" :
+                        "text-red-600 dark:text-red-400"
+                      )}>
+                        {e.overallScore}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={cn("text-xs font-medium", className)}>{label}</Badge>
+                    </TableCell>
+                    <TableCell className="min-w-[90px]">
+                      <ScoreBar value={e.componentScores.completion} color="[&>div]:bg-blue-500" />
+                    </TableCell>
+                    <TableCell className="min-w-[90px]">
+                      <ScoreBar value={e.componentScores.overdue} color="[&>div]:bg-green-500" />
+                    </TableCell>
+                    <TableCell className="min-w-[90px]">
+                      <ScoreBar value={e.componentScores.utilization} color="[&>div]:bg-violet-500" />
+                    </TableCell>
+                    <TableCell className="min-w-[90px]">
+                      <ScoreBar value={e.componentScores.efficiency} color="[&>div]:bg-amber-500" />
+                    </TableCell>
+                    <TableCell className="min-w-[90px]">
+                      <ScoreBar value={e.componentScores.compliance} color="[&>div]:bg-cyan-500" />
+                    </TableCell>
+                    <TableCell>
+                      {e.riskFlags.length > 0 ? (
+                        <div className="space-y-1" data-testid={`perf-flags-${e.userId}`}>
+                          {e.riskFlags.map((flag, i) => (
+                            <div key={i} className="flex items-start gap-1 text-xs text-orange-600 dark:text-orange-400">
+                              <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                              <span className="leading-tight max-w-[180px]">{flag}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {sorted.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center text-muted-foreground py-8">No performance data found</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ── MAIN COMPONENT ─────────────────────────────────────────────────────────────
+
 export function EmployeeCommandCenter() {
   const [rangeDays, setRangeDays] = useState(30);
   const [activeTab, setActiveTab] = useState("overview");
+  const flags = useFeatureFlags();
 
   return (
     <ReportCommandCenterLayout
@@ -757,6 +1016,12 @@ export function EmployeeCommandCenter() {
             <TrendingUp className="h-3.5 w-3.5" />
             Trends
           </TabsTrigger>
+          {flags.enableEmployeePerformanceIndex && (
+            <TabsTrigger value="performance" className="text-xs gap-1.5" data-testid="tab-employee-performance">
+              <Award className="h-3.5 w-3.5" />
+              Performance
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
@@ -777,6 +1042,11 @@ export function EmployeeCommandCenter() {
         <TabsContent value="trends" className="mt-4">
           <TrendsTab rangeDays={rangeDays} />
         </TabsContent>
+        {flags.enableEmployeePerformanceIndex && (
+          <TabsContent value="performance" className="mt-4">
+            <PerformanceTab rangeDays={rangeDays} />
+          </TabsContent>
+        )}
       </Tabs>
     </ReportCommandCenterLayout>
   );

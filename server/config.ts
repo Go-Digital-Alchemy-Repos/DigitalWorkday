@@ -192,6 +192,7 @@ export const config = {
     reportPipelineV2: optionalEnvBool("REPORT_PIPELINE_V2", false),
     enableEmployeeCommandCenter: optionalEnvBool("ENABLE_EMPLOYEE_COMMAND_CENTER", isDevelopment),
     enableClientCommandCenter: optionalEnvBool("ENABLE_CLIENT_COMMAND_CENTER", isDevelopment),
+    enableEmployeePerformanceIndex: optionalEnvBool("ENABLE_EMPLOYEE_PERFORMANCE_INDEX", isDevelopment),
   },
 
   tenancyEnforcement: {

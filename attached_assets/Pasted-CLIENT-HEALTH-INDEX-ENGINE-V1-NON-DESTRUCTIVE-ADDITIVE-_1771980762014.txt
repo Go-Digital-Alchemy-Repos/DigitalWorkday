@@ -1,0 +1,118 @@
+CLIENT HEALTH INDEX ENGINE (V1)
+NON-DESTRUCTIVE • ADDITIVE • FEATURE-FLAGGED
+
+You are working in the DigitalWorkday codebase.
+
+We are implementing a Client Health Index (CHI) system for the Client Command Center.
+
+Feature flag:
+ENABLE_CLIENT_HEALTH_INDEX
+
+===========================================================
+PHASE 1 — DEFINE CLIENT HEALTH MODEL
+===========================================================
+
+Create file:
+server/src/reporting/health/clientHealthModel.ts
+
+Components:
+
+HealthComponents = {
+  overdueWeight: 0.25,
+  engagementWeight: 0.20,
+  timeOverrunWeight: 0.20,
+  slaComplianceWeight: 0.20,
+  activityWeight: 0.15
+}
+
+Score range: 0–100
+
+Component logic:
+
+overdueScore:
+  inverse % of overdue tasks
+
+engagementScore:
+  normalized messages + activity frequency
+
+timeOverrunScore:
+  estimated vs actual hours variance
+
+slaComplianceScore:
+  response times within SLA %
+
+activityScore:
+  days since last activity (inverse scaled)
+
+===========================================================
+PHASE 2 — CALCULATION ENGINE
+===========================================================
+
+Create:
+server/src/reporting/health/calculateClientHealth.ts
+
+Function:
+
+calculateClientHealth({
+  tenantId,
+  clientId,
+  startDate,
+  endDate
+})
+
+Returns:
+
+{
+  overallScore,
+  componentScores,
+  riskFlags,
+  healthTier: "Healthy" | "Monitor" | "At Risk" | "Critical"
+}
+
+Tier thresholds:
+- 85+ Healthy
+- 70–84 Monitor
+- 50–69 At Risk
+- <50 Critical
+
+===========================================================
+PHASE 3 — ENDPOINT
+===========================================================
+
+GET /api/reports/v2/client/health-index
+
+Returns per client:
+- overallScore
+- component breakdown
+- tier
+- risk flags
+
+Paginated + filterable.
+
+===========================================================
+PHASE 4 — UI INTEGRATION
+===========================================================
+
+Add “Health” tab under Client Command Center.
+
+Display:
+- health score column
+- tier badges
+- drilldown view
+- risk explanation tooltips
+
+===========================================================
+PHASE 5 — APP DOCS UPDATE
+===========================================================
+
+New section:
+“Client Health Index (CHI)”
+
+Include:
+- Formula
+- Component weights
+- Risk flag definitions
+- SLA logic assumptions
+- Known limitations
+
+STOP after completion.
