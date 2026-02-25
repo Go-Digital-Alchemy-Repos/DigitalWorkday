@@ -67,7 +67,8 @@ import {
 } from "@shared/schema";
 import type { ProjectTemplateContent } from "@shared/schema";
 import { db } from "../../db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, ilike, asc, desc } from "drizzle-orm";
+import { config } from "../../config";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import {
   getCurrentUserId,
@@ -121,13 +122,41 @@ router.get("/projects", async (req: Request, res: Response) => {
     const isAdmin = user?.role === 'admin' || user?.role === 'super_user';
     
     if (tenantId) {
-      const projects = await storage.getProjectsForUser(userId, tenantId, workspaceId, isAdmin);
-      return res.json(projects);
+      if (config.features.enableProjectsSqlFiltering) {
+        const { status, clientId, teamId, search, sortBy = 'createdAt', sortDir = 'desc', limit = '100', offset = '0' } = req.query as Record<string, string>;
+        
+        const conditions: ReturnType<typeof eq>[] = [eq(projects.tenantId, tenantId)];
+        if (status) conditions.push(eq(projects.status, status));
+        if (clientId) conditions.push(eq(projects.clientId, clientId));
+        if (teamId) conditions.push(eq(projects.teamId, teamId));
+        if (search) conditions.push(ilike(projects.name, `%${search}%`));
+        
+        const sortCol = ({
+          'name': projects.name,
+          'status': projects.status,
+          'createdAt': projects.createdAt,
+          'updatedAt': projects.updatedAt,
+        } as Record<string, typeof projects.createdAt>)[sortBy] ?? projects.createdAt;
+        const order = sortDir === 'asc' ? asc(sortCol) : desc(sortCol);
+        
+        const projectList = await db
+          .select()
+          .from(projects)
+          .where(and(...conditions))
+          .orderBy(order)
+          .limit(parseInt(limit))
+          .offset(parseInt(offset));
+        
+        return res.json(projectList);
+      }
+      
+      const projectList = await storage.getProjectsForUser(userId, tenantId, workspaceId, isAdmin);
+      return res.json(projectList);
     }
     
     if (isSuperUser(req)) {
-      const projects = await storage.getProjectsByWorkspace(workspaceId);
-      return res.json(projects);
+      const projectList = await storage.getProjectsByWorkspace(workspaceId);
+      return res.json(projectList);
     }
     
     console.error(`[projects] User ${getCurrentUserId(req)} has no tenantId`);

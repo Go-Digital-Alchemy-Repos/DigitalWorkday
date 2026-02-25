@@ -316,6 +316,7 @@ export interface IStorage {
   // Tenant-scoped methods (Phase 2A)
   getClientByIdAndTenant(id: string, tenantId: string): Promise<Client | undefined>;
   getClientsByTenant(tenantId: string, workspaceId?: string): Promise<ClientWithContacts[]>;
+  getClientsByTenantBatched(tenantId: string): Promise<ClientWithContacts[]>;
   getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean })[]>;
   getClientsSummaryByTenant(tenantId: string): Promise<{ total: number; active: number; inactive: number; prospect: number; newThisMonth: number; needsAttention: number }>;
   updateClientStage(clientId: string, tenantId: string, toStage: string, changedByUserId: string): Promise<Client | undefined>;
@@ -2384,6 +2385,47 @@ export class DatabaseStorage implements IStorage {
       result.push({ ...client, contacts, projects: clientProjects });
     }
     return result;
+  }
+
+  async getClientsByTenantBatched(tenantId: string): Promise<ClientWithContacts[]> {
+    const clientsList = await db.select()
+      .from(clients)
+      .where(eq(clients.tenantId, tenantId))
+      .orderBy(asc(clients.companyName));
+
+    if (clientsList.length === 0) return [];
+
+    const clientIds = clientsList.map(c => c.id);
+
+    const allContacts = await db.select()
+      .from(clientContacts)
+      .where(inArray(clientContacts.clientId, clientIds));
+
+    const allProjects = await db.select()
+      .from(projects)
+      .where(and(
+        inArray(projects.clientId, clientIds),
+        isNotNull(projects.clientId)
+      ));
+
+    const contactsByClient = new Map<string, typeof clientContacts.$inferSelect[]>();
+    for (const contact of allContacts) {
+      if (!contactsByClient.has(contact.clientId)) contactsByClient.set(contact.clientId, []);
+      contactsByClient.get(contact.clientId)!.push(contact);
+    }
+
+    const projectsByClient = new Map<string, typeof projects.$inferSelect[]>();
+    for (const project of allProjects) {
+      if (!project.clientId) continue;
+      if (!projectsByClient.has(project.clientId)) projectsByClient.set(project.clientId, []);
+      projectsByClient.get(project.clientId)!.push(project);
+    }
+
+    return clientsList.map(client => ({
+      ...client,
+      contacts: contactsByClient.get(client.id) ?? [],
+      projects: projectsByClient.get(client.id) ?? [],
+    }));
   }
 
   async getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean })[]> {

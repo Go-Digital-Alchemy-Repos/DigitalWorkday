@@ -199,6 +199,10 @@ export const config = {
     enableForecastSnapshots: optionalEnvBool("ENABLE_FORECAST_SNAPSHOTS", true),
     enableAlertAutomation: optionalEnvBool("ENABLE_ALERT_AUTOMATION", true),
     enableWeeklyOpsDigest: optionalEnvBool("ENABLE_WEEKLY_OPS_DIGEST", true),
+    // Performance optimization flags (server-side only)
+    enableTasksBatchHydration: optionalEnvBool("ENABLE_TASKS_BATCH_HYDRATION", true),
+    enableClientsBatchExpansion: optionalEnvBool("ENABLE_CLIENTS_BATCH_EXPANSION", true),
+    enableProjectsSqlFiltering: optionalEnvBool("ENABLE_PROJECTS_SQL_FILTERING", true),
   },
 
   tenancyEnforcement: {

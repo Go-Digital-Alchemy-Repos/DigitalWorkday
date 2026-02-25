@@ -57,6 +57,8 @@ import { AppError, handleRouteError, sendError, validateBody } from "../../lib/e
 import { captureError } from "../../middleware/errorLogging";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { getCurrentUserId, getCurrentWorkspaceId, isSuperUser } from "../../routes/helpers";
+import { config } from "../../config";
+import { getTasksByUserBatched } from "../services/taskBatchHydrator";
 import {
   insertTaskSchema,
   updateTaskSchema,
@@ -205,7 +207,14 @@ router.get("/projects/:projectId/activity", async (req, res) => {
 
 router.get("/tasks/my", async (req, res) => {
   try {
-    const tasks = await storage.getTasksByUser(getCurrentUserId(req));
+    const userId = getCurrentUserId(req);
+    let tasks;
+    if (config.features.enableTasksBatchHydration) {
+      const tenantId = getEffectiveTenantId(req) ?? "";
+      tasks = await getTasksByUserBatched(userId, tenantId);
+    } else {
+      tasks = await storage.getTasksByUser(userId);
+    }
     res.json(tasks);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/tasks/my", req);

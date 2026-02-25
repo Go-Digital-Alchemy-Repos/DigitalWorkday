@@ -3,6 +3,7 @@ import { createApiRouter } from "../http/routerFactory";
 import { z } from "zod";
 import { storage } from "../storage";
 import { db } from "../db";
+import { config } from "../config";
 import { eq, and, desc, sql, count, inArray } from "drizzle-orm";
 import { AppError, handleRouteError, sendError, validateBody } from "../lib/errors";
 import { getEffectiveTenantId } from "../middleware/tenantContext";
@@ -109,7 +110,9 @@ router.get("/clients", async (req, res) => {
     console.log(`[GET /api/clients] requestId=${requestId}, tenantId=${tenantId}, workspaceId=${workspaceId}, userId=${req.user?.id}`);
     
     if (tenantId) {
-      const clients = await storage.getClientsByTenant(tenantId, workspaceId);
+      const clients = config.features.enableClientsBatchExpansion
+        ? await storage.getClientsByTenantBatched(tenantId)
+        : await storage.getClientsByTenant(tenantId, workspaceId);
       console.log(`[GET /api/clients] Found ${clients.length} clients for tenantId=${tenantId}, requestId=${requestId}`);
       return res.json(clients);
     }

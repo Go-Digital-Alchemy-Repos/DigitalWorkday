@@ -54,6 +54,9 @@ router.get("/features/flags", async (_req, res) => {
       enableForecastSnapshots: config.features.enableForecastSnapshots,
       enableAlertAutomation: config.features.enableAlertAutomation,
       enableWeeklyOpsDigest: config.features.enableWeeklyOpsDigest,
+      enableTasksBatchHydration: config.features.enableTasksBatchHydration,
+      enableClientsBatchExpansion: config.features.enableClientsBatchExpansion,
+      enableProjectsSqlFiltering: config.features.enableProjectsSqlFiltering,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

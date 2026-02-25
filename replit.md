@@ -50,6 +50,12 @@ MyWorkDay is an Asana-inspired project management application designed to stream
 - **Documents → Asset Library Unification**: An adapter layer allows existing Documents API to use Asset Library infrastructure with a feature flag for backward compatibility and migration.
 - **Default Tenant Documents**: Canonical tenant-wide document library managed by Super Admins and Tenant Admins, visible read-only to clients in the Asset Library.
 
+## Performance Optimizations
+- **Tasks Batch Hydration**: `getTasksByUserBatched()` in `server/http/services/taskBatchHydrator.ts` eliminates the N+1 pattern in `GET /tasks/my`. Reduces queries from 2+7N to ~9 flat queries (inArray batch fetches for assignees, watchers, tags, subtasks, sections, projects) with in-memory stitching. Gated by `ENABLE_TASKS_BATCH_HYDRATION` env var (default `true`).
+- **Clients Batch Expansion**: `getClientsByTenantBatched()` in `server/storage.ts` eliminates the N+1 pattern in `GET /clients`. Reduces queries from 1+2N to 3 flat queries (clients, all contacts, all projects) with in-memory grouping. Gated by `ENABLE_CLIENTS_BATCH_EXPANSION` env var (default `true`).
+- **Projects SQL Filtering**: The `GET /projects` endpoint accepts `status`, `clientId`, `teamId`, `search`, `sortBy`, `sortDir`, `limit`, `offset` query params and applies them as SQL WHERE clauses instead of loading all projects then filtering in memory. Gated by `ENABLE_PROJECTS_SQL_FILTERING` env var (default `true`).
+- **DB Indexes**: Comprehensive indexes on all hot-path columns. Two additional indexes added: `tasks(tenant_id, updated_at)` and `task_assignees(tenant_id, user_id)` for time-ordered queries and batch hydration. All feature flags are server-side only (no frontend changes needed).
+
 ## External Dependencies
 - **PostgreSQL**: Primary database.
 - **Socket.IO**: Real-time communication.
