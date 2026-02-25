@@ -1,0 +1,243 @@
+AI SUMMARY — EMPLOYEE PERFORMANCE TRENDS (EMPLOYEE PROFILE REPORT)
+NON-DESTRUCTIVE • ADDITIVE • TENANT-SAFE • COST-CONTROLLED • DOCUMENTED
+
+You are working in the DigitalWorkday codebase (React frontend, Node/Express backend, PostgreSQL + Drizzle ORM).
+We already have an Employee Intelligence Profile drill-down report.
+
+GOAL:
+Add an AI-generated “Employee Performance Trend Summary” to the Employee Profile page that:
+- summarizes trends over a selected date range (e.g., last 30/60/90 days)
+- is grounded strictly in computed metrics (no hallucinations)
+- includes “Key Wins”, “Risks”, “Notable Changes”, and “Recommended Actions”
+- respects private visibility (private tasks/projects must not leak)
+- is cached and cost-controlled
+- is available only to authorized roles (Tenant Admin / Manager / Super Admin per existing rules)
+
+Feature flags:
+- ENABLE_AI_EMPLOYEE_SUMMARY
+- ENABLE_AI_SUMMARY_CACHE
+- ENABLE_AI_SUMMARY_REDACTION
+
+============================================================
+PHASE 1 — DATA CONTRACT: “AI SAFE INPUT”
+============================================================
+
+1.1 Create a “safe summary payload” generator that produces a compact, non-sensitive JSON object.
+File:
+server/src/ai/employeeSummary/buildEmployeeSummaryPayload.ts
+
+Function:
+buildEmployeeSummaryPayload({
+  tenantId,
+  employeeId,
+  startDate,
+  endDate,
+  viewerUserId
+})
+
+Rules:
+- Use ONLY aggregated metrics and counts already available in reporting services:
+  - EPI score + tier (current + prior period)
+  - utilization (avg, min/max weekly)
+  - time tracked totals + compliance %
+  - completion rate + overdue rate
+  - workload pressure metrics (assigned, due soon, overdue)
+  - capacity over/under allocation summaries (weekly)
+  - trend series (weekly completion, weekly hours, weekly EPI/CHI where relevant)
+- DO NOT include:
+  - task titles/descriptions
+  - message contents
+  - client names (unless you already show them to the viewer and can safely include only counts)
+  - any PII beyond employee display name already visible
+- Enforce visibility:
+  - only include metrics derived from items the viewer is authorized to see
+  - if your reporting layer already applies visibility filtering, reuse that; do not bypass.
+
+Output example (JSON):
+{
+  "employee": { "id": "...", "displayName": "...", "role": "...", "team": "..." },
+  "range": { "start": "...", "end": "...", "days": 30 },
+  "summary": {
+    "epi": { "current": 78, "previous": 72, "delta": 6, "tier": "Stable" },
+    "utilizationPct": { "avg": 84, "trend": "up" },
+    "time": { "totalHours": 142.5, "compliancePct": 82, "overtimeHours": 6.0 },
+    "tasks": { "completed": 41, "overdueOpen": 3, "completionRatePct": 76, "overdueRatePct": 8 },
+    "capacity": { "weeksOverAllocated": 1, "maxPredictedUtilizationPct": 112 },
+    "riskFlags": ["HIGH_OVERDUE_RATIO_LAST_14_DAYS"]
+  },
+  "trendsWeekly": {
+    "weeks": ["2026-01-05", "..."],
+    "completedTasks": [8, 10, ...],
+    "hours": [34, 38, ...],
+    "epi": [70, 74, ...],
+    "utilizationPct": [78, 86, ...]
+  }
+}
+
+============================================================
+PHASE 2 — AI SUMMARY STORAGE + CACHING (COST CONTROL)
+============================================================
+
+2.1 Add table: ai_summaries (additive)
+Columns:
+- id
+- tenant_id (indexed)
+- entity_type (text): "employee"
+- entity_id (employeeId)
+- viewer_scope (text): "tenant_admins" | "managers" | "self" | "super_admin"  (or similar)
+- range_start (date)
+- range_end (date)
+- input_hash (text)  // hash of payload to prevent stale reuse
+- model (text)
+- summary_markdown (text)
+- bullets_json (jsonb) // structured highlights (wins/risks/actions)
+- created_by_user_id (nullable)
+- created_at
+- expires_at (timestamp) // TTL, e.g., 24h
+Indexes:
+- (tenant_id, entity_type, entity_id, range_start, range_end, viewer_scope)
+- (tenant_id, created_at desc)
+
+2.2 Implement cache policy
+- Default TTL: 24 hours
+- Recompute if:
+  - input_hash changed
+  - expired
+  - user clicks “Refresh summary”
+
+Gate behind ENABLE_AI_SUMMARY_CACHE.
+
+============================================================
+PHASE 3 — SERVER ENDPOINTS (NON-DESTRUCTIVE)
+============================================================
+
+3.1 Add endpoints:
+GET  /api/ai/employee/:employeeId/summary?start=&end=
+POST /api/ai/employee/:employeeId/summary/refresh?start=&end=
+
+Permissions:
+- Same as Employee Profile access + must be Tenant Admin/Manager/Super Admin (align to your app’s roles)
+
+Behavior:
+- GET:
+  - Build safe payload
+  - Compute input_hash
+  - Return cached summary if present + not expired
+  - Else generate new summary and store
+- POST refresh:
+  - Force regenerate (rate-limited)
+
+3.2 Rate limiting (important)
+- Per tenant: e.g., 30 generations/day
+- Per user: e.g., 10 generations/day
+- Return a friendly error if exceeded.
+
+============================================================
+PHASE 4 — AI GENERATION (GROUNDED, NON-HALLUCINATING)
+============================================================
+
+4.1 Create:
+server/src/ai/employeeSummary/generateEmployeeSummary.ts
+
+This must:
+- Call the existing OpenAI integration used elsewhere in the app (do not introduce a new pattern)
+- Use a strict system prompt requiring:
+  - only cite facts from provided JSON
+  - if a number is missing, say “not available”
+  - never invent names, tasks, or events
+  - output in a structured JSON + markdown format
+
+Suggested output schema:
+{
+  "headline": "string (1 sentence)",
+  "wins": ["..."],
+  "risks": ["..."],
+  "notableChanges": ["..."],
+  "recommendedActions": ["..."],
+  "confidence": "Low|Medium|High",
+  "supportingMetrics": [
+    { "metric": "EPI delta", "value": "+6" },
+    { "metric": "Avg utilization", "value": "84%" }
+  ],
+  "markdown": "### Summary ... (renderable markdown)"
+}
+
+4.2 Add redaction safety net (optional but recommended)
+If ENABLE_AI_SUMMARY_REDACTION:
+- Run a small post-processor that rejects outputs containing:
+  - email addresses
+  - long freeform text copied from tasks/messages
+  - client names (if disallowed)
+If detected, regenerate once with stricter instruction; otherwise return a safe error.
+
+============================================================
+PHASE 5 — FRONTEND UI INTEGRATION (EMPLOYEE PROFILE PAGE)
+============================================================
+
+5.1 Add a new section/card on Employee Profile:
+Title: “AI Summary”
+- Shows:
+  - Headline
+  - Wins (bullets)
+  - Risks (bullets)
+  - Recommended Actions (bullets)
+  - Confidence badge
+  - “Last updated” timestamp
+- Buttons:
+  - Refresh (calls POST refresh; disabled if rate-limited)
+  - Copy summary
+  - Expand “Supporting Metrics”
+
+5.2 Loading states:
+- Skeleton while generating
+- Show cached result instantly if available, then optionally “refresh in background” only if user clicks
+
+5.3 Date range integration:
+- Summary uses the same date range selector as the Employee Profile page.
+
+Gate the entire UI behind ENABLE_AI_EMPLOYEE_SUMMARY.
+
+============================================================
+PHASE 6 — AUDITABILITY + TRANSPARENCY
+============================================================
+
+6.1 On the UI, include “What this is based on”
+- small link that opens a dialog showing:
+  - key supporting metrics (numbers)
+  - a note: “AI summary is generated from aggregated metrics only.”
+
+6.2 Store model + prompt version
+- Store model string and summary generator version for later debugging.
+
+============================================================
+PHASE 7 — APP DOCS UPDATE (MANDATORY)
+============================================================
+
+Add App Docs section:
+“AI Employee Performance Trend Summary”
+
+Include:
+- Data sources (aggregated metrics only)
+- Safety rules (no task text, no message content)
+- Permission rules
+- Caching/TTL + rate limits
+- Output schema
+- Limitations + future enhancements (team summaries, manager coaching notes)
+
+============================================================
+ACCEPTANCE CRITERIA
+============================================================
+
+- Employee Profile shows AI Summary card (flagged)
+- Summary is grounded in provided metrics (no hallucinated facts)
+- Cached summaries reduce cost
+- Refresh works with rate limits
+- No private/task/message content leaks
+- Docs updated
+
+STOP CONDITION
+============================================================
+Stop after:
+- endpoints + generation + caching + UI are complete
+- docs updated
+Do NOT add AI chat, embeddings, or long-term memory in this prompt.

@@ -191,6 +191,7 @@ export const config = {
     reportMessagesV2: optionalEnvBool("REPORT_MESSAGES_V2", false),
     reportPipelineV2: optionalEnvBool("REPORT_PIPELINE_V2", false),
     enableEmployeeCommandCenter: optionalEnvBool("ENABLE_EMPLOYEE_COMMAND_CENTER", true),
+    enableEmployeeProfileReport: optionalEnvBool("ENABLE_EMPLOYEE_PROFILE_REPORT", true),
     enableClientCommandCenter: optionalEnvBool("ENABLE_CLIENT_COMMAND_CENTER", true),
     enableEmployeePerformanceIndex: optionalEnvBool("ENABLE_EMPLOYEE_PERFORMANCE_INDEX", true),
     enableClientHealthIndex: optionalEnvBool("ENABLE_CLIENT_HEALTH_INDEX", true),

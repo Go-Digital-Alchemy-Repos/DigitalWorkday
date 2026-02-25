@@ -1,5 +1,6 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
+import { Link } from "wouter";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -182,7 +183,9 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                   <AvatarImage src={getStorageUrl(e.avatarUrl) ?? ""} alt={userName(e)} />
                   <AvatarFallback className="text-xs">{userInitials(e)}</AvatarFallback>
                 </Avatar>
-                <span className="text-sm font-semibold truncate">{userName(e)}</span>
+                <Link href={`/reports/employees/${e.userId}`} className="text-sm font-semibold truncate hover:underline text-primary cursor-pointer">
+                  {userName(e)}
+                </Link>
               </div>
               <div className="grid grid-cols-2 gap-2 text-xs">
                 <div>
@@ -242,7 +245,9 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                             <AvatarImage src={getStorageUrl(e.avatarUrl) ?? ""} alt={userName(e)} />
                             <AvatarFallback className="text-xs">{userInitials(e)}</AvatarFallback>
                           </Avatar>
-                          <span className="text-sm font-medium truncate max-w-[140px]">{userName(e)}</span>
+                          <Link href={`/reports/employees/${e.userId}`} className="text-sm font-medium truncate max-w-[140px] hover:underline text-primary cursor-pointer">
+                            {userName(e)}
+                          </Link>
                         </div>
                       </TableCell>
                       <TableCell className="text-sm font-medium">{e.activeTasksNow}</TableCell>
@@ -337,7 +342,9 @@ function WorkloadTab({ rangeDays }: { rangeDays: number }) {
               {(data?.employees ?? []).map((e) => (
                 <TableRow key={e.userId} data-testid={`row-employee-workload-${e.userId}`}>
                   <TableCell>
-                    <span className="text-sm font-medium">{userName(e)}</span>
+                    <Link href={`/reports/employees/${e.userId}`} className="text-sm font-medium hover:underline text-primary cursor-pointer">
+                      {userName(e)}
+                    </Link>
                   </TableCell>
                   <TableCell className="text-sm">{e.assignedCount}</TableCell>
                   <TableCell>
@@ -435,7 +442,9 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
               {(data?.employees ?? []).map((e) => (
                 <TableRow key={e.userId} data-testid={`row-employee-time-${e.userId}`}>
                   <TableCell>
-                    <span className="text-sm font-medium">{userName(e)}</span>
+                    <Link href={`/reports/employees/${e.userId}`} className="text-sm font-medium hover:underline text-primary cursor-pointer">
+                      {userName(e)}
+                    </Link>
                   </TableCell>
                   <TableCell className="text-sm font-medium">{e.totalHours}h</TableCell>
                   <TableCell>
@@ -548,7 +557,9 @@ function CapacityTab({ rangeDays }: { rangeDays: number }) {
                 {data.users.map((u) => (
                   <tr key={u.userId} className="border-b last:border-0">
                     <td className="p-3">
-                      <span className="font-medium text-sm truncate max-w-[130px] block">{userName(u)}</span>
+                      <Link href={`/reports/employees/${u.userId}`} className="font-medium text-sm truncate max-w-[130px] block hover:underline text-primary cursor-pointer">
+                        {userName(u)}
+                      </Link>
                     </td>
                     {u.weeks.map((w) => (
                       <td key={w.weekStart} className="p-2 text-center">
@@ -655,7 +666,9 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-2">
-                    <span className="font-semibold text-sm">{userName(u)}</span>
+                    <Link href={`/reports/employees/${u.userId}`} className="font-semibold text-sm hover:underline text-primary cursor-pointer">
+                      {userName(u)}
+                    </Link>
                     <Badge variant={variant}>{label}</Badge>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3 flex-wrap">
@@ -969,7 +982,9 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
                           <AvatarImage src={getStorageUrl(e.avatarUrl) ?? ""} alt={userName(e)} />
                           <AvatarFallback className="text-xs">{userInitials(e)}</AvatarFallback>
                         </Avatar>
-                        <span className="text-sm font-medium truncate max-w-[130px]">{userName(e)}</span>
+                        <Link href={`/reports/employees/${e.userId}`} className="text-sm font-medium truncate max-w-[130px] hover:underline text-primary cursor-pointer">
+                          {userName(e)}
+                        </Link>
                       </div>
                     </TableCell>
                     <TableCell>
