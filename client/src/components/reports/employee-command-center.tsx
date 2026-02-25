@@ -1242,7 +1242,14 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
                         data-testid={`forecast-capacity-row-${u.userId}`}
                       >
                         <td className="py-2 px-3 font-medium">
-                          {u.firstName || u.lastName ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() : u.email}
+                          <Link
+                            href={`/reports/employees/${u.userId}`}
+                            className="hover:underline text-primary cursor-pointer"
+                            onClick={(e: React.MouseEvent) => e.stopPropagation()}
+                            data-testid={`link-forecast-employee-${u.userId}`}
+                          >
+                            {u.firstName || u.lastName ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() : u.email}
+                          </Link>
                         </td>
                         {u.weeks.map(w => (
                           <td key={w.weekStart} className="py-1.5 px-1 text-center">
