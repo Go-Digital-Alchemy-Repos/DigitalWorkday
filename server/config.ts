@@ -194,6 +194,8 @@ export const config = {
     enableClientCommandCenter: optionalEnvBool("ENABLE_CLIENT_COMMAND_CENTER", isDevelopment),
     enableEmployeePerformanceIndex: optionalEnvBool("ENABLE_EMPLOYEE_PERFORMANCE_INDEX", isDevelopment),
     enableClientHealthIndex: optionalEnvBool("ENABLE_CLIENT_HEALTH_INDEX", isDevelopment),
+    enableForecastingLayer: optionalEnvBool("ENABLE_FORECASTING_LAYER", isDevelopment),
+    enableForecastingAlerts: optionalEnvBool("ENABLE_FORECASTING_ALERTS", false),
   },
 
   tenancyEnforcement: {

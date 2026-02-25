@@ -1,0 +1,334 @@
+ALERT AUTOMATION + SCHEDULED OPS DIGEST + FORECAST SNAPSHOTS
+NON-DESTRUCTIVE • ADDITIVE • FEATURE-FLAGGED • DOCUMENTED
+
+You are working in the DigitalWorkday codebase (React frontend, Node/Express backend, PostgreSQL + Drizzle ORM).
+
+We are implementing:
+1) Alert Automation (rules + notifications)
+2) Scheduled Summaries (Weekly Ops Digest)
+3) Exportable Forecast Snapshots (persisted forecasts + export)
+
+This must be:
+- 100% NON-DESTRUCTIVE (no breaking changes)
+- Additive only
+- Tenant-scoped
+- Feature-flagged
+- Reuse existing Notifications/Email infrastructure if present
+- Fully documented in App Docs
+
+Feature flags:
+- ENABLE_ALERT_AUTOMATION
+- ENABLE_WEEKLY_OPS_DIGEST
+- ENABLE_FORECAST_SNAPSHOTS
+
+============================================================
+PHASE 0 — DISCOVERY (NO CHANGES)
+============================================================
+0.1 Identify existing notification channels:
+- in-app notifications (DB table? websockets?)
+- email provider (Mailgun/etc.)
+- any background worker/cron system (pg-boss, bull, node-cron, Railway cron, etc.)
+0.2 Identify existing “notification preferences” model (user settings).
+0.3 Identify existing report/forecast endpoints to reuse.
+Do not refactor; only integrate.
+
+============================================================
+PHASE 1 — FORECAST SNAPSHOTS (PERSISTED, EXPORTABLE)
+============================================================
+
+1.1 Add DB table (additive):
+
+forecast_snapshots
+- id
+- tenant_id (indexed)
+- snapshot_type (enum/text): "capacity_overload" | "project_deadline_risk" | "client_risk_trend" | "team_throughput"
+- horizon_weeks (int: 2|4|8)
+- as_of_date (date/time)
+- range_start (date)
+- range_end (date)
+- entity_scope (text): "tenant" | "user" | "project" | "client"
+- entity_id (nullable; when scope != tenant)
+- payload_json (jsonb)  // store ForecastResultEnvelope + rows
+- confidence (text)
+- data_quality_flags (jsonb)
+- created_by_user_id (nullable; null for scheduled jobs)
+- created_at
+- is_deleted (boolean default false)
+
+Indexes:
+- (tenant_id, snapshot_type, as_of_date desc)
+- (tenant_id, entity_scope, entity_id)
+- (tenant_id, created_at desc)
+
+1.2 Snapshot creation service (additive)
+Create:
+server/src/reporting/forecasting/snapshots/createForecastSnapshot.ts
+
+Function:
+createForecastSnapshot({
+  tenantId,
+  snapshotType,
+  horizonWeeks,
+  asOfDate,
+  createdByUserId? (nullable)
+})
+
+Implementation:
+- Call the existing forecasting endpoint calculators internally (not HTTP)
+- Persist payload_json with envelope + results
+
+1.3 Snapshot read endpoints
+- GET /api/reports/v2/forecasting/snapshots?type=&weeks=&limit=&cursor=
+- GET /api/reports/v2/forecasting/snapshots/:snapshotId
+Tenant Admin and Super Admin only. Tenant-scoped.
+
+1.4 Export endpoints (CSV first)
+- GET /api/reports/v2/forecasting/snapshots/:snapshotId/export?format=csv
+Rules:
+- Must stream for large datasets
+- Include headers + normalized columns per snapshot type
+- Do NOT dump raw JSON into CSV; flatten key fields
+- Respect tenant scoping
+
+============================================================
+PHASE 2 — ALERT AUTOMATION (RULES ENGINE)
+============================================================
+
+2.1 Add DB tables (additive)
+
+alert_rules
+- id
+- tenant_id (indexed)
+- name
+- description (nullable)
+- is_enabled (boolean default true)
+- rule_type (enum/text):
+   "employee_overload"
+ | "employee_underutilized"
+ | "employee_low_compliance"
+ | "project_deadline_high_risk"
+ | "client_health_critical"
+ | "client_risk_worsening"
+- severity (enum/text): "info" | "warning" | "critical"
+- schedule (enum/text): "daily" | "weekly" | "hourly" (default daily)  // evaluation frequency
+- parameters_json (jsonb) // thresholds, horizon weeks, filters
+- target_user_scope (enum/text): "tenant_admins" | "project_managers" | "custom"
+- target_user_ids (jsonb nullable) // when custom
+- delivery_channels (jsonb): ["in_app","email"] default ["in_app"]
+- throttle_minutes (int default 1440) // prevent spam
+- last_run_at (timestamp nullable)
+- created_by_user_id
+- updated_by_user_id
+- created_at
+- updated_at
+
+alert_events
+- id
+- tenant_id (indexed)
+- rule_id (FK)
+- event_key (text) // deterministic key for dedupe (rule_type+entity_id+weekStart+reason)
+- entity_scope (text): "user"|"project"|"client"
+- entity_id
+- severity
+- title
+- message
+- payload_json (jsonb) // details, explanations, snapshot reference
+- snapshot_id (nullable FK forecast_snapshots)
+- triggered_at
+- delivered_channels (jsonb)
+- is_acknowledged (boolean default false)
+- acknowledged_by_user_id (nullable)
+- acknowledged_at (nullable)
+Indexes:
+- (tenant_id, rule_id, triggered_at desc)
+- (tenant_id, entity_scope, entity_id, triggered_at desc)
+- unique (tenant_id, event_key) to prevent duplicates
+
+2.2 Rule evaluation engine (additive)
+Create:
+server/src/alerts/evaluateAlertRules.ts
+
+Function:
+evaluateAlertRules({ tenantId, now })
+
+Logic:
+- Load enabled alert_rules for tenant
+- For each rule_type:
+  - call the appropriate data source:
+    - forecasting calculators + snapshots (preferred)
+    - EPI/CHI endpoints when needed
+  - determine if condition is met using parameters_json thresholds
+  - create alert_event if not already created (dedupe by event_key)
+  - send notifications via configured channels (Phase 3)
+
+Rule defaults (ship with sensible templates):
+- employee_overload:
+  - horizonWeeks: 4
+  - risk >= "High" OR predictedUtilizationPct >= 110
+- employee_underutilized:
+  - utilization < 50 for 2 consecutive weeks (if history exists)
+- employee_low_compliance:
+  - timeCompliance < 60% in last 7 days
+- project_deadline_high_risk:
+  - deadlineRisk == "High" OR predictedWeeksToClearBacklog > weeksUntilDue
+- client_health_critical:
+  - CHI tier == "Critical" OR score < 50
+- client_risk_worsening:
+  - riskTrend == "Worsening" AND predicted score drop beyond threshold
+
+2.3 Management UI (Tenant Admin)
+Add new admin page:
+Settings → Alerts (or Reports → Alerts)
+
+Features:
+- list alert rules
+- enable/disable
+- edit thresholds (parameters_json)
+- choose channels (in-app/email)
+- set throttle
+- choose recipients (tenant_admins / project_managers / custom)
+
+All behind:
+ENABLE_ALERT_AUTOMATION
+
+============================================================
+PHASE 3 — NOTIFICATION DELIVERY (REUSE EXISTING INFRA)
+============================================================
+
+3.1 In-App notifications
+If an existing notifications table/system exists:
+- create notification entries referencing alert_event
+- include title, message, deep link (to employee/client/project forecast or command center)
+
+3.2 Email notifications
+Reuse existing email sending pipeline.
+Send summary emails per rule evaluation run:
+- group events by recipient
+- include top events + links
+- respect user notification preferences if they exist
+- if no preferences exist, add minimal preferences:
+  - email_alerts_enabled boolean
+  - in_app_alerts_enabled boolean
+
+3.3 Throttling
+Ensure rule throttle_minutes prevents repeated notifications.
+Use alert_events + last_run_at to enforce.
+
+============================================================
+PHASE 4 — SCHEDULED SUMMARIES (WEEKLY OPS DIGEST)
+============================================================
+
+4.1 DB table (additive)
+
+ops_digest_schedules
+- id
+- tenant_id
+- is_enabled (boolean)
+- frequency (enum/text): "weekly"
+- day_of_week (int 0-6) default Monday (1) OR ISO weekday
+- hour_local (int 0-23) default 9
+- timezone (text) default tenant timezone
+- recipients_scope (enum/text): "tenant_admins"|"project_managers"|"custom"
+- recipient_user_ids (jsonb nullable)
+- include_sections (jsonb):
+   ["top_overloads","projects_at_risk","clients_at_risk","team_throughput","notable_changes"]
+- last_sent_at (timestamp nullable)
+- created_by_user_id
+- created_at
+- updated_at
+
+4.2 Digest generator (additive)
+Create:
+server/src/digests/generateWeeklyOpsDigest.ts
+
+Output structure:
+- headline KPIs (team utilization avg, overdue tasks, projects at high risk, clients at risk)
+- Top 5 overloaded employees (from capacity_overload forecast)
+- Top 5 projects at high deadline risk
+- Top 5 clients with worsening/critical health
+- “Notable changes” (largest week-over-week changes in EPI/CHI)
+- Links into Employee/Client Command Center filtered views
+- Attach CSV exports optionally (or provide download links)
+
+Implementation:
+- Prefer using the latest forecast_snapshot for each type.
+- If none exists, generate snapshot on demand, persist it, then use it.
+
+4.3 Scheduling/execution
+Use existing job runner/cron system:
+- run daily to check if any tenant schedule is due in its timezone
+- when due, generate digest, persist a record (optional), deliver via email and/or in-app
+
+Feature flag:
+ENABLE_WEEKLY_OPS_DIGEST
+
+4.4 UI for digest schedules
+Settings → Ops Digest
+- configure recipients + day/time/timezone + included sections
+- preview digest (generate on demand without sending)
+
+============================================================
+PHASE 5 — EXPORTABLE SNAPSHOTS UI
+============================================================
+
+Add to Forecasts UI:
+- “Snapshots” tab
+- list recent snapshots (type, as_of_date, horizon, confidence)
+- open snapshot detail view
+- export CSV button
+
+Behind:
+ENABLE_FORECAST_SNAPSHOTS
+
+============================================================
+PHASE 6 — APP DOCS UPDATE (MANDATORY)
+============================================================
+
+Create/update App Docs sections:
+
+1) “Forecast Snapshots”
+- schema
+- creation flows (manual + scheduled)
+- export formats
+- retention strategy
+
+2) “Alert Automation”
+- rule types
+- parameters + defaults
+- dedupe keys
+- throttling model
+- delivery channels
+- permissions
+- audit trail / acknowledgment
+
+3) “Weekly Ops Digest”
+- schedule model (timezone)
+- sections included
+- data sources (snapshots, EPI, CHI)
+- example digest format
+- failure handling (retry)
+
+============================================================
+ACCEPTANCE CRITERIA
+============================================================
+
+- Forecast snapshots can be created, listed, viewed, and exported to CSV
+- Alert rules can be configured, evaluated on schedule, and create alert events
+- In-app notifications created for alert events (and email if configured)
+- Weekly Ops Digest schedules work and send grouped summary
+- All behind feature flags for safe rollout
+- Fully tenant-scoped and permissioned
+- App Docs updated
+
+============================================================
+STOP CONDITION
+============================================================
+
+Stop after:
+- Snapshots + export are complete
+- Alerts engine + UI is functional
+- Weekly digest scheduler + UI is functional
+- Docs updated
+
+Do NOT implement Slack/MS Teams integrations in this phase.
+Do NOT implement ML-based alerts; keep rules deterministic and explainable.

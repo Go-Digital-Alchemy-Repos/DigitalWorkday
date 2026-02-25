@@ -1,0 +1,274 @@
+PERFORMANCE IMPROVEMENT SPRINT (TASKS • PROJECTS • CLIENTS • GLOBAL)
+NON-DESTRUCTIVE • MEASURABLE • DOCUMENTED
+
+You are working in the DigitalWorkday codebase (React frontend, Node/Express backend, PostgreSQL + Drizzle ORM).
+
+Goal: Improve perceived + actual performance, especially for Tasks, Projects, Clients. Then apply the same approach app-wide.
+
+CRITICAL RULES
+- NON-DESTRUCTIVE: no breaking API changes, no removing features.
+- Any response shape changes must be additive and gated behind feature flags.
+- Prefer server-side pagination/filtering, bulk/batched queries, and lighter list payloads.
+- Add instrumentation first; every improvement must be measurable.
+- Update App Docs at the end with a “Performance Playbook” + before/after notes.
+
+============================================================
+PHASE 0 — PERFORMANCE BASELINE + INSTRUMENTATION (DO FIRST)
+============================================================
+
+0.1 Backend request timing (global)
+- Add request/response timing middleware (if not present):
+  - logs route, status, duration_ms
+  - includes tenantId/workspaceId (safe IDs only)
+  - include response payload size (approx bytes)
+- Add “slow request” log threshold (e.g., >500ms) for dev/staging.
+
+0.2 DB query logging (dev/staging)
+- Add a safe toggle ENABLE_SQL_LOGGING (dev only) or query-count instrumentation per request.
+- For known hotspots (Tasks, Clients, Projects), log query counts and total DB time.
+
+0.3 Frontend performance marks
+- Add lightweight performance marks for:
+  - route navigation → first contentful render
+  - list fetch start/end
+  - table render completion
+- Keep behind DEV flag.
+
+Deliverable:
+- A baseline report in App Docs: “Performance Baseline (Pre-Sprint)”.
+
+============================================================
+PHASE 1 — TASKS PERFORMANCE (HIGHEST PRIORITY)
+============================================================
+
+1.1 Eliminate N+1 in task list endpoints
+- Ensure /api/tasks/my and any task list routes use bulk “tasks with relations” loading:
+  - one base query
+  - batched IN() relation queries (assignees/watchers/tags/subtasks/projects/sections)
+  - chunk large IN() lists (e.g., 500 ids)
+- Keep getTaskWithRelations(taskId) for detail views; never call it in list loops.
+
+1.2 Split “list view” vs “detail view” payloads
+- Add new endpoint or query param:
+  - GET /api/tasks?view=list  (light payload)
+  - GET /api/tasks/:id        (full payload)
+- Light payload returns only fields needed for list cards:
+  - id, title, status, dueDate, priority, assigneeIds (or minimal user stubs), projectId, clientId, updatedAt
+  - NO heavy HTML bodies, large relation arrays unless needed
+- Gate behind flag: ENABLE_TASK_LIST_LIGHT_PAYLOAD
+
+1.3 Server-side filtering/sorting/pagination
+- Add query params:
+  - search, status, sort, limit, cursor/page
+- Return:
+  - items
+  - nextCursor
+  - lightweight counts (optional)
+- Remove client-side sorting/filtering over huge arrays (keep as fallback behind flag).
+
+1.4 Task UI rendering cost
+- Virtualize long lists (react-virtual) only where lists can exceed ~100–200 rows.
+- Memoize row components, avoid re-render storms (stable keys, useMemo for derived lists).
+- Avoid rendering rich text previews for all rows—lazy render on expand/hover.
+
+============================================================
+PHASE 2 — CLIENTS PERFORMANCE (NEXT PRIORITY)
+============================================================
+
+2.1 Remove N+1 client expansion
+- Replace per-client loops fetching contacts/projects with:
+  - one query for clients
+  - batched queries for contacts/projects with IN(clientIds)
+  - group in memory
+- Add chunking for IN lists.
+
+2.2 Introduce “Clients list (light)” endpoint
+- GET /api/clients?view=list
+- Return only:
+  - id, name, status/stage, primaryContact (optional), lastActivityAt, openTaskCount (optional), updatedAt
+- Defer heavy relations to:
+  - GET /api/clients/:id (detail)
+- Gate behind flag: ENABLE_CLIENT_LIST_LIGHT_PAYLOAD
+
+2.3 Server-side filtering/pagination
+- search, stage/status, sort, limit, cursor
+- Return paginated data + counts as needed.
+
+2.4 Optimize “last activity” logic
+- Replace expensive IN(SELECT ...) patterns with explicit joins where possible.
+- Add/verify indexes supporting activity queries:
+  - activity_log(tenant_id, created_at)
+  - tasks(project_id), projects(client_id)
+- Verify with EXPLAIN ANALYZE on realistic dataset.
+
+============================================================
+PHASE 3 — PROJECTS PERFORMANCE
+============================================================
+
+3.1 Push filtering into SQL
+- Replace “load all then filter in memory” with WHERE clauses.
+- Add query params:
+  - status, clientId, teamId, search, sort, limit, cursor
+
+3.2 Split list vs detail payload
+- GET /api/projects?view=list
+  - minimal fields for list grid
+- GET /api/projects/:id
+  - full fields + relations
+- Gate behind flag: ENABLE_PROJECT_LIST_LIGHT_PAYLOAD
+
+3.3 Batched relation loading
+- If project list shows counts (open tasks, overdue):
+  - compute via aggregated SQL grouped by project_id for the visible page only (not all projects)
+  - do NOT compute counts by looping projects.
+
+============================================================
+PHASE 4 — ROUTE SEGMENTATION & FILE SIZE REDUCTION (BACKEND)
+============================================================
+
+4.1 Split large route files into feature modules
+- Organize Express routes by domain:
+  - routes/tasks/*.ts
+  - routes/clients/*.ts
+  - routes/projects/*.ts
+  - routes/reports/*.ts
+- Keep existing route paths intact.
+- Ensure imports do not create circular deps.
+
+4.2 Split large service/repo files by responsibility
+- tasksRepo:
+  - list queries
+  - detail queries
+  - relation loaders
+  - mutation commands
+- Keep exported APIs stable.
+
+4.3 Add “query builder helpers” per domain
+- Avoid repeated query logic; create:
+  - buildTaskListQuery(filters)
+  - buildClientListQuery(filters)
+  - buildProjectListQuery(filters)
+
+============================================================
+PHASE 5 — FRONTEND BUNDLE & ROUTE-LEVEL CODE SPLITTING
+============================================================
+
+5.1 Ensure route-level code splitting for heavy pages
+- Lazy-load:
+  - Reports pages
+  - Command centers
+  - Large editors (rich text, charts)
+- Use React.lazy + Suspense (or existing router code-splitting pattern).
+
+5.2 Reduce main bundle weight
+- Confirm large libs are not globally imported:
+  - chart libs should load only on report routes
+  - editors load only where used
+- Replace eager imports with dynamic imports.
+
+5.3 Avoid “mount burst” requests
+- On Clients/Projects pages, avoid 4 simultaneous heavy queries on mount.
+- Consolidate:
+  - one primary list query
+  - load summaries lazily or via a single aggregated endpoint
+- Use request dedupe (React Query) and staleTime to prevent refetch storms.
+
+============================================================
+PHASE 6 — CACHING & INVALIDATION HYGIENE
+============================================================
+
+6.1 Backend caching (optional, safe)
+- Add short TTL caching for stable summaries (10–60 seconds) per tenant:
+  - counts, stage summaries, dashboard KPIs
+- Ensure cache keys include tenantId + filters.
+- Keep behind flag: ENABLE_REPORT_SUMMARY_CACHE
+
+6.2 Frontend cache tuning
+- Increase staleTime for lists that don’t need constant refresh.
+- Use optimistic updates on mutations where safe.
+- Reduce broad invalidations; do targeted cache updates.
+
+6.3 Bulk endpoints to reduce mutation storms
+- Add:
+  - PATCH /clients/bulk-status
+  - PATCH /tasks/bulk-update (optional)
+- Replace Promise.all per-item requests with one request.
+
+============================================================
+PHASE 7 — DB INDEX AUDIT + QUERY PLANS
+============================================================
+
+7.1 Index audit (add only missing)
+Tasks:
+- (tenant_id, updated_at)
+- (tenant_id, assignee_id, status)
+- (tenant_id, due_date, status)
+- (tenant_id, project_id)
+- (tenant_id, client_id)
+Time entries:
+- (tenant_id, user_id, date)
+Clients:
+- (tenant_id, stage/status)
+Projects:
+- (tenant_id, status)
+Relations:
+- task_assignees(task_id), task_watchers(task_id), task_tags(task_id), tasks(parent_task_id)
+
+7.2 EXPLAIN ANALYZE
+Run on:
+- task list (my tasks)
+- client list (light + any activity joins)
+- project list with filters
+
+Adjust query shapes to avoid seq scans and nested loops.
+
+============================================================
+PHASE 8 — MEASUREMENT + REGRESSION SAFETY
+============================================================
+
+8.1 Create a simple “perf test script” (dev/staging)
+- Seed dataset test (or use staging tenant)
+- Record:
+  - /tasks list latency + query count
+  - /clients list latency + query count
+  - /projects list latency + query count
+- Capture before/after.
+
+8.2 Add guardrails
+- If list payload exceeds size threshold (e.g., 1MB), log warning.
+- If query count > threshold (e.g., 50), log warning.
+
+============================================================
+PHASE 9 — APP DOCS UPDATE (MANDATORY)
+============================================================
+
+Add App Docs pages:
+1) “Performance Playbook”
+   - Principles: list vs detail, pagination, server-side filters, batching, chunking
+2) “Tasks Performance Improvements”
+   - before/after, N+1 removal, list payload rules
+3) “Clients Performance Improvements”
+4) “Projects Performance Improvements”
+5) “Frontend Performance & Code Splitting”
+6) “Caching & Invalidation Strategy”
+
+============================================================
+STOP CONDITION
+============================================================
+
+Stop when:
+- Tasks, Clients, Projects list endpoints are paginated + light payload (behind flags)
+- N+1 patterns removed
+- Frontend route code-splitting in place for heavy pages
+- Baseline vs after metrics recorded
+- Docs updated
+
+Proceed in this order:
+1) Instrumentation
+2) Tasks
+3) Clients
+4) Projects
+5) Frontend code splitting
+6) Caching/invalidations
+7) Index+EXPLAIN
+8) Docs

@@ -24,6 +24,8 @@ export interface FeatureFlags {
   enableClientCommandCenter: boolean;
   enableEmployeePerformanceIndex: boolean;
   enableClientHealthIndex: boolean;
+  enableForecastingLayer: boolean;
+  enableForecastingAlerts: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -50,6 +52,8 @@ const ALL_OFF: FeatureFlags = {
   enableClientCommandCenter: false,
   enableEmployeePerformanceIndex: false,
   enableClientHealthIndex: false,
+  enableForecastingLayer: false,
+  enableForecastingAlerts: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

@@ -49,6 +49,8 @@ router.get("/features/flags", async (_req, res) => {
       enableClientCommandCenter: config.features.enableClientCommandCenter,
       enableEmployeePerformanceIndex: config.features.enableEmployeePerformanceIndex,
       enableClientHealthIndex: config.features.enableClientHealthIndex,
+      enableForecastingLayer: config.features.enableForecastingLayer,
+      enableForecastingAlerts: config.features.enableForecastingAlerts,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

@@ -3,10 +3,11 @@ import { useQuery } from "@tanstack/react-query";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { AlertTriangle, Building2, ShieldAlert, Activity, CheckSquare, Clock, TrendingUp, Users, HeartPulse, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
+import { AlertTriangle, Building2, ShieldAlert, Activity, CheckSquare, Clock, TrendingUp, Users, HeartPulse, ArrowUpDown, ChevronUp, ChevronDown, Sparkles, Info } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
@@ -784,11 +785,256 @@ function HealthTab({ rangeDays }: { rangeDays: number }) {
   );
 }
 
+// ── FORECASTS TAB ─────────────────────────────────────────────────────────────
+
+interface ClientRiskTrendItem {
+  clientId: string;
+  companyName: string;
+  currentHealthScore: number;
+  priorHealthScore: number;
+  predictedHealthScore: number;
+  riskTrend: "Improving" | "Stable" | "Worsening";
+  clientRisk: "Low" | "Medium" | "High";
+  weeklySlope: number;
+  explanation: string[];
+  metrics: {
+    currOpenTasks: number;
+    currOverdueTasks: number;
+    currHoursLogged: number;
+    currCompleted: number;
+  };
+}
+
+const CLIENT_RISK_COLORS: Record<"Low" | "Medium" | "High", string> = {
+  Low: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  Medium: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  High: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+};
+
+const TREND_CONFIG: Record<"Improving" | "Stable" | "Worsening", { color: string; label: string }> = {
+  Improving: { color: "text-emerald-600 dark:text-emerald-400", label: "↑ Improving" },
+  Stable: { color: "text-muted-foreground", label: "→ Stable" },
+  Worsening: { color: "text-red-600 dark:text-red-400", label: "↓ Worsening" },
+};
+
+function ClientConfidenceBadge({ confidence }: { confidence: "Low" | "Medium" | "High" }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "text-xs",
+        confidence === "High" ? "border-emerald-500 text-emerald-600" :
+        confidence === "Medium" ? "border-amber-500 text-amber-600" :
+        "border-red-400 text-red-500"
+      )}
+    >
+      {confidence} confidence
+    </Badge>
+  );
+}
+
+function ClientExplanationsPanel({ explanations, dataQualityFlags }: { explanations: string[]; dataQualityFlags: string[] }) {
+  if (!explanations.length && !dataQualityFlags.length) return null;
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
+      <div className="flex items-center gap-1.5 font-medium text-foreground mb-1">
+        <Info className="h-3.5 w-3.5" />
+        Model notes
+      </div>
+      {explanations.map((e, i) => <p key={i}>{e}</p>)}
+      {dataQualityFlags.map((f, i) => (
+        <p key={`dq-${i}`} className="text-amber-600 dark:text-amber-400">⚠ {f.replace(/_/g, " ")}</p>
+      ))}
+    </div>
+  );
+}
+
+function ScoreBar({ current, predicted }: { current: number; predicted: number }) {
+  const improving = predicted > current;
+  const worsening = predicted < current;
+  return (
+    <div className="flex items-center gap-1.5 min-w-[100px]">
+      <div className="flex-1 h-1.5 bg-muted rounded-full overflow-hidden">
+        <div
+          className={cn("h-full rounded-full transition-all",
+            current >= 70 ? "bg-emerald-500" : current >= 50 ? "bg-amber-500" : "bg-red-500"
+          )}
+          style={{ width: `${current}%` }}
+        />
+      </div>
+      <span className="text-xs font-medium w-8 text-right">{current}</span>
+      {improving && <span className="text-xs text-emerald-600">→{predicted}</span>}
+      {worsening && <span className="text-xs text-red-500">→{predicted}</span>}
+      {!improving && !worsening && <span className="text-xs text-muted-foreground">={predicted}</span>}
+    </div>
+  );
+}
+
+function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
+  const [expandedClient, setExpandedClient] = useState<string | null>(null);
+
+  const { data, isLoading } = useQuery<{
+    clients: ClientRiskTrendItem[];
+    confidence: "Low" | "Medium" | "High";
+    dataQualityFlags: string[];
+    explanations: string[];
+    horizonWeeks: number;
+  }>({
+    queryKey: ["/api/reports/v2/forecasting/client-risk-trend", horizonWeeks],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/v2/forecasting/client-risk-trend?weeks=${horizonWeeks}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  if (isLoading) {
+    return (
+      <div className="space-y-3">
+        {[...Array(5)].map((_, i) => <Skeleton key={i} className="h-16 w-full" />)}
+      </div>
+    );
+  }
+
+  const highRisk = data?.clients.filter(c => c.clientRisk === "High").length ?? 0;
+  const worsening = data?.clients.filter(c => c.riskTrend === "Worsening").length ?? 0;
+  const improving = data?.clients.filter(c => c.riskTrend === "Improving").length ?? 0;
+  const total = data?.clients.length ?? 0;
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-red-600">{highRisk}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">High risk clients</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-red-500">{worsening}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Worsening trend</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-emerald-600">{improving}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Improving trend</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold">{total}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Clients analysed</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle className="text-sm">Client Risk Trend Forecast</CardTitle>
+              <CardDescription className="text-xs">Health score trajectory — predicted {horizonWeeks} weeks forward</CardDescription>
+            </div>
+            {data && <ClientConfidenceBadge confidence={data.confidence} />}
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {!data?.clients.length ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No client data found</p>
+          ) : (
+            <>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Client</TableHead>
+                    <TableHead className="text-center">Current Score</TableHead>
+                    <TableHead className="text-center">Trend</TableHead>
+                    <TableHead className="text-center">Predicted ({horizonWeeks}w)</TableHead>
+                    <TableHead className="text-center">Open</TableHead>
+                    <TableHead className="text-center">Overdue</TableHead>
+                    <TableHead className="text-center">Risk</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.clients.map(c => (
+                    <>
+                      <TableRow
+                        key={c.clientId}
+                        className="cursor-pointer hover:bg-muted/30"
+                        onClick={() => setExpandedClient(expandedClient === c.clientId ? null : c.clientId)}
+                        data-testid={`forecast-client-row-${c.clientId}`}
+                      >
+                        <TableCell className="font-medium max-w-[160px]">
+                          <span className="truncate block">{c.companyName}</span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <ScoreBar current={c.currentHealthScore} predicted={c.predictedHealthScore} />
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className={cn("text-xs font-medium", TREND_CONFIG[c.riskTrend].color)}>
+                            {TREND_CONFIG[c.riskTrend].label}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <span className={cn("font-medium text-sm",
+                            c.predictedHealthScore >= 70 ? "text-emerald-600" :
+                            c.predictedHealthScore >= 50 ? "text-amber-600" : "text-red-600"
+                          )}>
+                            {c.predictedHealthScore}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center text-sm">{c.metrics.currOpenTasks}</TableCell>
+                        <TableCell className="text-center">
+                          <span className={c.metrics.currOverdueTasks > 0 ? "text-red-600 font-medium" : ""}>
+                            {c.metrics.currOverdueTasks}
+                          </span>
+                        </TableCell>
+                        <TableCell className="text-center">
+                          <Badge className={cn("text-xs", CLIENT_RISK_COLORS[c.clientRisk])}>
+                            {c.clientRisk}
+                          </Badge>
+                        </TableCell>
+                      </TableRow>
+                      {expandedClient === c.clientId && (
+                        <TableRow key={`${c.clientId}-exp`} className="bg-muted/20">
+                          <TableCell colSpan={7} className="py-2">
+                            <div className="text-xs text-muted-foreground space-y-0.5">
+                              {c.explanation.map((line, i) => (
+                                <p key={i} className={line.startsWith("⚠") ? "text-amber-600 dark:text-amber-400" : ""}>
+                                  {line}
+                                </p>
+                              ))}
+                            </div>
+                          </TableCell>
+                        </TableRow>
+                      )}
+                    </>
+                  ))}
+                </TableBody>
+              </Table>
+              <p className="text-xs text-muted-foreground mt-2">Click a row to see the full explanation</p>
+            </>
+          )}
+          {data && (
+            <div className="mt-3">
+              <ClientExplanationsPanel explanations={data.explanations} dataQualityFlags={data.dataQualityFlags} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ── MAIN COMPONENT ─────────────────────────────────────────────────────────────
 
 export function ClientCommandCenter() {
   const [rangeDays, setRangeDays] = useState(30);
   const [activeTab, setActiveTab] = useState("overview");
+  const [horizonWeeks, setHorizonWeeks] = useState<2 | 4 | 8>(4);
   const flags = useFeatureFlags();
 
   return (
@@ -831,6 +1077,12 @@ export function ClientCommandCenter() {
               Health
             </TabsTrigger>
           )}
+          {flags.enableForecastingLayer && (
+            <TabsTrigger value="forecasts" className="text-xs gap-1.5" data-testid="tab-client-forecasts">
+              <Sparkles className="h-3.5 w-3.5" />
+              Forecasts
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
@@ -854,6 +1106,24 @@ export function ClientCommandCenter() {
         {flags.enableClientHealthIndex && (
           <TabsContent value="health" className="mt-4">
             <HealthTab rangeDays={rangeDays} />
+          </TabsContent>
+        )}
+        {flags.enableForecastingLayer && (
+          <TabsContent value="forecasts" className="mt-4">
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <span className="text-sm text-muted-foreground">Forecast horizon:</span>
+              <Select value={String(horizonWeeks)} onValueChange={(v) => setHorizonWeeks(Number(v) as 2 | 4 | 8)}>
+                <SelectTrigger className="w-32 h-8 text-xs" data-testid="client-forecast-horizon-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2">2 weeks</SelectItem>
+                  <SelectItem value="4">4 weeks</SelectItem>
+                  <SelectItem value="8">8 weeks</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <ClientForecastsTab horizonWeeks={horizonWeeks} />
           </TabsContent>
         )}
       </Tabs>

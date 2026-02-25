@@ -1,0 +1,236 @@
+MOBILE + RESPONSIVENESS IMPROVEMENT SPRINT (REPORTS + COMMAND CENTERS)
+NON-DESTRUCTIVE • UI/UX POLISH • TABLET + MOBILE FIRST • DOCUMENTED
+
+You are working in the DigitalWorkday codebase (React frontend using Tailwind CSS + shadcn/ui components under client/src/components/ui/, Radix primitives).
+
+Goal: Perform a comprehensive mobile/tablet responsiveness pass focused on ALL Reports pages (legacy + new V2 command centers) so they look premium and work great on:
+- phones (320–480px)
+- large phones (480–768px)
+- tablets (768–1024px)
+- small laptops (1024–1280px)
+
+CRITICAL RULES
+- NON-DESTRUCTIVE: do not remove features or break desktop layouts.
+- Prefer component-level improvements and responsive variants.
+- Reuse shadcn/ui; do NOT introduce a new heavy UI framework.
+- Use progressive disclosure patterns (drawers, accordions, segmented controls).
+- All changes must keep accessibility (keyboard, focus, aria) intact.
+- Add App Docs update at end: “Mobile & Responsiveness Standards for Reports”.
+
+========================================================
+PHASE 0 — AUDIT & BASELINE (NO CODE BREAKAGE)
+========================================================
+0.1 Identify all report routes/pages:
+- Legacy reports pages (Overview, Task Analysis, Client Analytics, Workload, Time Tracking, Project Analysis, Messages, Client Pipeline)
+- New V2 pages (Employee Command Center, Client Command Center, Project Intelligence, Task Intelligence, Executive Overview)
+0.2 For each page, capture:
+- layout issues on 375px width and 768px width
+- overflow problems (tables, charts)
+- filter bar wrapping issues
+- tap target issues
+- fixed headers/scroll issues
+0.3 Add a small dev-only “viewport debug” toggle (optional) to display active breakpoint label.
+
+Deliverable:
+- A short markdown checklist in /docs or App Docs draft notes listing per-page issues.
+
+========================================================
+PHASE 1 — CONFIRM “BEST UI LIBRARIES” + STANDARDIZE PATTERNS
+========================================================
+We already use the best-fit stack for premium responsive UI:
+- Tailwind CSS
+- shadcn/ui (Radix primitives)
+- (Optional) react-virtual for long lists (if already used in app; otherwise add carefully and minimally)
+
+Standardize these patterns for mobile:
+A) Filters: horizontal toolbar on desktop → collapsible filter drawer on mobile
+B) Tables: desktop table → mobile “card rows” + optional condensed table in landscape/tablet
+C) Charts: stack vertically, full-width, reduced legends, tooltips enabled
+D) Drilldowns: use Sheet/Drawer on mobile instead of side-by-side panes
+E) Navigation: tabs become a Select/SegmentedControl on mobile
+
+Implement shared components to enforce consistency:
+- <ReportPageShell />
+- <ReportFilterBar />
+- <ReportFiltersSheet /> (mobile)
+- <ResponsiveDataTable /> (table→cards)
+- <MetricCardGrid /> (auto-responsive grid)
+
+========================================================
+PHASE 2 — BUILD A RESPONSIVE REPORT PAGE SHELL (REUSABLE)
+========================================================
+Create/upgrade a shared shell component used by all report pages:
+
+ReportPageShell responsibilities:
+- Title + subtitle
+- Actions area (export, save view, etc.)
+- Filter Bar:
+  - Desktop: inline
+  - Mobile: “Filters” button opens Sheet
+- Content layout:
+  - Use CSS grid with responsive columns
+  - Provide safe padding and max widths
+- Sticky top controls (optional) WITHOUT causing scroll jank:
+  - sticky only on md+ or when safe
+
+Implement breakpoints:
+- base: single column
+- md: two-column where appropriate
+- lg+: multi-column dashboards
+
+========================================================
+PHASE 3 — FIX TABLES (BIGGEST MOBILE PAIN POINT)
+========================================================
+For all report tables (employee lists, client lists, project risk lists):
+
+3.1 Create ResponsiveDataTable abstraction:
+Props:
+- columns (desktop)
+- renderCard(row) for mobile
+- rowKey
+- empty state
+- pagination controls
+
+Behavior:
+- Desktop (md+): standard table (shadcn Table)
+- Mobile (base–sm): card list layout
+  - each “row card” shows top 4–6 key fields
+  - secondary fields in expandable accordion
+  - CTA row (View details)
+
+3.2 Ensure horizontal overflow is eliminated:
+- No x-scroll tables by default on mobile
+- Use truncation + tooltip for long text
+- Use line-clamp for descriptions
+
+3.3 Pagination controls:
+- Always visible
+- Mobile-friendly (prev/next + page indicator)
+- Do not use tiny page numbers on small screens
+
+3.4 Virtualization (optional, only if needed):
+If employee/client lists can exceed ~200 rows, add virtualization behind a prop:
+- Use react-virtual (small, proven) OR reuse existing virtualization already in the app.
+- Do not virtualize everything; only long lists.
+
+========================================================
+PHASE 4 — FIX FILTERS & TOOLBARS (SECOND BIGGEST ISSUE)
+========================================================
+4.1 Convert filter bars to responsive layout:
+- Desktop: inline filters with flex wrap + consistent spacing
+- Mobile: hide inline, show “Filters” button + active filter count badge
+- Filter Sheet uses shadcn Sheet + Accordion sections:
+  - Date range
+  - Users
+  - Clients
+  - Projects
+  - Status
+  - Advanced
+
+4.2 Apply/Reset UX:
+- “Apply” sticky footer in Sheet
+- “Reset” secondary button
+- Show “Active filters chips” below title (wrap nicely)
+
+4.3 Date Range:
+- Use a compact date range picker UI on mobile
+- Ensure popover doesn’t render off-screen (use portal + collision handling if needed)
+
+========================================================
+PHASE 5 — REPORT DASHBOARD LAYOUTS (CARDS + GRIDS)
+========================================================
+For KPI blocks and summary cards:
+- Use responsive grid: grid-cols-1 sm:grid-cols-2 lg:grid-cols-4
+- Ensure consistent card heights where possible
+- Add “stacked metrics” variant for mobile (bigger text, fewer charts)
+
+Implement:
+- <MetricCard />
+- <MetricCardRow /> (mobile condensed)
+- <SparklinePlaceholder /> (optional if you already have charts)
+
+========================================================
+PHASE 6 — COMMAND CENTER SPECIFIC MOBILE UX
+========================================================
+Employee Command Center:
+- Mobile landing: employee selector + summary cards
+- “Tabs” convert to:
+  - md+: Tabs
+  - base: Select (section picker) + content below
+- Drilldowns open in Sheet:
+  - Employee detail / explanations / forecast details
+
+Client Command Center:
+- Same pattern:
+  - client selector
+  - summary
+  - sections in Select on mobile
+  - risk explanations in Sheet
+
+Project/Task intelligence:
+- Replace side-by-side layouts with stacked sections
+- Ensure charts are full width and legends wrap properly
+
+========================================================
+PHASE 7 — ACCESSIBILITY + TOUCH TARGETS
+========================================================
+- Minimum touch target 44px for primary actions
+- Ensure focus rings visible
+- Ensure Sheet/Dialogs trap focus correctly
+- Ensure tables/cards are navigable via keyboard
+
+========================================================
+PHASE 8 — VISUAL POLISH (PREMIUM FEEL, PERFORMANCE SAFE)
+========================================================
+- Add subtle motion only where safe (hover on desktop, none required on mobile)
+- Use consistent spacing scale (p-4 / gap-3 / md:p-6)
+- Ensure typography scales: text-sm on mobile, text-base+ on md
+- Ensure color contrast meets standards
+- Use skeleton loaders for slow endpoints, but keep them lightweight
+
+========================================================
+PHASE 9 — QA MATRIX (REQUIRED)
+========================================================
+Test each report page at:
+- 375x812 (iPhone)
+- 414x896 (large phone)
+- 768x1024 (iPad portrait)
+- 1024x768 (iPad landscape)
+- 1280x800 (small laptop)
+
+Validate:
+- no horizontal scrolling
+- filters usable with thumb
+- tables readable
+- drilldowns usable
+- exports/actions accessible
+- no layout shifts or overlapping sticky bars
+
+========================================================
+PHASE 10 — APP DOCS UPDATE (MANDATORY)
+========================================================
+Add App Docs section:
+“Mobile & Responsiveness Standards — Reports”
+
+Include:
+- Breakpoint rules
+- Filter behavior (inline → sheet)
+- Table behavior (table → cards)
+- Drilldown behavior (pane → sheet)
+- Component standards (ReportPageShell, ResponsiveDataTable, ReportFiltersSheet)
+- QA checklist + viewport matrix
+
+========================================================
+DELIVERABLES
+========================================================
+- Shared responsive report shell + mobile filter sheet
+- Responsive table-to-card pattern across report pages
+- Command centers usable on mobile/tablet
+- No regressions on desktop
+- Docs updated
+
+STOP when:
+- All report pages pass QA matrix above
+- No horizontal scroll on mobile
+- Filters and tables are fully usable on tablet + phone
+- Docs updated

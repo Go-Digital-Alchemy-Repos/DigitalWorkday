@@ -15,7 +15,7 @@ import {
 import {
   Users, Clock, CheckSquare, AlertTriangle, TrendingUp,
   ChevronUp, ChevronDown, ArrowUpDown, CalendarRange, Activity,
-  ShieldAlert, User, Award,
+  ShieldAlert, User, Award, Sparkles, FolderKanban, Info,
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
@@ -975,11 +975,337 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
   );
 }
 
+// ── FORECASTS TAB ─────────────────────────────────────────────────────────────
+
+interface CapacityOverloadUser {
+  userId: string;
+  firstName: string | null;
+  lastName: string | null;
+  email: string;
+  weeks: {
+    weekStart: string;
+    availableHours: number;
+    historicalAvgHours: number;
+    dueEstimatedHours: number;
+    predictedHours: number;
+    predictedUtilizationPct: number;
+    overloadRisk: "Low" | "Medium" | "High";
+    explanation: string[];
+  }[];
+}
+
+interface ProjectRisk {
+  projectId: string;
+  projectName: string;
+  dueDate: string | null;
+  weeksUntilDue: number | null;
+  openTaskCount: number;
+  overdueCount: number;
+  openEstimatedHours: number;
+  throughputPerWeek: number;
+  predictedWeeksToClear: number;
+  deadlineRisk: "Low" | "Medium" | "High";
+  explanation: string[];
+}
+
+const RISK_COLORS: Record<"Low" | "Medium" | "High", string> = {
+  Low: "bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-300",
+  Medium: "bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-300",
+  High: "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300",
+};
+
+const CAPACITY_CELL_COLORS: Record<"Low" | "Medium" | "High" | "none", string> = {
+  none: "bg-muted/30 text-muted-foreground",
+  Low: "bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300",
+  Medium: "bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300",
+  High: "bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300",
+};
+
+function ConfidenceBadge({ confidence }: { confidence: "Low" | "Medium" | "High" }) {
+  return (
+    <Badge
+      variant="outline"
+      className={cn(
+        "text-xs",
+        confidence === "High" ? "border-emerald-500 text-emerald-600" :
+        confidence === "Medium" ? "border-amber-500 text-amber-600" :
+        "border-red-400 text-red-500"
+      )}
+    >
+      {confidence} confidence
+    </Badge>
+  );
+}
+
+function ExplanationsPanel({ explanations, dataQualityFlags }: { explanations: string[]; dataQualityFlags: string[] }) {
+  if (!explanations.length && !dataQualityFlags.length) return null;
+  return (
+    <div className="rounded-lg border border-border bg-muted/30 p-3 text-xs text-muted-foreground space-y-1">
+      <div className="flex items-center gap-1.5 font-medium text-foreground mb-1">
+        <Info className="h-3.5 w-3.5" />
+        Model notes
+      </div>
+      {explanations.map((e, i) => <p key={i}>{e}</p>)}
+      {dataQualityFlags.map((f, i) => (
+        <p key={`dq-${i}`} className="text-amber-600 dark:text-amber-400">⚠ {f.replace(/_/g, " ")}</p>
+      ))}
+    </div>
+  );
+}
+
+function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
+  const [expandedUser, setExpandedUser] = useState<string | null>(null);
+  const [expandedProject, setExpandedProject] = useState<string | null>(null);
+
+  const { data: capData, isLoading: capLoading } = useQuery<{
+    users: CapacityOverloadUser[];
+    confidence: "Low" | "Medium" | "High";
+    dataQualityFlags: string[];
+    explanations: string[];
+    horizonWeeks: number;
+  }>({
+    queryKey: ["/api/reports/v2/forecasting/capacity-overload", horizonWeeks],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/v2/forecasting/capacity-overload?weeks=${horizonWeeks}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const { data: projData, isLoading: projLoading } = useQuery<{
+    projects: ProjectRisk[];
+    confidence: "Low" | "Medium" | "High";
+    dataQualityFlags: string[];
+    explanations: string[];
+  }>({
+    queryKey: ["/api/reports/v2/forecasting/project-deadline-risk", horizonWeeks],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/v2/forecasting/project-deadline-risk?weeks=${horizonWeeks}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const formatWeekLabel = (w: string) => {
+    const d = new Date(w);
+    return d.toLocaleDateString("en-US", { month: "short", day: "numeric" });
+  };
+
+  const highRiskUsers = capData?.users.filter(u => u.weeks.some(w => w.overloadRisk === "High")).length ?? 0;
+  const mediumRiskUsers = capData?.users.filter(u => u.weeks.some(w => w.overloadRisk === "Medium") && !u.weeks.some(w => w.overloadRisk === "High")).length ?? 0;
+  const highRiskProjects = projData?.projects.filter(p => p.deadlineRisk === "High").length ?? 0;
+
+  if (capLoading || projLoading) {
+    return (
+      <div className="space-y-3">
+        {[...Array(4)].map((_, i) => <Skeleton key={i} className="h-20 w-full" />)}
+      </div>
+    );
+  }
+
+  return (
+    <div className="space-y-6">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-red-600">{highRiskUsers}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">High overload risk</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-amber-600">{mediumRiskUsers}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Medium overload risk</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold text-red-600">{highRiskProjects}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Projects at deadline risk</div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4">
+            <div className="text-2xl font-bold">{horizonWeeks}</div>
+            <div className="text-xs text-muted-foreground mt-0.5">Forecast horizon (weeks)</div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle className="text-sm">Capacity Overload Forecast</CardTitle>
+              <CardDescription className="text-xs">Predicted hours per employee per week</CardDescription>
+            </div>
+            {capData && <ConfidenceBadge confidence={capData.confidence} />}
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0 overflow-x-auto">
+          {!capData?.users.length ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No employee data found</p>
+          ) : (
+            <>
+              <table className="w-full text-xs border-collapse">
+                <thead>
+                  <tr className="border-b border-border">
+                    <th className="text-left py-2 px-3 font-medium min-w-[160px]">Employee</th>
+                    {capData.users[0]?.weeks.map(w => (
+                      <th key={w.weekStart} className="text-center py-2 px-2 font-medium min-w-[80px]">
+                        {formatWeekLabel(w.weekStart)}
+                      </th>
+                    ))}
+                  </tr>
+                </thead>
+                <tbody>
+                  {capData.users.map(u => (
+                    <>
+                      <tr
+                        key={u.userId}
+                        className="border-b border-border/50 hover:bg-muted/30 cursor-pointer"
+                        onClick={() => setExpandedUser(expandedUser === u.userId ? null : u.userId)}
+                        data-testid={`forecast-capacity-row-${u.userId}`}
+                      >
+                        <td className="py-2 px-3 font-medium">
+                          {u.firstName || u.lastName ? `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim() : u.email}
+                        </td>
+                        {u.weeks.map(w => (
+                          <td key={w.weekStart} className="py-1.5 px-1 text-center">
+                            <div className={cn(
+                              "rounded px-2 py-1 text-xs font-medium mx-auto w-fit",
+                              CAPACITY_CELL_COLORS[w.predictedHours > 0 ? w.overloadRisk : "none"]
+                            )}>
+                              {w.predictedHours > 0 ? `${w.predictedHours}h` : "—"}
+                            </div>
+                          </td>
+                        ))}
+                      </tr>
+                      {expandedUser === u.userId && (
+                        <tr key={`${u.userId}-exp`} className="bg-muted/20">
+                          <td colSpan={(u.weeks.length || 0) + 1} className="px-3 py-2">
+                            <div className="space-y-1">
+                              {u.weeks.map(w => (
+                                <div key={w.weekStart} className="text-xs text-muted-foreground">
+                                  <span className="font-medium text-foreground">{formatWeekLabel(w.weekStart)}:</span>{" "}
+                                  {w.explanation.join(" • ")}
+                                </div>
+                              ))}
+                            </div>
+                          </td>
+                        </tr>
+                      )}
+                    </>
+                  ))}
+                </tbody>
+              </table>
+              <p className="text-xs text-muted-foreground mt-2">Click a row to see explanations</p>
+            </>
+          )}
+          {capData && (
+            <div className="mt-3">
+              <ExplanationsPanel explanations={capData.explanations} dataQualityFlags={capData.dataQualityFlags} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center justify-between flex-wrap gap-2">
+            <div>
+              <CardTitle className="text-sm">Project Deadline Risk</CardTitle>
+              <CardDescription className="text-xs">Based on throughput vs. remaining backlog</CardDescription>
+            </div>
+            {projData && <ConfidenceBadge confidence={projData.confidence} />}
+          </div>
+        </CardHeader>
+        <CardContent className="pt-0">
+          {!projData?.projects.length ? (
+            <p className="text-sm text-muted-foreground py-4 text-center">No active projects found</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Project</TableHead>
+                  <TableHead className="text-center">Due</TableHead>
+                  <TableHead className="text-center">Open</TableHead>
+                  <TableHead className="text-center">Overdue</TableHead>
+                  <TableHead className="text-center">Throughput/wk</TableHead>
+                  <TableHead className="text-center">Weeks to Clear</TableHead>
+                  <TableHead className="text-center">Risk</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {projData.projects.map(p => (
+                  <>
+                    <TableRow
+                      key={p.projectId}
+                      className="cursor-pointer hover:bg-muted/30"
+                      onClick={() => setExpandedProject(expandedProject === p.projectId ? null : p.projectId)}
+                      data-testid={`forecast-project-row-${p.projectId}`}
+                    >
+                      <TableCell className="font-medium max-w-[160px] truncate">
+                        <div className="flex items-center gap-1.5">
+                          <FolderKanban className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+                          {p.projectName}
+                        </div>
+                      </TableCell>
+                      <TableCell className="text-center text-xs">
+                        {p.dueDate ? (
+                          <span className={p.weeksUntilDue !== null && p.weeksUntilDue < 0 ? "text-red-600 font-medium" : ""}>
+                            {new Date(p.dueDate).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                            {p.weeksUntilDue !== null && (
+                              <span className="text-muted-foreground ml-1">
+                                ({p.weeksUntilDue < 0 ? "past" : `${Math.round(p.weeksUntilDue)}w`})
+                              </span>
+                            )}
+                          </span>
+                        ) : <span className="text-muted-foreground">—</span>}
+                      </TableCell>
+                      <TableCell className="text-center">{p.openTaskCount}</TableCell>
+                      <TableCell className="text-center">
+                        <span className={p.overdueCount > 0 ? "text-red-600 font-medium" : ""}>{p.overdueCount}</span>
+                      </TableCell>
+                      <TableCell className="text-center">{p.throughputPerWeek}</TableCell>
+                      <TableCell className="text-center">{p.predictedWeeksToClear}</TableCell>
+                      <TableCell className="text-center">
+                        <Badge className={cn("text-xs", RISK_COLORS[p.deadlineRisk])}>
+                          {p.deadlineRisk}
+                        </Badge>
+                      </TableCell>
+                    </TableRow>
+                    {expandedProject === p.projectId && (
+                      <TableRow key={`${p.projectId}-exp`} className="bg-muted/20">
+                        <TableCell colSpan={7} className="text-xs text-muted-foreground py-2">
+                          {p.explanation.join(" • ")}
+                        </TableCell>
+                      </TableRow>
+                    )}
+                  </>
+                ))}
+              </TableBody>
+            </Table>
+          )}
+          {projData && (
+            <div className="mt-3">
+              <ExplanationsPanel explanations={projData.explanations} dataQualityFlags={projData.dataQualityFlags} />
+            </div>
+          )}
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
 // ── MAIN COMPONENT ─────────────────────────────────────────────────────────────
 
 export function EmployeeCommandCenter() {
   const [rangeDays, setRangeDays] = useState(30);
   const [activeTab, setActiveTab] = useState("overview");
+  const [horizonWeeks, setHorizonWeeks] = useState<2 | 4 | 8>(4);
   const flags = useFeatureFlags();
 
   return (
@@ -1022,6 +1348,12 @@ export function EmployeeCommandCenter() {
               Performance
             </TabsTrigger>
           )}
+          {flags.enableForecastingLayer && (
+            <TabsTrigger value="forecasts" className="text-xs gap-1.5" data-testid="tab-employee-forecasts">
+              <Sparkles className="h-3.5 w-3.5" />
+              Forecasts
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
@@ -1045,6 +1377,24 @@ export function EmployeeCommandCenter() {
         {flags.enableEmployeePerformanceIndex && (
           <TabsContent value="performance" className="mt-4">
             <PerformanceTab rangeDays={rangeDays} />
+          </TabsContent>
+        )}
+        {flags.enableForecastingLayer && (
+          <TabsContent value="forecasts" className="mt-4">
+            <div className="flex items-center gap-3 mb-4 flex-wrap">
+              <span className="text-sm text-muted-foreground">Forecast horizon:</span>
+              <Select value={String(horizonWeeks)} onValueChange={(v) => setHorizonWeeks(Number(v) as 2 | 4 | 8)}>
+                <SelectTrigger className="w-32 h-8 text-xs" data-testid="forecast-horizon-select">
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="2">2 weeks</SelectItem>
+                  <SelectItem value="4">4 weeks</SelectItem>
+                  <SelectItem value="8">8 weeks</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <ForecastsTab horizonWeeks={horizonWeeks} />
           </TabsContent>
         )}
       </Tabs>
