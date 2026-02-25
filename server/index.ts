@@ -1,10 +1,11 @@
 import "dotenv/config";
-// Import config early to validate env vars before anything else runs
 import { config, logConfigStatus } from "./config";
 import express, { type Request, Response, NextFunction } from "express";
 import { mountAllRoutes } from "./http/mount";
 import { serveStatic } from "./static";
 import { createServer } from "http";
+import path from "path";
+import fs from "fs";
 import { initializeSocketIO } from "./realtime/socket";
 import { setupAuth, setupBootstrapEndpoints, setupPlatformInviteEndpoints, setupTenantInviteEndpoints, setupPasswordResetEndpoints } from "./auth";
 import { bootstrapAdminUser } from "./bootstrap";
@@ -60,32 +61,29 @@ app.head("/", (_req, res) => {
   res.status(200).end();
 });
 
-app.get("/", (req, res, next) => {
-  const acceptHeader = req.headers.accept || "";
-  const userAgent = req.headers["user-agent"] || "";
+let cachedIndexHtml: string | null = null;
 
-  const isBrowser = acceptHeader.includes("text/html") &&
-                    (userAgent.includes("Mozilla") || userAgent.includes("Chrome") || userAgent.includes("Safari"));
-
-  // Non-browser requests (health check probes, curl, etc.): always 200 immediately.
-  // This includes all Replit / Cloud Run health check probes.
-  if (!isBrowser) {
-    return res.status(200).json({ status: "ok", ready: appReady, timestamp: new Date().toISOString() });
-  }
-
-  // Browser request: only fall through to static file serving once it is registered.
-  // During startup, serve a minimal auto-refreshing page so the browser doesn't hang.
+app.get("/", (_req, res) => {
   if (!staticMounted) {
-    return res.status(200).send(
-      '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Starting\u2026</title>' +
-      '<meta http-equiv="refresh" content="2"><style>body{font-family:sans-serif;display:flex;' +
-      'align-items:center;justify-content:center;height:100vh;margin:0;color:#555}' +
-      '</style></head><body><p>Starting up, please wait\u2026</p></body></html>'
-    );
+    return res.status(200)
+      .set("Content-Type", "text/html")
+      .send(
+        '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Starting\u2026</title>' +
+        '<meta http-equiv="refresh" content="2"><style>body{font-family:sans-serif;display:flex;' +
+        'align-items:center;justify-content:center;height:100vh;margin:0;color:#555}' +
+        '</style></head><body><p>Starting up, please wait\u2026</p></body></html>'
+      );
   }
 
-  // Static server is ready — serve the React app.
-  next();
+  if (!cachedIndexHtml) {
+    try {
+      const indexPath = path.resolve(__dirname, "public", "index.html");
+      cachedIndexHtml = fs.readFileSync(indexPath, "utf-8");
+    } catch {
+      return res.status(200).send("OK");
+    }
+  }
+  res.status(200).set("Content-Type", "text/html").send(cachedIndexHtml);
 });
 
 // Main health endpoint - always responds 200 for load balancer health checks
@@ -530,14 +528,17 @@ async function runPhase<T>(
 
 httpServer.listen(port, host, () => {
   serverStartTime = Date.now();
-  // Mark ready IMMEDIATELY — health check probes get 200 from this point on.
-  // Schema validation and route mounting continue asynchronously in the background.
   appReady = true;
   console.log(`[startup] Phase 1: Server listening on ${host}:${port} — health checks passing`);
+
+  runAsyncInit().catch((err) => {
+    setPhase("error");
+    console.error("[boot] Unhandled startup error:", err);
+    startupError = err instanceof Error ? err : new Error(String(err));
+  });
 });
 
-// Run async initialization in the background
-(async () => {
+async function runAsyncInit() {
   // Boot logging for deployment verification
   const env = process.env.NODE_ENV || "development";
   const version = process.env.RAILWAY_GIT_COMMIT_SHA?.slice(0, 7) 
@@ -681,11 +682,7 @@ httpServer.listen(port, host, () => {
       // Don't fail - these are non-critical
     }
   });
-})().catch((err) => {
-  setPhase("error");
-  console.error("[boot] Unhandled startup error:", err);
-  startupError = err instanceof Error ? err : new Error(String(err));
-});
+}
 
 // ============================================================================
 // Graceful Shutdown
@@ -751,3 +748,11 @@ async function gracefulShutdown(signal: string) {
 
 process.on("SIGTERM", () => gracefulShutdown("SIGTERM"));
 process.on("SIGINT", () => gracefulShutdown("SIGINT"));
+
+process.on("uncaughtException", (err) => {
+  console.error("[fatal] Uncaught exception:", err);
+});
+
+process.on("unhandledRejection", (reason) => {
+  console.error("[fatal] Unhandled rejection:", reason);
+});
