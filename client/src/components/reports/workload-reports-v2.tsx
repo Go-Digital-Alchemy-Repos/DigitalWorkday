@@ -635,14 +635,7 @@ export function WorkloadReportsV2() {
 
   return (
     <div className="space-y-4" data-testid="workload-reports-v2">
-      <div className="flex items-center justify-between gap-3 flex-wrap">
-        <div>
-          <h2 className="text-base font-semibold flex items-center gap-2">
-            <Users className="h-4 w-4 text-primary" />
-            Workload Reports V2
-          </h2>
-          <p className="text-xs text-muted-foreground mt-0.5">Server-side aggregations — date range, efficiency, and risk analysis</p>
-        </div>
+      <div className="flex items-center justify-end gap-3 flex-wrap">
         <Select value={String(rangeDays)} onValueChange={(v) => setRangeDays(Number(v))}>
           <SelectTrigger className="w-44" data-testid="select-date-range">
             <CalendarRange className="h-3.5 w-3.5 mr-1.5" />
