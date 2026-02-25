@@ -336,6 +336,7 @@ export default function ClientDetailPage() {
   const { data: client, isLoading } = useQuery<ClientWithContacts>({
     queryKey: ["/api/clients", clientId],
     enabled: !!clientId,
+    staleTime: 60 * 1000,
   });
 
   const { data: divisions = [] } = useQuery<DivisionWithCounts[]>({
@@ -352,6 +353,7 @@ export default function ClientDetailPage() {
   const { data: allClients = [] } = useQuery<ClientWithContacts[]>({
     queryKey: ["/api/clients"],
     enabled: !!clientId,
+    staleTime: 60 * 1000,
   });
 
   useEffect(() => {
