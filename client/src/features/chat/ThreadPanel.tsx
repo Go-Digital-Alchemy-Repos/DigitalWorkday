@@ -85,7 +85,6 @@ export function ThreadPanel({
     },
     onSuccess: () => {
       setReplyInput("");
-      handleSendSuccess();
       queryClient.invalidateQueries({ queryKey: threadQueryKey });
       queryClient.invalidateQueries({ queryKey: summariesQueryKey });
     },
@@ -94,6 +93,11 @@ export function ThreadPanel({
         title: "Failed to send reply",
         description: error.message || "Please try again",
         variant: "destructive",
+      });
+    },
+    onSettled: () => {
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
       });
     },
   });

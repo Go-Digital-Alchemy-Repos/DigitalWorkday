@@ -1741,6 +1741,11 @@ export default function ChatPage() {
     onSuccess: () => {
       // Message will be replaced by socket event with confirmed ID
     },
+    onSettled: () => {
+      requestAnimationFrame(() => {
+        messageInputRef.current?.focus();
+      });
+    },
   });
 
   // Retry failed message
@@ -2215,6 +2220,7 @@ export default function ChatPage() {
 
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (sendMessageMutation.isPending) return;
     const readyAttachments = pendingAttachments.filter(a => !a.uploading);
     if (!messageInput.trim() && readyAttachments.length === 0) return;
 
@@ -2861,7 +2867,6 @@ export default function ChatPage() {
                     onKeyDown={handleMessageKeyDown}
                     {...compositionHandlers}
                     placeholder={`Message ${selectedChannel ? "#" + selectedChannel.name : getDmDisplayName(selectedDm!)}`}
-                    disabled={sendMessageMutation.isPending}
                     data-testid="input-message"
                     onAttachClick={() => fileInputRef.current?.click()}
                     isUploading={isUploading}

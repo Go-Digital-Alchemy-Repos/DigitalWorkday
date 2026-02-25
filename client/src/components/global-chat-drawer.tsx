@@ -283,8 +283,12 @@ export function GlobalChatDrawer() {
     onSuccess: () => {
       setMessageInput("");
       setPendingAttachments([]);
-      handleSendSuccess();
       chatSounds.play("messageSent");
+    },
+    onSettled: () => {
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
     },
   });
 
@@ -441,6 +445,7 @@ export function GlobalChatDrawer() {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
+    if (sendMessageMutation.isPending) return;
     if (!messageInput.trim() && pendingAttachments.length === 0) return;
     sendMessageMutation.mutate({
       body: messageInput.trim() || " ",
@@ -456,7 +461,7 @@ export function GlobalChatDrawer() {
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (isSendKey(e)) {
       e.preventDefault();
-      if (messageInput.trim() || pendingAttachments.length > 0) {
+      if (!sendMessageMutation.isPending && (messageInput.trim() || pendingAttachments.length > 0)) {
         sendMessageMutation.mutate({
           body: messageInput.trim() || " ",
           attachmentIds: pendingAttachments.map(a => a.id),
@@ -826,7 +831,6 @@ export function GlobalChatDrawer() {
                   onKeyDown={handleKeyDown}
                   {...compositionHandlers}
                   placeholder={`Message ${selectedChannel ? "#" + selectedChannel.name : selectedDm ? getDmDisplayName(selectedDm) : ""}... (Enter to send, Shift+Enter for new line)`}
-                  disabled={sendMessageMutation.isPending}
                   className="min-h-[60px] max-h-[120px] resize-none text-sm"
                   rows={2}
                   data-testid="drawer-input-message"

@@ -427,12 +427,16 @@ function ConversationThread({
     },
     onSuccess: () => {
       setReplyText("");
-      handleSendSuccess();
       queryClient.invalidateQueries({ queryKey: ["/api/crm/conversations", conversationId, "messages"] });
       queryClient.invalidateQueries({ queryKey: ["/api/crm/portal/conversations"] });
     },
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
+    },
+    onSettled: () => {
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
     },
   });
 
