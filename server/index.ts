@@ -46,8 +46,11 @@ declare module "http" {
 // to ensure immediate responses during startup for deployment health checks
 // ============================================================================
 
-// Track application readiness for health checks (must be before health endpoints)
+// appReady = true as soon as the server is listening — health checks pass immediately.
+// staticMounted = true once static file serving / Vite dev middleware is registered,
+// which allows browser requests to GET / to fall through to the React app.
 let appReady = false;
+let staticMounted = false;
 let startupError: Error | null = null;
 
 // Root endpoint - CRITICAL: Return 200 immediately WITHOUT any checks
@@ -58,25 +61,30 @@ app.head("/", (_req, res) => {
 });
 
 app.get("/", (req, res, next) => {
-  // During startup (before routes + static serving are mounted), return 200 immediately
-  // for ALL requests. Health check probes must never wait for app readiness.
-  if (!appReady) {
-    return res.status(200).json({ status: "ok", starting: true, timestamp: new Date().toISOString() });
-  }
-
-  // App is ready — distinguish health checks from browser requests
   const acceptHeader = req.headers.accept || "";
   const userAgent = req.headers["user-agent"] || "";
 
   const isBrowser = acceptHeader.includes("text/html") &&
                     (userAgent.includes("Mozilla") || userAgent.includes("Chrome") || userAgent.includes("Safari"));
 
-  // Non-browser (health check / curl): respond immediately
+  // Non-browser requests (health check probes, curl, etc.): always 200 immediately.
+  // This includes all Replit / Cloud Run health check probes.
   if (!isBrowser) {
-    return res.status(200).json({ status: "ok", timestamp: new Date().toISOString() });
+    return res.status(200).json({ status: "ok", ready: appReady, timestamp: new Date().toISOString() });
   }
 
-  // Browser request: fall through to the static file server (registered during Phase 3)
+  // Browser request: only fall through to static file serving once it is registered.
+  // During startup, serve a minimal auto-refreshing page so the browser doesn't hang.
+  if (!staticMounted) {
+    return res.status(200).send(
+      '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Starting\u2026</title>' +
+      '<meta http-equiv="refresh" content="2"><style>body{font-family:sans-serif;display:flex;' +
+      'align-items:center;justify-content:center;height:100vh;margin:0;color:#555}' +
+      '</style></head><body><p>Starting up, please wait\u2026</p></body></html>'
+    );
+  }
+
+  // Static server is ready — serve the React app.
   next();
 });
 
@@ -520,8 +528,10 @@ async function runPhase<T>(
 
 httpServer.listen(port, host, () => {
   serverStartTime = Date.now();
-  console.log(`[startup] Phase 1/6: Server listening started at ${new Date(serverStartTime).toISOString()}`);
-  console.log(`[startup] Server listening on ${host}:${port}`);
+  // Mark ready IMMEDIATELY — health check probes get 200 from this point on.
+  // Schema validation and route mounting continue asynchronously in the background.
+  appReady = true;
+  console.log(`[startup] Phase 1: Server listening on ${host}:${port} — health checks passing`);
 });
 
 // Run async initialization in the background
@@ -574,6 +584,8 @@ httpServer.listen(port, host, () => {
         const { setupVite } = await import("./vite");
         await setupVite(httpServer, app);
       }
+      // Static file server is now registered — browser requests to / can be served
+      staticMounted = true;
     });
   } catch (routesErr) {
     setPhase("error");
@@ -582,12 +594,10 @@ httpServer.listen(port, host, () => {
     return;
   }
 
-  // Phase 4: Mark app as READY immediately after routes are registered
-  // This ensures health checks pass quickly - diagnostics run in background
+  // Phase 4: All routes and static serving are ready
   setPhase("ready");
-  appReady = true;
   const totalDuration = Date.now() - serverStartTime;
-  console.log(`[startup] Phase 4/4: App READY in ${totalDuration}ms`);
+  console.log(`[startup] Phase 4/4: Fully ready in ${totalDuration}ms`);
   log(`[boot] Application ready - running background diagnostics...`);
   
   // ============================================================================
