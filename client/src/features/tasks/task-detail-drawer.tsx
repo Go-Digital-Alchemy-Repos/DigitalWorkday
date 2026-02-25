@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus, Trash2, Link2 } from "lucide-react";
+import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus, Trash2, Link2, Lock, Share2 } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -51,6 +51,8 @@ import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import { useToast } from "@/hooks/use-toast";
 import { DrawerActionBar } from "@/components/layout/drawer-action-bar";
 import { FormFieldWrapper, DatePickerWithChips, PrioritySelector, StatusSelector, type PriorityLevel, type TaskStatus } from "@/components/forms";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { ShareModal } from "@/features/sharing/share-modal";
 import type { TaskWithRelations, User, Tag as TagType, Comment, Project, Client } from "@shared/schema";
 
 type ActiveTimer = {
@@ -172,6 +174,7 @@ export function TaskDetailDrawer({
   const [isCompletingTask, setIsCompletingTask] = useState(false);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [isCreatingTag, setIsCreatingTag] = useState(false);
+  const [shareModalOpen, setShareModalOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#3b82f6");
   
@@ -908,6 +911,28 @@ export function TaskDetailDrawer({
               <StatusBadge status={task.status as any} />
             </div>
             <div className="flex items-center gap-1">
+              {(task as any).visibility === "private" && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className="gap-1 text-xs">
+                      <Lock className="h-3 w-3" />
+                      Private
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>Only you and invited members can see this task</TooltipContent>
+                </Tooltip>
+              )}
+              {(task as any).visibility === "private" && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShareModalOpen(true)}
+                  title="Share task"
+                  data-testid="button-share-task"
+                >
+                  <Share2 className="h-4 w-4" />
+                </Button>
+              )}
               {task.projectId && (
                 <Button
                   variant="ghost"
@@ -1633,6 +1658,14 @@ export function TaskDetailDrawer({
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      {task && (
+        <ShareModal
+          type="task"
+          itemId={task.id}
+          isOpen={shareModalOpen}
+          onClose={() => setShareModalOpen(false)}
+        />
+      )}
       </Sheet>
     </>
   );

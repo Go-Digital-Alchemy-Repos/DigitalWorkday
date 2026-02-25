@@ -17,6 +17,7 @@ import {
   PopoverContent,
   PopoverTrigger,
 } from "@/components/ui/popover";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Calendar } from "@/components/ui/calendar";
 import { cn } from "@/lib/utils";
 import { 
@@ -26,6 +27,7 @@ import {
   Flag,
   CalendarDays,
   Link2,
+  Lock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import type { TaskWithRelations, User, Tag } from "@shared/schema";
@@ -162,6 +164,14 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
             >
               {task.title}
             </span>
+            {(task as any).visibility === "private" && (
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" data-testid={`icon-private-${task.id}`} />
+                </TooltipTrigger>
+                <TooltipContent>Private task</TooltipContent>
+              </Tooltip>
+            )}
             {hasProject && (
               <Button
                 variant="ghost"
@@ -267,6 +277,14 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
               {task.title}
             </span>
             <div className="flex items-center gap-1 shrink-0">
+              {(task as any).visibility === "private" && (
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Lock className="h-3.5 w-3.5 text-muted-foreground" data-testid={`icon-private-${task.id}`} />
+                  </TooltipTrigger>
+                  <TooltipContent>Private task</TooltipContent>
+                </Tooltip>
+              )}
               {hasProject && (
                 <Button
                   variant="ghost"
@@ -364,6 +382,14 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
           >
             {task.title}
           </span>
+          {(task as any).visibility === "private" && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" data-testid={`icon-private-${task.id}`} />
+              </TooltipTrigger>
+              <TooltipContent>Private task</TooltipContent>
+            </Tooltip>
+          )}
           {hasProject && (
             <Button
               variant="ghost"

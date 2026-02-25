@@ -203,6 +203,8 @@ export const config = {
     enableTasksBatchHydration: optionalEnvBool("ENABLE_TASKS_BATCH_HYDRATION", true),
     enableClientsBatchExpansion: optionalEnvBool("ENABLE_CLIENTS_BATCH_EXPANSION", true),
     enableProjectsSqlFiltering: optionalEnvBool("ENABLE_PROJECTS_SQL_FILTERING", true),
+    enablePrivateTasks: optionalEnvBool("ENABLE_PRIVATE_TASKS", true),
+    enablePrivateProjects: optionalEnvBool("ENABLE_PRIVATE_PROJECTS", true),
   },
 
   tenancyEnforcement: {

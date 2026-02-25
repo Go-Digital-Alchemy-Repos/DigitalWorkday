@@ -1422,6 +1422,7 @@ export const tasks = pgTable("tasks", {
   dueDate: timestamp("due_date"),
   estimateMinutes: integer("estimate_minutes"), // Optional task estimate in minutes for workload forecasting
   isPersonal: boolean("is_personal").notNull().default(false),
+  visibility: text("visibility").notNull().default("workspace"),
   createdBy: varchar("created_by").references(() => users.id),
   orderIndex: integer("order_index").notNull().default(0),
   // Personal task organization fields (only used when isPersonal=true)
@@ -1443,6 +1444,7 @@ export const tasks = pgTable("tasks", {
   index("tasks_project_id_idx").on(table.projectId),
   index("tasks_project_status_idx").on(table.projectId, table.status),
   index("tasks_status_priority_idx").on(table.status, table.priority),
+  index("tasks_tenant_visibility_idx").on(table.tenantId, table.visibility),
 ]);
 
 // Task Assignees table (for multiple assignees)
@@ -1470,6 +1472,38 @@ export const taskWatchers = pgTable("task_watchers", {
   uniqueIndex("task_watchers_unique").on(table.taskId, table.userId),
   index("task_watchers_user").on(table.userId),
   index("task_watchers_tenant_idx").on(table.tenantId),
+]);
+
+// Task Access table — controls who can view/edit private tasks
+export const taskAccess = pgTable("task_access", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  taskId: varchar("task_id").references(() => tasks.id, { onDelete: "cascade" }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  role: text("role").notNull().default("editor"),
+  invitedByUserId: varchar("invited_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("task_access_unique").on(table.tenantId, table.taskId, table.userId),
+  index("task_access_task_idx").on(table.taskId),
+  index("task_access_user_idx").on(table.userId),
+  index("task_access_tenant_task_idx").on(table.tenantId, table.taskId),
+]);
+
+// Project Access table — controls who can view/edit private projects
+export const projectAccess = pgTable("project_access", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  role: text("role").notNull().default("editor"),
+  invitedByUserId: varchar("invited_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("project_access_unique").on(table.tenantId, table.projectId, table.userId),
+  index("project_access_project_idx").on(table.projectId),
+  index("project_access_user_idx").on(table.userId),
+  index("project_access_tenant_project_idx").on(table.tenantId, table.projectId),
 ]);
 
 // Personal Task Sections table - user-defined sections for organizing personal tasks in My Tasks view
@@ -2291,6 +2325,46 @@ export const taskAssigneesRelations = relations(taskAssignees, ({ one }) => ({
   }),
 }));
 
+export const taskAccessRelations = relations(taskAccess, ({ one }) => ({
+  task: one(tasks, {
+    fields: [taskAccess.taskId],
+    references: [tasks.id],
+  }),
+  user: one(users, {
+    fields: [taskAccess.userId],
+    references: [users.id],
+  }),
+  tenant: one(tenants, {
+    fields: [taskAccess.tenantId],
+    references: [tenants.id],
+  }),
+  invitedBy: one(users, {
+    fields: [taskAccess.invitedByUserId],
+    references: [users.id],
+    relationName: "taskAccessInviter",
+  }),
+}));
+
+export const projectAccessRelations = relations(projectAccess, ({ one }) => ({
+  project: one(projects, {
+    fields: [projectAccess.projectId],
+    references: [projects.id],
+  }),
+  user: one(users, {
+    fields: [projectAccess.userId],
+    references: [users.id],
+  }),
+  tenant: one(tenants, {
+    fields: [projectAccess.tenantId],
+    references: [tenants.id],
+  }),
+  invitedBy: one(users, {
+    fields: [projectAccess.invitedByUserId],
+    references: [users.id],
+    relationName: "projectAccessInviter",
+  }),
+}));
+
 export const taskWatchersRelations = relations(taskWatchers, ({ one }) => ({
   task: one(tasks, {
     fields: [taskWatchers.taskId],
@@ -2685,6 +2759,16 @@ export const insertTaskWatcherSchema = createInsertSchema(taskWatchers).omit({
   createdAt: true,
 });
 
+export const insertTaskAccessSchema = createInsertSchema(taskAccess).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProjectAccessSchema = createInsertSchema(projectAccess).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertPersonalTaskSectionSchema = createInsertSchema(personalTaskSections).omit({
   id: true,
   createdAt: true,
@@ -3069,6 +3153,12 @@ export type InsertTaskAssignee = z.infer<typeof insertTaskAssigneeSchema>;
 
 export type TaskWatcher = typeof taskWatchers.$inferSelect;
 export type InsertTaskWatcher = z.infer<typeof insertTaskWatcherSchema>;
+
+export type TaskAccess = typeof taskAccess.$inferSelect;
+export type InsertTaskAccess = z.infer<typeof insertTaskAccessSchema>;
+
+export type ProjectAccess = typeof projectAccess.$inferSelect;
+export type InsertProjectAccess = z.infer<typeof insertProjectAccessSchema>;
 
 export type PersonalTaskSection = typeof personalTaskSections.$inferSelect;
 export type InsertPersonalTaskSection = z.infer<typeof insertPersonalTaskSectionSchema>;

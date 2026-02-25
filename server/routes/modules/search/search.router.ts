@@ -8,7 +8,9 @@
 import { createApiRouter } from '../../../http/routerFactory';
 import { storage } from '../../../storage';
 import { AppError, handleRouteError, sendError } from '../../../lib/errors';
-import { getEffectiveTenantId, getCurrentWorkspaceIdAsync } from '../../helpers';
+import { getEffectiveTenantId, getCurrentWorkspaceIdAsync, getCurrentUserId } from '../../helpers';
+import { config } from '../../../config';
+import { getAccessiblePrivateProjectIds, getAccessiblePrivateTaskIds } from '../../../lib/privateVisibility';
 
 export const searchRouter = createApiRouter({ policy: "authTenant" });
 
@@ -51,13 +53,24 @@ searchRouter.get("/search", async (req, res) => {
 
     const workspaceId = await getCurrentWorkspaceIdAsync(req);
 
+    const userId = getCurrentUserId(req);
+
     const [clientsList, projectsList] = await Promise.all([
       storage.getClientsByTenant(tenantId, workspaceId),
       storage.getProjectsByTenant(tenantId, workspaceId),
     ]);
 
-    const projectIds = projectsList.map(p => p.id);
-    let tasksList: Array<{ id: string; title: string; projectId: string | null; status: string | null; tenantId: string | null }> = [];
+    let filteredProjectsList = projectsList;
+    if (config.features.enablePrivateProjects) {
+      const accessibleProjectIds = await getAccessiblePrivateProjectIds(userId, tenantId);
+      const accessibleProjectSet = new Set(accessibleProjectIds);
+      filteredProjectsList = projectsList.filter(p =>
+        (p as any).visibility !== 'private' || accessibleProjectSet.has(p.id)
+      );
+    }
+
+    const projectIds = filteredProjectsList.map(p => p.id);
+    let tasksList: Array<{ id: string; title: string; projectId: string | null; status: string | null; tenantId: string | null; visibility?: string }> = [];
     
     if (projectIds.length > 0) {
       const taskMap = await storage.getTasksByProjectIds(projectIds);
@@ -68,8 +81,17 @@ searchRouter.get("/search", async (req, res) => {
           projectId: t.projectId,
           status: t.status,
           tenantId: tenantId,
+          visibility: (t as any).visibility || 'workspace',
         })));
       }
+    }
+
+    if (config.features.enablePrivateTasks) {
+      const accessibleTaskIds = await getAccessiblePrivateTaskIds(userId, tenantId);
+      const accessibleTaskSet = new Set(accessibleTaskIds);
+      tasksList = tasksList.filter(t =>
+        t.visibility !== 'private' || accessibleTaskSet.has(t.id)
+      );
     }
 
     const filterAndScore = <T extends { id: string }>(
@@ -90,7 +112,7 @@ searchRouter.get("/search", async (req, res) => {
     };
 
     const clients = filterAndScore(clientsList, c => c.companyName);
-    const projects = filterAndScore(projectsList, p => p.name);
+    const projects = filterAndScore(filteredProjectsList, p => p.name);
     const filteredTasks = filterAndScore(tasksList, t => t.title);
 
     res.json({ 
@@ -115,15 +137,25 @@ searchRouter.get("/clients/:clientId/search", async (req, res) => {
     const searchQuery = String(q || "").trim().toLowerCase();
     const maxResults = Math.min(parseInt(String(limit), 10) || 15, 50);
 
+    const userId = getCurrentUserId(req);
+
     const clientProjects = await storage.getProjectsByClient(clientId);
-    const tenantProjects = clientProjects.filter(p => p.tenantId === tenantId);
+    let tenantProjects = clientProjects.filter(p => p.tenantId === tenantId);
+
+    if (config.features.enablePrivateProjects) {
+      const accessibleProjectIds = await getAccessiblePrivateProjectIds(userId, tenantId);
+      const accessibleProjectSet = new Set(accessibleProjectIds);
+      tenantProjects = tenantProjects.filter(p =>
+        (p as any).visibility !== 'private' || accessibleProjectSet.has(p.id)
+      );
+    }
 
     if (tenantProjects.length === 0 && searchQuery.length < 2) {
       return res.json({ projects: [], tasks: [] });
     }
 
     const projectIds = tenantProjects.map(p => p.id);
-    let tasksList: Array<{ id: string; title: string; projectId: string | null; status: string | null }> = [];
+    let tasksList: Array<{ id: string; title: string; projectId: string | null; status: string | null; visibility?: string }> = [];
 
     if (projectIds.length > 0) {
       const taskMap = await storage.getTasksByProjectIds(projectIds);
@@ -133,8 +165,17 @@ searchRouter.get("/clients/:clientId/search", async (req, res) => {
           title: t.title || "",
           projectId: t.projectId,
           status: t.status,
+          visibility: (t as any).visibility || 'workspace',
         })));
       }
+    }
+
+    if (config.features.enablePrivateTasks) {
+      const accessibleTaskIds = await getAccessiblePrivateTaskIds(userId, tenantId);
+      const accessibleTaskSet = new Set(accessibleTaskIds);
+      tasksList = tasksList.filter(t =>
+        t.visibility !== 'private' || accessibleTaskSet.has(t.id)
+      );
     }
 
     if (!searchQuery || searchQuery.length < 2) {

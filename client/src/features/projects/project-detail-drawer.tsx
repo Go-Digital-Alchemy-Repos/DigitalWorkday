@@ -37,12 +37,16 @@ import {
   DollarSign,
   Pencil,
   StickyNote,
+  Lock,
+  Share2,
 } from "lucide-react";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { format } from "date-fns";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, PieChart, Pie, Cell, LineChart, Line } from "recharts";
+import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Project, Client, Team, TaskWithRelations } from "@shared/schema";
 import { ProjectNotesTab } from "@/components/project-notes-tab";
+import { ShareModal } from "@/features/sharing/share-modal";
 
 interface ProjectAnalytics {
   projectId: string;
@@ -116,6 +120,7 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
   const { openTask } = useTaskDrawer();
   const isSuperUser = user?.role === "super_user";
   const [activeTab, setActiveTab] = useState("overview");
+  const [shareModalOpen, setShareModalOpen] = useState(false);
 
   const { data: projectDetails, isLoading } = useQuery<Project>({
     queryKey: ["/api/projects", project?.id],
@@ -192,9 +197,31 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
               </div>
             </div>
             <div className="flex items-center gap-2">
+              {currentProject.visibility === "private" && (
+                <UITooltip>
+                  <TooltipTrigger asChild>
+                    <Badge variant="outline" className="gap-1 text-xs" data-testid="badge-private-project">
+                      <Lock className="h-3 w-3" />
+                      Private
+                    </Badge>
+                  </TooltipTrigger>
+                  <TooltipContent>Only you and invited members can see this project</TooltipContent>
+                </UITooltip>
+              )}
               <Badge variant={currentProject.status === "archived" ? "secondary" : "default"}>
                 {currentProject.status === "archived" ? "Archived" : "Active"}
               </Badge>
+              {currentProject.visibility === "private" && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setShareModalOpen(true)}
+                  title="Share project"
+                  data-testid="button-share-project"
+                >
+                  <Share2 className="h-4 w-4" />
+                </Button>
+              )}
               {onEdit && (
                 <Button
                   variant="outline"
@@ -891,6 +918,14 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
           )}
         </Tabs>
       </SheetContent>
+      {currentProject && (
+        <ShareModal
+          type="project"
+          itemId={currentProject.id}
+          isOpen={shareModalOpen}
+          onClose={() => setShareModalOpen(false)}
+        />
+      )}
     </Sheet>
   );
 }

@@ -31,6 +31,8 @@ import {
   RotateCcw,
   Archive,
   Link2,
+  Lock,
+  Share2,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -784,6 +786,12 @@ export default function ProjectPage() {
             <div className="min-w-0 flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-base md:text-xl font-semibold truncate">{project.name}</h1>
+                {project.visibility === "private" && (
+                  <Badge variant="outline" className="gap-1 text-xs shrink-0" data-testid="badge-private-project">
+                    <Lock className="h-3 w-3" />
+                    Private
+                  </Badge>
+                )}
                 {project.status === "archived" && (
                   <Badge variant="secondary" className="text-xs shrink-0" data-testid="badge-project-archived">
                     <Archive className="h-3 w-3 mr-1" />

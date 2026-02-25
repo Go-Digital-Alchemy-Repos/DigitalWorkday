@@ -2,6 +2,8 @@ import { db } from "../../db";
 import { tasks, taskAssignees, taskWatchers, taskTags, tags, sections, projects } from "@shared/schema";
 import { eq, inArray, and } from "drizzle-orm";
 import type { TaskWithRelations, Subtask } from "@shared/schema";
+import { getAccessiblePrivateTaskIds } from "../../lib/privateVisibility";
+import { config } from "../../config";
 
 function chunk<T>(arr: T[], size: number): T[][] {
   const result: T[][] = [];
@@ -30,7 +32,17 @@ export async function getTasksByUserBatched(userId: string, tenantId: string): P
   }
   if (baseTasks.length === 0) return [];
 
-  const taskIds = baseTasks.map(t => t.id);
+  let filteredTasks = baseTasks;
+  if (config.features.enablePrivateTasks) {
+    const accessiblePrivateIds = await getAccessiblePrivateTaskIds(userId, tenantId);
+    const accessibleSet = new Set(accessiblePrivateIds);
+    filteredTasks = baseTasks.filter(t =>
+      (t as any).visibility !== 'private' || accessibleSet.has(t.id)
+    );
+  }
+  if (filteredTasks.length === 0) return [];
+
+  const taskIds = filteredTasks.map(t => t.id);
 
   const [assigneeRows2, watcherRows, tagRows, subtaskRows] = await Promise.all([
     db.select().from(taskAssignees).where(inArray(taskAssignees.taskId, taskIds)),
@@ -47,8 +59,8 @@ export async function getTasksByUserBatched(userId: string, tenantId: string): P
     db.select().from(tasks).where(inArray(tasks.parentTaskId, taskIds)),
   ]);
 
-  const uniqueSectionIds = Array.from(new Set(baseTasks.map(t => t.sectionId).filter((id): id is string => id !== null && id !== undefined)));
-  const uniqueProjectIds = Array.from(new Set(baseTasks.map(t => t.projectId).filter((id): id is string => id !== null && id !== undefined)));
+  const uniqueSectionIds = Array.from(new Set(filteredTasks.map(t => t.sectionId).filter((id): id is string => id !== null && id !== undefined)));
+  const uniqueProjectIds = Array.from(new Set(filteredTasks.map(t => t.projectId).filter((id): id is string => id !== null && id !== undefined)));
 
   const [sectionRows, projectRows] = await Promise.all([
     uniqueSectionIds.length > 0
@@ -99,7 +111,7 @@ export async function getTasksByUserBatched(userId: string, tenantId: string): P
     project: undefined,
   });
 
-  const result: TaskWithRelations[] = baseTasks.map(task => ({
+  const result: TaskWithRelations[] = filteredTasks.map(task => ({
     ...task,
     assignees: assigneesByTask.get(task.id) ?? [],
     watchers: watchersByTask.get(task.id) ?? [],

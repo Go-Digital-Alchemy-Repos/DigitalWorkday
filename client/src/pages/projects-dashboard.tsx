@@ -23,7 +23,7 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X, Pin, Link2, Trash2, Loader2 } from "lucide-react";
+import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X, Pin, Link2, Trash2, Loader2, Lock } from "lucide-react";
 import { ProjectDrawer } from "@/features/projects";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -517,6 +517,9 @@ export default function ProjectsDashboard() {
                       <div className="flex-1 min-w-0">
                         <div className="flex items-center gap-2 mb-1">
                           <h3 className="font-medium truncate">{project.name}</h3>
+                          {project.visibility === "private" && (
+                            <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" data-testid={`icon-private-project-${project.id}`} />
+                          )}
                           {project.stickyAt && (
                             <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
                           )}
@@ -614,7 +617,12 @@ export default function ProjectsDashboard() {
                           <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
                         )}
                         <div className="min-w-0">
-                          <div className="font-medium truncate">{project.name}</div>
+                          <div className="flex items-center gap-1.5 font-medium truncate">
+                            {project.name}
+                            {project.visibility === "private" && (
+                              <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" data-testid={`icon-private-project-table-${project.id}`} />
+                            )}
+                          </div>
                           {project.description && (
                             <div className="text-xs text-muted-foreground truncate max-w-[250px]">
                               {getPreviewText(project.description)}

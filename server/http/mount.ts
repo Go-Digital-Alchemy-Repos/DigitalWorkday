@@ -44,6 +44,7 @@ import tenantDefaultDocsRouter from "./domains/tenantDefaultDocs.router";
 import controlCenterRouter from "./domains/controlCenter.router";
 import emailTemplatesRouter from "./domains/emailTemplates.router";
 import fileServeRouter from "./domains/fileServe.router";
+import accessRouter from "./domains/access.router";
 
 import usersRouter from "../routes/users.router";
 import crmRouter from "../routes/crm.router";
@@ -320,6 +321,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "file-serve",
     description: "File serving and download endpoints.",
+  },
+  {
+    path: "/api",
+    router: accessRouter,
+    policy: "authTenant",
+    domain: "access",
+    description: "Private access management for tasks and projects.",
   },
   {
     path: "/api",

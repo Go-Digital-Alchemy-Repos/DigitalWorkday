@@ -4,6 +4,8 @@ import { DatabaseStorage } from "../storage";
 import { getEffectiveTenantId } from "../middleware/tenantContext";
 import { UserRole, TaskWithRelations } from "@shared/schema";
 import { AppError, handleRouteError } from "../lib/errors";
+import { config } from "../config";
+import { getAccessiblePrivateProjectIds, getAccessiblePrivateTaskIds } from "../lib/privateVisibility";
 
 const router = createApiRouter({ policy: "authTenant" });
 const storage = new DatabaseStorage();
@@ -54,6 +56,7 @@ router.get("/projects", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const workspaceId = getCurrentWorkspaceId(req);
+    const userId = getCurrentUserId(req);
     const includeCounts = req.query.includeCounts === "true";
     const status = typeof req.query.status === "string" ? req.query.status : undefined;
     const clientId = typeof req.query.clientId === "string" ? req.query.clientId : undefined;
@@ -68,6 +71,14 @@ router.get("/projects", async (req, res) => {
       projects = await storage.getProjectsByWorkspace(workspaceId);
     } else {
       throw AppError.internal("User tenant not configured");
+    }
+
+    if (tenantId && config.features.enablePrivateProjects) {
+      const accessibleIds = await getAccessiblePrivateProjectIds(userId, tenantId);
+      const accessibleSet = new Set(accessibleIds);
+      projects = projects.filter(p =>
+        (p as any).visibility !== 'private' || accessibleSet.has(p.id)
+      );
     }
 
     let filteredProjects = projects;
@@ -115,6 +126,7 @@ router.get("/projects/analytics/summary", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const workspaceId = getCurrentWorkspaceId(req);
+    const userId = getCurrentUserId(req);
     const onlyActive = req.query.onlyActive !== "false";
     const clientId = typeof req.query.clientId === "string" ? req.query.clientId : undefined;
 
@@ -125,6 +137,14 @@ router.get("/projects/analytics/summary", async (req, res) => {
       projects = await storage.getProjectsByWorkspace(workspaceId);
     } else {
       throw AppError.internal("User tenant not configured");
+    }
+
+    if (tenantId && config.features.enablePrivateProjects) {
+      const accessibleIds = await getAccessiblePrivateProjectIds(userId, tenantId);
+      const accessibleSet = new Set(accessibleIds);
+      projects = projects.filter(p =>
+        (p as any).visibility !== 'private' || accessibleSet.has(p.id)
+      );
     }
 
     if (onlyActive) {
@@ -216,6 +236,7 @@ router.get("/projects/:projectId/analytics", async (req, res) => {
   try {
     const { projectId } = req.params;
     const tenantId = getEffectiveTenantId(req);
+    const userId = getCurrentUserId(req);
 
     const project = await storage.getProject(projectId);
     if (!project) {
@@ -224,6 +245,13 @@ router.get("/projects/:projectId/analytics", async (req, res) => {
 
     if (tenantId && project.tenantId !== tenantId) {
       throw AppError.forbidden("Access denied");
+    }
+
+    if (tenantId && config.features.enablePrivateProjects && (project as any).visibility === 'private') {
+      const { canViewProject } = await import("../lib/privateVisibility");
+      if (!(await canViewProject(tenantId, projectId, userId))) {
+        throw AppError.notFound("Project");
+      }
     }
 
     const tasks = await storage.getTasksByProject(projectId);
@@ -347,6 +375,7 @@ router.get("/projects/:projectId/forecast", async (req, res) => {
     const { projectId } = req.params;
     const tenantId = getEffectiveTenantId(req);
     const workspaceId = getCurrentWorkspaceId(req);
+    const userId = getCurrentUserId(req);
 
     const project = await storage.getProject(projectId);
     if (!project) {
@@ -355,6 +384,13 @@ router.get("/projects/:projectId/forecast", async (req, res) => {
 
     if (tenantId && project.tenantId !== tenantId) {
       throw AppError.forbidden("Access denied");
+    }
+
+    if (tenantId && config.features.enablePrivateProjects && (project as any).visibility === 'private') {
+      const { canViewProject } = await import("../lib/privateVisibility");
+      if (!(await canViewProject(tenantId, projectId, userId))) {
+        throw AppError.notFound("Project");
+      }
     }
 
     const tasks = await storage.getTasksByProject(projectId);
@@ -555,6 +591,7 @@ router.get("/projects/forecast/summary", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     const workspaceId = getCurrentWorkspaceId(req);
+    const userId = getCurrentUserId(req);
 
     let projects;
     if (tenantId) {
@@ -563,6 +600,14 @@ router.get("/projects/forecast/summary", async (req, res) => {
       projects = await storage.getProjectsByWorkspace(workspaceId);
     } else {
       throw AppError.internal("User tenant not configured");
+    }
+
+    if (tenantId && config.features.enablePrivateProjects) {
+      const accessibleIds = await getAccessiblePrivateProjectIds(userId, tenantId);
+      const accessibleSet = new Set(accessibleIds);
+      projects = projects.filter(p =>
+        (p as any).visibility !== 'private' || accessibleSet.has(p.id)
+      );
     }
 
     projects = projects.filter(p => p.status === "active");

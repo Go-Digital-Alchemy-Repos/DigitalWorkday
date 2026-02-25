@@ -30,7 +30,9 @@ import {
 } from "@/components/ui/select";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
-import { CalendarIcon, Loader2 } from "lucide-react";
+import { Switch } from "@/components/ui/switch";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
+import { CalendarIcon, Loader2, Lock } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
 import type { Section } from "@shared/schema";
@@ -42,6 +44,7 @@ const createTaskSchema = z.object({
   priority: z.enum(["low", "medium", "high", "urgent"]).default("medium"),
   status: z.enum(["todo", "in_progress", "blocked", "done"]).default("todo"),
   dueDate: z.date().optional().nullable(),
+  visibility: z.enum(["workspace", "private"]).default("workspace"),
 });
 
 type CreateTaskFormData = z.infer<typeof createTaskSchema>;
@@ -72,6 +75,7 @@ export function CreateTaskDialog({
       priority: "medium",
       status: "todo",
       dueDate: null,
+      visibility: "workspace",
     },
   });
 
@@ -248,6 +252,36 @@ export function CreateTaskDialog({
                 )}
               />
             </div>
+
+            <FormField
+              control={form.control}
+              name="visibility"
+              render={({ field }) => (
+                <FormItem>
+                  <div className="flex items-center justify-between gap-2">
+                    <div className="flex items-center gap-2">
+                      <Lock className="h-4 w-4 text-muted-foreground" />
+                      <FormLabel className="mb-0">Private</FormLabel>
+                    </div>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <FormControl>
+                          <Switch
+                            checked={field.value === "private"}
+                            onCheckedChange={(checked) => field.onChange(checked ? "private" : "workspace")}
+                            data-testid="switch-task-visibility"
+                          />
+                        </FormControl>
+                      </TooltipTrigger>
+                      <TooltipContent>
+                        Only you and invited members can see this task
+                      </TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
 
             <DialogFooter>
               <Button

@@ -63,7 +63,11 @@ import {
   insertTaskSchema,
   updateTaskSchema,
   addAssigneeSchema,
+  taskAccess,
 } from "@shared/schema";
+import { db } from "../../db";
+import { eq, and } from "drizzle-orm";
+import { canManageTaskAccess, canViewTask, getAccessiblePrivateTaskIds } from "../../lib/privateVisibility";
 import {
   emitTaskCreated,
   emitTaskUpdated,
@@ -88,8 +92,17 @@ const router = createApiRouter({ policy: "authTenant", skipEnvelope: true });
 
 router.get("/projects/:projectId/tasks", async (req, res) => {
   try {
-    const tasks = await storage.getTasksByProject(req.params.projectId);
-    res.json(tasks);
+    const userId = getCurrentUserId(req);
+    const tenantId = getEffectiveTenantId(req) ?? "";
+    let projectTasks = await storage.getTasksByProject(req.params.projectId);
+    if (config.features.enablePrivateTasks) {
+      const accessibleIds = await getAccessiblePrivateTaskIds(userId, tenantId);
+      const accessibleSet = new Set(accessibleIds);
+      projectTasks = projectTasks.filter((t: any) =>
+        t.visibility !== 'private' || accessibleSet.has(t.id)
+      );
+    }
+    res.json(projectTasks);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/projects/:projectId/tasks", req);
   }
@@ -242,6 +255,19 @@ router.post("/tasks/personal", async (req, res) => {
     const task = tenantId 
       ? await storage.createTaskWithTenant(data, tenantId)
       : await storage.createTask(data);
+
+    if (task.visibility === 'private' && config.features.enablePrivateTasks && tenantId) {
+      try {
+        await db.insert(taskAccess).values({
+          tenantId,
+          taskId: task.id,
+          userId,
+          role: 'admin',
+        }).onConflictDoNothing();
+      } catch (accessError) {
+        console.warn(`[Personal Task Create] Failed to create access row for private task ${task.id}:`, accessError);
+      }
+    }
 
     const assigneesToAdd = Array.isArray(assigneeIds) && assigneeIds.length > 0 
       ? assigneeIds 
@@ -419,6 +445,11 @@ router.get("/tasks/:id", async (req, res) => {
     if (!task) {
       return sendError(res, AppError.notFound("Task"), req);
     }
+    const userId = getCurrentUserId(req);
+    const tenantId = getEffectiveTenantId(req) ?? "";
+    if (!(await canViewTask(tenantId, req.params.id, userId))) {
+      return sendError(res, AppError.notFound("Task"), req);
+    }
     res.json(task);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/tasks/:id", req);
@@ -477,6 +508,19 @@ router.post("/tasks", async (req, res) => {
     const task = tenantId 
       ? await storage.createTaskWithTenant(data, tenantId)
       : await storage.createTask(data);
+
+    if (task.visibility === 'private' && config.features.enablePrivateTasks && tenantId) {
+      try {
+        await db.insert(taskAccess).values({
+          tenantId,
+          taskId: task.id,
+          userId,
+          role: 'admin',
+        }).onConflictDoNothing();
+      } catch (accessError) {
+        console.warn(`[Task Create] Failed to create access row for private task ${task.id}:`, accessError);
+      }
+    }
 
     const rawAssigneeIds = req.body.assigneeIds;
     const assigneeIds: string[] = Array.isArray(rawAssigneeIds) 
@@ -628,6 +672,15 @@ router.patch("/tasks/:id", async (req, res) => {
       updateData.startDate = updateData.startDate ? new Date(updateData.startDate) : null;
     }
     
+    if (updateData.visibility !== undefined && config.features.enablePrivateTasks && tenantId) {
+      if (!(await canManageTaskAccess(tenantId, req.params.id, userId))) {
+        const existingTask = await storage.getTask(req.params.id);
+        if (existingTask && existingTask.visibility === 'private' && updateData.visibility !== existingTask.visibility) {
+          return sendError(res, AppError.forbidden("Only the creator or an admin can change task visibility"), req);
+        }
+      }
+    }
+
     let task;
     if (tenantId) {
       task = await storage.updateTaskWithTenant(req.params.id, tenantId, updateData);
@@ -640,6 +693,20 @@ router.patch("/tasks/:id", async (req, res) => {
     if (!task) {
       return sendError(res, AppError.notFound("Task"), req);
     }
+
+    if (updateData.visibility === 'private' && config.features.enablePrivateTasks && tenantId) {
+      try {
+        await db.insert(taskAccess).values({
+          tenantId,
+          taskId: task.id,
+          userId,
+          role: 'admin',
+        }).onConflictDoNothing();
+      } catch (accessError) {
+        console.warn(`[Task Update] Failed to create access row for private task ${task.id}:`, accessError);
+      }
+    }
+
     const taskWithRelations = await storage.getTaskWithRelations(task.id);
 
     if (task.isPersonal && task.createdBy) {
