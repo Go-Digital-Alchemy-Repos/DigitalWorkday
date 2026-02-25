@@ -179,7 +179,7 @@ export const config = {
     clientControlCenterPinnedWidgets: optionalEnvBool("CLIENT_CONTROL_CENTER_PINNED_WIDGETS", true),
     notificationsGroupingV1: optionalEnvBool("NOTIFICATIONS_GROUPING_V1", true),
     prefetchV1: optionalEnvBool("PREFETCH_V1", true),
-    virtualizationV1: optionalEnvBool("VIRTUALIZATION_V1", true),
+    virtualizationV1: optionalEnvBool("VIRTUALIZATION_V1", false),
     tenantDefaultDocs: optionalEnvBool("TENANT_DEFAULT_DOCS", true),
     // Reporting Engine V2 — stable, ON by default in all environments
     reportingEngineEnabled: optionalEnvBool("REPORTING_ENGINE", true),

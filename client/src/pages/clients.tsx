@@ -1178,7 +1178,7 @@ function ClientTableView({
   density,
 }: ClientViewProps & { density: "comfortable" | "compact" }) {
   const { virtualizationV1 } = useFeatureFlags();
-  const useVirtual = virtualizationV1 && groupedClients.length > VIRTUALIZATION_THRESHOLD;
+  const useVirtual = false; // virtualizationV1 && groupedClients.length > VIRTUALIZATION_THRESHOLD;
 
   if (useVirtual) {
     return (
