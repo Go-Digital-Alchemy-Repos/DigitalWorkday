@@ -554,4 +554,35 @@ router.get("/client/risk", async (req: Request, res: Response) => {
   }
 });
 
+// ── CHI: Client Health Index ───────────────────────────────────────────────────
+
+router.get("/client/health-index", async (req: Request, res: Response) => {
+  try {
+    const { calculateClientHealth } = await import("../../reports/health/calculateClientHealth");
+    const tenantId = getTenantId(req);
+    const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
+    const filters = normalizeFilters(params);
+    const { limit, offset } = safePagination(params);
+
+    const clientId = filters.clientIds.length === 1 ? filters.clientIds[0] : null;
+
+    const { results, total } = await calculateClientHealth({
+      tenantId,
+      startDate: new Date(startDate),
+      endDate: new Date(endDate),
+      clientId,
+      limit,
+      offset,
+    });
+
+    res.json({
+      clients: results,
+      pagination: { total, limit, offset },
+      range: { startDate, endDate },
+    });
+  } catch (error) {
+    handleRouteError(res, error, "reports-v2/client/health-index", req);
+  }
+});
+
 export default router;

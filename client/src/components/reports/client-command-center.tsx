@@ -6,9 +6,10 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { AlertTriangle, Building2, ShieldAlert, Activity, CheckSquare, Clock, TrendingUp, Users } from "lucide-react";
+import { AlertTriangle, Building2, ShieldAlert, Activity, CheckSquare, Clock, TrendingUp, Users, HeartPulse, ArrowUpDown, ChevronUp, ChevronDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
 
 interface MetricCardProps {
   label: string;
@@ -556,9 +557,239 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
   );
 }
 
+// ── TYPES ─────────────────────────────────────────────────────────────────────
+
+interface ChiComponentScores {
+  overdue: number;
+  engagement: number;
+  timeOverrun: number;
+  slaCompliance: number;
+  activity: number;
+}
+
+interface ChiClient {
+  clientId: string;
+  companyName: string;
+  overallScore: number;
+  healthTier: "Healthy" | "Monitor" | "At Risk" | "Critical";
+  componentScores: ChiComponentScores;
+  riskFlags: string[];
+  rawMetrics: {
+    totalTasks: number;
+    overdueCount: number;
+    completedOnTime: number;
+    totalDoneWithDue: number;
+    totalHoursInRange: number;
+    estimatedHours: number;
+    commentCount: number;
+    daysSinceLastActivity: number | null;
+    activeProjects: number;
+  };
+}
+
+type ChiSortField = "companyName" | "overallScore" | "overdue" | "engagement" | "timeOverrun" | "slaCompliance" | "activity";
+type SortDir = "asc" | "desc";
+
+// ── HEALTH TAB ─────────────────────────────────────────────────────────────────
+
+function chiTierConfig(tier: ChiClient["healthTier"]) {
+  switch (tier) {
+    case "Healthy":  return { className: "bg-green-500 text-white border-transparent" };
+    case "Monitor":  return { className: "bg-blue-500 text-white border-transparent" };
+    case "At Risk":  return { className: "bg-orange-500 text-white border-transparent" };
+    case "Critical": return { className: "bg-red-500 text-white border-transparent" };
+  }
+}
+
+function SortIcon({ field, sortBy, sortDir }: { field: string; sortBy: string; sortDir: SortDir }) {
+  if (sortBy !== field) return <ArrowUpDown className="h-3.5 w-3.5 text-muted-foreground/50 ml-1 shrink-0" />;
+  return sortDir === "asc"
+    ? <ChevronUp className="h-3.5 w-3.5 ml-1 shrink-0 text-primary" />
+    : <ChevronDown className="h-3.5 w-3.5 ml-1 shrink-0 text-primary" />;
+}
+
+function ChiScoreBar({ value, colorClass }: { value: number; colorClass: string }) {
+  return (
+    <div className="flex items-center gap-1.5 min-w-[80px]">
+      <Progress value={value} className={cn("h-1.5 flex-1", colorClass)} />
+      <span className="text-xs text-muted-foreground w-7 text-right tabular-nums">{value}</span>
+    </div>
+  );
+}
+
+function HealthTab({ rangeDays }: { rangeDays: number }) {
+  const [sortBy, setSortBy] = useState<ChiSortField>("overallScore");
+  const [sortDir, setSortDir] = useState<SortDir>("desc");
+
+  const { data, isLoading } = useQuery<{
+    clients: ChiClient[];
+    pagination: { total: number; limit: number; offset: number };
+    range: { startDate: string; endDate: string };
+  }>({
+    queryKey: ["/api/reports/v2/client/health-index", rangeDays],
+    queryFn: async () => {
+      const res = await fetch(`/api/reports/v2/client/health-index?${buildDateParams(rangeDays, { limit: "100" })}`);
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    staleTime: 2 * 60 * 1000,
+  });
+
+  const sorted = useMemo(() => {
+    if (!data?.clients) return [];
+    return [...data.clients].sort((a, b) => {
+      let av: number | string = 0, bv: number | string = 0;
+      if (sortBy === "companyName")   { av = a.companyName; bv = b.companyName; }
+      else if (sortBy === "overallScore")  { av = a.overallScore; bv = b.overallScore; }
+      else if (sortBy === "overdue")       { av = a.componentScores.overdue; bv = b.componentScores.overdue; }
+      else if (sortBy === "engagement")    { av = a.componentScores.engagement; bv = b.componentScores.engagement; }
+      else if (sortBy === "timeOverrun")   { av = a.componentScores.timeOverrun; bv = b.componentScores.timeOverrun; }
+      else if (sortBy === "slaCompliance") { av = a.componentScores.slaCompliance; bv = b.componentScores.slaCompliance; }
+      else if (sortBy === "activity")      { av = a.componentScores.activity; bv = b.componentScores.activity; }
+      if (typeof av === "string") {
+        return sortDir === "asc" ? av.localeCompare(bv as string) : (bv as string).localeCompare(av);
+      }
+      return sortDir === "asc" ? av - (bv as number) : (bv as number) - av;
+    });
+  }, [data?.clients, sortBy, sortDir]);
+
+  function toggleSort(field: ChiSortField) {
+    if (sortBy === field) setSortDir(d => d === "asc" ? "desc" : "asc");
+    else { setSortBy(field); setSortDir("desc"); }
+  }
+
+  function Th({ field, children }: { field: ChiSortField; children: React.ReactNode }) {
+    return (
+      <TableHead
+        className="cursor-pointer select-none whitespace-nowrap"
+        onClick={() => toggleSort(field)}
+        data-testid={`th-chi-${field}`}
+      >
+        <div className="flex items-center">
+          {children}
+          <SortIcon field={field} sortBy={sortBy} sortDir={sortDir} />
+        </div>
+      </TableHead>
+    );
+  }
+
+  const summary = useMemo(() => {
+    if (!data?.clients.length) return null;
+    const cls = data.clients;
+    return {
+      avgScore: Math.round(cls.reduce((s, c) => s + c.overallScore, 0) / cls.length),
+      healthy: cls.filter(c => c.healthTier === "Healthy").length,
+      critical: cls.filter(c => c.healthTier === "Critical").length,
+      withFlags: cls.filter(c => c.riskFlags.length > 0).length,
+    };
+  }, [data?.clients]);
+
+  if (isLoading) return (
+    <div className="space-y-3">
+      {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
+    </div>
+  );
+
+  return (
+    <div className="space-y-4">
+      {summary && (
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <MetricCard label="Avg CHI Score" value={summary.avgScore} sub="out of 100" icon={<HeartPulse className="h-4 w-4 text-white" />} color="bg-emerald-500" />
+          <MetricCard label="Healthy" value={summary.healthy} sub="score ≥ 85" icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-green-500" />
+          <MetricCard label="Critical" value={summary.critical} sub="score < 50" icon={<AlertTriangle className="h-4 w-4 text-white" />} color="bg-red-500" />
+          <MetricCard label="With Risk Flags" value={summary.withFlags} sub="one or more flags" icon={<ShieldAlert className="h-4 w-4 text-white" />} color="bg-orange-500" />
+        </div>
+      )}
+
+      <Card>
+        <CardContent className="p-0">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <Th field="companyName">Client</Th>
+                <Th field="overallScore">CHI Score</Th>
+                <TableHead className="text-xs text-muted-foreground">Tier</TableHead>
+                <Th field="overdue">Overdue</Th>
+                <Th field="engagement">Engagement</Th>
+                <Th field="timeOverrun">Time Overrun</Th>
+                <Th field="slaCompliance">SLA</Th>
+                <Th field="activity">Activity</Th>
+                <TableHead className="text-xs text-muted-foreground">Flags</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {sorted.map((c) => {
+                const { className } = chiTierConfig(c.healthTier);
+                return (
+                  <TableRow key={c.clientId} data-testid={`row-client-health-${c.clientId}`}>
+                    <TableCell>
+                      <span className="text-sm font-medium">{c.companyName}</span>
+                    </TableCell>
+                    <TableCell>
+                      <span className={cn(
+                        "text-base font-bold tabular-nums",
+                        c.overallScore >= 85 ? "text-green-600 dark:text-green-400" :
+                        c.overallScore >= 70 ? "text-blue-600 dark:text-blue-400" :
+                        c.overallScore >= 50 ? "text-orange-600 dark:text-orange-400" :
+                        "text-red-600 dark:text-red-400"
+                      )}>
+                        {c.overallScore}
+                      </span>
+                    </TableCell>
+                    <TableCell>
+                      <Badge className={cn("text-xs font-medium", className)}>{c.healthTier}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <ChiScoreBar value={c.componentScores.overdue} colorClass="[&>div]:bg-blue-500" />
+                    </TableCell>
+                    <TableCell>
+                      <ChiScoreBar value={c.componentScores.engagement} colorClass="[&>div]:bg-violet-500" />
+                    </TableCell>
+                    <TableCell>
+                      <ChiScoreBar value={c.componentScores.timeOverrun} colorClass="[&>div]:bg-amber-500" />
+                    </TableCell>
+                    <TableCell>
+                      <ChiScoreBar value={c.componentScores.slaCompliance} colorClass="[&>div]:bg-cyan-500" />
+                    </TableCell>
+                    <TableCell>
+                      <ChiScoreBar value={c.componentScores.activity} colorClass="[&>div]:bg-green-500" />
+                    </TableCell>
+                    <TableCell>
+                      {c.riskFlags.length > 0 ? (
+                        <div className="space-y-1" data-testid={`chi-flags-${c.clientId}`}>
+                          {c.riskFlags.map((flag, i) => (
+                            <div key={i} className="flex items-start gap-1 text-xs text-orange-600 dark:text-orange-400">
+                              <AlertTriangle className="h-3 w-3 shrink-0 mt-0.5" />
+                              <span className="leading-tight max-w-[180px]">{flag}</span>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
+                      )}
+                    </TableCell>
+                  </TableRow>
+                );
+              })}
+              {sorted.length === 0 && (
+                <TableRow>
+                  <TableCell colSpan={9} className="text-center text-muted-foreground py-8">No client health data found</TableCell>
+                </TableRow>
+              )}
+            </TableBody>
+          </Table>
+        </CardContent>
+      </Card>
+    </div>
+  );
+}
+
+// ── MAIN COMPONENT ─────────────────────────────────────────────────────────────
+
 export function ClientCommandCenter() {
   const [rangeDays, setRangeDays] = useState(30);
   const [activeTab, setActiveTab] = useState("overview");
+  const flags = useFeatureFlags();
 
   return (
     <ReportCommandCenterLayout
@@ -594,6 +825,12 @@ export function ClientCommandCenter() {
             <ShieldAlert className="h-3.5 w-3.5" />
             Risk
           </TabsTrigger>
+          {flags.enableClientHealthIndex && (
+            <TabsTrigger value="health" className="text-xs gap-1.5" data-testid="tab-client-health">
+              <HeartPulse className="h-3.5 w-3.5" />
+              Health
+            </TabsTrigger>
+          )}
         </TabsList>
 
         <TabsContent value="overview" className="mt-4">
@@ -614,6 +851,11 @@ export function ClientCommandCenter() {
         <TabsContent value="risk" className="mt-4">
           <RiskTab rangeDays={rangeDays} />
         </TabsContent>
+        {flags.enableClientHealthIndex && (
+          <TabsContent value="health" className="mt-4">
+            <HealthTab rangeDays={rangeDays} />
+          </TabsContent>
+        )}
       </Tabs>
     </ReportCommandCenterLayout>
   );
