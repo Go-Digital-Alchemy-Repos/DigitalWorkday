@@ -1877,7 +1877,9 @@ export default function ClientsPage() {
   }, [vipClients, hierarchyClients]);
 
   const groupedClients = useMemo(() => {
-    const clientsToGroup = filteredAndSortedClients;
+    const clientsToGroup = viewMode === "table"
+      ? filteredAndSortedClients
+      : filteredAndSortedClients.filter((c) => !vipClientIds.has(c.id));
     const groups: { parent: ClientWithHierarchy; children: ClientWithHierarchy[] }[] = [];
     const clientMap = new Map<string, ClientWithHierarchy>();
     const childrenByParent = new Map<string, ClientWithHierarchy[]>();
@@ -1920,7 +1922,7 @@ export default function ClientsPage() {
 
     // Sort groups by parent's company name to maintain consistent order
     return groups.sort((a, b) => a.parent.companyName.localeCompare(b.parent.companyName));
-  }, [filteredAndSortedClients, viewMode]);
+  }, [filteredAndSortedClients, vipClientIds, viewMode]);
 
   const hasActiveFilters = Object.values(filterValues).some(
     (v) => v && v !== "all"
