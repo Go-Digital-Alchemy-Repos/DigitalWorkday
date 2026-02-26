@@ -1,4 +1,5 @@
 import { useParams, useLocation, Link } from "wouter";
+import { useTaskDrawer } from "@/lib/task-drawer-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useState } from "react";
 import { 
@@ -21,8 +22,6 @@ import {
   Info,
   Loader2,
   ListChecks,
-  Calendar,
-  ExternalLink,
 } from "lucide-react";
 import { 
   Card, 
@@ -502,6 +501,7 @@ function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number 
 
 export default function EmployeeProfileReportPage() {
   const { employeeId } = useParams<{ employeeId: string }>();
+  const { openTask } = useTaskDrawer();
   const [, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const range = searchParams.get("range") || "30d";
@@ -842,13 +842,13 @@ export default function EmployeeProfileReportPage() {
                             return (
                               <TableRow key={task.id} data-testid={`row-task-${task.id}`}>
                                 <TableCell className="font-medium max-w-[300px]">
-                                  <Link
-                                    href={task.projectId ? `/projects/${task.projectId}` : "#"}
-                                    className="hover:underline text-primary truncate block"
+                                  <button
+                                    onClick={() => openTask(task.id)}
+                                    className="hover:underline text-primary truncate block text-left cursor-pointer"
                                     data-testid={`link-task-${task.id}`}
                                   >
                                     {task.title}
-                                  </Link>
+                                  </button>
                                 </TableCell>
                                 <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">
                                   {task.projectName || "—"}
