@@ -179,7 +179,7 @@ export const config = {
     clientControlCenterPinnedWidgets: optionalEnvBool("CLIENT_CONTROL_CENTER_PINNED_WIDGETS", true),
     notificationsGroupingV1: optionalEnvBool("NOTIFICATIONS_GROUPING_V1", true),
     prefetchV1: optionalEnvBool("PREFETCH_V1", true),
-    virtualizationV1: optionalEnvBool("VIRTUALIZATION_V1", true),
+    virtualizationV1: optionalEnvBool("VIRTUALIZATION_V1", false),
     tenantDefaultDocs: optionalEnvBool("TENANT_DEFAULT_DOCS", true),
     // Reporting Engine V2 — stable, ON by default in all environments
     reportingEngineEnabled: optionalEnvBool("REPORTING_ENGINE", true),
@@ -191,7 +191,12 @@ export const config = {
     reportMessagesV2: optionalEnvBool("REPORT_MESSAGES_V2", false),
     reportPipelineV2: optionalEnvBool("REPORT_PIPELINE_V2", false),
     enableEmployeeCommandCenter: optionalEnvBool("ENABLE_EMPLOYEE_COMMAND_CENTER", true),
+    enableEmployeeProfileReport: optionalEnvBool("ENABLE_EMPLOYEE_PROFILE_REPORT", true),
+    enableAiEmployeeSummary: optionalEnvBool("ENABLE_AI_EMPLOYEE_SUMMARY", true),
+    enableAiSummaryCache: optionalEnvBool("ENABLE_AI_SUMMARY_CACHE", true),
+    enableAiSummaryRedaction: optionalEnvBool("ENABLE_AI_SUMMARY_REDACTION", true),
     enableClientCommandCenter: optionalEnvBool("ENABLE_CLIENT_COMMAND_CENTER", true),
+    enableClientProfileReport: optionalEnvBool("ENABLE_CLIENT_PROFILE_REPORT", true),
     enableEmployeePerformanceIndex: optionalEnvBool("ENABLE_EMPLOYEE_PERFORMANCE_INDEX", true),
     enableClientHealthIndex: optionalEnvBool("ENABLE_CLIENT_HEALTH_INDEX", true),
     enableForecastingLayer: optionalEnvBool("ENABLE_FORECASTING_LAYER", true),
@@ -199,6 +204,25 @@ export const config = {
     enableForecastSnapshots: optionalEnvBool("ENABLE_FORECAST_SNAPSHOTS", true),
     enableAlertAutomation: optionalEnvBool("ENABLE_ALERT_AUTOMATION", true),
     enableWeeklyOpsDigest: optionalEnvBool("ENABLE_WEEKLY_OPS_DIGEST", true),
+    // Performance optimization flags (server-side only)
+    enableTasksBatchHydration: optionalEnvBool("ENABLE_TASKS_BATCH_HYDRATION", true),
+    enableClientsBatchExpansion: optionalEnvBool("ENABLE_CLIENTS_BATCH_EXPANSION", true),
+    enableProjectsSqlFiltering: optionalEnvBool("ENABLE_PROJECTS_SQL_FILTERING", true),
+    enablePrivateTasks: optionalEnvBool("ENABLE_PRIVATE_TASKS", true),
+    enablePrivateProjects: optionalEnvBool("ENABLE_PRIVATE_PROJECTS", true),
+    // Observability & stability flags
+    enableObservability: optionalEnvBool("ENABLE_OBSERVABILITY", true),
+    enablePerfProfiling: optionalEnvBool("ENABLE_PERF_PROFILING", false),
+    enableDbPoolMetrics: optionalEnvBool("ENABLE_DB_POOL_METRICS", true),
+    enablePayloadGuards: optionalEnvBool("ENABLE_PAYLOAD_GUARDS", true),
+    enableRegressionSmokeTests: optionalEnvBool("ENABLE_REGRESSION_SMOKE_TESTS", false),
+    enableHealthEndpoints: optionalEnvBool("ENABLE_HEALTH_ENDPOINTS", true),
+    enableLogSampling: optionalEnvBool("ENABLE_LOG_SAMPLING", true),
+    enableErrorReporting: optionalEnvBool("ENABLE_ERROR_REPORTING", true),
+    // Data retention flags
+    enableDataRetention: optionalEnvBool("ENABLE_DATA_RETENTION", false),
+    enableSoftArchive: optionalEnvBool("ENABLE_SOFT_ARCHIVE", false),
+    enableRetentionAuditUi: optionalEnvBool("ENABLE_RETENTION_AUDIT_UI", true),
   },
 
   tenancyEnforcement: {

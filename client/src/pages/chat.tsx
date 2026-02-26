@@ -1,5 +1,6 @@
 // Mobile UX Phase 3B improvements applied here
 import { useState, useRef, useEffect, useCallback, useMemo, lazy, Suspense } from "react";
+import { useStickyComposerFocus } from "@/hooks/useStickyComposerFocus";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest, ApiError } from "@/lib/queryClient";
 import { useChatUrlState, ConversationListPanel, ChatMessageTimeline, ChatContextPanelToggle, PinnedMessagesPanel, ChatAIAssist, ConvertToTaskAction, SlashCommandDropdown, getMatchingCommands, parseSlashCommand, isSlashCommandInput, findCommand, type SlashCommand, type ReadByUser } from "@/features/chat";
@@ -290,6 +291,7 @@ export default function ChatPage() {
   const [mentionCursorPos, setMentionCursorPos] = useState(0);
   const [mentionIndex, setMentionIndex] = useState(0);
   const messageInputRef = useRef<HTMLTextAreaElement>(null);
+  const { compositionHandlers, handleSendSuccess, isSendKey } = useStickyComposerFocus(messageInputRef);
 
   // Team panel state
   const [sidebarTab, setSidebarTab] = useState<"chats" | "team">("chats");
@@ -1739,6 +1741,11 @@ export default function ChatPage() {
     onSuccess: () => {
       // Message will be replaced by socket event with confirmed ID
     },
+    onSettled: () => {
+      requestAnimationFrame(() => {
+        messageInputRef.current?.focus();
+      });
+    },
   });
 
   // Retry failed message
@@ -2213,6 +2220,7 @@ export default function ChatPage() {
 
   const handleSendMessage = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
+    if (sendMessageMutation.isPending) return;
     const readyAttachments = pendingAttachments.filter(a => !a.uploading);
     if (!messageInput.trim() && readyAttachments.length === 0) return;
 
@@ -2227,6 +2235,7 @@ export default function ChatPage() {
       attachmentIds: readyAttachments.map(a => a.id),
       tempId,
     });
+    handleSendSuccess();
   };
 
   const handleMessageKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
@@ -2281,7 +2290,7 @@ export default function ChatPage() {
         return;
       }
     }
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (isSendKey(e)) {
       e.preventDefault();
       handleSendMessage();
     }
@@ -2856,8 +2865,8 @@ export default function ChatPage() {
                     value={messageInput}
                     onChange={handleMessageInputChange}
                     onKeyDown={handleMessageKeyDown}
+                    {...compositionHandlers}
                     placeholder={`Message ${selectedChannel ? "#" + selectedChannel.name : getDmDisplayName(selectedDm!)}`}
-                    disabled={sendMessageMutation.isPending}
                     data-testid="input-message"
                     onAttachClick={() => fileInputRef.current?.click()}
                     isUploading={isUploading}

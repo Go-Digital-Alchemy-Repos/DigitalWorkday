@@ -109,35 +109,37 @@ export default function SuperAdminReportsPage() {
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
-      <div className="p-6 border-b shrink-0">
-        <h1 className="text-2xl font-bold">Global Reports</h1>
-        <p className="text-muted-foreground mt-1">Cross-tenant analytics and platform overview</p>
+      <div className="p-3 sm:p-4 lg:p-6 border-b shrink-0">
+        <h1 className="text-xl md:text-2xl font-bold">Global Reports</h1>
+        <p className="text-muted-foreground mt-1 text-sm">Cross-tenant analytics and platform overview</p>
       </div>
 
-      <div className="flex-1 overflow-auto p-6">
+      <div className="flex-1 overflow-auto p-3 sm:p-4 lg:p-6">
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-6" data-testid="reports-tabs">
-            <TabsTrigger value="tenants" data-testid="tab-tenants">
-              <Building2 className="h-4 w-4 mr-2" />
-              Tenants
-            </TabsTrigger>
-            <TabsTrigger value="projects" data-testid="tab-projects">
-              <FolderKanban className="h-4 w-4 mr-2" />
-              Projects
-            </TabsTrigger>
-            <TabsTrigger value="users" data-testid="tab-users">
-              <Users className="h-4 w-4 mr-2" />
-              Users
-            </TabsTrigger>
-            <TabsTrigger value="tasks" data-testid="tab-tasks">
-              <CheckSquare className="h-4 w-4 mr-2" />
-              Tasks
-            </TabsTrigger>
-            <TabsTrigger value="time" data-testid="tab-time">
-              <Clock className="h-4 w-4 mr-2" />
-              Time Tracking
-            </TabsTrigger>
-          </TabsList>
+          <div className="overflow-x-auto -mx-3 px-3 sm:mx-0 sm:px-0 mb-6">
+            <TabsList className="inline-flex w-auto min-w-full sm:min-w-0" data-testid="reports-tabs">
+              <TabsTrigger value="tenants" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tenants">
+                <Building2 className="h-4 w-4 mr-1.5 sm:mr-2" />
+                Tenants
+              </TabsTrigger>
+              <TabsTrigger value="projects" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-projects">
+                <FolderKanban className="h-4 w-4 mr-1.5 sm:mr-2" />
+                Projects
+              </TabsTrigger>
+              <TabsTrigger value="users" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-users">
+                <Users className="h-4 w-4 mr-1.5 sm:mr-2" />
+                Users
+              </TabsTrigger>
+              <TabsTrigger value="tasks" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tasks">
+                <CheckSquare className="h-4 w-4 mr-1.5 sm:mr-2" />
+                Tasks
+              </TabsTrigger>
+              <TabsTrigger value="time" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-time">
+                <Clock className="h-4 w-4 mr-1.5 sm:mr-2" />
+                <span className="hidden sm:inline">Time </span>Track<span className="hidden sm:inline">ing</span>
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           <TabsContent value="tenants">
             {tenantsLoading ? (

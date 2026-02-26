@@ -28,7 +28,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2 } from "lucide-react";
+import { Loader2, Lock } from "lucide-react";
 import type { Team, Client, ClientDivision } from "@shared/schema";
 
 const PROJECT_COLORS = [
@@ -272,7 +272,12 @@ export function CreateProjectDialog({
                       </FormControl>
                       <SelectContent>
                         <SelectItem value="workspace">Workspace</SelectItem>
-                        <SelectItem value="private">Private</SelectItem>
+                        <SelectItem value="private">
+                          <span className="flex items-center gap-1.5">
+                            <Lock className="h-3 w-3" />
+                            Private
+                          </span>
+                        </SelectItem>
                       </SelectContent>
                     </Select>
                     <FormMessage />

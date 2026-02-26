@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, integer, boolean, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, date, integer, boolean, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -1422,6 +1422,7 @@ export const tasks = pgTable("tasks", {
   dueDate: timestamp("due_date"),
   estimateMinutes: integer("estimate_minutes"), // Optional task estimate in minutes for workload forecasting
   isPersonal: boolean("is_personal").notNull().default(false),
+  visibility: text("visibility").notNull().default("workspace"),
   createdBy: varchar("created_by").references(() => users.id),
   orderIndex: integer("order_index").notNull().default(0),
   // Personal task organization fields (only used when isPersonal=true)
@@ -1429,6 +1430,8 @@ export const tasks = pgTable("tasks", {
   personalSortOrder: integer("personal_sort_order"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
+  archivedAt: timestamp("archived_at"),
+  archivedReason: text("archived_reason"),
 }, (table) => [
   index("tasks_project_section_order").on(table.projectId, table.sectionId, table.orderIndex),
   index("tasks_due_date").on(table.dueDate),
@@ -1443,6 +1446,9 @@ export const tasks = pgTable("tasks", {
   index("tasks_project_id_idx").on(table.projectId),
   index("tasks_project_status_idx").on(table.projectId, table.status),
   index("tasks_status_priority_idx").on(table.status, table.priority),
+  index("tasks_tenant_visibility_idx").on(table.tenantId, table.visibility),
+  index("tasks_tenant_archived_idx").on(table.tenantId, table.archivedAt),
+  index("tasks_tenant_status_archived_idx").on(table.tenantId, table.status, table.archivedAt),
 ]);
 
 // Task Assignees table (for multiple assignees)
@@ -1470,6 +1476,38 @@ export const taskWatchers = pgTable("task_watchers", {
   uniqueIndex("task_watchers_unique").on(table.taskId, table.userId),
   index("task_watchers_user").on(table.userId),
   index("task_watchers_tenant_idx").on(table.tenantId),
+]);
+
+// Task Access table — controls who can view/edit private tasks
+export const taskAccess = pgTable("task_access", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  taskId: varchar("task_id").references(() => tasks.id, { onDelete: "cascade" }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  role: text("role").notNull().default("editor"),
+  invitedByUserId: varchar("invited_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("task_access_unique").on(table.tenantId, table.taskId, table.userId),
+  index("task_access_task_idx").on(table.taskId),
+  index("task_access_user_idx").on(table.userId),
+  index("task_access_tenant_task_idx").on(table.tenantId, table.taskId),
+]);
+
+// Project Access table — controls who can view/edit private projects
+export const projectAccess = pgTable("project_access", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  role: text("role").notNull().default("editor"),
+  invitedByUserId: varchar("invited_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("project_access_unique").on(table.tenantId, table.projectId, table.userId),
+  index("project_access_project_idx").on(table.projectId),
+  index("project_access_user_idx").on(table.userId),
+  index("project_access_tenant_project_idx").on(table.tenantId, table.projectId),
 ]);
 
 // Personal Task Sections table - user-defined sections for organizing personal tasks in My Tasks view
@@ -2291,6 +2329,46 @@ export const taskAssigneesRelations = relations(taskAssignees, ({ one }) => ({
   }),
 }));
 
+export const taskAccessRelations = relations(taskAccess, ({ one }) => ({
+  task: one(tasks, {
+    fields: [taskAccess.taskId],
+    references: [tasks.id],
+  }),
+  user: one(users, {
+    fields: [taskAccess.userId],
+    references: [users.id],
+  }),
+  tenant: one(tenants, {
+    fields: [taskAccess.tenantId],
+    references: [tenants.id],
+  }),
+  invitedBy: one(users, {
+    fields: [taskAccess.invitedByUserId],
+    references: [users.id],
+    relationName: "taskAccessInviter",
+  }),
+}));
+
+export const projectAccessRelations = relations(projectAccess, ({ one }) => ({
+  project: one(projects, {
+    fields: [projectAccess.projectId],
+    references: [projects.id],
+  }),
+  user: one(users, {
+    fields: [projectAccess.userId],
+    references: [users.id],
+  }),
+  tenant: one(tenants, {
+    fields: [projectAccess.tenantId],
+    references: [tenants.id],
+  }),
+  invitedBy: one(users, {
+    fields: [projectAccess.invitedByUserId],
+    references: [users.id],
+    relationName: "projectAccessInviter",
+  }),
+}));
+
 export const taskWatchersRelations = relations(taskWatchers, ({ one }) => ({
   task: one(tasks, {
     fields: [taskWatchers.taskId],
@@ -2685,6 +2763,16 @@ export const insertTaskWatcherSchema = createInsertSchema(taskWatchers).omit({
   createdAt: true,
 });
 
+export const insertTaskAccessSchema = createInsertSchema(taskAccess).omit({
+  id: true,
+  createdAt: true,
+});
+
+export const insertProjectAccessSchema = createInsertSchema(projectAccess).omit({
+  id: true,
+  createdAt: true,
+});
+
 export const insertPersonalTaskSectionSchema = createInsertSchema(personalTaskSections).omit({
   id: true,
   createdAt: true,
@@ -3069,6 +3157,12 @@ export type InsertTaskAssignee = z.infer<typeof insertTaskAssigneeSchema>;
 
 export type TaskWatcher = typeof taskWatchers.$inferSelect;
 export type InsertTaskWatcher = z.infer<typeof insertTaskWatcherSchema>;
+
+export type TaskAccess = typeof taskAccess.$inferSelect;
+export type InsertTaskAccess = z.infer<typeof insertTaskAccessSchema>;
+
+export type ProjectAccess = typeof projectAccess.$inferSelect;
+export type InsertProjectAccess = z.infer<typeof insertProjectAccessSchema>;
 
 export type PersonalTaskSection = typeof personalTaskSections.$inferSelect;
 export type InsertPersonalTaskSection = z.infer<typeof insertPersonalTaskSectionSchema>;
@@ -4134,3 +4228,64 @@ export const insertOpsDigestScheduleSchema = createInsertSchema(opsDigestSchedul
 });
 export type InsertOpsDigestSchedule = z.infer<typeof insertOpsDigestScheduleSchema>;
 export type OpsDigestSchedule = typeof opsDigestSchedules.$inferSelect;
+
+// ============================================================
+// Data Retention System
+// ============================================================
+
+/**
+ * Data Retention Policies — per-tenant or global (tenant_id = null) retention rules.
+ * is_enabled defaults to false (preview-only in Phase 0).
+ */
+export const dataRetentionPolicies = pgTable("data_retention_policies", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id),
+  entityType: text("entity_type").notNull(),
+  retentionDays: integer("retention_days").notNull().default(365),
+  isEnabled: boolean("is_enabled").notNull().default(false),
+  archiveMode: text("archive_mode").notNull().default("soft"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  updatedByUserId: varchar("updated_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("data_retention_policies_tenant_entity_idx").on(table.tenantId, table.entityType),
+  index("data_retention_policies_entity_idx").on(table.entityType),
+]);
+
+export const insertDataRetentionPolicySchema = createInsertSchema(dataRetentionPolicies).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+});
+export type InsertDataRetentionPolicy = z.infer<typeof insertDataRetentionPolicySchema>;
+export type DataRetentionPolicy = typeof dataRetentionPolicies.$inferSelect;
+
+// ============================================================
+// AI SUMMARIES — cached AI-generated content per entity
+// ============================================================
+
+export const aiSummaries = pgTable("ai_summaries", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull().references(() => tenants.id),
+  entityType: text("entity_type").notNull().default("employee"),
+  entityId: varchar("entity_id").notNull(),
+  viewerScope: text("viewer_scope").notNull().default("tenant_admins"),
+  rangeStart: date("range_start").notNull(),
+  rangeEnd: date("range_end").notNull(),
+  inputHash: text("input_hash").notNull(),
+  model: text("model").notNull(),
+  summaryVersion: text("summary_version").notNull().default("1.0"),
+  headline: text("headline"),
+  summaryMarkdown: text("summary_markdown"),
+  bulletsJson: jsonb("bullets_json"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  expiresAt: timestamp("expires_at").notNull(),
+}, (table) => [
+  index("ai_summaries_entity_idx").on(table.tenantId, table.entityType, table.entityId, table.rangeStart, table.rangeEnd),
+  index("ai_summaries_tenant_created_idx").on(table.tenantId, table.createdAt),
+  index("ai_summaries_expires_idx").on(table.expiresAt),
+]);
+
+export type AiSummary = typeof aiSummaries.$inferSelect;

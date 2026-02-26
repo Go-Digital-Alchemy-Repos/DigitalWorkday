@@ -724,7 +724,7 @@ export function NotificationCenter() {
           )}
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[420px] p-0 notif-panel-motion origin-top-right" align="end">
+      <PopoverContent className="w-[calc(100vw-2rem)] sm:w-[420px] max-w-[420px] p-0 notif-panel-motion origin-top-right" align="end">
         <Tabs value={activeTab} onValueChange={(v) => setActiveTab(v as "notifications" | "settings")}>
           <div className="flex items-center justify-between px-4 py-3 border-b">
             <h3 className="font-semibold text-sm">Notifications</h3>

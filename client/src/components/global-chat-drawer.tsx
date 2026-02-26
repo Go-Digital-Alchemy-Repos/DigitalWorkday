@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useStickyComposerFocus } from "@/hooks/useStickyComposerFocus";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
@@ -113,6 +114,7 @@ export function GlobalChatDrawer() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const lastMarkedReadRef = useRef<string | null>(null);
+  const { compositionHandlers, handleSendSuccess, isSendKey } = useStickyComposerFocus(textareaRef);
 
   const { data: channels = [] } = useQuery<ChatChannel[]>({
     queryKey: ["/api/v1/chat/channels"],
@@ -283,6 +285,11 @@ export function GlobalChatDrawer() {
       setPendingAttachments([]);
       chatSounds.play("messageSent");
     },
+    onSettled: () => {
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
+    },
   });
 
   const markAsReadMutation = useMutation({
@@ -438,6 +445,7 @@ export function GlobalChatDrawer() {
 
   const handleSendMessage = (e: React.FormEvent) => {
     e.preventDefault();
+    if (sendMessageMutation.isPending) return;
     if (!messageInput.trim() && pendingAttachments.length === 0) return;
     sendMessageMutation.mutate({
       body: messageInput.trim() || " ",
@@ -451,9 +459,9 @@ export function GlobalChatDrawer() {
   };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (isSendKey(e)) {
       e.preventDefault();
-      if (messageInput.trim() || pendingAttachments.length > 0) {
+      if (!sendMessageMutation.isPending && (messageInput.trim() || pendingAttachments.length > 0)) {
         sendMessageMutation.mutate({
           body: messageInput.trim() || " ",
           attachmentIds: pendingAttachments.map(a => a.id),
@@ -821,8 +829,8 @@ export function GlobalChatDrawer() {
                   value={messageInput}
                   onChange={(e) => setMessageInput(e.target.value)}
                   onKeyDown={handleKeyDown}
+                  {...compositionHandlers}
                   placeholder={`Message ${selectedChannel ? "#" + selectedChannel.name : selectedDm ? getDmDisplayName(selectedDm) : ""}... (Enter to send, Shift+Enter for new line)`}
-                  disabled={sendMessageMutation.isPending}
                   className="min-h-[60px] max-h-[120px] resize-none text-sm"
                   rows={2}
                   data-testid="drawer-input-message"

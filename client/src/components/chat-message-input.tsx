@@ -13,6 +13,8 @@ interface ChatMessageInputProps {
   value: string;
   onChange: (value: string) => void;
   onKeyDown?: (e: React.KeyboardEvent<HTMLTextAreaElement>) => void;
+  onCompositionStart?: () => void;
+  onCompositionEnd?: () => void;
   placeholder?: string;
   disabled?: boolean;
   className?: string;
@@ -23,7 +25,7 @@ interface ChatMessageInputProps {
 }
 
 export const ChatMessageInput = forwardRef<HTMLTextAreaElement, ChatMessageInputProps>(
-  ({ value, onChange, onKeyDown, placeholder, disabled, className, "data-testid": dataTestId, onAttachClick, isUploading, attachDisabled }, ref) => {
+  ({ value, onChange, onKeyDown, onCompositionStart, onCompositionEnd, placeholder, disabled, className, "data-testid": dataTestId, onAttachClick, isUploading, attachDisabled }, ref) => {
     const internalRef = useRef<HTMLTextAreaElement>(null);
     const textareaRef = (ref as React.RefObject<HTMLTextAreaElement>) || internalRef;
 
@@ -133,6 +135,8 @@ export const ChatMessageInput = forwardRef<HTMLTextAreaElement, ChatMessageInput
           value={value}
           onChange={(e) => onChange(e.target.value)}
           onKeyDown={onKeyDown}
+          onCompositionStart={onCompositionStart}
+          onCompositionEnd={onCompositionEnd}
           placeholder={placeholder}
           disabled={disabled}
           className={`resize-none min-h-[68px] max-h-[180px] border-0 focus-visible:ring-0 focus-visible:ring-offset-0 rounded-b-none text-sm ${className || ""}`}

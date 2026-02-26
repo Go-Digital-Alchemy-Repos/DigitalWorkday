@@ -28,6 +28,8 @@ const EXCLUDED_PATHS = [
   "/health",
   "/healthz",
   "/ready",
+  "/readyz",
+  "/livez",
   "/api/health",
   "/favicon.ico",
 ];

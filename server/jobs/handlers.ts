@@ -12,10 +12,23 @@ import {
   suggestProjectPlan,
   generateTaskDescription,
 } from "../services/ai/aiService";
+import { runSoftArchive } from "../retention/softArchiveRunner";
 import { storage } from "../storage";
 import * as schema from "@shared/schema";
 import { and, sql } from "drizzle-orm";
 import { z } from "zod";
+
+async function handleDataRetention(ctx: JobContext): Promise<void> {
+  const { tenantId } = ctx.payload;
+  if (!tenantId) {
+    throw new Error("Missing tenantId in data_retention job payload");
+  }
+
+  await ctx.updateProgress({ current: 0, total: 100, phase: "Starting retention job..." });
+  const result = await runSoftArchive(tenantId);
+  await ctx.setResult(result);
+  await ctx.updateProgress({ current: 100, total: 100, phase: "Retention job complete" });
+}
 
 async function handleAsanaImport(ctx: JobContext): Promise<void> {
   const {
@@ -319,6 +332,7 @@ export function registerAllHandlers(): void {
   registerHandler("csv_import", handleCsvImport, 1);
   registerHandler("bulk_tasks_import", handleBulkTasksImport, 2);
   registerHandler("ai_generation", handleAiGeneration, 3);
+  registerHandler("data_retention", handleDataRetention, 1);
 
   console.log("[jobs] All job handlers registered");
 }

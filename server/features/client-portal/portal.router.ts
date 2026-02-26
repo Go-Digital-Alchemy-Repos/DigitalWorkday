@@ -46,7 +46,6 @@ router.get("/dashboard", async (req, res) => {
       accessLevel: cd.access.accessLevel,
     }));
     
-    // Get all projects for these clients
     const allProjects: any[] = [];
     const allTasks: any[] = [];
     
@@ -54,6 +53,7 @@ router.get("/dashboard", async (req, res) => {
       const projects = await storage.getProjectsByClient(clientId);
       
       for (const project of projects) {
+        if ((project as any).visibility === 'private') continue;
         allProjects.push({
           id: project.id,
           name: project.name,
@@ -63,9 +63,9 @@ router.get("/dashboard", async (req, res) => {
           createdAt: project.createdAt,
         });
         
-        // Get tasks for this project (excluding personal tasks)
         const tasksList = await storage.getTasksByProject(project.id);
         for (const task of tasksList) {
+          if ((task as any).visibility === 'private') continue;
           allTasks.push({
             id: task.id,
             title: task.title,
@@ -129,10 +129,11 @@ router.get("/projects", async (req, res) => {
       const projects = await storage.getProjectsByClient(clientId);
       
       for (const project of projects) {
-        // Get task counts for this project
+        if ((project as any).visibility === 'private') continue;
         const tasks = await storage.getTasksByProject(project.id);
-        const taskCount = tasks.length;
-        const completedCount = tasks.filter(t => t.status === "completed").length;
+        const visibleTasks = tasks.filter(t => (t as any).visibility !== 'private');
+        const taskCount = visibleTasks.length;
+        const completedCount = visibleTasks.filter(t => t.status === "completed").length;
         
         allProjects.push({
           id: project.id,
@@ -166,16 +167,19 @@ router.get("/projects/:projectId", async (req, res) => {
       throw AppError.notFound("Project");
     }
     
-    // Verify client user has access to this project's client
+    if ((project as any).visibility === 'private') {
+      throw AppError.notFound("Project");
+    }
+    
     const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
     if (!access) {
       throw AppError.forbidden("Access denied");
     }
     
     const client = await storage.getClient(project.clientId);
-    const tasks = await storage.getTasksByProject(projectId);
+    const allTasks = await storage.getTasksByProject(projectId);
+    const tasks = allTasks.filter(t => (t as any).visibility !== 'private');
     
-    // Map tasks without time tracking info
     const tasksForClient = tasks.map(task => ({
       id: task.id,
       title: task.title,
@@ -224,13 +228,13 @@ router.get("/tasks", async (req, res) => {
       const projects = await storage.getProjectsByClient(clientId);
       
       for (const project of projects) {
-        // Filter by projectId if provided
+        if ((project as any).visibility === 'private') continue;
         if (projectId && project.id !== projectId) continue;
         
         const tasks = await storage.getTasksByProject(project.id);
         
         for (const task of tasks) {
-          // Filter by status if provided
+          if ((task as any).visibility === 'private') continue;
           if (status && task.status !== status) continue;
           
           allTasks.push({
@@ -279,13 +283,18 @@ router.get("/tasks/:taskId", async (req, res) => {
     if (!task || !task.projectId) {
       throw AppError.notFound("Task");
     }
+    if ((task as any).visibility === 'private') {
+      throw AppError.notFound("Task");
+    }
     
     const project = await storage.getProject(task.projectId);
     if (!project || !project.clientId) {
       throw AppError.notFound("Task");
     }
+    if ((project as any).visibility === 'private') {
+      throw AppError.notFound("Task");
+    }
     
-    // Verify client user has access to this task's client
     const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
     if (!access) {
       throw AppError.forbidden("Access denied");
@@ -344,13 +353,18 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
     if (!task || !task.projectId) {
       throw AppError.notFound("Task");
     }
+    if ((task as any).visibility === 'private') {
+      throw AppError.notFound("Task");
+    }
     
     const project = await storage.getProject(task.projectId);
     if (!project || !project.clientId) {
       throw AppError.notFound("Task");
     }
+    if ((project as any).visibility === 'private') {
+      throw AppError.notFound("Task");
+    }
     
-    // Verify client user has collaborator access
     const access = await storage.getClientUserAccessByUserAndClient(userId, project.clientId);
     if (!access) {
       throw AppError.forbidden("Access denied");

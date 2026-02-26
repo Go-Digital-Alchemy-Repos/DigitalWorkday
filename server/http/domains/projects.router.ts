@@ -64,16 +64,20 @@ import {
   taskWatchers,
   taskTags,
   comments,
+  projectAccess,
 } from "@shared/schema";
 import type { ProjectTemplateContent } from "@shared/schema";
 import { db } from "../../db";
-import { eq, and, inArray } from "drizzle-orm";
+import { eq, and, inArray, ilike, asc, desc } from "drizzle-orm";
+import { config } from "../../config";
+import { canManageProjectAccess } from "../../lib/privateVisibility";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import {
   getCurrentUserId,
   getCurrentWorkspaceId,
   isSuperUser,
 } from "../../routes/helpers";
+import { projectVisibilityFilter, canViewProject, getAccessiblePrivateProjectIds } from "../../lib/privateVisibility";
 import {
   emitProjectCreated,
   emitProjectUpdated,
@@ -121,13 +125,51 @@ router.get("/projects", async (req: Request, res: Response) => {
     const isAdmin = user?.role === 'admin' || user?.role === 'super_user';
     
     if (tenantId) {
-      const projects = await storage.getProjectsForUser(userId, tenantId, workspaceId, isAdmin);
-      return res.json(projects);
+      if (config.features.enableProjectsSqlFiltering) {
+        const { status, clientId, teamId, search, sortBy = 'createdAt', sortDir = 'desc', limit = '100', offset = '0' } = req.query as Record<string, string>;
+        
+        const conditions: ReturnType<typeof eq>[] = [eq(projects.tenantId, tenantId)];
+        if (config.features.enablePrivateProjects) {
+          conditions.push(projectVisibilityFilter(userId, tenantId) as any);
+        }
+        if (status) conditions.push(eq(projects.status, status));
+        if (clientId) conditions.push(eq(projects.clientId, clientId));
+        if (teamId) conditions.push(eq(projects.teamId, teamId));
+        if (search) conditions.push(ilike(projects.name, `%${search}%`));
+        
+        const sortCol = ({
+          'name': projects.name,
+          'status': projects.status,
+          'createdAt': projects.createdAt,
+          'updatedAt': projects.updatedAt,
+        } as Record<string, typeof projects.createdAt>)[sortBy] ?? projects.createdAt;
+        const order = sortDir === 'asc' ? asc(sortCol) : desc(sortCol);
+        
+        const projectList = await db
+          .select()
+          .from(projects)
+          .where(and(...conditions))
+          .orderBy(order)
+          .limit(parseInt(limit))
+          .offset(parseInt(offset));
+        
+        return res.json(projectList);
+      }
+      
+      let projectList = await storage.getProjectsForUser(userId, tenantId, workspaceId, isAdmin);
+      if (config.features.enablePrivateProjects) {
+        const accessibleIds = await getAccessiblePrivateProjectIds(userId, tenantId);
+        const accessibleSet = new Set(accessibleIds);
+        projectList = projectList.filter(p =>
+          (p as any).visibility !== 'private' || accessibleSet.has(p.id)
+        );
+      }
+      return res.json(projectList);
     }
     
     if (isSuperUser(req)) {
-      const projects = await storage.getProjectsByWorkspace(workspaceId);
-      return res.json(projects);
+      const projectList = await storage.getProjectsByWorkspace(workspaceId);
+      return res.json(projectList);
     }
     
     console.error(`[projects] User ${getCurrentUserId(req)} has no tenantId`);
@@ -172,10 +214,14 @@ router.get("/projects/hidden", async (req: Request, res: Response) => {
 router.get("/projects/:id", async (req: Request, res: Response) => {
   try {
     const tenantId = getEffectiveTenantId(req);
+    const userId = getCurrentUserId(req);
     
     if (tenantId) {
       const project = await storage.getProjectByIdAndTenant(req.params.id, tenantId);
       if (!project) {
+        return sendError(res, AppError.notFound("Project"), req);
+      }
+      if (!(await canViewProject(tenantId, req.params.id, userId))) {
         return sendError(res, AppError.notFound("Project"), req);
       }
       return res.json(project);
@@ -266,14 +312,34 @@ router.post("/projects", async (req: Request, res: Response) => {
       return sendError(res, AppError.badRequest("Tenant context required - user not associated with a tenant"), req);
     }
 
-    if (tenantId) {
+    if (tenantId && project.visibility !== 'private') {
       await storage.addAllTenantUsersToProject(project.id, tenantId, creatorId);
+    } else if (tenantId && project.visibility === 'private') {
+      await storage.addProjectMember({ projectId: project.id, userId: creatorId, role: "owner" });
+      for (const memberId of memberIds) {
+        if (memberId !== creatorId) {
+          await storage.addProjectMember({ projectId: project.id, userId: memberId, role: "member" });
+        }
+      }
     } else {
       await storage.addProjectMember({ projectId: project.id, userId: creatorId, role: "owner" });
       for (const memberId of memberIds) {
         if (memberId !== creatorId) {
           await storage.addProjectMember({ projectId: project.id, userId: memberId, role: "member" });
         }
+      }
+    }
+
+    if (project.visibility === 'private' && config.features.enablePrivateProjects && tenantId) {
+      try {
+        await db.insert(projectAccess).values({
+          tenantId,
+          projectId: project.id,
+          userId: creatorId,
+          role: 'admin',
+        }).onConflictDoNothing();
+      } catch (accessError) {
+        console.warn(`[Project Create] Failed to create access row for private project ${project.id}:`, accessError);
       }
     }
 
@@ -306,6 +372,7 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
     if (!data) return;
     
     const tenantId = getEffectiveTenantId(req);
+    const currentUserId = getCurrentUserId(req);
     
     let existingProject;
     if (tenantId) {
@@ -342,6 +409,14 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
       }
     }
     
+    if (data.visibility !== undefined && config.features.enablePrivateProjects && tenantId) {
+      if (!(await canManageProjectAccess(tenantId, req.params.id, currentUserId))) {
+        if (existingProject.visibility === 'private' && data.visibility !== existingProject.visibility) {
+          return sendError(res, AppError.forbidden("Only the creator or an admin can change project visibility"), req);
+        }
+      }
+    }
+
     let project;
     if (tenantId) {
       project = await storage.updateProjectWithTenant(req.params.id, tenantId, data);
@@ -350,10 +425,21 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
     } else {
       return sendError(res, AppError.internal("User tenant not configured"), req);
     }
+
+    if (data.visibility === 'private' && config.features.enablePrivateProjects && tenantId) {
+      try {
+        await db.insert(projectAccess).values({
+          tenantId,
+          projectId: project!.id,
+          userId: currentUserId,
+          role: 'admin',
+        }).onConflictDoNothing();
+      } catch (accessError) {
+        console.warn(`[Project Update] Failed to create access row for private project ${project!.id}:`, accessError);
+      }
+    }
     
     emitProjectUpdated(project!.id, data);
-
-    const currentUserId = getCurrentUserId(req);
     const members = await storage.getProjectMembers(project!.id);
     const updateDescription = getProjectUpdateDescription(data);
     const currentUser = await storage.getUser(currentUserId);

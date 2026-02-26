@@ -537,6 +537,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
   const { user } = useAuth();
   const { flags } = useFeatureFlags();
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
+  const [defaultFolderId, setDefaultFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>("all");
   const [visibilityFilter, setVisibilityFilter] = useState<string>("all");
@@ -598,6 +599,28 @@ export function AssetLibraryPanel({ clientId }: Props) {
 
   const tenantDefaultDocs = tenantDefaultsQuery.data?.documents ?? [];
   const tenantDefaultFolders = tenantDefaultsQuery.data?.folders ?? [];
+
+  const isInsideDefaultFolder = defaultFolderId !== null;
+
+  const currentDefaultFolders = tenantDefaultFolders.filter(
+    f => f.parentFolderId === defaultFolderId
+  );
+  const currentDefaultDocs = tenantDefaultDocs.filter(
+    d => d.folderId === defaultFolderId
+  );
+  const rootDefaultFolders = tenantDefaultFolders.filter(f => !f.parentFolderId);
+  const rootDefaultDocs = tenantDefaultDocs.filter(d => !d.folderId);
+
+  const defaultBreadcrumbs: TenantDefaultFolder[] = [];
+  if (defaultFolderId) {
+    let f: TenantDefaultFolder | undefined = tenantDefaultFolders.find(x => x.id === defaultFolderId);
+    while (f) {
+      defaultBreadcrumbs.unshift(f);
+      f = f.parentFolderId ? tenantDefaultFolders.find(x => x.id === f!.parentFolderId) : undefined;
+    }
+  }
+
+  const hasAnyDefaults = rootDefaultFolders.length > 0 || rootDefaultDocs.length > 0;
 
   const handleDefaultDocDownload = useCallback(
     async (doc: TenantDefaultDoc) => {
@@ -849,11 +872,18 @@ export function AssetLibraryPanel({ clientId }: Props) {
       >
         <div className="flex items-center justify-between gap-2 mb-4 flex-wrap">
           <div className="flex items-center gap-2 flex-wrap">
-            {currentFolderId && (
+            {(currentFolderId || isInsideDefaultFolder) && (
               <Button
                 variant="ghost"
                 size="icon"
-                onClick={() => setCurrentFolderId(currentFolder?.parentFolderId ?? null)}
+                onClick={() => {
+                  if (isInsideDefaultFolder) {
+                    const currentDf = tenantDefaultFolders.find(f => f.id === defaultFolderId);
+                    setDefaultFolderId(currentDf?.parentFolderId ?? null);
+                  } else {
+                    setCurrentFolderId(currentFolder?.parentFolderId ?? null);
+                  }
+                }}
                 data-testid="button-folder-back"
               >
                 <ArrowLeft className="w-4 h-4" />
@@ -861,13 +891,33 @@ export function AssetLibraryPanel({ clientId }: Props) {
             )}
             <div className="flex items-center gap-1 text-sm text-muted-foreground">
               <button
-                onClick={() => setCurrentFolderId(null)}
+                onClick={() => { setCurrentFolderId(null); setDefaultFolderId(null); }}
                 className="hover:underline cursor-pointer"
                 data-testid="breadcrumb-root"
               >
                 All Files
               </button>
-              {breadcrumbs.map((bc) => (
+              {isInsideDefaultFolder && (
+                <>
+                  <span className="flex items-center gap-1">
+                    <ChevronRight className="w-3 h-3" />
+                    <span className="text-muted-foreground/70">Defaults</span>
+                  </span>
+                  {defaultBreadcrumbs.map((bc) => (
+                    <span key={bc.id} className="flex items-center gap-1">
+                      <ChevronRight className="w-3 h-3" />
+                      <button
+                        onClick={() => setDefaultFolderId(bc.id)}
+                        className="hover:underline cursor-pointer"
+                        data-testid={`breadcrumb-default-folder-${bc.id}`}
+                      >
+                        {bc.name}
+                      </button>
+                    </span>
+                  ))}
+                </>
+              )}
+              {!isInsideDefaultFolder && breadcrumbs.map((bc) => (
                 <span key={bc.id} className="flex items-center gap-1">
                   <ChevronRight className="w-3 h-3" />
                   <button
@@ -882,37 +932,39 @@ export function AssetLibraryPanel({ clientId }: Props) {
             </div>
           </div>
 
-          <div className="flex items-center gap-2 flex-wrap">
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={() => setCreateFolderOpen(true)}
-              data-testid="button-create-folder"
-            >
-              <FolderPlus className="w-4 h-4 mr-1" />
-              New Folder
-            </Button>
-            <Button
-              size="sm"
-              onClick={() => fileInputRef.current?.click()}
-              disabled={uploading}
-              data-testid="button-upload-file"
-            >
-              <Upload className="w-4 h-4 mr-1" />
-              {uploading ? "Uploading..." : "Upload"}
-            </Button>
-            <input
-              ref={fileInputRef}
-              type="file"
-              multiple
-              className="hidden"
-              onChange={(e) => handleFileUpload(e.target.files)}
-              data-testid="input-file-upload"
-            />
-          </div>
+          {!isInsideDefaultFolder && (
+            <div className="flex items-center gap-2 flex-wrap">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setCreateFolderOpen(true)}
+                data-testid="button-create-folder"
+              >
+                <FolderPlus className="w-4 h-4 mr-1" />
+                New Folder
+              </Button>
+              <Button
+                size="sm"
+                onClick={() => fileInputRef.current?.click()}
+                disabled={uploading}
+                data-testid="button-upload-file"
+              >
+                <Upload className="w-4 h-4 mr-1" />
+                {uploading ? "Uploading..." : "Upload"}
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                multiple
+                className="hidden"
+                onChange={(e) => handleFileUpload(e.target.files)}
+                data-testid="input-file-upload"
+              />
+            </div>
+          )}
         </div>
 
-        <div className="flex items-center gap-2 mb-4 flex-wrap">
+        {!isInsideDefaultFolder && <div className="flex items-center gap-2 mb-4 flex-wrap">
           <div className="relative flex-1 min-w-[200px]">
             <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
             <Input
@@ -967,7 +1019,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
               <LayoutGrid className="w-4 h-4" />
             </Button>
           </div>
-        </div>
+        </div>}
 
         {foldersQuery.isLoading || assetsQuery.isLoading ? (
           viewMode === "grid" ? (
@@ -985,52 +1037,144 @@ export function AssetLibraryPanel({ clientId }: Props) {
           )
         ) : (
           <ScrollArea className="flex-1">
-            {!currentFolderId && tenantDefaultDocs.length > 0 && (
+            {isInsideDefaultFolder && (
+              <div data-testid="tenant-defaults-browse-section">
+                {currentDefaultFolders.length > 0 && (
+                  <div className="mb-4">
+                    <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider flex items-center gap-2">
+                      Folders
+                      <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">Read-only</Badge>
+                    </div>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                      {currentDefaultFolders.map((folder) => (
+                        <Card
+                          key={folder.id}
+                          className="p-3 flex items-center gap-2 cursor-pointer hover:bg-muted/50 transition-colors border-dashed"
+                          onClick={() => setDefaultFolderId(folder.id)}
+                          data-testid={`default-folder-${folder.id}`}
+                        >
+                          <Folder className="w-5 h-5 text-primary shrink-0" />
+                          <span className="text-sm font-medium truncate flex-1">{folder.name}</span>
+                          <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">Default</Badge>
+                        </Card>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {currentDefaultDocs.length > 0 && (
+                  <div className="mb-4">
+                    <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Files</div>
+                    <div className="space-y-1">
+                      {currentDefaultDocs.map((doc) => {
+                        const Icon = getFileIcon(doc.mimeType);
+                        const iconColor = getFileIconColor(doc.mimeType);
+                        return (
+                          <div
+                            key={doc.id}
+                            className="flex items-center justify-between p-2.5 rounded-lg border border-dashed hover:bg-muted/50 transition-colors"
+                            data-testid={`tenant-default-doc-${doc.id}`}
+                          >
+                            <div className="flex items-center gap-3 min-w-0 flex-1">
+                              <Icon className={`w-5 h-5 shrink-0 ${iconColor}`} />
+                              <div className="min-w-0 flex-1">
+                                <div className="flex items-center gap-2">
+                                  <p className="text-sm font-medium truncate">{doc.title}</p>
+                                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">Default</Badge>
+                                </div>
+                                <p className="text-xs text-muted-foreground mt-0.5">
+                                  {formatFileSize(doc.fileSizeBytes)}
+                                  {doc.version > 1 && ` · v${doc.version}`}
+                                </p>
+                              </div>
+                            </div>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-8 w-8 shrink-0"
+                              onClick={() => handleDefaultDocDownload(doc)}
+                              data-testid={`tenant-default-download-${doc.id}`}
+                            >
+                              <Download className="w-4 h-4" />
+                            </Button>
+                          </div>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
+                {currentDefaultFolders.length === 0 && currentDefaultDocs.length === 0 && (
+                  <div className="flex flex-col items-center justify-center py-16 text-center">
+                    <Folder className="w-12 h-12 text-muted-foreground/40 mb-3" />
+                    <p className="text-sm text-muted-foreground mb-1">This folder is empty</p>
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!isInsideDefaultFolder && !currentFolderId && hasAnyDefaults && (
               <div className="mb-4" data-testid="tenant-defaults-section">
                 <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider flex items-center gap-2">
                   Tenant Defaults
                   <Badge variant="outline" className="text-[10px] px-1.5 py-0 font-normal">Read-only</Badge>
                 </div>
-                <div className="space-y-1">
-                  {tenantDefaultDocs.map((doc) => {
-                    const Icon = getFileIcon(doc.mimeType);
-                    const iconColor = getFileIconColor(doc.mimeType);
-                    return (
-                      <div
-                        key={doc.id}
-                        className="flex items-center justify-between p-2.5 rounded-lg border border-dashed hover:bg-muted/50 transition-colors"
-                        data-testid={`tenant-default-doc-${doc.id}`}
+                {rootDefaultFolders.length > 0 && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2 mb-2">
+                    {rootDefaultFolders.map((folder) => (
+                      <Card
+                        key={folder.id}
+                        className="p-3 flex items-center gap-2 cursor-pointer hover:bg-muted/50 transition-colors border-dashed"
+                        onClick={() => setDefaultFolderId(folder.id)}
+                        data-testid={`default-folder-${folder.id}`}
                       >
-                        <div className="flex items-center gap-3 min-w-0 flex-1">
-                          <Icon className={`w-5 h-5 shrink-0 ${iconColor}`} />
-                          <div className="min-w-0 flex-1">
-                            <div className="flex items-center gap-2">
-                              <p className="text-sm font-medium truncate">{doc.title}</p>
-                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">Default</Badge>
-                            </div>
-                            <p className="text-xs text-muted-foreground mt-0.5">
-                              {formatFileSize(doc.fileSizeBytes)}
-                              {doc.version > 1 && ` · v${doc.version}`}
-                            </p>
-                          </div>
-                        </div>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          className="h-8 w-8 shrink-0"
-                          onClick={() => handleDefaultDocDownload(doc)}
-                          data-testid={`tenant-default-download-${doc.id}`}
+                        <Folder className="w-5 h-5 text-primary shrink-0" />
+                        <span className="text-sm font-medium truncate flex-1">{folder.name}</span>
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">Default</Badge>
+                      </Card>
+                    ))}
+                  </div>
+                )}
+                {rootDefaultDocs.length > 0 && (
+                  <div className="space-y-1">
+                    {rootDefaultDocs.map((doc) => {
+                      const Icon = getFileIcon(doc.mimeType);
+                      const iconColor = getFileIconColor(doc.mimeType);
+                      return (
+                        <div
+                          key={doc.id}
+                          className="flex items-center justify-between p-2.5 rounded-lg border border-dashed hover:bg-muted/50 transition-colors"
+                          data-testid={`tenant-default-doc-${doc.id}`}
                         >
-                          <Download className="w-4 h-4" />
-                        </Button>
-                      </div>
-                    );
-                  })}
-                </div>
+                          <div className="flex items-center gap-3 min-w-0 flex-1">
+                            <Icon className={`w-5 h-5 shrink-0 ${iconColor}`} />
+                            <div className="min-w-0 flex-1">
+                              <div className="flex items-center gap-2">
+                                <p className="text-sm font-medium truncate">{doc.title}</p>
+                                <Badge variant="secondary" className="text-[10px] px-1.5 py-0 shrink-0">Default</Badge>
+                              </div>
+                              <p className="text-xs text-muted-foreground mt-0.5">
+                                {formatFileSize(doc.fileSizeBytes)}
+                                {doc.version > 1 && ` · v${doc.version}`}
+                              </p>
+                            </div>
+                          </div>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 shrink-0"
+                            onClick={() => handleDefaultDocDownload(doc)}
+                            data-testid={`tenant-default-download-${doc.id}`}
+                          >
+                            <Download className="w-4 h-4" />
+                          </Button>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
 
-            {currentFolders.length > 0 && (
+            {!isInsideDefaultFolder && currentFolders.length > 0 && (
               <div className="mb-4">
                 <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Folders</div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
@@ -1056,7 +1200,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
               </div>
             )}
 
-            {assets_data.length > 0 && (
+            {!isInsideDefaultFolder && assets_data.length > 0 && (
               <div>
                 <div className="text-xs font-medium text-muted-foreground mb-2 uppercase tracking-wider">Files</div>
                 {viewMode === "list" ? (
@@ -1110,7 +1254,7 @@ export function AssetLibraryPanel({ clientId }: Props) {
               </div>
             )}
 
-            {currentFolders.length === 0 && assets_data.length === 0 && (
+            {!isInsideDefaultFolder && currentFolders.length === 0 && assets_data.length === 0 && !(!currentFolderId && hasAnyDefaults) && (
               <div className="flex flex-col items-center justify-center py-16 text-center">
                 <Folder className="w-12 h-12 text-muted-foreground/40 mb-3" />
                 <p className="text-sm text-muted-foreground mb-1">

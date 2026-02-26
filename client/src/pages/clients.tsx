@@ -684,7 +684,7 @@ function ClientTableRow({
     <div
       onClick={() => onOpenProfile(client.id)}
       className={cn(
-        "flex items-center gap-3 border-b border-border hover-elevate cursor-pointer",
+        "flex items-center gap-3 border-b border-border hover:bg-accent/50 transition-colors cursor-pointer",
         compact ? "px-3 py-2" : "px-4 py-3",
         isSelected && "bg-primary/5"
       )}
@@ -1178,19 +1178,47 @@ function ClientTableView({
   density,
 }: ClientViewProps & { density: "comfortable" | "compact" }) {
   const { virtualizationV1 } = useFeatureFlags();
-  const useVirtual = virtualizationV1 && groupedClients.length > VIRTUALIZATION_THRESHOLD;
+  const useVirtual = false; // virtualizationV1 && groupedClients.length > VIRTUALIZATION_THRESHOLD;
 
   if (useVirtual) {
     return (
-      <Card>
-        <TableHeader compact={density === "compact"} />
-        <div style={{ height: "calc(100vh - 380px)" }} data-testid="client-table-virtualized">
-          <VirtualizedList
-            data={groupedClients}
-            style={{ height: "100%" }}
-            overscan={300}
-            itemContent={(_index, { parent, children }) => (
+      <Card className="overflow-hidden border-border/50">
+        <div className="overflow-x-auto">
+          <div className="min-w-[800px]">
+            <TableHeader compact={density === "compact"} />
+            <div style={{ height: "calc(100vh - 380px)" }} data-testid="client-table-virtualized">
+              <VirtualizedList
+                data={groupedClients}
+                style={{ height: "100%" }}
+                overscan={300}
+                itemContent={(_index, { parent, children }) => (
+                  <ClientGroupRows
+                    parent={parent}
+                    children={children}
+                    selectedIds={selectedIds}
+                    onSelect={onSelect}
+                    showCheckbox={selectedIds.size > 0}
+                    compact={density === "compact"}
+                    onOpenProfile={onOpenProfile}
+                  />
+                )}
+              />
+            </div>
+          </div>
+        </div>
+      </Card>
+    );
+  }
+
+  return (
+    <Card className="overflow-hidden border-border/50">
+      <div className="overflow-x-auto">
+        <div className="min-w-[800px]">
+          <TableHeader compact={density === "compact"} />
+          <div className="flex flex-col">
+            {groupedClients.map(({ parent, children }) => (
               <ClientGroupRows
+                key={parent.id}
                 parent={parent}
                 children={children}
                 selectedIds={selectedIds}
@@ -1199,28 +1227,10 @@ function ClientTableView({
                 compact={density === "compact"}
                 onOpenProfile={onOpenProfile}
               />
-            )}
-          />
+            ))}
+          </div>
         </div>
-      </Card>
-    );
-  }
-
-  return (
-    <Card>
-      <TableHeader compact={density === "compact"} />
-      {groupedClients.map(({ parent, children }) => (
-        <ClientGroupRows
-          key={parent.id}
-          parent={parent}
-          children={children}
-          selectedIds={selectedIds}
-          onSelect={onSelect}
-          showCheckbox={selectedIds.size > 0}
-          compact={density === "compact"}
-          onOpenProfile={onOpenProfile}
-        />
-      ))}
+      </div>
     </Card>
   );
 }
@@ -1910,7 +1920,8 @@ export default function ClientsPage() {
       });
     }
 
-    return groups;
+    // Sort groups by parent's company name to maintain consistent order
+    return groups.sort((a, b) => a.parent.companyName.localeCompare(b.parent.companyName));
   }, [filteredAndSortedClients, vipClientIds, viewMode]);
 
   const hasActiveFilters = Object.values(filterValues).some(

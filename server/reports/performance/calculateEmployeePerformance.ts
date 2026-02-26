@@ -131,9 +131,16 @@ export async function calculateEmployeePerformance(
     LIMIT ${limit} OFFSET ${offset}
   `);
 
-  const total = rows.length > 0 ? Number(rows[0].total_count) : 0;
+  const normalizedRows = Array.isArray(rows)
+    ? rows
+    : (rows && typeof rows === "object" && "rows" in rows)
+      ? (rows as { rows: typeof rows }).rows
+      : rows;
+  const rowsArr = normalizedRows as any[];
 
-  const results: EmployeePerformanceResult[] = rows.map((row) => {
+  const total = rowsArr.length > 0 ? Number(rowsArr[0].total_count) : 0;
+
+  const results: EmployeePerformanceResult[] = rowsArr.map((row) => {
     const activeTasks = Number(row.active_tasks);
     const overdueCount = Number(row.overdue_tasks);
     const completedInRange = Number(row.completed_in_range);

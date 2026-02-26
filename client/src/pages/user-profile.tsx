@@ -155,7 +155,7 @@ export default function UserProfilePage() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="container max-w-3xl p-6">
+      <div className="container max-w-3xl p-3 sm:p-4 lg:p-6">
         <div className="mb-6">
           <Button
             variant="ghost"

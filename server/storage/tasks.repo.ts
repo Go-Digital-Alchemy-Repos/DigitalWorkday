@@ -115,12 +115,16 @@ export class TasksRepository {
     return result;
   }
 
-  async getTasksByProject(projectId: string): Promise<TaskWithRelations[]> {
+  async getTasksByProject(projectId: string, includeArchived = false): Promise<TaskWithRelations[]> {
+    const conditions: any[] = [
+      eq(tasks.projectId, projectId),
+      eq(tasks.isPersonal, false)
+    ];
+    if (!includeArchived) {
+      conditions.push(isNull(tasks.archivedAt));
+    }
     const tasksList = await db.select().from(tasks)
-      .where(and(
-        eq(tasks.projectId, projectId),
-        eq(tasks.isPersonal, false)
-      ))
+      .where(and(...conditions))
       .orderBy(asc(tasks.orderIndex));
     
     const result: TaskWithRelations[] = [];
@@ -147,16 +151,18 @@ export class TasksRepository {
     return tasksList;
   }
 
-  async getTasksByUser(userId: string): Promise<TaskWithRelations[]> {
+  async getTasksByUser(userId: string, includeArchived = false): Promise<TaskWithRelations[]> {
     const assigneeRecords = await db.select().from(taskAssignees).where(eq(taskAssignees.userId, userId));
     const assignedTaskIds = new Set(assigneeRecords.map(a => a.taskId));
     
-    const personalTasks = await db.select().from(tasks).where(
-      and(
-        eq(tasks.isPersonal, true),
-        eq(tasks.createdBy, userId)
-      )
-    );
+    const personalConditions: any[] = [
+      eq(tasks.isPersonal, true),
+      eq(tasks.createdBy, userId)
+    ];
+    if (!includeArchived) {
+      personalConditions.push(isNull(tasks.archivedAt));
+    }
+    const personalTasks = await db.select().from(tasks).where(and(...personalConditions));
     const personalTaskIds = personalTasks.map(t => t.id);
     
     const allTaskIds = [...new Set([...Array.from(assignedTaskIds), ...personalTaskIds])];
@@ -166,7 +172,9 @@ export class TasksRepository {
     for (const taskId of allTaskIds) {
       const taskWithRelations = await this.getTaskWithRelations(taskId);
       if (taskWithRelations) {
-        result.push(taskWithRelations);
+        if (includeArchived || !taskWithRelations.archivedAt) {
+          result.push(taskWithRelations);
+        }
       }
     }
     return result.sort((a, b) => {

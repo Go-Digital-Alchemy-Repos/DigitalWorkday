@@ -42,6 +42,8 @@ export const GUARD_EXEMPT_PATHS = [
   "/health",
   "/healthz",
   "/ready",
+  "/readyz",
+  "/livez",
 ] as const;
 
 export const AUTH_EXEMPT_PATHS = [

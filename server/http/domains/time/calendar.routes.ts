@@ -8,6 +8,8 @@ import {
   getCurrentUserId,
   getCurrentWorkspaceId,
 } from "./shared";
+import { config } from "../../../config";
+import { getAccessiblePrivateTaskIds, getAccessiblePrivateProjectIds } from "../../../lib/privateVisibility";
 
 const router = Router();
 
@@ -56,11 +58,29 @@ router.get("/calendar/events", async (req, res) => {
       users = await storage.getUsersByWorkspace(workspaceId);
     }
 
+    let filteredTasks = tasksInRange;
+    let filteredProjects = projects;
+    const userId = getCurrentUserId(req);
+    if (tenantId && config.features.enablePrivateTasks) {
+      const accessibleTaskIds = await getAccessiblePrivateTaskIds(userId, tenantId);
+      const accessibleTaskSet = new Set(accessibleTaskIds);
+      filteredTasks = tasksInRange.filter((t: any) =>
+        t.visibility !== 'private' || accessibleTaskSet.has(t.id)
+      );
+    }
+    if (tenantId && config.features.enablePrivateProjects) {
+      const accessibleProjectIds = await getAccessiblePrivateProjectIds(userId, tenantId);
+      const accessibleProjectSet = new Set(accessibleProjectIds);
+      filteredProjects = projects.filter((p: any) =>
+        p.visibility !== 'private' || accessibleProjectSet.has(p.id)
+      );
+    }
+
     res.json({
-      tasks: tasksInRange,
+      tasks: filteredTasks,
       timeEntries,
       clients,
-      projects,
+      projects: filteredProjects,
       users: users || [],
     });
   } catch (error) {
@@ -85,9 +105,17 @@ router.get("/my-calendar/events", async (req, res) => {
       tasks = await storage.getCalendarTasksByWorkspace(workspaceId, startDate, endDate);
     }
     
-    const userTasks = tasks.filter(task => 
+    let userTasks = tasks.filter(task => 
       task.assignees?.some(a => a.userId === userId)
     );
+
+    if (tenantId && config.features.enablePrivateTasks) {
+      const accessibleTaskIds = await getAccessiblePrivateTaskIds(userId, tenantId);
+      const accessibleTaskSet = new Set(accessibleTaskIds);
+      userTasks = userTasks.filter((t: any) =>
+        t.visibility !== 'private' || accessibleTaskSet.has(t.id)
+      );
+    }
 
     const allUserTasks = await storage.getTasksByUser(userId);
     const personalTasks = allUserTasks

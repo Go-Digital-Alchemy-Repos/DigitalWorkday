@@ -138,7 +138,7 @@ export default function TeamDetailPage() {
 
   if (teamLoading) {
     return (
-      <div className="container mx-auto p-6 max-w-4xl">
+      <div className="container mx-auto p-3 sm:p-4 lg:p-6 max-w-4xl">
         <Skeleton className="h-8 w-48 mb-4" />
         <Skeleton className="h-64 w-full" />
       </div>
@@ -147,7 +147,7 @@ export default function TeamDetailPage() {
 
   if (!team) {
     return (
-      <div className="container mx-auto p-6 max-w-4xl">
+      <div className="container mx-auto p-3 sm:p-4 lg:p-6 max-w-4xl">
         <Card>
           <CardContent className="p-6">
             <p className="text-muted-foreground" data-testid="text-team-not-found">Team not found</p>

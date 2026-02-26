@@ -184,8 +184,8 @@ export interface IStorage {
   
   getTask(id: string): Promise<Task | undefined>;
   getTaskWithRelations(id: string): Promise<TaskWithRelations | undefined>;
-  getTasksByProject(projectId: string): Promise<TaskWithRelations[]>;
-  getTasksByUser(userId: string): Promise<TaskWithRelations[]>;
+  getTasksByProject(projectId: string, includeArchived?: boolean): Promise<TaskWithRelations[]>;
+  getTasksByUser(userId: string, includeArchived?: boolean): Promise<TaskWithRelations[]>;
   getCalendarTasksByTenant(tenantId: string, workspaceId: string, startDate: Date, endDate: Date): Promise<CalendarTask[]>;
   getCalendarTasksByWorkspace(workspaceId: string, startDate: Date, endDate: Date): Promise<CalendarTask[]>;
   getChildTasks(parentTaskId: string): Promise<TaskWithRelations[]>;
@@ -316,6 +316,7 @@ export interface IStorage {
   // Tenant-scoped methods (Phase 2A)
   getClientByIdAndTenant(id: string, tenantId: string): Promise<Client | undefined>;
   getClientsByTenant(tenantId: string, workspaceId?: string): Promise<ClientWithContacts[]>;
+  getClientsByTenantBatched(tenantId: string): Promise<ClientWithContacts[]>;
   getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean })[]>;
   getClientsSummaryByTenant(tenantId: string): Promise<{ total: number; active: number; inactive: number; prospect: number; newThisMonth: number; needsAttention: number }>;
   updateClientStage(clientId: string, tenantId: string, toStage: string, changedByUserId: string): Promise<Client | undefined>;
@@ -858,7 +859,7 @@ export class DatabaseStorage implements IStorage {
   async addUserToAllTenantProjects(userId: string, tenantId: string): Promise<void> {
     const tenantProjects = await db.select({ id: projects.id })
       .from(projects)
-      .where(eq(projects.tenantId, tenantId));
+      .where(and(eq(projects.tenantId, tenantId), sql`${projects.visibility} != 'private'`));
 
     if (tenantProjects.length === 0) return;
 
@@ -876,7 +877,7 @@ export class DatabaseStorage implements IStorage {
   async backfillProjectMembership(tenantId: string): Promise<{ projectsProcessed: number; membershipsAdded: number }> {
     const tenantProjects = await db.select({ id: projects.id })
       .from(projects)
-      .where(eq(projects.tenantId, tenantId));
+      .where(and(eq(projects.tenantId, tenantId), sql`${projects.visibility} != 'private'`));
 
     const tenantUsers = await db.select({ id: users.id })
       .from(users)
@@ -1078,12 +1079,16 @@ export class DatabaseStorage implements IStorage {
     return result;
   }
 
-  async getTasksByProject(projectId: string): Promise<TaskWithRelations[]> {
+  async getTasksByProject(projectId: string, includeArchived = false): Promise<TaskWithRelations[]> {
+    const conditions: any[] = [
+      eq(tasks.projectId, projectId),
+      eq(tasks.isPersonal, false)
+    ];
+    if (!includeArchived) {
+      conditions.push(isNull(tasks.archivedAt));
+    }
     const tasksList = await db.select().from(tasks)
-      .where(and(
-        eq(tasks.projectId, projectId),
-        eq(tasks.isPersonal, false)
-      ))
+      .where(and(...conditions))
       .orderBy(asc(tasks.orderIndex));
     
     const result: TaskWithRelations[] = [];
@@ -1111,16 +1116,18 @@ export class DatabaseStorage implements IStorage {
     return tasksList;
   }
 
-  async getTasksByUser(userId: string): Promise<TaskWithRelations[]> {
+  async getTasksByUser(userId: string, includeArchived = false): Promise<TaskWithRelations[]> {
     const assigneeRecords = await db.select().from(taskAssignees).where(eq(taskAssignees.userId, userId));
     const assignedTaskIds = new Set(assigneeRecords.map(a => a.taskId));
     
-    const personalTasks = await db.select().from(tasks).where(
-      and(
-        eq(tasks.isPersonal, true),
-        eq(tasks.createdBy, userId)
-      )
-    );
+    const personalConditions: any[] = [
+      eq(tasks.isPersonal, true),
+      eq(tasks.createdBy, userId)
+    ];
+    if (!includeArchived) {
+      personalConditions.push(isNull(tasks.archivedAt));
+    }
+    const personalTasks = await db.select().from(tasks).where(and(...personalConditions));
     const personalTaskIds = personalTasks.map(t => t.id);
     
     const allTaskIds = [...new Set([...Array.from(assignedTaskIds), ...personalTaskIds])];
@@ -1130,7 +1137,9 @@ export class DatabaseStorage implements IStorage {
     for (const taskId of allTaskIds) {
       const taskWithRelations = await this.getTaskWithRelations(taskId);
       if (taskWithRelations) {
-        result.push(taskWithRelations);
+        if (includeArchived || !taskWithRelations.archivedAt) {
+          result.push(taskWithRelations);
+        }
       }
     }
     return result.sort((a, b) => {
@@ -2384,6 +2393,47 @@ export class DatabaseStorage implements IStorage {
       result.push({ ...client, contacts, projects: clientProjects });
     }
     return result;
+  }
+
+  async getClientsByTenantBatched(tenantId: string): Promise<ClientWithContacts[]> {
+    const clientsList = await db.select()
+      .from(clients)
+      .where(eq(clients.tenantId, tenantId))
+      .orderBy(asc(clients.companyName));
+
+    if (clientsList.length === 0) return [];
+
+    const clientIds = clientsList.map(c => c.id);
+
+    const allContacts = await db.select()
+      .from(clientContacts)
+      .where(inArray(clientContacts.clientId, clientIds));
+
+    const allProjects = await db.select()
+      .from(projects)
+      .where(and(
+        inArray(projects.clientId, clientIds),
+        isNotNull(projects.clientId)
+      ));
+
+    const contactsByClient = new Map<string, typeof clientContacts.$inferSelect[]>();
+    for (const contact of allContacts) {
+      if (!contactsByClient.has(contact.clientId)) contactsByClient.set(contact.clientId, []);
+      contactsByClient.get(contact.clientId)!.push(contact);
+    }
+
+    const projectsByClient = new Map<string, typeof projects.$inferSelect[]>();
+    for (const project of allProjects) {
+      if (!project.clientId) continue;
+      if (!projectsByClient.has(project.clientId)) projectsByClient.set(project.clientId, []);
+      projectsByClient.get(project.clientId)!.push(project);
+    }
+
+    return clientsList.map(client => ({
+      ...client,
+      contacts: contactsByClient.get(client.id) ?? [],
+      projects: projectsByClient.get(client.id) ?? [],
+    }));
   }
 
   async getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean })[]> {

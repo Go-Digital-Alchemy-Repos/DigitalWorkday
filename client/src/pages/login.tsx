@@ -201,7 +201,7 @@ export default function LoginPage() {
         description: "You have been logged in successfully",
       });
       const isSuperUser = result.user?.role === UserRole.SUPER_USER;
-      setLocation(isSuperUser ? "/super-admin/dashboard" : "/my-tasks");
+      setLocation(isSuperUser ? "/super-admin/dashboard" : "/");
     } else {
       toast({
         title: "Login failed",
@@ -541,7 +541,7 @@ export default function LoginPage() {
                       if (result.success) {
                         toast({ title: "Welcome!", description: `Logged in as ${account.label}` });
                         const isSuperUser = result.user?.role === UserRole.SUPER_USER;
-                        setLocation(isSuperUser ? "/super-admin/dashboard" : "/my-tasks");
+                        setLocation(isSuperUser ? "/super-admin/dashboard" : "/");
                       } else {
                         toast({ title: "Login failed", description: result.error || "Invalid credentials", variant: "destructive" });
                       }

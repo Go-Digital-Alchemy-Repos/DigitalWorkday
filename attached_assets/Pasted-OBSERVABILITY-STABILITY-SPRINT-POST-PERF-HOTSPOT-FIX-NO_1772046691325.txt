@@ -1,0 +1,237 @@
+OBSERVABILITY & STABILITY SPRINT (POST-PERF HOTSPOT FIX)
+NON-DESTRUCTIVE • MEASURABLE • LOW-RISK • DOCUMENTED
+
+You are working in the DigitalWorkday codebase (React frontend, Node/Express backend, PostgreSQL + Drizzle ORM).
+Recent work optimized Tasks/Clients/Projects. Now we must harden the system with observability, regression guards, and stability checks so performance does not drift and deploy/runtime issues are easier to diagnose.
+
+HARD RULES
+- NON-DESTRUCTIVE: no breaking API changes, no feature removals.
+- Additive changes only; new endpoints are optional and internal.
+- No new heavy dependencies unless clearly justified (prefer existing logger/metrics libs already in repo).
+- All observability must be tenant-safe (no PII in logs).
+- Keep overhead low: sampling, thresholds, and opt-in flags.
+- Update App Docs at end with a “Stability & Observability Playbook”.
+
+Feature flags:
+- ENABLE_OBSERVABILITY
+- ENABLE_PERF_PROFILING
+- ENABLE_DB_POOL_METRICS
+- ENABLE_PAYLOAD_GUARDS
+- ENABLE_REGRESSION_SMOKE_TESTS
+- ENABLE_HEALTH_ENDPOINTS
+- ENABLE_ERROR_REPORTING (placeholder if already exists)
+- ENABLE_LOG_SAMPLING
+
+============================================================
+PHASE 0 — DISCOVERY (NO BEHAVIOR CHANGES)
+============================================================
+0.1 Identify current logging system (pino/winston/etc.) and current perf middleware.
+0.2 Identify DB access layer entry points (Drizzle client, pool).
+0.3 Identify worker/scheduler system (pg-boss/bull/cron).
+0.4 Identify deploy health check expectations (Replit/Railway):
+  - port binding
+  - start command
+  - health endpoint
+0.5 Identify existing error boundary/reporting on frontend.
+
+============================================================
+PHASE 1 — STANDARD HEALTH ENDPOINTS (FAST, NO DB)
+============================================================
+1.1 Add endpoints (public or minimally protected, per your conventions):
+- GET /healthz
+  - Must be <10ms, no DB
+  - Returns: { ok: true, ts, version?, env? }
+- GET /readyz
+  - Lightweight readiness check:
+    - verify DB connection pool can acquire/release quickly (timeout 250ms)
+    - verify migrations are not in-progress/locked (if applicable)
+  - Returns: { ok: true, db: "ok"|"degraded", ts, details? }
+- GET /livez (optional)
+  - Always ok if process is running (no dependencies)
+
+Gate behind ENABLE_HEALTH_ENDPOINTS if you prefer, but /healthz should be always-on for deploy stability.
+
+============================================================
+PHASE 2 — REQUEST TRACING + PERF METRICS (SAMPLED, LOW OVERHEAD)
+============================================================
+2.1 Ensure a requestId exists for every request (UUID) and is propagated to logs.
+2.2 Implement standardized “request summary” log line on completion:
+- requestId, method, route, status
+- durationMs
+- dbQueryCount (if measurable)
+- dbTimeMs (if measurable)
+- payloadBytes (approx)
+- tenantHash (not tenantId), userHash (not userId)
+2.3 Sampling + thresholds
+- In prod:
+  - log all errors
+  - log slow requests above threshold (e.g. 800ms)
+  - sample normal requests (1–5%)
+- In dev/staging:
+  - log more verbosely
+Gate behind ENABLE_OBSERVABILITY and ENABLE_LOG_SAMPLING.
+
+2.4 Endpoint budgets
+Create a config file:
+server/src/observability/perfBudgets.ts
+Define p95 budgets for hot endpoints:
+- /api/tasks/my
+- /api/clients (list)
+- /projects (list)
+- /unread-count
+Use budgets for warnings (not failures) in runtime logs.
+
+============================================================
+PHASE 3 — DB POOL & QUERY OBSERVABILITY
+============================================================
+3.1 Add DB pool metrics (if using pg Pool under Drizzle)
+Expose internal metrics (no PII):
+- total, idle, waitingCount
+- acquire time histogram (coarse)
+3.2 Add query timing hooks (dev/staging)
+- Measure each query duration
+- Collect per-request totals: dbTimeMs, dbQueryCount
+- Add “top queries” logging only when a request is slow, and only in dev/staging.
+Gate behind ENABLE_DB_POOL_METRICS and ENABLE_PERF_PROFILING.
+
+============================================================
+PHASE 4 — PAYLOAD & RESPONSE GUARDS (PREVENT DRIFT)
+============================================================
+4.1 Add payload size warnings
+If response payload exceeds thresholds:
+- warn > 500KB
+- error > 2MB (but do not crash)
+Log: route, payloadBytes, requestId (sampled)
+Gate behind ENABLE_PAYLOAD_GUARDS.
+
+4.2 Add “list vs detail” contract enforcement (non-breaking)
+- For list endpoints, ensure heavy fields are excluded by default:
+  - rich text bodies
+  - large arrays of relations
+  - nested objects
+Add a dev-only assertion helper:
+assertListPayloadShape(routeKey, payload)
+that warns if known heavy fields appear in list mode.
+
+============================================================
+PHASE 5 — FRONTEND STABILITY & PERFORMANCE GUARDS
+============================================================
+5.1 Add global error boundary (if not already)
+- Capture uncaught React errors
+- Log to backend /api/client-errors (internal) OR existing error pipeline
+5.2 Add route-level performance marks (dev only)
+- navigationStart → firstDataLoaded → firstRenderComplete
+5.3 Add “network storm” guardrails
+- Identify query invalidation patterns that refetch many lists
+- Add per-page “max parallel requests” logging in dev
+- Ensure repeated polls (/unread-count) are throttled and paused in background tabs
+
+============================================================
+PHASE 6 — REGRESSION SMOKE TESTS (AUTOMATABLE)
+============================================================
+Create a lightweight smoke test runner (Node script) that can run against dev/staging:
+scripts/smoke/perf-smoke.ts
+
+Tests:
+A) Tasks list (batched hydration)
+- Call /api/tasks/my?limit=50&view=list
+- Assert: status 200
+- Assert: response time < X (configurable)
+- Assert: payload size < Y
+- Assert: dbQueryCount < Z (if available via headers or internal stats endpoint)
+
+B) Clients list (batched expansion)
+- GET /api/clients?limit=50&view=list
+- Similar assertions
+
+C) Projects list (SQL filtering)
+- GET /projects?limit=50&view=list&status=open
+- Assert filtering happens (results only open)
+
+D) Private visibility sanity (if enabled)
+- Ensure private items are not returned to unauthorized user (use existing test users if available)
+
+If you have no automated auth tokens, implement smoke tests as:
+- internal service-level tests (invoke service functions directly)
+OR
+- use existing test login helpers.
+
+Gate runner behind ENABLE_REGRESSION_SMOKE_TESTS and document how to run it.
+
+============================================================
+PHASE 7 — DEPLOY/STARTUP HARDENING
+============================================================
+7.1 Ensure server binds to:
+- host 0.0.0.0
+- port process.env.PORT
+7.2 Add startup self-check logs (no secrets):
+- env, port, version, commit (if available)
+7.3 Add graceful shutdown handlers:
+- SIGTERM/SIGINT close HTTP server and DB pool cleanly
+7.4 Ensure migrations do not block startup indefinitely:
+- add timeouts
+- log progress clearly
+
+============================================================
+PHASE 8 — OPTIONAL: SHORT TTL MICRO-CACHE STABILITY
+============================================================
+For “hot poll” endpoints:
+- /unread-count (2–5s TTL)
+- lightweight summary counts (10–30s TTL)
+Ensure:
+- key includes tenantId/userId hashes
+- TTL short
+- bypass cache on write paths if needed
+Document cache behavior.
+(If already implemented, validate correctness and add metrics hit rate.)
+
+============================================================
+PHASE 9 — INTERNAL OBSERVABILITY PANEL (OPTIONAL UI)
+============================================================
+If feasible and fast:
+Add an Admin-only internal page:
+Admin → System → Observability (dev/staging only)
+Shows:
+- recent slow endpoints (top 20)
+- db pool metrics
+- payload warnings
+- last smoke test results (if stored)
+Gate behind ENABLE_OBSERVABILITY and hide in production unless Super Admin.
+
+============================================================
+PHASE 10 — APP DOCS UPDATE (MANDATORY)
+============================================================
+Add App Docs sections:
+
+1) “Stability & Observability Playbook”
+- healthz/readyz/livez
+- log sampling rules
+- endpoint perf budgets
+- db pool metrics meaning
+- payload guard thresholds
+- regression smoke tests: how to run + expected outputs
+- deploy hardening checklist
+
+2) “Performance Regression Policy”
+- what metrics to monitor (p50/p95, payload, query count)
+- how to respond to regressions
+- rules: list vs detail payloads, batching, pagination
+
+============================================================
+ACCEPTANCE CRITERIA
+============================================================
+- /healthz and /readyz exist and behave correctly
+- request logs are sampled and slow-request focused
+- dbQueryCount/dbTimeMs observable (at least dev/staging)
+- payload guards warn on oversized responses
+- smoke tests exist and can be run reliably
+- deploy/startup hardening complete (port binding, graceful shutdown)
+- App Docs updated
+
+STOP CONDITION
+============================================================
+Stop after:
+- health endpoints + request/db/payload instrumentation are stable
+- smoke tests are runnable
+- docs updated
+Do NOT add new product features in this sprint.

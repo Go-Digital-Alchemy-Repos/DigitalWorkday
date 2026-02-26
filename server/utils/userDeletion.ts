@@ -121,7 +121,6 @@ export async function cleanupUserReferences(tx: TxOrDb, userId: string, actorId:
   await tx.update(platformInvitations).set({ targetUserId: null }).where(eq(platformInvitations.targetUserId, userId));
   await tx.update(platformInvitations).set({ createdByUserId: actorId }).where(eq(platformInvitations.createdByUserId, userId));
 
-  await tx.update(tasks).set({ assigneeId: null }).where(eq(tasks.assigneeId, userId));
   await tx.update(tasks).set({ createdBy: null }).where(eq(tasks.createdBy, userId));
   await tx.update(subtasks).set({ assigneeId: null }).where(eq(subtasks.assigneeId, userId));
   await tx.update(projects).set({ createdBy: null }).where(eq(projects.createdBy, userId));

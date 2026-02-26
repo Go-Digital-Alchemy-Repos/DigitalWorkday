@@ -385,14 +385,14 @@ export default function TemplatesPage() {
 
   return (
     <ScrollArea className="h-full">
-      <div className="container max-w-5xl p-6">
-        <div className="flex items-center justify-between mb-6">
+      <div className="container max-w-5xl p-3 sm:p-4 lg:p-6">
+        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 mb-4 md:mb-6">
           <div className="flex items-center gap-3">
-            <div className="w-12 h-12 rounded-lg bg-primary/10 flex items-center justify-center">
-              <FileStack className="h-6 w-6 text-primary" />
+            <div className="w-10 h-10 md:w-12 md:h-12 rounded-lg bg-primary/10 flex items-center justify-center shrink-0">
+              <FileStack className="h-5 w-5 md:h-6 md:w-6 text-primary" />
             </div>
             <div>
-              <h1 className="text-2xl font-bold">Project Templates</h1>
+              <h1 className="text-xl md:text-2xl font-bold">Project Templates</h1>
               <p className="text-muted-foreground text-sm">
                 Create reusable templates with predefined sections and tasks
               </p>

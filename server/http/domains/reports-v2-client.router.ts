@@ -600,4 +600,34 @@ router.get("/client/health-index", async (req: Request, res: Response) => {
   }
 });
 
+router.get("/client/:clientId/profile", async (req: Request, res: Response) => {
+  try {
+    const { config } = await import("../../config");
+    if (!config.features.enableClientProfileReport) {
+      return res.status(403).json({ message: "Client profile report feature is disabled" });
+    }
+
+    const tenantId = getTenantId(req);
+    const { clientId } = req.params;
+    const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
+
+    const { getClientProfileReport } = await import("../../reports/clientProfileAggregator");
+
+    const report = await getClientProfileReport({
+      tenantId,
+      clientId,
+      startDate,
+      endDate,
+    });
+
+    if (!report) {
+      return res.status(404).json({ message: "Client not found or does not belong to this tenant" });
+    }
+
+    res.json(report);
+  } catch (error) {
+    handleRouteError(res, error, "reports-v2/client/profile", req);
+  }
+});
+
 export default router;

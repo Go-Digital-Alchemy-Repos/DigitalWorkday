@@ -1,4 +1,5 @@
 import { useState, useRef, useEffect } from "react";
+import { useStickyComposerFocus } from "@/hooks/useStickyComposerFocus";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -406,6 +407,8 @@ function ConversationThread({
   const { toast } = useToast();
   const [replyText, setReplyText] = useState("");
   const messagesEndRef = useRef<HTMLDivElement>(null);
+  const textareaRef = useRef<HTMLTextAreaElement>(null);
+  const { compositionHandlers, handleSendSuccess, isSendKey } = useStickyComposerFocus(textareaRef);
 
   const { data, isLoading } = useQuery<ConversationDetail>({
     queryKey: ["/api/crm/conversations", conversationId, "messages"],
@@ -430,6 +433,11 @@ function ConversationThread({
     onError: (error: Error) => {
       toast({ title: "Error", description: error.message, variant: "destructive" });
     },
+    onSettled: () => {
+      requestAnimationFrame(() => {
+        textareaRef.current?.focus();
+      });
+    },
   });
 
   const handleSend = () => {
@@ -438,8 +446,8 @@ function ConversationThread({
     sendMutation.mutate(trimmed);
   };
 
-  const handleKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+  const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
+    if (isSendKey(e)) {
       e.preventDefault();
       handleSend();
     }
@@ -523,9 +531,11 @@ function ConversationThread({
       {!isClosed && (
         <div className="flex gap-2 items-end border-t pt-3">
           <Textarea
+            ref={textareaRef}
             value={replyText}
             onChange={(e) => setReplyText(e.target.value)}
             onKeyDown={handleKeyDown}
+            {...compositionHandlers}
             placeholder="Type your reply..."
             className="resize-none min-h-[60px]"
             data-testid="input-reply-message"
