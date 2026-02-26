@@ -20,6 +20,9 @@ import {
   ChevronUp,
   Info,
   Loader2,
+  ListChecks,
+  Calendar,
+  ExternalLink,
 } from "lucide-react";
 import { 
   Card, 
@@ -118,6 +121,18 @@ interface ProfileData {
     weeklyCompletion: Array<{ week: string; count: number }>;
     weeklyTimeTracked: Array<{ week: string; hours: number }>;
   };
+  assignedTasks: Array<{
+    id: string;
+    title: string;
+    status: string;
+    priority: string;
+    dueDate: string | null;
+    projectId: string | null;
+    projectName: string | null;
+    estimateMinutes: number | null;
+    createdAt: string;
+    updatedAt: string;
+  }>;
 }
 
 interface AiSummaryData {
@@ -777,6 +792,104 @@ export default function EmployeeProfileReportPage() {
                   </CardContent>
                 </Card>
               </div>
+
+              {/* Assigned Tasks Section */}
+              <Card data-testid="section-assigned-tasks">
+                <CardHeader>
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <ListChecks className="h-5 w-5 text-primary" />
+                    Assigned Tasks
+                  </CardTitle>
+                  <CardDescription>All non-archived tasks currently assigned to this employee ({data.assignedTasks?.length ?? 0} tasks)</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  {data.assignedTasks && data.assignedTasks.length > 0 ? (
+                    <div className="overflow-x-auto">
+                      <Table>
+                        <TableHeader>
+                          <TableRow>
+                            <TableHead>Task</TableHead>
+                            <TableHead>Project</TableHead>
+                            <TableHead className="text-center">Status</TableHead>
+                            <TableHead className="text-center">Priority</TableHead>
+                            <TableHead className="text-center">Due Date</TableHead>
+                            <TableHead className="text-right">Estimate</TableHead>
+                          </TableRow>
+                        </TableHeader>
+                        <TableBody>
+                          {data.assignedTasks.map((task) => {
+                            const isOverdue = task.dueDate && new Date(task.dueDate) < new Date() && !["done", "cancelled"].includes(task.status);
+                            return (
+                              <TableRow key={task.id} data-testid={`row-task-${task.id}`}>
+                                <TableCell className="font-medium max-w-[300px]">
+                                  <Link
+                                    href={task.projectId ? `/projects/${task.projectId}` : "#"}
+                                    className="hover:underline text-primary truncate block"
+                                    data-testid={`link-task-${task.id}`}
+                                  >
+                                    {task.title}
+                                  </Link>
+                                </TableCell>
+                                <TableCell className="text-muted-foreground text-sm max-w-[200px] truncate">
+                                  {task.projectName || "—"}
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Badge
+                                    variant={task.status === "done" ? "default" : task.status === "cancelled" ? "secondary" : "outline"}
+                                    className={cn(
+                                      "text-[10px] capitalize",
+                                      task.status === "done" && "bg-green-600 hover:bg-green-700 text-white",
+                                      task.status === "in_progress" && "border-blue-500 text-blue-600",
+                                      task.status === "in_review" && "border-purple-500 text-purple-600"
+                                    )}
+                                    data-testid={`badge-status-${task.id}`}
+                                  >
+                                    {task.status.replace(/_/g, " ")}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  <Badge
+                                    variant="outline"
+                                    className={cn(
+                                      "text-[10px] capitalize",
+                                      task.priority === "urgent" && "border-red-500 text-red-600",
+                                      task.priority === "high" && "border-orange-500 text-orange-600",
+                                      task.priority === "medium" && "border-amber-500 text-amber-600",
+                                      task.priority === "low" && "border-gray-400 text-gray-500"
+                                    )}
+                                    data-testid={`badge-priority-${task.id}`}
+                                  >
+                                    {task.priority}
+                                  </Badge>
+                                </TableCell>
+                                <TableCell className="text-center">
+                                  {task.dueDate ? (
+                                    <span className={cn("text-sm", isOverdue && "text-destructive font-medium")} data-testid={`text-due-${task.id}`}>
+                                      {new Date(task.dueDate).toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}
+                                      {isOverdue && " ⚠"}
+                                    </span>
+                                  ) : (
+                                    <span className="text-muted-foreground text-sm">—</span>
+                                  )}
+                                </TableCell>
+                                <TableCell className="text-right text-sm text-muted-foreground">
+                                  {task.estimateMinutes != null ? `${Math.round(task.estimateMinutes / 60 * 10) / 10}h` : "—"}
+                                </TableCell>
+                              </TableRow>
+                            );
+                          })}
+                        </TableBody>
+                      </Table>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col items-center justify-center py-10 text-center space-y-2">
+                      <ListChecks className="h-10 w-10 text-muted-foreground opacity-20" />
+                      <p className="text-sm font-medium">No assigned tasks</p>
+                      <p className="text-xs text-muted-foreground">This employee has no active tasks assigned.</p>
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
               {/* Capacity Section */}
               <Card data-testid="section-capacity">

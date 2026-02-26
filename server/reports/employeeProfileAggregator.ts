@@ -180,7 +180,44 @@ export async function getEmployeeProfileReport({
     LIMIT 10
   `);
 
-  // 6. Performance Index (EPI)
+  // 6. Assigned Tasks (full list, non-archived)
+  const assignedTasksPromise = db.execute<{
+    id: string;
+    title: string;
+    status: string;
+    priority: string;
+    due_date: string | null;
+    project_id: string | null;
+    project_name: string | null;
+    estimate_minutes: string | null;
+    created_at: string;
+    updated_at: string;
+  }>(sql`
+    SELECT
+      t.id,
+      t.title,
+      t.status,
+      t.priority,
+      t.due_date,
+      t.project_id,
+      p.name as project_name,
+      t.estimate_minutes,
+      t.created_at,
+      t.updated_at
+    FROM task_assignees ta
+    JOIN tasks t ON t.id = ta.task_id AND t.tenant_id = ${tenantId}
+    LEFT JOIN projects p ON p.id = t.project_id AND p.tenant_id = ${tenantId}
+    WHERE ta.user_id = ${employeeId} AND ta.tenant_id = ${tenantId}
+      AND t.archived_at IS NULL
+    ORDER BY
+      CASE WHEN t.status IN ('done','cancelled') THEN 1 ELSE 0 END,
+      CASE WHEN t.due_date IS NOT NULL AND t.due_date < NOW() AND t.status NOT IN ('done','cancelled') THEN 0 ELSE 1 END,
+      t.due_date ASC NULLS LAST,
+      t.updated_at DESC
+    LIMIT 100
+  `);
+
+  // 7. Performance Index (EPI)
   const performancePromise = calculateEmployeePerformance({
     tenantId,
     startDate,
@@ -197,6 +234,7 @@ export async function getEmployeeProfileReport({
     breakdownStatus,
     breakdownPriority,
     breakdownProject,
+    assignedTasksResult,
     performance,
   ] = await Promise.all([
     employeeInfoPromise,
@@ -206,6 +244,7 @@ export async function getEmployeeProfileReport({
     breakdownStatusPromise,
     breakdownPriorityPromise,
     breakdownProjectPromise,
+    assignedTasksPromise,
     performancePromise,
   ]);
 
@@ -221,6 +260,7 @@ export async function getEmployeeProfileReport({
   const statusRows = toRows<any>(breakdownStatus);
   const priorityRows = toRows<any>(breakdownPriority);
   const projectRows = toRows<any>(breakdownProject);
+  const taskRows = toRows<any>(assignedTasksResult);
   const perf = performance.results[0];
 
   const totalHours = Math.round(Number(time.total_seconds) / 3600 * 10) / 10;
@@ -305,5 +345,17 @@ export async function getEmployeeProfileReport({
       weeklyCompletion: capacityRows.map(r => ({ week: r.week_start, count: 0 })),
       weeklyTimeTracked: capacityRows.map(r => ({ week: r.week_start, hours: Math.round(Number(r.actual_seconds) / 3600 * 10) / 10 })),
     },
+    assignedTasks: taskRows.map((r: any) => ({
+      id: r.id,
+      title: r.title,
+      status: r.status,
+      priority: r.priority,
+      dueDate: r.due_date,
+      projectId: r.project_id,
+      projectName: r.project_name,
+      estimateMinutes: r.estimate_minutes ? Number(r.estimate_minutes) : null,
+      createdAt: r.created_at,
+      updatedAt: r.updated_at,
+    })),
   };
 }
