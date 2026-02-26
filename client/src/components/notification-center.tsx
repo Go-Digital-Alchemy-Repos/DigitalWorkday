@@ -23,6 +23,7 @@ import type { ServerToClientEvents } from "@shared/events";
 import { useTaskDrawerOptional } from "@/lib/task-drawer-context";
 import { useLocation } from "wouter";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
+import { chatSounds } from "@/lib/sounds";
 
 interface GroupMeta {
   count: number;
@@ -599,6 +600,7 @@ export function NotificationCenter() {
       }
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
+      chatSounds.play("notification");
       toast({
         title: payload.notification.title,
         description: payload.notification.message || undefined,
