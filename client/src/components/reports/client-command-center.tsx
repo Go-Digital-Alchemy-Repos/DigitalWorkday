@@ -8,7 +8,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
-import { AlertTriangle, Building2, ShieldAlert, Activity, CheckSquare, Clock, TrendingUp, Users, HeartPulse, ArrowUpDown, ChevronUp, ChevronDown, Sparkles, Info, Camera } from "lucide-react";
+import { Button } from "@/components/ui/button";
+import { AlertTriangle, Building2, ShieldAlert, Activity, CheckSquare, Clock, TrendingUp, Users, HeartPulse, ArrowUpDown, ChevronUp, ChevronDown, Sparkles, Info, Camera, Tag, Factory, X } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
@@ -50,9 +51,23 @@ function relativeDate(dateStr: string | null): string {
   return `${diff} days ago`;
 }
 
+interface ClientFilters {
+  industry: string;
+  tags: string[];
+}
+
+function buildFilterParams(filters: ClientFilters): Record<string, string> {
+  const extra: Record<string, string> = {};
+  if (filters.industry && filters.industry !== "__all__") extra.industry = filters.industry;
+  if (filters.tags.length > 0) extra.tags = filters.tags.join(",");
+  return extra;
+}
+
 interface ClientOverviewItem {
   clientId: string;
   companyName: string;
+  industry: string | null;
+  tags: string[];
   activeProjects: number;
   openTasks: number;
   overdueTasks: number;
@@ -63,16 +78,52 @@ interface ClientOverviewItem {
   completedInRange: number;
 }
 
-function OverviewTab({ rangeDays }: { rangeDays: number }) {
+function OverviewTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
+  const [sortField, setSortField] = useState<"industry" | "engagement" | null>(null);
+  const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
+
+  const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientOverviewItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/overview", rangeDays],
+    queryKey: ["/api/reports/v2/client/overview", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/overview?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/overview?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
     staleTime: 2 * 60 * 1000,
   });
+
+  const sortedClients = useMemo(() => {
+    if (!data?.clients) return [];
+    if (!sortField) return data.clients;
+    const sorted = [...data.clients];
+    sorted.sort((a, b) => {
+      if (sortField === "industry") {
+        const aVal = (a.industry ?? "").toLowerCase();
+        const bVal = (b.industry ?? "").toLowerCase();
+        return sortDir === "asc" ? aVal.localeCompare(bVal) : bVal.localeCompare(aVal);
+      }
+      if (sortField === "engagement") {
+        return sortDir === "asc" ? a.engagementScore - b.engagementScore : b.engagementScore - a.engagementScore;
+      }
+      return 0;
+    });
+    return sorted;
+  }, [data?.clients, sortField, sortDir]);
+
+  function toggleSort(field: "industry" | "engagement") {
+    if (sortField === field) {
+      setSortDir(d => d === "asc" ? "desc" : "asc");
+    } else {
+      setSortField(field);
+      setSortDir("asc");
+    }
+  }
+
+  function SortIcon({ field }: { field: "industry" | "engagement" }) {
+    if (sortField !== field) return <ArrowUpDown className="h-3 w-3 ml-1 inline opacity-40" />;
+    return sortDir === "asc" ? <ChevronUp className="h-3 w-3 ml-1 inline" /> : <ChevronDown className="h-3 w-3 ml-1 inline" />;
+  }
 
   const totals = useMemo(() => {
     if (!data?.clients) return null;
@@ -107,9 +158,9 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
           <MetricCard label="Avg Engagement" value={`${totals.avgEngagement}%`} icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-orange-500" />
         </div>
       )}
-      {data?.clients && data.clients.length > 0 && (
+      {sortedClients.length > 0 && (
         <div className="md:hidden space-y-3">
-          {data.clients.map((c) => (
+          {sortedClients.map((c) => (
             <Card key={c.clientId} data-testid={`mobile-card-client-${c.clientId}`}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2 mb-2">
@@ -119,11 +170,19 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                   </Badge>
                 </div>
                 <div className="grid grid-cols-2 gap-x-4 gap-y-1 text-xs text-muted-foreground">
+                  {c.industry && <span>Industry: <span className="text-foreground font-medium">{c.industry}</span></span>}
                   <span>Active Projects: <span className="text-foreground font-medium">{c.activeProjects}</span></span>
                   <span>Open Tasks: <span className="text-foreground font-medium">{c.openTasks}</span></span>
                   <span>Overdue: <span className={cn("font-medium", c.overdueTasks > 0 ? "text-red-600 dark:text-red-400" : "text-foreground")}>{c.overdueTasks}</span></span>
                   <span>Hours: <span className="text-foreground font-medium">{c.totalHours}h</span></span>
                   <span className="col-span-2">Last Activity: <span className="text-foreground font-medium">{relativeDate(c.lastActivityDate)}</span></span>
+                  {c.tags.length > 0 && (
+                    <div className="col-span-2 flex flex-wrap gap-1 mt-1">
+                      {c.tags.map((t) => (
+                        <Badge key={t} variant="outline" className="text-[10px] px-1.5 py-0">{t}</Badge>
+                      ))}
+                    </div>
+                  )}
                 </div>
               </CardContent>
             </Card>
@@ -138,18 +197,34 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                 <TableHeader>
                   <TableRow>
                     <TableHead>Company</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("industry")} data-testid="sort-industry">
+                      Industry <SortIcon field="industry" />
+                    </TableHead>
+                    <TableHead>Tags</TableHead>
                     <TableHead>Active Projects</TableHead>
                     <TableHead>Open Tasks</TableHead>
                     <TableHead>Overdue</TableHead>
                     <TableHead>Hours</TableHead>
                     <TableHead>Last Activity</TableHead>
-                    <TableHead>Engagement</TableHead>
+                    <TableHead className="cursor-pointer select-none" onClick={() => toggleSort("engagement")} data-testid="sort-engagement">
+                      Engagement <SortIcon field="engagement" />
+                    </TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
-                  {data?.clients.map((c) => (
+                  {sortedClients.map((c) => (
                     <TableRow key={c.clientId} data-testid={`row-client-${c.clientId}`}>
                       <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-overview-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                      <TableCell className="text-sm text-muted-foreground" data-testid={`industry-${c.clientId}`}>{c.industry ?? "—"}</TableCell>
+                      <TableCell data-testid={`tags-${c.clientId}`}>
+                        {c.tags.length > 0 ? (
+                          <div className="flex flex-wrap gap-1">
+                            {c.tags.map((t) => (
+                              <Badge key={t} variant="outline" className="text-[10px] px-1.5 py-0">{t}</Badge>
+                            ))}
+                          </div>
+                        ) : <span className="text-muted-foreground text-sm">—</span>}
+                      </TableCell>
                       <TableCell className="text-sm">{c.activeProjects}</TableCell>
                       <TableCell className="text-sm">{c.openTasks}</TableCell>
                       <TableCell>
@@ -166,9 +241,9 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                       </TableCell>
                     </TableRow>
                   ))}
-                  {data?.clients.length === 0 && (
+                  {sortedClients.length === 0 && (
                     <TableRow>
-                      <TableCell colSpan={7} className="text-center text-muted-foreground py-8">No clients found</TableCell>
+                      <TableCell colSpan={9} className="text-center text-muted-foreground py-8">No clients found</TableCell>
                     </TableRow>
                   )}
                 </TableBody>
@@ -190,11 +265,12 @@ interface ClientActivityItem {
   inactivityDays: number;
 }
 
-function ActivityTab({ rangeDays }: { rangeDays: number }) {
+function ActivityTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
+  const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientActivityItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/activity", rangeDays],
+    queryKey: ["/api/reports/v2/client/activity", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/activity?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/activity?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -258,11 +334,12 @@ interface ClientTimeItem {
   varianceHours: number;
 }
 
-function TimeTab({ rangeDays }: { rangeDays: number }) {
+function TimeTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
+  const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientTimeItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/time", rangeDays],
+    queryKey: ["/api/reports/v2/client/time", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/time?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/time?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -335,11 +412,12 @@ interface ClientTaskItem {
   agingOver30: number;
 }
 
-function TasksTab({ rangeDays }: { rangeDays: number }) {
+function TasksTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
+  const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientTaskItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/tasks", rangeDays],
+    queryKey: ["/api/reports/v2/client/tasks", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/tasks?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/tasks?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -426,11 +504,12 @@ interface ClientSlaItem {
   completedWithinDuePct: number;
 }
 
-function SlaTab({ rangeDays }: { rangeDays: number }) {
+function SlaTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
+  const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientSlaItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/sla", rangeDays],
+    queryKey: ["/api/reports/v2/client/sla", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/sla?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/sla?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -514,11 +593,12 @@ interface ClientRiskItem {
   };
 }
 
-function RiskTab({ rangeDays }: { rangeDays: number }) {
+function RiskTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
+  const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ flagged: ClientRiskItem[]; totalChecked: number; range: { startDate: string; endDate: string } }>({
-    queryKey: ["/api/reports/v2/client/risk", rangeDays],
+    queryKey: ["/api/reports/v2/client/risk", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/risk?${buildDateParams(rangeDays)}`);
+      const res = await fetch(`/api/reports/v2/client/risk?${buildDateParams(rangeDays, filterParams)}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -656,18 +736,19 @@ function ChiScoreBar({ value, colorClass }: { value: number; colorClass: string 
   );
 }
 
-function HealthTab({ rangeDays }: { rangeDays: number }) {
+function HealthTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
   const [sortBy, setSortBy] = useState<ChiSortField>("overallScore");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
+  const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
 
   const { data, isLoading } = useQuery<{
     clients: ChiClient[];
     pagination: { total: number; limit: number; offset: number };
     range: { startDate: string; endDate: string };
   }>({
-    queryKey: ["/api/reports/v2/client/health-index", rangeDays],
+    queryKey: ["/api/reports/v2/client/health-index", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/health-index?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await fetch(`/api/reports/v2/client/health-index?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -1077,7 +1158,37 @@ export function ClientCommandCenter() {
   const [rangeDays, setRangeDays] = useState(30);
   const [activeTab, setActiveTab] = useState("overview");
   const [horizonWeeks, setHorizonWeeks] = useState<2 | 4 | 8>(4);
+  const [selectedIndustry, setSelectedIndustry] = useState("");
+  const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const flags = useFeatureFlags();
+
+  const { data: filterOptions } = useQuery<{ industries: string[]; tags: string[] }>({
+    queryKey: ["/api/reports/v2/client/filter-options"],
+    queryFn: async () => {
+      const res = await fetch("/api/reports/v2/client/filter-options");
+      if (!res.ok) throw new Error("Failed");
+      return res.json();
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  const filters: ClientFilters = useMemo(() => ({
+    industry: selectedIndustry,
+    tags: selectedTags,
+  }), [selectedIndustry, selectedTags]);
+
+  const hasActiveFilters = (selectedIndustry !== "" && selectedIndustry !== "__all__") || selectedTags.length > 0;
+
+  function toggleTag(tag: string) {
+    setSelectedTags(prev =>
+      prev.includes(tag) ? prev.filter(t => t !== tag) : [...prev, tag]
+    );
+  }
+
+  function clearFilters() {
+    setSelectedIndustry("__all__");
+    setSelectedTags([]);
+  }
 
   return (
     <ReportCommandCenterLayout
@@ -1087,6 +1198,59 @@ export function ClientCommandCenter() {
       rangeDays={rangeDays}
       onRangeChange={setRangeDays}
     >
+      {filterOptions && (filterOptions.industries.length > 0 || filterOptions.tags.length > 0) && (
+        <div className="flex flex-wrap items-center gap-2 mb-4" data-testid="client-filters">
+          {filterOptions.industries.length > 0 && (
+            <Select value={selectedIndustry} onValueChange={setSelectedIndustry}>
+              <SelectTrigger className="w-full sm:w-44 h-8 text-xs" data-testid="filter-industry">
+                <Factory className="h-3.5 w-3.5 mr-1.5 shrink-0 text-muted-foreground" />
+                <SelectValue placeholder="All Industries" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="__all__">All Industries</SelectItem>
+                {filterOptions.industries.map(ind => (
+                  <SelectItem key={ind} value={ind}>{ind}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {filterOptions.tags.length > 0 && (
+            <Select value="__tags__" onValueChange={(v) => { if (v !== "__tags__") toggleTag(v); }}>
+              <SelectTrigger className="w-full sm:w-44 h-8 text-xs" data-testid="filter-tags">
+                <Tag className="h-3.5 w-3.5 mr-1.5 shrink-0 text-muted-foreground" />
+                <span className="truncate">{selectedTags.length > 0 ? `${selectedTags.length} tag${selectedTags.length > 1 ? "s" : ""}` : "All Tags"}</span>
+              </SelectTrigger>
+              <SelectContent>
+                {filterOptions.tags.map(tag => (
+                  <SelectItem key={tag} value={tag}>
+                    <span className="flex items-center gap-2">
+                      <span className={cn("w-3 h-3 rounded-sm border flex items-center justify-center text-[10px]", selectedTags.includes(tag) ? "bg-primary border-primary text-primary-foreground" : "border-muted-foreground/30")}>
+                        {selectedTags.includes(tag) && "✓"}
+                      </span>
+                      {tag}
+                    </span>
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+          {selectedTags.length > 0 && (
+            <div className="flex flex-wrap gap-1">
+              {selectedTags.map(tag => (
+                <Badge key={tag} variant="secondary" className="text-xs gap-1 cursor-pointer" onClick={() => toggleTag(tag)} data-testid={`filter-tag-badge-${tag}`}>
+                  {tag}
+                  <X className="h-3 w-3" />
+                </Badge>
+              ))}
+            </div>
+          )}
+          {hasActiveFilters && (
+            <Button variant="ghost" size="sm" className="h-8 text-xs px-2" onClick={clearFilters} data-testid="clear-filters">
+              Clear filters
+            </Button>
+          )}
+        </div>
+      )}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <MobileTabSelect
           tabs={[
@@ -1145,26 +1309,26 @@ export function ClientCommandCenter() {
         </div>
 
         <TabsContent value="overview" className="mt-4">
-          <OverviewTab rangeDays={rangeDays} />
+          <OverviewTab rangeDays={rangeDays} filters={filters} />
         </TabsContent>
         <TabsContent value="activity" className="mt-4">
-          <ActivityTab rangeDays={rangeDays} />
+          <ActivityTab rangeDays={rangeDays} filters={filters} />
         </TabsContent>
         <TabsContent value="time" className="mt-4">
-          <TimeTab rangeDays={rangeDays} />
+          <TimeTab rangeDays={rangeDays} filters={filters} />
         </TabsContent>
         <TabsContent value="tasks" className="mt-4">
-          <TasksTab rangeDays={rangeDays} />
+          <TasksTab rangeDays={rangeDays} filters={filters} />
         </TabsContent>
         <TabsContent value="sla" className="mt-4">
-          <SlaTab rangeDays={rangeDays} />
+          <SlaTab rangeDays={rangeDays} filters={filters} />
         </TabsContent>
         <TabsContent value="risk" className="mt-4">
-          <RiskTab rangeDays={rangeDays} />
+          <RiskTab rangeDays={rangeDays} filters={filters} />
         </TabsContent>
         {flags.enableClientHealthIndex && (
           <TabsContent value="health" className="mt-4">
-            <HealthTab rangeDays={rangeDays} />
+            <HealthTab rangeDays={rangeDays} filters={filters} />
           </TabsContent>
         )}
         {flags.enableForecastingLayer && (

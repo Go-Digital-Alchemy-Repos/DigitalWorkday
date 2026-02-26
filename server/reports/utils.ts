@@ -12,6 +12,8 @@ export const reportRangeSchema = z.object({
   clientIds: z.string().optional(),
   projectIds: z.string().optional(),
   status: z.string().optional(),
+  industry: z.string().optional(),
+  tags: z.string().optional(),
   limit: z.coerce.number().int().min(1).max(200).optional().default(50),
   page: z.coerce.number().int().min(1).optional().default(1),
   sortBy: z.string().optional(),
@@ -58,6 +60,8 @@ export function normalizeFilters(params: ReportRangeParams) {
     clientIds: params.clientIds ? params.clientIds.split(",").filter(Boolean) : [],
     projectIds: params.projectIds ? params.projectIds.split(",").filter(Boolean) : [],
     statuses: params.status ? params.status.split(",").filter(Boolean) : [],
+    industries: params.industry ? params.industry.split(",").filter(Boolean) : [],
+    tags: params.tags ? params.tags.split(",").filter(Boolean) : [],
   };
 }
 
