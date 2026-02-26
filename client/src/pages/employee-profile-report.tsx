@@ -151,19 +151,33 @@ interface AiSummaryData {
   expiresAt: string;
 }
 
-function MetricCard({ title, value, subValue, icon: Icon, description, testId }: { 
+function MetricCard({ title, value, subValue, icon: Icon, iconColor, description, testId }: { 
   title: string; 
   value: string | number; 
   subValue?: string;
   icon: any;
+  iconColor?: string;
   description?: string;
   testId: string;
 }) {
+  const colorMap: Record<string, { bg: string; text: string }> = {
+    blue: { bg: "bg-blue-500/10", text: "text-blue-500" },
+    green: { bg: "bg-green-500/10", text: "text-green-500" },
+    red: { bg: "bg-red-500/10", text: "text-red-500" },
+    amber: { bg: "bg-amber-500/10", text: "text-amber-500" },
+    purple: { bg: "bg-purple-500/10", text: "text-purple-500" },
+    orange: { bg: "bg-orange-500/10", text: "text-orange-500" },
+    cyan: { bg: "bg-cyan-500/10", text: "text-cyan-500" },
+  };
+  const colors = colorMap[iconColor || "blue"] || colorMap.blue;
+
   return (
     <Card data-testid={testId}>
       <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2 gap-1">
         <CardTitle className="text-sm font-medium">{title}</CardTitle>
-        <Icon className="h-4 w-4 text-muted-foreground" />
+        <div className={cn("h-8 w-8 rounded-full flex items-center justify-center shrink-0", colors.bg)}>
+          <Icon className={cn("h-4 w-4", colors.text)} />
+        </div>
       </CardHeader>
       <CardContent>
         <div className="text-2xl font-bold">{value}</div>
@@ -660,36 +674,42 @@ export default function EmployeeProfileReportPage() {
                   title="Performance Index" 
                   value={data.summary.performanceScore} 
                   icon={Award}
+                  iconColor="purple"
                   testId="metric-performance-index"
                 />
                 <MetricCard 
                   title="Completion Rate" 
                   value={`${data.summary.completionRate}%`} 
                   icon={CheckSquare}
+                  iconColor="green"
                   testId="metric-completion-rate"
                 />
                 <MetricCard 
                   title="Overdue Rate" 
                   value={`${data.summary.overdueRate}%`} 
                   icon={AlertTriangle}
+                  iconColor="red"
                   testId="metric-overdue-rate"
                 />
                 <MetricCard 
                   title="Utilization" 
                   value={`${data.summary.utilization}%`} 
                   icon={TrendingUp}
+                  iconColor="blue"
                   testId="metric-utilization"
                 />
                 <MetricCard 
                   title="Capacity" 
                   value={`${data.summary.capacityUsage}%`} 
                   icon={Activity}
+                  iconColor="amber"
                   testId="metric-capacity"
                 />
                 <MetricCard 
                   title="Total Hours" 
                   value={`${data.timeTracking.totalHours}h`} 
                   icon={Clock}
+                  iconColor="cyan"
                   testId="metric-total-hours"
                 />
               </div>
