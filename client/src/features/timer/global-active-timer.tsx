@@ -1,6 +1,7 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
+import { richTextToPlainText } from "@/lib/richtext/richText";
 import { Play, Pause, Square, Clock, AlertCircle, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
@@ -326,9 +327,7 @@ export function GlobalActiveTimer() {
   }, [timer?.title]);
 
   useEffect(() => {
-    if (timer?.description) {
-      setStopDescription(timer.description);
-    }
+    setStopDescription(timer?.description ? richTextToPlainText(timer.description) : "");
   }, [timer?.description]);
 
   useEffect(() => {
