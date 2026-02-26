@@ -236,8 +236,8 @@ agreementsRouter.patch("/agreements/:id", requireSuperUser, async (req, res) => 
       return res.status(404).json({ error: "Agreement not found" });
     }
     
-    if (existing.status !== AgreementStatus.DRAFT) {
-      return res.status(400).json({ error: "Only draft agreements can be edited" });
+    if (existing.status === AgreementStatus.ARCHIVED) {
+      return res.status(400).json({ error: "Archived agreements cannot be edited" });
     }
     
     const [updated] = await db.update(tenantAgreements)
