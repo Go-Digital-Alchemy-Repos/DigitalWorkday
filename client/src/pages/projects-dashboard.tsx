@@ -167,6 +167,26 @@ export default function ProjectsDashboard() {
     await updateProjectMutation.mutateAsync({ projectId: editingProject.id, data });
   };
 
+  const togglePinMutation = useMutation({
+    mutationFn: async ({ projectId, isPinned }: { projectId: string; isPinned: boolean }) => {
+      return apiRequest("PATCH", `/api/projects/${projectId}`, {
+        stickyAt: isPinned ? null : new Date().toISOString(),
+      });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to update pin status", variant: "destructive" });
+    },
+  });
+
+  const handleTogglePin = (e: React.MouseEvent, project: ProjectWithCounts) => {
+    e.stopPropagation();
+    togglePinMutation.mutate({ projectId: project.id, isPinned: !!project.stickyAt });
+  };
+
   const getProjectStats = (projectId: string) => {
     if (!analytics?.perProject) return null;
     return analytics.perProject.find(p => p.projectId === projectId);
@@ -214,8 +234,8 @@ export default function ProjectsDashboard() {
         const bSticky = b.stickyAt ? new Date(b.stickyAt).getTime() : 0;
         if (aSticky && !bSticky) return -1;
         if (!aSticky && bSticky) return 1;
-        if (aSticky && bSticky) return aSticky - bSticky;
-        return 0;
+        if (aSticky && bSticky) return bSticky - aSticky;
+        return a.name.localeCompare(b.name);
       });
   }, [projects, searchQuery, statusFilter, clientFilter, divisionFilter, teamFilter]);
 
@@ -520,9 +540,16 @@ export default function ProjectsDashboard() {
                           {project.visibility === "private" && (
                             <Lock className="h-3.5 w-3.5 text-muted-foreground shrink-0" data-testid={`icon-private-project-${project.id}`} />
                           )}
-                          {project.stickyAt && (
-                            <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
-                          )}
+                          <button
+                            onClick={(e) => handleTogglePin(e, project)}
+                            className={cn(
+                              "shrink-0 p-0.5 rounded hover:bg-muted transition-colors",
+                              project.stickyAt ? "text-primary" : "text-muted-foreground/40 hover:text-muted-foreground"
+                            )}
+                            data-testid={`button-pin-project-${project.id}`}
+                          >
+                            <Pin className="h-3.5 w-3.5" />
+                          </button>
                           <Badge variant={project.status === "archived" ? "secondary" : "default"} className="shrink-0">
                             {project.status === "archived" ? "Archived" : "Active"}
                           </Badge>
@@ -603,7 +630,7 @@ export default function ProjectsDashboard() {
                 {filteredProjects.map((project) => (
                   <TableRow
                     key={project.id}
-                    className={`cursor-pointer hover-elevate ${project.status === "archived" ? "opacity-60" : ""}`}
+                    className={`cursor-pointer hover-elevate group ${project.status === "archived" ? "opacity-60" : ""}`}
                     onClick={() => handleRowClick(project)}
                     data-testid={`row-project-${project.id}`}
                   >
@@ -613,9 +640,16 @@ export default function ProjectsDashboard() {
                           className="h-3 w-3 rounded-sm shrink-0"
                           style={{ backgroundColor: project.status === "archived" ? "#9ca3af" : (project.color || "#3B82F6") }}
                         />
-                        {project.stickyAt && (
-                          <Pin className="h-3 w-3 shrink-0 text-muted-foreground" />
-                        )}
+                        <button
+                          onClick={(e) => handleTogglePin(e, project)}
+                          className={cn(
+                            "shrink-0 p-0.5 rounded hover:bg-muted transition-colors",
+                            project.stickyAt ? "text-primary" : "text-muted-foreground/30 opacity-0 group-hover:opacity-100 hover:text-muted-foreground"
+                          )}
+                          data-testid={`button-pin-project-table-${project.id}`}
+                        >
+                          <Pin className="h-3.5 w-3.5" />
+                        </button>
                         <div className="min-w-0">
                           <div className="flex items-center gap-1.5 font-medium truncate">
                             {project.name}
