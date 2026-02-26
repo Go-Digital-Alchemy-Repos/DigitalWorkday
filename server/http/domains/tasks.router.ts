@@ -64,9 +64,10 @@ import {
   updateTaskSchema,
   addAssigneeSchema,
   taskAccess,
+  tasks,
 } from "@shared/schema";
 import { db } from "../../db";
-import { eq, and } from "drizzle-orm";
+import { eq, and, asc, sql } from "drizzle-orm";
 import { canManageTaskAccess, canViewTask, getAccessiblePrivateTaskIds } from "../../lib/privateVisibility";
 import {
   emitTaskCreated,
@@ -694,6 +695,38 @@ router.patch("/tasks/:id", async (req, res) => {
     
     if (!task) {
       return sendError(res, AppError.notFound("Task"), req);
+    }
+
+    if (updateData.status && taskBefore && updateData.status !== taskBefore.status && task.sectionId && !task.parentTaskId) {
+      try {
+        const isCompleting = updateData.status === "done" || updateData.status === "completed";
+        const isReopening = !isCompleting && (taskBefore.status === "done" || taskBefore.status === "completed");
+        if (isCompleting || isReopening) {
+          const sectionTasks = await db.select().from(tasks)
+            .where(and(
+              eq(tasks.sectionId, task.sectionId),
+              sql`${tasks.parentTaskId} IS NULL`
+            ))
+            .orderBy(asc(tasks.orderIndex));
+
+          const currentIndex = sectionTasks.findIndex(t => t.id === task.id);
+          if (currentIndex !== -1) {
+            let targetIndex: number;
+            if (isCompleting) {
+              const openTasks = sectionTasks.filter(t => t.id !== task.id && t.status !== "done" && t.status !== "completed");
+              targetIndex = openTasks.length;
+            } else {
+              const openTasks = sectionTasks.filter(t => t.id !== task.id && t.status !== "done" && t.status !== "completed");
+              targetIndex = openTasks.length;
+            }
+            if (currentIndex !== targetIndex) {
+              await storage.moveTask(task.id, task.sectionId, targetIndex);
+            }
+          }
+        }
+      } catch (reorderError) {
+        console.warn(`[Task Update] Auto-reorder failed for task ${task.id}:`, reorderError);
+      }
     }
 
     if (updateData.visibility === 'private' && config.features.enablePrivateTasks && tenantId) {
