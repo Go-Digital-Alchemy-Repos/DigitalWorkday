@@ -102,6 +102,10 @@ export function setupAuth(app: Express): void {
     CREATE INDEX IF NOT EXISTS "IDX_user_sessions_expire" ON "user_sessions" ("expire");
   `).catch(err => console.error("Session table creation error:", err));
 
+  const isProduction = process.env.NODE_ENV === "production";
+  const isReplit = !!process.env.REPL_OWNER;
+  const needsSecureCookie = isProduction || isReplit;
+
   sessionMiddlewareInstance = session({
     store: new PgSession({
       pool,
@@ -111,12 +115,12 @@ export function setupAuth(app: Express): void {
     secret: process.env.SESSION_SECRET || "dasana-dev-secret-key",
     resave: false,
     saveUninitialized: false,
-    name: process.env.NODE_ENV === "production" ? "__Host-sid" : "connect.sid",
+    name: isProduction ? "__Host-sid" : "connect.sid",
     cookie: {
       maxAge: 30 * 24 * 60 * 60 * 1000,
       httpOnly: true,
-      secure: process.env.NODE_ENV === "production",
-      sameSite: "lax",
+      secure: needsSecureCookie,
+      sameSite: needsSecureCookie ? "none" : "lax",
       path: "/",
     },
   });
@@ -231,12 +235,14 @@ export function setupAuth(app: Express): void {
           console.error("Session destroy error:", sessionErr);
         }
         const isProduction = process.env.NODE_ENV === "production";
+        const isReplit = !!process.env.REPL_OWNER;
+        const needsSecureCookie = isProduction || isReplit;
         const cookieName = isProduction ? "__Host-sid" : "connect.sid";
         res.clearCookie(cookieName, {
           path: "/",
           httpOnly: true,
-          secure: isProduction,
-          sameSite: "lax",
+          secure: needsSecureCookie,
+          sameSite: needsSecureCookie ? "none" : "lax",
         });
         res.json({ success: true });
       });
