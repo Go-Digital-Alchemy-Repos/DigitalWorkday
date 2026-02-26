@@ -820,7 +820,7 @@ export default function EmployeeProfileReportPage() {
                     <ListChecks className="h-5 w-5 text-primary" />
                     Assigned Tasks
                   </CardTitle>
-                  <CardDescription>All non-archived tasks currently assigned to this employee ({data.assignedTasks?.length ?? 0} tasks)</CardDescription>
+                  <CardDescription>Open tasks currently assigned to this employee ({data.assignedTasks?.length ?? 0} tasks)</CardDescription>
                 </CardHeader>
                 <CardContent>
                   {data.assignedTasks && data.assignedTasks.length > 0 ? (

@@ -180,7 +180,7 @@ export async function getEmployeeProfileReport({
     LIMIT 10
   `);
 
-  // 6. Assigned Tasks (full list, non-archived)
+  // 6. Assigned Tasks (open only — excludes done/cancelled/archived)
   const assignedTasksPromise = db.execute<{
     id: string;
     title: string;
@@ -209,9 +209,9 @@ export async function getEmployeeProfileReport({
     LEFT JOIN projects p ON p.id = t.project_id AND p.tenant_id = ${tenantId}
     WHERE ta.user_id = ${employeeId} AND ta.tenant_id = ${tenantId}
       AND t.archived_at IS NULL
+      AND t.status NOT IN ('done', 'cancelled')
     ORDER BY
-      CASE WHEN t.status IN ('done','cancelled') THEN 1 ELSE 0 END,
-      CASE WHEN t.due_date IS NOT NULL AND t.due_date < NOW() AND t.status NOT IN ('done','cancelled') THEN 0 ELSE 1 END,
+      CASE WHEN t.due_date IS NOT NULL AND t.due_date < NOW() THEN 0 ELSE 1 END,
       t.due_date ASC NULLS LAST,
       t.updated_at DESC
     LIMIT 100
