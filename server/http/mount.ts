@@ -47,6 +47,7 @@ import emailTemplatesRouter from "./domains/emailTemplates.router";
 import fileServeRouter from "./domains/fileServe.router";
 import accessRouter from "./domains/access.router";
 import retentionRouter from "./domains/retention.router";
+import taskReviewRouter from "./domains/task-review.router";
 
 import usersRouter from "../routes/users.router";
 import crmRouter from "../routes/crm.router";
@@ -330,6 +331,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "access",
     description: "Private access management for tasks and projects.",
+  },
+  {
+    path: "/api",
+    router: taskReviewRouter,
+    policy: "authTenant",
+    domain: "task-review",
+    description: "Task PM review queue: request review, clear review, dashboard queue.",
   },
   {
     path: "/api",

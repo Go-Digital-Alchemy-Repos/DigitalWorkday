@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus, Trash2, Link2, Lock, Share2 } from "lucide-react";
+import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus, Trash2, Link2, Lock, Share2, SendHorizonal, CheckCircle } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
@@ -53,6 +53,7 @@ import { DrawerActionBar } from "@/components/layout/drawer-action-bar";
 import { FormFieldWrapper, DatePickerWithChips, PrioritySelector, StatusSelector, type PriorityLevel, type TaskStatus } from "@/components/forms";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ShareModal } from "@/features/sharing/share-modal";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import type { TaskWithRelations, User, Tag as TagType, Comment, Project, Client } from "@shared/schema";
 
 type ActiveTimer = {
@@ -148,6 +149,18 @@ export function TaskDetailDrawer({
 
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
+  const isClientUser = currentUser?.role === "client";
+  const { enableTaskReviewQueue } = useFeatureFlags();
+
+  const { data: projectMembersData } = useQuery<Array<{ userId: string; role: string }>>({
+    queryKey: ["/api/projects", task?.projectId, "members"],
+    enabled: !!task?.projectId && enableTaskReviewQueue && open,
+  });
+  const isProjectOwner = useMemo(() => {
+    if (!currentUser?.id || !projectMembersData) return false;
+    return projectMembersData.some(m => m.userId === currentUser.id && m.role === "owner");
+  }, [currentUser?.id, projectMembersData]);
+  const canClearReview = isAdmin || isProjectOwner;
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
@@ -298,6 +311,31 @@ export function TaskDetailDrawer({
       queryClient.invalidateQueries({ queryKey: ["/api/projects", task.projectId, "tasks"] });
     }
   }, [task?.id, task?.projectId]);
+
+  const requestReviewMutation = useMutation({
+    mutationFn: () => apiRequest("POST", `/api/tasks/${task?.id}/review/request`),
+    onSuccess: () => {
+      invalidateTaskQueries();
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/review-queue"] });
+      toast({ title: "Sent to PM for review" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to request review", description: error?.message || "Please try again", variant: "destructive" });
+    },
+  });
+
+  const clearReviewMutation = useMutation({
+    mutationFn: (data: { markComplete?: boolean }) =>
+      apiRequest("POST", `/api/tasks/${task?.id}/review/clear`, data),
+    onSuccess: () => {
+      invalidateTaskQueries();
+      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/review-queue"] });
+      toast({ title: "Review cleared" });
+    },
+    onError: (error: any) => {
+      toast({ title: "Failed to clear review", description: error?.message || "Please try again", variant: "destructive" });
+    },
+  });
 
   // Workspace tags query for adding existing tags
   const { data: workspaceTags = [] } = useQuery<TagType[]>({
@@ -909,6 +947,14 @@ export function TaskDetailDrawer({
             <div className="flex items-center gap-2">
               <SheetTitle className="sr-only">Task Details</SheetTitle>
               <StatusBadge status={task.status as any} />
+              {enableTaskReviewQueue && (task as any).needsPmReview && (
+                <Badge
+                  className="bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700"
+                  data-testid="badge-review-requested"
+                >
+                  Review Requested
+                </Badge>
+              )}
             </div>
             <div className="flex items-center gap-1">
               {(task as any).visibility === "private" && (
@@ -1509,11 +1555,63 @@ export function TaskDetailDrawer({
           incompleteDisabled={isReopeningTask}
           isIncompleting={isReopeningTask}
           extraActions={
-            activeTimer && !isTimerOnThisTask ? (
-              <Badge variant="secondary" className="text-xs">
-                Timer running on another task
-              </Badge>
-            ) : undefined
+            <>
+              {activeTimer && !isTimerOnThisTask && (
+                <Badge variant="secondary" className="text-xs">
+                  Timer running on another task
+                </Badge>
+              )}
+              {enableTaskReviewQueue && !isClientUser && !(task as any).needsPmReview && (
+                <Button
+                  variant="outline"
+                  size="default"
+                  onClick={() => requestReviewMutation.mutate()}
+                  disabled={requestReviewMutation.isPending}
+                  data-testid="button-request-review"
+                >
+                  {requestReviewMutation.isPending ? (
+                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                  ) : (
+                    <SendHorizonal className="h-4 w-4 mr-1.5" />
+                  )}
+                  Send to PM
+                </Button>
+              )}
+              {enableTaskReviewQueue && (task as any).needsPmReview && canClearReview && (
+                <>
+                  <Button
+                    variant="outline"
+                    size="default"
+                    onClick={() => clearReviewMutation.mutate({})}
+                    disabled={clearReviewMutation.isPending}
+                    data-testid="button-clear-review"
+                  >
+                    {clearReviewMutation.isPending ? (
+                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                    ) : (
+                      <CheckCircle className="h-4 w-4 mr-1.5" />
+                    )}
+                    Clear Review
+                  </Button>
+                  {task.status !== "done" && (
+                    <Button
+                      variant="outline"
+                      size="default"
+                      onClick={() => clearReviewMutation.mutate({ markComplete: true })}
+                      disabled={clearReviewMutation.isPending}
+                      data-testid="button-complete-and-clear-review"
+                    >
+                      {clearReviewMutation.isPending ? (
+                        <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+                      ) : (
+                        <Check className="h-4 w-4 mr-1.5" />
+                      )}
+                      Complete & Clear
+                    </Button>
+                  )}
+                </>
+              )}
+            </>
           }
           className="sticky bottom-0 z-10"
         />

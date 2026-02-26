@@ -1432,6 +1432,12 @@ export const tasks = pgTable("tasks", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
   archivedAt: timestamp("archived_at"),
   archivedReason: text("archived_reason"),
+  needsPmReview: boolean("needs_pm_review").notNull().default(false),
+  pmReviewRequestedAt: timestamp("pm_review_requested_at"),
+  pmReviewRequestedBy: varchar("pm_review_requested_by").references(() => users.id),
+  pmReviewResolvedAt: timestamp("pm_review_resolved_at"),
+  pmReviewResolvedBy: varchar("pm_review_resolved_by").references(() => users.id),
+  pmReviewNote: text("pm_review_note"),
 }, (table) => [
   index("tasks_project_section_order").on(table.projectId, table.sectionId, table.orderIndex),
   index("tasks_due_date").on(table.dueDate),
@@ -1449,6 +1455,8 @@ export const tasks = pgTable("tasks", {
   index("tasks_tenant_visibility_idx").on(table.tenantId, table.visibility),
   index("tasks_tenant_archived_idx").on(table.tenantId, table.archivedAt),
   index("tasks_tenant_status_archived_idx").on(table.tenantId, table.status, table.archivedAt),
+  index("tasks_tenant_pm_review_idx").on(table.tenantId, table.needsPmReview, table.pmReviewRequestedAt),
+  index("tasks_project_pm_review_idx").on(table.projectId, table.needsPmReview),
 ]);
 
 // Task Assignees table (for multiple assignees)

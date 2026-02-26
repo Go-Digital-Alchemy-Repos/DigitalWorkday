@@ -59,6 +59,7 @@ router.get("/features/flags", async (_req, res) => {
       enableProjectsSqlFiltering: config.features.enableProjectsSqlFiltering,
       enablePrivateTasks: config.features.enablePrivateTasks,
       enablePrivateProjects: config.features.enablePrivateProjects,
+      enableTaskReviewQueue: config.features.enableTaskReviewQueue,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

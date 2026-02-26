@@ -1,0 +1,244 @@
+TASK “SEND TO PROJECT MANAGER FOR REVIEW” (TASK DRAWER BUTTON + REVIEW QUEUE CARD)
+NON-DESTRUCTIVE • ADDITIVE • TENANT-SCOPED • ROLE-AWARE • DOCUMENTED
+
+You are working in the DigitalWorkday codebase (React frontend, Node/Express backend, PostgreSQL + Drizzle ORM).
+We are adding a “Send to Project Manager for Review” feature from the Task Drawer.
+
+REQUIREMENTS (restated precisely)
+- In the Task Drawer (slide-out panel), add an action: “Send to Project Manager for Review”.
+- When a Tenant Employee or Tenant Admin triggers it:
+  - DO NOT change task status
+  - DO NOT change task assignment
+  - Only mark the task as “Needs Review”
+  - Show a yellow “Review” badge on the task (list + drawer)
+- Tasks marked for review must appear on:
+  - Home dashboard of the Project Manager for that task’s project
+  - Home dashboard of Tenant Admins
+- Employee dashboard must NOT show the review card.
+- On Admin/PM dashboards, add a new card ABOVE “Recent Projects” listing tasks marked for review.
+- Clicking a task in that card opens the Task Drawer right from the dashboard.
+- PM/Admin can “review and close those tasks out if they are complete” (i.e., mark review resolved/cleared, and optionally set status to complete if allowed).
+
+Feature flags:
+- ENABLE_TASK_REVIEW_QUEUE
+
+============================================================
+PHASE 0 — DISCOVERY (NO BEHAVIOR CHANGES)
+============================================================
+0.1 Identify:
+- tasks table schema (status, project_id, assigned users, etc.)
+- how “Project Manager” is stored (project.manager_user_id? project_members role? etc.)
+- dashboard backend endpoints and frontend dashboard components
+- task drawer open mechanism (route state? query param? global store?)
+
+Do not refactor; just integrate.
+
+============================================================
+PHASE 1 — DATA MODEL (ADDITIVE)
+============================================================
+Add review fields to tasks (migration + Drizzle schema update):
+
+tasks:
+- needs_pm_review (boolean, default false)
+- pm_review_requested_at (timestamp, nullable)
+- pm_review_requested_by_user_id (uuid, nullable)
+- pm_review_resolved_at (timestamp, nullable)
+- pm_review_resolved_by_user_id (uuid, nullable)
+- pm_review_note (text, nullable)  // optional, keep for future
+
+Indexes:
+- tasks(tenant_id, needs_pm_review, pm_review_requested_at desc)
+- tasks(project_id, needs_pm_review)
+
+Rules:
+- needs_pm_review=true means “in review queue”
+- resolved_at set implies needs_pm_review=false (keep consistent in code)
+
+============================================================
+PHASE 2 — BACKEND SERVICE + ENDPOINTS (NON-DESTRUCTIVE)
+============================================================
+
+2.1 Add service:
+server/src/services/tasks/taskReviewQueueService.ts
+
+Functions:
+- requestPmReview({ tenantId, taskId, userId })
+- clearPmReview({ tenantId, taskId, userId, resolutionNote? })
+- listReviewQueueForUser({ tenantId, userId, limit, cursor })
+- listReviewQueueForTenantAdmins({ tenantId, limit, cursor })
+
+Authorization rules:
+A) requestPmReview:
+- allowed for Tenant Employee and Tenant Admin who can view the task
+- must not change task status/assignment
+
+B) clearPmReview:
+- allowed for:
+  - Tenant Admin
+  - Project Manager of the task’s project
+- When clearing, set:
+  - needs_pm_review = false
+  - pm_review_resolved_at/by set
+
+C) listReviewQueueForUser (PM dashboard):
+- must return only tasks where:
+  - needs_pm_review = true
+  - task belongs to a project managed by this user
+- enforce tenant scoping + private visibility rules
+
+D) listReviewQueueForTenantAdmins:
+- return all tasks in tenant where needs_pm_review=true
+- enforce tenant scoping + private visibility rules
+
+2.2 Add endpoints (additive):
+POST   /api/tasks/:taskId/review/request
+POST   /api/tasks/:taskId/review/clear
+GET    /api/dashboard/review-queue              (role-aware, returns correct list for current user)
+
+Response shape for review queue items (LIGHT):
+{
+  items: [
+    {
+      taskId,
+      title,
+      status,
+      priority,
+      dueDate,
+      projectId,
+      projectName,
+      clientId?,
+      clientName?,
+      requestedAt,
+      requestedBy: { userId, name } (or minimal)
+    }
+  ],
+  nextCursor
+}
+
+IMPORTANT:
+- Do NOT hydrate full task relations here; keep lightweight.
+- Clicking will open task drawer which can fetch full details via existing task detail endpoint.
+
+============================================================
+PHASE 3 — TASK DRAWER UI (REQUEST REVIEW)
+============================================================
+3.1 Add UI control in Task Drawer:
+- Primary button (preferred): “Send to PM for Review”
+- When needs_pm_review already true:
+  - show yellow badge “Review”
+  - change button to “Review Requested” (disabled) OR “Cancel Review Request” (optional; only requester/admin)
+
+Behavior:
+- On click, call POST /api/tasks/:taskId/review/request
+- Optimistically set needs_pm_review=true in local cache
+- Show toast: “Sent to Project Manager for review”
+
+3.2 Badge placement:
+- In Task Drawer header: yellow “Review” badge when needs_pm_review=true
+- In task list rows/cards: same badge.
+
+Gate behind ENABLE_TASK_REVIEW_QUEUE.
+
+============================================================
+PHASE 4 — ADMIN/PM DASHBOARD CARD (REVIEW QUEUE)
+============================================================
+4.1 Create new dashboard card component:
+ReviewQueueCard.tsx
+
+Placement:
+- On Tenant Admin and Project Manager dashboards ONLY
+- Insert ABOVE “Recent Projects” card.
+
+Data:
+- Fetch from GET /api/dashboard/review-queue (role-aware)
+- Show a list (top 10–20) with:
+  - task title
+  - project
+  - due date
+  - requested at
+  - requested by
+  - status chip
+
+4.2 Clicking an item:
+- Opens Task Drawer from the dashboard page context.
+- Use existing drawer open mechanism:
+  - if app supports deep link: add query param ?taskId=
+  - or use global drawer store openTaskDrawer(taskId)
+
+Ensure it works without route changes if possible.
+
+4.3 Actions in card (optional but useful):
+- “Open” button per row
+- “Clear review” quick action (Admin/PM only) (optional)
+If adding quick action, confirm with dialog to avoid accidental clears.
+
+============================================================
+PHASE 5 — “REVIEW & CLOSE OUT” WORKFLOW
+============================================================
+Inside Task Drawer, when viewed by Tenant Admin or Project Manager AND needs_pm_review=true:
+- Show a small “Review Actions” section:
+  - Button: “Mark Review Complete” (clears review flag)
+  - Optional: “Mark Task Complete & Clear Review” (only if user has permission to complete tasks)
+    - This changes status to complete using existing task update endpoint, then clears review.
+    - Must preserve non-destructive behavior: no status change unless explicitly chosen.
+
+Employee users should NOT see clear-review controls unless you want requester cancellation (optional).
+
+============================================================
+PHASE 6 — PERMISSIONS & EDGE CASES
+============================================================
+6.1 If task has no project or project has no manager:
+- Decide behavior:
+  - Still allow “Send to PM for Review”
+  - Route into Tenant Admin review queue only
+  - UI should show: “No PM assigned; Tenant Admins will review”
+Implement with a safe fallback.
+
+6.2 Private tasks/projects:
+- Review queue must not leak private items.
+- Only include tasks the current viewer can access (apply existing visibility rules).
+
+6.3 Archiving:
+- Exclude archived tasks from review queue by default.
+
+6.4 Performance:
+- Review queue query must be indexed and fast.
+- Return lightweight items only.
+
+============================================================
+PHASE 7 — TESTING (MINIMUM)
+============================================================
+- Employee requests review on a task:
+  - status unchanged
+  - needs_pm_review true
+  - badge appears
+- PM dashboard shows the task (if PM owns project)
+- Tenant Admin dashboard shows the task
+- Employee dashboard does NOT show review card
+- Clicking item opens drawer
+- PM/Admin can clear review
+- Optional: PM/Admin can mark complete (explicit action) and clears review
+
+============================================================
+PHASE 8 — APP DOCS UPDATE (MANDATORY)
+============================================================
+Add App Docs section:
+“Task Review Queue (Send to PM for Review)”
+Include:
+- Fields added
+- UI behavior (drawer + badge)
+- Dashboard card behavior
+- Permissions (who can request/clear)
+- Fallback when project has no PM
+- API endpoints
+
+============================================================
+STOP CONDITION
+============================================================
+Stop after:
+- Task drawer action + badge works
+- Review queue card appears for PM/Admin dashboards only
+- Clicking opens drawer
+- PM/Admin can clear review and optionally complete task
+- Docs updated
+- All behind ENABLE_TASK_REVIEW_QUEUE

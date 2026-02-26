@@ -30,6 +30,7 @@ import {
   Lock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import type { TaskWithRelations, User, Tag } from "@shared/schema";
 import { getPreviewText } from "@/components/richtext/richTextUtils";
 import { usePrefetchTask } from "@/hooks/use-prefetch";
@@ -71,6 +72,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
   const isCompleted = task.status === "done";
   const { prefetch: prefetchTask, cancel: cancelPrefetch } = usePrefetchTask();
   const isMobile = useIsMobile();
+  const { enableTaskReviewQueue } = useFeatureFlags();
   const { copyLink, hasProject } = useTaskLink(task, projectId);
   const [justCompleted, setJustCompleted] = useState(false);
   const [showTimeDialog, setShowTimeDialog] = useState(false);
@@ -195,6 +197,17 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
             </div>
           )}
 
+          {enableTaskReviewQueue && (task as any).needsPmReview && (
+            <div className="pl-6">
+              <Badge
+                className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700"
+                data-testid={`badge-review-${task.id}`}
+              >
+                Review
+              </Badge>
+            </div>
+          )}
+
           {task.description && getPreviewText(task.description, 150) && (
             <p className="text-xs text-muted-foreground line-clamp-2 pl-6">
               {getPreviewText(task.description, 150)}
@@ -310,6 +323,14 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
                 Personal
               </Badge>
             )}
+            {enableTaskReviewQueue && (task as any).needsPmReview && (
+              <Badge
+                className="text-xs bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700"
+                data-testid={`badge-review-${task.id}`}
+              >
+                Review
+              </Badge>
+            )}
             {subtaskCount > 0 && (
               <span className="text-xs text-muted-foreground">
                 {completedSubtasks}/{subtaskCount}
@@ -406,6 +427,14 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
             <Badge variant="outline" className="text-xs shrink-0 gap-1 px-1.5 py-0">
               <UserIcon className="h-3 w-3" />
               Personal
+            </Badge>
+          )}
+          {enableTaskReviewQueue && (task as any).needsPmReview && (
+            <Badge
+              className="text-xs shrink-0 bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700"
+              data-testid={`badge-review-${task.id}`}
+            >
+              Review
             </Badge>
           )}
           {subtaskCount > 0 && (

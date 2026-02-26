@@ -204,6 +204,7 @@ export const config = {
     enableForecastSnapshots: optionalEnvBool("ENABLE_FORECAST_SNAPSHOTS", true),
     enableAlertAutomation: optionalEnvBool("ENABLE_ALERT_AUTOMATION", true),
     enableWeeklyOpsDigest: optionalEnvBool("ENABLE_WEEKLY_OPS_DIGEST", true),
+    enableTaskReviewQueue: optionalEnvBool("ENABLE_TASK_REVIEW_QUEUE", true),
     // Performance optimization flags (server-side only)
     enableTasksBatchHydration: optionalEnvBool("ENABLE_TASKS_BATCH_HYDRATION", true),
     enableClientsBatchExpansion: optionalEnvBool("ENABLE_CLIENTS_BATCH_EXPANSION", true),

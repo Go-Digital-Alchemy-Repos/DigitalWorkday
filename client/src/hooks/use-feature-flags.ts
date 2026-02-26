@@ -29,6 +29,7 @@ export interface FeatureFlags {
   enableForecastSnapshots: boolean;
   enableAlertAutomation: boolean;
   enableWeeklyOpsDigest: boolean;
+  enableTaskReviewQueue: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -60,6 +61,7 @@ const ALL_OFF: FeatureFlags = {
   enableForecastSnapshots: false,
   enableAlertAutomation: false,
   enableWeeklyOpsDigest: false,
+  enableTaskReviewQueue: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

@@ -29,8 +29,10 @@ import { TaskCard } from "@/features/tasks/task-card";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { CreateProjectDialog } from "@/features/projects";
 import { TaskProgressBar } from "@/components/task-progress-bar";
+import { ReviewQueueCard } from "@/components/review-queue-card";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
+import { useTaskDrawer } from "@/lib/task-drawer-context";
 import type { Project, TaskWithRelations, Team, Workspace, Client, User } from "@shared/schema";
 
 interface AnalyticsSummary {
@@ -711,6 +713,7 @@ function EmployeeDashboardSection({
 
 export default function Home() {
   const { user } = useAuth();
+  const { openTask } = useTaskDrawer();
   const [, setLocation] = useLocation();
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
@@ -883,6 +886,8 @@ export default function Home() {
             </CardContent>
           </Card>
         )}
+
+        <ReviewQueueCard onTaskClick={openTask} />
 
         {isAdmin ? (
           <AdminDashboardSection
