@@ -1,0 +1,96 @@
+PM PORTFOLIO DASHBOARD
+NON-DESTRUCTIVE • ROLE-AWARE • PERFORMANCE-SAFE • DOCUMENTED
+
+GOAL:
+Provide Project Managers with a portfolio-level intelligence dashboard.
+
+Feature flag:
+ENABLE_PM_PORTFOLIO_DASHBOARD
+
+============================================================
+PHASE 1 — BACKEND AGGREGATOR
+============================================================
+
+Create:
+services/reports/pmPortfolioAggregator.ts
+
+Function:
+getPmPortfolio({ tenantId, pmUserId, dateRange })
+
+Return:
+{
+  projects: [
+    {
+      projectId,
+      name,
+      healthScore?,
+      milestoneCompletionPct?,
+      burnPercent?,
+      isBurnRisk,
+      overdueTasksCount,
+      utilizationPressure?,
+      riskTrend?
+    }
+  ],
+  summary: {
+    totalProjects,
+    atRiskCount,
+    burnRiskCount,
+    avgHealthScore,
+    totalOverdueTasks
+  }
+}
+
+Must:
+- Only include projects where user is project manager
+- Respect private visibility
+- Use batched queries
+
+============================================================
+PHASE 2 — API
+============================================================
+
+GET /api/reports/pm/portfolio
+
+============================================================
+PHASE 3 — FRONTEND
+============================================================
+
+Add new Dashboard tab:
+“PM Portfolio”
+
+Show:
+1) Summary cards
+2) Portfolio table with:
+   - Health
+   - Milestone progress
+   - Burn %
+   - Overdue count
+   - Risk badge
+
+Each row clickable → Project detail
+
+============================================================
+PHASE 4 — INTEGRATE REVIEW QUEUE + BURN RISK
+============================================================
+
+In PM Portfolio:
+- Highlight projects with:
+  - Tasks in review
+  - Burn risk
+  - Milestone overdue
+
+============================================================
+PHASE 5 — APP DOCS UPDATE
+============================================================
+
+Document:
+- Portfolio metrics
+- Data sources
+- Performance notes
+- Future expansion (capacity + AI focus)
+
+STOP when:
+- PM sees complete portfolio overview
+- Metrics accurate
+- Dashboard performant
