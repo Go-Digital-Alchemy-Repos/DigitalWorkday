@@ -88,6 +88,18 @@ export const folderRepo = {
       throw new Error("Cannot delete folder with assets");
     }
 
+    // Null out folderId on soft-deleted assets so the FK constraint allows deletion
+    await db
+      .update(assets)
+      .set({ folderId: null })
+      .where(
+        and(
+          eq(assets.folderId, id),
+          eq(assets.tenantId, tenantId),
+          eq(assets.isDeleted, true)
+        )
+      );
+
     await db
       .delete(assetFolders)
       .where(and(eq(assetFolders.id, id), eq(assetFolders.tenantId, tenantId)));
