@@ -1,11 +1,13 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Loader2, ChevronRight, CheckSquare, ListTodo, MessageSquare, FileText, History, Link2 } from "lucide-react";
+import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Loader2, ChevronRight, CheckSquare, ListTodo, MessageSquare, FileText, History, Link2, Pencil } from "lucide-react";
 import { TaskPanelShell } from "./task-panel/TaskPanelShell";
 import { TaskHistoryTab } from "./task-panel/TaskHistoryTab";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RichTextEditor } from "@/components/richtext";
+import { RichTextRenderer } from "@/components/richtext/RichTextRenderer";
+import { toPlainText } from "@/components/richtext/richTextUtils";
 import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
@@ -122,6 +124,7 @@ export function SubtaskDetailDrawer({
   const { user: currentUser } = useAuth();
   const [activeTab, setActiveTab] = useState<"overview" | "history">("overview");
   const [editingTitle, setEditingTitle] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
   const [title, setTitle] = useState(subtask?.title || "");
   const [description, setDescription] = useState<string>(
     typeof subtask?.description === 'string' 
@@ -355,6 +358,7 @@ export function SubtaskDetailDrawer({
           : subtask.description ? JSON.stringify(subtask.description) : ""
       );
       setLocalDueDate(subtask.dueDate ? new Date(subtask.dueDate) : null);
+      setEditingDescription(false);
     }
   }, [subtask?.id]);
 
@@ -816,16 +820,41 @@ export function SubtaskDetailDrawer({
         <div className="p-4 sm:p-6 space-y-6">
           {activeTab === "overview" && (
             <>
-              <div className="space-y-2">
-                <label className="text-xs font-medium text-muted-foreground">Description</label>
-                <RichTextEditor
-                  value={description}
-                  onChange={handleDescriptionChange}
-                  placeholder="Add a description... Type @ to mention someone"
-                  minHeight="120px"
-                  users={mentionUsers}
-                  data-testid="textarea-subtask-description"
-                />
+              <div className="space-y-1.5 overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-muted-foreground">Description</label>
+                  {!editingDescription && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                      onClick={() => setEditingDescription(true)}
+                      data-testid="button-edit-description"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
+                <div className="max-w-full overflow-hidden">
+                  {editingDescription || !toPlainText(description).trim() ? (
+                    <RichTextEditor
+                      value={description}
+                      onChange={handleDescriptionChange}
+                      placeholder="Add a description... Type @ to mention someone"
+                      minHeight="120px"
+                      users={mentionUsers}
+                      data-testid="textarea-subtask-description"
+                    />
+                  ) : (
+                    <div
+                      className="cursor-pointer rounded-md border border-transparent hover:border-border p-2 -m-2 transition-colors text-sm"
+                      onClick={() => setEditingDescription(true)}
+                      data-testid="description-readonly"
+                    >
+                      <RichTextRenderer value={description} />
+                    </div>
+                  )}
+                </div>
               </div>
 
               {projectId && (

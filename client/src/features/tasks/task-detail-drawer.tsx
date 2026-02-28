@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, Clock, Eye, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Check, Plus, Trash2, Link2, Lock, Share2, SendHorizonal, CheckCircle, History, MessageSquare, FileText } from "lucide-react";
+import { X, Calendar, Users, Tag, Flag, Layers, Clock, Eye, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Check, Plus, Trash2, Link2, Lock, Share2, SendHorizonal, CheckCircle, History, MessageSquare, FileText, Pencil } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { TaskDrawerSkeleton } from "@/components/skeletons";
@@ -10,6 +10,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { RichTextEditor } from "@/components/richtext";
+import { RichTextRenderer } from "@/components/richtext/RichTextRenderer";
 import { toPlainText } from "@/components/richtext/richTextUtils";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { Separator } from "@/components/ui/separator";
@@ -176,6 +177,7 @@ export function TaskDetailDrawer({
   const canClearReview = isAdmin || isProjectOwner;
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
+  const [editingDescription, setEditingDescription] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
   const [description, setDescription] = useState(task?.description || "");
   const [estimateMinutes, setEstimateMinutes] = useState<string>(
@@ -772,6 +774,7 @@ export function TaskDetailDrawer({
       setTitle(task.title);
       setDescription(task.description || "");
       setEstimateMinutes(task.estimateMinutes ? String(task.estimateMinutes) : "");
+      setEditingDescription(false);
     }
   }, [task?.id, task?.description, task?.title, task?.estimateMinutes]);
 
@@ -1306,19 +1309,43 @@ export function TaskDetailDrawer({
         <div className="p-4 sm:p-6 space-y-6">
           {activeTab === "overview" && (
             <>
-              <FormFieldWrapper label="Description" className="overflow-hidden">
-                <div className="max-w-full overflow-hidden">
-                  <RichTextEditor
-                    value={description}
-                    onChange={handleDescriptionChange}
-                    onBlur={handleDescriptionBlur}
-                    placeholder="Add a description... Type @ to mention someone"
-                    minHeight="120px"
-                    users={mentionUsers}
-                    data-testid="textarea-description"
-                  />
+              <div className="space-y-1.5 overflow-hidden">
+                <div className="flex items-center justify-between">
+                  <label className="text-xs font-medium text-muted-foreground">Description</label>
+                  {!editingDescription && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                      onClick={() => setEditingDescription(true)}
+                      data-testid="button-edit-description"
+                    >
+                      <Pencil className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
                 </div>
-              </FormFieldWrapper>
+                <div className="max-w-full overflow-hidden">
+                  {editingDescription || !toPlainText(description).trim() ? (
+                    <RichTextEditor
+                      value={description}
+                      onChange={handleDescriptionChange}
+                      onBlur={handleDescriptionBlur}
+                      placeholder="Add a description... Type @ to mention someone"
+                      minHeight="120px"
+                      users={mentionUsers}
+                      data-testid="textarea-description"
+                    />
+                  ) : (
+                    <div
+                      className="cursor-pointer rounded-md border border-transparent hover:border-border p-2 -m-2 transition-colors text-sm"
+                      onClick={() => setEditingDescription(true)}
+                      data-testid="description-readonly"
+                    >
+                      <RichTextRenderer value={description} />
+                    </div>
+                  )}
+                </div>
+              </div>
 
               {task.projectId && (
                 <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66]">
