@@ -1,6 +1,6 @@
 import { useState, useCallback, memo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { Plus, GripVertical, X, CalendarIcon, UserCircle, Sparkles, Loader2 } from "lucide-react";
+import { Plus, GripVertical, X, CalendarIcon, UserCircle, Sparkles, Loader2, Link2 } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -385,6 +385,25 @@ function SubtaskListInner({
                     })()}
                   </div>
                 )}
+
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  className="h-6 w-6 flex-shrink-0 opacity-0 group-hover:opacity-100"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    const url = `${window.location.origin}/projects/${projectId}?task=${subtask.id}`;
+                    navigator.clipboard.writeText(url);
+                    toast({
+                      title: "Link copied",
+                      description: "Subtask link copied to clipboard",
+                    });
+                  }}
+                  title="Copy subtask link"
+                  data-testid={`button-copy-subtask-link-list-${subtask.id}`}
+                >
+                  <Link2 className="h-3.5 w-3.5 text-muted-foreground" />
+                </Button>
 
                 <Popover>
                   <PopoverTrigger asChild>
