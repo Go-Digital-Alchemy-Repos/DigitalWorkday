@@ -84,6 +84,7 @@ import {
   notifyTaskStatusChanged,
 } from "../../features/notifications/notification.service";
 import { evaluateAutomation } from "../../features/automation/clientStageAutomation.service";
+import { recordHistory, computeChanges } from "../../services/taskHistoryService";
 
 const router = createApiRouter({ policy: "authTenant", skipEnvelope: true });
 
@@ -744,6 +745,21 @@ router.patch("/tasks/:id", async (req, res) => {
 
     const taskWithRelations = await storage.getTaskWithRelations(task.id);
 
+    if (taskBefore && tenantId) {
+      const trackedFields = ["title", "description", "status", "priority", "dueDate", "startDate", "estimateMinutes", "milestoneId", "visibility", "sectionId"];
+      const changes = computeChanges(taskBefore as any, task as any, trackedFields);
+      if (changes.length > 0) {
+        recordHistory({
+          tenantId,
+          entityType: "task",
+          entityId: task.id,
+          actorUserId: userId,
+          actionType: "update",
+          changes,
+        }).catch(() => {});
+      }
+    }
+
     if (task.isPersonal && task.createdBy) {
       emitMyTaskUpdated(task.createdBy, task.id, data, getCurrentWorkspaceId(req));
     } else if (task.projectId) {
@@ -833,6 +849,26 @@ router.patch("/tasks/:id", async (req, res) => {
     res.json(taskWithRelations);
   } catch (error) {
     return handleRouteError(res, error, "PATCH /api/tasks/:id", req);
+  }
+});
+
+router.get("/tasks/:id/history", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) {
+      return sendError(res, AppError.unauthorized("Tenant required"), req);
+    }
+    const task = await storage.getTaskByIdAndTenant(req.params.id, tenantId);
+    if (!task) {
+      return sendError(res, AppError.notFound("Task"), req);
+    }
+    const { getHistoryWithActors } = await import("../../services/taskHistoryService");
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const history = await getHistoryWithActors(tenantId, "task", req.params.id, limit, offset);
+    res.json(history);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/tasks/:id/history", req);
   }
 });
 

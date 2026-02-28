@@ -1,0 +1,89 @@
+PROJECT BUDGET VS BURN ENGINE
+NON-DESTRUCTIVE • ADDITIVE • FINANCIAL SAFE • DOCUMENTED
+
+GOAL:
+Enable tracking of planned hours vs actual hours and predict overruns.
+
+Feature flag:
+ENABLE_PROJECT_BUDGET_ENGINE
+
+============================================================
+PHASE 1 — DATA MODEL
+============================================================
+
+Add to projects table:
+- budget_hours (decimal nullable)
+- budget_amount (decimal nullable)  // optional future billing
+- billing_rate (decimal nullable)
+- budget_start_date (nullable)
+- budget_end_date (nullable)
+
+Indexes:
+- (tenant_id)
+
+============================================================
+PHASE 2 — BURN METRICS SERVICE
+============================================================
+
+Create:
+services/projects/burnEngine.ts
+
+Functions:
+- getProjectBurnMetrics({ projectId, dateRange })
+
+Return:
+{
+  plannedHours,
+  actualHours,
+  burnRatePerWeek,
+  percentConsumed,
+  predictedOverrunDate?,
+  projectedFinalHours?,
+  isAtRisk (boolean)
+}
+
+Logic:
+- actualHours from time_entries
+- burnRate = actualHours / elapsedWeeks
+- predictedFinalHours = burnRate * totalPlannedWeeks
+- atRisk if projectedFinalHours > budget_hours
+
+============================================================
+PHASE 3 — API
+============================================================
+
+GET /api/projects/:projectId/burn-metrics
+
+============================================================
+PHASE 4 — FRONTEND
+============================================================
+
+In Project detail view:
+Add “Budget & Burn” card:
+- Planned vs Actual bar
+- % consumed
+- Overrun risk indicator
+- Predicted completion projection
+
+============================================================
+PHASE 5 — ALERT INTEGRATION
+============================================================
+
+If projected overrun detected:
+- Add risk flag to project
+- Surface in PM Portfolio Dashboard later
+
+============================================================
+PHASE 6 — APP DOCS UPDATE
+============================================================
+
+Document:
+- Burn formula
+- Projection logic
+- Risk threshold
+- Future: margin tracking
+
+STOP when:
+- Burn metrics accurate
+- UI stable
+- No performance issues

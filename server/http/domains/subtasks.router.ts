@@ -21,6 +21,7 @@ import {
   emitSubtaskUpdated,
   emitSubtaskDeleted,
 } from "../../realtime/events";
+import { recordHistory, computeChanges } from "../../services/taskHistoryService";
 import {
   notifyCommentAdded,
   notifyCommentMention,
@@ -126,9 +127,49 @@ router.patch("/subtasks/:id", async (req, res) => {
       );
     }
 
+    if (existingSubtask && tenantId) {
+      const userId = getCurrentUserId(req);
+      const trackedFields = ["title", "description", "status", "priority", "dueDate", "estimateMinutes", "completed"];
+      const changes = computeChanges(existingSubtask as any, subtask as any, trackedFields);
+      if (changes.length > 0) {
+        recordHistory({
+          tenantId,
+          entityType: "subtask",
+          entityId: subtask.id,
+          actorUserId: userId,
+          actionType: "update",
+          changes,
+        }).catch(() => {});
+      }
+    }
+
     res.json(subtask);
   } catch (error) {
     return handleRouteError(res, error, "PATCH /api/subtasks/:id", req);
+  }
+});
+
+router.get("/subtasks/:id/history", async (req, res) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) {
+      return sendError(res, AppError.unauthorized("Tenant required"), req);
+    }
+    const subtask = await storage.getSubtask(req.params.id);
+    if (!subtask) {
+      return sendError(res, AppError.notFound("Subtask"), req);
+    }
+    const parentTask = await storage.getTaskByIdAndTenant(subtask.taskId, tenantId);
+    if (!parentTask) {
+      return sendError(res, AppError.notFound("Task"), req);
+    }
+    const { getHistoryWithActors } = await import("../../services/taskHistoryService");
+    const limit = parseInt(req.query.limit as string) || 50;
+    const offset = parseInt(req.query.offset as string) || 0;
+    const history = await getHistoryWithActors(tenantId, "subtask", req.params.id, limit, offset);
+    res.json(history);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/subtasks/:id/history", req);
   }
 });
 

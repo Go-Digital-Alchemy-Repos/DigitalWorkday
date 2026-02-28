@@ -1,7 +1,8 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare, Save, Check, Link2 } from "lucide-react";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
+import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, MessageSquare, FileText, History, Link2 } from "lucide-react";
+import { TaskPanelShell } from "./task-panel/TaskPanelShell";
+import { TaskHistoryTab } from "./task-panel/TaskHistoryTab";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { RichTextEditor } from "@/components/richtext";
@@ -26,7 +27,6 @@ import { format } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { useIsMobile } from "@/hooks/use-mobile";
 import type { Subtask, User, Tag as TagType, Comment, TaskWithRelations } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { ColorPicker } from "@/components/ui/color-picker";
@@ -42,6 +42,19 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+
+type ActiveTimer = {
+  id: string;
+  taskId: string | null;
+  status: string;
+};
+
+function formatDurationShort(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h > 0) return `${h}h ${m}m`;
+  return `${m}m`;
+}
 
 type SubtaskOrTask = (Subtask | (TaskWithRelations & { taskId?: string; completed?: boolean; assigneeId?: string | null })) & {
   id: string;
@@ -107,7 +120,7 @@ export function SubtaskDetailDrawer({
 
   const { toast } = useToast();
   const { user: currentUser } = useAuth();
-  const isMobile = useIsMobile();
+  const [activeTab, setActiveTab] = useState<"overview" | "comments" | "time" | "history">("overview");
   const [editingTitle, setEditingTitle] = useState(false);
   const [title, setTitle] = useState(subtask?.title || "");
   const [description, setDescription] = useState<string>(
@@ -221,11 +234,7 @@ export function SubtaskDetailDrawer({
     },
     onSuccess: invalidateCommentQueries,
     onError: (error: any) => {
-      toast({
-        title: "Failed to update comment",
-        description: error?.message || "Please try again",
-        variant: "destructive",
-      });
+      toast({ title: "Failed to update comment", description: error?.message || "Please try again", variant: "destructive" });
     },
   });
 
@@ -235,11 +244,7 @@ export function SubtaskDetailDrawer({
     },
     onSuccess: invalidateCommentQueries,
     onError: (error: any) => {
-      toast({
-        title: "Failed to delete comment",
-        description: error?.message || "Please try again",
-        variant: "destructive",
-      });
+      toast({ title: "Failed to delete comment", description: error?.message || "Please try again", variant: "destructive" });
     },
   });
 
@@ -364,9 +369,6 @@ export function SubtaskDetailDrawer({
 
   const startTimerMutation = useMutation({
     mutationFn: async () => {
-      if (projectId && !isActualSubtask) {
-        // Handle case where we might need more context for non-subtask items if any
-      }
       return apiRequest("POST", "/api/timer/start", {
         clientId: (subtask as any).project?.clientId || null,
         projectId: projectId || null,
@@ -378,7 +380,7 @@ export function SubtaskDetailDrawer({
       queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
       toast({ title: "Timer started", description: `Tracking time for "${subtask?.title}"` });
     },
-    onError: (error: Error) => {
+    onError: () => {
       toast({ title: "Failed to start timer", variant: "destructive" });
     },
   });
@@ -479,579 +481,472 @@ export function SubtaskDetailDrawer({
     onOpenChange(false);
   };
 
+  const tabItems = [
+    { id: "overview" as const, label: "Overview", icon: <FileText className="h-3.5 w-3.5" /> },
+    { id: "comments" as const, label: "Comments", icon: <MessageSquare className="h-3.5 w-3.5" />, count: subtaskComments.length },
+    { id: "time" as const, label: "Time", icon: <Timer className="h-3.5 w-3.5" />, count: timeEntries.length },
+    { id: "history" as const, label: "History", icon: <History className="h-3.5 w-3.5" /> },
+  ];
+
+  const panelHeader = (
+    <div className="px-4 sm:px-6 py-3 space-y-2">
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back to parent task" data-testid="button-back-to-parent">
+            <ArrowLeft className="h-4 w-4" />
+          </Button>
+          <StatusBadge status={subtask.status as any} />
+        </div>
+        <div className="flex items-center gap-1">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => {
+              const url = `${window.location.origin}/projects/${projectId}?task=${subtask.id}`;
+              navigator.clipboard.writeText(url);
+              toast({ title: "Link copied", description: "Subtask link copied to clipboard" });
+            }}
+            title="Copy subtask link"
+            data-testid="button-copy-subtask-link"
+          >
+            <Link2 className="h-4 w-4" />
+          </Button>
+          <Button variant="secondary" size="icon" onClick={() => onOpenChange(false)} aria-label="Close drawer" data-testid="button-close-subtask-drawer">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      <div className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap" data-testid="subtask-breadcrumbs">
+        <button onClick={onBack} className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer" data-testid="breadcrumb-parent-task">
+          <CheckSquare className="h-3 w-3" />
+          <span className="truncate max-w-[120px] sm:max-w-[150px]">{parentTaskTitle}</span>
+        </button>
+        <ChevronRight className="h-3 w-3 shrink-0" />
+        <span className="flex items-center gap-1 font-medium text-foreground">
+          <ListTodo className="h-3 w-3" />
+          <span className="truncate max-w-[120px] sm:max-w-[150px]">{subtask.title}</span>
+        </span>
+      </div>
+      <div className="flex items-center gap-1 border-b border-border -mx-4 sm:-mx-6 px-4 sm:px-6">
+        {tabItems.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors",
+              activeTab === tab.id
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+            )}
+            data-testid={`tab-${tab.id}`}
+          >
+            {tab.icon}
+            {tab.label}
+            {tab.count !== undefined && tab.count > 0 && (
+              <Badge variant="secondary" className="h-5 min-w-[20px] px-1 text-[10px]">{tab.count}</Badge>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const panelSidebar = (
+    <div className="p-4 space-y-5">
+      <div className="space-y-4">
+        {editingTitle ? (
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={handleTitleSave}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleTitleSave();
+              if (e.key === "Escape") { setTitle(subtask.title); setEditingTitle(false); }
+            }}
+            className="text-lg font-semibold h-auto py-1"
+            autoFocus
+            data-testid="input-subtask-title"
+          />
+        ) : (
+          <h2
+            className="text-lg font-semibold cursor-pointer hover:text-muted-foreground transition-colors line-clamp-2"
+            onClick={() => { setTitle(subtask.title); setEditingTitle(true); }}
+            data-testid="text-subtask-title"
+          >
+            {title || subtask.title}
+          </h2>
+        )}
+        {isActualSubtask && subtask.createdAt && (
+          <div className="text-xs text-muted-foreground" data-testid="subtask-created-at">
+            Created {format(new Date(subtask.createdAt), "MMM d, yyyy")}
+          </div>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <Layers className="h-3.5 w-3.5" />
+            Status
+          </label>
+          <Select value={subtask.status || "todo"} onValueChange={(value) => onUpdate?.(subtask.id, { status: value })}>
+            <SelectTrigger className="w-full h-8" data-testid="select-subtask-status">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todo">To Do</SelectItem>
+              <SelectItem value="in_progress">In Progress</SelectItem>
+              <SelectItem value="blocked">Blocked</SelectItem>
+              <SelectItem value="done">Done</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <Flag className="h-3.5 w-3.5" />
+            Priority
+          </label>
+          <PrioritySelector
+            value={(subtask.priority || "medium") as PriorityLevel}
+            onChange={(value) => onUpdate?.(subtask.id, { priority: value })}
+            className="w-full h-8"
+            data-testid="select-subtask-priority"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <Calendar className="h-3.5 w-3.5" />
+            Due Date
+          </label>
+          <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" className="justify-start px-2 font-normal w-full h-8" data-testid="button-subtask-due-date">
+                {localDueDate ? format(localDueDate, "MMM d, yyyy") : <span className="text-muted-foreground">Set due date</span>}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <CalendarComponent
+                mode="single"
+                selected={localDueDate || undefined}
+                onSelect={(date) => { setLocalDueDate(date || null); setDueDatePopoverOpen(false); }}
+                initialFocus
+              />
+              {localDueDate && (
+                <div className="p-2 border-t">
+                  <Button variant="ghost" size="sm" className="w-full" onClick={() => { setLocalDueDate(null); setDueDatePopoverOpen(false); }}>
+                    Clear due date
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <Clock className="h-3.5 w-3.5" />
+            Estimate
+          </label>
+          <Input
+            type="number"
+            min="0"
+            value={subtask.estimateMinutes || ""}
+            onChange={(e) => {
+              const val = e.target.value ? parseInt(e.target.value) : null;
+              onUpdate?.(subtask.id, { estimateMinutes: val });
+            }}
+            placeholder="Minutes"
+            className="w-full h-8"
+            data-testid="input-subtask-estimate"
+          />
+        </div>
+
+        <div className="space-y-2">
+          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            Assignees
+          </label>
+          {isActualSubtask ? (
+            loadingAssignees ? (
+              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            ) : (
+              <MultiSelectAssignees
+                taskId={subtask.id}
+                assignees={assigneeUsers}
+                apiPrefix={`/api/subtasks/${subtask.id}`}
+                invalidateKeys={[
+                  ["/api/subtasks", subtask.id, "assignees"],
+                  ["/api/subtasks", subtask.id],
+                  ["/api/tasks/my"],
+                ]}
+              />
+            )
+          ) : (
+            <MultiSelectAssignees taskId={subtask.id} assignees={assigneeUsers} disabled />
+          )}
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <Tag className="h-3.5 w-3.5" />
+          Tags
+        </label>
+        <div className="flex flex-wrap gap-1.5 min-h-[28px] items-center">
+          {(isActualSubtask && loadingTags) ? (
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+          ) : (
+            <>
+              {(isActualSubtask ? subtaskTags : childTaskTags).map((st) => {
+                const tag = isActualSubtask ? (st as SubtaskTag).tag : (st as any).tag;
+                const tagId = isActualSubtask ? (st as SubtaskTag).tagId : (st as any).tagId;
+                if (!tag) return null;
+                return (
+                  <Badge key={tagId} variant="secondary" className="gap-1 pr-1" style={{ backgroundColor: `${tag.color}20`, borderColor: tag.color }} data-testid={`subtask-tag-${tag.id}`}>
+                    <span style={{ color: tag.color }}>{tag.name}</span>
+                    {isActualSubtask && (
+                      <button className="ml-1 h-3 w-3 rounded-full hover:bg-destructive/20 flex items-center justify-center" onClick={() => removeTagMutation.mutate(tag.id)} data-testid={`button-remove-tag-${tag.id}`}>
+                        <X className="h-2 w-2" />
+                      </button>
+                    )}
+                  </Badge>
+                );
+              })}
+              {(isActualSubtask ? subtaskTags : childTaskTags).length === 0 && (
+                <span className="text-xs text-muted-foreground">No tags</span>
+              )}
+            </>
+          )}
+          {isActualSubtask && (
+            <Popover open={tagPopoverOpen} onOpenChange={(open) => { setTagPopoverOpen(open); if (!open) { setIsCreatingTag(false); setNewTagName(""); } }}>
+              <PopoverTrigger asChild>
+                <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full hover:bg-muted" data-testid="button-add-subtask-tag">
+                  <Plus className="h-3.5 w-3.5" />
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-56 p-2" align="end">
+                {isCreatingTag ? (
+                  <div className="space-y-2">
+                    <div className="text-xs font-medium text-muted-foreground">Create new tag</div>
+                    <Input value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="Tag name..." className="h-8 text-sm" autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleCreateTag(); if (e.key === "Escape") { setIsCreatingTag(false); setNewTagName(""); } }} data-testid="input-new-tag-name" />
+                    <div className="flex items-center gap-2">
+                      <ColorPicker value={newTagColor} onChange={setNewTagColor} data-testid="input-new-tag-color" />
+                      <span className="text-xs text-muted-foreground">Pick color</span>
+                    </div>
+                    <div className="flex gap-1">
+                      <Button size="sm" className="flex-1" onClick={handleCreateTag} disabled={!newTagName.trim() || createTagMutation.isPending} data-testid="button-create-tag-submit">
+                        {createTagMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Create"}
+                      </Button>
+                      <Button variant="ghost" size="sm" onClick={() => { setIsCreatingTag(false); setNewTagName(""); }} data-testid="button-cancel-create-tag">Cancel</Button>
+                    </div>
+                  </div>
+                ) : (
+                  <div className="space-y-1">
+                    <ScrollArea className="max-h-48">
+                      <div className="space-y-0.5">
+                        {workspaceTags.map((tag) => {
+                          if (assignedTagIds.has(tag.id)) return null;
+                          return (
+                            <button key={tag.id} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover-elevate" onClick={() => addTagMutation.mutate(tag.id)} data-testid={`button-subtask-add-tag-${tag.id}`}>
+                              <div className="h-3 w-3 rounded-full" style={{ backgroundColor: tag.color || "#888" }} />
+                              <span className="text-sm truncate">{tag.name}</span>
+                            </button>
+                          );
+                        })}
+                        {workspaceTags.filter((t) => !assignedTagIds.has(t.id)).length === 0 && (
+                          <div className="px-2 py-2 text-xs text-muted-foreground">{workspaceTags.length === 0 ? "No tags in workspace" : "All tags added"}</div>
+                        )}
+                      </div>
+                    </ScrollArea>
+                    {workspaceId && (
+                      <Button variant="ghost" size="sm" className="w-full justify-start text-xs" onClick={() => setIsCreatingTag(true)} data-testid="button-create-new-tag">
+                        <Plus className="h-3 w-3 mr-1" /> Create new tag
+                      </Button>
+                    )}
+                  </div>
+                )}
+              </PopoverContent>
+            </Popover>
+          )}
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <CheckSquare className="h-3.5 w-3.5" />
+          Parent Task
+        </label>
+        <button onClick={onBack} className="text-sm text-primary hover:underline cursor-pointer" data-testid="link-parent-task">
+          {parentTaskTitle}
+        </button>
+      </div>
+    </div>
+  );
+
+  const panelFooter = (
+    <DrawerActionBar
+      showTimer={false}
+      showSave={true}
+      onSave={handleSaveAll}
+      saveLabel="Save Subtask"
+      showComplete={isActualSubtask}
+      onMarkComplete={handleMarkComplete}
+      isCompleting={toggleCompleteMutation.isPending}
+      completeLabel={(subtask as Subtask).completed ? "Reopen" : "Mark Complete"}
+    />
+  );
+
   return (
     <>
-    <Sheet open={open} onOpenChange={handleOpenChange}>
-      <SheetContent
-        className="w-full sm:max-w-xl overflow-y-auto p-0"
+      <TaskPanelShell
+        open={open}
+        onOpenChange={handleOpenChange}
+        header={panelHeader}
+        sidebar={panelSidebar}
+        footer={panelFooter}
         data-testid="subtask-detail-drawer"
       >
-        <SheetHeader className="sticky top-0 z-10 bg-background border-b border-border px-3 sm:px-6 py-3 sm:py-4">
-          <SheetDescription className="sr-only">Edit subtask details</SheetDescription>
-          <div className="flex items-center justify-between gap-2">
-            <div className="flex items-center gap-2 min-w-0">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={onBack}
-                aria-label="Back to parent task"
-                data-testid="button-back-to-parent"
-              >
-                <ArrowLeft className="h-4 w-4" />
-              </Button>
-              <SheetTitle className="sr-only">Subtask Details</SheetTitle>
-              <StatusBadge status={subtask.status as any} />
-            </div>
-            <div className="flex items-center gap-1">
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => {
-                  const url = `${window.location.origin}/projects/${projectId}?task=${subtask.id}`;
-                  navigator.clipboard.writeText(url);
-                  toast({
-                    title: "Link copied",
-                    description: "Subtask link copied to clipboard",
-                  });
-                }}
-                title="Copy subtask link"
-                data-testid="button-copy-subtask-link"
-              >
-                <Link2 className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="secondary"
-                size="icon"
-                onClick={() => onOpenChange(false)}
-                aria-label="Close drawer"
-                data-testid="button-close-subtask-drawer"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2 flex-wrap" data-testid="subtask-breadcrumbs">
-            <button
-              onClick={onBack}
-              className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer"
-              data-testid="breadcrumb-parent-task"
-            >
-              <CheckSquare className="h-3 w-3" />
-              <span className="truncate max-w-[120px] sm:max-w-[150px]">{parentTaskTitle}</span>
-            </button>
-            <ChevronRight className="h-3 w-3 shrink-0" />
-            <span className="flex items-center gap-1 font-medium text-foreground">
-              <ListTodo className="h-3 w-3" />
-              <span className="truncate max-w-[120px] sm:max-w-[150px]">{subtask.title}</span>
-            </span>
-          </div>
-        </SheetHeader>
-
-        <div className="flex flex-col h-[calc(100vh-120px)]">
-          <ScrollArea className="flex-1">
-            <div className="px-3 sm:px-6 py-4 sm:py-6 space-y-6">
-              <div className="space-y-4">
-                {editingTitle ? (
-                  <Input
-                    value={title}
-                    onChange={(e) => setTitle(e.target.value)}
-                    onBlur={handleTitleSave}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") handleTitleSave();
-                      if (e.key === "Escape") {
-                        setTitle(subtask.title);
-                        setEditingTitle(false);
-                      }
-                    }}
-                    className="text-lg sm:text-xl font-semibold h-auto py-1"
-                    autoFocus
-                    data-testid="input-subtask-title"
-                  />
-                ) : (
-                  <h2
-                    className="text-lg sm:text-xl font-semibold cursor-pointer hover:text-muted-foreground transition-colors"
-                    onClick={() => {
-                      setTitle(subtask.title);
-                      setEditingTitle(true);
-                    }}
-                    data-testid="text-subtask-title"
-                  >
-                    {title || subtask.title}
-                  </h2>
-                )}
-
-                {isActualSubtask && subtask.createdAt && (
-                  <div className="text-xs text-muted-foreground" data-testid="subtask-created-at">
-                    Created {format(new Date(subtask.createdAt), "MMM d, yyyy")}
-                  </div>
-                )}
-
-                <div className={cn("grid gap-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                      <Flag className="h-3.5 w-3.5" />
-                      Priority
-                    </label>
-                    <PrioritySelector
-                      value={(subtask.priority || "medium") as PriorityLevel}
-                      onChange={(value) => onUpdate?.(subtask.id, { priority: value })}
-                      className={cn(isMobile ? "w-full" : "w-[140px]")}
-                      data-testid="select-subtask-priority"
-                    />
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                      <Layers className="h-3.5 w-3.5" />
-                      Status
-                    </label>
-                    <Select
-                      value={subtask.status || "todo"}
-                      onValueChange={(value) => onUpdate?.(subtask.id, { status: value })}
-                    >
-                      <SelectTrigger className={cn(isMobile ? "w-full" : "w-[140px]")} data-testid="select-subtask-status">
-                        <SelectValue />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="todo">To Do</SelectItem>
-                        <SelectItem value="in_progress">In Progress</SelectItem>
-                        <SelectItem value="blocked">Blocked</SelectItem>
-                        <SelectItem value="done">Done</SelectItem>
-                      </SelectContent>
-                    </Select>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                      <Calendar className="h-3.5 w-3.5" />
-                      Due Date
-                    </label>
-                    <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
-                      <PopoverTrigger asChild>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className={cn("justify-start px-2 font-normal", isMobile ? "w-full" : "")}
-                          data-testid="button-subtask-due-date"
-                        >
-                          {localDueDate ? (
-                            format(localDueDate, "MMM d, yyyy")
-                          ) : (
-                            <span className="text-muted-foreground">Set due date</span>
-                          )}
-                        </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-auto p-0" align="start">
-                        <CalendarComponent
-                          mode="single"
-                          selected={localDueDate || undefined}
-                          onSelect={(date) => {
-                            setLocalDueDate(date || null);
-                            setDueDatePopoverOpen(false);
-                          }}
-                          initialFocus
-                        />
-                        {localDueDate && (
-                          <div className="p-2 border-t">
-                            <Button
-                              variant="ghost"
-                              size="sm"
-                              className="w-full"
-                              onClick={() => {
-                                setLocalDueDate(null);
-                                setDueDatePopoverOpen(false);
-                              }}
-                            >
-                              Clear due date
-                            </Button>
-                          </div>
-                        )}
-                      </PopoverContent>
-                    </Popover>
-                  </div>
-
-                  <div className="space-y-2">
-                    <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                      <Clock className="h-3.5 w-3.5" />
-                      Estimate
-                    </label>
-                    <Input
-                      type="number"
-                      min="0"
-                      value={subtask.estimateMinutes || ""}
-                      onChange={(e) => {
-                        const val = e.target.value ? parseInt(e.target.value) : null;
-                        onUpdate?.(subtask.id, { estimateMinutes: val });
-                      }}
-                      placeholder="Minutes"
-                      className={cn(isMobile ? "w-full" : "w-[140px]")}
-                      data-testid="input-subtask-estimate"
-                    />
-                  </div>
-                </div>
-
-                <div className="space-y-2">
-                  <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-                    Assignees
-                  </label>
-                  {isActualSubtask ? (
-                    loadingAssignees ? (
-                      <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    ) : (
-                      <MultiSelectAssignees
-                        taskId={subtask.id}
-                        assignees={assigneeUsers}
-                        apiPrefix={`/api/subtasks/${subtask.id}`}
-                        invalidateKeys={[
-                          ["/api/subtasks", subtask.id, "assignees"],
-                          ["/api/subtasks", subtask.id],
-                          ["/api/tasks/my"],
-                        ]}
-                      />
-                    )
-                  ) : (
-                    <MultiSelectAssignees
-                      taskId={subtask.id}
-                      assignees={assigneeUsers}
-                      disabled
-                    />
-                  )}
-                </div>
-              </div>
-
-              <Separator />
-
+        <div className="p-4 sm:p-6 space-y-6">
+          {activeTab === "overview" && (
+            <>
               <div className="space-y-2">
                 <label className="text-xs font-medium text-muted-foreground">Description</label>
                 <RichTextEditor
                   value={description}
                   onChange={handleDescriptionChange}
                   placeholder="Add a description... Type @ to mention someone"
-                  minHeight="100px"
+                  minHeight="120px"
                   users={mentionUsers}
                   data-testid="textarea-subtask-description"
                 />
               </div>
 
-              <Separator />
-
               {projectId && (
-                <div 
-                  className="p-3 sm:p-4 bg-[hsl(var(--section-attachments))] border border-[hsl(var(--section-attachments-border))]"
-                  style={{ borderRadius: "10px" }}
-                >
+                <div className="p-3 sm:p-4 bg-[hsl(var(--section-attachments))] border border-[hsl(var(--section-attachments-border))]" style={{ borderRadius: "10px" }}>
                   <AttachmentUploader taskId={subtask.id} projectId={projectId} />
                 </div>
               )}
+            </>
+          )}
 
-              <div 
-                className="p-3 sm:p-4 bg-[#d1f6ff4d] dark:bg-[hsl(var(--section-tags))] border border-[#ade8f5] dark:border-[hsl(var(--section-tags-border))]"
-                style={{ borderRadius: "10px" }}
-              >
+          {activeTab === "comments" && isActualSubtask && (
+            <div className="p-3 sm:p-4 bg-[hsl(var(--section-comments))] border border-[hsl(var(--section-comments-border))]" style={{ borderRadius: "10px" }} data-testid="subtask-comments-section">
+              <CommentThread
+                comments={subtaskComments}
+                taskId={subtask.id}
+                projectId={projectId}
+                currentUserId={currentUser?.id}
+                onAdd={(body, attachmentIds) => addCommentMutation.mutate({ body, attachmentIds })}
+                onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
+                onDelete={(id) => deleteCommentMutation.mutate(id)}
+                onResolve={(id) => resolveCommentMutation.mutate(id)}
+                onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
+                users={mentionUsers}
+              />
+            </div>
+          )}
+          {activeTab === "comments" && !isActualSubtask && (
+            <p className="text-sm text-muted-foreground">Comments are not available for child tasks.</p>
+          )}
+
+          {activeTab === "time" && isActualSubtask && (
+            <div className="p-3 sm:p-4 bg-[hsl(var(--section-time))] border border-[hsl(var(--section-time-border))]" style={{ borderRadius: "10px" }}>
+              <div className="space-y-3">
                 <div className="flex items-center justify-between">
                   <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
-                    <Tag className="h-3.5 w-3.5" />
-                    Tags
+                    <Timer className="h-3.5 w-3.5" />
+                    Time Entries
                   </label>
-                  {isActualSubtask && (
-                    <Popover open={tagPopoverOpen} onOpenChange={(open) => {
-                      setTagPopoverOpen(open);
-                      if (!open) {
-                        setIsCreatingTag(false);
-                        setNewTagName("");
-                      }
-                    }}>
-                      <PopoverTrigger asChild>
-                        <Button variant="ghost" size="sm" className="h-6 px-2" data-testid="button-add-subtask-tag">
-                          <Plus className="h-3.5 w-3.5 mr-1" />
-                          Add
+                  <div className="flex items-center gap-2">
+                    {timerState === "idle" && (
+                      <Button size="sm" onClick={() => startTimerMutation.mutate()} className="h-8 border border-[#d97d26] text-white bg-[#f7902f] hover:bg-[#e67e22]" data-testid="button-timer-start">
+                        <Play className="h-3.5 w-3.5 mr-1.5" /> Start Timer
+                      </Button>
+                    )}
+                    {timerState === "loading" && (
+                      <Button size="sm" disabled className="h-8 border border-[#d97d26] text-white bg-[#f7902f]">
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Loading...
+                      </Button>
+                    )}
+                    {timerState === "running" && (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-8">
+                          <Pause className="h-3.5 w-3.5 mr-1.5" /> Pause
                         </Button>
-                      </PopoverTrigger>
-                      <PopoverContent className="w-56 p-2" align="end">
-                        {isCreatingTag ? (
-                          <div className="space-y-2">
-                            <div className="text-xs font-medium text-muted-foreground">Create new tag</div>
-                            <Input
-                              value={newTagName}
-                              onChange={(e) => setNewTagName(e.target.value)}
-                              placeholder="Tag name..."
-                              className="text-sm"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === "Enter") handleCreateTag();
-                                if (e.key === "Escape") {
-                                  setIsCreatingTag(false);
-                                  setNewTagName("");
-                                }
-                              }}
-                              data-testid="input-new-tag-name"
-                            />
-                            <div className="flex items-center gap-2">
-                              <ColorPicker
-                                value={newTagColor}
-                                onChange={setNewTagColor}
-                                data-testid="input-new-tag-color"
-                              />
-                              <span className="text-xs text-muted-foreground">Pick color</span>
-                            </div>
-                            <div className="flex gap-1">
-                              <Button
-                                size="sm"
-                                className="flex-1"
-                                onClick={handleCreateTag}
-                                disabled={!newTagName.trim() || createTagMutation.isPending}
-                                data-testid="button-create-tag-submit"
-                              >
-                                {createTagMutation.isPending ? (
-                                  <Loader2 className="h-3 w-3 animate-spin" />
-                                ) : (
-                                  "Create"
-                                )}
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => {
-                                  setIsCreatingTag(false);
-                                  setNewTagName("");
-                                }}
-                                data-testid="button-cancel-create-tag"
-                              >
-                                Cancel
-                              </Button>
-                            </div>
-                          </div>
-                        ) : (
-                          <div className="space-y-1">
-                            <ScrollArea className="max-h-48">
-                              <div className="space-y-0.5">
-                                {workspaceTags.map((tag) => {
-                                  if (assignedTagIds.has(tag.id)) return null;
-                                  return (
-                                    <button
-                                      key={tag.id}
-                                      className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover-elevate"
-                                      onClick={() => addTagMutation.mutate(tag.id)}
-                                      data-testid={`button-subtask-add-tag-${tag.id}`}
-                                    >
-                                      <div
-                                        className="h-3 w-3 rounded-full"
-                                        style={{ backgroundColor: tag.color || "#888" }}
-                                      />
-                                      <span className="text-sm truncate">{tag.name}</span>
-                                    </button>
-                                  );
-                                })}
-                                {workspaceTags.filter((t) => !assignedTagIds.has(t.id)).length === 0 && (
-                                  <div className="px-2 py-2 text-xs text-muted-foreground">
-                                    {workspaceTags.length === 0 ? "No tags in workspace" : "All tags added"}
-                                  </div>
-                                )}
-                              </div>
-                            </ScrollArea>
-                            {workspaceId && (
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                className="w-full justify-start text-xs"
-                                onClick={() => setIsCreatingTag(true)}
-                                data-testid="button-create-new-tag"
-                              >
-                                <Plus className="h-3 w-3 mr-1" />
-                                Create new tag
-                              </Button>
-                            )}
-                          </div>
-                        )}
-                      </PopoverContent>
-                    </Popover>
-                  )}
-                </div>
-                <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center">
-                  {(isActualSubtask && loadingTags) ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                  ) : (
-                    <>
-                      {(isActualSubtask ? subtaskTags : childTaskTags).map((st) => {
-                        const tag = isActualSubtask ? (st as SubtaskTag).tag : (st as any).tag;
-                        const tagId = isActualSubtask ? (st as SubtaskTag).tagId : (st as any).tagId;
-                        if (!tag) return null;
-                        return (
-                          <Badge
-                            key={tagId}
-                            variant="secondary"
-                            className="gap-1 pr-1"
-                            style={{ backgroundColor: `${tag.color}20`, borderColor: tag.color }}
-                            data-testid={`subtask-tag-${tag.id}`}
-                          >
-                            <span style={{ color: tag.color }}>{tag.name}</span>
-                            {isActualSubtask && (
-                              <button
-                                className="ml-1 h-3 w-3 rounded-full hover:bg-destructive/20 flex items-center justify-center"
-                                onClick={() => removeTagMutation.mutate(tag.id)}
-                                data-testid={`button-remove-tag-${tag.id}`}
-                              >
-                                <X className="h-2 w-2" />
-                              </button>
-                            )}
-                          </Badge>
-                        );
-                      })}
-                      {(isActualSubtask ? subtaskTags : childTaskTags).length === 0 && (
-                        <span className="text-sm text-muted-foreground">No tags</span>
-                      )}
-                    </>
-                  )}
-                </div>
-              </div>
-
-              <Separator />
-
-              {isActualSubtask && (
-                <div 
-                  className="p-3 sm:p-4 bg-[#ffbb734d] dark:bg-[hsl(var(--section-time))] border border-[#f5ac5b] dark:border-[hsl(var(--section-time-border))]"
-                  style={{ borderRadius: "10px" }}
-                >
-                  <div className="space-y-3">
-                    <div className="flex items-center justify-between">
-                      <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
-                        <Timer className="h-3.5 w-3.5" />
-                        Time Entries
-                      </label>
-                      <div className="flex items-center gap-2">
-                        {timerState === "idle" && (
-                          <Button
-                            size="sm"
-                            onClick={() => startTimerMutation.mutate()}
-                            className="h-8 border border-[#d97d26] text-white bg-[#f7902f] hover:bg-[#e67e22]"
-                          >
-                            <Play className="h-3.5 w-3.5 mr-1.5" />
-                            Start Timer
-                          </Button>
-                        )}
-                        {timerState === "loading" && (
-                          <Button size="sm" disabled className="h-8 border border-[#d97d26] text-white bg-[#f7902f]">
-                            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                            Loading...
-                          </Button>
-                        )}
-                        {timerState === "running" && (
-                          <>
-                            <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-8">
-                              <Pause className="h-3.5 w-3.5 mr-1.5" />
-                              Pause
-                            </Button>
-                            <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
-                              <Square className="h-3.5 w-3.5 mr-1.5" />
-                              Stop
-                            </Button>
-                          </>
-                        )}
-                        {timerState === "paused" && (
-                          <>
-                            <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-8">
-                              <Play className="h-3.5 w-3.5 mr-1.5" />
-                              Resume
-                            </Button>
-                            <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
-                              <Square className="h-3.5 w-3.5 mr-1.5" />
-                              Stop
-                            </Button>
-                          </>
-                        )}
-                        {timeEntries.length > 0 && (
-                          <span className="text-xs text-muted-foreground ml-2">
-                            Total: {formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}
-                          </span>
-                        )}
-                      </div>
-                    </div>
-                    {timeEntriesLoading ? (
-                      <p className="text-sm text-muted-foreground">Loading time entries...</p>
-                    ) : timeEntries.length === 0 ? (
-                      <p className="text-sm text-muted-foreground">No time entries for this subtask</p>
-                    ) : (
-                      <div className="space-y-2">
-                        {timeEntries.map((entry) => (
-                          <div key={entry.id} className="flex items-start justify-between p-3 rounded-md border bg-muted/30">
-                            <div className="space-y-1 flex-1 min-w-0">
-                              <div className="flex items-center gap-2 flex-wrap">
-                                <span className="text-sm font-medium">
-                                  {formatDurationShort(entry.durationSeconds)}
-                                </span>
-                              </div>
-                              <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                                <span>{format(new Date(entry.startTime), "MMM d, yyyy")}</span>
-                              </div>
-                            </div>
-                          </div>
-                        ))}
-                      </div>
+                        <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
+                          <Square className="h-3.5 w-3.5 mr-1.5" /> Stop
+                        </Button>
+                      </>
+                    )}
+                    {timerState === "paused" && (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-8">
+                          <Play className="h-3.5 w-3.5 mr-1.5" /> Resume
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
+                          <Square className="h-3.5 w-3.5 mr-1.5" /> Stop
+                        </Button>
+                      </>
+                    )}
+                    {timeEntries.length > 0 && (
+                      <span className="text-xs text-muted-foreground ml-2">
+                        Total: {formatDurationShort(timeEntries.reduce((sum: number, e: any) => sum + e.durationSeconds, 0))}
+                      </span>
                     )}
                   </div>
                 </div>
-              )}
-
-              <Separator />
-
-              {isActualSubtask && (
-                <div 
-                  className="p-3 sm:p-4 bg-[#c2dfff4d] dark:bg-[hsl(var(--section-comments))] border border-[#adc6e6] dark:border-[hsl(var(--section-comments-border))]"
-                  style={{ borderRadius: "10px" }}
-                  data-testid="subtask-comments-section"
-                >
-                  <CommentThread
-                    comments={subtaskComments}
-                    taskId={subtask.id}
-                    projectId={projectId}
-                    currentUserId={currentUser?.id}
-                    onAdd={(body, attachmentIds) => addCommentMutation.mutate({ body, attachmentIds })}
-                    onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
-                    onDelete={(id) => deleteCommentMutation.mutate(id)}
-                    onResolve={(id) => resolveCommentMutation.mutate(id)}
-                    onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
-                    users={mentionUsers}
-                  />
-                </div>
-              )}
+                {timeEntriesLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading time entries...</p>
+                ) : timeEntries.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No time entries for this subtask</p>
+                ) : (
+                  <div className="space-y-2">
+                    {timeEntries.map((entry: any) => (
+                      <div key={entry.id} className="flex items-start justify-between p-3 rounded-md border bg-muted/30">
+                        <div className="space-y-1 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium">{formatDurationShort(entry.durationSeconds)}</span>
+                          </div>
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>{format(new Date(entry.startTime), "MMM d, yyyy")}</span>
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
             </div>
-          </ScrollArea>
+          )}
+          {activeTab === "time" && !isActualSubtask && (
+            <p className="text-sm text-muted-foreground">Time tracking is not available for child tasks.</p>
+          )}
 
-        <DrawerActionBar
-          showTimer={false}
-          showSave={true}
-          onSave={handleSaveAll}
-          saveLabel="Save Subtask"
-          showComplete={isActualSubtask}
-          onMarkComplete={handleMarkComplete}
-          isCompleting={toggleCompleteMutation.isPending}
-          completeLabel={(subtask as Subtask).completed ? "Reopen" : "Mark Complete"}
-          className="sticky bottom-0 z-10"
-        />
+          {activeTab === "history" && (
+            <TaskHistoryTab entityType="subtask" entityId={subtask.id} enabled={activeTab === "history"} />
+          )}
         </div>
-      </SheetContent>
-    </Sheet>
+      </TaskPanelShell>
 
-    <AlertDialog open={showUnsavedChangesDialog} onOpenChange={setShowUnsavedChangesDialog}>
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
-          <AlertDialogDescription>
-            You have unsaved changes. Are you sure you want to close without saving?
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel data-testid="button-cancel-close-subtask">Keep Editing</AlertDialogCancel>
-          <AlertDialogAction
-            onClick={handleConfirmClose}
-            className="bg-destructive text-destructive-foreground"
-            data-testid="button-confirm-close-subtask"
-          >
-            Discard Changes
-          </AlertDialogAction>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
+      <AlertDialog open={showUnsavedChangesDialog} onOpenChange={setShowUnsavedChangesDialog}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
+            <AlertDialogDescription>You have unsaved changes. Are you sure you want to close without saving?</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-close-subtask">Keep Editing</AlertDialogCancel>
+            <AlertDialogAction onClick={handleConfirmClose} className="bg-destructive text-destructive-foreground" data-testid="button-confirm-close-subtask">
+              Discard Changes
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

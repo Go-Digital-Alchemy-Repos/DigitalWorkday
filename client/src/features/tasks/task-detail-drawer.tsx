@@ -1,14 +1,15 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, CalendarIcon, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Save, Check, Plus, Trash2, Link2, Lock, Share2, SendHorizonal, CheckCircle } from "lucide-react";
+import { X, Calendar, Users, Tag, Flag, Layers, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Check, Plus, Trash2, Link2, Lock, Share2, SendHorizonal, CheckCircle, History, MessageSquare, FileText } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
-import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { TaskDrawerSkeleton } from "@/components/skeletons";
+import { TaskPanelShell } from "./task-panel/TaskPanelShell";
+import { TaskHistoryTab } from "./task-panel/TaskHistoryTab";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
-import { RichTextEditor, RichTextRenderer } from "@/components/richtext";
+import { RichTextEditor } from "@/components/richtext";
 import { toPlainText } from "@/components/richtext/richTextUtils";
 import { useUnsavedChanges } from "@/hooks/use-unsaved-changes";
 import { Separator } from "@/components/ui/separator";
@@ -41,7 +42,6 @@ import { SubtaskDetailDrawer } from "./subtask-detail-drawer";
 import { CommentThread } from "@/components/comment-thread";
 import { AttachmentUploader } from "@/components/attachment-uploader";
 import { StatusBadge } from "@/components/status-badge";
-import { TagBadge } from "@/components/tag-badge";
 import { ColorPicker } from "@/components/ui/color-picker";
 import { MultiSelectAssignees } from "@/components/multi-select-assignees";
 import { MultiSelectWatchers } from "@/components/multi-select-watchers";
@@ -203,6 +203,7 @@ export function TaskDetailDrawer({
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#3b82f6");
+  const [activeTab, setActiveTab] = useState<"overview" | "comments" | "time" | "history">("overview");
   
   const { isDirty, setDirty, markClean, confirmIfDirty, UnsavedChangesDialog } = useUnsavedChanges();
 
@@ -830,75 +831,50 @@ export function TaskDetailDrawer({
     onOpenChange(false);
   }, [task?.id, task?.title, task?.description, title, description, onUpdate, markClean, onOpenChange]);
 
-  const drawerContentClass = isMobile 
-    ? "w-full flex flex-col h-full p-0 overflow-hidden" 
-    : "w-full sm:max-w-2xl flex flex-col h-full p-0 overflow-hidden";
-  const drawerPadding = isMobile ? "px-4 py-3" : "px-6 py-4";
-  const drawerBodyPadding = isMobile ? "px-4 py-4" : "px-6 py-6";
-
   if (isError) {
     return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent 
-          className={drawerContentClass}
-          data-testid="task-detail-drawer-error"
-        >
-          <SheetHeader className={cn("shrink-0 bg-background border-b border-border", drawerPadding)}>
-            <SheetDescription className="sr-only">Error loading task</SheetDescription>
-            <div className="flex items-center justify-between">
-              <SheetTitle className="text-destructive">Error</SheetTitle>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => onOpenChange(false)}
-                aria-label="Close drawer"
-                data-testid="button-close-drawer"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </SheetHeader>
-          <div className="flex-1 flex flex-col items-center justify-center py-12 px-6 text-center">
-            <div className="text-muted-foreground mb-4">Failed to load task details</div>
-            <Button variant="outline" onClick={() => onOpenChange(false)}>
-              Close
+      <TaskPanelShell
+        open={open}
+        onOpenChange={onOpenChange}
+        header={
+          <div className="flex items-center justify-between px-6 py-3">
+            <span className="text-destructive font-semibold">Error</span>
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onOpenChange(false)} aria-label="Close" data-testid="button-close-drawer">
+              <X className="h-4 w-4" />
             </Button>
           </div>
-        </SheetContent>
-      </Sheet>
+        }
+        sidebar={<div />}
+        data-testid="task-detail-drawer-error"
+      >
+        <div className="flex-1 flex flex-col items-center justify-center py-12 px-6 text-center">
+          <div className="text-muted-foreground mb-4">Failed to load task details</div>
+          <Button variant="outline" onClick={() => onOpenChange(false)}>Close</Button>
+        </div>
+      </TaskPanelShell>
     );
   }
 
   if (isLoading || !task) {
     return (
-      <Sheet open={open} onOpenChange={onOpenChange}>
-        <SheetContent 
-          className={drawerContentClass}
-          data-testid="task-detail-drawer-loading"
-        >
-          <SheetHeader className={cn("shrink-0 bg-background border-b border-border", drawerPadding)}>
-            <SheetDescription className="sr-only">Loading task details</SheetDescription>
-            <div className="flex items-center justify-between">
-              <SheetTitle className="sr-only">Loading Task</SheetTitle>
-              <div className="h-6 w-24 bg-muted animate-pulse rounded" />
-              <Button
-                variant="ghost"
-                size="icon"
-                className="h-8 w-8"
-                onClick={() => onOpenChange(false)}
-                aria-label="Close drawer"
-                data-testid="button-close-drawer"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </SheetHeader>
-          <div className="flex-1 overflow-y-auto">
-            <TaskDrawerSkeleton />
+      <TaskPanelShell
+        open={open}
+        onOpenChange={onOpenChange}
+        header={
+          <div className="flex items-center justify-between px-6 py-3">
+            <div className="h-6 w-24 bg-muted animate-pulse rounded" />
+            <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => onOpenChange(false)} aria-label="Close" data-testid="button-close-drawer">
+              <X className="h-4 w-4" />
+            </Button>
           </div>
-        </SheetContent>
-      </Sheet>
+        }
+        sidebar={<div />}
+        data-testid="task-detail-drawer-loading"
+      >
+        <div className="flex-1 overflow-y-auto">
+          <TaskDrawerSkeleton />
+        </div>
+      </TaskPanelShell>
     );
   }
 
@@ -946,719 +922,525 @@ export function TaskDetailDrawer({
 
   if (PERF_ENABLED) perfLog("render-complete", renderStart);
 
+  const tabItems = [
+    { id: "overview" as const, label: "Overview", icon: <FileText className="h-3.5 w-3.5" /> },
+    { id: "comments" as const, label: "Comments", icon: <MessageSquare className="h-3.5 w-3.5" />, count: taskComments.length },
+    { id: "time" as const, label: "Time", icon: <Timer className="h-3.5 w-3.5" />, count: timeEntries.length },
+    { id: "history" as const, label: "History", icon: <History className="h-3.5 w-3.5" /> },
+  ];
+
+  const panelHeader = (
+    <div className="px-4 sm:px-6 py-3 space-y-2">
+      <div className="flex items-center justify-between gap-2 flex-wrap">
+        <div className="flex items-center gap-2">
+          <StatusBadge status={task.status as any} />
+          {enableTaskReviewQueue && (task as any).needsPmReview && (
+            <Badge
+              className="bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700"
+              data-testid="badge-review-requested"
+            >
+              Review Requested
+            </Badge>
+          )}
+        </div>
+        <div className="flex items-center gap-1">
+          {(task as any).visibility === "private" && (
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Badge variant="outline" className="gap-1 text-xs">
+                  <Lock className="h-3 w-3" />
+                  Private
+                </Badge>
+              </TooltipTrigger>
+              <TooltipContent>Only you and invited members can see this task</TooltipContent>
+            </Tooltip>
+          )}
+          {(task as any).visibility === "private" && (
+            <Button variant="ghost" size="icon" onClick={() => setShareModalOpen(true)} title="Share task" data-testid="button-share-task">
+              <Share2 className="h-4 w-4" />
+            </Button>
+          )}
+          {task.projectId && (
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={() => {
+                const url = `${window.location.origin}/projects/${task.projectId}?task=${task.id}`;
+                navigator.clipboard.writeText(url).then(() => {
+                  toast({ title: "Link copied", description: "Task link copied to clipboard" });
+                });
+              }}
+              title="Copy task link"
+              data-testid="button-copy-task-link"
+            >
+              <Link2 className="h-4 w-4" />
+            </Button>
+          )}
+          {isAdmin && (
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button variant="ghost" size="icon" disabled={deleteTaskMutation.isPending} aria-label="Delete task" data-testid="button-delete-task">
+                  <Trash2 className="h-4 w-4" />
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete Task</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    Are you sure you want to permanently delete <span className="font-semibold">"{task.title}"</span>? This will remove all subtasks, comments, and attachments associated with this task. This action cannot be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel data-testid="button-cancel-delete-task">Cancel</AlertDialogCancel>
+                  <AlertDialogAction onClick={() => deleteTaskMutation.mutate(task.id)} className="bg-destructive text-destructive-foreground" disabled={deleteTaskMutation.isPending} data-testid="button-confirm-delete-task">
+                    Delete Task
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
+          )}
+          <Button variant="secondary" size="icon" onClick={saveAndClose} aria-label="Close drawer" data-testid="button-close-drawer">
+            <X className="h-4 w-4" />
+          </Button>
+        </div>
+      </div>
+      <div className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap" data-testid="task-breadcrumbs">
+        {task.projectId && projectContextLoading ? (
+          <div className="flex items-center gap-2">
+            <Loader2 className="h-3 w-3 animate-spin" />
+            <span>Loading context...</span>
+          </div>
+        ) : (
+          <>
+            {task.projectId && projectContext?.client && (
+              <>
+                <Building2 className="h-3.5 w-3.5 shrink-0" />
+                <span className="font-medium" data-testid="breadcrumb-client">
+                  {projectContext.client.displayName || projectContext.client.companyName}
+                </span>
+                <ChevronRight className="h-3 w-3 shrink-0" />
+              </>
+            )}
+            {task.projectId && projectContext?.division && (
+              <>
+                <div className="flex items-center gap-1">
+                  {projectContext.division.color && (
+                    <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: projectContext.division.color }} />
+                  )}
+                  <span data-testid="breadcrumb-division">{projectContext.division.name}</span>
+                </div>
+                <ChevronRight className="h-3 w-3 shrink-0" />
+              </>
+            )}
+            {task.projectId && (
+              <>
+                <FolderKanban className="h-3.5 w-3.5 shrink-0" />
+                <span data-testid="breadcrumb-project">{projectContext?.name || "Project"}</span>
+                <ChevronRight className="h-3 w-3 shrink-0" />
+              </>
+            )}
+            <CheckSquare className="h-3.5 w-3.5 shrink-0" />
+            <span className="font-medium" data-testid="breadcrumb-task">{task.title?.slice(0, 30) || "Task"}{(task.title?.length || 0) > 30 ? "..." : ""}</span>
+          </>
+        )}
+      </div>
+      <div className="flex items-center gap-1 border-b border-border -mx-4 sm:-mx-6 px-4 sm:px-6">
+        {tabItems.map((tab) => (
+          <button
+            key={tab.id}
+            onClick={() => setActiveTab(tab.id)}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors",
+              activeTab === tab.id
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+            )}
+            data-testid={`tab-${tab.id}`}
+          >
+            {tab.icon}
+            {tab.label}
+            {tab.count !== undefined && tab.count > 0 && (
+              <Badge variant="secondary" className="h-5 min-w-[20px] px-1 text-[10px]">{tab.count}</Badge>
+            )}
+          </button>
+        ))}
+      </div>
+    </div>
+  );
+
+  const panelSidebar = (
+    <div className="p-4 space-y-5">
+      <div className="space-y-4">
+        {editingTitle ? (
+          <Input
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            onBlur={handleTitleSave}
+            onKeyDown={(e) => {
+              if (e.key === "Enter") handleTitleSave();
+              if (e.key === "Escape") { setTitle(task.title); setEditingTitle(false); }
+            }}
+            className="text-lg font-semibold h-auto py-1"
+            autoFocus
+            data-testid="input-task-title"
+          />
+        ) : (
+          <h2
+            className="text-lg font-semibold cursor-pointer hover:text-muted-foreground transition-colors line-clamp-2"
+            onClick={() => { setTitle(task.title); setEditingTitle(true); }}
+            data-testid="text-task-title"
+          >
+            {task.title}
+          </h2>
+        )}
+      </div>
+
+      <div className="space-y-4">
+        <FormFieldWrapper label="Assignees" labelIcon={<Users className="h-3.5 w-3.5" />}>
+          <MultiSelectAssignees taskId={task.id} assignees={assigneeUsers} workspaceId={workspaceId} onAssigneeChange={onRefresh} />
+        </FormFieldWrapper>
+
+        <FormFieldWrapper label="Status" labelIcon={<Layers className="h-3.5 w-3.5" />}>
+          <StatusSelector value={task.status as TaskStatus} onChange={handleStatusChange} className="w-full h-8" data-testid="select-status" />
+        </FormFieldWrapper>
+
+        <FormFieldWrapper label="Priority" labelIcon={<Flag className="h-3.5 w-3.5" />}>
+          <PrioritySelector value={task.priority as PriorityLevel} onChange={(value) => onUpdate?.(task.id, { priority: value })} className="w-full h-8" data-testid="select-priority" />
+        </FormFieldWrapper>
+
+        <FormFieldWrapper label="Due Date" labelIcon={<Calendar className="h-3.5 w-3.5" />}>
+          <DatePickerWithChips value={task.dueDate ? new Date(task.dueDate) : null} onChange={(date) => onUpdate?.(task.id, { dueDate: date as any })} className="w-full h-8" data-testid="button-due-date" />
+        </FormFieldWrapper>
+
+        <FormFieldWrapper label="Estimate" labelIcon={<Clock className="h-3.5 w-3.5" />} helpText="Time in minutes">
+          <Input
+            type="number"
+            min="0"
+            value={estimateMinutes}
+            onChange={(e) => setEstimateMinutes(e.target.value)}
+            onBlur={() => {
+              const val = estimateMinutes.trim();
+              const parsed = val ? parseInt(val, 10) : null;
+              if (parsed !== task.estimateMinutes) onUpdate?.(task.id, { estimateMinutes: parsed });
+            }}
+            placeholder="0"
+            className="w-full h-8"
+            data-testid="input-estimate-minutes"
+          />
+        </FormFieldWrapper>
+
+        <FormFieldWrapper label="Watchers" labelIcon={<Eye className="h-3.5 w-3.5" />}>
+          <MultiSelectWatchers taskId={task.id} watchers={watcherUsers} workspaceId={workspaceId} onWatcherChange={onRefresh} />
+        </FormFieldWrapper>
+
+        {enableProjectMilestones && task.projectId && projectMilestones.length > 0 && (
+          <FormFieldWrapper label="Milestone" labelIcon={<Flag className="h-3.5 w-3.5" />}>
+            <Select value={task.milestoneId ?? "none"} onValueChange={(value) => onUpdate?.(task.id, { milestoneId: value === "none" ? null : value })}>
+              <SelectTrigger className="w-full h-8" data-testid="select-milestone">
+                <SelectValue placeholder="No milestone" />
+              </SelectTrigger>
+              <SelectContent className="max-w-[300px]">
+                <SelectItem value="none">No milestone</SelectItem>
+                {projectMilestones.map((m) => (
+                  <SelectItem key={m.id} value={m.id} data-testid={`option-milestone-${m.id}`}>{m.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </FormFieldWrapper>
+        )}
+      </div>
+
+      <Separator />
+
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <Tag className="h-3.5 w-3.5" />
+          Tags
+        </label>
+        <div className="flex flex-wrap gap-1.5 min-h-[28px] items-center">
+          {taskTags.map((tag) => (
+            <Badge key={tag.id} variant="secondary" className="gap-1 pr-1" style={{ backgroundColor: tag.color ? `${tag.color}20` : undefined, borderColor: tag.color || undefined }} data-testid={`task-tag-${tag.id}`}>
+              <span style={{ color: tag.color || undefined }}>{tag.name}</span>
+              <button className="ml-1 h-3 w-3 rounded-full hover:bg-destructive/20 flex items-center justify-center" onClick={() => removeTagFromTaskMutation.mutate(tag.id)} data-testid={`button-remove-tag-${tag.id}`}>
+                <X className="h-2 w-2" />
+              </button>
+            </Badge>
+          ))}
+          {taskTags.length === 0 && <span className="text-xs text-muted-foreground">No tags</span>}
+          <Popover open={tagPopoverOpen} onOpenChange={(open) => { setTagPopoverOpen(open); if (!open) { setIsCreatingTag(false); setNewTagName(""); } }}>
+            <PopoverTrigger asChild>
+              <Button variant="ghost" size="sm" className="h-6 w-6 p-0 rounded-full hover:bg-muted">
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-56 p-2" align="end">
+              {isCreatingTag ? (
+                <div className="space-y-2">
+                  <div className="text-xs font-medium text-muted-foreground">Create new tag</div>
+                  <Input value={newTagName} onChange={(e) => setNewTagName(e.target.value)} placeholder="Tag name..." className="h-8 text-sm" autoFocus onKeyDown={(e) => { if (e.key === "Enter") handleCreateTag(); if (e.key === "Escape") { setIsCreatingTag(false); setNewTagName(""); } }} data-testid="input-new-tag-name" />
+                  <div className="flex items-center gap-2">
+                    <ColorPicker value={newTagColor} onChange={setNewTagColor} data-testid="input-new-tag-color" />
+                    <span className="text-xs text-muted-foreground">Pick color</span>
+                  </div>
+                  <div className="flex gap-1">
+                    <Button size="sm" className="flex-1" onClick={handleCreateTag} disabled={!newTagName.trim() || createTagMutation.isPending} data-testid="button-create-tag-submit">
+                      {createTagMutation.isPending ? <Loader2 className="h-3 w-3 animate-spin" /> : "Create"}
+                    </Button>
+                    <Button variant="ghost" size="sm" onClick={() => { setIsCreatingTag(false); setNewTagName(""); }} data-testid="button-cancel-create-tag">Cancel</Button>
+                  </div>
+                </div>
+              ) : (
+                <div className="space-y-1">
+                  <ScrollArea className="max-h-48">
+                    <div className="space-y-0.5">
+                      {workspaceTags.map((tag) => {
+                        if (taskTagIds.has(tag.id)) return null;
+                        return (
+                          <button key={tag.id} className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover-elevate" onClick={() => addTagToTaskMutation.mutate(tag.id)} data-testid={`button-add-tag-${tag.id}`}>
+                            <div className="h-3 w-3 rounded-full" style={{ backgroundColor: tag.color || "#888" }} />
+                            <span className="text-sm truncate">{tag.name}</span>
+                          </button>
+                        );
+                      })}
+                      {workspaceTags.filter((t) => !taskTagIds.has(t.id)).length === 0 && (
+                        <div className="px-2 py-2 text-xs text-muted-foreground">{workspaceTags.length === 0 ? "No tags in workspace" : "All tags added"}</div>
+                      )}
+                    </div>
+                  </ScrollArea>
+                  {workspaceId && (
+                    <Button variant="ghost" size="sm" className="w-full justify-start text-xs" onClick={() => setIsCreatingTag(true)} data-testid="button-create-new-tag">
+                      <Plus className="h-3 w-3 mr-1" /> Create new tag
+                    </Button>
+                  )}
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+        </div>
+      </div>
+
+      <Separator />
+
+      <div className="space-y-2">
+        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+          <Layers className="h-3.5 w-3.5" />
+          Subtasks ({(task.subtasks || []).length})
+        </label>
+        <SubtaskList
+          subtasks={task.subtasks || []}
+          taskId={task.id}
+          workspaceId={workspaceId}
+          projectId={task.projectId}
+          clientId={task.project?.clientId}
+          taskTitle={task.title}
+          taskDescription={task.description || undefined}
+          onAdd={handleAddSubtask}
+          onToggle={handleToggleSubtask}
+          onDelete={handleDeleteSubtask}
+          onUpdate={handleUpdateSubtask}
+          onSubtaskUpdate={handleSubtaskUpdate}
+          onSubtaskClick={(subtask) => {
+            setSelectedSubtask(subtask);
+            setSubtaskDrawerOpen(true);
+          }}
+        />
+      </div>
+    </div>
+  );
+
+  const panelFooter = (
+    <DrawerActionBar
+      showSave={true}
+      onSave={saveAndClose}
+      saveLabel="Save Task"
+      showComplete={task.status !== "done"}
+      onMarkComplete={handleMarkAsComplete}
+      completeDisabled={timeEntriesLoading || isCompletingTask}
+      isCompleting={isCompletingTask}
+      showIncomplete={task.status === "done"}
+      onMarkIncomplete={handleMarkAsIncomplete}
+      incompleteDisabled={isReopeningTask}
+      isIncompleting={isReopeningTask}
+      extraActions={
+        <>
+          {activeTimer && !isTimerOnThisTask && (
+            <Badge variant="secondary" className="text-xs">Timer running on another task</Badge>
+          )}
+          {enableTaskReviewQueue && !isClientUser && !(task as any).needsPmReview && (
+            <Button variant="outline" size="default" onClick={() => requestReviewMutation.mutate()} disabled={requestReviewMutation.isPending} data-testid="button-request-review">
+              {requestReviewMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <SendHorizonal className="h-4 w-4 mr-1.5" />}
+              Send to PM For Review
+            </Button>
+          )}
+          {enableTaskReviewQueue && (task as any).needsPmReview && canClearReview && (
+            <>
+              <Button variant="outline" size="default" onClick={() => clearReviewMutation.mutate({})} disabled={clearReviewMutation.isPending} data-testid="button-clear-review">
+                {clearReviewMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-1.5" />}
+                Clear Review
+              </Button>
+              {task.status !== "done" && (
+                <Button variant="outline" size="default" onClick={() => clearReviewMutation.mutate({ markComplete: true })} disabled={clearReviewMutation.isPending} data-testid="button-complete-and-clear-review">
+                  {clearReviewMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Check className="h-4 w-4 mr-1.5" />}
+                  Complete & Clear
+                </Button>
+              )}
+            </>
+          )}
+        </>
+      }
+    />
+  );
+
   return (
     <>
       <UnsavedChangesDialog />
-      <Sheet open={open} onOpenChange={handleDrawerClose}>
-        <SheetContent
-        className={drawerContentClass}
+      <TaskPanelShell
+        open={open}
+        onOpenChange={handleDrawerClose}
+        header={panelHeader}
+        sidebar={panelSidebar}
+        footer={panelFooter}
         data-testid="task-detail-drawer"
       >
-        <SheetHeader className={cn("sticky top-0 z-10 bg-background border-b border-border", drawerPadding)}>
-          <SheetDescription className="sr-only">Edit task details, add subtasks, and manage comments</SheetDescription>
-          <div className="flex items-center justify-between gap-2 flex-wrap">
-            <div className="flex items-center gap-2">
-              <SheetTitle className="sr-only">Task Details</SheetTitle>
-              <StatusBadge status={task.status as any} />
-              {enableTaskReviewQueue && (task as any).needsPmReview && (
-                <Badge
-                  className="bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700"
-                  data-testid="badge-review-requested"
-                >
-                  Review Requested
-                </Badge>
-              )}
-            </div>
-            <div className="flex items-center gap-1">
-              {(task as any).visibility === "private" && (
-                <Tooltip>
-                  <TooltipTrigger asChild>
-                    <Badge variant="outline" className="gap-1 text-xs">
-                      <Lock className="h-3 w-3" />
-                      Private
-                    </Badge>
-                  </TooltipTrigger>
-                  <TooltipContent>Only you and invited members can see this task</TooltipContent>
-                </Tooltip>
-              )}
-              {(task as any).visibility === "private" && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setShareModalOpen(true)}
-                  title="Share task"
-                  data-testid="button-share-task"
-                >
-                  <Share2 className="h-4 w-4" />
-                </Button>
-              )}
-              {task.projectId && (
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => {
-                    const url = `${window.location.origin}/projects/${task.projectId}?task=${task.id}`;
-                    navigator.clipboard.writeText(url).then(() => {
-                      toast({ title: "Link copied", description: "Task link copied to clipboard" });
-                    });
-                  }}
-                  title="Copy task link"
-                  data-testid="button-copy-task-link"
-                >
-                  <Link2 className="h-4 w-4" />
-                </Button>
-              )}
-              {isAdmin && (
-                <AlertDialog>
-                  <AlertDialogTrigger asChild>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      disabled={deleteTaskMutation.isPending}
-                      aria-label="Delete task"
-                      data-testid="button-delete-task"
-                    >
-                      <Trash2 className="h-4 w-4" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Delete Task</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        Are you sure you want to permanently delete <span className="font-semibold">"{task.title}"</span>? This will remove all subtasks, comments, and attachments associated with this task. This action cannot be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel data-testid="button-cancel-delete-task">Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        onClick={() => deleteTaskMutation.mutate(task.id)}
-                        className="bg-destructive text-destructive-foreground"
-                        disabled={deleteTaskMutation.isPending}
-                        data-testid="button-confirm-delete-task"
-                      >
-                        Delete Task
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              )}
-              <Button
-                variant="secondary"
-                size="icon"
-                onClick={saveAndClose}
-                aria-label="Close drawer"
-                data-testid="button-close-drawer"
-              >
-                <X className="h-4 w-4" />
-              </Button>
-            </div>
-          </div>
-        </SheetHeader>
-
-        <div className="flex flex-col flex-1 min-h-0 overflow-hidden">
-          <div className={cn("flex-1 overflow-y-auto space-y-6 scrollbar-hide", drawerBodyPadding)}>
-            <div className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap" data-testid="task-breadcrumbs">
-            {task.projectId && projectContextLoading ? (
-              <div className="flex items-center gap-2">
-                <Loader2 className="h-3 w-3 animate-spin" />
-                <span>Loading context...</span>
-              </div>
-            ) : (
-              <>
-                {task.projectId && projectContext?.client && (
-                  <>
-                    <Building2 className="h-3.5 w-3.5 shrink-0" />
-                    <span className="font-medium" data-testid="breadcrumb-client">
-                      {projectContext.client.displayName || projectContext.client.companyName}
-                    </span>
-                    <ChevronRight className="h-3 w-3 shrink-0" />
-                  </>
-                )}
-                {task.projectId && projectContext?.division && (
-                  <>
-                    <div className="flex items-center gap-1">
-                      {projectContext.division.color && (
-                        <div
-                          className="h-2.5 w-2.5 rounded-full shrink-0"
-                          style={{ backgroundColor: projectContext.division.color }}
-                        />
-                      )}
-                      <span data-testid="breadcrumb-division">{projectContext.division.name}</span>
-                    </div>
-                    <ChevronRight className="h-3 w-3 shrink-0" />
-                  </>
-                )}
-                {task.projectId && (
-                  <>
-                    <FolderKanban className="h-3.5 w-3.5 shrink-0" />
-                    <span data-testid="breadcrumb-project">{projectContext?.name || "Project"}</span>
-                    <ChevronRight className="h-3 w-3 shrink-0" />
-                  </>
-                )}
-                <CheckSquare className="h-3.5 w-3.5 shrink-0" />
-                <span className="font-medium" data-testid="breadcrumb-task">{task.title?.slice(0, 30) || "Task"}{(task.title?.length || 0) > 30 ? "..." : ""}</span>
-              </>
-            )}
-          </div>
-
-          <div className="space-y-4">
-            {editingTitle ? (
-              <Input
-                value={title}
-                onChange={(e) => setTitle(e.target.value)}
-                onBlur={handleTitleSave}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter") handleTitleSave();
-                  if (e.key === "Escape") {
-                    setTitle(task.title);
-                    setEditingTitle(false);
-                  }
-                }}
-                className="text-xl font-semibold h-auto py-1"
-                autoFocus
-                data-testid="input-task-title"
-              />
-            ) : (
-              <h2
-                className="text-xl font-semibold cursor-pointer hover:text-muted-foreground transition-colors"
-                onClick={() => {
-                  setTitle(task.title);
-                  setEditingTitle(true);
-                }}
-                data-testid="text-task-title"
-              >
-                {task.title}
-              </h2>
-            )}
-
-            <div className={cn("grid gap-4", isMobile ? "grid-cols-1" : "grid-cols-2")}>
-              <FormFieldWrapper
-                label="Assignees"
-                labelIcon={<Users className="h-3.5 w-3.5" />}
-              >
-                <MultiSelectAssignees
-                  taskId={task.id}
-                  assignees={assigneeUsers}
-                  workspaceId={workspaceId}
-                  onAssigneeChange={onRefresh}
-                />
-              </FormFieldWrapper>
-
-              <FormFieldWrapper
-                label="Due Date"
-                labelIcon={<Calendar className="h-3.5 w-3.5" />}
-              >
-                <DatePickerWithChips
-                  value={task.dueDate ? new Date(task.dueDate) : null}
-                  onChange={(date) => onUpdate?.(task.id, { dueDate: date as any })}
-                  className={cn(isMobile ? "w-full h-10" : "w-[180px] h-8")}
-                  data-testid="button-due-date"
-                />
-              </FormFieldWrapper>
-
-              <FormFieldWrapper
-                label="Priority"
-                labelIcon={<Flag className="h-3.5 w-3.5" />}
-              >
-                <PrioritySelector
-                  value={task.priority as PriorityLevel}
-                  onChange={(value) => onUpdate?.(task.id, { priority: value })}
-                  className={cn(isMobile ? "w-full h-10" : "w-[140px] h-8")}
-                  data-testid="select-priority"
-                />
-              </FormFieldWrapper>
-
-              <FormFieldWrapper
-                label="Status"
-                labelIcon={<Layers className="h-3.5 w-3.5" />}
-              >
-                <StatusSelector
-                  value={task.status as TaskStatus}
-                  onChange={handleStatusChange}
-                  className={cn(isMobile ? "w-full h-10" : "w-[140px] h-8")}
-                  data-testid="select-status"
-                />
-              </FormFieldWrapper>
-
-              <FormFieldWrapper
-                label="Estimate"
-                labelIcon={<Clock className="h-3.5 w-3.5" />}
-                helpText="Time in minutes"
-              >
-                <Input
-                  type="number"
-                  min="0"
-                  value={estimateMinutes}
-                  onChange={(e) => setEstimateMinutes(e.target.value)}
-                  onBlur={() => {
-                    const val = estimateMinutes.trim();
-                    const parsed = val ? parseInt(val, 10) : null;
-                    if (parsed !== task.estimateMinutes) {
-                      onUpdate?.(task.id, { estimateMinutes: parsed });
-                    }
-                  }}
-                  placeholder="0"
-                  className={cn(isMobile ? "w-full h-10" : "w-[140px] h-8")}
-                  data-testid="input-estimate-minutes"
-                />
-              </FormFieldWrapper>
-
-              <FormFieldWrapper
-                label="Watchers"
-                labelIcon={<Eye className="h-3.5 w-3.5" />}
-              >
-                <MultiSelectWatchers
-                  taskId={task.id}
-                  watchers={watcherUsers}
-                  workspaceId={workspaceId}
-                  onWatcherChange={onRefresh}
-                />
-              </FormFieldWrapper>
-
-              {enableProjectMilestones && task.projectId && projectMilestones.length > 0 && (
-                <FormFieldWrapper
-                  label="Milestone"
-                  labelIcon={<Flag className="h-3.5 w-3.5" />}
-                >
-                  <Select
-                    value={task.milestoneId ?? "none"}
-                    onValueChange={(value) =>
-                      onUpdate?.(task.id, { milestoneId: value === "none" ? null : value })
-                    }
-                  >
-                    <SelectTrigger
-                      className={cn(isMobile ? "w-full h-10" : "w-[240px] h-8")}
-                      data-testid="select-milestone"
-                    >
-                      <SelectValue placeholder="No milestone" />
-                    </SelectTrigger>
-                    <SelectContent className="max-w-[300px]">
-                      <SelectItem value="none">No milestone</SelectItem>
-                      {projectMilestones.map((m) => (
-                        <SelectItem key={m.id} value={m.id} data-testid={`option-milestone-${m.id}`}>
-                          {m.name}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
-                </FormFieldWrapper>
-              )}
-            </div>
-          </div>
-
-          <Separator />
-
-          <FormFieldWrapper label="Description" className="overflow-hidden">
-            <div className="max-w-full overflow-hidden">
-              <RichTextEditor
-                value={description}
-                onChange={handleDescriptionChange}
-                onBlur={handleDescriptionBlur}
-                placeholder="Add a description... Type @ to mention someone"
-                minHeight="100px"
-                users={mentionUsers}
-                data-testid="textarea-description"
-              />
-            </div>
-          </FormFieldWrapper>
-
-          <Separator />
-
-          {task.projectId && (
-            <div 
-              className="p-3 sm:p-4 bg-[hsl(var(--section-attachments))] border border-[hsl(var(--section-attachments-border))]"
-              style={{ borderRadius: "10px" }}
-            >
-              <AttachmentUploader taskId={task.id} projectId={task.projectId} />
-            </div>
-          )}
-          {!task.projectId && (
-            <div className="text-sm text-muted-foreground">
-              Attachments are available for project tasks only
-            </div>
-          )}
-
-          <Separator />
-
-          <div 
-            className="p-3 sm:p-4 bg-[hsl(var(--section-subtasks))] border border-[hsl(var(--section-subtasks-border))]"
-            style={{ borderRadius: "10px" }}
-          >
-            <div className="flex items-center justify-between mb-3">
-              <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
-                <Layers className="h-3.5 w-3.5" />
-                Subtasks
-              </label>
-            </div>
-            <SubtaskList
-              subtasks={task.subtasks || []}
-              taskId={task.id}
-              workspaceId={workspaceId}
-              projectId={task.projectId}
-              clientId={task.project?.clientId}
-              taskTitle={task.title}
-              taskDescription={task.description || undefined}
-              onAdd={handleAddSubtask}
-              onToggle={handleToggleSubtask}
-              onDelete={handleDeleteSubtask}
-              onUpdate={handleUpdateSubtask}
-              onSubtaskUpdate={handleSubtaskUpdate}
-              onSubtaskClick={(subtask) => {
-                setSelectedSubtask(subtask);
-                setSubtaskDrawerOpen(true);
-              }}
-            />
-          </div>
-
-          <div 
-            className="p-3 sm:p-4 bg-[hsl(var(--section-tags))] border border-[hsl(var(--section-tags-border))]"
-            style={{ borderRadius: "10px" }}
-          >
-            <div className="space-y-2">
-              <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
-                <Tag className="h-3.5 w-3.5" />
-                Tags
-              </label>
-              <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center">
-                {taskTags.map((tag) => (
-                  <Badge
-                    key={tag.id}
-                    variant="secondary"
-                    className="gap-1 pr-1"
-                    style={{ backgroundColor: tag.color ? `${tag.color}20` : undefined, borderColor: tag.color || undefined }}
-                    data-testid={`task-tag-${tag.id}`}
-                  >
-                    <span style={{ color: tag.color || undefined }}>{tag.name}</span>
-                    <button
-                      className="ml-1 h-3 w-3 rounded-full hover:bg-destructive/20 flex items-center justify-center"
-                      onClick={() => removeTagFromTaskMutation.mutate(tag.id)}
-                      data-testid={`button-remove-tag-${tag.id}`}
-                    >
-                      <X className="h-2 w-2" />
-                    </button>
-                  </Badge>
-                ))}
-                {taskTags.length === 0 && (
-                  <span className="text-sm text-muted-foreground">No tags</span>
-                )}
-                
-                <Popover open={tagPopoverOpen} onOpenChange={(open) => {
-                  setTagPopoverOpen(open);
-                  if (!open) {
-                    setIsCreatingTag(false);
-                    setNewTagName("");
-                  }
-                }}>
-                  <PopoverTrigger asChild>
-                    <Button variant="ghost" size="sm" className="h-7 w-7 p-0 rounded-full hover:bg-muted ml-auto">
-                      <Plus className="h-4 w-4" />
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-56 p-2" align="end">
-                    {isCreatingTag ? (
-                      <div className="space-y-2">
-                        <div className="text-xs font-medium text-muted-foreground">Create new tag</div>
-                        <Input
-                          value={newTagName}
-                          onChange={(e) => setNewTagName(e.target.value)}
-                          placeholder="Tag name..."
-                          className={cn(isMobile ? "h-10" : "h-8", "text-sm")}
-                          autoFocus
-                          onKeyDown={(e) => {
-                            if (e.key === "Enter") handleCreateTag();
-                            if (e.key === "Escape") {
-                              setIsCreatingTag(false);
-                              setNewTagName("");
-                            }
-                          }}
-                          data-testid="input-new-tag-name"
-                        />
-                        <div className="flex items-center gap-2">
-                          <ColorPicker
-                            value={newTagColor}
-                            onChange={setNewTagColor}
-                            data-testid="input-new-tag-color"
-                          />
-                          <span className="text-xs text-muted-foreground">Pick color</span>
-                        </div>
-                        <div className="flex gap-1">
-                          <Button
-                            size="sm"
-                            className="flex-1"
-                            onClick={handleCreateTag}
-                            disabled={!newTagName.trim() || createTagMutation.isPending}
-                            data-testid="button-create-tag-submit"
-                          >
-                            {createTagMutation.isPending ? (
-                              <Loader2 className="h-3 w-3 animate-spin" />
-                            ) : (
-                              "Create"
-                            )}
-                          </Button>
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => {
-                              setIsCreatingTag(false);
-                              setNewTagName("");
-                            }}
-                            data-testid="button-cancel-create-tag"
-                          >
-                            Cancel
-                          </Button>
-                        </div>
-                      </div>
-                    ) : (
-                      <div className="space-y-1">
-                        <ScrollArea className="max-h-48">
-                          <div className="space-y-0.5">
-                            {workspaceTags.map((tag) => {
-                              if (taskTagIds.has(tag.id)) return null;
-                              return (
-                                <button
-                                  key={tag.id}
-                                  className="w-full flex items-center gap-2 px-2 py-1.5 rounded-md text-left hover-elevate"
-                                  onClick={() => addTagToTaskMutation.mutate(tag.id)}
-                                  data-testid={`button-add-tag-${tag.id}`}
-                                >
-                                  <div
-                                    className="h-3 w-3 rounded-full"
-                                    style={{ backgroundColor: tag.color || "#888" }}
-                                  />
-                                  <span className="text-sm truncate">{tag.name}</span>
-                                </button>
-                              );
-                            })}
-                            {workspaceTags.filter((t) => !taskTagIds.has(t.id)).length === 0 && (
-                              <div className="px-2 py-2 text-xs text-muted-foreground">
-                                {workspaceTags.length === 0 ? "No tags in workspace" : "All tags added"}
-                              </div>
-                            )}
-                          </div>
-                        </ScrollArea>
-                        {workspaceId && (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            className="w-full justify-start text-xs"
-                            onClick={() => setIsCreatingTag(true)}
-                            data-testid="button-create-new-tag"
-                          >
-                            <Plus className="h-3 w-3 mr-1" />
-                            Create new tag
-                          </Button>
-                        )}
-                      </div>
-                    )}
-                  </PopoverContent>
-                </Popover>
-              </div>
-            </div>
-          </div>
-
-          <Separator />
-
-          <div 
-            className="p-3 sm:p-4 bg-[hsl(var(--section-comments))] border border-[hsl(var(--section-comments-border))]"
-            style={{ borderRadius: "10px" }}
-          >
-            <CommentThread
-              comments={taskComments}
-              taskId={task.id}
-              projectId={task.projectId}
-              currentUserId={currentUser?.id}
-              onAdd={(body, attachmentIds) => addCommentMutation.mutate({ body, attachmentIds })}
-              onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
-              onDelete={(id) => deleteCommentMutation.mutate(id)}
-              onResolve={(id) => resolveCommentMutation.mutate(id)}
-              onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
-              users={mentionUsers}
-            />
-          </div>
-
-          <Separator />
-
-          <div 
-            className="p-3 sm:p-4 bg-[hsl(var(--section-time))] border border-[hsl(var(--section-time-border))]"
-            style={{ borderRadius: "10px" }}
-          >
-            <div className="space-y-3">
-              <div className="flex items-center justify-between">
-                <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
-                  <Timer className="h-3.5 w-3.5" />
-                  Time Entries
-                </label>
-                <div className="flex items-center gap-2">
-                  {timerState === "idle" && (
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        if (canQuickStartTimer && !projectContextError) {
-                          startTimerMutation.mutate();
-                        } else {
-                          setTimerDrawerOpen(true);
-                        }
-                      }}
-                      className="h-8 border border-[#d97d26] text-white hover:bg-[#e67e22] bg-[#ff8614ed]"
-                      data-testid="button-timer-start"
-                    >
-                      <Play className="h-3.5 w-3.5 mr-1.5" />
-                      Start Timer
-                    </Button>
-                  )}
-                  {timerState === "loading" && (
-                    <Button size="sm" disabled className="h-8 border border-[#d97d26] text-white bg-[#f7902f]">
-                      <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                      Loading...
-                    </Button>
-                  )}
-                  {timerState === "running" && (
-                    <>
-                      <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-8">
-                        <Pause className="h-3.5 w-3.5 mr-1.5" />
-                        Pause
-                      </Button>
-                      <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
-                        <Square className="h-3.5 w-3.5 mr-1.5" />
-                        Stop
-                      </Button>
-                    </>
-                  )}
-                  {timerState === "paused" && (
-                    <>
-                      <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-8">
-                        <Play className="h-3.5 w-3.5 mr-1.5" />
-                        Resume
-                      </Button>
-                      <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
-                        <Square className="h-3.5 w-3.5 mr-1.5" />
-                        Stop
-                      </Button>
-                    </>
-                  )}
-                  {timeEntries.length > 0 && (
-                    <span className="text-xs text-muted-foreground ml-2">
-                      Total: {formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}
-                    </span>
-                  )}
-                </div>
-              </div>
-              {timeEntriesLoading ? (
-                <p className="text-sm text-muted-foreground">Loading time entries...</p>
-              ) : timeEntries.length === 0 ? (
-                <p className="text-sm text-muted-foreground">No time entries for this task</p>
-              ) : (
-                <div className="space-y-2">
-                  {timeEntries.map((entry) => (
-                    <div key={entry.id} className="flex items-start justify-between p-3 rounded-md border bg-muted/30">
-                      <div className="space-y-1 flex-1 min-w-0">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="text-sm font-medium">
-                            {formatDurationShort(entry.durationSeconds)}
-                          </span>
-                          <Badge variant={entry.scope === "out_of_scope" ? "default" : "secondary"} className="text-xs">
-                            {entry.scope === "out_of_scope" ? "Billable" : "Unbillable"}
-                          </Badge>
-                        </div>
-                        {entry.description && (
-                          <p className="text-sm text-muted-foreground truncate">{entry.description}</p>
-                        )}
-                        <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                          <span>{format(new Date(entry.startTime), "MMM d, yyyy")}</span>
-                          {entry.user && (
-                            <>
-                              <span>•</span>
-                              <span>
-                                {entry.user.firstName && entry.user.lastName 
-                                  ? `${entry.user.firstName} ${entry.user.lastName}` 
-                                  : entry.user.email}
-                              </span>
-                            </>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-        <DrawerActionBar
-          showSave={true}
-          onSave={saveAndClose}
-          saveLabel="Save Task"
-          showComplete={task.status !== "done"}
-          onMarkComplete={handleMarkAsComplete}
-          completeDisabled={timeEntriesLoading || isCompletingTask}
-          isCompleting={isCompletingTask}
-          showIncomplete={task.status === "done"}
-          onMarkIncomplete={handleMarkAsIncomplete}
-          incompleteDisabled={isReopeningTask}
-          isIncompleting={isReopeningTask}
-          extraActions={
+        <div className="p-4 sm:p-6 space-y-6">
+          {activeTab === "overview" && (
             <>
-              {activeTimer && !isTimerOnThisTask && (
-                <Badge variant="secondary" className="text-xs">
-                  Timer running on another task
-                </Badge>
+              <FormFieldWrapper label="Description" className="overflow-hidden">
+                <div className="max-w-full overflow-hidden">
+                  <RichTextEditor
+                    value={description}
+                    onChange={handleDescriptionChange}
+                    onBlur={handleDescriptionBlur}
+                    placeholder="Add a description... Type @ to mention someone"
+                    minHeight="120px"
+                    users={mentionUsers}
+                    data-testid="textarea-description"
+                  />
+                </div>
+              </FormFieldWrapper>
+
+              {task.projectId && (
+                <div className="p-3 sm:p-4 bg-[hsl(var(--section-attachments))] border border-[hsl(var(--section-attachments-border))]" style={{ borderRadius: "10px" }}>
+                  <AttachmentUploader taskId={task.id} projectId={task.projectId} />
+                </div>
               )}
-              {enableTaskReviewQueue && !isClientUser && !(task as any).needsPmReview && (
-                <Button
-                  variant="outline"
-                  size="default"
-                  onClick={() => requestReviewMutation.mutate()}
-                  disabled={requestReviewMutation.isPending}
-                  data-testid="button-request-review"
-                >
-                  {requestReviewMutation.isPending ? (
-                    <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                  ) : (
-                    <SendHorizonal className="h-4 w-4 mr-1.5" />
-                  )}
-                  Send to PM For Review
-                </Button>
-              )}
-              {enableTaskReviewQueue && (task as any).needsPmReview && canClearReview && (
-                <>
-                  <Button
-                    variant="outline"
-                    size="default"
-                    onClick={() => clearReviewMutation.mutate({})}
-                    disabled={clearReviewMutation.isPending}
-                    data-testid="button-clear-review"
-                  >
-                    {clearReviewMutation.isPending ? (
-                      <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                    ) : (
-                      <CheckCircle className="h-4 w-4 mr-1.5" />
-                    )}
-                    Clear Review
-                  </Button>
-                  {task.status !== "done" && (
-                    <Button
-                      variant="outline"
-                      size="default"
-                      onClick={() => clearReviewMutation.mutate({ markComplete: true })}
-                      disabled={clearReviewMutation.isPending}
-                      data-testid="button-complete-and-clear-review"
-                    >
-                      {clearReviewMutation.isPending ? (
-                        <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-                      ) : (
-                        <Check className="h-4 w-4 mr-1.5" />
-                      )}
-                      Complete & Clear
-                    </Button>
-                  )}
-                </>
+              {!task.projectId && (
+                <div className="text-sm text-muted-foreground">Attachments are available for project tasks only</div>
               )}
             </>
-          }
-          className="sticky bottom-0 z-10"
-        />
+          )}
+
+          {activeTab === "comments" && (
+            <div className="p-3 sm:p-4 bg-[hsl(var(--section-comments))] border border-[hsl(var(--section-comments-border))]" style={{ borderRadius: "10px" }}>
+              <CommentThread
+                comments={taskComments}
+                taskId={task.id}
+                projectId={task.projectId}
+                currentUserId={currentUser?.id}
+                onAdd={(body, attachmentIds) => addCommentMutation.mutate({ body, attachmentIds })}
+                onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
+                onDelete={(id) => deleteCommentMutation.mutate(id)}
+                onResolve={(id) => resolveCommentMutation.mutate(id)}
+                onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
+                users={mentionUsers}
+              />
+            </div>
+          )}
+
+          {activeTab === "time" && (
+            <div className="p-3 sm:p-4 bg-[hsl(var(--section-time))] border border-[hsl(var(--section-time-border))]" style={{ borderRadius: "10px" }}>
+              <div className="space-y-3">
+                <div className="flex items-center justify-between">
+                  <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
+                    <Timer className="h-3.5 w-3.5" />
+                    Time Entries
+                  </label>
+                  <div className="flex items-center gap-2">
+                    {timerState === "idle" && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          if (canQuickStartTimer && !projectContextError) { startTimerMutation.mutate(); } else { setTimerDrawerOpen(true); }
+                        }}
+                        className="h-8 border border-[#d97d26] text-white hover:bg-[#e67e22] bg-[#ff8614ed]"
+                        data-testid="button-timer-start"
+                      >
+                        <Play className="h-3.5 w-3.5 mr-1.5" />
+                        Start Timer
+                      </Button>
+                    )}
+                    {timerState === "loading" && (
+                      <Button size="sm" disabled className="h-8 border border-[#d97d26] text-white bg-[#f7902f]">
+                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+                        Loading...
+                      </Button>
+                    )}
+                    {timerState === "running" && (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-8">
+                          <Pause className="h-3.5 w-3.5 mr-1.5" /> Pause
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
+                          <Square className="h-3.5 w-3.5 mr-1.5" /> Stop
+                        </Button>
+                      </>
+                    )}
+                    {timerState === "paused" && (
+                      <>
+                        <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-8">
+                          <Play className="h-3.5 w-3.5 mr-1.5" /> Resume
+                        </Button>
+                        <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
+                          <Square className="h-3.5 w-3.5 mr-1.5" /> Stop
+                        </Button>
+                      </>
+                    )}
+                    {timeEntries.length > 0 && (
+                      <span className="text-xs text-muted-foreground ml-2">
+                        Total: {formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}
+                      </span>
+                    )}
+                  </div>
+                </div>
+                {timeEntriesLoading ? (
+                  <p className="text-sm text-muted-foreground">Loading time entries...</p>
+                ) : timeEntries.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">No time entries for this task</p>
+                ) : (
+                  <div className="space-y-2">
+                    {timeEntries.map((entry) => (
+                      <div key={entry.id} className="flex items-start justify-between p-3 rounded-md border bg-muted/30">
+                        <div className="space-y-1 flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-sm font-medium">{formatDurationShort(entry.durationSeconds)}</span>
+                            <Badge variant={entry.scope === "out_of_scope" ? "default" : "secondary"} className="text-xs">
+                              {entry.scope === "out_of_scope" ? "Billable" : "Unbillable"}
+                            </Badge>
+                          </div>
+                          {entry.description && <p className="text-sm text-muted-foreground truncate">{entry.description}</p>}
+                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span>{format(new Date(entry.startTime), "MMM d, yyyy")}</span>
+                            {entry.user && (
+                              <>
+                                <span>·</span>
+                                <span>{entry.user.firstName && entry.user.lastName ? `${entry.user.firstName} ${entry.user.lastName}` : entry.user.email}</span>
+                              </>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {activeTab === "history" && (
+            <TaskHistoryTab entityType="task" entityId={task.id} enabled={activeTab === "history"} />
+          )}
         </div>
-      </SheetContent>
+      </TaskPanelShell>
 
       <SubtaskDetailDrawer
         subtask={selectedSubtask}
@@ -1696,117 +1478,49 @@ export function TaskDetailDrawer({
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Track time for this task?</DialogTitle>
-            <DialogDescription>
-              No time has been logged for this task. Would you like to add a time entry before completing it?
-            </DialogDescription>
+            <DialogDescription>No time has been logged for this task. Would you like to add a time entry before completing it?</DialogDescription>
           </DialogHeader>
           <DialogFooter className="flex gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              onClick={handleTimeTrackingNo}
-              data-testid="button-time-tracking-no"
-            >
-              No, just complete
-            </Button>
-            <Button
-              onClick={handleTimeTrackingYes}
-              data-testid="button-time-tracking-yes"
-            >
-              Yes, add time
-            </Button>
+            <Button variant="outline" onClick={handleTimeTrackingNo} data-testid="button-time-tracking-no">No, just complete</Button>
+            <Button onClick={handleTimeTrackingYes} data-testid="button-time-tracking-yes">Yes, add time</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
 
-      <Dialog open={showTimeEntryForm} onOpenChange={(open) => {
-        if (!open) resetCompletionState();
-        else setShowTimeEntryForm(open);
-      }}>
+      <Dialog open={showTimeEntryForm} onOpenChange={(open) => { if (!open) resetCompletionState(); else setShowTimeEntryForm(open); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Log time and complete task</DialogTitle>
-            <DialogDescription>
-              Enter the time spent on "{task.title}"
-            </DialogDescription>
+            <DialogDescription>Enter the time spent on "{task.title}"</DialogDescription>
           </DialogHeader>
           <div className="space-y-4 py-4">
             <div className="space-y-2">
               <Label>Duration</Label>
               <div className="flex items-center gap-4">
                 <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    max="24"
-                    value={completionTimeHours}
-                    onChange={(e) => setCompletionTimeHours(parseInt(e.target.value) || 0)}
-                    className="w-20"
-                    data-testid="input-completion-hours"
-                  />
+                  <Input type="number" min="0" max="24" value={completionTimeHours} onChange={(e) => setCompletionTimeHours(parseInt(e.target.value) || 0)} className="w-20" data-testid="input-completion-hours" />
                   <span className="text-sm text-muted-foreground">hours</span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <Input
-                    type="number"
-                    min="0"
-                    max="59"
-                    value={completionTimeMinutes}
-                    onChange={(e) => setCompletionTimeMinutes(parseInt(e.target.value) || 0)}
-                    className="w-20"
-                    data-testid="input-completion-minutes"
-                  />
+                  <Input type="number" min="0" max="59" value={completionTimeMinutes} onChange={(e) => setCompletionTimeMinutes(parseInt(e.target.value) || 0)} className="w-20" data-testid="input-completion-minutes" />
                   <span className="text-sm text-muted-foreground">minutes</span>
                 </div>
               </div>
             </div>
             <div className="space-y-2">
               <Label>Description (optional)</Label>
-              <Textarea
-                value={completionTimeDescription}
-                onChange={(e) => setCompletionTimeDescription(e.target.value)}
-                placeholder="What did you work on?"
-                className="resize-none"
-                data-testid="textarea-completion-description"
-              />
+              <Textarea value={completionTimeDescription} onChange={(e) => setCompletionTimeDescription(e.target.value)} placeholder="What did you work on?" className="resize-none" data-testid="textarea-completion-description" />
             </div>
           </div>
           <DialogFooter className="flex gap-2 sm:gap-0">
-            <Button
-              variant="outline"
-              onClick={() => resetCompletionState()}
-              data-testid="button-cancel-time-entry"
-            >
-              Cancel
-            </Button>
-            <Button
-              onClick={handleTimeEntrySubmit}
-              disabled={isCompletingTask || (completionTimeHours === 0 && completionTimeMinutes === 0)}
-              data-testid="button-submit-time-complete"
-            >
-              {isCompletingTask ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-1 animate-spin" />
-                  Completing...
-                </>
-              ) : (
-                <>
-                  <Check className="h-4 w-4 mr-1" />
-                  Log Time & Complete
-                </>
-              )}
+            <Button variant="outline" onClick={() => resetCompletionState()} data-testid="button-cancel-time-entry">Cancel</Button>
+            <Button onClick={handleTimeEntrySubmit} disabled={isCompletingTask || (completionTimeHours === 0 && completionTimeMinutes === 0)} data-testid="button-submit-time-complete">
+              {isCompletingTask ? (<><Loader2 className="h-4 w-4 mr-1 animate-spin" />Completing...</>) : (<><Check className="h-4 w-4 mr-1" />Log Time & Complete</>)}
             </Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
-      {task && (
-        <ShareModal
-          type="task"
-          itemId={task.id}
-          isOpen={shareModalOpen}
-          onClose={() => setShareModalOpen(false)}
-        />
-      )}
-      </Sheet>
+      {task && <ShareModal type="task" itemId={task.id} isOpen={shareModalOpen} onClose={() => setShareModalOpen(false)} />}
     </>
   );
 }

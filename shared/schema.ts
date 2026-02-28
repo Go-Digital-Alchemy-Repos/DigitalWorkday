@@ -4328,3 +4328,19 @@ export const aiSummaries = pgTable("ai_summaries", {
 ]);
 
 export type AiSummary = typeof aiSummaries.$inferSelect;
+
+export const taskHistory = pgTable("task_history", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull(),
+  entityType: text("entity_type").notNull(),
+  entityId: varchar("entity_id").notNull(),
+  actorUserId: varchar("actor_user_id").references(() => users.id),
+  actionType: text("action_type").notNull(),
+  changes: jsonb("changes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("task_history_entity_idx").on(table.tenantId, table.entityType, table.entityId, table.createdAt),
+  index("task_history_tenant_created_idx").on(table.tenantId, table.createdAt),
+]);
+
+export type TaskHistory = typeof taskHistory.$inferSelect;
