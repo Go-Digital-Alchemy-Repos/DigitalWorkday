@@ -60,6 +60,7 @@ router.get("/features/flags", async (_req, res) => {
       enablePrivateTasks: config.features.enablePrivateTasks,
       enablePrivateProjects: config.features.enablePrivateProjects,
       enableTaskReviewQueue: config.features.enableTaskReviewQueue,
+      enableProjectMilestones: config.features.enableProjectMilestones,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

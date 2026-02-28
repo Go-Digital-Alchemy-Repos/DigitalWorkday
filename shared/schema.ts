@@ -1405,6 +1405,34 @@ export const sections = pgTable("sections", {
   index("sections_project_order_idx").on(table.projectId, table.orderIndex),
 ]);
 
+// Project Milestones table
+export const projectMilestones = pgTable("project_milestones", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  projectId: varchar("project_id").references(() => projects.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  dueDate: timestamp("due_date"),
+  status: text("status").notNull().default("not_started"), // "not_started" | "in_progress" | "completed"
+  orderIndex: integer("order_index").notNull().default(0),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  completedAt: timestamp("completed_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("project_milestones_tenant_project_idx").on(table.tenantId, table.projectId),
+  index("project_milestones_project_status_idx").on(table.projectId, table.status),
+]);
+
+export type ProjectMilestone = typeof projectMilestones.$inferSelect;
+export type InsertProjectMilestone = typeof projectMilestones.$inferInsert;
+export const insertProjectMilestoneSchema = createInsertSchema(projectMilestones).omit({
+  id: true,
+  createdAt: true,
+  updatedAt: true,
+  completedAt: true,
+});
+
 // Tasks table
 // Note: projectId is nullable to support personal tasks (isPersonal=true)
 // Note: tenantId is nullable for backward compatibility during migration
@@ -1438,6 +1466,7 @@ export const tasks = pgTable("tasks", {
   pmReviewResolvedAt: timestamp("pm_review_resolved_at"),
   pmReviewResolvedBy: varchar("pm_review_resolved_by").references(() => users.id),
   pmReviewNote: text("pm_review_note"),
+  milestoneId: varchar("milestone_id").references(() => projectMilestones.id),
 }, (table) => [
   index("tasks_project_section_order").on(table.projectId, table.sectionId, table.orderIndex),
   index("tasks_due_date").on(table.dueDate),
@@ -1457,6 +1486,7 @@ export const tasks = pgTable("tasks", {
   index("tasks_tenant_status_archived_idx").on(table.tenantId, table.status, table.archivedAt),
   index("tasks_tenant_pm_review_idx").on(table.tenantId, table.needsPmReview, table.pmReviewRequestedAt),
   index("tasks_project_pm_review_idx").on(table.projectId, table.needsPmReview),
+  index("tasks_milestone_idx").on(table.milestoneId),
 ]);
 
 // Task Assignees table (for multiple assignees)

@@ -47,6 +47,8 @@ import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from "@/componen
 import type { Project, Client, Team, TaskWithRelations } from "@shared/schema";
 import { ProjectNotesTab } from "@/components/project-notes-tab";
 import { ShareModal } from "@/features/sharing/share-modal";
+import { MilestonesTab } from "./MilestonesTab";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
 
 interface ProjectAnalytics {
   projectId: string;
@@ -119,6 +121,7 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
   const { user } = useAuth();
   const { openTask } = useTaskDrawer();
   const isSuperUser = user?.role === "super_user";
+  const { enableProjectMilestones } = useFeatureFlags();
   const [activeTab, setActiveTab] = useState("overview");
   const [shareModalOpen, setShareModalOpen] = useState(false);
 
@@ -247,9 +250,12 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="overflow-x-auto -mx-2 px-2">
-            <TabsList className={`inline-flex w-auto min-w-full ${isSuperUser ? "sm:grid sm:grid-cols-6" : "sm:grid sm:grid-cols-5"}`}>
+            <TabsList className={`inline-flex w-auto min-w-full ${isSuperUser && enableProjectMilestones ? "sm:grid sm:grid-cols-7" : isSuperUser || enableProjectMilestones ? "sm:grid sm:grid-cols-6" : "sm:grid sm:grid-cols-5"}`}>
               <TabsTrigger value="overview" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-overview">Overview</TabsTrigger>
               <TabsTrigger value="tasks" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tasks">Tasks</TabsTrigger>
+              {enableProjectMilestones && (
+                <TabsTrigger value="milestones" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-milestones">Milestones</TabsTrigger>
+              )}
               <TabsTrigger value="notes" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-notes">Notes</TabsTrigger>
               <TabsTrigger value="insights" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-insights">Insights</TabsTrigger>
               <TabsTrigger value="forecast" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-forecast">Forecast</TabsTrigger>
@@ -402,6 +408,12 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
               </div>
             )}
           </TabsContent>
+
+          {enableProjectMilestones && (
+            <TabsContent value="milestones" className="mt-4">
+              <MilestonesTab projectId={currentProject.id} />
+            </TabsContent>
+          )}
 
           <TabsContent value="notes" className="mt-4">
             <ProjectNotesTab projectId={currentProject.id} />

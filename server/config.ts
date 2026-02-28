@@ -205,6 +205,7 @@ export const config = {
     enableAlertAutomation: optionalEnvBool("ENABLE_ALERT_AUTOMATION", true),
     enableWeeklyOpsDigest: optionalEnvBool("ENABLE_WEEKLY_OPS_DIGEST", true),
     enableTaskReviewQueue: optionalEnvBool("ENABLE_TASK_REVIEW_QUEUE", true),
+    enableProjectMilestones: optionalEnvBool("ENABLE_PROJECT_MILESTONES", true),
     // Performance optimization flags (server-side only)
     enableTasksBatchHydration: optionalEnvBool("ENABLE_TASKS_BATCH_HYDRATION", true),
     enableClientsBatchExpansion: optionalEnvBool("ENABLE_CLIENTS_BATCH_EXPANSION", true),

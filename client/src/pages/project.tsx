@@ -33,6 +33,7 @@ import {
   Link2,
   Lock,
   Share2,
+  Flag,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -43,6 +44,8 @@ import { ListSectionDroppable } from "@/features/tasks/list-section-droppable";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { TaskCreateDrawer } from "@/features/tasks/task-create-drawer";
 import { ProjectCalendar, ProjectSettingsSheet, ProjectMembersSheet, ProjectActivityFeed, AIProjectPlanner } from "@/features/projects";
+import { MilestonesTab } from "@/features/projects/MilestonesTab";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import {
   Sheet,
@@ -99,7 +102,7 @@ import {
 } from "@/components/ui/breadcrumb";
 import type { Client } from "@shared/schema";
 
-type ViewType = "board" | "list" | "calendar";
+type ViewType = "board" | "list" | "calendar" | "milestones";
 
 export default function ProjectPage() {
   const [, params] = useRoute("/projects/:id");
@@ -109,6 +112,7 @@ export default function ProjectPage() {
 
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
+  const { enableProjectMilestones } = useFeatureFlags();
 
   // Subscribe to real-time updates for this project
   useProjectSocket(projectId);
@@ -828,6 +832,12 @@ export default function ProjectPage() {
                   <CalendarIcon className="h-3.5 w-3.5" />
                   <span className="hidden sm:inline">Calendar</span>
                 </TabsTrigger>
+                {enableProjectMilestones && (
+                  <TabsTrigger value="milestones" className="gap-1 md:gap-1.5 text-xs md:text-sm" data-testid="tab-milestones">
+                    <Flag className="h-3.5 w-3.5" />
+                    <span className="hidden sm:inline">Milestones</span>
+                  </TabsTrigger>
+                )}
               </TabsList>
             </Tabs>
 
@@ -1145,6 +1155,12 @@ export default function ProjectPage() {
               setCreateTaskOpen(true);
             }}
           />
+        )}
+
+        {view === "milestones" && projectId && enableProjectMilestones && (
+          <div className="px-3 sm:px-4 lg:px-6 py-4 md:py-6 h-full overflow-y-auto max-w-3xl">
+            <MilestonesTab projectId={projectId} />
+          </div>
         )}
       </div>
       <TaskDetailDrawer

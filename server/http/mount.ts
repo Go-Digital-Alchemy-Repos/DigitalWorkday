@@ -48,6 +48,7 @@ import fileServeRouter from "./domains/fileServe.router";
 import accessRouter from "./domains/access.router";
 import retentionRouter from "./domains/retention.router";
 import taskReviewRouter from "./domains/task-review.router";
+import milestonesRouter from "./domains/milestones.router";
 
 import usersRouter from "../routes/users.router";
 import crmRouter from "../routes/crm.router";
@@ -338,6 +339,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "task-review",
     description: "Task PM review queue: request review, clear review, dashboard queue.",
+  },
+  {
+    path: "/api",
+    router: milestonesRouter,
+    policy: "authTenant",
+    domain: "milestones",
+    description: "Project milestones: CRUD, reorder, and progress tracking.",
   },
   {
     path: "/api",

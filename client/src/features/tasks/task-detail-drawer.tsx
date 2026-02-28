@@ -54,7 +54,15 @@ import { FormFieldWrapper, DatePickerWithChips, PrioritySelector, StatusSelector
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { ShareModal } from "@/features/sharing/share-modal";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import type { TaskWithRelations, User, Tag as TagType, Comment, Project, Client } from "@shared/schema";
+import type { MilestoneWithStats } from "@/features/projects/MilestonesTab";
 
 type ActiveTimer = {
   id: string;
@@ -150,11 +158,16 @@ export function TaskDetailDrawer({
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
   const isClientUser = currentUser?.role === "client";
-  const { enableTaskReviewQueue } = useFeatureFlags();
+  const { enableTaskReviewQueue, enableProjectMilestones } = useFeatureFlags();
 
   const { data: projectMembersData } = useQuery<Array<{ userId: string; role: string }>>({
     queryKey: ["/api/projects", task?.projectId, "members"],
     enabled: !!task?.projectId && enableTaskReviewQueue && open,
+  });
+
+  const { data: projectMilestones = [] } = useQuery<MilestoneWithStats[]>({
+    queryKey: [`/api/projects/${task?.projectId}/milestones`],
+    enabled: !!task?.projectId && enableProjectMilestones && open,
   });
   const isProjectOwner = useMemo(() => {
     if (!currentUser?.id || !projectMembersData) return false;
@@ -1201,6 +1214,35 @@ export function TaskDetailDrawer({
                   onWatcherChange={onRefresh}
                 />
               </FormFieldWrapper>
+
+              {enableProjectMilestones && task.projectId && projectMilestones.length > 0 && (
+                <FormFieldWrapper
+                  label="Milestone"
+                  labelIcon={<Flag className="h-3.5 w-3.5" />}
+                >
+                  <Select
+                    value={task.milestoneId ?? "none"}
+                    onValueChange={(value) =>
+                      onUpdate?.(task.id, { milestoneId: value === "none" ? null : value })
+                    }
+                  >
+                    <SelectTrigger
+                      className={cn(isMobile ? "w-full h-10" : "w-[180px] h-8")}
+                      data-testid="select-milestone"
+                    >
+                      <SelectValue placeholder="No milestone" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="none">No milestone</SelectItem>
+                      {projectMilestones.map((m) => (
+                        <SelectItem key={m.id} value={m.id} data-testid={`option-milestone-${m.id}`}>
+                          {m.name}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </FormFieldWrapper>
+              )}
             </div>
           </div>
 

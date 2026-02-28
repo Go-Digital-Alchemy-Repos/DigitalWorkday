@@ -1,0 +1,88 @@
+PROJECT MILESTONES SYSTEM
+NON-DESTRUCTIVE • ADDITIVE • PERFORMANCE-SAFE • DOCUMENTED
+
+GOAL:
+Add structured Milestones to Projects to enable phase tracking and delivery intelligence.
+
+Feature flag:
+ENABLE_PROJECT_MILESTONES
+
+============================================================
+PHASE 1 — DATA MODEL
+============================================================
+
+Create table: project_milestones
+
+Columns:
+- id (uuid)
+- tenant_id
+- project_id (indexed)
+- name
+- description (nullable)
+- due_date (nullable)
+- status (enum): "not_started" | "in_progress" | "completed"
+- order_index (int)
+- created_by_user_id
+- created_at
+- updated_at
+- completed_at (nullable)
+
+Indexes:
+- (tenant_id, project_id)
+- (project_id, status)
+
+Add to tasks table:
+- milestone_id (nullable, indexed)
+
+============================================================
+PHASE 2 — BACKEND SERVICES
+============================================================
+
+Create:
+services/projects/milestoneService.ts
+
+Functions:
+- createMilestone
+- updateMilestone
+- deleteMilestone
+- reorderMilestones
+- getMilestonesForProject
+
+Milestone completion logic:
+- % complete = (# completed tasks linked to milestone) / (total tasks linked)
+- Auto-set milestone status to completed when 100%
+
+============================================================
+PHASE 3 — API ENDPOINTS
+============================================================
+
+POST   /api/projects/:projectId/milestones
+PATCH  /api/milestones/:id
+DELETE /api/milestones/:id
+GET    /api/projects/:projectId/milestones
+
+============================================================
+PHASE 4 — FRONTEND
+============================================================
+
+Add "Milestones" tab in Project detail view:
+- List milestones
+- Progress bar per milestone
+- Due date badge
+- Drag to reorder
+- Assign tasks to milestone via task drawer dropdown
+
+============================================================
+PHASE 5 — APP DOCS UPDATE
+============================================================
+
+Document:
+- Data model
+- Auto-completion logic
+- Performance considerations
+- Future: milestone risk scoring
+
+STOP when:
+- Milestones fully functional
+- Tasks linkable
+- No performance regressions

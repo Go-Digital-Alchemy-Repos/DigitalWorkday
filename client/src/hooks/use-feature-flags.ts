@@ -30,6 +30,7 @@ export interface FeatureFlags {
   enableAlertAutomation: boolean;
   enableWeeklyOpsDigest: boolean;
   enableTaskReviewQueue: boolean;
+  enableProjectMilestones: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -62,6 +63,7 @@ const ALL_OFF: FeatureFlags = {
   enableAlertAutomation: false,
   enableWeeklyOpsDigest: false,
   enableTaskReviewQueue: false,
+  enableProjectMilestones: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {
