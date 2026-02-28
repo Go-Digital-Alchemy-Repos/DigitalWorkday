@@ -940,8 +940,8 @@ export function TaskDetailDrawer({
               onChange={(e) => setTitle(e.target.value)}
               onBlur={handleTitleSave}
               onKeyDown={(e) => {
-                if (e.key === "Enter") handleTitleSave();
-                if (e.key === "Escape") { setTitle(task.title); setEditingTitle(false); }
+                if (e.key === "Enter") { e.stopPropagation(); handleTitleSave(); }
+                if (e.key === "Escape") { e.stopPropagation(); setTitle(task.title); setEditingTitle(false); }
               }}
               className="text-base font-semibold h-8 min-w-0 flex-1"
               autoFocus
