@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare, Save, Check } from "lucide-react";
+import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, CheckCircle2, Circle, MessageSquare, Save, Check, Link2 } from "lucide-react";
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetDescription } from "@/components/ui/sheet";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -502,15 +502,33 @@ export function SubtaskDetailDrawer({
               <SheetTitle className="sr-only">Subtask Details</SheetTitle>
               <StatusBadge status={subtask.status as any} />
             </div>
-            <Button
-              variant="secondary"
-              size="icon"
-              onClick={() => onOpenChange(false)}
-              aria-label="Close drawer"
-              data-testid="button-close-subtask-drawer"
-            >
-              <X className="h-4 w-4" />
-            </Button>
+            <div className="flex items-center gap-1">
+              <Button
+                variant="ghost"
+                size="icon"
+                onClick={() => {
+                  const url = `${window.location.origin}/projects/${projectId}?task=${subtask.id}`;
+                  navigator.clipboard.writeText(url);
+                  toast({
+                    title: "Link copied",
+                    description: "Subtask link copied to clipboard",
+                  });
+                }}
+                title="Copy subtask link"
+                data-testid="button-copy-subtask-link"
+              >
+                <Link2 className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="secondary"
+                size="icon"
+                onClick={() => onOpenChange(false)}
+                aria-label="Close drawer"
+                data-testid="button-close-subtask-drawer"
+              >
+                <X className="h-4 w-4" />
+              </Button>
+            </div>
           </div>
           <div className="flex items-center gap-1 text-xs text-muted-foreground mt-2 flex-wrap" data-testid="subtask-breadcrumbs">
             <button
