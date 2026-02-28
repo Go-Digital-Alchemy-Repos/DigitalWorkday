@@ -2,7 +2,8 @@
  * Search Router
  * 
  * Global search endpoint for command palette and quick navigation.
- * Provides tenant-scoped search across clients, projects, and tasks.
+ * Provides tenant-scoped search across clients, projects, tasks,
+ * users, teams, and client notes.
  * Also provides client-scoped search for the client command palette.
  */
 import { createApiRouter } from '../../../http/routerFactory';
@@ -11,30 +12,12 @@ import { AppError, handleRouteError, sendError } from '../../../lib/errors';
 import { getEffectiveTenantId, getCurrentWorkspaceIdAsync, getCurrentUserId } from '../../helpers';
 import { config } from '../../../config';
 import { getAccessiblePrivateProjectIds, getAccessiblePrivateTaskIds } from '../../../lib/privateVisibility';
+import { db } from '../../../db';
+import { comments, tasks } from '@shared/schema';
+import { eq, ilike, and, inArray } from 'drizzle-orm';
 
 export const searchRouter = createApiRouter({ policy: "authTenant" });
 
-/**
- * Global Search Endpoint for Command Palette
- * 
- * Provides tenant-scoped search across clients, projects, and tasks.
- * Used by the command palette (⌘K/Ctrl+K) for quick navigation.
- * 
- * Security:
- * - REQUIRES tenant context (returns 403 if missing)
- * - Uses only tenant-scoped storage methods (no fallbacks)
- * - Tasks fetched via project ownership (inherently tenant-scoped)
- * 
- * Performance:
- * - Parallel fetches for clients and projects
- * - Single batch query for tasks (getTasksByProjectIds)
- * - In-memory filtering with simple scoring (startsWith = 2, includes = 1)
- * - Results limited to maxResults (default 10, max 50)
- * 
- * @query q - Search query string (min 2 chars for results)
- * @query limit - Max results per category (default 10, max 50)
- * @returns { clients, projects, tasks } - Matching items with id, name, type
- */
 searchRouter.get("/search", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
@@ -47,17 +30,18 @@ searchRouter.get("/search", async (req, res) => {
     const searchQuery = String(q || "").trim().toLowerCase();
     const maxResults = Math.min(parseInt(String(limit), 10) || 10, 50);
     
-    if (!searchQuery) {
-      return res.json({ clients: [], projects: [], tasks: [] });
+    if (!searchQuery || searchQuery.length < 2) {
+      return res.json({ clients: [], projects: [], tasks: [], users: [], teams: [], comments: [] });
     }
 
     const workspaceId = await getCurrentWorkspaceIdAsync(req);
-
     const userId = getCurrentUserId(req);
 
-    const [clientsList, projectsList] = await Promise.all([
+    const [clientsList, projectsList, tenantUsers, tenantTeams] = await Promise.all([
       storage.getClientsByTenant(tenantId, workspaceId),
       storage.getProjectsByTenant(tenantId, workspaceId),
+      storage.getUsersByTenant(tenantId),
+      storage.getTeamsByTenant(tenantId, workspaceId),
     ]);
 
     let filteredProjectsList = projectsList;
@@ -87,11 +71,27 @@ searchRouter.get("/search", async (req, res) => {
     }
 
     if (config.features.enablePrivateTasks) {
-      const accessibleTaskIds = await getAccessiblePrivateTaskIds(userId, tenantId);
-      const accessibleTaskSet = new Set(accessibleTaskIds);
+      const privateAccessibleTaskIds = await getAccessiblePrivateTaskIds(userId, tenantId);
+      const accessibleTaskSet = new Set(privateAccessibleTaskIds);
       tasksList = tasksList.filter(t =>
         t.visibility !== 'private' || accessibleTaskSet.has(t.id)
       );
+    }
+
+    const visibleTaskIds = tasksList.map(t => t.id);
+    let commentResults: Array<{ id: string; body: string; taskId: string | null }> = [];
+    if (visibleTaskIds.length > 0) {
+      commentResults = await db.select({
+        id: comments.id,
+        body: comments.body,
+        taskId: comments.taskId,
+      })
+        .from(comments)
+        .where(and(
+          inArray(comments.taskId, visibleTaskIds),
+          ilike(comments.body, `%${searchQuery}%`)
+        ))
+        .limit(maxResults);
     }
 
     const filterAndScore = <T extends { id: string }>(
@@ -114,11 +114,36 @@ searchRouter.get("/search", async (req, res) => {
     const clients = filterAndScore(clientsList, c => c.companyName);
     const projects = filterAndScore(filteredProjectsList, p => p.name);
     const filteredTasks = filterAndScore(tasksList, t => t.title);
+    const filteredUsers = filterAndScore(tenantUsers, u => {
+      const parts = [u.firstName, u.lastName, u.email].filter(Boolean);
+      return parts.join(" ");
+    });
+    const filteredTeams = filterAndScore(tenantTeams, t => t.name);
+
+    const taskIdToProjectId = new Map(tasksList.map(t => [t.id, t.projectId]));
 
     res.json({ 
       clients: clients.map(c => ({ id: c.id, name: c.companyName, type: "client" })),
       projects: projects.map(p => ({ id: p.id, name: p.name, type: "project", status: p.status })),
       tasks: filteredTasks.map(t => ({ id: t.id, name: t.title, type: "task", projectId: t.projectId, status: t.status })),
+      users: filteredUsers.map(u => ({
+        id: u.id,
+        name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
+        email: u.email,
+        type: "user",
+        role: u.role,
+      })),
+      teams: filteredTeams.map(t => ({ id: t.id, name: t.name, type: "team" })),
+      comments: commentResults.map(c => {
+        const plainBody = (c.body || "").replace(/<[^>]*>/g, "").slice(0, 80);
+        return {
+          id: c.id,
+          name: plainBody + (plainBody.length >= 80 ? "..." : ""),
+          type: "comment",
+          taskId: c.taskId,
+          projectId: taskIdToProjectId.get(c.taskId || "") || null,
+        };
+      }),
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/search", req);

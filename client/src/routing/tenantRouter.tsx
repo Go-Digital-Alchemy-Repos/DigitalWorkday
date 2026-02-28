@@ -29,7 +29,8 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check } from "lucide-react";
+import { MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check, Search } from "lucide-react";
+import { GlobalSearchBar } from "@/components/global-search-bar";
 import { type Workspace } from "@shared/schema";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 
@@ -302,6 +303,9 @@ export function TenantLayout() {
                         TENANT IMPERSONATION
                       </span>
                     )}
+                  </div>
+                  <div className="hidden md:block flex-1 max-w-sm mx-4">
+                    <GlobalSearchBar />
                   </div>
                   <div className="flex items-center gap-1 md:gap-2">
                     <GlobalActiveTimer />

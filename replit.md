@@ -39,7 +39,7 @@ MyWorkDay is an Asana-inspired project management application designed to centra
 - **Client Relationship Management (CRM)**: Includes client detail pages, notes, documents, pipeline tracking, contacts, and an external client portal with a Client 360 View and profitability reports.
 - **Workload Management**: Provides forecasting and reporting based on task distribution and budget utilization.
 - **Notifications**: Enhanced Notification Center with pagination, filters, deep-linking, and severity levels.
-- **User Experience**: Global command palette, keyboard shortcuts, dark mode, CSS-variable-based theming, Framer Motion animations, mobile-first responsive design, and consistent drawer UI.
+- **User Experience**: Global command palette, keyboard shortcuts, dark mode, CSS-variable-based theming, Framer Motion animations, mobile-first responsive design, and consistent drawer UI. Global Search Bar with debounced queries across various entities, categorized dropdown results, and keyboard navigation.
 - **Modular Architecture**: API routes with policy enforcement, centralized query key builders, and role-based frontend routing with lazy-loaded components.
 - **Reporting Engine V2**: Rebuilt reporting system with feature flags, including workload, task analysis, time tracking, project analysis, client analytics, messages, pipeline, and overview reports. Features Employee/Client Command Centers, Health Indexes, Forecasting, and Alert Automation.
 - **Asset Library (Beta)**: Centralized asset management with folders, assets, links, presigned R2 upload/download, source tracking, and deduplication.
