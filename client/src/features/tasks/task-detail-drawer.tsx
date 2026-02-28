@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, Clock, Timer, Play, Eye, Square, Pause, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Check, Plus, Trash2, Link2, Lock, Share2, SendHorizonal, CheckCircle, History, MessageSquare, FileText } from "lucide-react";
+import { X, Calendar, Users, Tag, Flag, Layers, Clock, Eye, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Check, Plus, Trash2, Link2, Lock, Share2, SendHorizonal, CheckCircle, History, MessageSquare, FileText } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { TaskDrawerSkeleton } from "@/components/skeletons";
@@ -1024,52 +1024,6 @@ export function TaskDetailDrawer({
           </Button>
         </div>
       </div>
-      <div className="flex items-center justify-end gap-2">
-        {timerState === "idle" && (
-          <Button
-            size="sm"
-            onClick={() => {
-              if (canQuickStartTimer && !projectContextError) { startTimerMutation.mutate(); } else { setTimerDrawerOpen(true); }
-            }}
-            className="h-8 border border-[#d97d26] text-white hover:bg-[#e67e22] bg-[#ff8614ed]"
-            data-testid="button-timer-start"
-          >
-            <Play className="h-3.5 w-3.5 mr-1.5" />
-            Start Timer
-          </Button>
-        )}
-        {timerState === "loading" && (
-          <Button size="sm" disabled className="h-8 border border-[#d97d26] text-white bg-[#f7902f]">
-            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-            Loading...
-          </Button>
-        )}
-        {timerState === "running" && (
-          <>
-            <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-8">
-              <Pause className="h-3.5 w-3.5 mr-1.5" /> Pause
-            </Button>
-            <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
-              <Square className="h-3.5 w-3.5 mr-1.5" /> Stop
-            </Button>
-          </>
-        )}
-        {timerState === "paused" && (
-          <>
-            <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-8">
-              <Play className="h-3.5 w-3.5 mr-1.5" /> Resume
-            </Button>
-            <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
-              <Square className="h-3.5 w-3.5 mr-1.5" /> Stop
-            </Button>
-          </>
-        )}
-        {timeEntries.length > 0 && (
-          <span className="text-xs text-muted-foreground">
-            Total: {formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}
-          </span>
-        )}
-      </div>
       <div className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap" data-testid="task-breadcrumbs">
         {task.projectId && projectContextLoading ? (
           <div className="flex items-center gap-2">
@@ -1294,6 +1248,15 @@ export function TaskDetailDrawer({
       showSave={true}
       onSave={saveAndClose}
       saveLabel="Save Task"
+      showTimer={true}
+      timerState={activeTimer && !isTimerOnThisTask ? "other_task" : timerState}
+      onStartTimer={() => {
+        if (canQuickStartTimer && !projectContextError) { startTimerMutation.mutate(); } else { setTimerDrawerOpen(true); }
+      }}
+      onPauseTimer={() => pauseTimerMutation.mutate()}
+      onResumeTimer={() => resumeTimerMutation.mutate()}
+      onStopTimer={() => stopTimerMutation.mutate()}
+      timerTotalLabel={timeEntries.length > 0 ? `Total: ${formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}` : undefined}
       showComplete={task.status !== "done"}
       onMarkComplete={handleMarkAsComplete}
       completeDisabled={timeEntriesLoading || isCompletingTask}
@@ -1304,24 +1267,21 @@ export function TaskDetailDrawer({
       isIncompleting={isReopeningTask}
       extraActions={
         <>
-          {activeTimer && !isTimerOnThisTask && (
-            <Badge variant="secondary" className="text-xs">Timer running on another task</Badge>
-          )}
           {enableTaskReviewQueue && !isClientUser && !(task as any).needsPmReview && (
-            <Button variant="outline" size="default" onClick={() => requestReviewMutation.mutate()} disabled={requestReviewMutation.isPending} data-testid="button-request-review">
-              {requestReviewMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <SendHorizonal className="h-4 w-4 mr-1.5" />}
-              Send to PM For Review
+            <Button variant="outline" size="default" onClick={() => requestReviewMutation.mutate()} disabled={requestReviewMutation.isPending} className="bg-background hover:bg-muted border-border/60" data-testid="button-request-review">
+              {requestReviewMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <SendHorizonal className="h-4 w-4 mr-1.5 text-violet-500" />}
+              Send to PM
             </Button>
           )}
           {enableTaskReviewQueue && (task as any).needsPmReview && canClearReview && (
             <>
-              <Button variant="outline" size="default" onClick={() => clearReviewMutation.mutate({})} disabled={clearReviewMutation.isPending} data-testid="button-clear-review">
-                {clearReviewMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-1.5" />}
+              <Button variant="outline" size="default" onClick={() => clearReviewMutation.mutate({})} disabled={clearReviewMutation.isPending} className="bg-background hover:bg-muted border-border/60" data-testid="button-clear-review">
+                {clearReviewMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-1.5 text-cyan-500" />}
                 Clear Review
               </Button>
               {task.status !== "done" && (
-                <Button variant="outline" size="default" onClick={() => clearReviewMutation.mutate({ markComplete: true })} disabled={clearReviewMutation.isPending} data-testid="button-complete-and-clear-review">
-                  {clearReviewMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Check className="h-4 w-4 mr-1.5" />}
+                <Button variant="outline" size="default" onClick={() => clearReviewMutation.mutate({ markComplete: true })} disabled={clearReviewMutation.isPending} className="bg-background hover:bg-muted border-border/60" data-testid="button-complete-and-clear-review">
+                  {clearReviewMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <Check className="h-4 w-4 mr-1.5 text-emerald-500" />}
                   Complete & Clear
                 </Button>
               )}

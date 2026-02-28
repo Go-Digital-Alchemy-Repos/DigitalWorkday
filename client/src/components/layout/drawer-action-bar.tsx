@@ -1,6 +1,7 @@
 import { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
-import { Play, Save, Check, Loader2, Pause, Square, RotateCcw } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Play, Save, Check, Loader2, Pause, Square, RotateCcw, Timer } from "lucide-react";
 import { cn } from "@/lib/utils";
 
 interface DrawerActionBarProps {
@@ -25,16 +26,19 @@ interface DrawerActionBarProps {
   showIncomplete?: boolean;
   showSave?: boolean;
   showTimer?: boolean;
+  timerTotalLabel?: string;
   extraActions?: ReactNode;
   className?: string;
 }
+
+const actionBtn = "bg-background hover:bg-muted border-border/60";
 
 export function DrawerActionBar({
   onStartTimer,
   onSave,
   onMarkComplete,
   onMarkIncomplete,
-  timerState = "idle",
+  timerState = "hidden",
   onPauseTimer,
   onResumeTimer,
   onStopTimer,
@@ -50,6 +54,8 @@ export function DrawerActionBar({
   showComplete = true,
   showIncomplete = false,
   showSave = true,
+  showTimer = false,
+  timerTotalLabel,
   extraActions,
   className,
 }: DrawerActionBarProps) {
@@ -61,7 +67,105 @@ export function DrawerActionBar({
       )}
       data-testid="drawer-action-bar"
     >
-      {extraActions}
+      <div className="flex items-center gap-2 flex-wrap">
+        {showSave && onSave && (
+          <Button
+            size="default"
+            variant="outline"
+            onClick={onSave}
+            disabled={saveDisabled || isSaving}
+            className={actionBtn}
+            data-testid="button-action-save"
+          >
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-1.5 text-blue-500" />
+            )}
+            {isSaving ? "Saving..." : saveLabel}
+          </Button>
+        )}
+
+        {showTimer && timerState === "idle" && onStartTimer && (
+          <Button
+            size="default"
+            variant="outline"
+            onClick={onStartTimer}
+            className={actionBtn}
+            data-testid="button-timer-start"
+          >
+            <Timer className="h-4 w-4 mr-1.5 text-amber-500" />
+            Start Timer
+          </Button>
+        )}
+
+        {showTimer && timerState === "loading" && (
+          <Button size="default" variant="outline" disabled className={actionBtn}>
+            <Loader2 className="h-4 w-4 mr-1.5 animate-spin text-amber-500" />
+            Loading...
+          </Button>
+        )}
+
+        {showTimer && timerState === "running" && (
+          <>
+            <Button
+              size="default"
+              variant="outline"
+              onClick={onPauseTimer}
+              className={actionBtn}
+              data-testid="button-timer-pause"
+            >
+              <Pause className="h-4 w-4 mr-1.5 text-amber-500" />
+              Pause
+            </Button>
+            <Button
+              size="default"
+              variant="outline"
+              onClick={onStopTimer}
+              className={actionBtn}
+              data-testid="button-timer-stop"
+            >
+              <Square className="h-4 w-4 mr-1.5 text-red-500" />
+              Stop
+            </Button>
+          </>
+        )}
+
+        {showTimer && timerState === "paused" && (
+          <>
+            <Button
+              size="default"
+              variant="outline"
+              onClick={onResumeTimer}
+              className={actionBtn}
+              data-testid="button-timer-resume"
+            >
+              <Play className="h-4 w-4 mr-1.5 text-amber-500" />
+              Resume
+            </Button>
+            <Button
+              size="default"
+              variant="outline"
+              onClick={onStopTimer}
+              className={actionBtn}
+              data-testid="button-timer-stop"
+            >
+              <Square className="h-4 w-4 mr-1.5 text-red-500" />
+              Stop
+            </Button>
+          </>
+        )}
+
+        {showTimer && timerState === "other_task" && (
+          <Badge variant="secondary" className="text-xs">Timer running on another task</Badge>
+        )}
+
+        {showTimer && timerTotalLabel && (
+          <span className="text-xs text-muted-foreground">{timerTotalLabel}</span>
+        )}
+
+        {extraActions}
+      </div>
 
       <div className="flex items-center gap-2 ml-auto">
         {showIncomplete && onMarkIncomplete && (
@@ -70,47 +174,31 @@ export function DrawerActionBar({
             variant="outline"
             onClick={onMarkIncomplete}
             disabled={incompleteDisabled || isIncompleting}
+            className={actionBtn}
             data-testid="button-action-mark-incomplete"
           >
             {isIncompleting ? (
               <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
             ) : (
-              <RotateCcw className="h-4 w-4 mr-1.5" />
+              <RotateCcw className="h-4 w-4 mr-1.5 text-orange-500" />
             )}
             {isIncompleting ? "Reopening..." : incompleteLabel}
-          </Button>
-        )}
-
-        {showSave && onSave && (
-          <Button
-            size="default"
-            variant="default"
-            onClick={onSave}
-            disabled={saveDisabled || isSaving}
-            data-testid="button-action-save"
-          >
-            {isSaving ? (
-              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4 mr-1.5" />
-            )}
-            {isSaving ? "Saving..." : saveLabel}
           </Button>
         )}
 
         {showComplete && onMarkComplete && (
           <Button
             size="default"
-            variant="default"
+            variant="outline"
             onClick={onMarkComplete}
             disabled={completeDisabled || isCompleting}
-            className="bg-success text-success-foreground border-success/80"
+            className={cn(actionBtn, "border-emerald-200 dark:border-emerald-800")}
             data-testid="button-action-mark-complete"
           >
             {isCompleting ? (
               <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
             ) : (
-              <Check className="h-4 w-4 mr-1.5" />
+              <Check className="h-4 w-4 mr-1.5 text-emerald-500" />
             )}
             {isCompleting ? "Completing..." : completeLabel}
           </Button>

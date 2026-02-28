@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Timer, Play, Pause, Square, Loader2, ChevronRight, CheckSquare, ListTodo, MessageSquare, FileText, History, Link2 } from "lucide-react";
+import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Loader2, ChevronRight, CheckSquare, ListTodo, MessageSquare, FileText, History, Link2 } from "lucide-react";
 import { TaskPanelShell } from "./task-panel/TaskPanelShell";
 import { TaskHistoryTab } from "./task-panel/TaskHistoryTab";
 import { Button } from "@/components/ui/button";
@@ -536,45 +536,6 @@ export function SubtaskDetailDrawer({
           </Button>
         </div>
       </div>
-      {isActualSubtask && (
-        <div className="flex items-center justify-end gap-2">
-          {timerState === "idle" && (
-            <Button size="sm" onClick={() => startTimerMutation.mutate()} className="h-8 border border-[#d97d26] text-white bg-[#f7902f] hover:bg-[#e67e22]" data-testid="button-timer-start">
-              <Play className="h-3.5 w-3.5 mr-1.5" /> Start Timer
-            </Button>
-          )}
-          {timerState === "loading" && (
-            <Button size="sm" disabled className="h-8 border border-[#d97d26] text-white bg-[#f7902f]">
-              <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> Loading...
-            </Button>
-          )}
-          {timerState === "running" && (
-            <>
-              <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-8">
-                <Pause className="h-3.5 w-3.5 mr-1.5" /> Pause
-              </Button>
-              <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
-                <Square className="h-3.5 w-3.5 mr-1.5" /> Stop
-              </Button>
-            </>
-          )}
-          {timerState === "paused" && (
-            <>
-              <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-8">
-                <Play className="h-3.5 w-3.5 mr-1.5" /> Resume
-              </Button>
-              <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
-                <Square className="h-3.5 w-3.5 mr-1.5" /> Stop
-              </Button>
-            </>
-          )}
-          {timeEntries.length > 0 && (
-            <span className="text-xs text-muted-foreground">
-              Total: {formatDurationShort(timeEntries.reduce((sum: number, e: any) => sum + e.durationSeconds, 0))}
-            </span>
-          )}
-        </div>
-      )}
       <div className="flex items-center gap-1 text-xs text-muted-foreground flex-wrap" data-testid="subtask-breadcrumbs">
         <button onClick={onBack} className="flex items-center gap-1 hover:text-foreground transition-colors cursor-pointer" data-testid="breadcrumb-parent-task">
           <CheckSquare className="h-3 w-3" />
@@ -825,10 +786,16 @@ export function SubtaskDetailDrawer({
 
   const panelFooter = (
     <DrawerActionBar
-      showTimer={false}
       showSave={true}
       onSave={handleSaveAll}
       saveLabel="Save Subtask"
+      showTimer={isActualSubtask}
+      timerState={timerState}
+      onStartTimer={() => startTimerMutation.mutate()}
+      onPauseTimer={() => pauseTimerMutation.mutate()}
+      onResumeTimer={() => resumeTimerMutation.mutate()}
+      onStopTimer={() => stopTimerMutation.mutate()}
+      timerTotalLabel={timeEntries.length > 0 ? `Total: ${formatDurationShort(timeEntries.reduce((sum: number, e: any) => sum + e.durationSeconds, 0))}` : undefined}
       showComplete={isActualSubtask}
       onMarkComplete={handleMarkComplete}
       isCompleting={toggleCompleteMutation.isPending}
