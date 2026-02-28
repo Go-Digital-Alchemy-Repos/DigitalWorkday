@@ -1227,12 +1227,12 @@ export function TaskDetailDrawer({
                     }
                   >
                     <SelectTrigger
-                      className={cn(isMobile ? "w-full h-10" : "w-[180px] h-8")}
+                      className={cn(isMobile ? "w-full h-10" : "w-[240px] h-8")}
                       data-testid="select-milestone"
                     >
                       <SelectValue placeholder="No milestone" />
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent className="max-w-[300px]">
                       <SelectItem value="none">No milestone</SelectItem>
                       {projectMilestones.map((m) => (
                         <SelectItem key={m.id} value={m.id} data-testid={`option-milestone-${m.id}`}>
