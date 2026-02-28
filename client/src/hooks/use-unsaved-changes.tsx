@@ -69,7 +69,7 @@ export function useUnsavedChanges(initialDirty = false): UnsavedChangesState {
 
   const UnsavedChangesDialog = useCallback(
     () => (
-      <AlertDialog open={showDialog} onOpenChange={setShowDialog}>
+      <AlertDialog open={showDialog && isDirty} onOpenChange={setShowDialog}>
         <AlertDialogContent>
           <AlertDialogHeader>
             <AlertDialogTitle>Unsaved Changes</AlertDialogTitle>
@@ -96,7 +96,7 @@ export function useUnsavedChanges(initialDirty = false): UnsavedChangesState {
         </AlertDialogContent>
       </AlertDialog>
     ),
-    [showDialog, handleCancel, handleConfirm]
+    [showDialog, isDirty, handleCancel, handleConfirm]
   );
 
   return {
