@@ -1616,7 +1616,7 @@ export function TaskDetailDrawer({
                   ) : (
                     <SendHorizonal className="h-4 w-4 mr-1.5" />
                   )}
-                  Send to PM
+                  Send to PM For Review
                 </Button>
               )}
               {enableTaskReviewQueue && (task as any).needsPmReview && canClearReview && (
