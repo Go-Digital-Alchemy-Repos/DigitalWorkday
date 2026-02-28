@@ -1361,7 +1361,7 @@ export function TaskDetailDrawer({
               </FormFieldWrapper>
 
               {task.projectId && (
-                <div className="p-3 sm:p-4 bg-muted/40 border border-border rounded-xl">
+                <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66]">
                   <AttachmentUploader taskId={task.id} projectId={task.projectId} />
                 </div>
               )}
@@ -1391,7 +1391,6 @@ export function TaskDetailDrawer({
           )}
         </div>
       </TaskPanelShell>
-
       <SubtaskDetailDrawer
         subtask={selectedSubtask}
         parentTaskTitle={task.title}
@@ -1416,14 +1415,12 @@ export function TaskDetailDrawer({
         }}
         availableUsers={mentionUsers}
       />
-
       <StartTimerDrawer
         open={timerDrawerOpen}
         onOpenChange={setTimerDrawerOpen}
         initialTaskId={task.id}
         initialProjectId={task.projectId || null}
       />
-
       <Dialog open={showTimeTrackingPrompt} onOpenChange={setShowTimeTrackingPrompt}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
@@ -1436,7 +1433,6 @@ export function TaskDetailDrawer({
           </DialogFooter>
         </DialogContent>
       </Dialog>
-
       <Dialog open={showTimeEntryForm} onOpenChange={(open) => { if (!open) resetCompletionState(); else setShowTimeEntryForm(open); }}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
