@@ -137,7 +137,10 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
               "w-full px-3 py-2 text-left text-sm flex flex-col",
               index === selectedIndex && "bg-accent"
             )}
-            onClick={() => selectUser(index)}
+            onMouseDown={(e) => {
+              e.preventDefault();
+              selectUser(index);
+            }}
             data-testid={`mention-option-${user.id}`}
           >
             <span className="font-medium">{user.displayName || user.name || "Unknown"}</span>
