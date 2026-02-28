@@ -1361,7 +1361,7 @@ export function TaskDetailDrawer({
               </FormFieldWrapper>
 
               {task.projectId && (
-                <div className="p-3 sm:p-4 bg-[hsl(var(--section-attachments))] border border-[hsl(var(--section-attachments-border))]" style={{ borderRadius: "10px" }}>
+                <div className="p-3 sm:p-4 bg-muted/40 border border-border rounded-xl">
                   <AttachmentUploader taskId={task.id} projectId={task.projectId} />
                 </div>
               )}
@@ -1369,7 +1369,7 @@ export function TaskDetailDrawer({
                 <div className="text-sm text-muted-foreground">Attachments are available for project tasks only</div>
               )}
 
-              <div className="p-3 sm:p-4 bg-[hsl(var(--section-comments))] border border-[hsl(var(--section-comments-border))]" style={{ borderRadius: "10px" }}>
+              <div className="p-3 sm:p-4 bg-muted/40 border border-border rounded-xl">
                 <CommentThread
                   comments={taskComments}
                   taskId={task.id}
