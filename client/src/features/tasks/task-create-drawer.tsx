@@ -592,7 +592,7 @@ export function TaskCreateDrawer({
 
           {projectId && (
             <div 
-              className="p-3 sm:p-4 bg-[#edebff4d] dark:bg-[hsl(var(--section-attachments))] border border-[#d6d2ff] dark:border-[hsl(var(--section-attachments-border))]"
+              className="p-3 sm:p-4 bg-[hsl(var(--section-attachments))] border border-[hsl(var(--section-attachments-border))]"
               style={{ borderRadius: "10px" }}
             >
               <div className="space-y-3">
@@ -663,7 +663,7 @@ export function TaskCreateDrawer({
           )}
 
           <div 
-            className="p-3 sm:p-4 bg-[#e3e3e34d] dark:bg-[hsl(var(--section-subtasks))] border border-[#cfcfcf] dark:border-[hsl(var(--section-subtasks-border))]"
+            className="p-3 sm:p-4 bg-[hsl(var(--section-subtasks))] border border-[hsl(var(--section-subtasks-border))]"
             style={{ borderRadius: "10px" }}
           >
             <div className="space-y-3">
@@ -735,7 +735,7 @@ export function TaskCreateDrawer({
 
           {workspaceId && (
             <div 
-              className="p-3 sm:p-4 dark:bg-[hsl(var(--section-tags))] border border-[#ade8f5] dark:border-[hsl(var(--section-tags-border))] bg-[#edf4f54d]"
+              className="p-3 sm:p-4 bg-[hsl(var(--section-tags))] border border-[hsl(var(--section-tags-border))]"
               style={{ borderRadius: "10px" }}
             >
               <div className="space-y-2">
