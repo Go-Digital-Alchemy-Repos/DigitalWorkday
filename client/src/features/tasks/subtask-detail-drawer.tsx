@@ -491,10 +491,32 @@ export function SubtaskDetailDrawer({
   const panelHeader = (
     <div className="px-4 sm:px-6 py-3 space-y-2">
       <div className="flex items-center justify-between gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Button variant="ghost" size="icon" onClick={onBack} aria-label="Back to parent task" data-testid="button-back-to-parent">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
+          <Button variant="ghost" size="icon" className="shrink-0" onClick={onBack} aria-label="Back to parent task" data-testid="button-back-to-parent">
             <ArrowLeft className="h-4 w-4" />
           </Button>
+          {editingTitle ? (
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={handleTitleSave}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleTitleSave();
+                if (e.key === "Escape") { setTitle(subtask.title); setEditingTitle(false); }
+              }}
+              className="text-base font-semibold h-8 min-w-0 flex-1"
+              autoFocus
+              data-testid="input-subtask-title"
+            />
+          ) : (
+            <h2
+              className="text-base font-semibold cursor-pointer hover:text-muted-foreground transition-colors truncate min-w-0 flex-1"
+              onClick={() => { setTitle(subtask.title); setEditingTitle(true); }}
+              data-testid="text-subtask-title"
+            >
+              {title || subtask.title}
+            </h2>
+          )}
           <StatusBadge status={subtask.status as any} />
         </div>
         <div className="flex items-center gap-1">
@@ -553,35 +575,11 @@ export function SubtaskDetailDrawer({
 
   const panelSidebar = (
     <div className="p-4 space-y-5">
-      <div className="space-y-4">
-        {editingTitle ? (
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={handleTitleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleTitleSave();
-              if (e.key === "Escape") { setTitle(subtask.title); setEditingTitle(false); }
-            }}
-            className="text-lg font-semibold h-auto py-1"
-            autoFocus
-            data-testid="input-subtask-title"
-          />
-        ) : (
-          <h2
-            className="text-lg font-semibold cursor-pointer hover:text-muted-foreground transition-colors line-clamp-2"
-            onClick={() => { setTitle(subtask.title); setEditingTitle(true); }}
-            data-testid="text-subtask-title"
-          >
-            {title || subtask.title}
-          </h2>
-        )}
-        {isActualSubtask && subtask.createdAt && (
-          <div className="text-xs text-muted-foreground" data-testid="subtask-created-at">
-            Created {format(new Date(subtask.createdAt), "MMM d, yyyy")}
-          </div>
-        )}
-      </div>
+      {isActualSubtask && subtask.createdAt && (
+        <div className="text-xs text-muted-foreground" data-testid="subtask-created-at">
+          Created {format(new Date(subtask.createdAt), "MMM d, yyyy")}
+        </div>
+      )}
 
       <div className="space-y-4">
         <div className="space-y-2">

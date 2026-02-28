@@ -932,11 +932,33 @@ export function TaskDetailDrawer({
   const panelHeader = (
     <div className="px-4 sm:px-6 py-3 space-y-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 min-w-0 flex-1">
           <StatusBadge status={task.status as any} />
+          {editingTitle ? (
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              onBlur={handleTitleSave}
+              onKeyDown={(e) => {
+                if (e.key === "Enter") handleTitleSave();
+                if (e.key === "Escape") { setTitle(task.title); setEditingTitle(false); }
+              }}
+              className="text-base font-semibold h-8 min-w-0 flex-1"
+              autoFocus
+              data-testid="input-task-title"
+            />
+          ) : (
+            <h2
+              className="text-base font-semibold cursor-pointer hover:text-muted-foreground transition-colors truncate min-w-0 flex-1"
+              onClick={() => { setTitle(task.title); setEditingTitle(true); }}
+              data-testid="text-task-title"
+            >
+              {task.title}
+            </h2>
+          )}
           {enableTaskReviewQueue && (task as any).needsPmReview && (
             <Badge
-              className="bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700"
+              className="bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700 shrink-0"
               data-testid="badge-review-requested"
             >
               Review Requested
@@ -1070,31 +1092,6 @@ export function TaskDetailDrawer({
 
   const panelSidebar = (
     <div className="p-4 space-y-5">
-      <div className="space-y-4">
-        {editingTitle ? (
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            onBlur={handleTitleSave}
-            onKeyDown={(e) => {
-              if (e.key === "Enter") handleTitleSave();
-              if (e.key === "Escape") { setTitle(task.title); setEditingTitle(false); }
-            }}
-            className="text-lg font-semibold h-auto py-1"
-            autoFocus
-            data-testid="input-task-title"
-          />
-        ) : (
-          <h2
-            className="text-lg font-semibold cursor-pointer hover:text-muted-foreground transition-colors line-clamp-2"
-            onClick={() => { setTitle(task.title); setEditingTitle(true); }}
-            data-testid="text-task-title"
-          >
-            {task.title}
-          </h2>
-        )}
-      </div>
-
       <div className="space-y-4">
         <FormFieldWrapper label="Assignees" labelIcon={<Users className="h-3.5 w-3.5" />}>
           <MultiSelectAssignees taskId={task.id} assignees={assigneeUsers} workspaceId={workspaceId} onAssigneeChange={onRefresh} />
