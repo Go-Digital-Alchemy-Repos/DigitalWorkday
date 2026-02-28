@@ -1273,7 +1273,7 @@ export function TaskDetailDrawer({
           {enableTaskReviewQueue && !isClientUser && !(task as any).needsPmReview && (
             <Button variant="outline" size="default" onClick={() => requestReviewMutation.mutate()} disabled={requestReviewMutation.isPending} className="bg-background hover:bg-muted border-border/60" data-testid="button-request-review">
               {requestReviewMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <SendHorizonal className="h-4 w-4 mr-1.5 text-violet-500" />}
-              Send to PM
+              Send to PM for Review
             </Button>
           )}
           {enableTaskReviewQueue && (task as any).needsPmReview && canClearReview && (
