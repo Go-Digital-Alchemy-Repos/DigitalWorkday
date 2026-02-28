@@ -205,18 +205,19 @@ export function CommentThread({
     setEditBody(comment.body);
   };
 
-  const handleSaveEdit = () => {
-    if (editingId && editBody.trim()) {
-      onUpdate?.(editingId, editBody.trim());
+  const handleSaveEdit = useCallback((content?: string) => {
+    const finalContent = typeof content === "string" ? content : editBody;
+    if (editingId && finalContent.trim()) {
+      onUpdate?.(editingId, finalContent.trim());
       setEditingId(null);
       setEditBody("");
     }
-  };
+  }, [editingId, editBody, onUpdate]);
 
-  const handleCancelEdit = () => {
+  const handleCancelEdit = useCallback(() => {
     setEditingId(null);
     setEditBody("");
-  };
+  }, []);
 
   return (
     <div className="space-y-4" data-testid="comment-thread">

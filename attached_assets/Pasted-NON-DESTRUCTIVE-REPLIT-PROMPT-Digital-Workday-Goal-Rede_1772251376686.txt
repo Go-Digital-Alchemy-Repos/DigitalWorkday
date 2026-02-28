@@ -1,0 +1,147 @@
+NON-DESTRUCTIVE REPLIT PROMPT — Digital Workday
+Goal: Redesign BOTH the Task Drawer and Subtask Drawer UI to be full-width, premium, and far less “long + narrow”, while preserving 100% of existing functionality and data behavior. Also add a new “Task History” feature (audit log) visible in BOTH task and subtask drawers that records field changes over time.
+
+CRITICAL RULES
+- Non-destructive: do not remove any existing fields, buttons, sections, endpoints, permissions, validations, or behaviors.
+- Preserve existing data model and APIs unless an additive change is required for Task History.
+- Preserve routing/deep-link behavior: if we currently open a drawer from board/list/calendar/notifications, keep that working.
+- The redesign must apply to BOTH:
+  1) Task Drawer
+  2) Subtask Drawer
+  They should share the same layout system/components with small differences only where required.
+
+CONTEXT
+- UI uses shadcn/ui components in client/src/components/ui/ with Tailwind + Radix.
+- Current drawer is too narrow and vertically stacked; we want a premium full-width overlay with a structured layout.
+
+PART 1 — IMPLEMENT A FULL-WIDTH “TASK PANEL” OVERLAY (TASK + SUBTASK)
+1) Replace the narrow right-side drawer with a full-width overlay panel:
+   - The overlay should dim/blur the background.
+   - Panel should be centered with max width (e.g., 1200–1400px) and responsive padding.
+   - Keep an obvious close action (X) and preserve ESC-to-close behavior if present.
+   - Ensure focus trapping + accessibility remains correct.
+
+2) Structure the panel into:
+   A) Sticky Header (always visible while scrolling the panel content)
+      - Breadcrumbs: Client > Project > List/Board > Task (keep existing breadcrumb behavior)
+      - Task/Subtask Title prominently
+      - Quick actions on the right:
+        - Status dropdown
+        - Assignees / watchers quick access
+        - Due date
+        - Priority
+        - Start Timer (if available)
+        - Close button
+      - Do NOT remove any controls. If something existed before, it must still be accessible.
+
+   B) Body Layout (desktop): 2 columns
+      - Left “Primary” column (about 65–75%):
+        - Description editor/view
+        - Comments (primary activity feed)
+        - Optional tabs or sub-tabs inside the left column for: Overview | Comments | Time | Files | History
+          (Tabs are acceptable; choose the most maintainable approach.)
+      - Right “Control Panel” column (about 25–35%, fixed width ~320–380px):
+        - Assignees
+        - Watchers
+        - Due date
+        - Priority
+        - Estimate
+        - Tags
+        - Subtasks (if in Task drawer; if in Subtask drawer, show “Parent task” and sibling info if available)
+        - Attachments
+        - Time entries summary (and the Start Timer button may also be here)
+      - Make the right column optionally collapsible to focus on left content (non-destructive enhancement).
+
+   C) Sticky Footer (optional but recommended)
+      - Keep existing action buttons: Send to PM, Save Task, Mark Complete, etc.
+      - Use a sticky footer so actions are always reachable without scrolling to the bottom.
+      - Do not change button semantics.
+
+3) Mobile layout:
+   - Use a single-column layout.
+   - Use tabs (Overview, Comments, Files, Time, History) to reduce vertical overload.
+   - Ensure all features remain reachable.
+
+PART 2 — REFACTOR FOR SHARED DRAWER SYSTEM (TASK + SUBTASK)
+Create a shared component architecture:
+- TaskPanelShell (overlay + header + footer + responsive layout)
+- TaskPanelHeader (title, breadcrumbs, quick actions)
+- TaskPanelRightRail (meta fields and widgets)
+- TaskPanelTabs / TaskPanelMain (description/comments/attachments/time/history)
+Then implement:
+- TaskDrawer uses TaskPanelShell with task-specific sections (subtasks list, etc.)
+- SubtaskDrawer uses TaskPanelShell with subtask-specific sections (parent task link, etc.)
+
+Ensure the two drawers share the same visual hierarchy and spacing.
+
+PART 3 — ADD “TASK HISTORY” (AUDIT LOG) FOR TASKS AND SUBTASKS
+Goal: Record and display what changed, who changed it, and when, over the life of a task/subtask.
+
+Requirements:
+1) Data model (additive, minimal):
+   - Create a new table/collection (or equivalent) e.g. task_history (and/or subtask_history if you need separate, but prefer a single generic model):
+     Fields:
+       - id (uuid)
+       - entity_type (enum: 'task' | 'subtask')
+       - entity_id (taskId or subtaskId)
+       - actor_user_id (who made the change; null allowed for system events)
+       - action_type (enum/string: 'create' | 'update' | 'comment' | 'status_change' | 'assignment_change' | 'attachment_add' | etc.)
+       - changes JSON (structured diff: { field: { from, to } } )
+       - created_at timestamp
+       - tenant_id / workspace_id scoping consistent with app’s tenancy model
+   - Ensure indexes for (tenant_id, entity_type, entity_id, created_at desc)
+
+2) History capture:
+   - When a task or subtask is created: write a history event.
+   - When key fields change: status, priority, due date, estimate, assignees, watchers, title, description, tags, completion/resolved, attachments added/removed, time entry created/edited/deleted (if applicable).
+   - Prefer capturing history in ONE place (service layer) so updates from any UI path are logged consistently.
+   - Do NOT log sensitive content beyond what is needed (but title/field diffs are fine).
+   - Avoid excessive noise: if multiple fields change in one save, create a single history entry with multiple changes.
+
+3) API endpoints (additive):
+   - GET /tasks/:id/history (or equivalent in your routing/tRPC structure)
+   - GET /subtasks/:id/history
+   - Or a unified endpoint: GET /history?entity_type=task&entity_id=...
+   - Enforce tenant scoping and permissions consistent with viewing tasks/subtasks.
+
+4) UI: “Task History” section/tab
+   - Add a new tab or right-rail section labeled “History”
+   - For both Task Drawer and Subtask Drawer
+   - Display as a chronological timeline:
+     - Top: most recent
+     - Each item shows: user avatar/name, action summary, timestamp, and expanded diff of fields changed.
+   - Include filtering (optional but helpful):
+     - All | Status | Assignments | Dates | Attachments | Time | Comments
+     (Non-destructive enhancement; if too much, do basic list first.)
+
+PART 4 — QUALITY + POLISH
+- Keep typography hierarchy: make task title larger, section headings clear.
+- Reduce visual density:
+  - Use Cards/Separators
+  - Use consistent spacing (e.g., gap-6 / py-4 / px-4)
+- Maintain performance:
+  - Virtualize long comment/history lists if needed.
+  - Lazy-load History tab content when opened.
+
+PART 5 — ACCEPTANCE CHECKLIST (MUST PASS)
+- All existing fields and actions are still present and work exactly as before.
+- Task Drawer and Subtask Drawer both use the new full-width panel layout.
+- Works from all entry points: board click, list click, calendar, notifications → deep link opens correct task/subtask.
+- “Task History” exists for both tasks and subtasks.
+- History records: who, what changed, and when; tenant scoped; permissioned.
+- No breaking database migrations; only additive changes.
+- No UI regressions on mobile; panel is usable on small screens.
+- Tests updated/added where applicable.
+
+DELIVERABLES
+1) Implement the new shared TaskPanelShell and migrate TaskDrawer/SubtaskDrawer to use it.
+2) Add the new task_history model + migrations.
+3) Add service-layer history logging for task/subtask create/update and key events.
+4) Add History APIs.
+5) Add History UI tab/section in both drawers.
+
+Proceed step-by-step:
+- First, implement the UI shell + migrate TaskDrawer and SubtaskDrawer visuals (without history).
+- Second, implement the history data model + logging + API.
+- Third, add the History UI and validate it populates correctly.
+- Finally, run through acceptance checklist and fix regressions.
