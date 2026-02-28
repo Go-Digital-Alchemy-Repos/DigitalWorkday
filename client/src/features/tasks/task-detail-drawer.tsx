@@ -1266,7 +1266,7 @@ export function TaskDetailDrawer({
 
           {task.projectId && (
             <div 
-              className="p-3 sm:p-4 bg-[#edebff4d] dark:bg-[hsl(var(--section-attachments))] border border-[#d6d2ff] dark:border-[hsl(var(--section-attachments-border))]"
+              className="p-3 sm:p-4 bg-[hsl(var(--section-attachments))] border border-[hsl(var(--section-attachments-border))]"
               style={{ borderRadius: "10px" }}
             >
               <AttachmentUploader taskId={task.id} projectId={task.projectId} />
