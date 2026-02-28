@@ -1369,7 +1369,7 @@ export function TaskDetailDrawer({
                 <div className="text-sm text-muted-foreground">Attachments are available for project tasks only</div>
               )}
 
-              <div className="p-3 sm:p-4 bg-muted/40 border border-border rounded-xl">
+              <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66]">
                 <CommentThread
                   comments={taskComments}
                   taskId={task.id}
