@@ -13,10 +13,16 @@ export function Toaster() {
 
   return (
     <ToastProvider>
-      {toasts.map(function ({ id, title, description, action, ...props }) {
+      {toasts.map(function ({ id, title, description, action, onClick, ...props }) {
         return (
           <Toast key={id} {...props}>
-            <div className="grid gap-1">
+            <div
+              className={`grid gap-1 flex-1 min-w-0 ${onClick ? "cursor-pointer" : ""}`}
+              onClick={onClick}
+              role={onClick ? "button" : undefined}
+              tabIndex={onClick ? 0 : undefined}
+              onKeyDown={onClick ? (e) => { if (e.key === "Enter" || e.key === " ") onClick(); } : undefined}
+            >
               {title && <ToastTitle>{title}</ToastTitle>}
               {description && (
                 <ToastDescription>{description}</ToastDescription>

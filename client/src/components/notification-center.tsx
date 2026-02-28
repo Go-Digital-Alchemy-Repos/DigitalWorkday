@@ -406,6 +406,12 @@ export function NotificationCenter() {
   const [, setLocation] = useLocation();
   const scrollRef = useRef<HTMLDivElement>(null);
 
+  // Refs so the socket handler always has the latest navigate/openTask without stale closures
+  const openTaskRef = useRef(openTask);
+  const setLocationRef = useRef(setLocation);
+  useEffect(() => { openTaskRef.current = openTask; }, [openTask]);
+  useEffect(() => { setLocationRef.current = setLocation; }, [setLocation]);
+
   const [bellBounce, setBellBounce] = useState(false);
   const [badgePop, setBadgePop] = useState(false);
   const prevUnreadRef = useRef<number | null>(null);
@@ -601,9 +607,25 @@ export function NotificationCenter() {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications"] });
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/unread-count"] });
       chatSounds.play("notification");
+
+      // Build a click handler that navigates to the notification target
+      const notif = payload.notification;
+      let onToastClick: (() => void) | undefined;
+      if (notif) {
+        const taskId = getTaskIdFromPayload(notif.payloadJson);
+        onToastClick = () => {
+          if (isTaskNotification(notif.type) && taskId && openTaskRef.current) {
+            openTaskRef.current(taskId);
+          } else if (notif.href) {
+            setLocationRef.current(notif.href);
+          }
+        };
+      }
+
       toast({
         title: payload.notification.title,
         description: payload.notification.message || undefined,
+        onClick: onToastClick,
       });
     };
 
