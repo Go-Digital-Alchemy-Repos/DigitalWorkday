@@ -947,7 +947,7 @@ export function TaskDetailDrawer({
             />
           ) : (
             <h2
-              className="text-base font-semibold cursor-pointer hover:text-muted-foreground transition-colors truncate min-w-0 flex-1"
+              className="font-semibold cursor-pointer hover:text-muted-foreground transition-colors truncate min-w-0 flex-1 text-[22px]"
               onClick={() => { setTitle(task.title); setEditingTitle(true); }}
               data-testid="text-task-title"
             >
