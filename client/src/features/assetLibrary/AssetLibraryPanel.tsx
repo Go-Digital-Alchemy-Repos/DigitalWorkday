@@ -589,11 +589,11 @@ export function AssetLibraryPanel({ clientId }: Props) {
   const tenantDefaultsQuery = useQuery<TenantDefaultsClientView>({
     queryKey: ["/api/v1/tenants", tenantId, "default-docs", "client-view"],
     queryFn: async () => {
-      const res = await fetch(`/api/v1/tenants/${tenantId}/default-docs/client-view`, { credentials: "include" });
+      const res = await fetch(`/api/v1/tenants/${tenantId}/default-docs/client-view`);
       if (!res.ok) throw new Error("Failed to load tenant defaults");
       return res.json();
     },
-    enabled: !!tenantId && !!flags?.tenantDefaultDocs,
+    enabled: !!tenantId,
     staleTime: 5 * 60 * 1000,
   });
 

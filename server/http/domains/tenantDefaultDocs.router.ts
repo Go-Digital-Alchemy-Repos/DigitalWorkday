@@ -71,10 +71,11 @@ router.get("/tenants/:tenantId/default-docs/tree", requireAdminOrSuper, async (r
 
 router.get("/tenants/:tenantId/default-docs/client-view", async (req: Request, res: Response) => {
   try {
-    const { tenantId } = req.params;
     const effectiveTenantId = getEffectiveTenantId(req);
+    const { tenantId } = req.params;
     const user = req.user as any;
-    if (user.role === UserRole.SUPER_USER || effectiveTenantId === tenantId) {
+
+    if (user.role === UserRole.SUPER_USER || user.role === UserRole.CLIENT || user.role === UserRole.ADMIN || effectiveTenantId === tenantId) {
       const tree = await tenantDefaultDocsRepo.getTree(tenantId);
       res.json(tree);
     } else {
