@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { Clock, Loader2 } from "lucide-react";
+import { useMutation } from "@tanstack/react-query";
+import { Clock, Loader2, DollarSign } from "lucide-react";
 import {
   Dialog,
   DialogContent,
@@ -48,12 +48,14 @@ export function LogTimeOnCompleteDialog({
   const [hours, setHours] = useState(0);
   const [minutes, setMinutes] = useState(0);
   const [description, setDescription] = useState("");
+  const [billable, setBillable] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const createTimeEntryMutation = useMutation({
     mutationFn: async (data: {
       durationSeconds: number;
       description: string;
+      billable: boolean;
       taskId?: string | null;
       subtaskId?: string | null;
       projectId?: string | null;
@@ -104,6 +106,7 @@ export function LogTimeOnCompleteDialog({
       await createTimeEntryMutation.mutateAsync({
         durationSeconds: totalSeconds,
         description: description || `Completed: ${itemTitle}`,
+        billable,
         taskId: itemType === "task" ? itemId : taskId || null,
         subtaskId: itemType === "subtask" ? itemId : null,
         projectId: projectId || null,
@@ -129,6 +132,7 @@ export function LogTimeOnCompleteDialog({
     setHours(0);
     setMinutes(0);
     setDescription("");
+    setBillable(true);
     onOpenChange(false);
   };
 
@@ -195,6 +199,33 @@ export function LogTimeOnCompleteDialog({
                 rows={2}
                 data-testid="input-description"
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setBillable(true)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                  billable
+                    ? "bg-green-50 border-green-300 text-green-700 dark:bg-green-950/40 dark:border-green-700 dark:text-green-400"
+                    : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
+                }`}
+                data-testid="button-billable"
+              >
+                <DollarSign className="h-3.5 w-3.5" />
+                Billable
+              </button>
+              <button
+                type="button"
+                onClick={() => setBillable(false)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                  !billable
+                    ? "bg-muted border-foreground/30 text-foreground"
+                    : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
+                }`}
+                data-testid="button-non-billable"
+              >
+                Non-billable
+              </button>
             </div>
           </div>
         ) : null}
