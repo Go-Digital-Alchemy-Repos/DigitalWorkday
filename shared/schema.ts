@@ -3313,6 +3313,7 @@ export type InsertActiveTimer = z.infer<typeof insertActiveTimerSchema>;
 // Extended types for frontend use
 export type TaskAttachmentWithUser = TaskAttachment & {
   uploadedByUser?: User;
+  thumbnailUrl?: string;
 };
 
 export type TaskWithRelations = Task & {

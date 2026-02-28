@@ -7,6 +7,10 @@ import {
   FileText, 
   Image, 
   File, 
+  Film,
+  Music,
+  Archive,
+  Table2,
   Download, 
   Trash2,
   Loader2,
@@ -38,12 +42,28 @@ interface AttachmentConfig {
 }
 
 function getFileIcon(mimeType: string) {
-  if (mimeType.startsWith("image/")) {
-    return Image;
-  }
-  if (mimeType.includes("pdf") || mimeType.includes("document") || mimeType.includes("text")) {
-    return FileText;
-  }
+  if (mimeType.startsWith("video/")) return Film;
+  if (mimeType.startsWith("audio/")) return Music;
+  if (mimeType.includes("pdf")) return FileText;
+  if (
+    mimeType.includes("spreadsheet") ||
+    mimeType.includes("excel") ||
+    mimeType.includes("csv") ||
+    mimeType === "text/csv"
+  ) return Table2;
+  if (
+    mimeType.includes("document") ||
+    mimeType.includes("word") ||
+    mimeType.includes("text")
+  ) return FileText;
+  if (
+    mimeType.includes("zip") ||
+    mimeType.includes("compressed") ||
+    mimeType.includes("archive") ||
+    mimeType.includes("tar") ||
+    mimeType.includes("gzip")
+  ) return Archive;
+  if (mimeType.startsWith("image/")) return Image;
   return File;
 }
 
@@ -421,6 +441,7 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
         ) : completedAttachments.length > 0 ? (
           <div className="space-y-2">
             {completedAttachments.map((attachment) => {
+              const isImage = attachment.mimeType.startsWith("image/");
               const FileIcon = getFileIcon(attachment.mimeType);
               return (
                 <div
@@ -428,7 +449,22 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
                   className="flex items-center gap-2 p-2 bg-muted/30 rounded-md group"
                   data-testid={`attachment-item-${attachment.id}`}
                 >
-                  <FileIcon className="h-4 w-4 text-muted-foreground shrink-0" />
+                  {isImage && attachment.thumbnailUrl ? (
+                    <img
+                      src={attachment.thumbnailUrl}
+                      alt={attachment.originalFileName}
+                      className="h-10 w-10 object-cover rounded shrink-0 border border-border"
+                      onError={(e) => {
+                        e.currentTarget.style.display = "none";
+                        const sibling = e.currentTarget.nextElementSibling as HTMLElement | null;
+                        if (sibling) sibling.style.display = "block";
+                      }}
+                    />
+                  ) : null}
+                  <FileIcon
+                    className="h-4 w-4 text-muted-foreground shrink-0"
+                    style={{ display: isImage && attachment.thumbnailUrl ? "none" : "block" }}
+                  />
                   <div className="flex-1 min-w-0">
                     <p className="text-sm truncate">{attachment.originalFileName}</p>
                     <p className="text-xs text-muted-foreground">

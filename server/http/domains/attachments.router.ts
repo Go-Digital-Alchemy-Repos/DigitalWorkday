@@ -70,7 +70,22 @@ router.get(
       }
 
       const attachments = await storage.getTaskAttachmentsByTask(taskId);
-      res.json(attachments);
+
+      const enriched = await Promise.all(
+        attachments.map(async (att) => {
+          if (att.mimeType.startsWith("image/") && att.uploadStatus === "complete") {
+            try {
+              const thumbnailUrl = await createPresignedDownloadUrl(att.storageKey);
+              return { ...att, thumbnailUrl };
+            } catch {
+              return att;
+            }
+          }
+          return att;
+        })
+      );
+
+      res.json(enriched);
     } catch (error) {
       return handleRouteError(res, error, "GET /api/projects/:projectId/tasks/:taskId/attachments", req);
     }
