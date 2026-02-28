@@ -1,4 +1,4 @@
-import { ReactNode, useEffect, useRef } from "react";
+import { ReactNode, useEffect, useRef, useState } from "react";
 import { X } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { cn } from "@/lib/utils";
@@ -29,18 +29,24 @@ export function TaskPanelShell({
   const isMobile = useIsMobile();
   const panelRef = useRef<HTMLDivElement>(null);
   const previousFocusRef = useRef<HTMLElement | null>(null);
+  const didIncrementRef = useRef(false);
+  const [depth, setDepth] = useState(0);
 
   useEffect(() => {
     if (open) {
       previousFocusRef.current = document.activeElement as HTMLElement;
       const count = parseInt(document.body.dataset.panelCount || "0", 10);
+      setDepth(count);
       document.body.dataset.panelCount = String(count + 1);
+      didIncrementRef.current = true;
       document.body.style.overflow = "hidden";
       requestAnimationFrame(() => {
         panelRef.current?.focus();
       });
     }
     return () => {
+      if (!didIncrementRef.current) return;
+      didIncrementRef.current = false;
       const count = parseInt(document.body.dataset.panelCount || "1", 10) - 1;
       document.body.dataset.panelCount = String(Math.max(0, count));
       if (count <= 0) {
@@ -83,9 +89,10 @@ export function TaskPanelShell({
             "animate-in slide-in-from-bottom-4 fade-in-0 duration-300",
             isMobile
               ? "w-full h-full"
-              : "w-[calc(100vw-3rem)] max-w-[1400px] h-[calc(100vh-3rem)] mt-6 rounded-xl border border-border",
+              : "w-[calc(100vw-3rem)] max-w-[1400px] h-[calc(100vh-3rem)] rounded-xl border border-border",
             className
           )}
+          style={!isMobile && depth > 0 ? { marginTop: `${24 + depth * 20}px` } : !isMobile ? { marginTop: "24px" } : undefined}
           data-testid={testId}
         >
           <div className="sticky top-0 z-20 bg-background border-b border-border rounded-t-xl shrink-0">
