@@ -23,7 +23,10 @@ import { Badge } from "@/components/ui/badge";
 import { Card, CardContent } from "@/components/ui/card";
 import { Progress } from "@/components/ui/progress";
 import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
-import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X, Pin, Link2, Trash2, Loader2, Lock } from "lucide-react";
+import { DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors, DragEndEvent } from "@dnd-kit/core";
+import { arrayMove, SortableContext, sortableKeyboardCoordinates, verticalListSortingStrategy, useSortable } from "@dnd-kit/sortable";
+import { CSS } from "@dnd-kit/utilities";
+import { FolderKanban, Search, Filter, Calendar, Users, CheckSquare, AlertTriangle, Clock, CircleOff, Plus, X, Pin, Link2, Trash2, Loader2, Lock, GripVertical } from "lucide-react";
 import { ProjectDrawer } from "@/features/projects";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -185,6 +188,39 @@ export default function ProjectsDashboard() {
   const handleTogglePin = (e: React.MouseEvent, project: ProjectWithCounts) => {
     e.stopPropagation();
     togglePinMutation.mutate({ projectId: project.id, isPinned: !!project.stickyAt });
+  };
+
+  const reorderProjectsMutation = useMutation({
+    mutationFn: async ({ projectIds }: { projectIds: string[] }) => {
+      return apiRequest("PATCH", "/api/v1/projects/reorder", { projectIds });
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+    },
+    onError: () => {
+      toast({ title: "Failed to reorder projects", variant: "destructive" });
+    },
+  });
+
+  const sensors = useSensors(
+    useSensor(PointerSensor, {
+      activationConstraint: {
+        distance: 8,
+      },
+    }),
+    useSensor(KeyboardSensor, {
+      coordinateGetter: sortableKeyboardCoordinates,
+    })
+  );
+
+  const handleDragEnd = (event: DragEndEvent) => {
+    const { active, over } = event;
+    if (over && active.id !== over.id) {
+      const oldIndex = filteredProjects.findIndex((p) => p.id === active.id);
+      const newIndex = filteredProjects.findIndex((p) => p.id === over.id);
+      const newOrder = arrayMove(filteredProjects, oldIndex, newIndex);
+      reorderProjectsMutation.mutate({ projectIds: newOrder.map(p => p.id) });
+    }
   };
 
   const getProjectStats = (projectId: string) => {

@@ -1,10 +1,11 @@
 import { useQuery } from "@tanstack/react-query";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { formatDistanceToNow } from "date-fns";
-import { ClipboardCheck, ChevronRight } from "lucide-react";
+import { ClipboardCheck, ChevronRight, Clock } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Button } from "@/components/ui/button";
 
 interface ReviewQueueItem {
   taskId: string;
@@ -112,7 +113,10 @@ export function ReviewQueueCard({ onTaskClick }: ReviewQueueCardProps) {
                   {item.pmReviewRequestedAt && (
                     <>
                       <span>·</span>
-                      <span>{formatDistanceToNow(new Date(item.pmReviewRequestedAt), { addSuffix: true })}</span>
+                      <span className="flex items-center gap-1 shrink-0">
+                        <Clock className="h-3 w-3" />
+                        {formatDistanceToNow(new Date(item.pmReviewRequestedAt), { addSuffix: true })}
+                      </span>
                     </>
                   )}
                 </div>

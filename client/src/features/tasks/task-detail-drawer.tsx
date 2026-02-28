@@ -149,12 +149,11 @@ export function TaskDetailDrawer({
 
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
-  const isClientUser = currentUser?.role === "client";
   const { enableTaskReviewQueue } = useFeatureFlags();
 
   const { data: projectMembersData } = useQuery<Array<{ userId: string; role: string }>>({
     queryKey: ["/api/projects", task?.projectId, "members"],
-    enabled: !!task?.projectId && enableTaskReviewQueue && open,
+    enabled: !!task?.projectId && !!enableTaskReviewQueue && open,
   });
   const isProjectOwner = useMemo(() => {
     if (!currentUser?.id || !projectMembersData) return false;
