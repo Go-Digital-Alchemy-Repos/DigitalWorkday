@@ -508,7 +508,7 @@ export function SubtaskDetailDrawer({
             />
           ) : (
             <h2
-              className="text-base font-semibold cursor-pointer hover:text-muted-foreground transition-colors truncate min-w-0 flex-1"
+              className="font-semibold cursor-pointer hover:text-muted-foreground transition-colors truncate min-w-0 flex-1 text-[22px]"
               onClick={() => { setTitle(subtask.title); setEditingTitle(true); }}
               data-testid="text-subtask-title"
             >
