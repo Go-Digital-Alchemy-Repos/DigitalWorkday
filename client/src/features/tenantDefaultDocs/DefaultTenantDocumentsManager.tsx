@@ -306,7 +306,7 @@ export function DefaultTenantDocumentsManager({ tenantId, mode }: Props) {
       <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 border" data-testid="default-docs-info-banner">
         <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
         <p className="text-sm text-muted-foreground">
-          Documents uploaded here are visible to <strong>all clients</strong> in this tenant's Asset Library as read-only defaults.
+          Documents uploaded here are visible to <strong>ALL clients</strong> in their Asset Library as read-only defaults.
           Updates reflect instantly across all clients.
         </p>
       </div>
