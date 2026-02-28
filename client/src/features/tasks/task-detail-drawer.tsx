@@ -203,7 +203,7 @@ export function TaskDetailDrawer({
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#3b82f6");
-  const [activeTab, setActiveTab] = useState<"overview" | "comments" | "time" | "history">("overview");
+  const [activeTab, setActiveTab] = useState<"overview" | "history">("overview");
   
   const { isDirty, setDirty, markClean, confirmIfDirty, UnsavedChangesDialog } = useUnsavedChanges();
 
@@ -924,8 +924,6 @@ export function TaskDetailDrawer({
 
   const tabItems = [
     { id: "overview" as const, label: "Overview", icon: <FileText className="h-3.5 w-3.5" /> },
-    { id: "comments" as const, label: "Comments", icon: <MessageSquare className="h-3.5 w-3.5" />, count: taskComments.length },
-    { id: "time" as const, label: "Time", icon: <Timer className="h-3.5 w-3.5" />, count: timeEntries.length },
     { id: "history" as const, label: "History", icon: <History className="h-3.5 w-3.5" /> },
   ];
 
@@ -1025,6 +1023,52 @@ export function TaskDetailDrawer({
             <X className="h-4 w-4" />
           </Button>
         </div>
+      </div>
+      <div className="flex items-center justify-end gap-2">
+        {timerState === "idle" && (
+          <Button
+            size="sm"
+            onClick={() => {
+              if (canQuickStartTimer && !projectContextError) { startTimerMutation.mutate(); } else { setTimerDrawerOpen(true); }
+            }}
+            className="h-8 border border-[#d97d26] text-white hover:bg-[#e67e22] bg-[#ff8614ed]"
+            data-testid="button-timer-start"
+          >
+            <Play className="h-3.5 w-3.5 mr-1.5" />
+            Start Timer
+          </Button>
+        )}
+        {timerState === "loading" && (
+          <Button size="sm" disabled className="h-8 border border-[#d97d26] text-white bg-[#f7902f]">
+            <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
+            Loading...
+          </Button>
+        )}
+        {timerState === "running" && (
+          <>
+            <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-8">
+              <Pause className="h-3.5 w-3.5 mr-1.5" /> Pause
+            </Button>
+            <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
+              <Square className="h-3.5 w-3.5 mr-1.5" /> Stop
+            </Button>
+          </>
+        )}
+        {timerState === "paused" && (
+          <>
+            <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-8">
+              <Play className="h-3.5 w-3.5 mr-1.5" /> Resume
+            </Button>
+            <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
+              <Square className="h-3.5 w-3.5 mr-1.5" /> Stop
+            </Button>
+          </>
+        )}
+        {timeEntries.length > 0 && (
+          <span className="text-xs text-muted-foreground">
+            Total: {formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}
+          </span>
+        )}
       </div>
       <div className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap" data-testid="task-breadcrumbs">
         {task.projectId && projectContextLoading ? (
@@ -1324,113 +1368,22 @@ export function TaskDetailDrawer({
               {!task.projectId && (
                 <div className="text-sm text-muted-foreground">Attachments are available for project tasks only</div>
               )}
-            </>
-          )}
 
-          {activeTab === "comments" && (
-            <div className="p-3 sm:p-4 bg-[hsl(var(--section-comments))] border border-[hsl(var(--section-comments-border))]" style={{ borderRadius: "10px" }}>
-              <CommentThread
-                comments={taskComments}
-                taskId={task.id}
-                projectId={task.projectId}
-                currentUserId={currentUser?.id}
-                onAdd={(body, attachmentIds) => addCommentMutation.mutate({ body, attachmentIds })}
-                onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
-                onDelete={(id) => deleteCommentMutation.mutate(id)}
-                onResolve={(id) => resolveCommentMutation.mutate(id)}
-                onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
-                users={mentionUsers}
-              />
-            </div>
-          )}
-
-          {activeTab === "time" && (
-            <div className="p-3 sm:p-4 bg-[hsl(var(--section-time))] border border-[hsl(var(--section-time-border))]" style={{ borderRadius: "10px" }}>
-              <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
-                    <Timer className="h-3.5 w-3.5" />
-                    Time Entries
-                  </label>
-                  <div className="flex items-center gap-2">
-                    {timerState === "idle" && (
-                      <Button
-                        size="sm"
-                        onClick={() => {
-                          if (canQuickStartTimer && !projectContextError) { startTimerMutation.mutate(); } else { setTimerDrawerOpen(true); }
-                        }}
-                        className="h-8 border border-[#d97d26] text-white hover:bg-[#e67e22] bg-[#ff8614ed]"
-                        data-testid="button-timer-start"
-                      >
-                        <Play className="h-3.5 w-3.5 mr-1.5" />
-                        Start Timer
-                      </Button>
-                    )}
-                    {timerState === "loading" && (
-                      <Button size="sm" disabled className="h-8 border border-[#d97d26] text-white bg-[#f7902f]">
-                        <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" />
-                        Loading...
-                      </Button>
-                    )}
-                    {timerState === "running" && (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => pauseTimerMutation.mutate()} className="h-8">
-                          <Pause className="h-3.5 w-3.5 mr-1.5" /> Pause
-                        </Button>
-                        <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
-                          <Square className="h-3.5 w-3.5 mr-1.5" /> Stop
-                        </Button>
-                      </>
-                    )}
-                    {timerState === "paused" && (
-                      <>
-                        <Button variant="outline" size="sm" onClick={() => resumeTimerMutation.mutate()} className="h-8">
-                          <Play className="h-3.5 w-3.5 mr-1.5" /> Resume
-                        </Button>
-                        <Button variant="destructive" size="sm" onClick={() => stopTimerMutation.mutate()} className="h-8">
-                          <Square className="h-3.5 w-3.5 mr-1.5" /> Stop
-                        </Button>
-                      </>
-                    )}
-                    {timeEntries.length > 0 && (
-                      <span className="text-xs text-muted-foreground ml-2">
-                        Total: {formatDurationShort(timeEntries.reduce((sum, e) => sum + e.durationSeconds, 0))}
-                      </span>
-                    )}
-                  </div>
-                </div>
-                {timeEntriesLoading ? (
-                  <p className="text-sm text-muted-foreground">Loading time entries...</p>
-                ) : timeEntries.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">No time entries for this task</p>
-                ) : (
-                  <div className="space-y-2">
-                    {timeEntries.map((entry) => (
-                      <div key={entry.id} className="flex items-start justify-between p-3 rounded-md border bg-muted/30">
-                        <div className="space-y-1 flex-1 min-w-0">
-                          <div className="flex items-center gap-2 flex-wrap">
-                            <span className="text-sm font-medium">{formatDurationShort(entry.durationSeconds)}</span>
-                            <Badge variant={entry.scope === "out_of_scope" ? "default" : "secondary"} className="text-xs">
-                              {entry.scope === "out_of_scope" ? "Billable" : "Unbillable"}
-                            </Badge>
-                          </div>
-                          {entry.description && <p className="text-sm text-muted-foreground truncate">{entry.description}</p>}
-                          <div className="flex items-center gap-2 text-xs text-muted-foreground">
-                            <span>{format(new Date(entry.startTime), "MMM d, yyyy")}</span>
-                            {entry.user && (
-                              <>
-                                <span>·</span>
-                                <span>{entry.user.firstName && entry.user.lastName ? `${entry.user.firstName} ${entry.user.lastName}` : entry.user.email}</span>
-                              </>
-                            )}
-                          </div>
-                        </div>
-                      </div>
-                    ))}
-                  </div>
-                )}
+              <div className="p-3 sm:p-4 bg-[hsl(var(--section-comments))] border border-[hsl(var(--section-comments-border))]" style={{ borderRadius: "10px" }}>
+                <CommentThread
+                  comments={taskComments}
+                  taskId={task.id}
+                  projectId={task.projectId}
+                  currentUserId={currentUser?.id}
+                  onAdd={(body, attachmentIds) => addCommentMutation.mutate({ body, attachmentIds })}
+                  onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
+                  onDelete={(id) => deleteCommentMutation.mutate(id)}
+                  onResolve={(id) => resolveCommentMutation.mutate(id)}
+                  onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
+                  users={mentionUsers}
+                />
               </div>
-            </div>
+            </>
           )}
 
           {activeTab === "history" && (
