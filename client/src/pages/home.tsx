@@ -33,7 +33,6 @@ import { ReviewQueueCard } from "@/components/review-queue-card";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useTaskDrawer } from "@/lib/task-drawer-context";
-import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import type { Project, TaskWithRelations, Team, Workspace, Client, User } from "@shared/schema";
 
 interface AnalyticsSummary {
