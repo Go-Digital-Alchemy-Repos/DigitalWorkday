@@ -262,7 +262,9 @@ export function CommentThread({
                       <CommentEditor
                         value={editBody}
                         onChange={setEditBody}
+                        onSubmit={handleSaveEdit}
                         users={mentionUsers}
+                        isEditing={true}
                         data-testid="textarea-edit-comment"
                       />
                       <div className="flex gap-1">

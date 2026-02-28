@@ -35,6 +35,7 @@ interface CommentEditorProps {
   users?: User[];
   isSubmitting?: boolean;
   attachButton?: React.ReactNode;
+  isEditing?: boolean;
   "data-testid"?: string;
 }
 
@@ -139,16 +140,25 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
   }
 );
 
-interface CommentMenuBarProps {
+interface MenuBarProps {
   editor: Editor | null;
   onSubmit?: () => void;
   isSubmitting?: boolean;
   onOpenLinkDialog: () => void;
   onEmojiSelect: (emoji: string) => void;
   attachButton?: React.ReactNode;
+  isEditing?: boolean;
 }
 
-function MenuBar({ editor, onSubmit, isSubmitting, onOpenLinkDialog, onEmojiSelect, attachButton }: CommentMenuBarProps) {
+function MenuBar({
+  editor,
+  onSubmit,
+  isSubmitting,
+  onOpenLinkDialog,
+  onEmojiSelect,
+  attachButton,
+  isEditing = false,
+}: MenuBarProps) {
   const { theme } = useTheme();
   const [emojiOpen, setEmojiOpen] = useState(false);
 
@@ -266,7 +276,7 @@ function MenuBar({ editor, onSubmit, isSubmitting, onOpenLinkDialog, onEmojiSele
           data-testid="button-comment-submit"
         >
           <Send className="h-3 w-3 mr-1" />
-          Post Comment
+          {isEditing ? "Save" : "Post Comment"}
         </Button>
       )}
     </div>
@@ -286,6 +296,7 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
       users = [],
       isSubmitting = false,
       attachButton,
+      isEditing = false,
       "data-testid": testId,
     },
     ref
@@ -490,7 +501,7 @@ export const CommentEditor = forwardRef<CommentEditorRef, CommentEditorProps>(
           </div>,
           document.body
         )}
-        <MenuBar editor={editor} onSubmit={handleSubmit} isSubmitting={isSubmitting} onOpenLinkDialog={openLinkDialog} onEmojiSelect={handleEmojiSelect} attachButton={attachButton} />
+        <MenuBar editor={editor} onSubmit={handleSubmit} isSubmitting={isSubmitting} onOpenLinkDialog={openLinkDialog} onEmojiSelect={handleEmojiSelect} attachButton={attachButton} isEditing={isEditing} />
 
         <PromptDialog
           open={linkDialogOpen}
