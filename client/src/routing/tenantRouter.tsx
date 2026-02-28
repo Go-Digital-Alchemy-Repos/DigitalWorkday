@@ -63,6 +63,7 @@ const SupportTemplates = lazy(trackChunkLoad("SupportTemplates", () => import("@
 const SupportSlaPolicies = lazy(trackChunkLoad("SupportSla", () => import("@/pages/support-sla-policies")));
 const SupportFormSchemas = lazy(trackChunkLoad("SupportForms", () => import("@/pages/support-form-schemas")));
 const DesignSystemPage = lazy(trackChunkLoad("DesignSystem", () => import("@/pages/design-system")));
+const PmPortfolioDashboard = lazy(trackChunkLoad("PmPortfolio", () => import("@/pages/pm-portfolio")));
 const NotFound = lazy(trackChunkLoad("NotFound", () => import("@/pages/not-found")));
 
 function ClientRedirect({ id }: { id: string }) {
@@ -163,6 +164,9 @@ function TenantRouter() {
         </Route>
         <Route path="/support/:id">
           {() => <TenantRouteGuard component={SupportTicketDetail} />}
+        </Route>
+        <Route path="/pm-portfolio">
+          {() => <TenantRouteGuard component={PmPortfolioDashboard} />}
         </Route>
         <Route path="/design-system">
           {() => <TenantRouteGuard component={DesignSystemPage} />}

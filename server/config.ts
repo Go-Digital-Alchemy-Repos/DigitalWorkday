@@ -206,6 +206,7 @@ export const config = {
     enableWeeklyOpsDigest: optionalEnvBool("ENABLE_WEEKLY_OPS_DIGEST", true),
     enableTaskReviewQueue: optionalEnvBool("ENABLE_TASK_REVIEW_QUEUE", true),
     enableProjectMilestones: optionalEnvBool("ENABLE_PROJECT_MILESTONES", true),
+    enablePmPortfolioDashboard: optionalEnvBool("ENABLE_PM_PORTFOLIO_DASHBOARD", true),
     // Performance optimization flags (server-side only)
     enableTasksBatchHydration: optionalEnvBool("ENABLE_TASKS_BATCH_HYDRATION", true),
     enableClientsBatchExpansion: optionalEnvBool("ENABLE_CLIENTS_BATCH_EXPANSION", true),

@@ -70,6 +70,7 @@ import { CreateProjectDialog } from "@/features/projects";
 import { TeamDrawer } from "@/features/teams";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import type { Project, Team, Workspace, Client, ClientDivision } from "@shared/schema";
 
 interface UiPreferences {
@@ -181,6 +182,7 @@ export function TenantSidebar() {
   const { appName, iconUrl, logoUrl } = useTenantTheme();
   const isAdmin = user?.role === "admin";
   const isSuperUser = user?.role === "super_user";
+  const { enablePmPortfolioDashboard } = useFeatureFlags();
 
   const { data: workspace } = useQuery<Workspace>({
     queryKey: ["/api/workspaces/current"],
@@ -426,6 +428,19 @@ export function TenantSidebar() {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
+                  {enablePmPortfolioDashboard && (
+                    <SidebarMenuItem>
+                      <SidebarMenuButton
+                        asChild
+                        isActive={location === "/pm-portfolio"}
+                      >
+                        <Link href="/pm-portfolio" data-testid="link-pm-portfolio">
+                          <BarChart3 className="h-4 w-4 text-cyan-500" />
+                          <span>PM Portfolio</span>
+                        </Link>
+                      </SidebarMenuButton>
+                    </SidebarMenuItem>
+                  )}
                 </SidebarMenu>
               </SidebarGroupContent>
             </CollapsibleContent>

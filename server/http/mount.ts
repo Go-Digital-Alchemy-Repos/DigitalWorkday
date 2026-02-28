@@ -49,6 +49,7 @@ import accessRouter from "./domains/access.router";
 import retentionRouter from "./domains/retention.router";
 import taskReviewRouter from "./domains/task-review.router";
 import milestonesRouter from "./domains/milestones.router";
+import pmPortfolioRouter from "./domains/pm-portfolio.router";
 
 import usersRouter from "../routes/users.router";
 import crmRouter from "../routes/crm.router";
@@ -346,6 +347,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "milestones",
     description: "Project milestones: CRUD, reorder, and progress tracking.",
+  },
+  {
+    path: "/api/reports",
+    router: pmPortfolioRouter,
+    policy: "authTenant",
+    domain: "pm-portfolio",
+    description: "PM Portfolio Dashboard: per-PM project intelligence, burn risk, health scores.",
   },
   {
     path: "/api",
