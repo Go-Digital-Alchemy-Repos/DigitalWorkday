@@ -1,9 +1,8 @@
-import { ReactNode, useEffect, useRef, useState } from "react";
-import { X } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ReactNode, useEffect, useRef, useState, useCallback } from "react";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { createPortal } from "react-dom";
+import { GripVertical } from "lucide-react";
 
 interface TaskPanelShellProps {
   open: boolean;
@@ -15,6 +14,10 @@ interface TaskPanelShellProps {
   className?: string;
   "data-testid"?: string;
 }
+
+const SIDEBAR_MIN = 280;
+const SIDEBAR_MAX = 520;
+const SIDEBAR_DEFAULT = 340;
 
 export function TaskPanelShell({
   open,
@@ -31,6 +34,10 @@ export function TaskPanelShell({
   const previousFocusRef = useRef<HTMLElement | null>(null);
   const didIncrementRef = useRef(false);
   const [depth, setDepth] = useState(0);
+  const [sidebarWidth, setSidebarWidth] = useState(SIDEBAR_DEFAULT);
+  const isDraggingRef = useRef(false);
+  const startXRef = useRef(0);
+  const startWidthRef = useRef(SIDEBAR_DEFAULT);
 
   useEffect(() => {
     if (open) {
@@ -66,6 +73,33 @@ export function TaskPanelShell({
     document.addEventListener("keydown", handleKeyDown);
     return () => document.removeEventListener("keydown", handleKeyDown);
   }, [open, onOpenChange]);
+
+  const handleMouseDown = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    isDraggingRef.current = true;
+    startXRef.current = e.clientX;
+    startWidthRef.current = sidebarWidth;
+    document.body.style.cursor = "col-resize";
+    document.body.style.userSelect = "none";
+
+    const handleMouseMove = (e: MouseEvent) => {
+      if (!isDraggingRef.current) return;
+      const delta = startXRef.current - e.clientX;
+      const newWidth = Math.min(SIDEBAR_MAX, Math.max(SIDEBAR_MIN, startWidthRef.current + delta));
+      setSidebarWidth(newWidth);
+    };
+
+    const handleMouseUp = () => {
+      isDraggingRef.current = false;
+      document.body.style.cursor = "";
+      document.body.style.userSelect = "";
+      document.removeEventListener("mousemove", handleMouseMove);
+      document.removeEventListener("mouseup", handleMouseUp);
+    };
+
+    document.addEventListener("mousemove", handleMouseMove);
+    document.addEventListener("mouseup", handleMouseUp);
+  }, [sidebarWidth]);
 
   if (!open) return null;
 
@@ -111,7 +145,23 @@ export function TaskPanelShell({
                 <div className="flex-1 overflow-y-auto min-w-0">
                   {children}
                 </div>
-                <div className="w-[340px] shrink-0 border-l border-border overflow-y-auto bg-muted/20">
+                <div
+                  className="relative shrink-0 group/divider"
+                  style={{ width: 0 }}
+                >
+                  <div
+                    className="absolute inset-y-0 -left-1 w-2 cursor-col-resize z-10 flex items-center justify-center"
+                    onMouseDown={handleMouseDown}
+                    data-testid="sidebar-resize-handle"
+                  >
+                    <div className="h-8 w-[3px] rounded-full bg-border group-hover/divider:bg-primary/40 transition-colors flex items-center justify-center">
+                    </div>
+                  </div>
+                </div>
+                <div
+                  className="shrink-0 border-l border-border overflow-y-auto bg-muted/20"
+                  style={{ width: `${sidebarWidth}px` }}
+                >
                   {sidebar}
                 </div>
               </>
