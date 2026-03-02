@@ -565,8 +565,8 @@ export function NotificationCenter() {
   });
 
   const updatePreferenceMutation = useMutation({
-    mutationFn: async ({ type, enabled, emailEnabled }: { type: string; enabled?: boolean; emailEnabled?: boolean }) => {
-      await apiRequest("PATCH", "/api/notifications/preferences", { type, enabled, emailEnabled });
+    mutationFn: async (updates: Record<string, boolean>) => {
+      await apiRequest("PATCH", "/api/notifications/preferences", updates);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/notifications/preferences"] });
@@ -707,20 +707,38 @@ export function NotificationCenter() {
     work_order: "workOrder",
   };
 
+  const typeToEmailField: Record<NotificationType, keyof NotificationPreferences> = {
+    task_deadline: "taskDeadlineEmail",
+    task_assigned: "taskAssignedEmail",
+    task_completed: "taskCompletedEmail",
+    comment_added: "commentAddedEmail",
+    comment_mention: "commentMentionEmail",
+    project_update: "projectUpdateEmail",
+    project_member_added: "projectMemberAddedEmail",
+    task_status_changed: "taskStatusChangedEmail",
+    chat_message: "chatMessageEmail",
+    client_message: "clientMessageEmail",
+    support_ticket: "supportTicketEmail",
+    work_order: "workOrderEmail",
+  };
+
   const getPreference = (type: NotificationType) => {
     const field = typeToField[type];
+    const emailField = typeToEmailField[type];
     return {
       enabled: preferences[field] as boolean ?? true,
-      emailEnabled: preferences.emailEnabled ?? false,
+      emailEnabled: preferences[emailField] as boolean ?? false,
     };
   };
 
   const handleToggleEnabled = (type: NotificationType, currentEnabled: boolean) => {
-    updatePreferenceMutation.mutate({ type, enabled: !currentEnabled });
+    const field = typeToField[type] as string;
+    updatePreferenceMutation.mutate({ [field]: !currentEnabled });
   };
 
   const handleToggleEmailEnabled = (type: NotificationType, currentEmailEnabled: boolean) => {
-    updatePreferenceMutation.mutate({ type, emailEnabled: !currentEmailEnabled });
+    const emailField = typeToEmailField[type] as string;
+    updatePreferenceMutation.mutate({ [emailField]: !currentEmailEnabled });
   };
 
   return (

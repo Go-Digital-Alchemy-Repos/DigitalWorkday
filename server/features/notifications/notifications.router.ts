@@ -211,6 +211,18 @@ const updatePreferencesSchema = z.object({
   supportTicket: z.boolean().optional(),
   workOrder: z.boolean().optional(),
   emailEnabled: z.boolean().optional(),
+  taskDeadlineEmail: z.boolean().optional(),
+  taskAssignedEmail: z.boolean().optional(),
+  taskCompletedEmail: z.boolean().optional(),
+  commentAddedEmail: z.boolean().optional(),
+  commentMentionEmail: z.boolean().optional(),
+  projectUpdateEmail: z.boolean().optional(),
+  projectMemberAddedEmail: z.boolean().optional(),
+  taskStatusChangedEmail: z.boolean().optional(),
+  chatMessageEmail: z.boolean().optional(),
+  clientMessageEmail: z.boolean().optional(),
+  supportTicketEmail: z.boolean().optional(),
+  workOrderEmail: z.boolean().optional(),
 });
 
 router.patch("/notifications/preferences", async (req, res) => {
