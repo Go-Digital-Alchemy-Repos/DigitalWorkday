@@ -56,6 +56,7 @@ import {
   SidebarMenuButton,
   SidebarMenuItem,
   SidebarFooter,
+  useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
 import {
@@ -375,6 +376,9 @@ export function TenantSidebar() {
     await createTeamMutation.mutateAsync(data);
   };
 
+  const { state: sidebarState } = useSidebar();
+  const isCollapsed = sidebarState === "collapsed";
+
   const handleAddWorkspace = () => {
     toast({
       title: "Coming Soon",
@@ -450,114 +454,134 @@ export function TenantSidebar() {
           </Collapsible>
         </SidebarGroup>
 
-        <SidebarGroup>
-          <Collapsible defaultOpen className="group/collapsible">
-            <div className="flex items-center justify-between pr-2">
-              <CollapsibleTrigger asChild>
-                <SidebarGroupLabel className="cursor-pointer hover-elevate rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
-                  <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
-                  <span className="ml-1">Projects</span>
-                </SidebarGroupLabel>
-              </CollapsibleTrigger>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setCreateProjectOpen(true)}
-                data-testid="button-add-project"
-              >
-                <Plus className="h-4 w-4" />
-              </Button>
-            </div>
-            <CollapsibleContent>
-              <SidebarGroupContent>
-                <div className={visibleProjects.length > 10 ? "max-h-[360px] overflow-y-auto" : ""}>
-                  <SidebarMenu>
-                    {visibleStickyProjects.map((project) => {
-                      const clientName = getClientName(project.clientId);
-                      const divisionName = getDivisionName(project.divisionId);
-                      return (
-                        <SidebarMenuItem key={project.id}>
-                          <SidebarMenuButton
-                            asChild
-                            isActive={location === `/projects/${project.id}`}
-                            tooltip={project.name}
-                          >
-                            <Link
-                              href={`/projects/${project.id}`}
-                              data-testid={`link-project-${project.id}`}
+        {isCollapsed ? (
+          <SidebarGroup>
+            <SidebarGroupContent>
+              <SidebarMenu>
+                <SidebarMenuItem>
+                  <SidebarMenuButton
+                    asChild
+                    isActive={location === "/projects" || location.startsWith("/projects/")}
+                    tooltip="Projects"
+                  >
+                    <Link href="/projects" data-testid="link-projects-collapsed">
+                      <FolderKanban className="h-4 w-4 text-amber-500" />
+                      <span>Projects</span>
+                    </Link>
+                  </SidebarMenuButton>
+                </SidebarMenuItem>
+              </SidebarMenu>
+            </SidebarGroupContent>
+          </SidebarGroup>
+        ) : (
+          <SidebarGroup>
+            <Collapsible defaultOpen className="group/collapsible">
+              <div className="flex items-center justify-between pr-2">
+                <CollapsibleTrigger asChild>
+                  <SidebarGroupLabel className="cursor-pointer hover-elevate rounded-md px-2 py-1 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    <ChevronDown className="h-3 w-3 transition-transform group-data-[state=closed]/collapsible:-rotate-90" />
+                    <span className="ml-1">Projects</span>
+                  </SidebarGroupLabel>
+                </CollapsibleTrigger>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setCreateProjectOpen(true)}
+                  data-testid="button-add-project"
+                >
+                  <Plus className="h-4 w-4" />
+                </Button>
+              </div>
+              <CollapsibleContent>
+                <SidebarGroupContent>
+                  <div className={visibleProjects.length > 10 ? "max-h-[360px] overflow-y-auto" : ""}>
+                    <SidebarMenu>
+                      {visibleStickyProjects.map((project) => {
+                        const clientName = getClientName(project.clientId);
+                        const divisionName = getDivisionName(project.divisionId);
+                        return (
+                          <SidebarMenuItem key={project.id}>
+                            <SidebarMenuButton
+                              asChild
+                              isActive={location === `/projects/${project.id}`}
                             >
-                              <div className="flex items-center gap-2 min-w-0 flex-1">
-                                <div
-                                  className="h-3 w-3 rounded-sm shrink-0"
-                                  style={{ backgroundColor: project.color || "#3B82F6" }}
-                                />
-                                <span className="truncate flex-1 font-semibold">{project.name}</span>
-                                <Pin className="h-3 w-3 shrink-0 text-muted-foreground" data-testid={`icon-pinned-${project.id}`} />
-                                {(clientName || divisionName) && (
-                                  <div className="flex items-center gap-1 shrink-0">
-                                    {clientName && (
-                                      <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-client-${project.id}`}>
-                                        {clientName.length > 10 ? clientName.slice(0, 10) + "\u2026" : clientName}
-                                      </Badge>
-                                    )}
-                                    {divisionName && (
-                                      <Badge variant="outline" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-division-${project.id}`}>
-                                        {divisionName.length > 8 ? divisionName.slice(0, 8) + "\u2026" : divisionName}
-                                      </Badge>
-                                    )}
-                                  </div>
-                                )}
-                              </div>
-                            </Link>
-                          </SidebarMenuButton>
-                        </SidebarMenuItem>
-                      );
-                    })}
-                  </SidebarMenu>
-                  <DndContext
-                    sensors={sensors}
-                    collisionDetection={closestCenter}
-                    onDragEnd={handleDragEnd}
-                  >
-                    <SortableContext
-                      items={nonStickyIds}
-                      strategy={verticalListSortingStrategy}
+                              <Link
+                                href={`/projects/${project.id}`}
+                                data-testid={`link-project-${project.id}`}
+                              >
+                                <div className="flex items-center gap-2 min-w-0 flex-1">
+                                  <div
+                                    className="h-3 w-3 rounded-sm shrink-0"
+                                    style={{ backgroundColor: project.color || "#3B82F6" }}
+                                  />
+                                  <span className="truncate flex-1 font-semibold">{project.name}</span>
+                                  <Pin className="h-3 w-3 shrink-0 text-muted-foreground" data-testid={`icon-pinned-${project.id}`} />
+                                  {(clientName || divisionName) && (
+                                    <div className="flex items-center gap-1 shrink-0">
+                                      {clientName && (
+                                        <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-client-${project.id}`}>
+                                          {clientName.length > 10 ? clientName.slice(0, 10) + "\u2026" : clientName}
+                                        </Badge>
+                                      )}
+                                      {divisionName && (
+                                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-division-${project.id}`}>
+                                          {divisionName.length > 8 ? divisionName.slice(0, 8) + "\u2026" : divisionName}
+                                        </Badge>
+                                      )}
+                                    </div>
+                                  )}
+                                </div>
+                              </Link>
+                            </SidebarMenuButton>
+                          </SidebarMenuItem>
+                        );
+                      })}
+                    </SidebarMenu>
+                    <DndContext
+                      sensors={sensors}
+                      collisionDetection={closestCenter}
+                      onDragEnd={handleDragEnd}
                     >
-                      <SidebarMenu>
-                        {visibleNonStickyProjects.map((project) => (
-                          <SortableProjectItem
-                            key={project.id}
-                            project={project}
-                            isActive={location === `/projects/${project.id}`}
-                            clientName={getClientName(project.clientId)}
-                            divisionName={getDivisionName(project.divisionId)}
-                          />
-                        ))}
-                      </SidebarMenu>
-                    </SortableContext>
-                  </DndContext>
-                  {(!projects || projects.length === 0) && (
-                    <div className="px-3 py-2 text-xs text-muted-foreground">
-                      No projects yet
-                    </div>
+                      <SortableContext
+                        items={nonStickyIds}
+                        strategy={verticalListSortingStrategy}
+                      >
+                        <SidebarMenu>
+                          {visibleNonStickyProjects.map((project) => (
+                            <SortableProjectItem
+                              key={project.id}
+                              project={project}
+                              isActive={location === `/projects/${project.id}`}
+                              clientName={getClientName(project.clientId)}
+                              divisionName={getDivisionName(project.divisionId)}
+                            />
+                          ))}
+                        </SidebarMenu>
+                      </SortableContext>
+                    </DndContext>
+                    {(!projects || projects.length === 0) && (
+                      <div className="px-3 py-2 text-xs text-muted-foreground">
+                        No projects yet
+                      </div>
+                    )}
+                  </div>
+                  {hasMoreProjects && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => setProjectsLimit(prev => prev + PROJECTS_PAGE_SIZE)}
+                      className="flex items-center gap-1.5 w-full justify-start text-xs text-muted-foreground mt-1"
+                      data-testid="button-load-more-projects"
+                    >
+                      <ChevronsDown className="h-3 w-3" />
+                      <span>Load More ({allSortedProjects.length - projectsLimit} remaining)</span>
+                    </Button>
                   )}
-                </div>
-                {hasMoreProjects && (
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => setProjectsLimit(prev => prev + PROJECTS_PAGE_SIZE)}
-                    className="flex items-center gap-1.5 w-full justify-start text-xs text-muted-foreground mt-1"
-                    data-testid="button-load-more-projects"
-                  >
-                    <ChevronsDown className="h-3 w-3" />
-                    <span>Load More ({allSortedProjects.length - projectsLimit} remaining)</span>
-                  </Button>
-                )}
-              </SidebarGroupContent>
-            </CollapsibleContent>
-          </Collapsible>
-        </SidebarGroup>
+                </SidebarGroupContent>
+              </CollapsibleContent>
+            </Collapsible>
+          </SidebarGroup>
+        )}
 
         <SidebarGroup>
           <Collapsible defaultOpen className="group/collapsible">
