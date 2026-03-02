@@ -20,6 +20,7 @@ import {
   clientNoteVersions,
   clientNoteCategories,
   users,
+  projectAccess,
 } from "@shared/schema";
 import {
   getCurrentUserId,
@@ -421,18 +422,45 @@ router.get("/clients/:clientId/projects", async (req, res) => {
 router.post("/clients/:clientId/projects", async (req, res) => {
   try {
     const { clientId } = req.params;
+    const tenantId = getEffectiveTenantId(req);
+    const creatorId = getCurrentUserId(req);
 
-    const client = await storage.getClient(clientId);
+    const client = tenantId
+      ? await storage.getClientByIdAndTenant(clientId, tenantId)
+      : await storage.getClient(clientId);
     if (!client) throw AppError.notFound("Client");
 
     const data = insertProjectSchema.parse({
       ...req.body,
       workspaceId: getCurrentWorkspaceId(req),
-      createdBy: getCurrentUserId(req),
+      createdBy: creatorId,
       clientId: clientId,
     });
 
-    const project = await storage.createProject(data);
+    let project;
+    if (tenantId) {
+      project = await storage.createProjectWithTenant(data, tenantId);
+    } else {
+      project = await storage.createProject(data);
+    }
+
+    if (tenantId && project.visibility !== 'private') {
+      await storage.addAllTenantUsersToProject(project.id, tenantId, creatorId);
+    } else if (tenantId && project.visibility === 'private') {
+      await storage.addProjectMember({ projectId: project.id, userId: creatorId, role: "owner" });
+      try {
+        await db.insert(projectAccess).values({
+          tenantId,
+          projectId: project.id,
+          userId: creatorId,
+          role: 'admin',
+        }).onConflictDoNothing();
+      } catch (accessError) {
+        console.warn(`[Client Project Create] Failed to create access row for private project ${project.id}:`, accessError);
+      }
+    } else {
+      await storage.addProjectMember({ projectId: project.id, userId: creatorId, role: "owner" });
+    }
 
     emitProjectCreated(project as any);
     emitProjectClientAssigned(project as any, null);
