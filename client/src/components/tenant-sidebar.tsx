@@ -121,6 +121,7 @@ function SortableProjectItem({ project, isActive, clientName, divisionName }: So
         asChild
         isActive={isActive}
         className="flex-1"
+        tooltip={project.name}
       >
         <Link
           href={`/projects/${project.id}`}
@@ -479,6 +480,7 @@ export function TenantSidebar() {
                           <SidebarMenuButton
                             asChild
                             isActive={location === `/projects/${project.id}`}
+                            tooltip={project.name}
                           >
                             <Link
                               href={`/projects/${project.id}`}
@@ -583,6 +585,7 @@ export function TenantSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location === `/teams/${team.id}`}
+                        tooltip={team.name}
                       >
                         <Link
                           href={`/teams/${team.id}`}
@@ -627,7 +630,7 @@ export function TenantSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
-                    <SidebarMenuButton className="justify-between">
+                    <SidebarMenuButton className="justify-between" tooltip={workspace?.name || "Default Workspace"}>
                       <div className="flex items-center gap-2">
                         <Building2 className="h-4 w-4" />
                         <span className="truncate">{workspace?.name || "Default Workspace"}</span>
