@@ -630,12 +630,10 @@ export function TenantSidebar() {
               <SidebarGroupContent>
                 <SidebarMenu>
                   <SidebarMenuItem>
-                    <SidebarMenuButton className="justify-between" tooltip={workspace?.name || "Default Workspace"}>
-                      <div className="flex items-center gap-2">
-                        <Building2 className="h-4 w-4" />
-                        <span className="truncate">{workspace?.name || "Default Workspace"}</span>
-                      </div>
-                      <Check className="h-4 w-4 text-primary" />
+                    <SidebarMenuButton tooltip={workspace?.name || "Default Workspace"}>
+                      <Building2 className="h-4 w-4 shrink-0" />
+                      <span className="truncate flex-1">{workspace?.name || "Default Workspace"}</span>
+                      <Check className="h-4 w-4 text-primary shrink-0 group-data-[collapsible=icon]:hidden" />
                     </SidebarMenuButton>
                   </SidebarMenuItem>
                 </SidebarMenu>
