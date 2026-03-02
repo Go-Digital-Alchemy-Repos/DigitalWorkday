@@ -44,7 +44,7 @@ const baseHtmlWrapper = (content: string) => `<!DOCTYPE html>
 </body>
 </html>`;
 
-const buttonStyle = `display: inline-block; padding: 12px 32px; background-color: #3b82f6; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px;`;
+const buttonStyle = `display: inline-block; padding: 12px 32px; background-color: {{primaryColor}}; color: #ffffff; text-decoration: none; border-radius: 6px; font-weight: 600; font-size: 14px;`;
 
 export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
   {
@@ -443,6 +443,406 @@ Log in to view the ticket details and respond.`,
       { name: "clientName", description: "Name of the client who submitted the ticket", example: "Acme Corp" },
       { name: "priority", description: "Ticket priority", example: "High" },
       { name: "assignedByName", description: "Name of the person who made the assignment", example: "Alex Rivera" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+
+  // ─── Per-type notification email templates ────────────────────────────────
+
+  {
+    templateKey: "task_deadline_notification",
+    name: "Task Deadline Reminder",
+    subject: "Deadline reminder: {{notificationTitle}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">Task Deadline Reminder</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #fef3c7; border-left: 4px solid #f59e0b; border-radius: 6px;">
+                <p style="margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #18181b;">{{notificationTitle}}</p>
+                <p style="margin: 0; font-size: 14px; color: #3f3f46;">{{notificationMessage}}</p>
+              </div>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{appUrl}}" style="${buttonStyle}">View Task</a>
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You're receiving this because you have task deadline email notifications enabled.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+Task Deadline Reminder: {{notificationTitle}}
+
+{{notificationMessage}}
+
+Log in to view the task: {{appUrl}}
+
+You're receiving this because you have task deadline email notifications enabled.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Sarah Chen" },
+      { name: "notificationTitle", description: "The notification title", example: "Task deadline approaching: Design homepage" },
+      { name: "notificationMessage", description: "The notification message", example: "This task is due tomorrow" },
+      { name: "appUrl", description: "URL to the application", example: "https://app.myworkday.com" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "task_assigned_notification",
+    name: "Task Assigned",
+    subject: "New task assigned: {{notificationTitle}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">New Task Assigned to You</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #f4f4f5; border-radius: 6px;">
+                <p style="margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #18181b;">{{notificationTitle}}</p>
+                <p style="margin: 0; font-size: 14px; color: #3f3f46;">{{notificationMessage}}</p>
+              </div>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{appUrl}}" style="${buttonStyle}">View Task</a>
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You're receiving this because you have task assignment email notifications enabled.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+New task assigned: {{notificationTitle}}
+
+{{notificationMessage}}
+
+View the task: {{appUrl}}
+
+You're receiving this because you have task assignment email notifications enabled.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Sarah Chen" },
+      { name: "notificationTitle", description: "The notification title", example: "New task assigned: Design homepage" },
+      { name: "notificationMessage", description: "The notification message", example: "Alex Rivera assigned you a task in Website Redesign" },
+      { name: "appUrl", description: "URL to the application", example: "https://app.myworkday.com" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "task_completed_notification",
+    name: "Task Completed",
+    subject: "Task completed: {{notificationTitle}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">Task Completed</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #f0fdf4; border-left: 4px solid #22c55e; border-radius: 6px;">
+                <p style="margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #18181b;">{{notificationTitle}}</p>
+                <p style="margin: 0; font-size: 14px; color: #3f3f46;">{{notificationMessage}}</p>
+              </div>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{appUrl}}" style="${buttonStyle}">View Task</a>
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You're receiving this because you have task completion email notifications enabled.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+{{notificationTitle}}
+
+{{notificationMessage}}
+
+View the task: {{appUrl}}
+
+You're receiving this because you have task completion email notifications enabled.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Sarah Chen" },
+      { name: "notificationTitle", description: "The notification title", example: "Task completed: Design homepage" },
+      { name: "notificationMessage", description: "The notification message", example: "Alex Rivera completed this task" },
+      { name: "appUrl", description: "URL to the application", example: "https://app.myworkday.com" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "comment_added_notification",
+    name: "Comment Added",
+    subject: "New comment on: {{notificationTitle}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">New Comment</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <p style="margin: 0 0 16px; font-size: 15px; color: #3f3f46;">{{notificationMessage}}</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #f4f4f5; border-left: 4px solid #a1a1aa; border-radius: 6px; font-style: italic;">
+                <p style="margin: 0; font-size: 14px; color: #3f3f46;">On: <strong>{{notificationTitle}}</strong></p>
+              </div>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{appUrl}}" style="${buttonStyle}">View Comment</a>
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You're receiving this because you have comment email notifications enabled.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+{{notificationMessage}}
+
+Task: {{notificationTitle}}
+
+View the comment: {{appUrl}}
+
+You're receiving this because you have comment email notifications enabled.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Sarah Chen" },
+      { name: "notificationTitle", description: "The task title", example: "Design homepage mockup" },
+      { name: "notificationMessage", description: "The notification message", example: "Alex Rivera commented on your task" },
+      { name: "appUrl", description: "URL to the application", example: "https://app.myworkday.com" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "comment_mention_notification",
+    name: "Comment Mention",
+    subject: "{{notificationTitle}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">You Were Mentioned</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <p style="margin: 0 0 16px; font-size: 15px; color: #3f3f46;">{{notificationMessage}}</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #eff6ff; border-left: 4px solid {{primaryColor}}; border-radius: 6px; font-style: italic;">
+                <p style="margin: 0; font-size: 14px; color: #3f3f46;">"{{commentText}}"</p>
+              </div>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{appUrl}}" style="${buttonStyle}">View Mention</a>
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You're receiving this because you have mention email notifications enabled.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+{{notificationMessage}}
+
+"{{commentText}}"
+
+View the mention: {{appUrl}}
+
+You're receiving this because you have mention email notifications enabled.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Sarah Chen" },
+      { name: "notificationTitle", description: "The notification title", example: "Alex mentioned you in a comment" },
+      { name: "notificationMessage", description: "The notification message", example: "Alex Rivera mentioned you on Design homepage" },
+      { name: "commentText", description: "The comment text containing the mention", example: "@Sarah can you review this?" },
+      { name: "appUrl", description: "URL to the application", example: "https://app.myworkday.com" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "project_update_notification",
+    name: "Project Update",
+    subject: "Project update: {{notificationTitle}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">Project Update</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #f4f4f5; border-radius: 6px;">
+                <p style="margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #18181b;">{{notificationTitle}}</p>
+                <p style="margin: 0; font-size: 14px; color: #3f3f46;">{{notificationMessage}}</p>
+              </div>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{appUrl}}" style="${buttonStyle}">View Project</a>
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You're receiving this because you have project update email notifications enabled.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+{{notificationTitle}}
+
+{{notificationMessage}}
+
+View the project: {{appUrl}}
+
+You're receiving this because you have project update email notifications enabled.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Sarah Chen" },
+      { name: "notificationTitle", description: "The notification title", example: "Project status updated: Website Redesign" },
+      { name: "notificationMessage", description: "The notification message", example: "Alex Rivera updated the project status to In Progress" },
+      { name: "appUrl", description: "URL to the application", example: "https://app.myworkday.com" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "project_member_added_notification",
+    name: "Added to Project",
+    subject: "You've been added to a project: {{notificationTitle}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">You've Been Added to a Project</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #f4f4f5; border-radius: 6px;">
+                <p style="margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #18181b;">{{notificationTitle}}</p>
+                <p style="margin: 0; font-size: 14px; color: #3f3f46;">{{notificationMessage}}</p>
+              </div>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{appUrl}}" style="${buttonStyle}">View Project</a>
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You're receiving this because you have project member email notifications enabled.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+{{notificationTitle}}
+
+{{notificationMessage}}
+
+View the project: {{appUrl}}
+
+You're receiving this because you have project member email notifications enabled.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Sarah Chen" },
+      { name: "notificationTitle", description: "The notification title", example: "Added to project: Website Redesign" },
+      { name: "notificationMessage", description: "The notification message", example: "Alex Rivera added you to Website Redesign" },
+      { name: "appUrl", description: "URL to the application", example: "https://app.myworkday.com" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "task_status_changed_notification",
+    name: "Task Status Changed",
+    subject: "Task status update: {{notificationTitle}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">Task Status Updated</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #f4f4f5; border-radius: 6px;">
+                <p style="margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #18181b;">{{notificationTitle}}</p>
+                <p style="margin: 0; font-size: 14px; color: #3f3f46;">{{notificationMessage}}</p>
+              </div>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{appUrl}}" style="${buttonStyle}">View Task</a>
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You're receiving this because you have task status email notifications enabled.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+{{notificationTitle}}
+
+{{notificationMessage}}
+
+View the task: {{appUrl}}
+
+You're receiving this because you have task status email notifications enabled.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Sarah Chen" },
+      { name: "notificationTitle", description: "The notification title", example: "Task status changed: Design homepage" },
+      { name: "notificationMessage", description: "The notification message", example: "Alex Rivera changed the status to In Progress" },
+      { name: "appUrl", description: "URL to the application", example: "https://app.myworkday.com" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "chat_message_notification",
+    name: "Chat Message",
+    subject: "New message: {{notificationTitle}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">New Chat Message</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #f4f4f5; border-left: 4px solid {{primaryColor}}; border-radius: 6px;">
+                <p style="margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #18181b;">{{notificationTitle}}</p>
+                <p style="margin: 0; font-size: 14px; color: #3f3f46;">{{notificationMessage}}</p>
+              </div>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{appUrl}}" style="${buttonStyle}">View Message</a>
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You're receiving this because you have chat message email notifications enabled.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+{{notificationTitle}}
+
+{{notificationMessage}}
+
+View the message: {{appUrl}}
+
+You're receiving this because you have chat message email notifications enabled.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Sarah Chen" },
+      { name: "notificationTitle", description: "The notification title", example: "New message from Alex Rivera" },
+      { name: "notificationMessage", description: "The notification message", example: "Alex Rivera sent a message in #general" },
+      { name: "appUrl", description: "URL to the application", example: "https://app.myworkday.com" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "client_message_notification",
+    name: "Client Message",
+    subject: "New client message: {{notificationTitle}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">New Client Message</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #fdf4ff; border-left: 4px solid #a855f7; border-radius: 6px;">
+                <p style="margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #18181b;">{{notificationTitle}}</p>
+                <p style="margin: 0; font-size: 14px; color: #3f3f46;">{{notificationMessage}}</p>
+              </div>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{appUrl}}" style="${buttonStyle}">View Message</a>
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You're receiving this because you have client message email notifications enabled.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+{{notificationTitle}}
+
+{{notificationMessage}}
+
+View the message: {{appUrl}}
+
+You're receiving this because you have client message email notifications enabled.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Sarah Chen" },
+      { name: "notificationTitle", description: "The notification title", example: "New message from Acme Corp" },
+      { name: "notificationMessage", description: "The notification message", example: "A client sent you a message in the portal" },
+      { name: "appUrl", description: "URL to the application", example: "https://app.myworkday.com" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "support_ticket_notification",
+    name: "Support Ticket Activity",
+    subject: "Support ticket update: {{notificationTitle}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">Support Ticket Update</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #f4f4f5; border-radius: 6px;">
+                <p style="margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #18181b;">{{notificationTitle}}</p>
+                <p style="margin: 0; font-size: 14px; color: #3f3f46;">{{notificationMessage}}</p>
+              </div>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{appUrl}}" style="${buttonStyle}">View Ticket</a>
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You're receiving this because you have support ticket email notifications enabled.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+{{notificationTitle}}
+
+{{notificationMessage}}
+
+View the ticket: {{appUrl}}
+
+You're receiving this because you have support ticket email notifications enabled.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Sarah Chen" },
+      { name: "notificationTitle", description: "The notification title", example: "Support ticket assigned to you" },
+      { name: "notificationMessage", description: "The notification message", example: "A new support ticket has been assigned to your queue" },
+      { name: "appUrl", description: "URL to the application", example: "https://app.myworkday.com" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
+    templateKey: "work_order_notification",
+    name: "Work Order",
+    subject: "Work order update: {{notificationTitle}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">Work Order Notification</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #f4f4f5; border-radius: 6px;">
+                <p style="margin: 0 0 6px; font-size: 16px; font-weight: 600; color: #18181b;">{{notificationTitle}}</p>
+                <p style="margin: 0; font-size: 14px; color: #3f3f46;">{{notificationMessage}}</p>
+              </div>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{appUrl}}" style="${buttonStyle}">View Work Order</a>
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You're receiving this because you have work order email notifications enabled.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+{{notificationTitle}}
+
+{{notificationMessage}}
+
+View the work order: {{appUrl}}
+
+You're receiving this because you have work order email notifications enabled.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Sarah Chen" },
+      { name: "notificationTitle", description: "The notification title", example: "New work order assigned" },
+      { name: "notificationMessage", description: "The notification message", example: "A new work order has been assigned to you" },
+      { name: "appUrl", description: "URL to the application", example: "https://app.myworkday.com" },
       { name: "appName", description: "Application name", example: "MyWorkDay" },
     ],
   },

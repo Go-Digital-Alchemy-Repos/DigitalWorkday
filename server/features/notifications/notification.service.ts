@@ -136,9 +136,25 @@ async function dispatchNotificationEmail(
       appName,
     };
 
+    const typeToTemplateKey: Partial<Record<NotificationType, string>> = {
+      task_deadline: "task_deadline_notification",
+      task_assigned: "task_assigned_notification",
+      task_completed: "task_completed_notification",
+      comment_added: "comment_added_notification",
+      comment_mention: "comment_mention_notification",
+      project_update: "project_update_notification",
+      project_member_added: "project_member_added_notification",
+      task_status_changed: "task_status_changed_notification",
+      chat_message: "chat_message_notification",
+      client_message: "client_message_notification",
+      support_ticket: "support_ticket_notification",
+      work_order: "work_order_notification",
+    };
+    const templateKey = typeToTemplateKey[type] || "notification_email";
+
     const rendered = await emailTemplateService.renderByKey(
       tenantId || "",
-      "notification_email",
+      templateKey,
       vars
     );
 

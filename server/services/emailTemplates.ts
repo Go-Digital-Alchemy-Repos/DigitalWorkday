@@ -75,12 +75,34 @@ export class EmailTemplateService {
           </tr>`;
   }
 
+  async resolvePrimaryColor(tenantId: string | null): Promise<string> {
+    if (tenantId) {
+      const [ts] = await db.select({ primaryColor: tenantSettings.primaryColor })
+        .from(tenantSettings)
+        .where(eq(tenantSettings.tenantId, tenantId))
+        .limit(1);
+      if (ts?.primaryColor) return ts.primaryColor;
+    }
+
+    const [sys] = await db.select({ defaultPrimaryColor: systemSettings.defaultPrimaryColor })
+      .from(systemSettings)
+      .limit(1);
+    return sys?.defaultPrimaryColor || "#3b82f6";
+  }
+
   async renderByKey(tenantId: string | null, templateKey: string, variables: Record<string, string>): Promise<RenderedEmail | null> {
-    // Auto-inject logoBlock unless caller has already provided it
+    // Auto-inject logoBlock and primaryColor unless caller has already provided them
+    const injected: Record<string, string> = {};
+
     if (!("logoBlock" in variables)) {
       const logoUrl = await this.resolveLogoUrl(tenantId);
-      variables = { ...variables, logoBlock: this.buildLogoBlock(logoUrl) };
+      injected.logoBlock = this.buildLogoBlock(logoUrl);
     }
+    if (!("primaryColor" in variables)) {
+      injected.primaryColor = await this.resolvePrimaryColor(tenantId);
+    }
+
+    variables = { ...injected, ...variables };
 
     const template = await this.getTemplate(tenantId, templateKey);
     if (template) {

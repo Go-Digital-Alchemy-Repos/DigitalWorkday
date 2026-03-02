@@ -404,15 +404,18 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
           const { emailOutboxService } = await import("../../services/emailOutbox");
           const { emailTemplateService } = await import("../../services/emailTemplates");
           
+          const appUrl = process.env.PUBLIC_URL ||
+            (process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}` : "");
           const templateVars: Record<string, string> = {
             userName: mentionedUser.name || mentionedUser.email,
-            mentionedByName: commenter?.name || commenter?.email || "Someone",
-            itemTitle: subtask.title || "a subtask",
+            notificationTitle: `${commenter?.name || 'Someone'} mentioned you in a comment`,
+            notificationMessage: `${commenter?.name || 'Someone'} mentioned you on "${subtask.title || 'a subtask'}"`,
             commentText: plainTextBody,
+            appUrl,
             appName: "MyWorkDay",
           };
           
-          const rendered = await emailTemplateService.renderByKey(tenantId, "mention_notification", templateVars);
+          const rendered = await emailTemplateService.renderByKey(tenantId, "comment_mention_notification", templateVars);
           
           await emailOutboxService.sendEmail({
             tenantId,
