@@ -78,13 +78,13 @@ export function SectionColumn({
         data-testid={`section-column-${section.id}`}
       >
         <div className="flex items-center justify-between gap-2 px-3 py-2 border-b border-border">
-          <div className="flex items-center gap-2">
-            <h3 className="text-sm font-semibold truncate">{section.name}</h3>
-            <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+          <div className="flex items-center gap-2 min-w-0">
+            <h3 className="text-sm font-semibold truncate min-w-0">{section.name}</h3>
+            <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded shrink-0">
               {taskCount}
             </span>
           </div>
-          <div className="flex items-center gap-1">
+          <div className="flex items-center gap-1 shrink-0">
             <Button
               variant="ghost"
               size="icon"
