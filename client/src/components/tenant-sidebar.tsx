@@ -382,11 +382,11 @@ export function TenantSidebar() {
   };
 
   return (
-    <Sidebar>
-      <SidebarHeader className="border-b border-sidebar-border px-4 py-3">
-        <div className="flex items-center gap-3 min-w-0">
+    <Sidebar collapsible="icon">
+      <SidebarHeader className="border-b border-sidebar-border px-4 py-3 group-data-[collapsible=icon]:px-2">
+        <div className="flex items-center gap-3 min-w-0 group-data-[collapsible=icon]:justify-center">
           <img src={iconUrl || logoUrl || appLogo} alt={appName} className="h-8 w-8 flex-shrink-0 rounded-sm object-contain" />
-          <span className="font-['Inter',sans-serif] text-base font-semibold text-sidebar-foreground leading-tight truncate" data-testid="text-app-name">
+          <span className="font-['Inter',sans-serif] text-base font-semibold text-sidebar-foreground leading-tight truncate group-data-[collapsible=icon]:hidden" data-testid="text-app-name">
             {appName}
           </span>
         </div>
@@ -409,6 +409,7 @@ export function TenantSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location === item.url || (item.url !== "/" && location.startsWith(item.url))}
+                        tooltip={item.title}
                       >
                         <Link href={item.url} data-testid={`link-${item.title.toLowerCase().replace(/\s/g, "-")}`}>
                           <item.icon className={cn("h-4 w-4", item.color)} />
@@ -433,6 +434,7 @@ export function TenantSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location === "/pm-portfolio"}
+                        tooltip="PM Portfolio"
                       >
                         <Link href="/pm-portfolio" data-testid="link-pm-portfolio">
                           <BarChart3 className="h-4 w-4 text-cyan-500" />
@@ -655,6 +657,7 @@ export function TenantSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location === "/user-manager" || location.startsWith("/user-manager/")}
+                        tooltip="User Manager"
                       >
                         <Link href="/user-manager" data-testid="link-user-manager">
                           <UsersRound className="h-4 w-4" />
@@ -666,6 +669,7 @@ export function TenantSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location.startsWith("/account")}
+                        tooltip="Account"
                       >
                         <Link href="/account" data-testid="link-account-settings">
                           <UserCog className="h-4 w-4" />
@@ -677,6 +681,7 @@ export function TenantSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location === "/reports" || location.startsWith("/reports/")}
+                        tooltip="Reports"
                       >
                         <Link href="/reports" data-testid="link-reports">
                           <BarChart3 className="h-4 w-4" />
@@ -688,6 +693,7 @@ export function TenantSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location === "/templates" || location.startsWith("/templates/")}
+                        tooltip="Templates"
                       >
                         <Link href="/templates" data-testid="link-templates">
                           <FileStack className="h-4 w-4" />
@@ -699,6 +705,7 @@ export function TenantSidebar() {
                       <SidebarMenuButton
                         asChild
                         isActive={location.startsWith("/settings")}
+                        tooltip="System Settings"
                       >
                         <Link href="/settings" data-testid="link-global-settings">
                           <Cog className="h-4 w-4" />
@@ -714,14 +721,14 @@ export function TenantSidebar() {
         )}
       </SidebarContent>
 
-      <SidebarFooter className="border-t border-sidebar-border p-3">
-        <div className="flex items-center gap-3">
-          <Avatar className="h-8 w-8">
+      <SidebarFooter className="border-t border-sidebar-border p-3 group-data-[collapsible=icon]:p-2">
+        <div className="flex items-center gap-3 group-data-[collapsible=icon]:justify-center">
+          <Avatar className="h-8 w-8 shrink-0">
             <AvatarFallback className="bg-primary/10 text-primary text-xs">
               {user?.firstName?.charAt(0) || "U"}
             </AvatarFallback>
           </Avatar>
-          <div className="flex flex-1 flex-col overflow-hidden">
+          <div className="flex flex-1 flex-col overflow-hidden group-data-[collapsible=icon]:hidden">
             <span className="truncate text-sm font-medium">
               {user?.firstName} {user?.lastName}
             </span>
@@ -729,7 +736,7 @@ export function TenantSidebar() {
               {user?.email}
             </span>
           </div>
-          <Button variant="ghost" size="icon" className="h-8 w-8" data-testid="button-settings">
+          <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0 group-data-[collapsible=icon]:hidden" data-testid="button-settings">
             <Settings className="h-4 w-4" />
           </Button>
         </div>
