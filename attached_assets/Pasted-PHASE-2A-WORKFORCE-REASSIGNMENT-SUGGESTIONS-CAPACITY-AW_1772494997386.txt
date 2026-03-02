@@ -1,0 +1,106 @@
+PHASE 2A — WORKFORCE REASSIGNMENT SUGGESTIONS (CAPACITY-AWARE TASK REDISTRIBUTION)
+NON-DESTRUCTIVE • ADDITIVE • FLAGGED • DOCUMENTED
+
+Feature flags:
+- ENABLE_REASSIGNMENT_SUGGESTIONS
+- ENABLE_SUGGESTION_DEBUG
+
+GOAL:
+Provide PMs/Tenant Admins with system-generated suggestions to reassign tasks from overloaded employees to underutilized employees (within the same tenant), without auto-changing anything.
+
+============================================================
+PHASE 1 — DATA PREREQS + SAFE ASSUMPTIONS
+============================================================
+- Reuse existing capacity/utilization metrics if present.
+- If skills/tags exist, use them as soft signals; otherwise use role/team matching.
+- Suggestions are advisory only.
+
+============================================================
+PHASE 2 — BACKEND SUGGESTION ENGINE
+============================================================
+Create:
+server/src/ops/reassignment/reassignmentSuggestionEngine.ts
+
+Export:
+getReassignmentSuggestions({
+  tenantId,
+  pmUserId?,          // optional for PM-scoped portfolio
+  projectId?,         // optional
+  rangeStart,
+  rangeEnd,
+  limit
+})
+
+Algorithm (simple v1):
+1) Identify overloaded users:
+   - utilizationPct >= 100 (or your threshold)
+   - OR predictedOverAllocationWeeks > 0 (if you have forecast)
+2) Identify candidate tasks for reassignment:
+   - status in ["todo","in_progress"] (exclude completed/archived)
+   - exclude private tasks not visible to viewer
+   - prefer tasks not due within next 24h (configurable)
+3) Identify recipient users:
+   - utilizationPct <= 70 (or threshold)
+   - same team/role preferred
+   - not already overloaded
+4) Score suggestions:
+   - +score if same team
+   - +score if similar role/skill tag
+   - -score if due soon
+   - -score if task is high priority (optional)
+Return list of suggestions with reasons and scores.
+
+Return shape:
+{
+  suggestions: [
+    {
+      taskId,
+      projectId,
+      fromUserId,
+      toUserId,
+      score,
+      reasons: ["Over capacity", "Recipient underutilized", "Same team"],
+      confidence: "low|medium|high"
+    }
+  ]
+}
+
+============================================================
+PHASE 3 — API
+============================================================
+GET /api/ops/reassignment-suggestions?projectId=&rangeStart=&rangeEnd=&limit=
+
+Access:
+- Tenant Admin always
+- PM only for projects they manage
+
+============================================================
+PHASE 4 — FRONTEND UI
+============================================================
+Add to PM Portfolio Dashboard and Tenant Admin Home:
+- Card: “Reassignment Suggestions”
+- Shows top N suggestions with:
+  - task title
+  - from → to
+  - reason chips
+  - button: “Review” opens task drawer (no changes)
+  - button: “Apply Reassignment” (optional) opens confirmation dialog and then performs existing reassignment mutation
+
+IMPORTANT:
+- Default is “Review”, not auto-apply.
+
+============================================================
+PHASE 5 — APP DOCS UPDATE
+============================================================
+Add:
+“Reassignment Suggestions Engine”
+- thresholds
+- scoring
+- permissions
+- safety notes
+
+STOP when:
+- Suggestions appear for PM/Admin
+- No auto changes
+- Task drawer deep-link works
+- Docs updated
