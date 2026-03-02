@@ -7,6 +7,7 @@ import { insertCommentSchema, updateCommentSchema } from "@shared/schema";
 import {
   notifyCommentAdded,
   notifyCommentMention,
+  shouldEmailUser,
 } from "../../features/notifications/notification.service";
 import {
   embedAttachmentIdsInBody,
@@ -89,7 +90,8 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
         console.error(`[mentions] requestId=${requestId} notification failed userId=${mentionedUserId}`, err);
       });
 
-      if (mentionedUser.email && tenantId) {
+      const wantsMentionEmail = await shouldEmailUser(mentionedUserId, "comment_mention").catch(() => false);
+      if (mentionedUser.email && tenantId && wantsMentionEmail) {
         try {
           const { emailOutboxService } = await import("../../services/emailOutbox");
           const { emailTemplateService } = await import("../../services/emailTemplates");

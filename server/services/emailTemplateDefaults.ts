@@ -376,6 +376,39 @@ You can track the status of your ticket by logging into the client portal.`,
     ],
   },
   {
+    templateKey: "notification_email",
+    name: "Notification Email",
+    subject: "{{notificationTitle}} — {{appName}}",
+    htmlBody: baseHtmlWrapper(`
+              <h2 style="margin: 0 0 16px; font-size: 22px; font-weight: 700; color: #18181b;">You have a new notification</h2>
+              <p style="margin: 0 0 8px; font-size: 15px; color: #3f3f46;">Hi {{userName}},</p>
+              <div style="margin: 0 0 24px; padding: 16px; background-color: #f4f4f5; border-radius: 6px;">
+                <p style="margin: 0 0 8px; font-size: 16px; font-weight: 600; color: #18181b;">{{notificationTitle}}</p>
+                <p style="margin: 0; font-size: 14px; color: #3f3f46;">{{notificationMessage}}</p>
+              </div>
+              <p style="margin: 0 0 24px; text-align: center;">
+                <a href="{{appUrl}}" style="${buttonStyle}">Open {{appName}}</a>
+              </p>
+              <p style="margin: 0; font-size: 13px; color: #71717a;">You're receiving this because you have email notifications enabled for this event type. You can update your preferences in your account settings.</p>
+    `),
+    textBody: `Hi {{userName}},
+
+{{notificationTitle}}
+
+{{notificationMessage}}
+
+Log in to {{appName}}: {{appUrl}}
+
+You're receiving this because you have email notifications enabled for this event type.`,
+    variables: [
+      { name: "userName", description: "The recipient's display name", example: "Sarah Chen" },
+      { name: "notificationTitle", description: "The notification title", example: "Task assigned: Design homepage" },
+      { name: "notificationMessage", description: "The notification body message", example: "Alex Rivera assigned you a task in Website Redesign" },
+      { name: "appUrl", description: "URL to the application", example: "https://app.myworkday.com" },
+      { name: "appName", description: "Application name", example: "MyWorkDay" },
+    ],
+  },
+  {
     templateKey: "support_ticket_assigned",
     name: "Support Ticket Assigned",
     subject: "You've been assigned to Ticket #{{ticketNumber}}: {{ticketSubject}}",

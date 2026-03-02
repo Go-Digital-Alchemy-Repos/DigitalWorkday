@@ -61,6 +61,7 @@ export type EmailMessageType =
   | "mention_notification"
   | "forgot_password"
   | "test_email"
+  | "notification_email"
   | "other";
 
 export type EmailStatus = "queued" | "sent" | "failed";

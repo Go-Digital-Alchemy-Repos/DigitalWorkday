@@ -4,6 +4,8 @@ import type { NotificationPayload } from "@shared/events";
 import { db } from "../../db";
 import { clientCrm, clients } from "@shared/schema";
 import { eq, and, lte, isNotNull } from "drizzle-orm";
+import { emailOutboxService } from "../../services/emailOutbox";
+import { emailTemplateService } from "../../services/emailTemplates";
 
 type NotificationType = 
   | "task_deadline"
@@ -82,6 +84,78 @@ async function shouldNotifyUser(userId: string, type: NotificationType): Promise
   }
 }
 
+export async function shouldEmailUser(userId: string, type: NotificationType): Promise<boolean> {
+  try {
+    const prefs = await storage.getNotificationPreferences(userId);
+    if (!prefs) return false;
+
+    const typeToEmailField: Record<NotificationType, keyof typeof prefs | null> = {
+      task_deadline: "taskDeadlineEmail",
+      task_assigned: "taskAssignedEmail",
+      task_completed: "taskCompletedEmail",
+      comment_added: "commentAddedEmail",
+      comment_mention: "commentMentionEmail",
+      project_update: "projectUpdateEmail",
+      project_member_added: "projectMemberAddedEmail",
+      task_status_changed: "taskStatusChangedEmail",
+      chat_message: "chatMessageEmail",
+      client_message: "clientMessageEmail",
+      support_ticket: "supportTicketEmail",
+      work_order: "workOrderEmail",
+      crm_followup_due: null,
+      approval_response: null,
+    };
+    const field = typeToEmailField[type];
+    if (!field) return false;
+    return prefs[field] === true;
+  } catch {
+    return false;
+  }
+}
+
+async function dispatchNotificationEmail(
+  userId: string,
+  type: NotificationType,
+  title: string,
+  message: string | null,
+  tenantId: string | null
+): Promise<void> {
+  try {
+    const user = await storage.getUser(userId);
+    if (!user?.email) return;
+
+    const appUrl = process.env.PUBLIC_URL ||
+      (process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}` : "");
+    const appName = "MyWorkDay";
+
+    const vars: Record<string, string> = {
+      userName: user.name || user.email,
+      notificationTitle: title,
+      notificationMessage: message || title,
+      appUrl,
+      appName,
+    };
+
+    const rendered = await emailTemplateService.renderByKey(
+      tenantId || "",
+      "notification_email",
+      vars
+    );
+
+    await emailOutboxService.sendEmail({
+      tenantId,
+      messageType: "notification_email",
+      toEmail: user.email,
+      subject: rendered?.subject || title,
+      textBody: rendered?.textBody || `${title}\n\n${message || ""}`,
+      htmlBody: rendered?.htmlBody,
+      metadata: { notificationType: type, userId },
+    });
+  } catch (err) {
+    console.error(`[notifications] Email dispatch failed for user ${userId} type ${type}:`, err);
+  }
+}
+
 async function createAndEmitNotification(
   userId: string,
   type: NotificationType,
@@ -123,6 +197,16 @@ async function createAndEmitNotification(
   const notification = options?.dedupeKey
     ? await storage.createOrDedupeNotification(insertData)
     : await storage.createNotification(insertData);
+
+  // Dispatch email if user has per-type email preference enabled.
+  // Skip comment_mention — those are handled in the comment route with a richer template.
+  if (type !== "comment_mention") {
+    shouldEmailUser(userId, type).then((wantsEmail) => {
+      if (wantsEmail) {
+        dispatchNotificationEmail(userId, type, title, message, context.tenantId);
+      }
+    }).catch(() => {});
+  }
 
   const payload: NotificationPayload = {
     id: notification.id,
