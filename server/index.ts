@@ -26,6 +26,7 @@ import { ensureSchemaReady, getLastSchemaCheck } from "./startup/schemaReadiness
 import { logAppInfo } from "./startup/appInfo";
 import { logNullTenantIdWarnings } from "./startup/tenantIdHealthCheck";
 import { repairDemoWorkspaceMembers } from "./startup/repairWorkspaceMembers";
+import { repairNullTenantProjects } from "./startup/repairNullTenantProjects";
 import { storage } from "./storage";
 import { evaluateSlaPolicies } from "./http/domains/support.router";
 import { evaluateConversationSla } from "./routes/modules/crm/conversations.router";
@@ -691,6 +692,9 @@ httpServer.listen(port, host, () => {
       
       // Repair workspace members stuck on "demo-workspace-id"
       await repairDemoWorkspaceMembers();
+      
+      // Repair projects created without tenant_id (legacy client-detail endpoint bug)
+      await repairNullTenantProjects();
       
       // Bootstrap admin user if not exists (for production first run)
       try {
