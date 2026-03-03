@@ -4374,3 +4374,21 @@ export const projectRiskAcknowledgments = pgTable("project_risk_acknowledgments"
 
 export type ProjectRiskAcknowledgment = typeof projectRiskAcknowledgments.$inferSelect;
 export type InsertProjectRiskAcknowledgment = typeof projectRiskAcknowledgments.$inferInsert;
+
+export const projectStatusReports = pgTable("project_status_reports", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull(),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  rangeStart: date("range_start").notNull(),
+  rangeEnd: date("range_end").notNull(),
+  generatedByUserId: varchar("generated_by_user_id").references(() => users.id),
+  summaryMarkdown: text("summary_markdown").notNull().default(""),
+  sectionsJson: jsonb("sections_json").notNull().default({}),
+  isSent: boolean("is_sent").notNull().default(false),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("status_reports_project_idx").on(table.tenantId, table.projectId, table.rangeEnd),
+]);
+
+export type ProjectStatusReport = typeof projectStatusReports.$inferSelect;
+export type InsertProjectStatusReport = typeof projectStatusReports.$inferInsert;
