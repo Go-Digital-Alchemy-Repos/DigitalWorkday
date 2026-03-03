@@ -51,6 +51,7 @@ import taskReviewRouter from "./domains/task-review.router";
 import milestonesRouter from "./domains/milestones.router";
 import pmPortfolioRouter from "./domains/pm-portfolio.router";
 import reassignmentRouter from "./domains/reassignment.router";
+import whatIfRouter from "./domains/whatif.router";
 
 import usersRouter from "../routes/users.router";
 import crmRouter from "../routes/crm.router";
@@ -362,6 +363,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "reassignment",
     description: "Workforce reassignment suggestions: capacity-aware advisory task redistribution.",
+  },
+  {
+    path: "/api/ops",
+    router: whatIfRouter,
+    policy: "authTenant",
+    domain: "whatif",
+    description: "Capacity What-If Simulator: in-memory scenario planning for project reassignments and estimates.",
   },
   {
     path: "/api",

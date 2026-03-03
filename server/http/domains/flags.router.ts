@@ -63,6 +63,8 @@ router.get("/features/flags", async (_req, res) => {
       enableProjectMilestones: config.features.enableProjectMilestones,
       enablePmPortfolioDashboard: config.features.enablePmPortfolioDashboard,
       enableReassignmentSuggestions: config.features.enableReassignmentSuggestions,
+      enableCapacityWhatIf: config.features.enableCapacityWhatIf,
+      enableWhatifSnapshots: config.features.enableWhatifSnapshots,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

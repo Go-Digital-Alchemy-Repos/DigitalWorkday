@@ -33,6 +33,8 @@ export interface FeatureFlags {
   enableProjectMilestones: boolean;
   enablePmPortfolioDashboard: boolean;
   enableReassignmentSuggestions: boolean;
+  enableCapacityWhatIf: boolean;
+  enableWhatifSnapshots: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -68,6 +70,8 @@ const ALL_OFF: FeatureFlags = {
   enableProjectMilestones: false,
   enablePmPortfolioDashboard: false,
   enableReassignmentSuggestions: false,
+  enableCapacityWhatIf: false,
+  enableWhatifSnapshots: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

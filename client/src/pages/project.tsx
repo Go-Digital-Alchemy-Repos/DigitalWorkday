@@ -34,6 +34,7 @@ import {
   Lock,
   Share2,
   Flag,
+  Zap,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -44,6 +45,7 @@ import { ListSectionDroppable } from "@/features/tasks/list-section-droppable";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { TaskCreateDrawer } from "@/features/tasks/task-create-drawer";
 import { ProjectCalendar, ProjectSettingsSheet, ProjectMembersSheet, ProjectActivityFeed, AIProjectPlanner } from "@/features/projects";
+import { WhatIfSimulator } from "@/features/projects/WhatIfSimulator";
 import { MilestonesTab } from "@/features/projects/MilestonesTab";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
@@ -112,7 +114,7 @@ export default function ProjectPage() {
 
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
-  const { enableProjectMilestones } = useFeatureFlags();
+  const { enableProjectMilestones, enableCapacityWhatIf } = useFeatureFlags();
 
   // Subscribe to real-time updates for this project
   useProjectSocket(projectId);
@@ -124,6 +126,7 @@ export default function ProjectPage() {
   const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
   const [aiPlannerOpen, setAiPlannerOpen] = useState(false);
+  const [whatIfOpen, setWhatIfOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
   const [selectedSectionId, setSelectedSectionId] = useState<string | undefined>();
   const [localSections, setLocalSections] = useState<SectionWithTasks[] | null>(null);
@@ -886,6 +889,30 @@ export default function ProjectPage() {
                   AI Plan
                 </Button>
               )}
+              {isAdmin && enableCapacityWhatIf && (
+                <Button
+                  variant="outline"
+                  size="icon"
+                  className="md:hidden"
+                  onClick={() => setWhatIfOpen(true)}
+                  aria-label="What-if simulator"
+                  data-testid="button-whatif-mobile"
+                >
+                  <Zap className="h-4 w-4" />
+                </Button>
+              )}
+              {isAdmin && enableCapacityWhatIf && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="hidden md:flex"
+                  onClick={() => setWhatIfOpen(true)}
+                  data-testid="button-whatif"
+                >
+                  <Zap className="h-4 w-4 mr-1" />
+                  What-if
+                </Button>
+              )}
               <Button
                 variant="ghost"
                 size="icon"
@@ -1368,6 +1395,14 @@ export default function ProjectPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      {project && projectId && enableCapacityWhatIf && (
+        <WhatIfSimulator
+          open={whatIfOpen}
+          onOpenChange={setWhatIfOpen}
+          projectId={projectId}
+          projectName={project.name}
+        />
+      )}
     </div>
   );
 }

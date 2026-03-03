@@ -209,6 +209,8 @@ export const config = {
     enablePmPortfolioDashboard: optionalEnvBool("ENABLE_PM_PORTFOLIO_DASHBOARD", true),
     enableReassignmentSuggestions: optionalEnvBool("ENABLE_REASSIGNMENT_SUGGESTIONS", true),
     enableSuggestionDebug: optionalEnvBool("ENABLE_SUGGESTION_DEBUG", false),
+    enableCapacityWhatIf: optionalEnvBool("ENABLE_CAPACITY_WHATIF", true),
+    enableWhatifSnapshots: optionalEnvBool("ENABLE_WHATIF_SNAPSHOTS", true),
     // Performance optimization flags (server-side only)
     enableTasksBatchHydration: optionalEnvBool("ENABLE_TASKS_BATCH_HYDRATION", true),
     enableClientsBatchExpansion: optionalEnvBool("ENABLE_CLIENTS_BATCH_EXPANSION", true),
