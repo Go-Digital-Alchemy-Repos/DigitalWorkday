@@ -264,20 +264,12 @@ export function TenantSidebar() {
       }
 
       ordered.sort((a, b) => (orderMap.get(a.id) ?? 0) - (orderMap.get(b.id) ?? 0));
-      unordered.sort((a, b) => {
-        const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-        const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-        return dateB - dateA;
-      });
+      unordered.sort((a, b) => a.name.localeCompare(b.name));
 
       return [...ordered, ...unordered];
     }
 
-    return nonSticky.sort((a, b) => {
-      const dateA = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-      const dateB = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
-      return dateB - dateA;
-    });
+    return nonSticky.sort((a, b) => a.name.localeCompare(b.name));
   }, [projects, uiPrefs?.sidebarProjectOrder]);
 
   const allSortedProjects = useMemo(
