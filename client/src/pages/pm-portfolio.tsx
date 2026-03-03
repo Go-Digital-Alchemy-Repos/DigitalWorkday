@@ -42,6 +42,7 @@ interface PmPortfolioProject {
   tasksInReviewCount: number;
   hasMilestoneOverdue: boolean;
   riskTrend: "stable" | "at_risk" | "critical";
+  needsAck: boolean;
 }
 
 interface PmPortfolioSummary {
@@ -492,6 +493,11 @@ export default function PmPortfolioDashboard() {
                             {project.tasksInReviewCount > 0 && (
                               <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 bg-violet-100 text-violet-700 dark:bg-violet-900/30 dark:text-violet-400 shrink-0">
                                 {project.tasksInReviewCount} review
+                              </Badge>
+                            )}
+                            {project.needsAck && (
+                              <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-5 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-400 shrink-0" data-testid={`badge-ack-needed-${project.projectId}`}>
+                                Ack Needed
                               </Badge>
                             )}
                           </div>

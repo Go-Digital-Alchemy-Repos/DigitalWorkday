@@ -35,6 +35,7 @@ export interface FeatureFlags {
   enableReassignmentSuggestions: boolean;
   enableCapacityWhatIf: boolean;
   enableWhatifSnapshots: boolean;
+  enableRiskAckWorkflow: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -72,6 +73,7 @@ const ALL_OFF: FeatureFlags = {
   enableReassignmentSuggestions: false,
   enableCapacityWhatIf: false,
   enableWhatifSnapshots: false,
+  enableRiskAckWorkflow: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

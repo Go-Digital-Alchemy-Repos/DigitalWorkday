@@ -1,5 +1,5 @@
 import { sql, relations } from "drizzle-orm";
-import { pgTable, text, varchar, timestamp, date, integer, boolean, jsonb, uniqueIndex, index } from "drizzle-orm/pg-core";
+import { pgTable, text, varchar, timestamp, date, integer, boolean, jsonb, uniqueIndex, index, numeric } from "drizzle-orm/pg-core";
 import { createInsertSchema } from "drizzle-zod";
 import { z } from "zod";
 
@@ -4356,3 +4356,21 @@ export const taskHistory = pgTable("task_history", {
 ]);
 
 export type TaskHistory = typeof taskHistory.$inferSelect;
+
+export const projectRiskAcknowledgments = pgTable("project_risk_acknowledgments", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull(),
+  projectId: varchar("project_id").notNull().references(() => projects.id, { onDelete: "cascade" }),
+  riskLevel: text("risk_level").notNull(),
+  riskScore: numeric("risk_score"),
+  acknowledgedByUserId: varchar("acknowledged_by_user_id").references(() => users.id),
+  acknowledgedAt: timestamp("acknowledged_at").defaultNow().notNull(),
+  mitigationNote: text("mitigation_note"),
+  nextCheckInDate: date("next_check_in_date"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("risk_ack_project_idx").on(table.tenantId, table.projectId, table.acknowledgedAt),
+]);
+
+export type ProjectRiskAcknowledgment = typeof projectRiskAcknowledgments.$inferSelect;
+export type InsertProjectRiskAcknowledgment = typeof projectRiskAcknowledgments.$inferInsert;

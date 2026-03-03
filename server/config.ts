@@ -211,6 +211,7 @@ export const config = {
     enableSuggestionDebug: optionalEnvBool("ENABLE_SUGGESTION_DEBUG", false),
     enableCapacityWhatIf: optionalEnvBool("ENABLE_CAPACITY_WHATIF", true),
     enableWhatifSnapshots: optionalEnvBool("ENABLE_WHATIF_SNAPSHOTS", true),
+    enableRiskAckWorkflow: optionalEnvBool("ENABLE_RISK_ACK_WORKFLOW", true),
     // Performance optimization flags (server-side only)
     enableTasksBatchHydration: optionalEnvBool("ENABLE_TASKS_BATCH_HYDRATION", true),
     enableClientsBatchExpansion: optionalEnvBool("ENABLE_CLIENTS_BATCH_EXPANSION", true),

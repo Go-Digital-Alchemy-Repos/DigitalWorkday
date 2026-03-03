@@ -46,6 +46,7 @@ import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { TaskCreateDrawer } from "@/features/tasks/task-create-drawer";
 import { ProjectCalendar, ProjectSettingsSheet, ProjectMembersSheet, ProjectActivityFeed, AIProjectPlanner } from "@/features/projects";
 import { WhatIfSimulator } from "@/features/projects/WhatIfSimulator";
+import { RiskAckBanner } from "@/features/projects/RiskAckBanner";
 import { MilestonesTab } from "@/features/projects/MilestonesTab";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
@@ -1087,6 +1088,11 @@ export default function ProjectPage() {
           )}
         </div>
       </div>
+      {projectId && (
+        <div className="px-3 sm:px-4 lg:px-6 pt-3">
+          <RiskAckBanner projectId={projectId} />
+        </div>
+      )}
       <div className="flex-1 overflow-hidden">
         {view === "board" && (
           <DndContext

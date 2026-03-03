@@ -15,6 +15,7 @@ export interface PmPortfolioProject {
   tasksInReviewCount: number;
   hasMilestoneOverdue: boolean;
   riskTrend: "stable" | "at_risk" | "critical";
+  needsAck: boolean;
 }
 
 export interface PmPortfolioSummary {
@@ -209,8 +210,46 @@ export async function getPmPortfolio(params: {
       tasksInReviewCount: reviewCount,
       hasMilestoneOverdue,
       riskTrend,
+      needsAck: false, // filled in below
     };
   });
+
+  // Batch-check ack status for all at-risk/critical projects
+  const atRiskProjectIds = projects
+    .filter((p) => p.riskTrend !== "stable")
+    .map((p) => p.projectId);
+
+  if (atRiskProjectIds.length > 0) {
+    const ACK_WINDOW_DAYS = 7;
+    const ackRows = await dbRows<{ project_id: string; latest_ack_at: string; next_check_in_date: string | null }>(sql`
+      SELECT DISTINCT ON (project_id)
+        project_id,
+        acknowledged_at AS latest_ack_at,
+        next_check_in_date
+      FROM project_risk_acknowledgments
+      WHERE tenant_id = ${tenantId}
+        AND project_id = ANY(ARRAY[${sql.raw(atRiskProjectIds.map((id) => `'${id}'`).join(","))}]::varchar[])
+      ORDER BY project_id, acknowledged_at DESC
+    `);
+
+    const ackByProject = new Map(ackRows.map((r) => [r.project_id, r]));
+
+    for (const p of projects) {
+      if (p.riskTrend === "stable") continue;
+      const ack = ackByProject.get(p.projectId);
+      if (!ack) {
+        p.needsAck = true;
+      } else {
+        const ackDate = new Date(ack.latest_ack_at);
+        const daysSince = (Date.now() - ackDate.getTime()) / (1000 * 60 * 60 * 24);
+        if (ack.next_check_in_date && new Date(ack.next_check_in_date) > new Date()) {
+          p.needsAck = false;
+        } else if (daysSince >= ACK_WINDOW_DAYS) {
+          p.needsAck = true;
+        }
+      }
+    }
+  }
 
   const summary: PmPortfolioSummary = {
     totalProjects: projects.length,

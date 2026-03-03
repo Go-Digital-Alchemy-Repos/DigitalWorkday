@@ -65,6 +65,7 @@ router.get("/features/flags", async (_req, res) => {
       enableReassignmentSuggestions: config.features.enableReassignmentSuggestions,
       enableCapacityWhatIf: config.features.enableCapacityWhatIf,
       enableWhatifSnapshots: config.features.enableWhatifSnapshots,
+      enableRiskAckWorkflow: config.features.enableRiskAckWorkflow,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);
