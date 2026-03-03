@@ -25,6 +25,7 @@ import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
+import { useAuth } from "@/lib/auth";
 import { Redirect } from "wouter";
 import { ReassignmentSuggestionsCard } from "@/components/reassignment/ReassignmentSuggestionsCard";
 import { AiFocusSummaryCard } from "@/features/pm-portfolio/AiFocusSummaryCard";
@@ -138,6 +139,8 @@ function TableSkeleton() {
 
 export default function PmPortfolioDashboard() {
   const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary } = useFeatureFlags();
+  const { user } = useAuth();
+  const isAdmin = user?.role === "admin" || user?.role === "super_user";
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("healthScore");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -149,7 +152,7 @@ export default function PmPortfolioDashboard() {
     refetchOnWindowFocus: false,
   });
 
-  if (!enablePmPortfolioDashboard) {
+  if (!enablePmPortfolioDashboard || !isAdmin) {
     return <Redirect to="/" />;
   }
 

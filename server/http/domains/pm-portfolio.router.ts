@@ -26,6 +26,11 @@ router.get("/pm/portfolio", async (req: Request, res: Response) => {
       return res.status(403).json({ error: "PM Portfolio Dashboard is not enabled." });
     }
 
+    const user = req.user as any;
+    if (!user || (user.role !== "admin" && user.role !== "super_user")) {
+      return res.status(403).json({ error: "PM Portfolio is only available to tenant admins." });
+    }
+
     const tenantId = getEffectiveTenantId(req);
     const pmUserId = getCurrentUserId(req);
 

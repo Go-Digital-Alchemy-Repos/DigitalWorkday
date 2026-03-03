@@ -426,7 +426,7 @@ export function TenantSidebar() {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
-                  {enablePmPortfolioDashboard && (
+                  {enablePmPortfolioDashboard && isAdmin && (
                     <SidebarMenuItem>
                       <SidebarMenuButton
                         asChild

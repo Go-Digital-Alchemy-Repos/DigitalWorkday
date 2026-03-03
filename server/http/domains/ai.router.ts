@@ -529,12 +529,9 @@ router.get("/v1/ai/pm/focus-summary", async (req, res) => {
       return res.status(401).json({ error: "Authentication required" });
     }
 
-    const currentUser = await storage.getUser(userId);
+    const currentUser = req.user as any;
     if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "super_user")) {
-      const isAllowedPm = currentUser?.role === "member";
-      if (!isAllowedPm) {
-        return res.status(403).json({ error: "PM or admin access required", code: "FORBIDDEN" });
-      }
+      return res.status(403).json({ error: "PM Portfolio is only available to tenant admins.", code: "FORBIDDEN" });
     }
 
     if (config.features.enableAiSummaryCache) {
@@ -587,6 +584,11 @@ router.post("/v1/ai/pm/focus-summary/refresh", async (req, res) => {
 
     if (!tenantId || !userId) {
       return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const currentUser = req.user as any;
+    if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "super_user")) {
+      return res.status(403).json({ error: "PM Portfolio is only available to tenant admins.", code: "FORBIDDEN" });
     }
 
     const rateCheck = checkAiRateLimit(tenantId, userId);
