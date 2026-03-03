@@ -36,6 +36,7 @@ export interface FeatureFlags {
   enableCapacityWhatIf: boolean;
   enableWhatifSnapshots: boolean;
   enableRiskAckWorkflow: boolean;
+  enableAiPmFocusSummary: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -74,6 +75,7 @@ const ALL_OFF: FeatureFlags = {
   enableCapacityWhatIf: false,
   enableWhatifSnapshots: false,
   enableRiskAckWorkflow: false,
+  enableAiPmFocusSummary: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

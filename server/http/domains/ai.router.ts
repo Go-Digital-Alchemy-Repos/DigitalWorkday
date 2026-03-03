@@ -18,6 +18,8 @@ import { getEmployeeProfileReport } from "../../reports/employeeProfileAggregato
 import { buildEmployeeSummaryPayload, hashPayload } from "../../ai/employeeSummary/buildEmployeeSummaryPayload";
 import { generateEmployeeSummary, SUMMARY_VERSION } from "../../ai/employeeSummary/generateEmployeeSummary";
 import { getAIProvider } from "../../services/ai/getAIProvider";
+import { buildPmFocusPayload, hashPmFocusPayload } from "../../ai/pmFocus/buildPmFocusPayload";
+import { generatePmFocusSummary, PM_FOCUS_SUMMARY_VERSION } from "../../ai/pmFocus/generatePmFocusSummary";
 
 const router = createApiRouter({
   policy: "authTenant",
@@ -411,6 +413,194 @@ router.post("/v1/ai/employee/:employeeId/summary/refresh", async (req, res) => {
   } catch (error: any) {
     console.error("[AI:employeeSummary] Refresh failed:", error);
     res.status(500).json({ error: error.message || "Failed to refresh AI summary." });
+  }
+});
+
+// ============================================================
+// PM FOCUS SUMMARY — Cached, grounded, rate-limited
+// entity_type = "pm_portfolio", entity_id = pmUserId
+// ============================================================
+
+const PM_FOCUS_TTL_MS = 24 * 60 * 60 * 1000;
+
+function parsePmFocusRange(req: any): { rangeStart: string; rangeEnd: string } {
+  const today = new Date();
+  const defaultEnd = today.toISOString().split("T")[0];
+  const sevenDaysAgo = new Date(Date.now() - 6 * 24 * 60 * 60 * 1000);
+  const defaultStart = sevenDaysAgo.toISOString().split("T")[0];
+  return {
+    rangeStart: (req.query.rangeStart as string) || defaultStart,
+    rangeEnd: (req.query.rangeEnd as string) || defaultEnd,
+  };
+}
+
+async function buildAndStorePmFocusSummary(
+  tenantId: string,
+  pmUserId: string,
+  requestingUserId: string,
+  rangeStart: string,
+  rangeEnd: string
+) {
+  const payload = await buildPmFocusPayload({ tenantId, pmUserId, rangeStart, rangeEnd });
+  const inputHash = hashPmFocusPayload(payload);
+
+  const providerResult = await getAIProvider(tenantId);
+  if (!providerResult) {
+    throw new Error("AI is not configured for this tenant. Contact your administrator.");
+  }
+
+  const generated = await generatePmFocusSummary(
+    tenantId,
+    payload,
+    config.features.enableAiSummaryRedaction
+  );
+
+  const expiresAt = new Date(Date.now() + PM_FOCUS_TTL_MS);
+
+  await db.delete(aiSummaries).where(
+    and(
+      eq(aiSummaries.tenantId, tenantId),
+      eq(aiSummaries.entityType, "pm_portfolio"),
+      eq(aiSummaries.entityId, pmUserId),
+      eq(aiSummaries.rangeStart, rangeStart),
+      eq(aiSummaries.rangeEnd, rangeEnd)
+    )
+  );
+
+  const [inserted] = await db.insert(aiSummaries).values({
+    tenantId,
+    entityType: "pm_portfolio",
+    entityId: pmUserId,
+    viewerScope: "tenant_admins",
+    rangeStart,
+    rangeEnd,
+    inputHash,
+    model: providerResult.config.model,
+    summaryVersion: PM_FOCUS_SUMMARY_VERSION,
+    headline: generated.headline,
+    summaryMarkdown: generated.markdown,
+    bulletsJson: {
+      topPriorities: generated.topPriorities,
+      risksToAddress: generated.risksToAddress,
+      capacityConcerns: generated.capacityConcerns,
+      budgetConcerns: generated.budgetConcerns,
+      confidence: generated.confidence,
+      supportingMetrics: generated.supportingMetrics,
+    },
+    createdByUserId: requestingUserId,
+    expiresAt,
+  }).returning();
+
+  return inserted;
+}
+
+function formatPmFocusRow(row: any) {
+  const bullets = (row.bulletsJson as any) ?? {};
+  return {
+    id: row.id,
+    headline: row.headline,
+    topPriorities: bullets.topPriorities ?? [],
+    risksToAddress: bullets.risksToAddress ?? [],
+    capacityConcerns: bullets.capacityConcerns ?? [],
+    budgetConcerns: bullets.budgetConcerns ?? [],
+    confidence: bullets.confidence ?? "Medium",
+    supportingMetrics: bullets.supportingMetrics ?? [],
+    summaryMarkdown: row.summaryMarkdown,
+    rangeStart: row.rangeStart,
+    rangeEnd: row.rangeEnd,
+    model: row.model,
+    createdAt: row.createdAt,
+    expiresAt: row.expiresAt,
+  };
+}
+
+// GET /v1/ai/pm/focus-summary — fetch cached (auto-generate if not cached)
+router.get("/v1/ai/pm/focus-summary", async (req, res) => {
+  try {
+    if (!config.features.enableAiPmFocusSummary) {
+      return res.status(404).json({ error: "Feature not enabled", code: "FEATURE_DISABLED" });
+    }
+
+    const tenantId = (req as any).tenant?.effectiveTenantId || (req.user as any)?.tenantId;
+    const userId = getCurrentUserId(req);
+    const { rangeStart, rangeEnd } = parsePmFocusRange(req);
+
+    if (!tenantId || !userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const currentUser = await storage.getUser(userId);
+    if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "super_user")) {
+      const isAllowedPm = currentUser?.role === "member";
+      if (!isAllowedPm) {
+        return res.status(403).json({ error: "PM or admin access required", code: "FORBIDDEN" });
+      }
+    }
+
+    if (config.features.enableAiSummaryCache) {
+      const [cached] = await db
+        .select()
+        .from(aiSummaries)
+        .where(
+          and(
+            eq(aiSummaries.tenantId, tenantId),
+            eq(aiSummaries.entityType, "pm_portfolio"),
+            eq(aiSummaries.entityId, userId),
+            eq(aiSummaries.rangeStart, rangeStart),
+            eq(aiSummaries.rangeEnd, rangeEnd),
+            gt(aiSummaries.expiresAt, new Date())
+          )
+        )
+        .orderBy(desc(aiSummaries.createdAt))
+        .limit(1);
+
+      if (cached) {
+        return res.json({ ...formatPmFocusRow(cached), cached: true });
+      }
+    }
+
+    const rateCheck = checkAiRateLimit(tenantId, userId);
+    if (!rateCheck.allowed) {
+      return res.status(429).json({ error: rateCheck.reason, code: "RATE_LIMITED" });
+    }
+
+    incrementAiRateLimit(tenantId, userId);
+
+    const inserted = await buildAndStorePmFocusSummary(tenantId, userId, userId, rangeStart, rangeEnd);
+    return res.json({ ...formatPmFocusRow(inserted), cached: false });
+  } catch (error: any) {
+    console.error("[AI:pmFocus] GET failed:", error);
+    return res.status(500).json({ error: error.message || "Failed to generate PM Focus summary." });
+  }
+});
+
+// POST /v1/ai/pm/focus-summary/refresh — force regeneration (rate limited)
+router.post("/v1/ai/pm/focus-summary/refresh", async (req, res) => {
+  try {
+    if (!config.features.enableAiPmFocusSummary) {
+      return res.status(404).json({ error: "Feature not enabled", code: "FEATURE_DISABLED" });
+    }
+
+    const tenantId = (req as any).tenant?.effectiveTenantId || (req.user as any)?.tenantId;
+    const userId = getCurrentUserId(req);
+    const { rangeStart, rangeEnd } = parsePmFocusRange(req);
+
+    if (!tenantId || !userId) {
+      return res.status(401).json({ error: "Authentication required" });
+    }
+
+    const rateCheck = checkAiRateLimit(tenantId, userId);
+    if (!rateCheck.allowed) {
+      return res.status(429).json({ error: rateCheck.reason, code: "RATE_LIMITED" });
+    }
+
+    incrementAiRateLimit(tenantId, userId);
+
+    const inserted = await buildAndStorePmFocusSummary(tenantId, userId, userId, rangeStart, rangeEnd);
+    return res.json({ ...formatPmFocusRow(inserted), cached: false });
+  } catch (error: any) {
+    console.error("[AI:pmFocus] Refresh failed:", error);
+    return res.status(500).json({ error: error.message || "Failed to refresh PM Focus summary." });
   }
 });
 

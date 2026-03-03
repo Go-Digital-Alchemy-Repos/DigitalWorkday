@@ -27,6 +27,7 @@ import { cn } from "@/lib/utils";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { Redirect } from "wouter";
 import { ReassignmentSuggestionsCard } from "@/components/reassignment/ReassignmentSuggestionsCard";
+import { AiFocusSummaryCard } from "@/features/pm-portfolio/AiFocusSummaryCard";
 
 interface PmPortfolioProject {
   projectId: string;
@@ -136,7 +137,7 @@ function TableSkeleton() {
 }
 
 export default function PmPortfolioDashboard() {
-  const { enablePmPortfolioDashboard, enableReassignmentSuggestions } = useFeatureFlags();
+  const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary } = useFeatureFlags();
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("healthScore");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -582,6 +583,10 @@ export default function PmPortfolioDashboard() {
             )}
           </CardContent>
         </Card>
+
+        {enableAiPmFocusSummary && (
+          <AiFocusSummaryCard />
+        )}
 
         {enableReassignmentSuggestions && (
           <ReassignmentSuggestionsCard limit={5} />

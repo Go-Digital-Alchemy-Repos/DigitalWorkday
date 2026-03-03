@@ -213,6 +213,7 @@ export const config = {
     enableWhatifSnapshots: optionalEnvBool("ENABLE_WHATIF_SNAPSHOTS", true),
     enableRiskAckWorkflow: optionalEnvBool("ENABLE_RISK_ACK_WORKFLOW", true),
     enableWeeklyStatusReports: optionalEnvBool("ENABLE_WEEKLY_STATUS_REPORTS", true),
+    enableAiPmFocusSummary: optionalEnvBool("ENABLE_AI_PM_FOCUS_SUMMARY", true),
     // Performance optimization flags (server-side only)
     enableTasksBatchHydration: optionalEnvBool("ENABLE_TASKS_BATCH_HYDRATION", true),
     enableClientsBatchExpansion: optionalEnvBool("ENABLE_CLIENTS_BATCH_EXPANSION", true),

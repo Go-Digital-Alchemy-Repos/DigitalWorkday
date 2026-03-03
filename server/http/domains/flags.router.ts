@@ -67,6 +67,7 @@ router.get("/features/flags", async (_req, res) => {
       enableWhatifSnapshots: config.features.enableWhatifSnapshots,
       enableRiskAckWorkflow: config.features.enableRiskAckWorkflow,
       enableWeeklyStatusReports: config.features.enableWeeklyStatusReports,
+      enableAiPmFocusSummary: config.features.enableAiPmFocusSummary,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);
