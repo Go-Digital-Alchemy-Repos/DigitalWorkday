@@ -1,0 +1,109 @@
+PHASE 2B — CAPACITY WHAT-IF SIMULATOR (PROJECT DELIVERY SCENARIO PLANNING)
+NON-DESTRUCTIVE • ADDITIVE • NO AUTO-SAVE • FLAGGED • DOCUMENTED
+
+Feature flags:
+- ENABLE_CAPACITY_WHATIF
+- ENABLE_WHATIF_SNAPSHOTS
+
+GOAL:
+Allow PM/Admin to simulate changes (reassign tasks, move due dates, adjust estimates) and preview impact on:
+- utilization/capacity
+- workload pressure
+- project risk
+- budget burn (if enabled)
+WITHOUT applying changes until user confirms.
+
+============================================================
+PHASE 1 — MODEL: WHAT-IF INPUT + OUTPUT
+============================================================
+Create types:
+server/src/ops/whatif/types.ts
+
+Input:
+{
+  tenantId,
+  projectId,
+  rangeStart,
+  rangeEnd,
+  changes: {
+    reassign?: [{ taskId, toUserId }]
+    moveDueDate?: [{ taskId, newDueDate }]
+    adjustEstimateHours?: [{ taskId, newEstimateHours }]
+  }
+}
+
+Output:
+{
+  before: {
+    utilizationByUser: [{ userId, utilizationPct, hoursPlanned }]
+    projectRisk: { level, drivers: [...] }
+    burn: { percentConsumed, projectedFinalHours, predictedOverrunDate? } (if enabled)
+  },
+  after: { ...same... },
+  delta: {
+    utilizationShift: [{ userId, deltaUtilizationPct }]
+    riskDelta: { from, to }
+    burnDelta: { projectedFinalHoursDelta }
+  }
+}
+
+============================================================
+PHASE 2 — BACKEND ENGINE
+============================================================
+Create:
+server/src/ops/whatif/whatIfEngine.ts
+
+Functions:
+- computeWhatIfScenario(input) -> output
+
+Rules:
+- Use existing capacity/time/task metrics pipelines
+- Apply changes in-memory (no DB writes)
+- Respect visibility (private tasks cannot be used in simulation if viewer lacks access)
+- Performance: batched lookups, page-limited tasks if needed
+
+============================================================
+PHASE 3 — API
+============================================================
+POST /api/ops/whatif/project
+
+Body: input above
+Access:
+- PM for projects they manage
+- Tenant Admin
+
+============================================================
+PHASE 4 — FRONTEND UI
+============================================================
+In Project Detail:
+Add button: “What-if”
+Opens Sheet/Modal:
+- Pick date range
+- Drag/drop reassignment (optional) OR select task and choose user
+- Adjust due date / estimate (simple controls)
+- “Run Simulation” calls API and displays Before vs After:
+  - utilization deltas
+  - risk change
+  - burn change
+- “Apply Changes” button:
+  - executes real mutations sequentially with confirmation
+  - only enabled after a successful simulation
+
+Optional:
+- “Save Snapshot” (ENABLE_WHATIF_SNAPSHOTS)
+  - stores scenario output in DB for later review/export
+
+============================================================
+PHASE 5 — APP DOCS UPDATE
+============================================================
+Add:
+“Capacity What-If Simulator”
+- input/output contract
+- permissions
+- safety: no auto-save
+- snapshot storage (if enabled)
+
+STOP when:
+- PM/Admin can simulate changes and view impact
+- No DB writes occur unless Apply is clicked
+- Docs updated

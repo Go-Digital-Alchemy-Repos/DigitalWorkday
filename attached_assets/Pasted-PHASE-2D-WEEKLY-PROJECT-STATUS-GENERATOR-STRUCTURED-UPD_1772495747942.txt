@@ -1,0 +1,94 @@
+PHASE 2D — WEEKLY PROJECT STATUS GENERATOR (STRUCTURED UPDATES)
+NON-DESTRUCTIVE • ADDITIVE • EXPORTABLE • FLAGGED • DOCUMENTED
+
+Feature flags:
+- ENABLE_WEEKLY_STATUS_REPORTS
+
+GOAL:
+Generate a structured weekly status report per project (not AI yet):
+- progress
+- completed items
+- upcoming deadlines
+- risks
+- burn metrics (if enabled)
+- capacity concerns (if enabled)
+Store it, display it, optionally export.
+
+============================================================
+PHASE 1 — DATA MODEL
+============================================================
+Create table: project_status_reports
+Columns:
+- id
+- tenant_id
+- project_id (indexed)
+- range_start (date)
+- range_end (date)
+- generated_by_user_id
+- created_at
+- summary_markdown (text)
+- sections_json (jsonb)   // structured sections for UI
+- is_sent (boolean default false) (optional)
+Indexes:
+- (tenant_id, project_id, range_end desc)
+
+============================================================
+PHASE 2 — GENERATOR SERVICE
+============================================================
+Create:
+server/src/ops/statusReports/statusReportGenerator.ts
+
+Function:
+generateWeeklyStatusReport({ tenantId, projectId, rangeStart, rangeEnd, viewerUserId })
+
+Build sections from existing metrics:
+- Completed tasks count (+ list of top N safe titles if viewer has access)
+- Upcoming tasks due next 7 days (top N)
+- Overdue tasks (top N)
+- Milestone progress (if enabled)
+- Risk flags + drivers (existing risk engine)
+- Burn summary (if enabled)
+- Time tracked this week
+- Capacity concerns (if enabled)
+
+IMPORTANT:
+- Respect private visibility.
+- Exclude archived items by default.
+- Keep lists limited (top 10–25).
+
+============================================================
+PHASE 3 — API
+============================================================
+POST /api/projects/:projectId/status-reports/generate (range params)
+GET  /api/projects/:projectId/status-reports?limit=&cursor=
+GET  /api/status-reports/:id
+
+Permissions:
+- PM of project or Tenant Admin
+
+============================================================
+PHASE 4 — FRONTEND UI
+============================================================
+In Project Detail:
+Add tab/section: “Status Reports”
+- List previous reports
+- “Generate Weekly Report” button
+- Render markdown + section cards
+- Export button (PDF later; for now allow copy/download markdown)
+
+Optional:
+- “Send to client” placeholder (no emailing in this phase unless already built)
+
+============================================================
+PHASE 5 — APP DOCS UPDATE
+============================================================
+Add:
+“Weekly Project Status Reports”
+- generation logic
+- visibility rules
+- export options
+
+STOP when:
+- Reports generate, store, and display
+- No privacy leaks
+- Docs updated

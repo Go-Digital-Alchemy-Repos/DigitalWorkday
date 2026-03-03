@@ -1,0 +1,86 @@
+PHASE 3A — AI PM FOCUS SUMMARY (WEEKLY OPS DIGEST FOR PM PORTFOLIO)
+NON-DESTRUCTIVE • GROUNDED • CACHED • RATE-LIMITED • FLAGGED • DOCUMENTED
+
+Feature flags:
+- ENABLE_AI_PM_FOCUS_SUMMARY
+- ENABLE_AI_SUMMARY_CACHE
+- ENABLE_AI_SUMMARY_REDACTION
+
+GOAL:
+Add an AI “What should I focus on this week?” summary for PMs that is strictly grounded in portfolio metrics and does not hallucinate.
+
+============================================================
+PHASE 1 — SAFE INPUT PAYLOAD (AGGREGATED ONLY)
+============================================================
+Create:
+server/src/ai/pmFocus/buildPmFocusPayload.ts
+
+Payload MUST ONLY include aggregated metrics + IDs:
+- top at-risk projects (id, name if safe, risk level, drivers)
+- projects needing risk acknowledgment
+- projects with burn risk (if enabled)
+- tasks in review queue counts
+- overloaded employees counts/ids (names only if already visible to PM)
+- key deltas week-over-week
+
+No task descriptions, no message content, no client PII beyond what PM already sees.
+
+============================================================
+PHASE 2 — CACHING + RATE LIMITS
+============================================================
+Use ai_summaries table (if already created) or add:
+- entity_type: "pm_portfolio"
+- entity_id: pmUserId
+- range_start/range_end
+TTL 24h, refresh button with rate limits.
+
+============================================================
+PHASE 3 — ENDPOINTS
+============================================================
+GET  /api/ai/pm/focus-summary?rangeStart=&rangeEnd=
+POST /api/ai/pm/focus-summary/refresh?rangeStart=&rangeEnd=
+
+Permissions:
+- PM or Tenant Admin
+
+============================================================
+PHASE 4 — AI GENERATION (STRICT GROUNDED OUTPUT)
+============================================================
+Create:
+server/src/ai/pmFocus/generatePmFocusSummary.ts
+
+Output schema:
+{
+  headline,
+  topPriorities: [{ title, why, suggestedNextStep }],
+  risksToAddress: [...],
+  capacityConcerns: [...],
+  budgetConcerns: [...],
+  confidence,
+  supportingMetrics: [...]
+}
+
+Add redaction post-check to reject outputs that include forbidden content.
+
+============================================================
+PHASE 5 — FRONTEND
+============================================================
+On PM Portfolio Dashboard:
+Add card: “AI Weekly Focus”
+- shows cached summary
+- refresh button
+- supporting metrics dialog
+
+============================================================
+PHASE 6 — APP DOCS UPDATE
+============================================================
+Add:
+“AI PM Focus Summary”
+- grounding rules
+- caching/limits
+- permissions
+
+STOP when:
+- PM sees an accurate grounded summary
+- Cached + rate limited
+- Docs updated

@@ -1,0 +1,80 @@
+PHASE 2C — RISK ACKNOWLEDGMENT + MITIGATION WORKFLOW (GOVERNANCE)
+NON-DESTRUCTIVE • ADDITIVE • AUDITABLE • FLAGGED • DOCUMENTED
+
+Feature flags:
+- ENABLE_RISK_ACK_WORKFLOW
+
+GOAL:
+When a project becomes “At Risk” (based on your health/risk engine), require PM (or Tenant Admin) to acknowledge and optionally attach a mitigation plan note. Track acknowledgments for accountability.
+
+============================================================
+PHASE 1 — DATA MODEL
+============================================================
+Create table: project_risk_acknowledgments
+Columns:
+- id
+- tenant_id
+- project_id (indexed)
+- risk_level (text)            // snapshot at time of ack
+- risk_score (numeric nullable)
+- acknowledged_by_user_id
+- acknowledged_at
+- mitigation_note (text nullable)
+- next_check_in_date (date nullable)
+- created_at
+
+Indexes:
+- (tenant_id, project_id, acknowledged_at desc)
+
+============================================================
+PHASE 2 — BACKEND
+============================================================
+Create:
+server/src/ops/risk/riskAckService.ts
+
+Functions:
+- getCurrentRiskState(projectId) (reuse existing)
+- acknowledgeRisk({ tenantId, projectId, userId, mitigationNote?, nextCheckInDate? })
+- getLatestAcknowledgment(projectId)
+
+Rules:
+- Only PM of project or Tenant Admin can acknowledge.
+- If risk drops below threshold, acknowledgment remains as history.
+- Add “needsAck” boolean:
+  - if project is at-risk AND no ack within last X days (configurable, e.g., 7)
+
+============================================================
+PHASE 3 — API
+============================================================
+GET  /api/projects/:projectId/risk-ack/status
+POST /api/projects/:projectId/risk-ack
+
+============================================================
+PHASE 4 — FRONTEND UI
+============================================================
+In Project Detail + PM Portfolio:
+- If project at-risk and needsAck:
+  - show banner: “Risk Acknowledgment Required”
+  - button: “Acknowledge” opens dialog with:
+    - mitigation note (textarea)
+    - next check-in date
+- Show latest ack summary in Project Risk section:
+  - acknowledged by, date, short note
+
+Also add PM Portfolio column/badge:
+- “Ack Needed” chip
+
+============================================================
+PHASE 5 — APP DOCS UPDATE
+============================================================
+Add:
+“Risk Acknowledgment Workflow”
+- triggers
+- ack frequency
+- audit trail
+- permissions
+
+STOP when:
+- At-risk projects surface ack-required UX
+- Acknowledgments stored and visible
+- Docs updated
