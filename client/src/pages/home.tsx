@@ -30,8 +30,10 @@ import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { CreateProjectDialog } from "@/features/projects";
 import { TaskProgressBar } from "@/components/task-progress-bar";
 import { ReviewQueueCard } from "@/components/review-queue-card";
+import { ReassignmentSuggestionsCard } from "@/components/reassignment/ReassignmentSuggestionsCard";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { useTaskDrawer } from "@/lib/task-drawer-context";
 import type { Project, TaskWithRelations, Team, Workspace, Client, User } from "@shared/schema";
 
@@ -719,6 +721,7 @@ export default function Home() {
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
 
   const isAdmin = user?.role === "admin" || user?.role === "super_user";
+  const { enableReassignmentSuggestions } = useFeatureFlags();
 
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
     queryKey: ["/api/projects"],
@@ -888,6 +891,10 @@ export default function Home() {
         )}
 
         <ReviewQueueCard onTaskClick={openTask} />
+
+        {isAdmin && enableReassignmentSuggestions && (
+          <ReassignmentSuggestionsCard limit={5} />
+        )}
 
         {isAdmin ? (
           <AdminDashboardSection

@@ -26,6 +26,7 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { cn } from "@/lib/utils";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { Redirect } from "wouter";
+import { ReassignmentSuggestionsCard } from "@/components/reassignment/ReassignmentSuggestionsCard";
 
 interface PmPortfolioProject {
   projectId: string;
@@ -134,7 +135,7 @@ function TableSkeleton() {
 }
 
 export default function PmPortfolioDashboard() {
-  const { enablePmPortfolioDashboard } = useFeatureFlags();
+  const { enablePmPortfolioDashboard, enableReassignmentSuggestions } = useFeatureFlags();
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("healthScore");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -575,6 +576,10 @@ export default function PmPortfolioDashboard() {
             )}
           </CardContent>
         </Card>
+
+        {enableReassignmentSuggestions && (
+          <ReassignmentSuggestionsCard limit={5} />
+        )}
 
         {!isLoading && summary && summary.atRiskCount > 0 && (
           <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10">

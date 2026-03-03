@@ -32,6 +32,7 @@ export interface FeatureFlags {
   enableTaskReviewQueue: boolean;
   enableProjectMilestones: boolean;
   enablePmPortfolioDashboard: boolean;
+  enableReassignmentSuggestions: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -66,6 +67,7 @@ const ALL_OFF: FeatureFlags = {
   enableTaskReviewQueue: false,
   enableProjectMilestones: false,
   enablePmPortfolioDashboard: false,
+  enableReassignmentSuggestions: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

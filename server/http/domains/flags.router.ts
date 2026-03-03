@@ -62,6 +62,7 @@ router.get("/features/flags", async (_req, res) => {
       enableTaskReviewQueue: config.features.enableTaskReviewQueue,
       enableProjectMilestones: config.features.enableProjectMilestones,
       enablePmPortfolioDashboard: config.features.enablePmPortfolioDashboard,
+      enableReassignmentSuggestions: config.features.enableReassignmentSuggestions,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);
