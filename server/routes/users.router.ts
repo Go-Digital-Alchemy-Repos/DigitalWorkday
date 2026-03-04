@@ -39,7 +39,7 @@ const avatarUpload = multer({
 
 const requireAdmin: RequestHandler = (req, res, next) => {
   const user = req.user as Express.User | undefined;
-  if (!user || (user.role !== "admin" && user.role !== "super_user")) {
+  if (!user || (user.role !== "admin" && user.role !== "tenant_owner" && user.role !== "super_user")) {
     return res.status(403).json({ ok: false, error: { code: "FORBIDDEN", message: "Admin access required", status: 403 } });
   }
   next();
