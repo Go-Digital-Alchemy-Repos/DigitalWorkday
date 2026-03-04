@@ -11,6 +11,7 @@ import {
   Users,
   PieChart,
   Database,
+  BarChart3,
 } from "lucide-react";
 import appLogo from "@assets/Symbol_1767994625714.png";
 import {
@@ -30,6 +31,7 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 const superAdminNavItems = [
   { title: "Dashboard", url: "/super-admin/dashboard", icon: LayoutDashboard, exact: false },
   { title: "Tenants", url: "/super-admin/tenants", icon: Building2, exact: false },
+  { title: "Reports", url: "/super-admin/reports", icon: BarChart3, exact: false },
   { title: "Chat System", url: "/super-admin/chat", icon: MessageSquareText, exact: false },
   { title: "User Manager", url: "/super-admin/users", icon: Users, exact: false },
   { title: "System Settings", url: "/super-admin/settings", icon: Wrench, exact: false },
