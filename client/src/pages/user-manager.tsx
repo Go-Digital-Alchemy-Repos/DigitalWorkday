@@ -8,7 +8,7 @@ import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 export default function UserManagerPage() {
   const { user, isLoading } = useAuth();
 
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "tenant_owner";
   const isSuperUser = user?.role === "super_user";
   const isEmployee = user?.role === "employee";
   const isTenantMember = isAdmin || isEmployee || isSuperUser;
