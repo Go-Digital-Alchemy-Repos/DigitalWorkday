@@ -15,10 +15,13 @@ import {
 } from "../../shared/schema";
 import { hashPassword } from "../auth";
 import { nanoid } from "nanoid";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 
 async function seed() {
   console.log("Seeding comprehensive tenant data...");
+
+  // Clean up existing data to avoid conflicts
+  await db.execute(sql`TRUNCATE TABLE tenant_integrations, client_crm, clients, task_assignees, tasks, sections, project_members, projects, workspace_members, workspaces, users, tenants CASCADE`);
 
   const passwordHash = await hashPassword("password123");
 
