@@ -6,7 +6,7 @@ import { tenantIntegrationService, IntegrationProvider } from '../../../services
 
 export const tenantIntegrationsRouter = Router();
 
-const validProviders: IntegrationProvider[] = ["mailgun", "s3"];
+const validProviders: IntegrationProvider[] = ["mailgun", "s3", "r2", "openai"];
 
 function isValidProvider(provider: string): provider is IntegrationProvider {
   return validProviders.includes(provider as IntegrationProvider);
@@ -76,6 +76,23 @@ const s3UpdateSchema = z.object({
   secretAccessKey: z.string().optional(),
 });
 
+const r2UpdateSchema = z.object({
+  bucketName: z.string().optional(),
+  accountId: z.string().optional(),
+  publicUrl: z.string().optional(),
+  keyPrefixTemplate: z.string().optional(),
+  accessKeyId: z.string().optional(),
+  secretAccessKey: z.string().optional(),
+});
+
+const openaiUpdateSchema = z.object({
+  enabled: z.boolean().optional(),
+  model: z.string().optional(),
+  maxTokens: z.number().optional(),
+  temperature: z.string().optional(),
+  apiKey: z.string().optional(),
+});
+
 tenantIntegrationsRouter.put("/tenants/:tenantId/integrations/:provider", requireSuperUser, async (req, res) => {
   try {
     const { tenantId, provider } = req.params;
@@ -95,9 +112,9 @@ tenantIntegrationsRouter.put("/tenants/:tenantId/integrations/:provider", requir
     if (provider === "mailgun") {
       const data = mailgunUpdateSchema.parse(req.body);
       publicConfig = {
-        domain: data.domain,
-        fromEmail: data.fromEmail,
-        replyTo: data.replyTo,
+        domain: data.domain?.trim(),
+        fromEmail: data.fromEmail?.trim(),
+        replyTo: data.replyTo?.trim(),
       };
       if (data.apiKey) {
         secretConfig = { apiKey: data.apiKey };
@@ -105,15 +122,48 @@ tenantIntegrationsRouter.put("/tenants/:tenantId/integrations/:provider", requir
     } else if (provider === "s3") {
       const data = s3UpdateSchema.parse(req.body);
       publicConfig = {
-        bucketName: data.bucketName,
-        region: data.region,
+        bucketName: data.bucketName?.trim(),
+        region: data.region?.trim(),
         keyPrefixTemplate: data.keyPrefixTemplate || `tenants/${tenantId}/`,
       };
       if (data.accessKeyId || data.secretAccessKey) {
         secretConfig = {
-          accessKeyId: data.accessKeyId,
+          accessKeyId: data.accessKeyId?.trim(),
           secretAccessKey: data.secretAccessKey,
         };
+      }
+    } else if (provider === "r2") {
+      const data = r2UpdateSchema.parse(req.body);
+      const accountId = data.accountId?.trim();
+      const bucketName = data.bucketName?.trim();
+      const endpoint = accountId
+        ? `https://${accountId}.r2.cloudflarestorage.com`
+        : undefined;
+      const publicUrl = data.publicUrl?.trim() || endpoint;
+      publicConfig = {
+        bucketName,
+        region: "auto",
+        accountId,
+        endpoint,
+        publicUrl,
+        keyPrefixTemplate: data.keyPrefixTemplate || `tenants/${tenantId}/`,
+      };
+      if (data.accessKeyId || data.secretAccessKey) {
+        secretConfig = {
+          accessKeyId: data.accessKeyId?.trim(),
+          secretAccessKey: data.secretAccessKey,
+        };
+      }
+    } else if (provider === "openai") {
+      const data = openaiUpdateSchema.parse(req.body);
+      publicConfig = {
+        enabled: data.enabled ?? true,
+        model: data.model ?? "gpt-4o-mini",
+        maxTokens: data.maxTokens ?? 2000,
+        temperature: data.temperature ?? "0.7",
+      };
+      if (data.apiKey) {
+        secretConfig = { apiKey: data.apiKey };
       }
     }
 

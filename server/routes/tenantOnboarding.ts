@@ -467,6 +467,7 @@ const s3UpdateSchema = z.object({
 const r2UpdateSchema = z.object({
   bucketName: z.string().optional(),
   accountId: z.string().optional(),
+  publicUrl: z.string().optional(),
   keyPrefixTemplate: z.string().optional(),
   accessKeyId: z.string().optional(),
   secretAccessKey: z.string().optional(),
@@ -517,19 +518,23 @@ router.put("/integrations/:provider", requireAuth, requireTenantAdmin, async (re
       }
     } else if (provider === "r2") {
       const data = r2UpdateSchema.parse(req.body);
-      const endpoint = data.accountId 
-        ? `https://${data.accountId}.r2.cloudflarestorage.com`
+      const accountId = data.accountId?.trim();
+      const bucketName = data.bucketName?.trim();
+      const endpoint = accountId
+        ? `https://${accountId}.r2.cloudflarestorage.com`
         : undefined;
+      const publicUrl = data.publicUrl?.trim() || endpoint;
       publicConfig = {
-        bucketName: data.bucketName,
+        bucketName,
         region: "auto",
-        accountId: data.accountId,
+        accountId,
         endpoint,
+        publicUrl,
         keyPrefixTemplate: data.keyPrefixTemplate || `tenants/${tenantId}/`,
       };
       if (data.accessKeyId || data.secretAccessKey) {
         secretConfig = {
-          accessKeyId: data.accessKeyId,
+          accessKeyId: data.accessKeyId?.trim(),
           secretAccessKey: data.secretAccessKey,
         };
       }

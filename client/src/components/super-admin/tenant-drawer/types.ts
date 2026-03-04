@@ -148,6 +148,12 @@ export interface IntegrationSummary {
   status: IntegrationStatus;
   secretConfigured: boolean;
   lastTestedAt: string | null;
+  publicConfig?: Record<string, any> | null;
+  secretMasked?: {
+    apiKeyMasked?: string | null;
+    accessKeyIdMasked?: string | null;
+    secretAccessKeyMasked?: string | null;
+  } | null;
 }
 
 export interface MailgunConfig {
@@ -163,6 +169,23 @@ export interface S3Config {
   keyPrefixTemplate?: string;
   accessKeyId?: string;
   secretAccessKey?: string;
+}
+
+export interface R2Config {
+  bucketName?: string;
+  accountId?: string;
+  publicUrl?: string;
+  keyPrefixTemplate?: string;
+  accessKeyId?: string;
+  secretAccessKey?: string;
+}
+
+export interface OpenAIConfig {
+  enabled?: boolean;
+  model?: string;
+  maxTokens?: number;
+  temperature?: string;
+  apiKey?: string;
 }
 
 export interface OnboardingProgress {
