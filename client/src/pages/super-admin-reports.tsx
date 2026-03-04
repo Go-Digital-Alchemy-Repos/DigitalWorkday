@@ -23,7 +23,7 @@ import { cn } from "@/lib/utils";
 
 const ReportsPage = lazy(() => import("@/pages/reports"));
 const SuperAdminPlatformReports = lazy(() => import("@/pages/super-admin-platform-reports"));
-const SuperAdminChatPage = lazy(() => import("@/pages/super-admin-chat"));
+const SuperAdminChatPage = lazy(() => import("@/pages/super-chat-monitoring"));
 
 interface Tenant {
   id: string;
