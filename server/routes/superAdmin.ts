@@ -79,12 +79,15 @@ router.use(asanaImportRouter);
 // =============================================================================
 
 export async function recordTenantAuditEvent(
-  tenantId: string,
+  tenantId: string | null,
   eventType: string,
   message: string,
   actorUserId?: string | null,
   metadata?: Record<string, unknown>
 ): Promise<void> {
+  if (!tenantId) {
+    return;
+  }
   try {
     await db.insert(tenantAuditEvents).values({
       tenantId,

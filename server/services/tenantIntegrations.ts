@@ -443,7 +443,15 @@ export class TenantIntegrationService {
   async testIntegration(tenantId: string | null, provider: IntegrationProvider): Promise<{ success: boolean; message: string }> {
     const integration = await this.getIntegration(tenantId, provider);
     
-    if (!integration || integration.status === IntegrationStatus.NOT_CONFIGURED) {
+    if (!integration) {
+      return { success: false, message: `${provider} is not configured` };
+    }
+
+    // For OpenAI: allow test even with stale NOT_CONFIGURED status as long as a secret exists.
+    // The test will update the status to CONFIGURED on success (self-healing).
+    const isOpenAIWithSecret = provider === "openai" && integration.secretConfigured;
+
+    if (!isOpenAIWithSecret && integration.status === IntegrationStatus.NOT_CONFIGURED) {
       return { success: false, message: `${provider} is not configured` };
     }
 
@@ -646,8 +654,21 @@ export class TenantIntegrationService {
       }
       case "r2": {
         const config = publicConfig as R2PublicConfig;
-        // R2 requires bucketName, accountId, AND secrets (accessKeyId, secretAccessKey)
         if (config.bucketName && config.accountId && hasSecret) {
+          return IntegrationStatus.CONFIGURED;
+        }
+        break;
+      }
+      case "openai": {
+        const config = publicConfig as OpenAIPublicConfig;
+        if (config.enabled && hasSecret) {
+          return IntegrationStatus.CONFIGURED;
+        }
+        break;
+      }
+      case "asana": {
+        const config = publicConfig as AsanaPublicConfig;
+        if (config.enabled && hasSecret) {
           return IntegrationStatus.CONFIGURED;
         }
         break;

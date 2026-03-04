@@ -86,12 +86,22 @@ async function getIntegrationConfig(tenantId: string | null): Promise<{
       .where(condition)
       .limit(1);
 
-    if (!integration || integration.status !== IntegrationStatus.CONFIGURED) {
+    if (!integration) {
       return { config: null, source: tenantId ? "tenant" : "system", sourceId: null };
     }
 
+    // Treat CONFIGURED or integrations with a stored secret + enabled flag as usable.
+    // This handles stale NOT_CONFIGURED status from pre-fix records in production.
     const publicConfig = integration.configPublic as OpenAIPublicConfig | null;
     if (!publicConfig?.enabled) {
+      return { config: null, source: tenantId ? "tenant" : "system", sourceId: null };
+    }
+
+    const isEffectivelyConfigured =
+      integration.status === IntegrationStatus.CONFIGURED ||
+      (integration.configEncrypted && publicConfig?.enabled);
+
+    if (!isEffectivelyConfigured) {
       return { config: null, source: tenantId ? "tenant" : "system", sourceId: null };
     }
 
