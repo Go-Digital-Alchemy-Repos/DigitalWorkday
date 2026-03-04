@@ -20,8 +20,19 @@ import { eq, sql } from "drizzle-orm";
 async function seed() {
   console.log("Seeding comprehensive tenant data...");
 
-  // Clean up existing data to avoid conflicts
-  await db.execute(sql`TRUNCATE TABLE tenant_integrations, client_crm, clients, task_assignees, tasks, sections, project_members, projects, workspace_members, workspaces, users, tenants CASCADE`);
+  // Clean up tenant-scoped data only — preserve dev workspace users (tenantId = null)
+  await db.execute(sql`DELETE FROM task_assignees WHERE task_id IN (SELECT id FROM tasks WHERE tenant_id IS NOT NULL)`);
+  await db.execute(sql`DELETE FROM tasks WHERE tenant_id IS NOT NULL`);
+  await db.execute(sql`DELETE FROM sections WHERE project_id IN (SELECT id FROM projects WHERE tenant_id IS NOT NULL)`);
+  await db.execute(sql`DELETE FROM project_members WHERE project_id IN (SELECT id FROM projects WHERE tenant_id IS NOT NULL)`);
+  await db.execute(sql`DELETE FROM projects WHERE tenant_id IS NOT NULL`);
+  await db.execute(sql`DELETE FROM workspace_members WHERE workspace_id IN (SELECT id FROM workspaces WHERE tenant_id IS NOT NULL)`);
+  await db.execute(sql`DELETE FROM workspaces WHERE tenant_id IS NOT NULL`);
+  await db.execute(sql`DELETE FROM client_crm WHERE tenant_id IS NOT NULL`);
+  await db.execute(sql`DELETE FROM clients WHERE tenant_id IS NOT NULL`);
+  await db.execute(sql`DELETE FROM tenant_integrations WHERE tenant_id IS NOT NULL`);
+  await db.execute(sql`DELETE FROM users WHERE tenant_id IS NOT NULL`);
+  await db.execute(sql`DELETE FROM tenants`);
 
   const passwordHash = await hashPassword("password123");
 
