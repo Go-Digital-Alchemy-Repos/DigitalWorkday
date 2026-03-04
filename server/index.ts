@@ -27,6 +27,7 @@ import { logAppInfo } from "./startup/appInfo";
 import { logNullTenantIdWarnings } from "./startup/tenantIdHealthCheck";
 import { repairDemoWorkspaceMembers } from "./startup/repairWorkspaceMembers";
 import { repairNullTenantProjects } from "./startup/repairNullTenantProjects";
+import { repairR2Endpoints } from "./startup/repairR2Endpoints";
 import { storage } from "./storage";
 import { evaluateSlaPolicies } from "./http/domains/support.router";
 import { evaluateConversationSla } from "./routes/modules/crm/conversations.router";
@@ -695,6 +696,9 @@ httpServer.listen(port, host, () => {
       
       // Repair projects created without tenant_id (legacy client-detail endpoint bug)
       await repairNullTenantProjects();
+      
+      // Trim whitespace from R2 endpoint URLs stored in tenant_integrations
+      await repairR2Endpoints();
       
       // Bootstrap admin user if not exists (for production first run)
       try {

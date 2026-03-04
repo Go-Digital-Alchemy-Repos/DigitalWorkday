@@ -154,7 +154,7 @@ function buildConfigFromIntegration(
   secretConfig: S3SecretConfig,
   provider: "r2"
 ): S3Config {
-  let publicUrl = publicConfig.publicUrl;
+  let publicUrl = publicConfig.publicUrl?.trim();
   if (!publicUrl || isR2ApiEndpoint(publicUrl)) {
     const envPublicUrl = process.env.CF_R2_PUBLIC_URL?.trim();
     if (envPublicUrl) {
@@ -164,13 +164,15 @@ function buildConfigFromIntegration(
     }
   }
 
+  const rawEndpoint = publicConfig.endpoint?.trim();
+
   return {
-    bucketName: publicConfig.bucketName,
-    region: publicConfig.region || "auto",
-    accessKeyId: secretConfig.accessKeyId!,
-    secretAccessKey: secretConfig.secretAccessKey!,
+    bucketName: publicConfig.bucketName?.trim(),
+    region: (publicConfig.region || "auto").trim(),
+    accessKeyId: secretConfig.accessKeyId!.trim(),
+    secretAccessKey: secretConfig.secretAccessKey!.trim(),
     keyPrefixTemplate: publicConfig.keyPrefixTemplate,
-    endpoint: publicConfig.endpoint,
+    endpoint: rawEndpoint,
     publicUrl,
     provider,
   };
