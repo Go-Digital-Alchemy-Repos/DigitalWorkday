@@ -11,10 +11,15 @@ import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Building2, ShieldAlert, Activity, CheckSquare, Clock, TrendingUp, Users, HeartPulse, ArrowUpDown, ChevronUp, ChevronDown, Sparkles, Info, Camera, Tag, Factory, X } from "lucide-react";
 import { cn } from "@/lib/utils";
+import { buildHeaders } from "@/lib/queryClient";
 import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
+
+function rfetch(url: string) {
+  return fetch(url, { credentials: "include", headers: buildHeaders() });
+}
 
 interface MetricCardProps {
   label: string;
@@ -86,7 +91,7 @@ function OverviewTab({ rangeDays, filters }: { rangeDays: number; filters: Clien
   const { data, isLoading } = useQuery<{ clients: ClientOverviewItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/overview", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/overview?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
+      const res = await rfetch(`/api/reports/v2/client/overview?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -270,7 +275,7 @@ function ActivityTab({ rangeDays, filters }: { rangeDays: number; filters: Clien
   const { data, isLoading } = useQuery<{ clients: ClientActivityItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/activity", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/activity?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
+      const res = await rfetch(`/api/reports/v2/client/activity?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -339,7 +344,7 @@ function TimeTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFil
   const { data, isLoading } = useQuery<{ clients: ClientTimeItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/time", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/time?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
+      const res = await rfetch(`/api/reports/v2/client/time?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -417,7 +422,7 @@ function TasksTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFi
   const { data, isLoading } = useQuery<{ clients: ClientTaskItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/tasks", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/tasks?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
+      const res = await rfetch(`/api/reports/v2/client/tasks?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -509,7 +514,7 @@ function SlaTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilt
   const { data, isLoading } = useQuery<{ clients: ClientSlaItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/sla", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/sla?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
+      const res = await rfetch(`/api/reports/v2/client/sla?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -598,7 +603,7 @@ function RiskTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFil
   const { data, isLoading } = useQuery<{ flagged: ClientRiskItem[]; totalChecked: number; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/risk", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/risk?${buildDateParams(rangeDays, filterParams)}`);
+      const res = await rfetch(`/api/reports/v2/client/risk?${buildDateParams(rangeDays, filterParams)}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -748,7 +753,7 @@ function HealthTab({ rangeDays, filters }: { rangeDays: number; filters: ClientF
   }>({
     queryKey: ["/api/reports/v2/client/health-index", rangeDays, filterParams],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/client/health-index?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
+      const res = await rfetch(`/api/reports/v2/client/health-index?${buildDateParams(rangeDays, { limit: "100", ...filterParams })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -1003,7 +1008,7 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
   }>({
     queryKey: ["/api/reports/v2/forecasting/client-risk-trend", horizonWeeks],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/forecasting/client-risk-trend?weeks=${horizonWeeks}`);
+      const res = await rfetch(`/api/reports/v2/forecasting/client-risk-trend?weeks=${horizonWeeks}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -1165,7 +1170,7 @@ export function ClientCommandCenter() {
   const { data: filterOptions } = useQuery<{ industries: string[]; tags: string[] }>({
     queryKey: ["/api/reports/v2/client/filter-options"],
     queryFn: async () => {
-      const res = await fetch("/api/reports/v2/client/filter-options");
+      const res = await rfetch("/api/reports/v2/client/filter-options");
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },

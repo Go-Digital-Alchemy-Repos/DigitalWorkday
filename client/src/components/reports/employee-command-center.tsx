@@ -20,10 +20,15 @@ import {
 } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { getStorageUrl } from "@/lib/storageUrl";
+import { buildHeaders } from "@/lib/queryClient";
 import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ForecastSnapshotsTab } from "./forecast-snapshots-tab";
 import { MobileTabSelect } from "./mobile-tab-select";
+
+function rfetch(url: string) {
+  return fetch(url, { credentials: "include", headers: buildHeaders() });
+}
 
 function userName(u: { firstName?: string | null; lastName?: string | null; email: string }) {
   if (u.firstName || u.lastName) return `${u.firstName ?? ""} ${u.lastName ?? ""}`.trim();
@@ -100,7 +105,7 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
   }>({
     queryKey: ["/api/reports/v2/employee/overview", rangeDays],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/overview?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await rfetch(`/api/reports/v2/employee/overview?${buildDateParams(rangeDays, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -310,7 +315,7 @@ function WorkloadTab({ rangeDays }: { rangeDays: number }) {
   }>({
     queryKey: ["/api/reports/v2/employee/workload", rangeDays],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/workload?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await rfetch(`/api/reports/v2/employee/workload?${buildDateParams(rangeDays, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -409,7 +414,7 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
   }>({
     queryKey: ["/api/reports/v2/employee/time", rangeDays],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/time?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await rfetch(`/api/reports/v2/employee/time?${buildDateParams(rangeDays, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -500,7 +505,7 @@ function CapacityTab({ rangeDays }: { rangeDays: number }) {
   }>({
     queryKey: ["/api/reports/v2/employee/capacity", rangeDays],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/capacity?${buildDateParams(rangeDays)}`);
+      const res = await rfetch(`/api/reports/v2/employee/capacity?${buildDateParams(rangeDays)}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -612,7 +617,7 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
   }>({
     queryKey: ["/api/reports/v2/employee/risk", rangeDays],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/risk?${buildDateParams(rangeDays)}`);
+      const res = await rfetch(`/api/reports/v2/employee/risk?${buildDateParams(rangeDays)}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -707,7 +712,7 @@ function TrendsTab({ rangeDays }: { rangeDays: number }) {
   const { data: teamData } = useQuery<{ employees: Array<{ userId: string; firstName: string | null; lastName: string | null; email: string }> }>({
     queryKey: ["/api/reports/v2/employee/overview", rangeDays],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/overview?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await rfetch(`/api/reports/v2/employee/overview?${buildDateParams(rangeDays, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -725,7 +730,7 @@ function TrendsTab({ rangeDays }: { rangeDays: number }) {
   }>({
     queryKey: ["/api/reports/v2/employee/trends", rangeDays, selectedUserId],
     queryFn: async () => {
-      const res = await fetch(trendsUrl);
+      const res = await rfetch(trendsUrl);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -857,7 +862,7 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
   }>({
     queryKey: ["/api/reports/v2/employee/performance", rangeDays],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/employee/performance?${buildDateParams(rangeDays, { limit: "100" })}`);
+      const res = await rfetch(`/api/reports/v2/employee/performance?${buildDateParams(rangeDays, { limit: "100" })}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -1138,7 +1143,7 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
   }>({
     queryKey: ["/api/reports/v2/forecasting/capacity-overload", horizonWeeks],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/forecasting/capacity-overload?weeks=${horizonWeeks}`);
+      const res = await rfetch(`/api/reports/v2/forecasting/capacity-overload?weeks=${horizonWeeks}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
@@ -1153,7 +1158,7 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
   }>({
     queryKey: ["/api/reports/v2/forecasting/project-deadline-risk", horizonWeeks],
     queryFn: async () => {
-      const res = await fetch(`/api/reports/v2/forecasting/project-deadline-risk?weeks=${horizonWeeks}`);
+      const res = await rfetch(`/api/reports/v2/forecasting/project-deadline-risk?weeks=${horizonWeeks}`);
       if (!res.ok) throw new Error("Failed");
       return res.json();
     },
