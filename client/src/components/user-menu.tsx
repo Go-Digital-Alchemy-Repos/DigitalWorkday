@@ -17,6 +17,7 @@ import { getStorageUrl } from "@/lib/storageUrl";
 function getRoleIcon(role: string) {
   switch (role) {
     case "super_user":
+    case "tenant_owner":
     case "admin":
       return <Shield className="h-3 w-3" />;
     case "client":
@@ -30,6 +31,8 @@ function getRoleLabel(role: string) {
   switch (role) {
     case "super_user":
       return "Super Admin";
+    case "tenant_owner":
+      return "Owner";
     case "admin":
       return "Admin";
     case "client":
@@ -37,7 +40,7 @@ function getRoleLabel(role: string) {
     case "employee":
       return "Employee";
     default:
-      return "Employee";
+      return role;
   }
 }
 
