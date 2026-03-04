@@ -16,13 +16,14 @@ import {
 } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
-import { Building2, BarChart3, Globe } from "lucide-react";
+import { Building2, BarChart3, Globe, MessageSquareText } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { cn } from "@/lib/utils";
 
 const ReportsPage = lazy(() => import("@/pages/reports"));
 const SuperAdminPlatformReports = lazy(() => import("@/pages/super-admin-platform-reports"));
+const SuperAdminChatPage = lazy(() => import("@/pages/super-admin-chat"));
 
 interface Tenant {
   id: string;
@@ -46,7 +47,7 @@ function NoTenantSelected() {
 
 export default function SuperAdminReportsPage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<"platform" | "tenant">("platform");
+  const [activeTab, setActiveTab] = useState<"platform" | "tenant" | "chat">("platform");
   const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
 
   if (user?.role !== "super_user") {
@@ -92,7 +93,7 @@ export default function SuperAdminReportsPage() {
   return (
     <Tabs
       value={activeTab}
-      onValueChange={(v) => setActiveTab(v as "platform" | "tenant")}
+      onValueChange={(v) => setActiveTab(v as "platform" | "tenant" | "chat")}
       className="flex flex-col h-full overflow-hidden"
     >
       {/* Page header + tab list */}
@@ -103,7 +104,7 @@ export default function SuperAdminReportsPage() {
           </div>
           <div>
             <h1 className="text-xl font-bold leading-tight">Reports</h1>
-            <p className="text-xs text-muted-foreground">Platform analytics and per-tenant reporting</p>
+            <p className="text-xs text-muted-foreground">Platform analytics, messaging, and per-tenant reporting</p>
           </div>
         </div>
 
@@ -115,6 +116,14 @@ export default function SuperAdminReportsPage() {
           >
             <Globe className="h-3.5 w-3.5" />
             Platform Overview
+          </TabsTrigger>
+          <TabsTrigger
+            value="chat"
+            className="rounded-none border-b-2 border-transparent data-[state=active]:border-primary data-[state=active]:bg-transparent data-[state=active]:shadow-none px-4 h-9 text-sm gap-1.5"
+            data-testid="tab-chat-system"
+          >
+            <MessageSquareText className="h-3.5 w-3.5" />
+            Chat System
           </TabsTrigger>
           <TabsTrigger
             value="tenant"
@@ -138,6 +147,21 @@ export default function SuperAdminReportsPage() {
         <div className="h-full overflow-auto">
           <Suspense fallback={<PageSkeleton />}>
             <SuperAdminPlatformReports />
+          </Suspense>
+        </div>
+      </TabsContent>
+
+      {/* Chat System tab */}
+      <TabsContent
+        value="chat"
+        className={cn(
+          "flex-1 overflow-hidden mt-0",
+          activeTab !== "chat" && "hidden"
+        )}
+      >
+        <div className="h-full overflow-auto">
+          <Suspense fallback={<PageSkeleton />}>
+            <SuperAdminChatPage />
           </Suspense>
         </div>
       </TabsContent>
