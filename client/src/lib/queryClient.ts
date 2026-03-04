@@ -171,7 +171,7 @@ export function clearActingAsState(): void {
 }
 
 // Build headers including X-Tenant-Id if acting as tenant (with super user verification)
-function buildHeaders(data?: unknown): HeadersInit {
+export function buildHeaders(data?: unknown): HeadersInit {
   const headers: HeadersInit = {};
   
   if (data) {
