@@ -136,6 +136,12 @@ export function SubtaskDetailDrawer({
   const [isCreatingTag, setIsCreatingTag] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#3b82f6");
+  const [estimateHours, setEstimateHours] = useState<number>(
+    subtask?.estimateMinutes ? Math.floor(subtask.estimateMinutes / 60) : 0
+  );
+  const [estimateMinutesPart, setEstimateMinutesPart] = useState<number>(
+    subtask?.estimateMinutes ? subtask.estimateMinutes % 60 : 0
+  );
   const [localDueDate, setLocalDueDate] = useState<Date | null>(
     subtask?.dueDate ? new Date(subtask.dueDate) : null
   );
@@ -358,9 +364,11 @@ export function SubtaskDetailDrawer({
           : subtask.description ? JSON.stringify(subtask.description) : ""
       );
       setLocalDueDate(subtask.dueDate ? new Date(subtask.dueDate) : null);
+      setEstimateHours(subtask.estimateMinutes ? Math.floor(subtask.estimateMinutes / 60) : 0);
+      setEstimateMinutesPart(subtask.estimateMinutes ? subtask.estimateMinutes % 60 : 0);
       setEditingDescription(false);
     }
-  }, [subtask?.id]);
+  }, [subtask?.id, subtask?.estimateMinutes]);
 
   const { data: activeTimer, isLoading: timerLoading } = useQuery<ActiveTimer | null>({
     queryKey: ["/api/timer/current"],
@@ -649,18 +657,39 @@ export function SubtaskDetailDrawer({
             <Clock className="h-3.5 w-3.5" />
             Estimate
           </label>
-          <Input
-            type="number"
-            min="0"
-            value={subtask.estimateMinutes || ""}
-            onChange={(e) => {
-              const val = e.target.value ? parseInt(e.target.value) : null;
-              onUpdate?.(subtask.id, { estimateMinutes: val });
-            }}
-            placeholder="Minutes"
-            className="w-full h-8"
-            data-testid="input-subtask-estimate"
-          />
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min="0"
+              value={estimateHours}
+              onChange={(e) => setEstimateHours(Math.max(0, parseInt(e.target.value) || 0))}
+              onBlur={() => {
+                const total = estimateHours * 60 + estimateMinutesPart;
+                const saved = total > 0 ? total : null;
+                if (saved !== (subtask.estimateMinutes ?? null)) onUpdate?.(subtask.id, { estimateMinutes: saved });
+              }}
+              placeholder="0"
+              className="w-full h-8"
+              data-testid="input-subtask-estimate-hours"
+            />
+            <span className="text-xs text-muted-foreground shrink-0">h</span>
+            <Input
+              type="number"
+              min="0"
+              max="59"
+              value={estimateMinutesPart}
+              onChange={(e) => setEstimateMinutesPart(Math.min(59, Math.max(0, parseInt(e.target.value) || 0)))}
+              onBlur={() => {
+                const total = estimateHours * 60 + estimateMinutesPart;
+                const saved = total > 0 ? total : null;
+                if (saved !== (subtask.estimateMinutes ?? null)) onUpdate?.(subtask.id, { estimateMinutes: saved });
+              }}
+              placeholder="0"
+              className="w-full h-8"
+              data-testid="input-subtask-estimate-minutes"
+            />
+            <span className="text-xs text-muted-foreground shrink-0">m</span>
+          </div>
         </div>
 
         <div className="space-y-2">

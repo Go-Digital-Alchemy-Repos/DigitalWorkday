@@ -180,8 +180,11 @@ export function TaskDetailDrawer({
   const [editingDescription, setEditingDescription] = useState(false);
   const [title, setTitle] = useState(task?.title || "");
   const [description, setDescription] = useState(task?.description || "");
-  const [estimateMinutes, setEstimateMinutes] = useState<string>(
-    task?.estimateMinutes ? String(task.estimateMinutes) : ""
+  const [estimateHours, setEstimateHours] = useState<number>(
+    task?.estimateMinutes ? Math.floor(task.estimateMinutes / 60) : 0
+  );
+  const [estimateMinutesPart, setEstimateMinutesPart] = useState<number>(
+    task?.estimateMinutes ? task.estimateMinutes % 60 : 0
   );
   const [selectedSubtask, setSelectedSubtask] = useState<any | null>(null);
   const [subtaskDrawerOpen, setSubtaskDrawerOpen] = useState(false);
@@ -773,7 +776,8 @@ export function TaskDetailDrawer({
     if (task) {
       setTitle(task.title);
       setDescription(task.description || "");
-      setEstimateMinutes(task.estimateMinutes ? String(task.estimateMinutes) : "");
+      setEstimateHours(task.estimateMinutes ? Math.floor(task.estimateMinutes / 60) : 0);
+      setEstimateMinutesPart(task.estimateMinutes ? task.estimateMinutes % 60 : 0);
       setEditingDescription(false);
     }
   }, [task?.id, task?.description, task?.title, task?.estimateMinutes]);
@@ -1110,21 +1114,40 @@ export function TaskDetailDrawer({
           <DatePickerWithChips value={task.dueDate ? new Date(task.dueDate) : null} onChange={(date) => onUpdate?.(task.id, { dueDate: date as any })} className="w-full h-8" data-testid="button-due-date" />
         </FormFieldWrapper>
 
-        <FormFieldWrapper label="Estimate" labelIcon={<Clock className="h-3.5 w-3.5" />} helpText="Time in minutes">
-          <Input
-            type="number"
-            min="0"
-            value={estimateMinutes}
-            onChange={(e) => setEstimateMinutes(e.target.value)}
-            onBlur={() => {
-              const val = estimateMinutes.trim();
-              const parsed = val ? parseInt(val, 10) : null;
-              if (parsed !== task.estimateMinutes) onUpdate?.(task.id, { estimateMinutes: parsed });
-            }}
-            placeholder="0"
-            className="w-full h-8"
-            data-testid="input-estimate-minutes"
-          />
+        <FormFieldWrapper label="Estimate" labelIcon={<Clock className="h-3.5 w-3.5" />}>
+          <div className="flex items-center gap-2">
+            <Input
+              type="number"
+              min="0"
+              value={estimateHours}
+              onChange={(e) => setEstimateHours(Math.max(0, parseInt(e.target.value) || 0))}
+              onBlur={() => {
+                const total = estimateHours * 60 + estimateMinutesPart;
+                const saved = total > 0 ? total : null;
+                if (saved !== task.estimateMinutes) onUpdate?.(task.id, { estimateMinutes: saved });
+              }}
+              placeholder="0"
+              className="w-full h-8"
+              data-testid="input-estimate-hours"
+            />
+            <span className="text-xs text-muted-foreground shrink-0">h</span>
+            <Input
+              type="number"
+              min="0"
+              max="59"
+              value={estimateMinutesPart}
+              onChange={(e) => setEstimateMinutesPart(Math.min(59, Math.max(0, parseInt(e.target.value) || 0)))}
+              onBlur={() => {
+                const total = estimateHours * 60 + estimateMinutesPart;
+                const saved = total > 0 ? total : null;
+                if (saved !== task.estimateMinutes) onUpdate?.(task.id, { estimateMinutes: saved });
+              }}
+              placeholder="0"
+              className="w-full h-8"
+              data-testid="input-estimate-minutes"
+            />
+            <span className="text-xs text-muted-foreground shrink-0">m</span>
+          </div>
         </FormFieldWrapper>
 
         <FormFieldWrapper label="Watchers" labelIcon={<Eye className="h-3.5 w-3.5" />}>

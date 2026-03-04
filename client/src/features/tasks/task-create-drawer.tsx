@@ -128,6 +128,8 @@ export function TaskCreateDrawer({
 }: TaskCreateDrawerProps) {
   const { toast } = useToast();
   const [hasChanges, setHasChanges] = useState(false);
+  const [createEstimateHours, setCreateEstimateHours] = useState(0);
+  const [createEstimateMinutes, setCreateEstimateMinutes] = useState(0);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
@@ -195,6 +197,8 @@ export function TaskCreateDrawer({
       setIsCreatingTag(false);
       setNewTagName("");
       setNewTagColor("#3b82f6");
+      setCreateEstimateHours(0);
+      setCreateEstimateMinutes(0);
     }
   }, [open, form]);
 
@@ -235,6 +239,8 @@ export function TaskCreateDrawer({
       setNewSubtaskTitle("");
       setQueuedFiles([]);
       setHasChanges(false);
+      setCreateEstimateHours(0);
+      setCreateEstimateMinutes(0);
       onOpenChange(false);
     } catch (error) {
       console.error("Failed to create task:", error);
@@ -249,6 +255,8 @@ export function TaskCreateDrawer({
     setNewSubtaskTitle("");
     setQueuedFiles([]);
     setHasChanges(false);
+    setCreateEstimateHours(0);
+    setCreateEstimateMinutes(0);
     onOpenChange(false);
   };
 
@@ -484,32 +492,43 @@ export function TaskCreateDrawer({
               )}
             />
 
-            <FormField
-              control={form.control}
-              name="estimateMinutes"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel className="flex items-center gap-1.5">
-                    <Clock className="h-3.5 w-3.5" />
-                    Estimate (minutes)
-                  </FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      min="0"
-                      placeholder="0"
-                      value={field.value ?? ""}
-                      onChange={(e) => {
-                        const val = e.target.value.trim();
-                        field.onChange(val ? parseInt(val, 10) : null);
-                      }}
-                      data-testid="input-estimate-minutes"
-                    />
-                  </FormControl>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
+            <FormItem>
+              <FormLabel className="flex items-center gap-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                Estimate
+              </FormLabel>
+              <div className="flex items-center gap-2">
+                <Input
+                  type="number"
+                  min="0"
+                  placeholder="0"
+                  value={createEstimateHours}
+                  onChange={(e) => {
+                    const h = Math.max(0, parseInt(e.target.value) || 0);
+                    setCreateEstimateHours(h);
+                    const total = h * 60 + createEstimateMinutes;
+                    form.setValue("estimateMinutes", total > 0 ? total : null);
+                  }}
+                  data-testid="input-estimate-hours"
+                />
+                <span className="text-xs text-muted-foreground shrink-0">h</span>
+                <Input
+                  type="number"
+                  min="0"
+                  max="59"
+                  placeholder="0"
+                  value={createEstimateMinutes}
+                  onChange={(e) => {
+                    const m = Math.min(59, Math.max(0, parseInt(e.target.value) || 0));
+                    setCreateEstimateMinutes(m);
+                    const total = createEstimateHours * 60 + m;
+                    form.setValue("estimateMinutes", total > 0 ? total : null);
+                  }}
+                  data-testid="input-estimate-minutes"
+                />
+                <span className="text-xs text-muted-foreground shrink-0">m</span>
+              </div>
+            </FormItem>
           </div>
 
           <div className="space-y-3">
