@@ -357,7 +357,6 @@ superUsersRouter.patch("/users/:userId", requireSuperUser, async (req, res) => {
       email: z.string().email().optional(),
       role: z.enum(["admin", "tenant_owner", "employee"]).optional(),
       isActive: z.boolean().optional(),
-      isProjectManager: z.boolean().optional(),
     }).parse(req.body);
     const superUser = req.user!;
     

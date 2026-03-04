@@ -2315,24 +2315,6 @@ export default function SuperAdminUsers() {
                 </SelectContent>
               </Select>
             </div>
-            {(appUserEditForm.role === "admin" || appUserEditForm.role === "tenant_owner") && (
-              <div className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-muted/30">
-                <Checkbox
-                  id="editAppUserIsProjectManager"
-                  checked={appUserEditForm.isProjectManager}
-                  onCheckedChange={(checked) => setAppUserEditForm({ ...appUserEditForm, isProjectManager: !!checked })}
-                  data-testid="checkbox-is-project-manager"
-                />
-                <div className="space-y-1 leading-none">
-                  <label htmlFor="editAppUserIsProjectManager" className="text-sm font-medium cursor-pointer">
-                    Is Project Manager
-                  </label>
-                  <p className="text-xs text-muted-foreground">
-                    Grants access to the PM Portfolio dashboard and its reports
-                  </p>
-                </div>
-              </div>
-            )}
             <div className="flex gap-3 pt-4">
               <Button 
                 onClick={handleEditAppUser} 
