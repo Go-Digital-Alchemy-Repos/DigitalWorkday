@@ -180,7 +180,6 @@ export default function SuperAdminUsers() {
     lastName: "",
     email: "",
     role: "employee" as "admin" | "tenant_owner" | "employee",
-    isProjectManager: false,
   });
   
   // Password reset link state
@@ -690,7 +689,6 @@ export default function SuperAdminUsers() {
       lastName: appUser.lastName || "",
       email: appUser.email || "",
       role: (appUser.role === "admin" || appUser.role === "tenant_owner" ? appUser.role : "employee") as "admin" | "tenant_owner" | "employee",
-      isProjectManager: (appUser as any).isProjectManager ?? false,
     });
     setAppUserEditDrawerOpen(true);
   };
@@ -709,7 +707,6 @@ export default function SuperAdminUsers() {
         lastName: appUserEditForm.lastName || undefined,
         email: appUserEditForm.email,
         role: appUserEditForm.role,
-        isProjectManager: appUserEditForm.isProjectManager,
       },
     });
   };
@@ -2262,7 +2259,7 @@ export default function SuperAdminUsers() {
       <Sheet open={appUserEditDrawerOpen} onOpenChange={(open) => {
         setAppUserEditDrawerOpen(open);
         if (!open) {
-          setAppUserEditForm({ firstName: "", lastName: "", email: "", role: "employee", isProjectManager: false });
+          setAppUserEditForm({ firstName: "", lastName: "", email: "", role: "employee" });
         }
       }}>
         <SheetContent className="w-full sm:max-w-xl" data-testid="drawer-edit-app-user">
