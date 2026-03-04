@@ -34,8 +34,8 @@ import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip
 const superAdminNavItems = [
   { title: "Dashboard",      url: "/super-admin/dashboard",     icon: LayoutDashboard, exact: false, color: "text-sky-500" },
   { title: "Tenants",        url: "/super-admin/tenants",       icon: Building2,       exact: false, color: "text-emerald-500" },
-  { title: "Reports",        url: "/super-admin/reports",       icon: BarChart3,       exact: false, color: "text-amber-500" },
   { title: "User Manager",   url: "/super-admin/users",         icon: Users,           exact: false, color: "text-violet-500" },
+  { title: "Reports",        url: "/super-admin/reports",       icon: BarChart3,       exact: false, color: "text-amber-500" },
   { title: "Data Retention", url: "/super-admin/retention",     icon: Database,        exact: false, color: "text-rose-500" },
   { title: "System Health",  url: "/super-admin/status",        icon: Activity,        exact: false, color: "text-green-500" },
   { title: "App Docs",       url: "/super-admin/docs",          icon: FileText,        exact: true,  color: "text-indigo-500" },
