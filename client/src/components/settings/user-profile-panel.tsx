@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { useAuth } from "@/lib/auth";
 import { FullScreenDrawer } from "@/components/ui/full-screen-drawer";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,6 +9,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { useToast } from "@/hooks/use-toast";
@@ -56,12 +58,17 @@ interface UserProfilePanelProps {
 
 export function UserProfilePanel({ open, onClose, user, invitations }: UserProfilePanelProps) {
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
+  const currentUserRole = (currentUser as any)?.role;
+  const isTenantOwner = currentUserRole === "tenant_owner";
+  const isSuperUser = currentUserRole === "super_user";
 
   const [isEditing, setIsEditing] = useState(false);
   const [editFirstName, setEditFirstName] = useState("");
   const [editLastName, setEditLastName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editRole, setEditRole] = useState<string>("");
+  const [editIsProjectManager, setEditIsProjectManager] = useState(false);
 
   const [showResetPassword, setShowResetPassword] = useState(false);
   const [newPassword, setNewPassword] = useState("");
@@ -77,6 +84,7 @@ export function UserProfilePanel({ open, onClose, user, invitations }: UserProfi
       setEditLastName(user.lastName || "");
       setEditEmail(user.email || "");
       setEditRole(user.role || "employee");
+      setEditIsProjectManager((user as any).isProjectManager ?? false);
     }
   }, [user]);
 
@@ -202,6 +210,7 @@ export function UserProfilePanel({ open, onClose, user, invitations }: UserProfi
       setEditLastName(user.lastName || "");
       setEditEmail(user.email || "");
       setEditRole(user.role || "employee");
+      setEditIsProjectManager((user as any).isProjectManager ?? false);
     }
   };
 
@@ -220,16 +229,21 @@ export function UserProfilePanel({ open, onClose, user, invitations }: UserProfi
       toast({ title: "Valid email is required", variant: "destructive" });
       return;
     }
-    if (!editRole || !["admin", "employee", "client"].includes(editRole)) {
+    if (!editRole || !["admin", "tenant_owner", "employee", "client"].includes(editRole)) {
       toast({ title: "Please select a valid role", variant: "destructive" });
       return;
     }
 
-    const updates: Record<string, string> = {};
+    const updates: Record<string, any> = {};
     if (editFirstName !== (user?.firstName || "")) updates.firstName = editFirstName;
     if (editLastName !== (user?.lastName || "")) updates.lastName = editLastName;
     if (editEmail !== user?.email) updates.email = editEmail;
     if (editRole !== user?.role) updates.role = editRole;
+    if (isTenantOwner && (editRole === "admin" || editRole === "tenant_owner")) {
+      if (editIsProjectManager !== ((user as any)?.isProjectManager ?? false)) {
+        updates.isProjectManager = editIsProjectManager;
+      }
+    }
 
     if (Object.keys(updates).length === 0) {
       toast({ title: "No changes to save" });
@@ -355,6 +369,9 @@ export function UserProfilePanel({ open, onClose, user, invitations }: UserProfi
                             <SelectValue placeholder="Select role" />
                           </SelectTrigger>
                           <SelectContent>
+                            {isSuperUser && (
+                              <SelectItem value="tenant_owner">Tenant Owner</SelectItem>
+                            )}
                             <SelectItem value="admin">Admin</SelectItem>
                             <SelectItem value="employee">Employee</SelectItem>
                             <SelectItem value="client">Client</SelectItem>
@@ -362,6 +379,20 @@ export function UserProfilePanel({ open, onClose, user, invitations }: UserProfi
                         </Select>
                       </div>
                     </div>
+                    {isTenantOwner && (editRole === "admin" || editRole === "tenant_owner") && (
+                      <div className="flex items-center gap-3 rounded-md border p-3 bg-muted/30">
+                        <Checkbox
+                          id="edit-pm"
+                          checked={editIsProjectManager}
+                          onCheckedChange={(checked) => setEditIsProjectManager(checked as boolean)}
+                          data-testid="checkbox-edit-is-pm"
+                        />
+                        <div className="space-y-0.5">
+                          <Label htmlFor="edit-pm" className="text-xs font-medium cursor-pointer">Is Project Manager</Label>
+                          <p className="text-xs text-muted-foreground">Grants access to the PM Portfolio dashboard</p>
+                        </div>
+                      </div>
+                    )}
                   </CardContent>
                 </Card>
               )}
