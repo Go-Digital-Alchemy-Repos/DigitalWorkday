@@ -8,6 +8,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
+import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
 import {
   AlertDialog,
@@ -59,6 +60,7 @@ interface TenantUser {
   lastName: string | null;
   role: string;
   isActive: boolean;
+  isProjectManager: boolean;
   avatarUrl: string | null;
   createdAt: string;
   updatedAt: string;
@@ -101,6 +103,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
   const [editLastName, setEditLastName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editRole, setEditRole] = useState<string>("");
+  const [editIsProjectManager, setEditIsProjectManager] = useState<boolean>(false);
 
   const { data: user, isLoading: userLoading } = useQuery<TenantUser>({
     queryKey: ["/api/v1/super/tenants", tenantId, "users", userId],
@@ -292,7 +295,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
 
   // Update user mutation
   const updateUserMutation = useMutation({
-    mutationFn: async (data: { firstName?: string; lastName?: string; email?: string; role?: string }) => {
+    mutationFn: async (data: { firstName?: string; lastName?: string; email?: string; role?: string; isProjectManager?: boolean }) => {
       const res = await apiRequest("PATCH", `/api/v1/super/tenants/${tenantId}/users/${userId}`, data);
       return res.json();
     },
@@ -337,6 +340,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
       setEditLastName(user.lastName || "");
       setEditEmail(user.email || "");
       setEditRole(user.role || "employee");
+      setEditIsProjectManager(user.isProjectManager ?? false);
     }
   }, [user]);
 
@@ -359,6 +363,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
       setEditLastName(user.lastName || "");
       setEditEmail(user.email || "");
       setEditRole(user.role || "employee");
+      setEditIsProjectManager(user.isProjectManager ?? false);
     }
   };
 
@@ -378,12 +383,12 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
       toast({ title: "Valid email is required", variant: "destructive" });
       return;
     }
-    if (!editRole || !["admin", "employee", "client"].includes(editRole)) {
+    if (!editRole || !["admin", "tenant_owner", "employee", "client"].includes(editRole)) {
       toast({ title: "Please select a valid role", variant: "destructive" });
       return;
     }
 
-    const updates: { firstName?: string; lastName?: string; email?: string; role?: string } = {};
+    const updates: { firstName?: string; lastName?: string; email?: string; role?: string; isProjectManager?: boolean } = {};
     
     if (editFirstName !== (user?.firstName || "")) {
       updates.firstName = editFirstName;
@@ -396,6 +401,9 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
     }
     if (editRole !== user?.role) {
       updates.role = editRole;
+    }
+    if (editIsProjectManager !== (user?.isProjectManager ?? false)) {
+      updates.isProjectManager = editIsProjectManager;
     }
     
     if (Object.keys(updates).length === 0) {
@@ -562,17 +570,36 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
                         </div>
                         <div className="space-y-2">
                           <Label htmlFor="edit-role">Role</Label>
-                          <Select value={editRole} onValueChange={setEditRole}>
+                          <Select value={editRole} onValueChange={(val) => { setEditRole(val); if (val !== "admin" && val !== "tenant_owner") setEditIsProjectManager(false); }}>
                             <SelectTrigger id="edit-role" data-testid="select-edit-role">
                               <SelectValue placeholder="Select role" />
                             </SelectTrigger>
                             <SelectContent>
+                              <SelectItem value="tenant_owner">Tenant Owner</SelectItem>
                               <SelectItem value="admin">Admin</SelectItem>
                               <SelectItem value="employee">Employee</SelectItem>
                               <SelectItem value="client">Client</SelectItem>
                             </SelectContent>
                           </Select>
                         </div>
+                        {(editRole === "admin" || editRole === "tenant_owner") && (
+                          <div className="col-span-2 flex flex-row items-start space-x-3 space-y-0 rounded-md border p-3 bg-muted/30">
+                            <Checkbox
+                              id="edit-is-pm"
+                              checked={editIsProjectManager}
+                              onCheckedChange={(checked) => setEditIsProjectManager(!!checked)}
+                              data-testid="checkbox-is-project-manager"
+                            />
+                            <div className="space-y-1 leading-none">
+                              <label htmlFor="edit-is-pm" className="text-sm font-medium cursor-pointer">
+                                Is Project Manager
+                              </label>
+                              <p className="text-xs text-muted-foreground">
+                                Grants access to the PM Portfolio dashboard
+                              </p>
+                            </div>
+                          </div>
+                        )}
                         <div>
                           <Label className="text-xs text-muted-foreground">Status</Label>
                           <Badge className={user.isActive ? "bg-green-600 mt-1" : "bg-gray-500 mt-1"}>
