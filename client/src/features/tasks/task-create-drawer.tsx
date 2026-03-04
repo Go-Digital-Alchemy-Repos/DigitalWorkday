@@ -333,7 +333,7 @@ export function TaskCreateDrawer({
       description="Add a new task to your project"
       hasUnsavedChanges={hasChanges}
       onConfirmClose={handleClose}
-      width="xl"
+      variant="dialog"
       footer={
         <FullScreenDrawerFooter
           onCancel={handleCancel}

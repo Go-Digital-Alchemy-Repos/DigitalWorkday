@@ -27,6 +27,7 @@ interface FullScreenDrawerProps {
   onConfirmClose?: () => void
   side?: "left" | "right"
   width?: "md" | "lg" | "xl" | "2xl" | "3xl" | "4xl" | "full"
+  variant?: "drawer" | "dialog"
 }
 
 const widthClasses = {
@@ -50,6 +51,7 @@ export function FullScreenDrawer({
   onConfirmClose,
   side = "right",
   width = "xl",
+  variant = "drawer",
 }: FullScreenDrawerProps) {
   const [showDiscardDialog, setShowDiscardDialog] = React.useState(false)
 
@@ -93,12 +95,31 @@ export function FullScreenDrawer({
     }
   }, [open])
 
-  const slideDirection = side === "right" 
-    ? "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
-    : "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left"
+  const isDialog = variant === "dialog"
 
-  const positionClass = side === "right" ? "right-0" : "left-0"
-  const borderClass = side === "right" ? "border-l" : "border-r"
+  const slideDirection = isDialog
+    ? "data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95"
+    : side === "right"
+      ? "data-[state=closed]:slide-out-to-right data-[state=open]:slide-in-from-right"
+      : "data-[state=closed]:slide-out-to-left data-[state=open]:slide-in-from-left"
+
+  const contentClass = isDialog
+    ? cn(
+        "fixed left-1/2 top-1/2 z-50 flex flex-col bg-background shadow-2xl rounded-xl border",
+        "-translate-x-1/2 -translate-y-1/2",
+        "w-[calc(100vw-32px)] max-w-[960px] max-h-[92vh]",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        slideDirection,
+      )
+    : cn(
+        "fixed inset-y-0 z-50 flex h-full flex-col bg-background shadow-xl",
+        "transition-transform duration-300 ease-in-out",
+        "data-[state=open]:animate-in data-[state=closed]:animate-out",
+        slideDirection,
+        side === "right" ? "right-0" : "left-0",
+        side === "right" ? "border-l" : "border-r",
+        widthClasses[width],
+      )
 
   return (
     <>
@@ -108,15 +129,7 @@ export function FullScreenDrawer({
             className="fixed inset-0 z-50 bg-black/50 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
           />
           <DialogPrimitive.Content
-            className={cn(
-              "fixed inset-y-0 z-50 flex h-full flex-col bg-background shadow-xl",
-              "transition-transform duration-300 ease-in-out",
-              "data-[state=open]:animate-in data-[state=closed]:animate-out",
-              slideDirection,
-              positionClass,
-              borderClass,
-              widthClasses[width]
-            )}
+            className={contentClass}
             data-testid="full-screen-drawer"
           >
             <div className="flex items-center justify-between border-b px-6 py-4 shrink-0">
