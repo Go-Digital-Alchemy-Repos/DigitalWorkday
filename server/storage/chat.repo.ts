@@ -16,7 +16,7 @@ import {
   chatMessageReactions, chatPins,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, asc, inArray, gte, lte, lt, gt, isNull, sql, ilike, or, type SQL } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, gte, lte, lt, gt, isNull, ne, sql, ilike, or, type SQL } from "drizzle-orm";
 
 export class ChatRepository {
 
@@ -636,7 +636,11 @@ export class ChatRepository {
     if (!readRecord?.lastReadMessageId) {
       const [result] = await db.select({ count: sql<number>`count(*)::int` })
         .from(chatMessages)
-        .where(and(eq(chatMessages.channelId, channelId), isNull(chatMessages.deletedAt)));
+        .where(and(
+          eq(chatMessages.channelId, channelId),
+          isNull(chatMessages.deletedAt),
+          ne(chatMessages.authorUserId, userId)
+        ));
       return result?.count ?? 0;
     }
 
@@ -651,7 +655,8 @@ export class ChatRepository {
       .where(and(
         eq(chatMessages.channelId, channelId),
         isNull(chatMessages.deletedAt),
-        gt(chatMessages.createdAt, lastReadMsg.createdAt)
+        gt(chatMessages.createdAt, lastReadMsg.createdAt),
+        ne(chatMessages.authorUserId, userId)
       ));
     return result?.count ?? 0;
   }
@@ -662,7 +667,11 @@ export class ChatRepository {
     if (!readRecord?.lastReadMessageId) {
       const [result] = await db.select({ count: sql<number>`count(*)::int` })
         .from(chatMessages)
-        .where(and(eq(chatMessages.dmThreadId, dmThreadId), isNull(chatMessages.deletedAt)));
+        .where(and(
+          eq(chatMessages.dmThreadId, dmThreadId),
+          isNull(chatMessages.deletedAt),
+          ne(chatMessages.authorUserId, userId)
+        ));
       return result?.count ?? 0;
     }
 
@@ -677,7 +686,8 @@ export class ChatRepository {
       .where(and(
         eq(chatMessages.dmThreadId, dmThreadId),
         isNull(chatMessages.deletedAt),
-        gt(chatMessages.createdAt, lastReadMsg.createdAt)
+        gt(chatMessages.createdAt, lastReadMsg.createdAt),
+        ne(chatMessages.authorUserId, userId)
       ));
     return result?.count ?? 0;
   }
@@ -709,7 +719,8 @@ export class ChatRepository {
         .from(chatMessages)
         .where(and(
           inArray(chatMessages.channelId, channelsWithNoRead),
-          isNull(chatMessages.deletedAt)
+          isNull(chatMessages.deletedAt),
+          ne(chatMessages.authorUserId, userId)
         ))
         .groupBy(chatMessages.channelId);
 
@@ -744,7 +755,8 @@ export class ChatRepository {
           .where(and(
             eq(chatMessages.channelId, channelId),
             isNull(chatMessages.deletedAt),
-            gt(chatMessages.createdAt, lastReadAt)
+            gt(chatMessages.createdAt, lastReadAt),
+            ne(chatMessages.authorUserId, userId)
           ));
         result.set(channelId, countResult?.count ?? 0);
       }
@@ -784,7 +796,8 @@ export class ChatRepository {
         .from(chatMessages)
         .where(and(
           inArray(chatMessages.dmThreadId, threadsWithNoRead),
-          isNull(chatMessages.deletedAt)
+          isNull(chatMessages.deletedAt),
+          ne(chatMessages.authorUserId, userId)
         ))
         .groupBy(chatMessages.dmThreadId);
 
@@ -819,7 +832,8 @@ export class ChatRepository {
           .where(and(
             eq(chatMessages.dmThreadId, threadId),
             isNull(chatMessages.deletedAt),
-            gt(chatMessages.createdAt, lastReadAt)
+            gt(chatMessages.createdAt, lastReadAt),
+            ne(chatMessages.authorUserId, userId)
           ));
         result.set(threadId, countResult?.count ?? 0);
       }
