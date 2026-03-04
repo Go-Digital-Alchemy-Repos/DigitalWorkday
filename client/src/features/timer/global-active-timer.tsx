@@ -67,6 +67,7 @@ export function GlobalActiveTimer() {
   const [stopDescription, setStopDescription] = useState("");
   const [stopTaskId, setStopTaskId] = useState<string | null>(null);
   const [stopClientId, setStopClientId] = useState<string | null>(null);
+  const [stopProjectId, setStopProjectId] = useState<string | null>(null);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
   const hasShownRecoveryToast = useRef(false);
 
@@ -86,6 +87,15 @@ export function GlobalActiveTimer() {
     queryKey: ["/api/clients"],
     enabled: isEligible,
   });
+
+  const { data: allProjects = [] } = useQuery<Array<{ id: string; name: string; clientId: string | null }>>({
+    queryKey: ["/api/v1/projects"],
+    enabled: isEligible,
+  });
+
+  const filteredProjects = stopClientId
+    ? allProjects.filter((p) => p.clientId === stopClientId)
+    : [];
 
   const invalidateTimer = useCallback(() => {
     queryClient.invalidateQueries({ queryKey: [TIMER_QUERY_KEY] });
@@ -291,6 +301,7 @@ export function GlobalActiveTimer() {
     setStopTitle("");
     setStopDescription("");
     setStopClientId(null);
+    setStopProjectId(null);
     setStopScope("in_scope");
   };
 
@@ -338,6 +349,10 @@ export function GlobalActiveTimer() {
     setStopClientId(timer?.clientId || null);
   }, [timer?.clientId]);
 
+  useEffect(() => {
+    setStopProjectId(timer?.projectId || null);
+  }, [timer?.projectId]);
+
   const handleOpenStopDialog = () => {
     setStopDialogOpen(true);
   };
@@ -357,7 +372,7 @@ export function GlobalActiveTimer() {
       description: stopDescription.trim() || null,
       taskId: stopTaskId,
       clientId: stopClientId,
-      projectId: timer?.projectId || null,
+      projectId: stopProjectId,
     });
   };
 
@@ -454,7 +469,11 @@ export function GlobalActiveTimer() {
               <Label>Client <span className="text-destructive">*</span></Label>
               <Select
                 value={stopClientId || ""}
-                onValueChange={(value) => setStopClientId(value || null)}
+                onValueChange={(value) => {
+                  setStopClientId(value || null);
+                  setStopProjectId(null);
+                  setStopTaskId(null);
+                }}
               >
                 <SelectTrigger data-testid="select-global-stop-client" className={!stopClientId ? "border-destructive/50" : ""}>
                   <SelectValue placeholder="Select client (required)" />
@@ -463,6 +482,29 @@ export function GlobalActiveTimer() {
                   {clients.map((client) => (
                     <SelectItem key={client.id} value={client.id}>
                       {client.displayName || client.companyName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div className="space-y-2">
+              <Label>Project (optional)</Label>
+              <Select
+                value={stopProjectId || "none"}
+                onValueChange={(value) => {
+                  setStopProjectId(value === "none" ? null : value);
+                  setStopTaskId(null);
+                }}
+                disabled={!stopClientId}
+              >
+                <SelectTrigger data-testid="select-global-stop-project">
+                  <SelectValue placeholder={stopClientId ? "Select project (optional)" : "Select client first"} />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">No project</SelectItem>
+                  {filteredProjects.map((p) => (
+                    <SelectItem key={p.id} value={p.id}>
+                      {p.name}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -483,7 +525,7 @@ export function GlobalActiveTimer() {
               <TaskSelectorWithCreate
                 taskId={stopTaskId}
                 onTaskChange={setStopTaskId}
-                projectId={null}
+                projectId={stopProjectId}
               />
             </div>
             <div className="flex items-center justify-between p-3 rounded-md border bg-muted/30">
