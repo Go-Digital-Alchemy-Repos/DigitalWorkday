@@ -34,7 +34,7 @@ async function seed() {
     firstName: "Admin",
     lastName: "User",
     passwordHash: adminPasswordHash,
-    role: "admin",
+    role: "super_user",
     isActive: true,
   }).returning();
 
@@ -693,7 +693,7 @@ async function seed() {
 
   console.log("Database seeded successfully!");
   console.log("\n=== LOGIN CREDENTIALS ===");
-  console.log("Admin:    admin@digitalworkday.com / admin123");
+  console.log("Admin:    admin@digitalworkday.com / admin123 (Super Admin)");
   console.log("Employee: sarah@digitalworkday.com / password123");
   console.log("Client:   client@example.com / password123");
   console.log("==========================\n");
