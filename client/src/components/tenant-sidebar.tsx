@@ -182,8 +182,11 @@ export function TenantSidebar() {
   const { user } = useAuth();
   const { toast } = useToast();
   const { appName, iconUrl, logoUrl } = useTenantTheme();
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "tenant_owner";
   const isSuperUser = user?.role === "super_user";
+  const canSeePmPortfolio =
+    user?.role === "tenant_owner" ||
+    (user?.role === "admin" && (user as any)?.isProjectManager === true);
   const { enablePmPortfolioDashboard } = useFeatureFlags();
 
   const { data: workspace } = useQuery<Workspace>({
@@ -426,7 +429,7 @@ export function TenantSidebar() {
                       </SidebarMenuButton>
                     </SidebarMenuItem>
                   ))}
-                  {enablePmPortfolioDashboard && isAdmin && (
+                  {enablePmPortfolioDashboard && canSeePmPortfolio && (
                     <SidebarMenuItem>
                       <SidebarMenuButton
                         asChild

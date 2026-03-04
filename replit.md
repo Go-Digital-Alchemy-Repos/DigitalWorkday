@@ -24,6 +24,8 @@ MyWorkDay is an Asana-inspired, multi-tenant project management application desi
 
 ### Core Features and Design Patterns
 - **Multi-Tenancy**: Supports multiple tenants with an admin dashboard and per-tenant user management.
+- **Role Hierarchy**: `super_user` > `tenant_owner` > `admin` > `employee` > `client`. Tenant Owner has all admin privileges plus can assign `isProjectManager` to admins. Only Super Admin can grant Tenant Owner role. `isProjectManager` flag on admins gates PM Portfolio access. Employees never see PM Portfolio.
+- **PM Portfolio Access**: Visible to `tenant_owner` (always), `admin` with `isProjectManager=true`, and `super_user`. Hidden from all other roles. Backend enforced in `pm-portfolio.router.ts`; frontend enforced in sidebar and page guard.
 - **Authentication**: Session-based authentication using Passport.js.
 - **Real-time Communication**: Socket.IO for live updates (chat, notifications).
 - **Project & Task Management**: Workspaces, teams, clients, projects, tasks (with subtasks), activity logs, time tracking, project templates, rich text comments.

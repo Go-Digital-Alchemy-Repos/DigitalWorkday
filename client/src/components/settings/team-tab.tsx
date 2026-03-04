@@ -299,10 +299,21 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
 
   const getRoleBadgeVariant = (role: string) => {
     switch (role) {
+      case "tenant_owner": return "default";
       case "admin": return "default";
       case "employee": return "secondary";
       case "client": return "outline";
       default: return "secondary";
+    }
+  };
+
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case "tenant_owner": return "Owner";
+      case "admin": return "Admin";
+      case "employee": return "Employee";
+      case "client": return "Client";
+      default: return role;
     }
   };
 
@@ -339,11 +350,11 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
     setEditTeamOpen(true);
   };
 
-  const handleCreateUser = async (data: { firstName: string; lastName: string; email: string; role: string; teamIds: string[]; clientIds: string[] }) => {
+  const handleCreateUser = async (data: { firstName: string; lastName: string; email: string; role: string; isProjectManager?: boolean; teamIds: string[]; clientIds: string[] }) => {
     await createUserMutation.mutateAsync(data);
   };
 
-  const handleUpdateUser = async (data: { firstName: string; lastName: string; email: string; role: string; isActive: boolean; teamIds: string[]; clientIds: string[] }) => {
+  const handleUpdateUser = async (data: { firstName: string; lastName: string; email: string; role: string; isActive: boolean; isProjectManager?: boolean; teamIds: string[]; clientIds: string[] }) => {
     if (!editingUser) return;
     await updateUserMutation.mutateAsync({
       id: editingUser.id,
@@ -481,9 +492,19 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
                           </div>
                         </TableCell>
                         <TableCell>
-                          <Badge variant={getRoleBadgeVariant(user.role || "employee")}>
-                            {user.role || "employee"}
-                          </Badge>
+                          <div className="flex flex-wrap gap-1">
+                            <Badge
+                              variant={getRoleBadgeVariant(user.role || "employee")}
+                              className={user.role === "tenant_owner" ? "bg-violet-600 hover:bg-violet-700 text-white" : ""}
+                            >
+                              {getRoleLabel(user.role || "employee")}
+                            </Badge>
+                            {(user.role === "admin" || user.role === "tenant_owner") && (user as any).isProjectManager && (
+                              <Badge variant="outline" className="border-cyan-500 text-cyan-600 dark:text-cyan-400 text-xs">
+                                PM
+                              </Badge>
+                            )}
+                          </div>
                         </TableCell>
                         <TableCell>
                           <div className="flex flex-col gap-1">

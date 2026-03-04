@@ -23,13 +23,15 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
 import type { User, Team, Client } from "@shared/schema";
+import { useAuth } from "@/lib/auth";
 
 const userSchema = z.object({
   firstName: z.string().min(1, "First name is required"),
   lastName: z.string().min(1, "Last name is required"),
   email: z.string().email("Valid email is required"),
-  role: z.enum(["admin", "employee", "client"]).default("employee"),
+  role: z.enum(["admin", "tenant_owner", "employee", "client"]).default("employee"),
   isActive: z.boolean().default(true),
+  isProjectManager: z.boolean().default(false),
   teamIds: z.array(z.string()).default([]),
   clientIds: z.array(z.string()).default([]),
 });
@@ -63,6 +65,12 @@ export function UserDrawer({
 }: UserDrawerProps) {
   const [hasChanges, setHasChanges] = useState(false);
   const prevOpenRef = useRef(false);
+  const { user: currentUser } = useAuth();
+
+  const currentUserRole = (currentUser as any)?.role;
+  const isSuperUser = currentUserRole === "super_user";
+  const isTenantOwner = currentUserRole === "tenant_owner";
+  const canManageProjectManager = isSuperUser || isTenantOwner;
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
@@ -72,12 +80,18 @@ export function UserDrawer({
       email: "",
       role: "employee",
       isActive: true,
+      isProjectManager: false,
       teamIds: [],
       clientIds: [],
     },
   });
 
   const watchedRole = form.watch("role");
+
+  const showIsProjectManagerCheckbox =
+    canManageProjectManager &&
+    mode === "edit" &&
+    (watchedRole === "admin" || watchedRole === "tenant_owner");
 
   useEffect(() => {
     const wasOpen = prevOpenRef.current;
@@ -89,8 +103,9 @@ export function UserDrawer({
           firstName: user.firstName || "",
           lastName: user.lastName || "",
           email: user.email,
-          role: (user.role as "admin" | "employee" | "client") || "employee",
+          role: (user.role as "admin" | "tenant_owner" | "employee" | "client") || "employee",
           isActive: user.isActive ?? true,
+          isProjectManager: (user as any).isProjectManager ?? false,
           teamIds: userTeamIds,
           clientIds: userClientIds,
         });
@@ -101,6 +116,7 @@ export function UserDrawer({
           email: "",
           role: "employee",
           isActive: true,
+          isProjectManager: false,
           teamIds: [],
           clientIds: [],
         });
@@ -227,18 +243,47 @@ export function UserDrawer({
                     </SelectTrigger>
                   </FormControl>
                   <SelectContent>
+                    {isSuperUser && (
+                      <SelectItem value="tenant_owner">Tenant Owner</SelectItem>
+                    )}
                     <SelectItem value="admin">Admin</SelectItem>
                     <SelectItem value="employee">Employee</SelectItem>
                     <SelectItem value="client">Client</SelectItem>
                   </SelectContent>
                 </Select>
                 <FormDescription>
-                  Admins have full access to settings and all data
+                  {watchedRole === "tenant_owner"
+                    ? "Tenant Owners have all admin privileges and can assign Project Manager permissions"
+                    : "Admins have full access to settings and all data"}
                 </FormDescription>
                 <FormMessage />
               </FormItem>
             )}
           />
+
+          {showIsProjectManagerCheckbox && (
+            <FormField
+              control={form.control}
+              name="isProjectManager"
+              render={({ field }) => (
+                <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-muted/30">
+                  <FormControl>
+                    <Checkbox
+                      checked={field.value}
+                      onCheckedChange={field.onChange}
+                      data-testid="checkbox-is-project-manager"
+                    />
+                  </FormControl>
+                  <div className="space-y-1 leading-none">
+                    <FormLabel>Is Project Manager</FormLabel>
+                    <FormDescription>
+                      Grants access to the PM Portfolio dashboard and its reports
+                    </FormDescription>
+                  </div>
+                </FormItem>
+              )}
+            />
+          )}
 
           {mode === "edit" && (
             <FormField

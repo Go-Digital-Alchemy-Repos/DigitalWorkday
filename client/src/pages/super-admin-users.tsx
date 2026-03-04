@@ -179,7 +179,8 @@ export default function SuperAdminUsers() {
     firstName: "",
     lastName: "",
     email: "",
-    role: "employee" as "admin" | "employee",
+    role: "employee" as "admin" | "tenant_owner" | "employee",
+    isProjectManager: false,
   });
   
   // Password reset link state
@@ -688,7 +689,8 @@ export default function SuperAdminUsers() {
       firstName: appUser.firstName || "",
       lastName: appUser.lastName || "",
       email: appUser.email || "",
-      role: (appUser.role === "admin" ? "admin" : "employee") as "admin" | "employee",
+      role: (appUser.role === "admin" || appUser.role === "tenant_owner" ? appUser.role : "employee") as "admin" | "tenant_owner" | "employee",
+      isProjectManager: (appUser as any).isProjectManager ?? false,
     });
     setAppUserEditDrawerOpen(true);
   };
@@ -707,6 +709,7 @@ export default function SuperAdminUsers() {
         lastName: appUserEditForm.lastName || undefined,
         email: appUserEditForm.email,
         role: appUserEditForm.role,
+        isProjectManager: appUserEditForm.isProjectManager,
       },
     });
   };
@@ -2259,7 +2262,7 @@ export default function SuperAdminUsers() {
       <Sheet open={appUserEditDrawerOpen} onOpenChange={(open) => {
         setAppUserEditDrawerOpen(open);
         if (!open) {
-          setAppUserEditForm({ firstName: "", lastName: "", email: "", role: "employee" });
+          setAppUserEditForm({ firstName: "", lastName: "", email: "", role: "employee", isProjectManager: false });
         }
       }}>
         <SheetContent className="w-full sm:max-w-xl" data-testid="drawer-edit-app-user">
@@ -2303,17 +2306,36 @@ export default function SuperAdminUsers() {
               <Label htmlFor="editAppUserRole">Role</Label>
               <Select
                 value={appUserEditForm.role}
-                onValueChange={(value) => setAppUserEditForm({ ...appUserEditForm, role: value as "admin" | "employee" })}
+                onValueChange={(value) => setAppUserEditForm({ ...appUserEditForm, role: value as "admin" | "tenant_owner" | "employee" })}
               >
                 <SelectTrigger id="editAppUserRole" data-testid="select-edit-app-user-role">
                   <SelectValue placeholder="Select role" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="tenant_owner">Tenant Owner</SelectItem>
                   <SelectItem value="admin">Admin</SelectItem>
                   <SelectItem value="employee">Employee</SelectItem>
                 </SelectContent>
               </Select>
             </div>
+            {(appUserEditForm.role === "admin" || appUserEditForm.role === "tenant_owner") && (
+              <div className="flex flex-row items-start space-x-3 space-y-0 rounded-md border p-4 bg-muted/30">
+                <Checkbox
+                  id="editAppUserIsProjectManager"
+                  checked={appUserEditForm.isProjectManager}
+                  onCheckedChange={(checked) => setAppUserEditForm({ ...appUserEditForm, isProjectManager: !!checked })}
+                  data-testid="checkbox-is-project-manager"
+                />
+                <div className="space-y-1 leading-none">
+                  <label htmlFor="editAppUserIsProjectManager" className="text-sm font-medium cursor-pointer">
+                    Is Project Manager
+                  </label>
+                  <p className="text-xs text-muted-foreground">
+                    Grants access to the PM Portfolio dashboard and its reports
+                  </p>
+                </div>
+              </div>
+            )}
             <div className="flex gap-3 pt-4">
               <Button 
                 onClick={handleEditAppUser} 

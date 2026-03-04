@@ -342,6 +342,24 @@ router.patch("/users/:id", requireAdmin, async (req, res) => {
     const targetUser = await storage.getUserByIdAndTenant(id, tenantId);
     if (!targetUser) throw AppError.notFound("User not found in your organization");
 
+    const currentRole = currentUser?.role;
+    const isSuperUser = currentRole === "super_user";
+    const isTenantOwner = currentRole === "tenant_owner";
+
+    // Only super_user can assign or revoke tenant_owner role
+    if (updates.role === "tenant_owner" || (targetUser.role === "tenant_owner" && updates.role && updates.role !== "tenant_owner")) {
+      if (!isSuperUser) {
+        return res.status(403).json({ error: "Only Super Admins can assign or revoke the Tenant Owner role." });
+      }
+    }
+
+    // Only tenant_owner or super_user can set isProjectManager
+    if ("isProjectManager" in updates) {
+      if (!isSuperUser && !isTenantOwner) {
+        return res.status(403).json({ error: "Only Tenant Owners or Super Admins can assign Project Manager permissions." });
+      }
+    }
+
     const user = await storage.updateUser(id, updates);
     if (!user) throw AppError.notFound("User");
     res.json(user);

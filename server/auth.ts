@@ -388,8 +388,19 @@ export const requireAdmin: RequestHandler = (req, res, next) => {
   if (!req.isAuthenticated()) {
     return res.status(401).json({ error: "Authentication required" });
   }
-  if (req.user?.role !== "admin") {
+  if (req.user?.role !== "admin" && req.user?.role !== "tenant_owner") {
     return res.status(403).json({ error: "Admin access required" });
+  }
+  next();
+};
+
+export const requireTenantOwnerOrSuper: RequestHandler = (req, res, next) => {
+  if (!req.isAuthenticated()) {
+    return res.status(401).json({ error: "Authentication required" });
+  }
+  const role = req.user?.role;
+  if (role !== "tenant_owner" && role !== "super_user") {
+    return res.status(403).json({ error: "Tenant Owner or Super Admin access required" });
   }
   next();
 };

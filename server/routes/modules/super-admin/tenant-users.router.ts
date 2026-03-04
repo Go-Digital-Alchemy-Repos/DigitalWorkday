@@ -500,7 +500,7 @@ const updateUserSchema = z.object({
   firstName: z.string().min(1).optional(),
   lastName: z.string().optional(),
   name: z.string().min(1).optional(),
-  role: z.enum(["admin", "employee", "client"]).optional(),
+  role: z.enum(["admin", "tenant_owner", "employee", "client"]).optional(),
   isActive: z.boolean().optional(),
 });
 

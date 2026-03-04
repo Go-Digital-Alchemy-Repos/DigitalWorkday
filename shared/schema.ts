@@ -65,9 +65,10 @@ export const TimerStatus = {
   PAUSED: "paused",
 } as const;
 
-// User role enum (Admin, Employee, Client, Super User)
+// User role enum (Admin, Employee, Client, Super User, Tenant Owner)
 export const UserRole = {
   SUPER_USER: "super_user",
+  TENANT_OWNER: "tenant_owner",
   ADMIN: "admin",
   EMPLOYEE: "employee",
   CLIENT: "client",
@@ -525,6 +526,7 @@ export const users = pgTable("users", {
   passwordHash: text("password_hash"),
   avatarUrl: text("avatar_url"),
   role: text("role").notNull().default("employee"),
+  isProjectManager: boolean("is_project_manager").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
   googleId: text("google_id").unique(),
   mustChangePasswordOnNextLogin: boolean("must_change_password_on_next_login").notNull().default(false),
@@ -3003,7 +3005,7 @@ export const insertInvitationSchema = createInsertSchema(invitations).omit({
   id: true,
   createdAt: true,
 }).extend({
-  role: z.enum([UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.CLIENT]).default(UserRole.EMPLOYEE),
+  role: z.enum([UserRole.ADMIN, UserRole.TENANT_OWNER, UserRole.EMPLOYEE, UserRole.CLIENT]).default(UserRole.EMPLOYEE),
   status: z.enum([InvitationStatus.PENDING, InvitationStatus.ACCEPTED, InvitationStatus.EXPIRED, InvitationStatus.REVOKED]).default(InvitationStatus.PENDING),
 });
 
@@ -3107,7 +3109,7 @@ export const insertChatExportJobSchema = createInsertSchema(chatExportJobs).omit
 
 // Enhanced user insert schema with role validation
 export const insertUserWithRoleSchema = insertUserSchema.extend({
-  role: z.enum([UserRole.ADMIN, UserRole.EMPLOYEE, UserRole.CLIENT]).default(UserRole.EMPLOYEE),
+  role: z.enum([UserRole.ADMIN, UserRole.TENANT_OWNER, UserRole.EMPLOYEE, UserRole.CLIENT]).default(UserRole.EMPLOYEE),
 });
 
 // Types

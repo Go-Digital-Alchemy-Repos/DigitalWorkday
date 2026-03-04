@@ -140,7 +140,10 @@ function TableSkeleton() {
 export default function PmPortfolioDashboard() {
   const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary } = useFeatureFlags();
   const { user } = useAuth();
-  const isAdmin = user?.role === "admin" || user?.role === "super_user";
+  const canAccessPmPortfolio =
+    user?.role === "super_user" ||
+    user?.role === "tenant_owner" ||
+    (user?.role === "admin" && (user as any)?.isProjectManager === true);
   const [search, setSearch] = useState("");
   const [sortKey, setSortKey] = useState<SortKey>("healthScore");
   const [sortDir, setSortDir] = useState<SortDir>("asc");
@@ -152,7 +155,7 @@ export default function PmPortfolioDashboard() {
     refetchOnWindowFocus: false,
   });
 
-  if (!enablePmPortfolioDashboard || !isAdmin) {
+  if (!enablePmPortfolioDashboard || !canAccessPmPortfolio) {
     return <Redirect to="/" />;
   }
 

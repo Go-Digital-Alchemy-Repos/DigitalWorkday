@@ -27,8 +27,12 @@ router.get("/pm/portfolio", async (req: Request, res: Response) => {
     }
 
     const user = req.user as any;
-    if (!user || (user.role !== "admin" && user.role !== "super_user")) {
-      return res.status(403).json({ error: "PM Portfolio is only available to tenant admins." });
+    const canAccessPmPortfolio =
+      user?.role === "super_user" ||
+      user?.role === "tenant_owner" ||
+      (user?.role === "admin" && user?.isProjectManager === true);
+    if (!user || !canAccessPmPortfolio) {
+      return res.status(403).json({ error: "PM Portfolio access requires Project Manager permission." });
     }
 
     const tenantId = getEffectiveTenantId(req);
