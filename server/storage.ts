@@ -1264,18 +1264,26 @@ export class DatabaseStorage implements IStorage {
   }
 
   async createTask(insertTask: InsertTask): Promise<Task> {
-    const existingTasks = insertTask.sectionId 
-      ? await db.select().from(tasks).where(and(
-          eq(tasks.sectionId, insertTask.sectionId),
-          sql`${tasks.parentTaskId} IS NULL`
-        ))
-      : insertTask.projectId 
-        ? await db.select().from(tasks).where(and(
-            eq(tasks.projectId, insertTask.projectId),
+    let orderIndex = insertTask.orderIndex;
+    if (orderIndex === undefined) {
+      if (insertTask.sectionId) {
+        await db.update(tasks)
+          .set({ orderIndex: sql`${tasks.orderIndex} + 1` })
+          .where(and(
+            eq(tasks.sectionId, insertTask.sectionId),
             sql`${tasks.parentTaskId} IS NULL`
-          ))
-        : [];
-    const orderIndex = insertTask.orderIndex ?? existingTasks.length;
+          ));
+      } else if (insertTask.projectId) {
+        await db.update(tasks)
+          .set({ orderIndex: sql`${tasks.orderIndex} + 1` })
+          .where(and(
+            eq(tasks.projectId, insertTask.projectId),
+            sql`${tasks.parentTaskId} IS NULL`,
+            sql`${tasks.sectionId} IS NULL`
+          ));
+      }
+      orderIndex = 0;
+    }
     const [task] = await db.insert(tasks).values({ ...insertTask, orderIndex }).returning();
     return task;
   }
@@ -2856,11 +2864,18 @@ export class DatabaseStorage implements IStorage {
 
   async createTaskWithTenant(insertTask: InsertTask, tenantId: string): Promise<Task> {
     let orderIndex = insertTask.orderIndex;
-    if (orderIndex === undefined && insertTask.sectionId) {
-      const existingTasks = await db.select().from(tasks).where(eq(tasks.sectionId, insertTask.sectionId));
-      orderIndex = existingTasks.length;
+    if (orderIndex === undefined) {
+      if (insertTask.sectionId) {
+        await db.update(tasks)
+          .set({ orderIndex: sql`${tasks.orderIndex} + 1` })
+          .where(and(
+            eq(tasks.sectionId, insertTask.sectionId),
+            sql`${tasks.parentTaskId} IS NULL`
+          ));
+      }
+      orderIndex = 0;
     }
-    const [task] = await db.insert(tasks).values({ ...insertTask, tenantId, orderIndex: orderIndex ?? 0 }).returning();
+    const [task] = await db.insert(tasks).values({ ...insertTask, tenantId, orderIndex }).returning();
     return task;
   }
 

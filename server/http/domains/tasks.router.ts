@@ -717,8 +717,7 @@ router.patch("/tasks/:id", async (req, res) => {
               const openTasks = sectionTasks.filter(t => t.id !== task.id && t.status !== "done" && t.status !== "completed");
               targetIndex = openTasks.length;
             } else {
-              const openTasks = sectionTasks.filter(t => t.id !== task.id && t.status !== "done" && t.status !== "completed");
-              targetIndex = openTasks.length;
+              targetIndex = 0;
             }
             if (currentIndex !== targetIndex) {
               await storage.moveTask(task.id, task.sectionId, targetIndex);
