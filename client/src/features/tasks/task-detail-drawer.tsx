@@ -158,7 +158,7 @@ export function TaskDetailDrawer({
   );
 
   const { user: currentUser } = useAuth();
-  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
+  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user" || currentUser?.role === "tenant_owner";
   const isClientUser = currentUser?.role === "client";
   const { enableTaskReviewQueue, enableProjectMilestones, enableBillingApprovalWorkflow } = useFeatureFlags();
 
@@ -351,7 +351,7 @@ export function TaskDetailDrawer({
     onSuccess: () => {
       invalidateTaskQueries();
       queryClient.invalidateQueries({ queryKey: ["/api/dashboard/review-queue"] });
-      toast({ title: "Review cleared" });
+      toast({ title: "Review cleared", description: "Assignees have been notified" });
     },
     onError: (error: any) => {
       toast({ title: "Failed to clear review", description: error?.message || "Please try again", variant: "destructive" });
@@ -973,6 +973,14 @@ export function TaskDetailDrawer({
               data-testid="badge-review-requested"
             >
               Review Requested
+            </Badge>
+          )}
+          {enableTaskReviewQueue && !(task as any).needsPmReview && (task as any).pmReviewResolvedAt && (
+            <Badge
+              className="bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700 shrink-0"
+              data-testid="badge-cleared-review"
+            >
+              Cleared Review
             </Badge>
           )}
         </div>

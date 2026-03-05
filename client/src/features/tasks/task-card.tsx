@@ -207,6 +207,16 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
               </Badge>
             </div>
           )}
+          {enableTaskReviewQueue && !(task as any).needsPmReview && (task as any).pmReviewResolvedAt && (
+            <div className="pl-6">
+              <Badge
+                className="text-xs bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700"
+                data-testid={`badge-cleared-review-${task.id}`}
+              >
+                Cleared Review
+              </Badge>
+            </div>
+          )}
 
           {task.description && getPreviewText(task.description, 150) && (
             <p className="text-xs text-muted-foreground line-clamp-2 pl-6">
@@ -331,6 +341,14 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
                 Review
               </Badge>
             )}
+            {enableTaskReviewQueue && !(task as any).needsPmReview && (task as any).pmReviewResolvedAt && (
+              <Badge
+                className="text-xs bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700"
+                data-testid={`badge-cleared-review-${task.id}`}
+              >
+                Cleared Review
+              </Badge>
+            )}
             {subtaskCount > 0 && (
               <span className="text-xs text-muted-foreground">
                 {completedSubtasks}/{subtaskCount}
@@ -435,6 +453,14 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
               data-testid={`badge-review-${task.id}`}
             >
               Review
+            </Badge>
+          )}
+          {enableTaskReviewQueue && !(task as any).needsPmReview && (task as any).pmReviewResolvedAt && (
+            <Badge
+              className="text-xs shrink-0 bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700"
+              data-testid={`badge-cleared-review-${task.id}`}
+            >
+              Cleared Review
             </Badge>
           )}
           {subtaskCount > 0 && (

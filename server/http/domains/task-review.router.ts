@@ -92,6 +92,7 @@ router.post("/tasks/:taskId/review/clear", async (req: Request, res: Response) =
         tenantId: tasks.tenantId,
         projectId: tasks.projectId,
         status: tasks.status,
+        title: tasks.title,
       })
       .from(tasks)
       .where(eq(tasks.id, taskId));
@@ -105,7 +106,7 @@ router.post("/tasks/:taskId/review/clear", async (req: Request, res: Response) =
     }
 
     const userRole = (req.user as any)?.role;
-    const isAdmin = userRole === "admin" || userRole === "super_user";
+    const isAdmin = userRole === "admin" || userRole === "super_user" || userRole === "tenant_owner";
 
     if (!isAdmin) {
       let isProjectOwner = false;
@@ -154,6 +155,31 @@ router.post("/tasks/:taskId/review/clear", async (req: Request, res: Response) =
         status: tasks.status,
       });
 
+    const [currentUser] = await db
+      .select({ firstName: users.firstName, lastName: users.lastName })
+      .from(users)
+      .where(eq(users.id, userId));
+    const clearedByName = currentUser
+      ? `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() || "A PM"
+      : "A PM";
+
+    const assignees = await db
+      .select({ userId: taskAssignees.userId })
+      .from(taskAssignees)
+      .where(eq(taskAssignees.taskId, taskId));
+
+    const notifContext = { tenantId: tenantId || task.tenantId, excludeUserId: userId };
+    for (const assignee of assignees) {
+      notifyTaskStatusChanged(
+        assignee.userId,
+        taskId,
+        task.title,
+        "cleared_review",
+        clearedByName,
+        notifContext
+      ).catch((err) => console.error("[task-review] notification error:", err));
+    }
+
     res.json({ ok: true, task: updated });
   } catch (error) {
     return handleRouteError(res, error, "POST /api/tasks/:taskId/review/clear", req);
@@ -167,7 +193,7 @@ router.get("/dashboard/review-queue", async (req: Request, res: Response) => {
     const tenantId = getEffectiveTenantId(req);
     const userId = getCurrentUserId(req);
     const userRole = (req.user as any)?.role;
-    const isAdmin = userRole === "admin" || userRole === "super_user";
+    const isAdmin = userRole === "admin" || userRole === "super_user" || userRole === "tenant_owner";
 
     if (!tenantId) {
       return res.json({ items: [] });
