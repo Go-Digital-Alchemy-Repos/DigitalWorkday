@@ -355,11 +355,11 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
     setEditTeamOpen(true);
   };
 
-  const handleCreateUser = async (data: { firstName: string; lastName: string; email: string; role: string; isProjectManager?: boolean; teamIds: string[]; clientIds: string[] }) => {
+  const handleCreateUser = async (data: { firstName: string; lastName: string; email: string; role: string; isProjectManager?: boolean; costRate?: string; billableRate?: string; teamIds: string[]; clientIds: string[] }) => {
     await createUserMutation.mutateAsync(data);
   };
 
-  const handleUpdateUser = async (data: { firstName: string; lastName: string; email: string; role: string; isActive: boolean; isProjectManager?: boolean; teamIds: string[]; clientIds: string[] }) => {
+  const handleUpdateUser = async (data: { firstName: string; lastName: string; email: string; role: string; isActive: boolean; isProjectManager?: boolean; costRate?: string; billableRate?: string; teamIds: string[]; clientIds: string[] }) => {
     if (!editingUser) return;
     await updateUserMutation.mutateAsync({
       id: editingUser.id,

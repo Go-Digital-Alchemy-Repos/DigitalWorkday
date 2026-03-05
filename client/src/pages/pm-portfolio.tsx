@@ -380,6 +380,108 @@ function BillingApprovalQueueCard() {
   );
 }
 
+interface LowMarginClient {
+  clientId: string;
+  clientName: string;
+  revenue: number;
+  laborCost: number;
+  grossMargin: number;
+  marginPercent: number;
+  billableHours: number;
+  totalHours: number;
+}
+
+function LowMarginClientsCard() {
+  const { toast } = useToast();
+  const [threshold, setThreshold] = useState("20");
+
+  const { data: clients = [], isLoading } = useQuery<LowMarginClient[]>({
+    queryKey: ["/api/analytics/client-profitability", threshold],
+    queryFn: async () => {
+      const params = new URLSearchParams({ marginThreshold: threshold });
+      const res = await fetch(`/api/analytics/client-profitability?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load profitability data");
+      return res.json();
+    },
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const fmt = (n: number) => n.toLocaleString("en-US", { minimumFractionDigits: 0, maximumFractionDigits: 0 });
+
+  return (
+    <Card data-testid="card-low-margin-clients">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <DollarSign className="h-4 w-4 text-amber-500" />
+            Low Margin Clients
+            {clients.length > 0 && (
+              <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700 ml-1" data-testid="badge-low-margin-count">
+                {clients.length}
+              </Badge>
+            )}
+          </CardTitle>
+          <div className="flex items-center gap-2">
+            <span className="text-xs text-muted-foreground">Threshold:</span>
+            <Select value={threshold} onValueChange={setThreshold}>
+              <SelectTrigger className="w-20 h-7 text-xs" data-testid="select-margin-threshold">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10%</SelectItem>
+                <SelectItem value="20">20%</SelectItem>
+                <SelectItem value="30">30%</SelectItem>
+                <SelectItem value="40">40%</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="px-4 pb-4 space-y-2">
+            {[1, 2].map((i) => <Skeleton key={i} className="h-12 w-full rounded" />)}
+          </div>
+        ) : clients.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+            <DollarSign className="h-8 w-8 mb-2 opacity-20" />
+            <p className="text-sm">No low-margin clients</p>
+            <p className="text-xs mt-0.5">All clients above {threshold}% margin threshold</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {clients.map((client) => (
+              <div key={client.clientId} className="flex items-center gap-3 px-4 py-3" data-testid={`low-margin-client-${client.clientId}`}>
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium truncate" data-testid={`text-lm-client-name-${client.clientId}`}>
+                    {client.clientName || "Unknown Client"}
+                  </p>
+                  <p className="text-xs text-muted-foreground tabular-nums">
+                    ${fmt(client.revenue)} rev · ${fmt(client.laborCost)} cost · {client.totalHours.toFixed(1)}h
+                  </p>
+                </div>
+                <div className="shrink-0">
+                  {client.marginPercent < 0 ? (
+                    <Badge className="bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700 gap-1 text-xs" data-testid={`badge-margin-${client.clientId}`}>
+                      <X className="h-3 w-3" />
+                      {client.marginPercent.toFixed(1)}%
+                    </Badge>
+                  ) : (
+                    <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700 text-xs" data-testid={`badge-margin-${client.clientId}`}>
+                      {client.marginPercent.toFixed(1)}%
+                    </Badge>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 interface InvoiceDraftItem {
   id: string;
   timeEntryId: string | null;
@@ -741,7 +843,7 @@ function InvoiceDraftsCard() {
 }
 
 export default function PmPortfolioDashboard() {
-  const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary, enableBillingApprovalWorkflow, enableInvoiceDraftBuilder } = useFeatureFlags();
+  const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary, enableBillingApprovalWorkflow, enableInvoiceDraftBuilder, enableClientProfitability } = useFeatureFlags();
   const { user } = useAuth();
   const canAccessPmPortfolio =
     user?.role === "super_user" ||
@@ -1203,6 +1305,10 @@ export default function PmPortfolioDashboard() {
 
         {enableInvoiceDraftBuilder && (
           <InvoiceDraftsCard />
+        )}
+
+        {enableClientProfitability && (
+          <LowMarginClientsCard />
         )}
 
         {enableReassignmentSuggestions && (

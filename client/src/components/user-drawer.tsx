@@ -32,6 +32,8 @@ const userSchema = z.object({
   role: z.enum(["admin", "tenant_owner", "employee", "client"]).default("employee"),
   isActive: z.boolean().default(true),
   isProjectManager: z.boolean().default(false),
+  costRate: z.string().default("0"),
+  billableRate: z.string().default("0"),
   teamIds: z.array(z.string()).default([]),
   clientIds: z.array(z.string()).default([]),
 });
@@ -81,6 +83,8 @@ export function UserDrawer({
       role: "employee",
       isActive: true,
       isProjectManager: false,
+      costRate: "0",
+      billableRate: "0",
       teamIds: [],
       clientIds: [],
     },
@@ -106,6 +110,8 @@ export function UserDrawer({
           role: (user.role as "admin" | "tenant_owner" | "employee" | "client") || "employee",
           isActive: user.isActive ?? true,
           isProjectManager: (user as any).isProjectManager ?? false,
+          costRate: String((user as any).costRate ?? "0"),
+          billableRate: String((user as any).billableRate ?? "0"),
           teamIds: userTeamIds,
           clientIds: userClientIds,
         });
@@ -117,6 +123,8 @@ export function UserDrawer({
           role: "employee",
           isActive: true,
           isProjectManager: false,
+          costRate: "0",
+          billableRate: "0",
           teamIds: [],
           clientIds: [],
         });
@@ -283,6 +291,56 @@ export function UserDrawer({
                 </FormItem>
               )}
             />
+          )}
+
+          {(isSuperUser || isTenantOwner || (currentUserRole === "admin")) && (
+            <div className="space-y-3">
+              <div className="text-xs font-medium text-muted-foreground uppercase tracking-wide pt-1">Billing Rates</div>
+              <div className="grid grid-cols-2 gap-3">
+                <FormField
+                  control={form.control}
+                  name="costRate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm">Cost Rate ($/hr)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          {...field}
+                          placeholder="0.00"
+                          data-testid="input-cost-rate"
+                        />
+                      </FormControl>
+                      <FormDescription className="text-xs">Internal labor cost per hour</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <FormField
+                  control={form.control}
+                  name="billableRate"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel className="text-sm">Billable Rate ($/hr)</FormLabel>
+                      <FormControl>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="0.01"
+                          {...field}
+                          placeholder="0.00"
+                          data-testid="input-billable-rate"
+                        />
+                      </FormControl>
+                      <FormDescription className="text-xs">Rate billed to clients</FormDescription>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            </div>
           )}
 
           {mode === "edit" && (
