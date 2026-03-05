@@ -321,9 +321,9 @@ export default function ProjectPage() {
     mutationFn: async (moves: { itemType: string; taskId: string; toSectionId: string; toIndex: number }[]) => {
       return apiRequest("PATCH", `/api/projects/${projectId}/tasks/reorder`, { moves });
     },
-    onSuccess: () => {
+    onSuccess: async () => {
+      await queryClient.refetchQueries({ queryKey: ["/api/projects", projectId, "sections"] });
       setLocalSections(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
     },
     onError: () => {
       setLocalSections(null);

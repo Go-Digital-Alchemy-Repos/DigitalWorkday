@@ -331,7 +331,7 @@ export default function ReportsPage() {
   const [currentView, setCurrentView] = useState<ReportView>("landing");
   const flags = useFeatureFlags();
 
-  const isAdmin = user?.role === "admin";
+  const isAdmin = user?.role === "admin" || user?.role === "tenant_owner";
   const isSuperUser = user?.role === "super_user";
 
   if (isLoading) {

@@ -714,8 +714,7 @@ router.patch("/tasks/:id", async (req, res) => {
           if (currentIndex !== -1) {
             let targetIndex: number;
             if (isCompleting) {
-              const openTasks = sectionTasks.filter(t => t.id !== task.id && t.status !== "done" && t.status !== "completed");
-              targetIndex = openTasks.length;
+              targetIndex = sectionTasks.length - 1;
             } else {
               targetIndex = 0;
             }

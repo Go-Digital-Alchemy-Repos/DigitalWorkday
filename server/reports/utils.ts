@@ -77,7 +77,11 @@ export function reportingGuard(req: Request, res: Response, next: NextFunction) 
     return next(AppError.unauthorized("Authentication required"));
   }
   const user = req.user as any;
-  if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
+  if (
+    user.role !== UserRole.ADMIN &&
+    user.role !== UserRole.SUPER_USER &&
+    user.role !== "tenant_owner"
+  ) {
     return next(AppError.forbidden("Admin access required for reports"));
   }
   next();
@@ -85,7 +89,7 @@ export function reportingGuard(req: Request, res: Response, next: NextFunction) 
 
 export function getTenantId(req: Request): string {
   const user = req.user as any;
-  const tenantId = user?.tenantId;
+  const tenantId = (req as any).tenant?.effectiveTenantId || user?.tenantId;
   if (!tenantId) throw AppError.forbidden("No tenant context");
   return tenantId;
 }
