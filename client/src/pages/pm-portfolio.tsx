@@ -31,6 +31,11 @@ import {
   Zap,
   Timer,
   Users,
+  Phone,
+  Send,
+  CalendarClock,
+  PhoneCall,
+  MailCheck,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -1095,8 +1100,272 @@ function RevenueLeakageCard() {
   );
 }
 
+interface CommunicationHealthSummary {
+  projectsNeedingFollowup: number;
+  clientsNotContactedRecently: number;
+  statusReportsSentThisWeek: number;
+  staleProjects: number;
+  warningProjects: number;
+  healthyProjects: number;
+}
+
+function ClientCommunicationHealthCard() {
+  const { data, isLoading } = useQuery<CommunicationHealthSummary>({
+    queryKey: ["/api/communication/health-summary"],
+    staleTime: 2 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const total = (data?.staleProjects ?? 0) + (data?.warningProjects ?? 0) + (data?.healthyProjects ?? 0);
+
+  return (
+    <Card data-testid="card-communication-health">
+      <CardHeader className="pb-2 pt-4 px-4">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <PhoneCall className="h-4 w-4 text-blue-500" />
+          Client Communication Health
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-4 pb-4">
+        {isLoading ? (
+          <div className="space-y-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ) : (
+          <>
+            <div className="grid grid-cols-3 gap-3 mb-4">
+              <div className="rounded-lg border bg-card p-3 text-center" data-testid="metric-needs-followup">
+                <p className="text-2xl font-bold text-amber-600 dark:text-amber-400">
+                  {data?.projectsNeedingFollowup ?? 0}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Needing Follow-Up</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3 text-center" data-testid="metric-clients-uncontacted">
+                <p className="text-2xl font-bold text-red-600 dark:text-red-400">
+                  {data?.clientsNotContactedRecently ?? 0}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Clients Uncontacted</p>
+              </div>
+              <div className="rounded-lg border bg-card p-3 text-center" data-testid="metric-reports-week">
+                <p className="text-2xl font-bold text-green-600 dark:text-green-400">
+                  {data?.statusReportsSentThisWeek ?? 0}
+                </p>
+                <p className="text-xs text-muted-foreground mt-0.5">Reports This Week</p>
+              </div>
+            </div>
+
+            {total > 0 && (
+              <div className="space-y-1.5">
+                <p className="text-xs font-medium text-muted-foreground mb-2">Health Distribution</p>
+                <div className="flex items-center gap-2 text-xs">
+                  <div className="w-2 h-2 rounded-full bg-green-500 flex-shrink-0" />
+                  <span className="text-muted-foreground flex-1">Healthy (contacted within 7 days)</span>
+                  <span className="font-medium">{data?.healthyProjects ?? 0}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <div className="w-2 h-2 rounded-full bg-amber-500 flex-shrink-0" />
+                  <span className="text-muted-foreground flex-1">Warning (7–14 days)</span>
+                  <span className="font-medium">{data?.warningProjects ?? 0}</span>
+                </div>
+                <div className="flex items-center gap-2 text-xs">
+                  <div className="w-2 h-2 rounded-full bg-red-500 flex-shrink-0" />
+                  <span className="text-muted-foreground flex-1">Stale (14+ days / never)</span>
+                  <span className="font-medium">{data?.staleProjects ?? 0}</span>
+                </div>
+              </div>
+            )}
+
+            {total === 0 && !isLoading && (
+              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 py-2">
+                <CheckCircle2 className="h-4 w-4" />
+                All active projects are in communication.
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+type CommStatus = "healthy" | "warning" | "stale" | "never_contacted";
+
+interface FollowUpProject {
+  projectId: string;
+  projectName: string;
+  projectColor: string;
+  clientId: string | null;
+  clientName: string | null;
+  lastClientContactAt: string | null;
+  nextFollowupDueAt: string | null;
+  daysSinceContact: number | null;
+  communicationStatus: CommStatus;
+  followupOverdue: boolean;
+}
+
+function CommStatusBadge({ status }: { status: CommStatus }) {
+  if (status === "healthy") {
+    return <Badge className="bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400 text-xs border-0">Healthy</Badge>;
+  }
+  if (status === "warning") {
+    return <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs border-0">Warning</Badge>;
+  }
+  if (status === "stale") {
+    return <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400 text-xs border-0">Stale</Badge>;
+  }
+  return <Badge className="bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-400 text-xs border-0">Never</Badge>;
+}
+
+function ClientFollowUpsCard() {
+  const queryClient = useQueryClient();
+  const { toast } = useToast();
+
+  const { data: followups = [], isLoading } = useQuery<FollowUpProject[]>({
+    queryKey: ["/api/communication/followups"],
+    staleTime: 2 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const logContactMutation = useMutation({
+    mutationFn: (projectId: string) =>
+      apiRequest("POST", `/api/projects/${projectId}/client-contact`),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/communication/followups"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/communication/health-summary"] });
+      toast({ title: "Contact logged", description: "Client contact has been recorded." });
+    },
+    onError: () => {
+      toast({ title: "Error", description: "Failed to log contact.", variant: "destructive" });
+    },
+  });
+
+  function formatContactAge(daysSince: number | null, lastContactAt: string | null): string {
+    if (lastContactAt === null || daysSince === null) return "Never contacted";
+    if (daysSince === 0) return "Today";
+    if (daysSince === 1) return "Yesterday";
+    return `${daysSince} days ago`;
+  }
+
+  function formatDueDate(dateStr: string | null): string {
+    if (!dateStr) return "—";
+    const d = new Date(dateStr);
+    return d.toLocaleDateString(undefined, { month: "short", day: "numeric" });
+  }
+
+  return (
+    <Card data-testid="card-client-followups">
+      <CardHeader className="pb-2 pt-4 px-4">
+        <div className="flex items-center justify-between">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <CalendarClock className="h-4 w-4 text-amber-500" />
+            Client Follow-Ups
+            {followups.length > 0 && (
+              <Badge className="bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400 text-xs border-0 ml-1">
+                {followups.length}
+              </Badge>
+            )}
+          </CardTitle>
+        </div>
+      </CardHeader>
+      <CardContent className="px-0 pb-0">
+        {isLoading ? (
+          <div className="px-4 pb-4 space-y-2">
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+            <Skeleton className="h-10 w-full" />
+          </div>
+        ) : followups.length === 0 ? (
+          <div className="px-4 pb-4 flex items-center gap-2 text-sm text-green-600 dark:text-green-400 py-2">
+            <CheckCircle2 className="h-4 w-4" />
+            No follow-ups pending. All clients are up to date.
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" data-testid="table-followups">
+              <thead>
+                <tr className="border-b bg-muted/30">
+                  <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Client</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Project</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Last Contact</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Next Follow-Up</th>
+                  <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Status</th>
+                  <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Action</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-border">
+                {followups.map((item) => (
+                  <tr
+                    key={item.projectId}
+                    className="hover:bg-muted/30 transition-colors"
+                    data-testid={`row-followup-${item.projectId}`}
+                  >
+                    <td className="px-4 py-2.5">
+                      <span className="text-xs text-muted-foreground">
+                        {item.clientName ?? "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <Link href={`/projects/${item.projectId}`}>
+                        <div className="flex items-center gap-2 hover:underline cursor-pointer">
+                          <div
+                            className="w-2 h-2 rounded-full flex-shrink-0"
+                            style={{ backgroundColor: item.projectColor }}
+                          />
+                          <span className="font-medium text-xs">{item.projectName}</span>
+                        </div>
+                      </Link>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className={cn(
+                        "text-xs",
+                        item.communicationStatus === "stale" || item.communicationStatus === "never_contacted"
+                          ? "text-red-600 dark:text-red-400"
+                          : item.communicationStatus === "warning"
+                          ? "text-amber-600 dark:text-amber-400"
+                          : "text-muted-foreground"
+                      )}>
+                        {formatContactAge(item.daysSinceContact, item.lastClientContactAt)}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className={cn(
+                        "text-xs",
+                        item.followupOverdue ? "text-red-600 dark:text-red-400 font-medium" : "text-muted-foreground"
+                      )}>
+                        {formatDueDate(item.nextFollowupDueAt)}
+                        {item.followupOverdue && <span className="ml-1 text-red-500">!</span>}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <CommStatusBadge status={item.communicationStatus} />
+                    </td>
+                    <td className="px-4 py-2.5 text-right">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        className="h-6 text-xs px-2 gap-1"
+                        data-testid={`button-log-contact-${item.projectId}`}
+                        disabled={logContactMutation.isPending}
+                        onClick={() => logContactMutation.mutate(item.projectId)}
+                      >
+                        <Phone className="h-3 w-3" />
+                        Log Contact
+                      </Button>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function PmPortfolioDashboard() {
-  const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary, enableBillingApprovalWorkflow, enableInvoiceDraftBuilder, enableClientProfitability, enableRevenueLeakageDetection } = useFeatureFlags();
+  const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary, enableBillingApprovalWorkflow, enableInvoiceDraftBuilder, enableClientProfitability, enableRevenueLeakageDetection, enableClientCommunicationHealth, enableClientFollowups } = useFeatureFlags();
   const { user } = useAuth();
   const canAccessPmPortfolio =
     user?.role === "super_user" ||
@@ -1566,6 +1835,14 @@ export default function PmPortfolioDashboard() {
 
         {enableRevenueLeakageDetection && (
           <RevenueLeakageCard />
+        )}
+
+        {enableClientCommunicationHealth && (
+          <ClientCommunicationHealthCard />
+        )}
+
+        {enableClientFollowups && (
+          <ClientFollowUpsCard />
         )}
 
         {enableReassignmentSuggestions && (

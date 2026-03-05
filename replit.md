@@ -57,6 +57,8 @@ MyWorkDay is an Asana-inspired, multi-tenant project management application desi
 - **Project Management Dashboard** (formerly PM Portfolio): Provides portfolio-level intelligence for project managers. UI route: `/project-management` (legacy `/pm-portfolio` redirects here). Accessible to `tenant_owner` and `admin` with `isProjectManager=true`.
 - **Multi-PM Projects**: Allows projects to have multiple assigned project managers.
 - **Mobile & Responsiveness**: App-wide mobile-first design patterns for optimal mobile user experience.
+- **Client Communication Health Engine** (`ENABLE_CLIENT_COMMUNICATION_HEALTH`): Tracks communication recency with clients per project. Adds `last_client_contact_at`, `last_status_report_at`, `next_followup_due_at` columns to the `projects` table. Health rules: 0–7 days → healthy, 7–14 days → warning, 14+ days → stale. Service: `server/services/communication/communicationHealthService.ts`. APIs: `GET /api/projects/:id/communication-health`, `POST /api/projects/:id/client-contact`, `GET /api/communication/health-summary`. Card visible on Project Management dashboard.
+- **Client Follow-Up Queue** (`ENABLE_CLIENT_FOLLOWUPS`): Queue of projects needing client follow-up, surfaced in Project Management dashboard. Shows Client, Project, Last Contact, Next Follow-Up, Status, and a "Log Contact" action. Service: `server/services/communication/followUpService.ts`. API: `GET /api/communication/followups`. Card: `data-testid="card-client-followups"`.
 
 ## External Dependencies
 - **PostgreSQL**: Primary database.

@@ -1360,6 +1360,9 @@ export const projects = pgTable("projects", {
   color: text("color").default("#3B82F6"),
   budgetMinutes: integer("budget_minutes"), // Optional project budget in minutes for workload forecasting
   stickyAt: timestamp("sticky_at"),
+  lastClientContactAt: timestamp("last_client_contact_at"),
+  lastStatusReportAt: timestamp("last_status_report_at"),
+  nextFollowupDueAt: timestamp("next_followup_due_at"),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -1373,6 +1376,7 @@ export const projects = pgTable("projects", {
   index("projects_workspace_id_idx").on(table.workspaceId),
   index("projects_tenant_workspace_idx").on(table.tenantId, table.workspaceId),
   index("projects_status_idx").on(table.status),
+  index("projects_tenant_last_contact_idx").on(table.tenantId, table.lastClientContactAt),
 ]);
 
 // Project Members table

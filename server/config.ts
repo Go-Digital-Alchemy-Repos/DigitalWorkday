@@ -237,6 +237,8 @@ export const config = {
     enableInvoiceDraftBuilder: optionalEnvBool("ENABLE_INVOICE_DRAFT_BUILDER", true),
     enableClientProfitability: optionalEnvBool("ENABLE_CLIENT_PROFITABILITY", true),
     enableRevenueLeakageDetection: optionalEnvBool("ENABLE_REVENUE_LEAKAGE_DETECTION", true),
+    enableClientCommunicationHealth: optionalEnvBool("ENABLE_CLIENT_COMMUNICATION_HEALTH", true),
+    enableClientFollowups: optionalEnvBool("ENABLE_CLIENT_FOLLOWUPS", true),
   },
 
   tenancyEnforcement: {
