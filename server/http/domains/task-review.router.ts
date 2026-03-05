@@ -5,8 +5,9 @@ import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { getCurrentUserId } from "../../routes/helpers";
 import { config } from "../../config";
 import { db } from "../../db";
-import { tasks, projects, projectMembers, users } from "@shared/schema";
+import { tasks, projects, projectMembers, users, taskAssignees } from "@shared/schema";
 import { eq, and, sql, desc, isNull } from "drizzle-orm";
+import { notifyTaskStatusChanged } from "../../features/notifications/notification.service";
 
 const router = createApiRouter({ policy: "authTenant", skipEnvelope: true });
 
