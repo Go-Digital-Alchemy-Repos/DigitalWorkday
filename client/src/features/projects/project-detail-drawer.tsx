@@ -46,6 +46,7 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import { Tooltip as UITooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import type { Project, Client, Team, TaskWithRelations } from "@shared/schema";
 import { ProjectNotesTab } from "@/components/project-notes-tab";
+import { ProjectCommunicationTimeline } from "@/features/communication/CommunicationTimeline";
 import { ShareModal } from "@/features/sharing/share-modal";
 import { MilestonesTab } from "./MilestonesTab";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
@@ -121,7 +122,7 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
   const { user } = useAuth();
   const { openTask } = useTaskDrawer();
   const isSuperUser = user?.role === "super_user";
-  const { enableProjectMilestones } = useFeatureFlags();
+  const { enableProjectMilestones, enableCommunicationTimeline } = useFeatureFlags();
   const [activeTab, setActiveTab] = useState("overview");
   const [shareModalOpen, setShareModalOpen] = useState(false);
 
@@ -261,13 +262,16 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
 
         <Tabs value={activeTab} onValueChange={setActiveTab}>
           <div className="overflow-x-auto -mx-2 px-2">
-            <TabsList className={`inline-flex w-auto min-w-full ${isSuperUser && enableProjectMilestones ? "sm:grid sm:grid-cols-7" : isSuperUser || enableProjectMilestones ? "sm:grid sm:grid-cols-6" : "sm:grid sm:grid-cols-5"}`}>
+            <TabsList className="inline-flex w-auto min-w-full gap-0">
               <TabsTrigger value="overview" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-overview">Overview</TabsTrigger>
               <TabsTrigger value="tasks" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-tasks">Tasks</TabsTrigger>
               {enableProjectMilestones && (
                 <TabsTrigger value="milestones" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-milestones">Milestones</TabsTrigger>
               )}
               <TabsTrigger value="notes" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-notes">Notes</TabsTrigger>
+              {enableCommunicationTimeline && (
+                <TabsTrigger value="communication" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-communication">Comms</TabsTrigger>
+              )}
               <TabsTrigger value="insights" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-insights">Insights</TabsTrigger>
               <TabsTrigger value="forecast" className="text-xs sm:text-sm whitespace-nowrap" data-testid="tab-forecast">Forecast</TabsTrigger>
               {isSuperUser && (
@@ -452,6 +456,15 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
           <TabsContent value="notes" className="mt-4">
             <ProjectNotesTab projectId={currentProject.id} />
           </TabsContent>
+
+          {enableCommunicationTimeline && (
+            <TabsContent value="communication" className="mt-4">
+              <ProjectCommunicationTimeline
+                projectId={currentProject.id}
+                clientId={currentProject.clientId ?? null}
+              />
+            </TabsContent>
+          )}
 
           <TabsContent value="insights" className="mt-4 space-y-4">
             {analyticsLoading ? (
