@@ -1,0 +1,120 @@
+INVOICE DRAFT BUILDER
+NON-DESTRUCTIVE • ADDITIVE • ACCOUNTING SAFE
+
+Feature flag:
+ENABLE_INVOICE_DRAFT_BUILDER
+
+GOAL
+Allow PM/Admins to generate invoice drafts from approved billable time.
+
+============================================================
+PHASE 1 — DATA MODEL
+============================================================
+
+Create table:
+
+invoice_drafts
+
+columns:
+
+id
+tenant_id
+client_id
+project_id
+created_by_user_id
+status (draft | exported | cancelled)
+total_hours
+total_amount
+created_at
+
+Create table:
+
+invoice_draft_items
+
+columns:
+
+id
+invoice_draft_id
+time_entry_id
+task_id
+description
+hours
+rate
+amount
+
+Indexes:
+
+invoice_draft_items(invoice_draft_id)
+
+============================================================
+PHASE 2 — DRAFT GENERATOR
+============================================================
+
+Create:
+
+server/src/services/billing/invoiceDraftService.ts
+
+Function:
+
+generateInvoiceDraft({
+  clientId,
+  projectId?,
+  dateRange
+})
+
+Logic:
+
+Fetch:
+
+time_entries where
+
+billing_status = approved
+billable_type = billable
+not invoiced
+
+============================================================
+PHASE 3 — API
+============================================================
+
+POST /api/billing/generate-invoice-draft
+GET  /api/billing/invoice-drafts
+GET  /api/billing/invoice-drafts/:id
+
+============================================================
+PHASE 4 — UI
+============================================================
+
+Add section:
+
+INVOICE DRAFTS
+
+Workflow:
+
+Generate Draft
+Review Tasks
+Adjust Descriptions
+Export
+
+============================================================
+PHASE 5 — STATUS UPDATE
+============================================================
+
+When invoice draft exported:
+
+update time_entries
+
+billing_status = invoiced
+
+============================================================
+PHASE 6 — APP DOCS
+============================================================
+
+Add:
+
+Invoice Draft Builder
+
+STOP when:
+
+invoice drafts generate
+items link correctly
+UI visible
