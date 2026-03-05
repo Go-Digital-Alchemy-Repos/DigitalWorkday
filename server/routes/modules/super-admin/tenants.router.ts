@@ -105,6 +105,14 @@ import {
   supportSlaPolicies,
   supportTicketFormSchemas,
   conversationSlaPolicies,
+  taskHistory,
+  projectMilestones,
+  taskAccess,
+  projectAccess,
+  forecastSnapshots,
+  projectRiskAcknowledgments,
+  invoiceDraftItems,
+  invoiceDrafts,
 } from '@shared/schema';
 import { recordTenantAuditEvent } from '../../superAdmin';
 import { tenantIntegrationService } from '../../../services/tenantIntegrations';
@@ -466,6 +474,8 @@ tenantsRouter.delete("/tenants/:tenantId", requireSuperUser, async (req, res) =>
 
       await tx.delete(approvalRequests).where(eq(approvalRequests.tenantId, tenantId));
 
+      await tx.delete(taskHistory).where(eq(taskHistory.tenantId, tenantId));
+
       await tx.delete(commentMentions).where(eq(commentMentions.commentId, sql`ANY(SELECT id FROM comments WHERE task_id IN (SELECT id FROM tasks WHERE tenant_id = ${tenantId}))`));
       await tx.delete(comments).where(eq(comments.taskId, tenantTaskIds));
 
@@ -476,12 +486,16 @@ tenantsRouter.delete("/tenants/:tenantId", requireSuperUser, async (req, res) =>
       await tx.delete(subtasks).where(eq(subtasks.taskId, tenantTaskIds));
       await tx.delete(taskWatchers).where(eq(taskWatchers.tenantId, tenantId));
       await tx.delete(taskAssignees).where(eq(taskAssignees.taskId, tenantTaskIds));
+      await tx.delete(taskAccess).where(eq(taskAccess.tenantId, tenantId));
       await tx.delete(activityLog).where(eq(activityLog.workspaceId, tenantWorkspaceIds));
       await tx.delete(personalTaskSections).where(eq(personalTaskSections.tenantId, tenantId));
       await tx.delete(tasks).where(eq(tasks.tenantId, tenantId));
 
       await tx.delete(tags).where(eq(tags.workspaceId, tenantWorkspaceIds));
 
+      await tx.delete(projectRiskAcknowledgments).where(eq(projectRiskAcknowledgments.tenantId, tenantId));
+      await tx.delete(projectMilestones).where(eq(projectMilestones.tenantId, tenantId));
+      await tx.delete(projectAccess).where(eq(projectAccess.tenantId, tenantId));
       await tx.delete(sections).where(eq(sections.projectId, tenantProjectIds));
       await tx.delete(projectMembers).where(eq(projectMembers.projectId, tenantProjectIds));
       await tx.delete(hiddenProjects).where(eq(hiddenProjects.projectId, tenantProjectIds));
@@ -553,6 +567,9 @@ tenantsRouter.delete("/tenants/:tenantId", requireSuperUser, async (req, res) =>
       await tx.delete(emailTemplates).where(eq(emailTemplates.tenantId, tenantId));
       await tx.delete(tenancyWarnings).where(eq(tenancyWarnings.effectiveTenantId, tenantId));
 
+      await tx.delete(invoiceDraftItems).where(eq(invoiceDraftItems.invoiceDraftId, sql`ANY(SELECT id FROM invoice_drafts WHERE tenant_id = ${tenantId})`));
+      await tx.delete(invoiceDrafts).where(eq(invoiceDrafts.tenantId, tenantId));
+      await tx.delete(forecastSnapshots).where(eq(forecastSnapshots.tenantId, tenantId));
       await tx.delete(userUiPreferences).where(eq(userUiPreferences.userId, sql`ANY(SELECT id FROM users WHERE tenant_id = ${tenantId})`));
       await tx.delete(users).where(eq(users.tenantId, tenantId));
 
