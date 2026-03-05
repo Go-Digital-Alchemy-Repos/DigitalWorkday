@@ -44,6 +44,7 @@ export interface FeatureFlags {
   enableClientCommunicationHealth: boolean;
   enableClientFollowups: boolean;
   enableWeeklyClientReports: boolean;
+  enableCommunicationTimeline: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -89,6 +90,8 @@ const ALL_OFF: FeatureFlags = {
   enableRevenueLeakageDetection: false,
   enableClientCommunicationHealth: false,
   enableClientFollowups: false,
+  enableWeeklyClientReports: false,
+  enableCommunicationTimeline: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

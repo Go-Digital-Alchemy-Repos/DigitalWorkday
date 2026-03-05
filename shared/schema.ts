@@ -4492,3 +4492,42 @@ export const invoiceDraftItems = pgTable("invoice_draft_items", {
 
 export type InvoiceDraftItem = typeof invoiceDraftItems.$inferSelect;
 export type InsertInvoiceDraftItem = typeof invoiceDraftItems.$inferInsert;
+
+// =============================================================================
+// CLIENT COMMUNICATION TIMELINE
+// =============================================================================
+
+export const CommunicationEventType = {
+  STATUS_REPORT_SENT: "status_report_sent",
+  CLIENT_CONTACT_LOGGED: "client_contact_logged",
+  FOLLOW_UP_CREATED: "follow_up_created",
+  MILESTONE_UPDATE: "milestone_update",
+  CLIENT_EMAIL_SENT: "client_email_sent",
+  MANUAL_NOTE: "manual_note",
+} as const;
+
+export type CommunicationEventTypeValue = typeof CommunicationEventType[keyof typeof CommunicationEventType];
+
+export const clientCommunicationEvents = pgTable("client_communication_events", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull(),
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "cascade" }),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "cascade" }),
+  eventType: text("event_type").notNull(),
+  eventDescription: text("event_description"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("comm_events_tenant_idx").on(table.tenantId),
+  index("comm_events_client_idx").on(table.tenantId, table.clientId),
+  index("comm_events_project_idx").on(table.tenantId, table.projectId),
+  index("comm_events_created_idx").on(table.createdAt),
+]);
+
+export type ClientCommunicationEvent = typeof clientCommunicationEvents.$inferSelect;
+export type InsertClientCommunicationEvent = typeof clientCommunicationEvents.$inferInsert;
+
+export const insertClientCommunicationEventSchema = createInsertSchema(clientCommunicationEvents).omit({
+  id: true,
+  createdAt: true,
+});

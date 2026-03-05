@@ -240,6 +240,7 @@ export const config = {
     enableClientCommunicationHealth: optionalEnvBool("ENABLE_CLIENT_COMMUNICATION_HEALTH", true),
     enableClientFollowups: optionalEnvBool("ENABLE_CLIENT_FOLLOWUPS", true),
     enableWeeklyClientReports: optionalEnvBool("ENABLE_WEEKLY_CLIENT_REPORTS", true),
+    enableCommunicationTimeline: optionalEnvBool("ENABLE_COMMUNICATION_TIMELINE", true),
   },
 
   tenancyEnforcement: {
