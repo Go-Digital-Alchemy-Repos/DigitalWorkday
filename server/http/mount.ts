@@ -53,6 +53,7 @@ import pmPortfolioRouter from "./domains/pm-portfolio.router";
 import reassignmentRouter from "./domains/reassignment.router";
 import whatIfRouter from "./domains/whatif.router";
 import riskAckRouter from "./domains/risk-ack.router";
+import billingRouter from "./domains/billing.router";
 
 import usersRouter from "../routes/users.router";
 import crmRouter from "../routes/crm.router";
@@ -378,6 +379,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "risk-ack",
     description: "Risk Acknowledgment Workflow: governance layer for at-risk projects requiring PM acknowledgment and mitigation notes.",
+  },
+  {
+    path: "/api",
+    router: billingRouter,
+    policy: "authTenant",
+    domain: "billing",
+    description: "Billing Approval Workflow: submit, approve, reject, and queue time entries for billing review.",
   },
   {
     path: "/api",

@@ -85,6 +85,7 @@ type TimeEntry = {
   startTime: string;
   durationSeconds: number;
   scope: "in_scope" | "out_of_scope";
+  billingStatus?: "draft" | "pending_approval" | "approved" | "rejected" | "invoiced";
   user?: { id: string; firstName: string | null; lastName: string | null; email: string };
 };
 
@@ -159,7 +160,7 @@ export function TaskDetailDrawer({
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
   const isClientUser = currentUser?.role === "client";
-  const { enableTaskReviewQueue, enableProjectMilestones } = useFeatureFlags();
+  const { enableTaskReviewQueue, enableProjectMilestones, enableBillingApprovalWorkflow } = useFeatureFlags();
 
   const { data: projectMembersData } = useQuery<Array<{ userId: string; role: string }>>({
     queryKey: ["/api/projects", task?.projectId, "members"],
@@ -1266,6 +1267,40 @@ export function TaskDetailDrawer({
           }}
         />
       </div>
+
+      {enableBillingApprovalWorkflow && timeEntries.length > 0 && (
+        <>
+          <Separator />
+          <div className="space-y-2">
+            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              Time Entries
+            </label>
+            <div className="space-y-1.5">
+              {timeEntries.map((entry) => {
+                const status = entry.billingStatus ?? "draft";
+                const statusConfig: Record<string, { label: string; className: string }> = {
+                  draft: { label: "Draft", className: "bg-gray-100 text-gray-600 border-gray-200 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700" },
+                  pending_approval: { label: "Pending Approval", className: "bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700" },
+                  approved: { label: "Approved", className: "bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700" },
+                  rejected: { label: "Rejected", className: "bg-red-100 text-red-700 border-red-200 dark:bg-red-900/30 dark:text-red-400 dark:border-red-700" },
+                  invoiced: { label: "Invoiced", className: "bg-violet-100 text-violet-700 border-violet-200 dark:bg-violet-900/30 dark:text-violet-400 dark:border-violet-700" },
+                };
+                const cfg = statusConfig[status] ?? statusConfig.draft;
+                return (
+                  <div key={entry.id} className="flex items-center justify-between gap-2 text-xs py-1 px-2 rounded-md bg-muted/30" data-testid={`time-entry-row-${entry.id}`}>
+                    <span className="text-muted-foreground tabular-nums">{formatDurationShort(entry.durationSeconds)}</span>
+                    <span className="truncate flex-1 text-muted-foreground">{entry.description || format(new Date(entry.startTime), "MMM d")}</span>
+                    <Badge variant="outline" className={cn("text-[10px] px-1.5 py-0 h-4 shrink-0", cfg.className)} data-testid={`badge-billing-status-${entry.id}`}>
+                      {cfg.label}
+                    </Badge>
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 

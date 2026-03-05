@@ -60,6 +60,16 @@ export const TimeEntryScope = {
   OUT_OF_SCOPE: "out_of_scope",
 } as const;
 
+export const BillingApprovalStatus = {
+  DRAFT: "draft",
+  PENDING_APPROVAL: "pending_approval",
+  APPROVED: "approved",
+  REJECTED: "rejected",
+  INVOICED: "invoiced",
+} as const;
+
+export type BillingApprovalStatusType = typeof BillingApprovalStatus[keyof typeof BillingApprovalStatus];
+
 export const TimerStatus = {
   RUNNING: "running",
   PAUSED: "paused",
@@ -1283,6 +1293,7 @@ export const timeEntries = pgTable("time_entries", {
   title: text("title"),
   description: text("description"),
   scope: text("scope").notNull().default("in_scope"),
+  billingStatus: text("billing_status").notNull().default("draft"),
   startTime: timestamp("start_time").notNull(),
   endTime: timestamp("end_time"),
   durationSeconds: integer("duration_seconds").notNull().default(0),

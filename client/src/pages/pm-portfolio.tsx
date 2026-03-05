@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useQuery } from "@tanstack/react-query";
+import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
   AlertTriangle,
@@ -16,7 +16,13 @@ import {
   ChevronDown,
   ChevronsUpDown,
   RefreshCw,
+  DollarSign,
+  Check,
+  X,
+  ExternalLink,
 } from "lucide-react";
+import { apiRequest } from "@/lib/queryClient";
+import { useToast } from "@/hooks/use-toast";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
@@ -137,8 +143,233 @@ function TableSkeleton() {
   );
 }
 
+interface PendingApprovalEntry {
+  id: string;
+  userId: string;
+  employeeName: string | null;
+  taskId: string | null;
+  taskTitle: string | null;
+  projectId: string | null;
+  projectName: string | null;
+  durationSeconds: number;
+  startTime: string;
+  billingStatus: string;
+}
+
+function formatHours(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  return h > 0 ? `${h}h ${m}m` : `${m}m`;
+}
+
+function BillingApprovalQueueCard() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [selected, setSelected] = useState<Set<string>>(new Set());
+
+  const { data: queue = [], isLoading } = useQuery<PendingApprovalEntry[]>({
+    queryKey: ["/api/billing/pending-approval"],
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const approveMutation = useMutation({
+    mutationFn: (ids: string[]) => apiRequest("POST", "/api/billing/approve", { timeEntryIds: ids }),
+    onSuccess: (_data, ids) => {
+      toast({ title: `${ids.length} time ${ids.length === 1 ? "entry" : "entries"} approved` });
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ["/api/billing/pending-approval"] });
+    },
+    onError: () => toast({ title: "Failed to approve entries", variant: "destructive" }),
+  });
+
+  const rejectMutation = useMutation({
+    mutationFn: (ids: string[]) => apiRequest("POST", "/api/billing/reject", { timeEntryIds: ids }),
+    onSuccess: (_data, ids) => {
+      toast({ title: `${ids.length} time ${ids.length === 1 ? "entry" : "entries"} rejected` });
+      setSelected(new Set());
+      qc.invalidateQueries({ queryKey: ["/api/billing/pending-approval"] });
+    },
+    onError: () => toast({ title: "Failed to reject entries", variant: "destructive" }),
+  });
+
+  const toggleSelect = (id: string) => {
+    setSelected((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const allSelected = queue.length > 0 && selected.size === queue.length;
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(queue.map((e) => e.id)));
+  };
+
+  const isPending = approveMutation.isPending || rejectMutation.isPending;
+
+  if (!isLoading && queue.length === 0) return null;
+
+  return (
+    <Card data-testid="card-billing-approval-queue">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <DollarSign className="h-4 w-4 text-amber-500" />
+            Time Awaiting Approval
+            {queue.length > 0 && (
+              <Badge className="bg-amber-100 text-amber-700 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400 dark:border-amber-700 ml-1" data-testid="badge-pending-count">
+                {queue.length}
+              </Badge>
+            )}
+          </CardTitle>
+          {selected.size > 0 && (
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1.5 text-emerald-600 border-emerald-200 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                onClick={() => approveMutation.mutate(Array.from(selected))}
+                disabled={isPending}
+                data-testid="button-approve-selected"
+              >
+                <Check className="h-3.5 w-3.5" />
+                Approve {selected.size}
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                className="h-7 text-xs gap-1.5 text-red-600 border-red-200 hover:bg-red-50 dark:hover:bg-red-900/20"
+                onClick={() => rejectMutation.mutate(Array.from(selected))}
+                disabled={isPending}
+                data-testid="button-reject-selected"
+              >
+                <X className="h-3.5 w-3.5" />
+                Reject {selected.size}
+              </Button>
+            </div>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="px-4 pb-4 space-y-2">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full rounded" />)}
+          </div>
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm" data-testid="table-billing-queue">
+              <thead>
+                <tr className="border-b border-border bg-muted/30">
+                  <th className="px-4 py-2.5 w-8">
+                    <input
+                      type="checkbox"
+                      checked={allSelected}
+                      onChange={toggleAll}
+                      className="rounded border-border"
+                      data-testid="checkbox-select-all"
+                    />
+                  </th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs">Employee</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs hidden sm:table-cell">Task</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs hidden md:table-cell">Project</th>
+                  <th className="text-right px-4 py-2.5 font-medium text-muted-foreground text-xs">Hours</th>
+                  <th className="text-left px-4 py-2.5 font-medium text-muted-foreground text-xs hidden lg:table-cell">Date</th>
+                  <th className="px-4 py-2.5 text-right font-medium text-muted-foreground text-xs">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {queue.map((entry) => (
+                  <tr
+                    key={entry.id}
+                    className={cn(
+                      "border-b border-border last:border-0 transition-colors",
+                      selected.has(entry.id) ? "bg-amber-50/60 dark:bg-amber-900/10" : "hover:bg-muted/30"
+                    )}
+                    data-testid={`row-billing-${entry.id}`}
+                  >
+                    <td className="px-4 py-2.5">
+                      <input
+                        type="checkbox"
+                        checked={selected.has(entry.id)}
+                        onChange={() => toggleSelect(entry.id)}
+                        className="rounded border-border"
+                        data-testid={`checkbox-entry-${entry.id}`}
+                      />
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <span className="font-medium" data-testid={`text-employee-${entry.id}`}>{entry.employeeName || "Unknown"}</span>
+                    </td>
+                    <td className="px-4 py-2.5 hidden sm:table-cell">
+                      <span className="text-muted-foreground truncate max-w-[140px] block" data-testid={`text-task-${entry.id}`}>
+                        {entry.taskTitle || "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 hidden md:table-cell">
+                      <span className="text-muted-foreground truncate max-w-[120px] block" data-testid={`text-project-${entry.id}`}>
+                        {entry.projectName || "—"}
+                      </span>
+                    </td>
+                    <td className="px-4 py-2.5 text-right tabular-nums font-medium" data-testid={`text-hours-${entry.id}`}>
+                      {formatHours(entry.durationSeconds)}
+                    </td>
+                    <td className="px-4 py-2.5 hidden lg:table-cell text-muted-foreground text-xs">
+                      {new Date(entry.startTime).toLocaleDateString()}
+                    </td>
+                    <td className="px-4 py-2.5">
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 text-emerald-600 hover:text-emerald-700 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                          onClick={() => approveMutation.mutate([entry.id])}
+                          disabled={isPending}
+                          title="Approve"
+                          data-testid={`button-approve-${entry.id}`}
+                        >
+                          <Check className="h-3.5 w-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-6 w-6 p-0 text-red-600 hover:text-red-700 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          onClick={() => rejectMutation.mutate([entry.id])}
+                          disabled={isPending}
+                          title="Reject"
+                          data-testid={`button-reject-${entry.id}`}
+                        >
+                          <X className="h-3.5 w-3.5" />
+                        </Button>
+                        {entry.taskId && (
+                          <Link href={`/projects/${entry.projectId}?task=${entry.taskId}`}>
+                            <Button
+                              size="sm"
+                              variant="ghost"
+                              className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                              title="Open Task"
+                              data-testid={`button-open-task-${entry.id}`}
+                            >
+                              <ExternalLink className="h-3.5 w-3.5" />
+                            </Button>
+                          </Link>
+                        )}
+                      </div>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function PmPortfolioDashboard() {
-  const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary } = useFeatureFlags();
+  const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary, enableBillingApprovalWorkflow } = useFeatureFlags();
   const { user } = useAuth();
   const canAccessPmPortfolio =
     user?.role === "super_user" ||
@@ -592,6 +823,10 @@ export default function PmPortfolioDashboard() {
 
         {enableAiPmFocusSummary && (
           <AiFocusSummaryCard />
+        )}
+
+        {enableBillingApprovalWorkflow && (
+          <BillingApprovalQueueCard />
         )}
 
         {enableReassignmentSuggestions && (
