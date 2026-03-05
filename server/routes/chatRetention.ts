@@ -24,7 +24,7 @@ const requireTenantAdmin = (req: Request, res: Response, next: NextFunction) => 
   if (!req.user) {
     throw AppError.unauthorized("Authentication required");
   }
-  if ((req.user as any).role !== "admin" && (req.user as any).role !== "super_user") {
+  if ((req.user as any).role !== "admin" && (req.user as any).role !== "tenant_owner" && (req.user as any).role !== "super_user") {
     throw AppError.forbidden("Admin access required");
   }
   next();

@@ -292,7 +292,7 @@ router.get("/v1/tenant/tenancy/health", requireAuth, async (req: Request, res: R
     throw AppError.unauthorized("Unauthorized");
   }
 
-  if (user.role !== "admin" && user.role !== "super_user") {
+  if (user.role !== "admin" && user.role !== "tenant_owner" && user.role !== "super_user") {
     throw AppError.forbidden("Forbidden - admin access required");
   }
 

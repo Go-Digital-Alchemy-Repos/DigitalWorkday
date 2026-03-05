@@ -4,7 +4,7 @@ import { eq, and } from "drizzle-orm";
 import { clients, UserRole } from "@shared/schema";
 
 export function isAdminOrSuper(req: Request): boolean {
-  return req.user?.role === UserRole.ADMIN || req.user?.role === UserRole.SUPER_USER;
+  return req.user?.role === UserRole.ADMIN || req.user?.role === UserRole.TENANT_OWNER || req.user?.role === UserRole.SUPER_USER;
 }
 
 export async function verifyClientTenancy(clientId: string, tenantId: string): Promise<typeof clients.$inferSelect | null> {
