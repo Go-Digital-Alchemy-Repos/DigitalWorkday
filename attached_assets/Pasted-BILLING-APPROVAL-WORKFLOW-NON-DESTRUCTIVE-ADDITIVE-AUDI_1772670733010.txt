@@ -1,0 +1,117 @@
+BILLING APPROVAL WORKFLOW
+NON-DESTRUCTIVE • ADDITIVE • AUDIT SAFE
+
+Feature flag:
+ENABLE_BILLING_APPROVAL_WORKFLOW
+
+GOAL
+Require PM/Admin approval before billable time becomes invoice-ready.
+
+============================================================
+PHASE 1 — DATA MODEL
+============================================================
+
+Add to time_entries table:
+
+billing_status (enum)
+
+values:
+- draft
+- pending_approval
+- approved
+- rejected
+- invoiced
+
+Default:
+draft
+
+Indexes:
+
+time_entries(tenant_id, billing_status)
+time_entries(project_id, billing_status)
+
+============================================================
+PHASE 2 — APPROVAL SERVICE
+============================================================
+
+Create:
+
+server/src/services/billing/billingApprovalService.ts
+
+Functions:
+
+submitTimeForApproval(timeEntryIds)
+
+approveTimeEntries(timeEntryIds)
+
+rejectTimeEntries(timeEntryIds)
+
+getPendingApprovalQueue(tenantId)
+
+Rules:
+
+Only billable entries can move to pending_approval.
+
+Rejected entries revert to draft.
+
+============================================================
+PHASE 3 — API
+============================================================
+
+POST /api/billing/submit-approval
+POST /api/billing/approve
+POST /api/billing/reject
+GET  /api/billing/pending-approval
+
+Permissions:
+
+Tenant Admin
+Project Manager
+
+============================================================
+PHASE 4 — PM DASHBOARD UI
+============================================================
+
+Add card:
+
+TIME AWAITING APPROVAL
+
+Columns:
+
+Employee
+Task
+Project
+Hours
+Date
+
+Buttons:
+
+Approve
+Reject
+Open Task
+
+============================================================
+PHASE 5 — TASK DRAWER
+============================================================
+
+Display Billing Status Badge:
+
+Draft
+Pending Approval
+Approved
+Rejected
+Invoiced
+
+============================================================
+PHASE 6 — APP DOCS
+============================================================
+
+Add section:
+
+Billing Approval Workflow
+
+STOP when:
+
+approval queue operational
+billing_status lifecycle works
+docs updated
