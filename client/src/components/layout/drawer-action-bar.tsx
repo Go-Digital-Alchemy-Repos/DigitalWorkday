@@ -62,7 +62,7 @@ export function DrawerActionBar({
   return (
     <div
       className={cn(
-        "flex items-center gap-2 flex-wrap px-3 sm:px-6 py-3 border-t bg-background shrink-0",
+        "flex items-center gap-2 flex-wrap px-3 sm:px-6 py-3 bg-background shrink-0",
         className
       )}
       data-testid="drawer-action-bar"

@@ -131,6 +131,11 @@ export function TaskPanelShell({
         >
           <div className="sticky top-0 z-20 bg-background border-b border-border rounded-t-xl shrink-0">
             {header}
+            {footer && (
+              <div className="border-t border-border bg-background shrink-0">
+                {footer}
+              </div>
+            )}
           </div>
           <div className="flex flex-1 min-h-0 overflow-hidden">
             {isMobile ? (
@@ -167,11 +172,6 @@ export function TaskPanelShell({
               </>
             )}
           </div>
-          {footer && (
-            <div className="sticky bottom-0 z-20 bg-background border-t border-border shrink-0">
-              {footer}
-            </div>
-          )}
         </div>
       </div>
     </div>,
