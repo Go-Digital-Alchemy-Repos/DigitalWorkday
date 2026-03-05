@@ -685,6 +685,19 @@ router.patch("/tasks/:id", async (req, res) => {
       }
     }
 
+    if (updateData.status && taskBefore && updateData.status !== taskBefore.status) {
+      const isReopening = (taskBefore.status === "done" || taskBefore.status === "completed") &&
+                          updateData.status !== "done" && updateData.status !== "completed";
+      if (isReopening && (taskBefore.pmReviewResolvedAt || taskBefore.needsPmReview)) {
+        updateData.needsPmReview = false;
+        updateData.pmReviewResolvedAt = null;
+        updateData.pmReviewResolvedBy = null;
+        updateData.pmReviewNote = null;
+        updateData.pmReviewRequestedAt = null;
+        updateData.pmReviewRequestedBy = null;
+      }
+    }
+
     let task;
     if (tenantId) {
       task = await storage.updateTaskWithTenant(req.params.id, tenantId, updateData);
