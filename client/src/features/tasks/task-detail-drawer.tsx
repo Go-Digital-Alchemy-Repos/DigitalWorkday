@@ -1113,23 +1113,23 @@ export function TaskDetailDrawer({
   const panelSidebar = (
     <div className="p-4 space-y-5">
       <div className="space-y-4">
-        <FormFieldWrapper label="Assignees" labelIcon={<Users className="h-3.5 w-3.5" />}>
+        <FormFieldWrapper label="Assignees" labelIcon={<Users className="h-3.5 w-3.5 text-blue-500" />}>
           <MultiSelectAssignees taskId={task.id} assignees={assigneeUsers} workspaceId={workspaceId} onAssigneeChange={onRefresh} />
         </FormFieldWrapper>
 
-        <FormFieldWrapper label="Status" labelIcon={<Layers className="h-3.5 w-3.5" />}>
+        <FormFieldWrapper label="Status" labelIcon={<Layers className="h-3.5 w-3.5 text-violet-500" />}>
           <StatusSelector value={task.status as TaskStatus} onChange={handleStatusChange} className="w-full h-8" data-testid="select-status" />
         </FormFieldWrapper>
 
-        <FormFieldWrapper label="Priority" labelIcon={<Flag className="h-3.5 w-3.5" />}>
+        <FormFieldWrapper label="Priority" labelIcon={<Flag className="h-3.5 w-3.5 text-orange-500" />}>
           <PrioritySelector value={task.priority as PriorityLevel} onChange={(value) => onUpdate?.(task.id, { priority: value })} className="w-full h-8" data-testid="select-priority" />
         </FormFieldWrapper>
 
-        <FormFieldWrapper label="Due Date" labelIcon={<Calendar className="h-3.5 w-3.5" />}>
+        <FormFieldWrapper label="Due Date" labelIcon={<Calendar className="h-3.5 w-3.5 text-green-500" />}>
           <DatePickerWithChips value={task.dueDate ? new Date(task.dueDate) : null} onChange={(date) => onUpdate?.(task.id, { dueDate: date as any })} className="w-full h-8" data-testid="button-due-date" />
         </FormFieldWrapper>
 
-        <FormFieldWrapper label="Estimate" labelIcon={<Clock className="h-3.5 w-3.5" />}>
+        <FormFieldWrapper label="Estimate" labelIcon={<Clock className="h-3.5 w-3.5 text-amber-500" />}>
           <div className="flex items-center gap-2">
             <Input
               type="number"
@@ -1195,12 +1195,12 @@ export function TaskDetailDrawer({
           </div>
         </FormFieldWrapper>
 
-        <FormFieldWrapper label="Watchers" labelIcon={<Eye className="h-3.5 w-3.5" />}>
+        <FormFieldWrapper label="Watchers" labelIcon={<Eye className="h-3.5 w-3.5 text-teal-500" />}>
           <MultiSelectWatchers taskId={task.id} watchers={watcherUsers} workspaceId={workspaceId} onWatcherChange={onRefresh} />
         </FormFieldWrapper>
 
         {enableProjectMilestones && task.projectId && projectMilestones.length > 0 && (
-          <FormFieldWrapper label="Milestone" labelIcon={<Flag className="h-3.5 w-3.5" />}>
+          <FormFieldWrapper label="Milestone" labelIcon={<Flag className="h-3.5 w-3.5 text-indigo-500" />}>
             <Select value={task.milestoneId ?? "none"} onValueChange={(value) => onUpdate?.(task.id, { milestoneId: value === "none" ? null : value })}>
               <SelectTrigger className="w-full h-8" data-testid="select-milestone">
                 <SelectValue placeholder="No milestone" />
@@ -1219,8 +1219,8 @@ export function TaskDetailDrawer({
       <Separator />
 
       <div className="space-y-2">
-        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <Tag className="h-3.5 w-3.5" />
+        <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+          <Tag className="h-3.5 w-3.5 text-rose-500" />
           Tags
         </label>
         <div className="flex flex-wrap gap-1.5 min-h-[28px] items-center">
@@ -1288,8 +1288,8 @@ export function TaskDetailDrawer({
       <Separator />
 
       <div className="space-y-2">
-        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <Layers className="h-3.5 w-3.5" />
+        <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+          <Layers className="h-3.5 w-3.5 text-violet-500" />
           Subtasks ({(task.subtasks || []).length})
         </label>
         <SubtaskList
@@ -1316,8 +1316,8 @@ export function TaskDetailDrawer({
         <>
           <Separator />
           <div className="space-y-2" data-testid="section-time-tracked">
-            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <Clock className="h-3.5 w-3.5" />
+            <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+              <Clock className="h-3.5 w-3.5 text-amber-500" />
               Time Tracked
             </label>
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/30">

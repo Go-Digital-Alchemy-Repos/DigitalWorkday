@@ -30,17 +30,15 @@ export function FormFieldWrapper({
       <label
         className={cn(
           "flex items-center gap-1.5 text-xs font-medium",
-          error ? "text-destructive" : "text-muted-foreground",
+          error ? "text-destructive" : "text-foreground",
           labelClassName
         )}
       >
         {labelIcon && <span className="flex-shrink-0">{labelIcon}</span>}
-        <span>{label}</span>
+        <span className="text-[13px]">{label}</span>
         {required && <span className="text-destructive">*</span>}
       </label>
-      
       {children}
-      
       {error ? (
         <p className="flex items-center gap-1 text-xs text-destructive" role="alert">
           <AlertCircle className="h-3 w-3 flex-shrink-0" />

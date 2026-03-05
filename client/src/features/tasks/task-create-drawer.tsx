@@ -400,8 +400,8 @@ export function TaskCreateDrawer({
             name="title"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <Type className="h-3.5 w-3.5" />
+                <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                  <Type className="h-3.5 w-3.5 text-blue-500" />
                   Title
                 </FormLabel>
                 <FormControl>
@@ -421,8 +421,8 @@ export function TaskCreateDrawer({
             name="description"
             render={({ field }) => (
               <FormItem>
-                <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                  <FileText className="h-3.5 w-3.5" />
+                <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                  <FileText className="h-3.5 w-3.5 text-indigo-500" />
                   Description
                 </FormLabel>
                 <FormControl>
@@ -449,8 +449,8 @@ export function TaskCreateDrawer({
                 name="sectionId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                      <FolderKanban className="h-3.5 w-3.5" />
+                    <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                      <FolderKanban className="h-3.5 w-3.5 text-cyan-500" />
                       Section
                     </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
@@ -478,8 +478,8 @@ export function TaskCreateDrawer({
               name="priority"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                    <Flag className="h-3.5 w-3.5" />
+                  <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                    <Flag className="h-3.5 w-3.5 text-orange-500" />
                     Priority
                   </FormLabel>
                   <FormControl>
@@ -499,8 +499,8 @@ export function TaskCreateDrawer({
               name="status"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                    <Layers className="h-3.5 w-3.5" />
+                  <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                    <Layers className="h-3.5 w-3.5 text-violet-500" />
                     Status
                   </FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
@@ -526,8 +526,8 @@ export function TaskCreateDrawer({
               name="dueDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                    <CalendarIcon className="h-3.5 w-3.5" />
+                  <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                    <CalendarIcon className="h-3.5 w-3.5 text-green-500" />
                     Due Date
                   </FormLabel>
                   <Popover>
@@ -561,8 +561,8 @@ export function TaskCreateDrawer({
             />
 
             <FormItem>
-              <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-                <Clock className="h-3.5 w-3.5" />
+              <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+                <Clock className="h-3.5 w-3.5 text-amber-500" />
                 Estimate
               </FormLabel>
               <div className="flex items-center gap-2">
@@ -624,8 +624,8 @@ export function TaskCreateDrawer({
           </div>
 
           <div className="space-y-3">
-            <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
-              <Users className="h-3.5 w-3.5" />
+            <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-foreground">
+              <Users className="h-3.5 w-3.5 text-blue-500" />
               Assignees
             </FormLabel>
             
@@ -869,7 +869,7 @@ export function TaskCreateDrawer({
             >
               <div className="space-y-2">
                 <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
-                  <Tag className="h-3.5 w-3.5" />
+                  <Tag className="h-3.5 w-3.5 text-rose-500" />
                   Tags
                 </label>
                 <div className="flex flex-wrap gap-1.5 min-h-[32px] items-center">

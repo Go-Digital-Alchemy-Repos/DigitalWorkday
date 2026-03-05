@@ -593,8 +593,8 @@ export function SubtaskDetailDrawer({
 
       <div className="space-y-4">
         <div className="space-y-2">
-          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <Layers className="h-3.5 w-3.5" />
+          <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+            <Layers className="h-3.5 w-3.5 text-violet-500" />
             Status
           </label>
           <Select value={subtask.status || "todo"} onValueChange={(value) => onUpdate?.(subtask.id, { status: value })}>
@@ -611,8 +611,8 @@ export function SubtaskDetailDrawer({
         </div>
 
         <div className="space-y-2">
-          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <Flag className="h-3.5 w-3.5" />
+          <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+            <Flag className="h-3.5 w-3.5 text-orange-500" />
             Priority
           </label>
           <PrioritySelector
@@ -624,8 +624,8 @@ export function SubtaskDetailDrawer({
         </div>
 
         <div className="space-y-2">
-          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <Calendar className="h-3.5 w-3.5" />
+          <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+            <Calendar className="h-3.5 w-3.5 text-green-500" />
             Due Date
           </label>
           <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
@@ -653,8 +653,8 @@ export function SubtaskDetailDrawer({
         </div>
 
         <div className="space-y-2">
-          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <Clock className="h-3.5 w-3.5" />
+          <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+            <Clock className="h-3.5 w-3.5 text-amber-500" />
             Estimate
           </label>
           <div className="flex items-center gap-2">
@@ -693,8 +693,8 @@ export function SubtaskDetailDrawer({
         </div>
 
         <div className="space-y-2">
-          <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-            <Users className="h-3.5 w-3.5" />
+          <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+            <Users className="h-3.5 w-3.5 text-blue-500" />
             Assignees
           </label>
           {isActualSubtask ? (
@@ -721,8 +721,8 @@ export function SubtaskDetailDrawer({
       <Separator />
 
       <div className="space-y-2">
-        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <Tag className="h-3.5 w-3.5" />
+        <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+          <Tag className="h-3.5 w-3.5 text-rose-500" />
           Tags
         </label>
         <div className="flex flex-wrap gap-1.5 min-h-[28px] items-center">
@@ -807,8 +807,8 @@ export function SubtaskDetailDrawer({
       <Separator />
 
       <div className="space-y-2">
-        <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-          <CheckSquare className="h-3.5 w-3.5" />
+        <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+          <CheckSquare className="h-3.5 w-3.5 text-sky-500" />
           Parent Task
         </label>
         <button onClick={onBack} className="text-sm text-primary hover:underline cursor-pointer" data-testid="link-parent-task">
@@ -820,8 +820,8 @@ export function SubtaskDetailDrawer({
         <>
           <Separator />
           <div className="space-y-2" data-testid="section-time-tracked">
-            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
-              <Clock className="h-3.5 w-3.5" />
+            <label className="flex items-center gap-2 text-xs font-medium text-foreground">
+              <Clock className="h-3.5 w-3.5 text-amber-500" />
               Time Tracked
             </label>
             <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/30">
