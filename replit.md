@@ -62,6 +62,48 @@ MyWorkDay is an Asana-inspired, multi-tenant project management application desi
 - **Google Calendar Follow-Up Integration** (`ENABLE_GOOGLE_CALENDAR_FOLLOWUPS`): Allows PMs to schedule client follow-up reminders directly in Google Calendar from the PM Dashboard. Requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` env secrets. Per-user OAuth tokens stored in `google_calendar_tokens` table. Service: `server/services/calendarIntegrationService.ts`. Routes: `GET /api/calendar/auth-url`, `GET /api/calendar/callback`, `GET /api/calendar/status`, `POST /api/calendar/events/followup`, `DELETE /api/calendar/disconnect`. UI: "Schedule" button in the Client Follow-Ups table on the PM Dashboard (`data-testid="button-schedule-followup-{projectId}"`); dialog with date/time picker and notes field; connect flow via OAuth redirect. Created event title: "Follow up with [Client] — [Project]", includes project link, 30-minute duration, email+popup reminders. Token refresh handled automatically by googleapis library.
 - **Client Communication Timeline** (`ENABLE_COMMUNICATION_TIMELINE`): Non-destructive, additive event log tracking all client-facing communication events per project and client. Table: `client_communication_events` (id, tenant_id, client_id, project_id, event_type, event_description, created_by_user_id, created_at). Event types: `status_report_sent`, `client_contact_logged`, `follow_up_created`, `milestone_update`, `client_email_sent`, `manual_note`. APIs: `GET /api/projects/:id/communication-events`, `POST /api/projects/:id/communication-events`, `GET /api/clients/:clientId/communication-events`. Auto-logged when client contact or status report endpoints are called. UI: "Comms" button (`data-testid="button-project-comms"`) in individual project page header opens a Sheet panel (`data-testid="project-communication-timeline"`); "Communication" section in Client Profile page. Service: `server/services/communication/communicationTimelineService.ts`. Component: `client/src/features/communication/CommunicationTimeline.tsx`.
 
+## System Performance Architecture
+
+### Route Modularization
+All API routes are organized as Express Router modules under `server/http/domains/`. Each domain (tasks, projects, reports, billing, communication, calendar, etc.) is its own file registered in `server/http/mount.ts`. No monolithic `routes.ts` exists.
+
+### Query Batching (Anti-N+1)
+Task hydration uses `getTasksByUserBatched` in `server/http/domains/tasks.router.ts` (controlled by `config.features.enableTasksBatchHydration`). This fetches all related records (assignees, tags, watchers, attachments) in bulk INs rather than per-task queries.
+
+### Report Caching
+All expensive aggregate report endpoints use an in-memory TTL cache via `server/lib/reportCache.ts`:
+- `withCache(ttlMs)` middleware factory intercepts JSON responses and caches by `tenantId + path + queryString`
+- Workload reports: 30s TTL
+- Client/employee analytics: 60s TTL
+- Forecasting reports: 120s TTL
+- PM Portfolio: 30s TTL
+- Cache is per-process (single instance), zero external dependencies
+- `X-Cache: HIT/MISS` header visible in responses for debugging
+
+### DB Indexes
+Comprehensive indexes exist on all high-query tables. Key patterns:
+- `tasks(tenant_id)`, `tasks(project_id)`, `tasks(status)`, compound indexes for multi-column filters
+- `task_assignees(task_id)` via unique(task_id, user_id), `task_tags(task_id)` via unique(task_id, tag_id)
+- `notifications(user_id, read)` for unread count queries
+- `time_entries(tenant_id, project_id, start_time)` for time reports
+
+### Request Log Sampling
+`server/middleware/requestLogger.ts` samples high-frequency polling endpoints at 5% to reduce log noise:
+- `/api/notifications/unread-count`
+- `/api/tasks/my`
+- `/api/communication/followups`
+- `/api/communication/health-summary`
+- Errors (4xx/5xx) are always logged regardless
+
+### Bundle Code Splitting
+`client/src/routing/tenantRouter.tsx` uses `React.lazy()` with `trackChunkLoad()` for every page. Each page loads its JS chunk on demand. Layouts (TenantLayout, SuperLayout, ClientPortalLayout) are also lazy-split in `App.tsx`.
+
+### Performance Monitoring
+`server/lib/perfLogger.ts` instruments both HTTP requests and DB queries:
+- Slow requests (>300ms default) → warning log
+- Slow queries (>300ms default) → warning log with truncated SQL
+- `PERF_SLOW_THRESHOLD_MS` and `PERF_SLOW_QUERY_MS` env vars for tuning
+
 ## External Dependencies
 - **PostgreSQL**: Primary database.
 - **Socket.IO**: Real-time communication.

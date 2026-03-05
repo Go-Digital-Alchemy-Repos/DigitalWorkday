@@ -34,8 +34,25 @@ const EXCLUDED_PATHS = [
   "/favicon.ico",
 ];
 
+/**
+ * High-frequency polling endpoints that generate significant log volume.
+ * These are sampled at a low rate to reduce noise — only 1 in N successful
+ * GET requests are logged. Errors (4xx/5xx) are always logged regardless.
+ */
+const HIGH_FREQUENCY_PATHS = [
+  "/api/notifications/unread-count",
+  "/api/tasks/my",
+  "/api/communication/followups",
+  "/api/communication/health-summary",
+];
+const HIGH_FREQUENCY_SAMPLE_RATE = 0.05; // Log ~5% of successful polling requests
+
 function shouldExclude(path: string): boolean {
   return EXCLUDED_PATHS.some(excluded => path === excluded || path.startsWith("/assets/"));
+}
+
+function isHighFrequency(method: string, path: string): boolean {
+  return method === "GET" && HIGH_FREQUENCY_PATHS.some(p => path === p || path.startsWith(p + "?"));
 }
 
 function getTenantId(req: Request): string | undefined {
@@ -60,8 +77,17 @@ export function requestLogger(
 
   const start = perfMark();
 
+  const highFreq = isHighFrequency(req.method, req.path);
+
   res.on("finish", () => {
     const durationMs = perfMs(start);
+    const status = res.statusCode;
+
+    // For high-frequency polling endpoints, skip successful responses unless sampled.
+    // Always log errors regardless.
+    if (highFreq && status < 400 && Math.random() > HIGH_FREQUENCY_SAMPLE_RATE) {
+      return;
+    }
 
     const ctx: LogContext = {
       requestId: req.requestId || "unknown",
@@ -69,13 +95,14 @@ export function requestLogger(
       userId: getUserId(req),
       method: req.method,
       path: req.path,
-      status: res.statusCode,
+      status,
       durationMs,
+      ...(highFreq ? { sampled: true } : {}),
     };
 
-    if (res.statusCode >= 500) {
+    if (status >= 500) {
       reqLog.error("Request failed", ctx);
-    } else if (res.statusCode >= 400) {
+    } else if (status >= 400) {
       reqLog.warn("Request client error", ctx);
     } else {
       reqLog.info("Request completed", ctx);

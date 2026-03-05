@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { db } from "../../db";
 import { sql } from "drizzle-orm";
 import { handleRouteError } from "../../lib/errors";
+import { withCache } from "../../lib/reportCache";
 import {
   parseReportRange,
   normalizeFilters,
@@ -20,7 +21,7 @@ function firstRow<T>(rows: T[]): T | null {
   return rows[0] ?? null;
 }
 
-router.get("/workload/team", async (req: Request, res: Response) => {
+router.get("/workload/team", withCache(30_000), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
@@ -282,7 +283,7 @@ router.get("/workload/users/:userId", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/workload/capacity", async (req: Request, res: Response) => {
+router.get("/workload/capacity", withCache(60_000), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
@@ -379,7 +380,7 @@ router.get("/workload/capacity", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/workload/risk", async (req: Request, res: Response) => {
+router.get("/workload/risk", withCache(60_000), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);

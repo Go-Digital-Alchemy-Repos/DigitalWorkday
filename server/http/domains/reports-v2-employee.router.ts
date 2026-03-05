@@ -2,6 +2,7 @@ import { Router, Request, Response } from "express";
 import { db } from "../../db";
 import { sql } from "drizzle-orm";
 import { handleRouteError } from "../../lib/errors";
+import { withCache } from "../../lib/reportCache";
 import {
   parseReportRange,
   normalizeFilters,
@@ -34,7 +35,7 @@ async function dbRows<T extends Record<string, unknown>>(
   return result as unknown as T[];
 }
 
-router.get("/employee/overview", async (req: Request, res: Response) => {
+router.get("/employee/overview", withCache(60_000), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
@@ -157,7 +158,7 @@ router.get("/employee/overview", async (req: Request, res: Response) => {
   }
 });
 
-router.get("/employee/workload", async (req: Request, res: Response) => {
+router.get("/employee/workload", withCache(60_000), async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
