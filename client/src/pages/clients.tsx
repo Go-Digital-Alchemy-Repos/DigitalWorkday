@@ -1158,7 +1158,7 @@ interface ClientViewProps {
 
 function LostSectionDivider({ count }: { count: number }) {
   return (
-    <div className="flex items-center gap-3 mt-8 mb-4" data-testid="lost-clients-divider">
+    <div className="flex items-center gap-3 mt-10 mb-6" data-testid="lost-clients-divider">
       <div className="flex-1 h-px bg-border" />
       <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-900/50">
         <span className="h-2 w-2 rounded-full bg-zinc-400 shrink-0" />
