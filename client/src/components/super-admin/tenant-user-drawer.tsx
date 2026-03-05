@@ -585,7 +585,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
                           <div className="flex items-center justify-between rounded-lg border p-3 col-span-2">
                             <div className="space-y-0.5">
                               <Label htmlFor="edit-is-pm" className="text-sm font-medium">Project Manager</Label>
-                              <p className="text-xs text-muted-foreground">Grants access to PM Portfolio, billing approval, and related reports</p>
+                              <p className="text-xs text-muted-foreground">Grants access to Project Management, billing approval, and related reports</p>
                             </div>
                             <Switch
                               id="edit-is-pm"
