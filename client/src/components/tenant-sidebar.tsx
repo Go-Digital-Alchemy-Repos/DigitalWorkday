@@ -697,18 +697,20 @@ export function TenantSidebar() {
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>
-                    <SidebarMenuItem>
-                      <SidebarMenuButton
-                        asChild
-                        isActive={location === "/reports" || location.startsWith("/reports/")}
-                        tooltip="Reports"
-                      >
-                        <Link href="/reports" data-testid="link-reports">
-                          <BarChart3 className="h-4 w-4" />
-                          <span>Reports</span>
-                        </Link>
-                      </SidebarMenuButton>
-                    </SidebarMenuItem>
+                    {enablePmPortfolioDashboard && canSeePmPortfolio && (
+                      <SidebarMenuItem>
+                        <SidebarMenuButton
+                          asChild
+                          isActive={location === "/reports" || location.startsWith("/reports/")}
+                          tooltip="Reports"
+                        >
+                          <Link href="/reports" data-testid="link-reports">
+                            <BarChart3 className="h-4 w-4" />
+                            <span>Reports</span>
+                          </Link>
+                        </SidebarMenuButton>
+                      </SidebarMenuItem>
+                    )}
                     <SidebarMenuItem>
                       <SidebarMenuButton
                         asChild

@@ -78,13 +78,13 @@ export function reportingGuard(req: Request, res: Response, next: NextFunction) 
   }
   const user = req.user as any;
   if (
-    user.role !== UserRole.ADMIN &&
-    user.role !== UserRole.SUPER_USER &&
-    user.role !== "tenant_owner"
+    user.role === UserRole.SUPER_USER ||
+    user.role === "tenant_owner" ||
+    (user.role === UserRole.ADMIN && user.isProjectManager === true)
   ) {
-    return next(AppError.forbidden("Admin access required for reports"));
+    return next();
   }
-  next();
+  return next(AppError.forbidden("Project Manager access required for reports"));
 }
 
 export function getTenantId(req: Request): string {

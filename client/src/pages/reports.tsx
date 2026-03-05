@@ -331,8 +331,10 @@ export default function ReportsPage() {
   const [currentView, setCurrentView] = useState<ReportView>("landing");
   const flags = useFeatureFlags();
 
-  const isAdmin = user?.role === "admin" || user?.role === "tenant_owner";
-  const isSuperUser = user?.role === "super_user";
+  const canAccessReports = 
+    user?.role === "super_user" || 
+    user?.role === "tenant_owner" || 
+    (user?.role === "admin" && (user as any)?.isProjectManager === true);
 
   if (isLoading) {
     return (
@@ -342,7 +344,7 @@ export default function ReportsPage() {
     );
   }
 
-  if (!isAdmin && !isSuperUser) {
+  if (!canAccessReports) {
     return <Redirect to="/" />;
   }
 
