@@ -2,11 +2,11 @@ import { AlertTriangle, X } from "lucide-react";
 import { useState } from "react";
 import { useFeatures } from "@/contexts/features-context";
 import { Button } from "@/components/ui/button";
-import { useAuth } from "@/lib/auth";
+import { useAuthSafe } from "@/lib/auth";
 
 export function FeaturesBanner() {
   const { features, recommendations, hasDisabledFeatures } = useFeatures();
-  const { user } = useAuth();
+  const user = useAuthSafe()?.user ?? null;
   const [dismissed, setDismissed] = useState(false);
 
   if (!hasDisabledFeatures || dismissed) {

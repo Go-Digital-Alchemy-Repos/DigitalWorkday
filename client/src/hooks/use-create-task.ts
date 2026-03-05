@@ -14,6 +14,7 @@ export interface CreateTaskData {
   personalSectionId?: string;
   assigneeIds?: string[];
   estimateMinutes?: number | null;
+  isBillable?: boolean;
 }
 
 export interface CreatePersonalTaskData {

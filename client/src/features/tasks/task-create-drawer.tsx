@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef, useCallback } from "react";
+import { useAuth } from "@/lib/auth";
 import { useForm } from "react-hook-form";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { zodResolver } from "@hookform/resolvers/zod";
@@ -43,6 +44,7 @@ import {
   Image,
   File,
   Trash2,
+  DollarSign,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -91,6 +93,7 @@ interface TaskCreateDrawerProps {
     dueDate?: Date | null;
     assigneeIds?: string[];
     estimateMinutes?: number | null;
+    isBillable?: boolean;
     tagIds?: string[];
     subtaskTitles?: string[];
     queuedFiles?: File[];
@@ -127,9 +130,11 @@ export function TaskCreateDrawer({
   workspaceId,
 }: TaskCreateDrawerProps) {
   const { toast } = useToast();
+  const { user: currentUser } = useAuth();
   const [hasChanges, setHasChanges] = useState(false);
   const [createEstimateHours, setCreateEstimateHours] = useState(0);
   const [createEstimateMinutes, setCreateEstimateMinutes] = useState(0);
+  const [isBillable, setIsBillable] = useState(true);
   const [selectedAssignees, setSelectedAssignees] = useState<string[]>([]);
   const [selectedTagIds, setSelectedTagIds] = useState<string[]>([]);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
@@ -199,6 +204,7 @@ export function TaskCreateDrawer({
       setNewTagColor("#3b82f6");
       setCreateEstimateHours(0);
       setCreateEstimateMinutes(0);
+      setIsBillable(true);
     }
   }, [open, form]);
 
@@ -228,6 +234,7 @@ export function TaskCreateDrawer({
       await onSubmit({
         ...data,
         assigneeIds: selectedAssignees,
+        isBillable,
         tagIds: selectedTagIds.length > 0 ? selectedTagIds : undefined,
         subtaskTitles: subtaskTitles.length > 0 ? subtaskTitles : undefined,
         queuedFiles: queuedFiles.length > 0 ? queuedFiles.map(f => f.file) : undefined,
@@ -241,6 +248,7 @@ export function TaskCreateDrawer({
       setHasChanges(false);
       setCreateEstimateHours(0);
       setCreateEstimateMinutes(0);
+      setIsBillable(true);
       onOpenChange(false);
     } catch (error) {
       console.error("Failed to create task:", error);
@@ -257,6 +265,7 @@ export function TaskCreateDrawer({
     setHasChanges(false);
     setCreateEstimateHours(0);
     setCreateEstimateMinutes(0);
+    setIsBillable(true);
     onOpenChange(false);
   };
 
@@ -527,6 +536,30 @@ export function TaskCreateDrawer({
                   data-testid="input-estimate-minutes"
                 />
                 <span className="text-xs text-muted-foreground shrink-0">m</span>
+                <Separator orientation="vertical" className="h-6 mx-1" />
+                {(() => {
+                  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user" || currentUser?.role === "tenant_owner";
+                  const canToggle = isAdmin || currentUser?.isProjectManager;
+                  return (
+                    <button
+                      type="button"
+                      onClick={() => canToggle && setIsBillable(!isBillable)}
+                      disabled={!canToggle}
+                      className={cn(
+                        "flex items-center gap-1 px-2 py-1 rounded-md text-xs font-medium border transition-colors shrink-0",
+                        isBillable
+                          ? "bg-green-50 border-green-300 text-green-700 dark:bg-green-950/40 dark:border-green-700 dark:text-green-400"
+                          : "bg-transparent border-dashed border-muted-foreground/40 text-muted-foreground",
+                        canToggle ? "cursor-pointer hover:opacity-80" : "cursor-not-allowed opacity-60"
+                      )}
+                      title={!canToggle ? "Only admins and project managers can change billable status" : (isBillable ? "Mark as non-billable" : "Mark as billable")}
+                      data-testid="button-toggle-billable"
+                    >
+                      <DollarSign className="h-3 w-3" />
+                      {isBillable ? "Billable" : "Non-billable"}
+                    </button>
+                  );
+                })()}
               </div>
             </FormItem>
           </div>

@@ -6,7 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
-import { AuthProvider, useAuth, useAuthSafe } from "@/lib/auth";
+import { AuthProvider, useAuthSafe } from "@/lib/auth";
 import { TenantThemeProvider } from "@/lib/tenant-theme-loader";
 import { useAppMode } from "@/hooks/useAppMode";
 import { PresenceProvider } from "@/hooks/use-presence";
@@ -23,7 +23,10 @@ const SuperLayout = lazy(() => import("@/routing/superRouter").then(m => ({ defa
 const ClientPortalLayout = lazy(() => import("@/routing/portalRouter").then(m => ({ default: m.ClientPortalLayout })));
 
 function AppLayout() {
-  const { isAuthenticated, isLoading, user } = useAuth();
+  const auth = useAuthSafe();
+  const isAuthenticated = auth?.isAuthenticated ?? false;
+  const isLoading = auth?.isLoading ?? true;
+  const user = auth?.user ?? null;
   const { appMode } = useAppMode();
   const [location] = useLocation();
 
