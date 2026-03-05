@@ -314,18 +314,56 @@ export function TaskCreateDrawer({
     setSubtaskTitles(prev => prev.filter((_, i) => i !== index));
   }, []);
 
-  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
-    const files = e.target.files;
-    if (!files) return;
+  const [isDragOver, setIsDragOver] = useState(false);
+
+  const addFilesToQueue = useCallback((files: FileList | File[]) => {
     const newFiles: QueuedFile[] = Array.from(files).map(file => ({
       id: `${Date.now()}-${Math.random().toString(36).slice(2)}`,
       file,
       name: file.name,
     }));
     setQueuedFiles(prev => [...prev, ...newFiles]);
+  }, []);
+
+  const handleFileSelect = useCallback((e: React.ChangeEvent<HTMLInputElement>) => {
+    const files = e.target.files;
+    if (!files) return;
+    addFilesToQueue(files);
     if (fileInputRef.current) {
       fileInputRef.current.value = "";
     }
+  }, [addFilesToQueue]);
+
+  const handleDrop = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(false);
+    if (e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+      addFilesToQueue(e.dataTransfer.files);
+    }
+  }, [addFilesToQueue]);
+
+  const handleDragOver = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
+    e.dataTransfer.dropEffect = 'copy';
+  }, []);
+
+  const handleDragLeave = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    const relatedTarget = e.relatedTarget as Node | null;
+    const currentTarget = e.currentTarget as Node;
+    if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
+      setIsDragOver(false);
+    }
+  }, []);
+
+  const handleDragEnter = useCallback((e: React.DragEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    setIsDragOver(true);
   }, []);
 
   const removeQueuedFile = useCallback((id: string) => {
@@ -669,22 +707,34 @@ export function TaskCreateDrawer({
               style={{ borderRadius: "10px" }}
             >
               <div className="space-y-3">
-                <div className="flex items-center justify-between">
-                  <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
-                    <Paperclip className="h-3.5 w-3.5" />
-                    Attachments
-                  </label>
-                  <Button
-                    type="button"
-                    variant="outline"
-                    size="sm"
-                    className="h-8"
-                    onClick={() => fileInputRef.current?.click()}
-                    data-testid="button-add-attachment"
-                  >
-                    <Upload className="h-3.5 w-3.5 mr-1.5" />
-                    Add File
-                  </Button>
+                <label className="flex items-center gap-2 font-medium text-foreground text-[16px]">
+                  <Paperclip className="h-3.5 w-3.5" />
+                  Attachments
+                </label>
+
+                <div
+                  role="button"
+                  tabIndex={0}
+                  aria-label="Attachments. Drag and drop or press Enter to upload files"
+                  className={cn(
+                    "border-2 border-dashed rounded-lg p-4 transition-colors cursor-pointer focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring",
+                    isDragOver
+                      ? "border-primary bg-primary/5"
+                      : "border-muted-foreground/20 hover:border-muted-foreground/40"
+                  )}
+                  onDrop={handleDrop}
+                  onDragOver={handleDragOver}
+                  onDragLeave={handleDragLeave}
+                  onDragEnter={handleDragEnter}
+                  onClick={() => fileInputRef.current?.click()}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" || e.key === " ") {
+                      e.preventDefault();
+                      fileInputRef.current?.click();
+                    }
+                  }}
+                  data-testid="dropzone-attachments"
+                >
                   <input
                     ref={fileInputRef}
                     type="file"
@@ -693,13 +743,19 @@ export function TaskCreateDrawer({
                     onChange={handleFileSelect}
                     data-testid="input-file-upload"
                   />
+                  <div className="flex flex-col items-center justify-center gap-2 text-center pointer-events-none">
+                    <Upload className="h-6 w-6 text-muted-foreground" />
+                    <div className="text-sm text-muted-foreground">
+                      <span>Drop files here or </span>
+                      <span className="text-primary">browse</span>
+                    </div>
+                    <p className="text-xs text-muted-foreground">
+                      Files will be uploaded when the task is created
+                    </p>
+                  </div>
                 </div>
 
-                {queuedFiles.length === 0 ? (
-                  <p className="text-sm text-muted-foreground">
-                    No files attached. Files will be uploaded when the task is created.
-                  </p>
-                ) : (
+                {queuedFiles.length > 0 && (
                   <div className="space-y-2">
                     {queuedFiles.map((qf) => {
                       const FileIcon = getFileIcon(qf.file.type);
