@@ -1,6 +1,7 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
+import { execSync } from "child_process";
 
 // server deps to bundle to reduce openat(2) syscalls
 // which helps cold start times
@@ -33,6 +34,17 @@ const allowlist = [
 ];
 
 async function buildAll() {
+  if (process.env.SKIP_TYPECHECK !== "1") {
+    console.log("running type check...");
+    try {
+      execSync("npx tsc --noEmit", { stdio: "inherit" });
+      console.log("type check passed");
+    } catch {
+      console.error("type check failed — aborting build");
+      process.exit(1);
+    }
+  }
+
   await rm("dist", { recursive: true, force: true });
 
   console.log("building client...");

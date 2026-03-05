@@ -201,7 +201,15 @@ export class TimeTrackingRepository {
       conditions.push(eq(timeEntries.taskId, filters.taskId));
     }
     if (filters?.divisionId) {
-      conditions.push(eq(timeEntries.divisionId, filters.divisionId));
+      const divisionProjects = await db.select({ id: projects.id })
+        .from(projects)
+        .where(and(eq(projects.tenantId, tenantId), eq(projects.divisionId, filters.divisionId)));
+      const projectIds = divisionProjects.map(p => p.id);
+      if (projectIds.length > 0) {
+        conditions.push(inArray(timeEntries.projectId, projectIds));
+      } else {
+        return [];
+      }
     }
     if (filters?.scope) {
       conditions.push(eq(timeEntries.scope, filters.scope));
