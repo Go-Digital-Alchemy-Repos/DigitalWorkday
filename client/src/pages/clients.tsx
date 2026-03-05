@@ -1150,52 +1150,85 @@ const VIRTUALIZATION_THRESHOLD = 20;
 
 interface ClientViewProps {
   groupedClients: { parent: ClientWithHierarchy; children: ClientWithHierarchy[] }[];
+  lostGroupedClients?: { parent: ClientWithHierarchy; children: ClientWithHierarchy[] }[];
   selectedIds: Set<string>;
   onSelect: (id: string) => void;
   onOpenProfile: (id: string) => void;
 }
 
-function ClientGridView({ groupedClients, selectedIds, onSelect, onOpenProfile }: ClientViewProps) {
+function LostSectionDivider({ count }: { count: number }) {
   return (
-    <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="client-grid">
-      {groupedClients.map(({ parent, children }) => (
-        <ClientGroupCard
-          key={parent.id}
-          parent={parent}
-          children={children}
-          selectedIds={selectedIds}
-          onSelect={onSelect}
-          showCheckbox={selectedIds.size > 0}
-          onOpenProfile={onOpenProfile}
-        />
-      ))}
+    <div className="flex items-center gap-3 mt-8 mb-4" data-testid="lost-clients-divider">
+      <div className="flex-1 h-px bg-border" />
+      <div className="flex items-center gap-2 px-3 py-1.5 rounded-full border border-zinc-300 dark:border-zinc-600 bg-zinc-50 dark:bg-zinc-900/50">
+        <span className="h-2 w-2 rounded-full bg-zinc-400 shrink-0" />
+        <span className="text-xs font-medium text-zinc-500 dark:text-zinc-400 whitespace-nowrap">
+          Lost, Inactive or Out of Business
+        </span>
+        <span className="text-xs text-zinc-400 dark:text-zinc-500">({count})</span>
+      </div>
+      <div className="flex-1 h-px bg-border" />
+    </div>
+  );
+}
+
+function ClientGridView({ groupedClients, lostGroupedClients = [], selectedIds, onSelect, onOpenProfile }: ClientViewProps) {
+  return (
+    <div data-testid="client-grid-wrapper">
+      <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3" data-testid="client-grid">
+        {groupedClients.map(({ parent, children }) => (
+          <ClientGroupCard
+            key={parent.id}
+            parent={parent}
+            children={children}
+            selectedIds={selectedIds}
+            onSelect={onSelect}
+            showCheckbox={selectedIds.size > 0}
+            onOpenProfile={onOpenProfile}
+          />
+        ))}
+      </div>
+      {lostGroupedClients.length > 0 && (
+        <>
+          <LostSectionDivider count={lostGroupedClients.length} />
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3 opacity-80">
+            {lostGroupedClients.map(({ parent, children }) => (
+              <ClientGroupCard
+                key={parent.id}
+                parent={parent}
+                children={children}
+                selectedIds={selectedIds}
+                onSelect={onSelect}
+                showCheckbox={selectedIds.size > 0}
+                onOpenProfile={onOpenProfile}
+              />
+            ))}
+          </div>
+        </>
+      )}
     </div>
   );
 }
 
 function ClientTableView({
   groupedClients,
+  lostGroupedClients = [],
   selectedIds,
   onSelect,
   onOpenProfile,
   density,
 }: ClientViewProps & { density: "comfortable" | "compact" }) {
-  const { virtualizationV1 } = useFeatureFlags();
-  const useVirtual = false; // virtualizationV1 && groupedClients.length > VIRTUALIZATION_THRESHOLD;
-
-  if (useVirtual) {
-    return (
-      <Card className="overflow-hidden border-border/50">
-        <div className="overflow-x-auto">
-          <div className="min-w-[800px]">
-            <TableHeader compact={density === "compact"} />
-            <div style={{ height: "calc(100vh - 380px)" }} data-testid="client-table-virtualized">
-              <VirtualizedList
-                data={groupedClients}
-                style={{ height: "100%" }}
-                overscan={300}
-                itemContent={(_index, { parent, children }) => (
+  return (
+    <div className="space-y-0">
+      {groupedClients.length > 0 && (
+        <Card className="overflow-hidden border-border/50">
+          <div className="overflow-x-auto">
+            <div className="min-w-[800px]">
+              <TableHeader compact={density === "compact"} />
+              <div className="flex flex-col">
+                {groupedClients.map(({ parent, children }) => (
                   <ClientGroupRows
+                    key={parent.id}
                     parent={parent}
                     children={children}
                     selectedIds={selectedIds}
@@ -1204,37 +1237,39 @@ function ClientTableView({
                     compact={density === "compact"}
                     onOpenProfile={onOpenProfile}
                   />
-                )}
-              />
+                ))}
+              </div>
             </div>
           </div>
-        </div>
-      </Card>
-    );
-  }
-
-  return (
-    <Card className="overflow-hidden border-border/50">
-      <div className="overflow-x-auto">
-        <div className="min-w-[800px]">
-          <TableHeader compact={density === "compact"} />
-          <div className="flex flex-col">
-            {groupedClients.map(({ parent, children }) => (
-              <ClientGroupRows
-                key={parent.id}
-                parent={parent}
-                children={children}
-                selectedIds={selectedIds}
-                onSelect={onSelect}
-                showCheckbox={selectedIds.size > 0}
-                compact={density === "compact"}
-                onOpenProfile={onOpenProfile}
-              />
-            ))}
-          </div>
-        </div>
-      </div>
-    </Card>
+        </Card>
+      )}
+      {lostGroupedClients.length > 0 && (
+        <>
+          <LostSectionDivider count={lostGroupedClients.length} />
+          <Card className="overflow-hidden border-border/50 opacity-80">
+            <div className="overflow-x-auto">
+              <div className="min-w-[800px]">
+                <TableHeader compact={density === "compact"} />
+                <div className="flex flex-col">
+                  {lostGroupedClients.map(({ parent, children }) => (
+                    <ClientGroupRows
+                      key={parent.id}
+                      parent={parent}
+                      children={children}
+                      selectedIds={selectedIds}
+                      onSelect={onSelect}
+                      showCheckbox={selectedIds.size > 0}
+                      compact={density === "compact"}
+                      onOpenProfile={onOpenProfile}
+                    />
+                  ))}
+                </div>
+              </div>
+            </div>
+          </Card>
+        </>
+      )}
+    </div>
   );
 }
 
@@ -1829,6 +1864,11 @@ export default function ClientsPage() {
     });
 
     result.sort((a, b) => {
+      // Always push lost_inactive to the very bottom
+      const aLost = a.stage === "lost_inactive" ? 1 : 0;
+      const bLost = b.stage === "lost_inactive" ? 1 : 0;
+      if (aLost !== bLost) return aLost - bLost;
+
       switch (sortValue) {
         case "name-asc":
           return a.companyName.localeCompare(b.companyName);
@@ -1926,6 +1966,16 @@ export default function ClientsPage() {
     // Sort groups by parent's company name to maintain consistent order
     return groups.sort((a, b) => a.parent.companyName.localeCompare(b.parent.companyName));
   }, [filteredAndSortedClients, vipClientIds, viewMode]);
+
+  const activeGroupedClients = useMemo(
+    () => groupedClients.filter(({ parent }) => parent.stage !== "lost_inactive"),
+    [groupedClients]
+  );
+
+  const lostGroupedClients = useMemo(
+    () => groupedClients.filter(({ parent }) => parent.stage === "lost_inactive"),
+    [groupedClients]
+  );
 
   const hasActiveFilters = Object.values(filterValues).some(
     (v) => v && v !== "all"
@@ -2131,17 +2181,19 @@ export default function ClientsPage() {
         />
       )}
 
-      {groupedClients.length > 0 ? (
+      {(activeGroupedClients.length > 0 || lostGroupedClients.length > 0) ? (
         viewMode === "grid" ? (
           <ClientGridView
-            groupedClients={groupedClients}
+            groupedClients={activeGroupedClients}
+            lostGroupedClients={lostGroupedClients}
             selectedIds={selectedIds}
             onSelect={handleSelectClient}
             onOpenProfile={handleOpenClientSheet}
           />
         ) : (
           <ClientTableView
-            groupedClients={groupedClients}
+            groupedClients={activeGroupedClients}
+            lostGroupedClients={lostGroupedClients}
             selectedIds={selectedIds}
             onSelect={handleSelectClient}
             onOpenProfile={handleOpenClientSheet}
