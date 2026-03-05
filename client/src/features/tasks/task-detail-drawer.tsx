@@ -1,6 +1,6 @@
 import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { X, Calendar, Users, Tag, Flag, Layers, Clock, Eye, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Check, Plus, Trash2, Link2, Lock, Share2, SendHorizonal, CheckCircle, History, MessageSquare, FileText, Pencil } from "lucide-react";
+import { X, Calendar, Users, Tag, Flag, Layers, Clock, Eye, ChevronRight, Building2, FolderKanban, Loader2, CheckSquare, Check, Plus, Trash2, Link2, Lock, Share2, SendHorizonal, CheckCircle, History, MessageSquare, FileText, Pencil, DollarSign } from "lucide-react";
 import { useAuth } from "@/lib/auth";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { TaskDrawerSkeleton } from "@/components/skeletons";
@@ -203,6 +203,7 @@ export function TaskDetailDrawer({
   const [completionTimeHours, setCompletionTimeHours] = useState(0);
   const [completionTimeMinutes, setCompletionTimeMinutes] = useState(0);
   const [completionTimeDescription, setCompletionTimeDescription] = useState("");
+  const [completionTimeBillable, setCompletionTimeBillable] = useState(true);
   const [isCompletingTask, setIsCompletingTask] = useState(false);
   const [tagPopoverOpen, setTagPopoverOpen] = useState(false);
   const [isCreatingTag, setIsCreatingTag] = useState(false);
@@ -604,6 +605,7 @@ export function TaskDetailDrawer({
     mutationFn: async (data: { 
       durationSeconds: number; 
       description: string;
+      billable: boolean;
       taskId: string;
       projectId: string | null;
       clientId: string | null;
@@ -613,6 +615,7 @@ export function TaskDetailDrawer({
         projectId: data.projectId,
         clientId: data.clientId,
         description: data.description,
+        billable: data.billable,
         durationSeconds: data.durationSeconds,
         startTime: new Date().toISOString(),
         scope: "in_scope",
@@ -731,6 +734,7 @@ export function TaskDetailDrawer({
       await createTimeEntryMutation.mutateAsync({
         durationSeconds: totalSeconds,
         description: completionTimeDescription || `Completed: ${task?.title}`,
+        billable: completionTimeBillable,
         taskId: task!.id,
         projectId: task?.projectId || null,
         clientId: projectContext?.clientId || null,
@@ -756,6 +760,7 @@ export function TaskDetailDrawer({
     setCompletionTimeHours(0);
     setCompletionTimeMinutes(0);
     setCompletionTimeDescription("");
+    setCompletionTimeBillable(true);
   };
 
   const handleStatusChange = (newStatus: string) => {
@@ -1501,6 +1506,33 @@ export function TaskDetailDrawer({
             <div className="space-y-2">
               <Label>Description (optional)</Label>
               <Textarea value={completionTimeDescription} onChange={(e) => setCompletionTimeDescription(e.target.value)} placeholder="What did you work on?" className="resize-none" data-testid="textarea-completion-description" />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCompletionTimeBillable(true)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                  completionTimeBillable
+                    ? "bg-green-50 border-green-300 text-green-700 dark:bg-green-950/40 dark:border-green-700 dark:text-green-400"
+                    : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
+                }`}
+                data-testid="button-completion-billable"
+              >
+                <DollarSign className="h-3.5 w-3.5" />
+                Billable
+              </button>
+              <button
+                type="button"
+                onClick={() => setCompletionTimeBillable(false)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                  !completionTimeBillable
+                    ? "bg-muted border-foreground/30 text-foreground"
+                    : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
+                }`}
+                data-testid="button-completion-non-billable"
+              >
+                Non-billable
+              </button>
             </div>
           </div>
           <DialogFooter className="flex gap-2 sm:gap-0">

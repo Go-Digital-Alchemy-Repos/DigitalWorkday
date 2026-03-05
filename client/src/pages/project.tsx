@@ -35,6 +35,7 @@ import {
   Share2,
   Flag,
   Zap,
+  DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -139,6 +140,7 @@ export default function ProjectPage() {
   const [completionTimeHours, setCompletionTimeHours] = useState(0);
   const [completionTimeMinutes, setCompletionTimeMinutes] = useState(0);
   const [completionTimeDescription, setCompletionTimeDescription] = useState("");
+  const [completionTimeBillable, setCompletionTimeBillable] = useState(true);
   const [isCompletingTask, setIsCompletingTask] = useState(false);
   const [isCheckingTimeEntries, setIsCheckingTimeEntries] = useState(false);
 
@@ -248,6 +250,7 @@ export default function ProjectPage() {
     mutationFn: async (data: {
       durationSeconds: number;
       description: string;
+      billable: boolean;
       taskId: string;
       projectId: string | null;
       clientId: string | null;
@@ -662,6 +665,7 @@ export default function ProjectPage() {
       await createTimeEntryMutation.mutateAsync({
         durationSeconds: totalSeconds,
         description: completionTimeDescription || `Completed: ${pendingTask?.title}`,
+        billable: completionTimeBillable,
         taskId: pendingCompletionTaskId,
         projectId: projectId || null,
         clientId: project?.clientId || null,
@@ -691,6 +695,7 @@ export default function ProjectPage() {
     setCompletionTimeHours(0);
     setCompletionTimeMinutes(0);
     setCompletionTimeDescription("");
+    setCompletionTimeBillable(true);
   };
 
   const handleEditSection = (sectionId: string, name: string) => {
@@ -1365,6 +1370,33 @@ export default function ProjectPage() {
                 className="resize-none"
                 data-testid="textarea-completion-description"
               />
+            </div>
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={() => setCompletionTimeBillable(true)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                  completionTimeBillable
+                    ? "bg-green-50 border-green-300 text-green-700 dark:bg-green-950/40 dark:border-green-700 dark:text-green-400"
+                    : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
+                }`}
+                data-testid="button-completion-billable"
+              >
+                <DollarSign className="h-3.5 w-3.5" />
+                Billable
+              </button>
+              <button
+                type="button"
+                onClick={() => setCompletionTimeBillable(false)}
+                className={`flex items-center gap-1.5 px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                  !completionTimeBillable
+                    ? "bg-muted border-foreground/30 text-foreground"
+                    : "bg-muted/50 border-border text-muted-foreground hover:bg-muted"
+                }`}
+                data-testid="button-completion-non-billable"
+              >
+                Non-billable
+              </button>
             </div>
           </div>
           <DialogFooter>
