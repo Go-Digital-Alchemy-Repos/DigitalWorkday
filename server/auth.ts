@@ -486,9 +486,10 @@ export function setupBootstrapEndpoints(app: Express): void {
     app.get("/api/v1/auth/dev-accounts", (_req, res) => {
       res.json({
         accounts: [
-          { role: "super_admin", email: "admin@myworkday.dev", password: "SuperAdmin123!", name: "Dev Super Admin" },
-          { role: "tenant_admin", email: "alex@brightstudio.com", password: "Password123!", name: "Alex Rivera" },
-          { role: "tenant_member", email: "mike@brightstudio.com", password: "Password123!", name: "Mike Johnson" },
+          { role: "super_user", email: "admin@digitalworkday.com", password: "admin123", name: "Super Admin" },
+          { role: "tenant_owner", email: "admin@alpha.com", password: "password123", name: "Alpha Corp Owner" },
+          { role: "admin", email: "admin@beta.com", password: "password123", name: "Beta Systems Admin" },
+          { role: "employee", email: "emily@digitalworkday.com", password: "password123", name: "Emily Rodriguez" },
         ],
       });
     });
