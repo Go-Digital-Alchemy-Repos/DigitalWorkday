@@ -69,6 +69,7 @@ router.get("/features/flags", async (_req, res) => {
       enableWeeklyStatusReports: config.features.enableWeeklyStatusReports,
       enableAiPmFocusSummary: config.features.enableAiPmFocusSummary,
       enableBillingApprovalWorkflow: config.features.enableBillingApprovalWorkflow,
+      enableInvoiceDraftBuilder: config.features.enableInvoiceDraftBuilder,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

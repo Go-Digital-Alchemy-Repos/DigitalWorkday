@@ -38,6 +38,7 @@ export interface FeatureFlags {
   enableRiskAckWorkflow: boolean;
   enableAiPmFocusSummary: boolean;
   enableBillingApprovalWorkflow: boolean;
+  enableInvoiceDraftBuilder: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -78,6 +79,7 @@ const ALL_OFF: FeatureFlags = {
   enableRiskAckWorkflow: false,
   enableAiPmFocusSummary: false,
   enableBillingApprovalWorkflow: false,
+  enableInvoiceDraftBuilder: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

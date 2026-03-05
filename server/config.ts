@@ -234,6 +234,7 @@ export const config = {
     enableSoftArchive: optionalEnvBool("ENABLE_SOFT_ARCHIVE", false),
     enableRetentionAuditUi: optionalEnvBool("ENABLE_RETENTION_AUDIT_UI", true),
     enableBillingApprovalWorkflow: optionalEnvBool("ENABLE_BILLING_APPROVAL_WORKFLOW", true),
+    enableInvoiceDraftBuilder: optionalEnvBool("ENABLE_INVOICE_DRAFT_BUILDER", true),
   },
 
   tenancyEnforcement: {

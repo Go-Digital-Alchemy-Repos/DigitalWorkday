@@ -4405,3 +4405,45 @@ export const projectStatusReports = pgTable("project_status_reports", {
 
 export type ProjectStatusReport = typeof projectStatusReports.$inferSelect;
 export type InsertProjectStatusReport = typeof projectStatusReports.$inferInsert;
+
+export const InvoiceDraftStatus = {
+  DRAFT: "draft",
+  EXPORTED: "exported",
+  CANCELLED: "cancelled",
+} as const;
+
+export const invoiceDrafts = pgTable("invoice_drafts", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").notNull(),
+  clientId: varchar("client_id").references(() => clients.id, { onDelete: "cascade" }),
+  projectId: varchar("project_id").references(() => projects.id, { onDelete: "set null" }),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  status: text("status").notNull().default("draft"),
+  totalHours: numeric("total_hours").notNull().default("0"),
+  totalAmount: numeric("total_amount").notNull().default("0"),
+  notes: text("notes"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  index("invoice_drafts_tenant_idx").on(table.tenantId, table.createdAt),
+  index("invoice_drafts_client_idx").on(table.tenantId, table.clientId),
+]);
+
+export type InvoiceDraft = typeof invoiceDrafts.$inferSelect;
+export type InsertInvoiceDraft = typeof invoiceDrafts.$inferInsert;
+
+export const invoiceDraftItems = pgTable("invoice_draft_items", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  invoiceDraftId: varchar("invoice_draft_id").notNull().references(() => invoiceDrafts.id, { onDelete: "cascade" }),
+  timeEntryId: varchar("time_entry_id").references(() => timeEntries.id, { onDelete: "set null" }),
+  taskId: varchar("task_id").references(() => tasks.id, { onDelete: "set null" }),
+  description: text("description").notNull().default(""),
+  hours: numeric("hours").notNull().default("0"),
+  rate: numeric("rate").notNull().default("0"),
+  amount: numeric("amount").notNull().default("0"),
+}, (table) => [
+  index("invoice_draft_items_draft_idx").on(table.invoiceDraftId),
+]);
+
+export type InvoiceDraftItem = typeof invoiceDraftItems.$inferSelect;
+export type InsertInvoiceDraftItem = typeof invoiceDraftItems.$inferInsert;

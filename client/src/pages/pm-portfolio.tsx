@@ -20,6 +20,13 @@ import {
   Check,
   X,
   ExternalLink,
+  FileText,
+  Download,
+  Plus,
+  ChevronRight,
+  ChevronDown as ChevronDownIcon,
+  Ban,
+  Loader2,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -29,6 +36,11 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Progress } from "@/components/ui/progress";
 import { Skeleton } from "@/components/ui/skeleton";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { Separator } from "@/components/ui/separator";
 import { cn } from "@/lib/utils";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { useAuth } from "@/lib/auth";
@@ -368,8 +380,368 @@ function BillingApprovalQueueCard() {
   );
 }
 
+interface InvoiceDraftItem {
+  id: string;
+  timeEntryId: string | null;
+  taskId: string | null;
+  description: string;
+  hours: string;
+  rate: string;
+  amount: string;
+}
+
+interface InvoiceDraft {
+  id: string;
+  clientId: string | null;
+  projectId: string | null;
+  status: string;
+  totalHours: string;
+  totalAmount: string;
+  notes: string | null;
+  createdAt: string;
+  clientName?: string | null;
+  projectName?: string | null;
+  creatorName?: string | null;
+  items: InvoiceDraftItem[];
+}
+
+interface ClientOption { id: string; name: string; }
+interface ProjectOption { id: string; name: string; clientId: string | null; }
+
+function InvoiceDraftStatusBadge({ status }: { status: string }) {
+  if (status === "exported") {
+    return <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700 text-[10px] px-1.5 py-0 h-4">Exported</Badge>;
+  }
+  if (status === "cancelled") {
+    return <Badge className="bg-gray-100 text-gray-500 border-gray-200 dark:bg-gray-800/50 dark:text-gray-400 dark:border-gray-700 text-[10px] px-1.5 py-0 h-4">Cancelled</Badge>;
+  }
+  return <Badge className="bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700 text-[10px] px-1.5 py-0 h-4">Draft</Badge>;
+}
+
+function InvoiceDraftsCard() {
+  const qc = useQueryClient();
+  const { toast } = useToast();
+  const [expandedId, setExpandedId] = useState<string | null>(null);
+  const [dialogOpen, setDialogOpen] = useState(false);
+  const [generating, setGenerating] = useState(false);
+
+  const [form, setForm] = useState({
+    clientId: "",
+    projectId: "" as string,
+    startDate: "",
+    endDate: new Date().toISOString().slice(0, 10),
+    defaultRate: "0",
+    notes: "",
+  });
+
+  const { data: drafts = [], isLoading } = useQuery<InvoiceDraft[]>({
+    queryKey: ["/api/billing/invoice-drafts"],
+    staleTime: 30_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const { data: clients = [] } = useQuery<ClientOption[]>({
+    queryKey: ["/api/clients"],
+    staleTime: 60_000,
+    select: (data: any[]) => data.map((c) => ({ id: c.id, name: c.name })),
+  });
+
+  const { data: allProjects = [] } = useQuery<ProjectOption[]>({
+    queryKey: ["/api/projects"],
+    staleTime: 60_000,
+    select: (data: any[]) => data.map((p) => ({ id: p.id, name: p.name, clientId: p.clientId })),
+  });
+
+  const projectsForClient = allProjects.filter((p) => !form.clientId || p.clientId === form.clientId);
+
+  const exportMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/billing/invoice-drafts/${id}/export`, {}),
+    onSuccess: () => {
+      toast({ title: "Invoice draft exported — time entries marked as Invoiced" });
+      qc.invalidateQueries({ queryKey: ["/api/billing/invoice-drafts"] });
+      qc.invalidateQueries({ queryKey: ["/api/billing/pending-approval"] });
+    },
+    onError: (err: any) => toast({ title: err?.message || "Failed to export draft", variant: "destructive" }),
+  });
+
+  const cancelMutation = useMutation({
+    mutationFn: (id: string) => apiRequest("POST", `/api/billing/invoice-drafts/${id}/cancel`, {}),
+    onSuccess: () => {
+      toast({ title: "Invoice draft cancelled" });
+      qc.invalidateQueries({ queryKey: ["/api/billing/invoice-drafts"] });
+    },
+    onError: (err: any) => toast({ title: err?.message || "Failed to cancel draft", variant: "destructive" }),
+  });
+
+  const handleGenerate = async () => {
+    if (!form.clientId || !form.startDate || !form.endDate) {
+      toast({ title: "Client and date range are required", variant: "destructive" });
+      return;
+    }
+    setGenerating(true);
+    try {
+      await apiRequest("POST", "/api/billing/generate-invoice-draft", {
+        clientId: form.clientId,
+        projectId: form.projectId || null,
+        startDate: form.startDate,
+        endDate: form.endDate,
+        defaultRate: parseFloat(form.defaultRate) || 0,
+        notes: form.notes || undefined,
+      });
+      toast({ title: "Invoice draft generated" });
+      qc.invalidateQueries({ queryKey: ["/api/billing/invoice-drafts"] });
+      setDialogOpen(false);
+      setForm({ clientId: "", projectId: "", startDate: "", endDate: new Date().toISOString().slice(0, 10), defaultRate: "0", notes: "" });
+    } catch (err: any) {
+      toast({ title: err?.message || "No approved entries found for this criteria", variant: "destructive" });
+    } finally {
+      setGenerating(false);
+    }
+  };
+
+  return (
+    <Card data-testid="card-invoice-drafts">
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <CardTitle className="text-sm font-semibold flex items-center gap-2">
+            <FileText className="h-4 w-4 text-blue-500" />
+            Invoice Drafts
+            {drafts.length > 0 && (
+              <Badge className="bg-blue-100 text-blue-700 border-blue-200 dark:bg-blue-900/30 dark:text-blue-400 dark:border-blue-700 ml-1" data-testid="badge-draft-count">
+                {drafts.length}
+              </Badge>
+            )}
+          </CardTitle>
+          <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
+            <DialogTrigger asChild>
+              <Button size="sm" variant="outline" className="h-7 text-xs gap-1.5" data-testid="button-generate-draft">
+                <Plus className="h-3.5 w-3.5" />
+                Generate Draft
+              </Button>
+            </DialogTrigger>
+            <DialogContent className="sm:max-w-[460px]">
+              <DialogHeader>
+                <DialogTitle>Generate Invoice Draft</DialogTitle>
+                <DialogDescription>
+                  Pulls all approved time entries for the selected client and date range.
+                </DialogDescription>
+              </DialogHeader>
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label>Client <span className="text-destructive">*</span></Label>
+                  <Select value={form.clientId} onValueChange={(v) => setForm((f) => ({ ...f, clientId: v, projectId: "" }))}>
+                    <SelectTrigger data-testid="select-invoice-client">
+                      <SelectValue placeholder="Select client…" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {clients.map((c) => (
+                        <SelectItem key={c.id} value={c.id} data-testid={`option-client-${c.id}`}>{c.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Project <span className="text-xs text-muted-foreground">(optional)</span></Label>
+                  <Select value={form.projectId || "all"} onValueChange={(v) => setForm((f) => ({ ...f, projectId: v === "all" ? "" : v }))}>
+                    <SelectTrigger data-testid="select-invoice-project" disabled={!form.clientId}>
+                      <SelectValue placeholder="All projects" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="all">All projects</SelectItem>
+                      {projectsForClient.map((p) => (
+                        <SelectItem key={p.id} value={p.id} data-testid={`option-project-${p.id}`}>{p.name}</SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <div className="space-y-1.5">
+                    <Label>Start Date <span className="text-destructive">*</span></Label>
+                    <Input
+                      type="date"
+                      value={form.startDate}
+                      onChange={(e) => setForm((f) => ({ ...f, startDate: e.target.value }))}
+                      data-testid="input-invoice-start-date"
+                    />
+                  </div>
+                  <div className="space-y-1.5">
+                    <Label>End Date <span className="text-destructive">*</span></Label>
+                    <Input
+                      type="date"
+                      value={form.endDate}
+                      onChange={(e) => setForm((f) => ({ ...f, endDate: e.target.value }))}
+                      data-testid="input-invoice-end-date"
+                    />
+                  </div>
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Hourly Rate (optional)</Label>
+                  <Input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={form.defaultRate}
+                    onChange={(e) => setForm((f) => ({ ...f, defaultRate: e.target.value }))}
+                    placeholder="0.00"
+                    data-testid="input-invoice-rate"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label>Notes (optional)</Label>
+                  <Textarea
+                    value={form.notes}
+                    onChange={(e) => setForm((f) => ({ ...f, notes: e.target.value }))}
+                    placeholder="Internal notes for this invoice draft…"
+                    rows={2}
+                    data-testid="input-invoice-notes"
+                  />
+                </div>
+              </div>
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setDialogOpen(false)} disabled={generating} data-testid="button-cancel-generate">
+                  Cancel
+                </Button>
+                <Button onClick={handleGenerate} disabled={generating || !form.clientId || !form.startDate || !form.endDate} data-testid="button-confirm-generate">
+                  {generating ? <Loader2 className="h-4 w-4 animate-spin mr-1.5" /> : <FileText className="h-4 w-4 mr-1.5" />}
+                  {generating ? "Generating…" : "Generate"}
+                </Button>
+              </DialogFooter>
+            </DialogContent>
+          </Dialog>
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="px-4 pb-4 space-y-2">
+            {[1, 2].map((i) => <Skeleton key={i} className="h-12 w-full rounded" />)}
+          </div>
+        ) : drafts.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+            <FileText className="h-8 w-8 mb-2 opacity-20" />
+            <p className="text-sm">No invoice drafts yet</p>
+            <p className="text-xs mt-0.5">Generate a draft from approved time entries</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            {drafts.map((draft) => {
+              const isExpanded = expandedId === draft.id;
+              const isDraft = draft.status === "draft";
+              const isPending = exportMutation.isPending || cancelMutation.isPending;
+              return (
+                <div key={draft.id} data-testid={`invoice-draft-${draft.id}`}>
+                  <div
+                    className="flex items-center gap-3 px-4 py-3 hover:bg-muted/30 transition-colors cursor-pointer"
+                    onClick={() => setExpandedId(isExpanded ? null : draft.id)}
+                  >
+                    <button className="text-muted-foreground shrink-0">
+                      {isExpanded
+                        ? <ChevronDownIcon className="h-3.5 w-3.5" />
+                        : <ChevronRight className="h-3.5 w-3.5" />}
+                    </button>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center gap-2 flex-wrap">
+                        <span className="text-sm font-medium truncate" data-testid={`text-draft-client-${draft.id}`}>
+                          {draft.clientName || "Unknown Client"}
+                        </span>
+                        {draft.projectName && (
+                          <span className="text-xs text-muted-foreground">· {draft.projectName}</span>
+                        )}
+                        <InvoiceDraftStatusBadge status={draft.status} />
+                      </div>
+                      <div className="flex items-center gap-3 mt-0.5">
+                        <span className="text-xs text-muted-foreground tabular-nums" data-testid={`text-draft-hours-${draft.id}`}>
+                          {parseFloat(draft.totalHours).toFixed(1)}h
+                        </span>
+                        {parseFloat(draft.totalAmount) > 0 && (
+                          <span className="text-xs text-muted-foreground tabular-nums">
+                            ${parseFloat(draft.totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}
+                          </span>
+                        )}
+                        <span className="text-xs text-muted-foreground">
+                          {new Date(draft.createdAt).toLocaleDateString()}
+                        </span>
+                      </div>
+                    </div>
+                    {isDraft && (
+                      <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs gap-1 text-emerald-600 hover:bg-emerald-50 dark:hover:bg-emerald-900/20"
+                          onClick={() => exportMutation.mutate(draft.id)}
+                          disabled={isPending}
+                          data-testid={`button-export-draft-${draft.id}`}
+                        >
+                          <Download className="h-3.5 w-3.5" />
+                          Export
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="ghost"
+                          className="h-7 text-xs gap-1 text-red-500 hover:bg-red-50 dark:hover:bg-red-900/20"
+                          onClick={() => cancelMutation.mutate(draft.id)}
+                          disabled={isPending}
+                          data-testid={`button-cancel-draft-${draft.id}`}
+                        >
+                          <Ban className="h-3.5 w-3.5" />
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                  {isExpanded && (
+                    <div className="px-4 pb-3 bg-muted/10">
+                      {draft.notes && (
+                        <p className="text-xs text-muted-foreground mb-2 italic">{draft.notes}</p>
+                      )}
+                      {draft.items.length === 0 ? (
+                        <p className="text-xs text-muted-foreground">No items</p>
+                      ) : (
+                        <div className="space-y-1">
+                          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 text-[10px] font-medium text-muted-foreground uppercase tracking-wide pb-1 border-b border-border/50">
+                            <span>Description</span>
+                            <span className="text-right">Hours</span>
+                            <span className="text-right hidden sm:block">Rate</span>
+                            <span className="text-right">Amount</span>
+                          </div>
+                          {draft.items.map((item) => (
+                            <div key={item.id} className="grid grid-cols-[1fr_auto_auto_auto] gap-2 text-xs py-0.5" data-testid={`invoice-item-${item.id}`}>
+                              <span className="truncate text-muted-foreground">{item.description}</span>
+                              <span className="tabular-nums text-right">{parseFloat(item.hours).toFixed(1)}h</span>
+                              <span className="tabular-nums text-right hidden sm:block text-muted-foreground">
+                                {parseFloat(item.rate) > 0 ? `$${parseFloat(item.rate).toFixed(2)}` : "—"}
+                              </span>
+                              <span className="tabular-nums text-right font-medium">
+                                {parseFloat(item.amount) > 0 ? `$${parseFloat(item.amount).toFixed(2)}` : "—"}
+                              </span>
+                            </div>
+                          ))}
+                          <Separator className="my-1" />
+                          <div className="grid grid-cols-[1fr_auto_auto_auto] gap-2 text-xs font-semibold">
+                            <span>Total</span>
+                            <span className="tabular-nums text-right">{parseFloat(draft.totalHours).toFixed(1)}h</span>
+                            <span className="hidden sm:block" />
+                            <span className="tabular-nums text-right">
+                              {parseFloat(draft.totalAmount) > 0
+                                ? `$${parseFloat(draft.totalAmount).toLocaleString("en-US", { minimumFractionDigits: 2 })}`
+                                : "—"}
+                            </span>
+                          </div>
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function PmPortfolioDashboard() {
-  const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary, enableBillingApprovalWorkflow } = useFeatureFlags();
+  const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary, enableBillingApprovalWorkflow, enableInvoiceDraftBuilder } = useFeatureFlags();
   const { user } = useAuth();
   const canAccessPmPortfolio =
     user?.role === "super_user" ||
@@ -827,6 +1199,10 @@ export default function PmPortfolioDashboard() {
 
         {enableBillingApprovalWorkflow && (
           <BillingApprovalQueueCard />
+        )}
+
+        {enableInvoiceDraftBuilder && (
+          <InvoiceDraftsCard />
         )}
 
         {enableReassignmentSuggestions && (

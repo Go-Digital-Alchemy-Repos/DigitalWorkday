@@ -10,12 +10,27 @@ import {
   rejectTimeEntries,
   getPendingApprovalQueue,
 } from "../../services/billing/billingApprovalService";
+import {
+  generateInvoiceDraft,
+  getInvoiceDrafts,
+  getInvoiceDraftById,
+  exportInvoiceDraft,
+  cancelInvoiceDraft,
+} from "../../services/billing/invoiceDraftService";
 
 const router = createApiRouter({ policy: "authTenant", skipEnvelope: true });
 
 function checkFeatureFlag(res: Response, req: Request): boolean {
   if (!config.features.enableBillingApprovalWorkflow) {
     sendError(res, AppError.forbidden("Billing approval workflow feature is disabled"), req);
+    return false;
+  }
+  return true;
+}
+
+function checkInvoiceFlag(res: Response, req: Request): boolean {
+  if (!config.features.enableInvoiceDraftBuilder) {
+    sendError(res, AppError.forbidden("Invoice draft builder feature is disabled"), req);
     return false;
   }
   return true;
@@ -119,6 +134,108 @@ router.post("/billing/reject", async (req: Request, res: Response) => {
     res.json({ ok: true, ...result });
   } catch (error) {
     return handleRouteError(res, error, "POST /api/billing/reject", req);
+  }
+});
+
+const generateDraftSchema = z.object({
+  clientId: z.string().min(1, "Client ID required"),
+  projectId: z.string().optional().nullable(),
+  startDate: z.string().min(1, "Start date required"),
+  endDate: z.string().min(1, "End date required"),
+  defaultRate: z.number().min(0).optional().default(0),
+  notes: z.string().optional(),
+});
+
+router.post("/billing/generate-invoice-draft", async (req: Request, res: Response) => {
+  try {
+    if (!checkInvoiceFlag(res, req)) return;
+    if (!checkPermission(req, res)) return;
+
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.unauthorized("Tenant context required"), req);
+
+    const parsed = generateDraftSchema.safeParse(req.body);
+    if (!parsed.success) {
+      return sendError(res, AppError.badRequest(parsed.error.errors[0]?.message || "Invalid input"), req);
+    }
+
+    const userId = (req.user as any)?.id;
+    const draft = await generateInvoiceDraft({
+      tenantId,
+      clientId: parsed.data.clientId,
+      projectId: parsed.data.projectId,
+      startDate: new Date(parsed.data.startDate),
+      endDate: new Date(parsed.data.endDate),
+      createdByUserId: userId,
+      defaultRate: parsed.data.defaultRate,
+      notes: parsed.data.notes,
+    });
+
+    res.json(draft);
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/billing/generate-invoice-draft", req);
+  }
+});
+
+router.get("/billing/invoice-drafts", async (req: Request, res: Response) => {
+  try {
+    if (!checkInvoiceFlag(res, req)) return;
+    if (!checkPermission(req, res)) return;
+
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.unauthorized("Tenant context required"), req);
+
+    const drafts = await getInvoiceDrafts(tenantId);
+    res.json(drafts);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/billing/invoice-drafts", req);
+  }
+});
+
+router.get("/billing/invoice-drafts/:id", async (req: Request, res: Response) => {
+  try {
+    if (!checkInvoiceFlag(res, req)) return;
+    if (!checkPermission(req, res)) return;
+
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.unauthorized("Tenant context required"), req);
+
+    const draft = await getInvoiceDraftById(req.params.id, tenantId);
+    if (!draft) return sendError(res, AppError.notFound("Invoice draft"), req);
+
+    res.json(draft);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/billing/invoice-drafts/:id", req);
+  }
+});
+
+router.post("/billing/invoice-drafts/:id/export", async (req: Request, res: Response) => {
+  try {
+    if (!checkInvoiceFlag(res, req)) return;
+    if (!checkPermission(req, res)) return;
+
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.unauthorized("Tenant context required"), req);
+
+    const result = await exportInvoiceDraft(req.params.id, tenantId);
+    res.json({ ok: true, ...result });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/billing/invoice-drafts/:id/export", req);
+  }
+});
+
+router.post("/billing/invoice-drafts/:id/cancel", async (req: Request, res: Response) => {
+  try {
+    if (!checkInvoiceFlag(res, req)) return;
+    if (!checkPermission(req, res)) return;
+
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.unauthorized("Tenant context required"), req);
+
+    await cancelInvoiceDraft(req.params.id, tenantId);
+    res.json({ ok: true });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/billing/invoice-drafts/:id/cancel", req);
   }
 });
 
