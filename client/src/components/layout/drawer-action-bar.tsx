@@ -67,7 +67,7 @@ export function DrawerActionBar({
       )}
       data-testid="drawer-action-bar"
     >
-      <div className="flex items-center gap-2 flex-wrap">
+      <div className="flex items-center gap-2 flex-wrap ml-auto">
         {showSave && onSave && (
           <Button
             size="default"
@@ -167,7 +167,7 @@ export function DrawerActionBar({
         {extraActions}
       </div>
 
-      <div className="flex items-center gap-2 ml-auto">
+      <div className="flex items-center gap-2">
         {showIncomplete && onMarkIncomplete && (
           <Button
             size="default"
