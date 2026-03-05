@@ -140,7 +140,7 @@ export function BrandingTab() {
               <Label htmlFor="appName">App Name</Label>
               <Input
                 id="appName"
-                placeholder="MyWorkDay"
+                placeholder="Digital Workday"
                 value={formData.appName || ""}
                 onChange={(e) => handleChange("appName", e.target.value)}
                 data-testid="input-app-name"
@@ -320,7 +320,7 @@ export function BrandingTab() {
             <div className="space-y-0.5">
               <Label>Hide Vendor Branding</Label>
               <p className="text-xs text-muted-foreground">
-                Remove "Powered by MyWorkDay" text from the application
+                Remove "Powered by Digital Workday" text from the application
               </p>
             </div>
             <Switch

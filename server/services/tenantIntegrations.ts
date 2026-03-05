@@ -574,8 +574,8 @@ export class TenantIntegrationService {
       await mg.messages.create(config.domain, {
         from: config.fromEmail,
         to: [toEmail],
-        subject: "Mailgun Test - MyWorkDay",
-        text: `This is a test email from MyWorkDay.\n\nTenant: ${tenantName}\nTimestamp: ${timestamp}\nRequest ID: ${requestId}\n\nIf you received this email, your Mailgun integration is working correctly.`,
+        subject: "Mailgun Test - Digital Workday",
+        text: `This is a test email from Digital Workday.\n\nTenant: ${tenantName}\nTimestamp: ${timestamp}\nRequest ID: ${requestId}\n\nIf you received this email, your Mailgun integration is working correctly.`,
       });
 
       debugLog("sendTestEmail - success", { tenantId, toEmail, requestId });

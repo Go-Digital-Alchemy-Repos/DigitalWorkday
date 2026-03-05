@@ -1,7 +1,7 @@
-# MyWorkDay - Project Management Application
+# Digital Workday - Project Management Application
 
 ## Overview
-MyWorkDay is an Asana-inspired, multi-tenant project management application aimed at centralizing project and client management. It streamlines workflows, enhances team collaboration, and improves productivity and client satisfaction through an intuitive user experience. Key capabilities include comprehensive CRM with a client portal, workload management, robust reporting, workspaces, tasks, subtasks, tags, comments, and activity tracking. The project's ambition is to become a leading solution in project and client management by offering a robust, scalable, and user-friendly platform that meets the evolving demands of modern businesses.
+Digital Workday is an Asana-inspired, multi-tenant project management application aimed at centralizing project and client management. It streamlines workflows, enhances team collaboration, and improves productivity and client satisfaction through an intuitive user experience. Key capabilities include comprehensive CRM with a client portal, workload management, robust reporting, workspaces, tasks, subtasks, tags, comments, and activity tracking. The project's ambition is to become a leading solution in project and client management by offering a robust, scalable, and user-friendly platform that meets the evolving demands of modern businesses.
 
 ## User Preferences
 - Professional, clean Asana-like design

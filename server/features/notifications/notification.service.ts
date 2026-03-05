@@ -126,7 +126,7 @@ async function dispatchNotificationEmail(
 
     const appUrl = process.env.PUBLIC_URL ||
       (process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}` : "");
-    const appName = "MyWorkDay";
+    const appName = "Digital Workday";
 
     const vars: Record<string, string> = {
       userName: user.name || user.email,

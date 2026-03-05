@@ -1,0 +1,347 @@
+SEARCH PERFORMANCE + RELIABILITY SPRINT
+NON-DESTRUCTIVE • SQL-FIRST • NO API BREAKS • SAFE ROLLOUT • DOCUMENTED
+
+GOAL
+Fix global search slowness and unreliability by:
+- eliminating broad tenant fetch + in-memory filtering
+- removing N+1 client expansion from search
+- replacing expensive comment search patterns
+- adding search-oriented indexes
+- improving frontend error handling and request behavior
+- expanding search scope to match user expectations
+- adding observability and perf budgets
+
+DO NOT remove features.
+DO NOT break existing permissions or tenant scoping.
+DO NOT replace search with Elasticsearch/OpenSearch/etc. in this sprint.
+Keep this as a Postgres/Drizzle-first optimization.
+
+Feature flags:
+- ENABLE_SEARCH_SQL_FIRST
+- ENABLE_SEARCH_UI_ERROR_STATE
+- ENABLE_SEARCH_EXPANDED_SCOPE
+- ENABLE_SEARCH_PERF_LOGGING
+
+============================================================
+PHASE 1 — BASELINE + DIAGNOSTICS (DO FIRST)
+============================================================
+
+1.1 Instrument existing search endpoint:
+- route timing
+- db query count
+- db time
+- payload size
+- result counts by entity type
+- slow search log threshold (e.g. >500ms)
+
+1.2 Capture baseline metrics for:
+GET /api/search?q=...
+Measure:
+- p50/p95 latency
+- average query count
+- average result count
+- error rate
+- timeout rate
+
+1.3 Identify exact current code paths used in search:
+- clients
+- projects
+- tasks
+- users
+- teams
+- comments
+
+Specifically confirm whether search currently calls:
+- getClientsByTenant()
+- getProjectsByTenant()
+- broad task fetches
+- visibleTaskIds + comments IN(...) pattern
+
+Output a short internal report in App Docs draft notes:
+“Search Baseline (Pre-Sprint)”
+
+============================================================
+PHASE 2 — SQL-FIRST SEARCH ENGINE (CORE FIX)
+============================================================
+
+Replace broad fetch + in-memory filtering with entity-specific SQL search queries.
+
+2.1 Create new service:
+server/src/services/search/globalSearchService.ts
+
+Export:
+searchTenantEntities({
+  tenantId,
+  userId,
+  query,
+  maxResults,
+  entityTypes?,   // optional filter
+  includeExpandedScope? // behind feature flag
+})
+
+2.2 Strategy:
+For each entity type, run a dedicated SQL query with:
+- tenant scoping in SQL
+- permission/visibility filters in SQL where possible
+- text match in SQL
+- ORDER / ranking in SQL or lightweight post-merge ranking
+- LIMIT in SQL before hydration
+- lightweight column selection only
+
+Entity queries:
+A) Clients
+B) Projects
+C) Tasks
+D) Users
+E) Teams
+F) Comments
+
+2.3 IMPORTANT:
+Do NOT:
+- load all tenant rows first
+- then filter in JS
+- then truncate after filtering
+
+Instead:
+- query top N per entity first
+- then combine + rank + truncate final result set
+
+2.4 Result shaping:
+Return lightweight search result items only:
+- id
+- entityType
+- title/displayText
+- subtitle/snippet
+- route/link target
+- maybe a small badge/meta
+
+Do NOT hydrate heavy relations in search results.
+
+============================================================
+PHASE 3 — REMOVE N+1 FROM CLIENT SEARCH PATH
+============================================================
+
+3.1 Search must NOT use getClientsByTenant() if that expands contacts/projects per client.
+
+3.2 Create a lightweight client search query:
+- select client id
+- company_name
+- display_name if exists
+- status/stage if useful
+- maybe updatedAt
+No contacts/projects expansion during search.
+
+3.3 If you already have a batched client list service, do NOT use expanded hydration for search.
+Search results must remain light.
+
+============================================================
+PHASE 4 — COMMENT SEARCH REWRITE
+============================================================
+
+Current problem:
+Search builds visibleTaskIds from all fetched tasks, then runs:
+comments.taskId IN (...)
+AND ilike(comments.body, '%query%')
+
+Replace this.
+
+4.1 Create SQL-based comment search query:
+- search comments directly
+- join comments → tasks → projects/tenant scoping
+- apply tenant + visibility filters in query
+- apply text search in SQL
+- limit early
+
+4.2 If visibility requires task/project access checks:
+- enforce them in the SQL join predicates or a scoped subquery
+- do NOT build giant ID arrays in application memory
+
+4.3 Return only:
+- comment id
+- snippet
+- taskId/projectId
+- minimal route target
+
+============================================================
+PHASE 5 — SEARCH INDEXES (HIGH IMPACT)
+============================================================
+
+Add search-oriented indexes via safe migrations.
+
+5.1 If using Postgres, enable pg_trgm if not already enabled.
+
+5.2 Add trigram indexes (or equivalent text indexes) for:
+- clients.company_name
+- projects.name
+- tasks.title
+- comments.body
+
+5.3 If expanded scope is enabled, also add indexes for:
+- projects.description
+- tasks.description
+- client display_name / alternate name fields if they exist
+- users.name
+- teams.name
+
+IMPORTANT:
+- Only add indexes that match actual queried fields.
+- Keep migrations safe and additive.
+- Document index purpose in migration comments if repo style allows.
+
+============================================================
+PHASE 6 — EXPAND SEARCH SCOPE TO MATCH USER EXPECTATIONS
+============================================================
+
+Behind ENABLE_SEARCH_EXPANDED_SCOPE:
+
+6.1 Expand matching fields:
+Clients:
+- company_name
+- display_name / legal_name / alternate name if they exist
+
+Projects:
+- name
+- description
+
+Tasks:
+- title
+- description / body if it exists
+
+Users:
+- name
+- email
+
+Teams:
+- name
+
+Comments:
+- body
+
+6.2 Snippet generation:
+For descriptions/comments, return short highlighted/truncated snippets.
+Do not send full bodies in search results.
+
+6.3 Preserve safety:
+- respect private tasks/projects visibility
+- exclude archived data by default
+- do not leak inaccessible comments/tasks/projects
+
+============================================================
+PHASE 7 — FRONTEND RELIABILITY FIXES
+============================================================
+
+7.1 Update global search UI to handle:
+- loading
+- no results
+- error state
+- partial results (if some entity queries fail safely)
+
+Do NOT treat backend failures as empty results.
+
+7.2 If using React Query:
+- reduce retries for search requests:
+  - retries = 0 or 1 max
+- cancel stale requests when query changes
+- debounce search input (e.g. 200–300ms)
+
+7.3 Surface errors clearly:
+Example:
+“Search is temporarily unavailable. Please try again.”
+
+7.4 Keep previous results visible while loading next query if that improves UX, but clearly indicate loading.
+
+============================================================
+PHASE 8 — SEARCH RANKING + LIMITS
+============================================================
+
+8.1 Apply simple ranking rules:
+- exact prefix matches rank higher
+- name/title matches rank above description/comment body matches
+- recently updated items may rank slightly higher as tie-breaker
+
+8.2 Per-entity limits:
+Example:
+- clients: 5–10
+- projects: 5–10
+- tasks: 5–10
+- users: 5
+- teams: 5
+- comments: 5–10
+
+Then merge + cap final total.
+
+8.3 Ensure maxResults is enforced early enough to prevent unnecessary backend work.
+
+============================================================
+PHASE 9 — OBSERVABILITY + PERF BUDGETS
+============================================================
+
+9.1 Add search-specific logs (sampled in prod):
+- query length
+- duration
+- total result count
+- result counts by entity
+- errors
+- timeout/fallbacks
+
+9.2 Add soft performance budgets:
+- p95 target < 300–500ms for normal tenants
+- warn if > 800ms
+
+9.3 Add App Docs notes:
+“Search Performance Architecture”
+Include:
+- SQL-first search model
+- index strategy
+- UI error handling
+- ranking approach
+- expanded scope fields
+
+============================================================
+PHASE 10 — VALIDATION / REGRESSION CHECK
+============================================================
+
+Verify all of the following:
+
+A) Performance
+- Search no longer loads broad datasets before filtering
+- No N+1 client expansion in search
+- Comment search no longer uses giant visibleTaskIds arrays
+- Query count and latency improved
+
+B) Reliability
+- Backend errors surface as errors in UI, not “no results”
+- Search spinner does not hang from repeated retries
+
+C) Relevance
+- Searching project descriptions / task descriptions (when enabled) returns expected results
+- Searching known client keywords works as users expect
+
+D) Security
+- private tasks/projects do not leak
+- archived items excluded by default
+- tenant scoping intact
+
+============================================================
+PHASE 11 — APP DOCS UPDATE (MANDATORY)
+============================================================
+
+Add/update App Docs sections:
+- Search Architecture
+- Search Index Strategy
+- Search Ranking Rules
+- Search Error Handling UX
+- Search Performance Baseline vs After
+
+============================================================
+STOP CONDITION
+============================================================
+
+Stop after:
+- SQL-first search path implemented
+- N+1 client expansion removed from search
+- comment search rewritten safely
+- trigram/text indexes added
+- frontend error handling fixed
+- docs updated
+- baseline vs after metrics recorded

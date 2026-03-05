@@ -373,7 +373,7 @@ tenantInvitationsRouter.post("/tenants/:tenantId/invitations/:invitationId/resen
     try {
       const { sendInviteEmail } = await import("../../../email");
       const tenantSettingsData = await storage.getTenantSettings(tenantId);
-      const appName = tenantSettingsData?.appName || "MyWorkDay";
+      const appName = tenantSettingsData?.appName || "Digital Workday";
       
       await sendInviteEmail(invitation.email, inviteUrl, appName, tenantId);
       emailSent = true;

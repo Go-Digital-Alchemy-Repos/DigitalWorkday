@@ -1341,7 +1341,7 @@ export default function SuperAdminSettingsPage() {
                         <Label htmlFor="defaultAppName">Default App Name</Label>
                         <Input
                           id="defaultAppName"
-                          placeholder="MyWorkDay"
+                          placeholder="Digital Workday"
                           value={brandingForm.defaultAppName ?? systemSettings?.defaultAppName ?? ""}
                           onChange={(e) => setBrandingForm(prev => ({ ...prev, defaultAppName: e.target.value }))}
                           data-testid="input-default-app-name"

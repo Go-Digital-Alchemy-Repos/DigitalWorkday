@@ -104,7 +104,7 @@ router.post("/tasks/:taskId/comments", async (req, res) => {
             notificationMessage: `${commenter?.name || 'Someone'} mentioned you on "${task?.title || 'a task'}"`,
             commentText: plainTextBody,
             appUrl,
-            appName: "MyWorkDay",
+            appName: "Digital Workday",
           };
           
           const rendered = await emailTemplateService.renderByKey(tenantId, "comment_mention_notification", templateVars);

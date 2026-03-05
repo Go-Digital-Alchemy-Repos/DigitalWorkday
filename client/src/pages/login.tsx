@@ -307,7 +307,7 @@ export default function LoginPage() {
             />
           </div>
           <CardTitle className="text-2xl font-bold text-center" data-testid="text-login-title">
-            {branding.appName || "MyWorkDay"}
+            {branding.appName || "Digital Workday"}
           </CardTitle>
           <CardDescription className="text-center" data-testid="text-login-description">
             {showBootstrap 

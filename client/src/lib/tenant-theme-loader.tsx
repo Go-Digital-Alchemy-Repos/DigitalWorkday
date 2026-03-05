@@ -166,7 +166,7 @@ export function useTenantTheme() {
 
   return {
     settings: data?.tenantSettings,
-    appName: data?.tenantSettings?.appName || "MyWorkDay",
+    appName: data?.tenantSettings?.appName || "Digital Workday",
     logoUrl: getStorageUrl(data?.tenantSettings?.logoUrl),
     iconUrl: getStorageUrl(data?.tenantSettings?.iconUrl),
     hideVendorBranding: data?.tenantSettings?.hideVendorBranding || false,

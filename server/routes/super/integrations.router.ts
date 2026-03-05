@@ -305,8 +305,8 @@ router.post("/integrations/mailgun/send-test-email", requireSuperUser, async (re
     await mg.messages.create(domain, {
       from: fromEmail,
       to: [toEmail],
-      subject: "Global Mailgun Test - MyWorkDay Platform",
-      text: `This is a test email from the MyWorkDay platform.\n\nTimestamp: ${timestamp}\n\nIf you received this email, your global Mailgun integration is working correctly.`,
+      subject: "Global Mailgun Test - Digital Workday Platform",
+      text: `This is a test email from the Digital Workday platform.\n\nTimestamp: ${timestamp}\n\nIf you received this email, your global Mailgun integration is working correctly.`,
     });
 
     res.json({ success: true, message: "Test email sent successfully" });

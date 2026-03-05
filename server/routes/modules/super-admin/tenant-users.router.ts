@@ -376,7 +376,7 @@ async function sendProvisionResetEmail(tenantId: string, email: string, resetUrl
       tenantName,
       resetUrl,
       expiryHours: "24",
-      appName: "MyWorkDay",
+      appName: "Digital Workday",
     };
     const rendered = await emailTemplateService.renderByKey(tenantId, "user_provision", templateVars);
     await emailOutboxService.sendEmail({
@@ -902,7 +902,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users/:userId/send-invite", requireSu
     try {
       const { sendInviteEmail } = await import("../../../email");
       const tenantSettingsData = await storage.getTenantSettings(tenantId);
-      const appName = tenantSettingsData?.appName || "MyWorkDay";
+      const appName = tenantSettingsData?.appName || "Digital Workday";
       
       await sendInviteEmail(user.email, inviteUrl, appName, tenantId);
       emailSent = true;
@@ -1179,7 +1179,7 @@ tenantUsersRouter.post("/tenants/:tenantId/import-users", requireSuperUser, asyn
                 const mg = mailgun.client({ username: "api", key: secretConfig.apiKey });
                 
                 const tenantSettingsData = await storage.getTenantSettings(tenantId);
-                const appName = tenantSettingsData?.appName || tenantSettingsData?.displayName || "MyWorkDay";
+                const appName = tenantSettingsData?.appName || tenantSettingsData?.displayName || "Digital Workday";
                 const recipientName = user.firstName || user.email.split("@")[0];
                 
                 await mg.messages.create(publicConfig.domain, {

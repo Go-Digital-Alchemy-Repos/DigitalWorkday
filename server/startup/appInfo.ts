@@ -22,7 +22,7 @@ export function logAppInfo(): void {
   const rateLimitEnabled = process.env.RATE_LIMIT_ENABLED !== "false";
   
   console.log("[app] =".repeat(10));
-  console.log("[app] MyWorkDay Starting...");
+  console.log("[app] Digital Workday Starting...");
   console.log("[app] =".repeat(10));
   console.log(`[app] Environment: ${nodeEnv}`);
   console.log(`[app] Git SHA: ${gitSha.substring(0, 7)}`);

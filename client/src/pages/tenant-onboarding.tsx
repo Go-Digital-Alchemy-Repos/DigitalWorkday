@@ -217,7 +217,7 @@ export default function TenantOnboarding() {
       <div className="container max-w-3xl mx-auto py-8 px-4">
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2" data-testid="text-onboarding-title">
-            Welcome to MyWorkDay
+            Welcome to Digital Workday
           </h1>
           <p className="text-muted-foreground" data-testid="text-onboarding-subtitle">
             Let's set up your workspace in a few quick steps

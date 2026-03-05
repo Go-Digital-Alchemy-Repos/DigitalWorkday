@@ -582,7 +582,7 @@ superUsersRouter.post("/users/:userId/generate-reset-link", requireSuperUser, as
           userEmail: existingUser.email,
           resetUrl,
           expiryHours: "24",
-          appName: "MyWorkDay",
+          appName: "Digital Workday",
         };
         const rendered = await emailTemplateService.renderByKey(existingUser.tenantId, "admin_password_reset", templateVars);
         await emailOutboxService.sendEmail({

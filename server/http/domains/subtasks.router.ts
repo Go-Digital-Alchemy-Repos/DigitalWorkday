@@ -412,7 +412,7 @@ router.post("/subtasks/:subtaskId/comments", async (req, res) => {
             notificationMessage: `${commenter?.name || 'Someone'} mentioned you on "${subtask.title || 'a subtask'}"`,
             commentText: plainTextBody,
             appUrl,
-            appName: "MyWorkDay",
+            appName: "Digital Workday",
           };
           
           const rendered = await emailTemplateService.renderByKey(tenantId, "comment_mention_notification", templateVars);

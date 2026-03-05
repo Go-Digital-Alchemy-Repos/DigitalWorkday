@@ -514,7 +514,7 @@ export function AsanaImportWizard({ tenantId, apiBasePath }: AsanaImportWizardPr
             </div>
 
             <div className="space-y-2">
-              <Label>Target MyWorkDay Workspace</Label>
+              <Label>Target Digital Workday Workspace</Label>
               <Select value={targetWorkspaceId} onValueChange={setTargetWorkspaceId}>
                 <SelectTrigger data-testid="select-target-workspace">
                   <SelectValue placeholder="Select target workspace" />

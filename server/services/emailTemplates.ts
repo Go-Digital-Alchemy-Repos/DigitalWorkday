@@ -70,7 +70,7 @@ export class EmailTemplateService {
     if (!logoUrl) {
       return `<tr>
             <td style="padding: 24px 40px 0; text-align: center;">
-              <span style="font-size: 20px; font-weight: 700; color: #18181b; letter-spacing: -0.5px;">MyWorkDay</span>
+              <span style="font-size: 20px; font-weight: 700; color: #18181b; letter-spacing: -0.5px;">Digital Workday</span>
             </td>
           </tr>`;
     }
@@ -90,7 +90,7 @@ export class EmailTemplateService {
     }
     return `<tr>
             <td align="center" style="padding: 24px 40px 0;">
-              <img src="${proxySrc}" alt="MyWorkDay" width="180" height="50" border="0" style="display: block; max-width: 220px; height: auto;" />
+              <img src="${proxySrc}" alt="Digital Workday" width="180" height="50" border="0" style="display: block; max-width: 220px; height: auto;" />
             </td>
           </tr>`;
   }

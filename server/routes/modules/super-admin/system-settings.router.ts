@@ -13,7 +13,7 @@ systemSettingsRouter.get("/system-settings", requireSuperUser, async (req, res) 
     if (!settings) {
       return res.json({
         id: 1,
-        defaultAppName: "MyWorkDay",
+        defaultAppName: "Digital Workday",
         defaultLogoUrl: null,
         defaultFaviconUrl: null,
         defaultPrimaryColor: "#3B82F6",

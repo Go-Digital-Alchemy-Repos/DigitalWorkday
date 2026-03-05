@@ -435,7 +435,7 @@ adminsRouter.post("/admins/:id/invite", requireSuperUser, async (req, res) => {
           userName: admin.name || admin.email,
           inviteUrl,
           expiryDays: String(body.expiresInDays),
-          appName: "MyWorkDay",
+          appName: "Digital Workday",
         };
         const rendered = await emailTemplateService.renderByKey(null, "platform_admin_invite", templateVars);
         await emailOutboxService.sendEmail({
@@ -645,7 +645,7 @@ adminsRouter.post("/admins/:id/provision", requireSuperUser, async (req, res) =>
             userEmail: admin.email,
             resetUrl,
             expiryHours: "24",
-            appName: "MyWorkDay",
+            appName: "Digital Workday",
           };
           const rendered = await emailTemplateService.renderByKey(null, "admin_password_reset", templateVars);
           await emailOutboxService.sendEmail({

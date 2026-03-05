@@ -236,7 +236,7 @@ export function generateDigestHtml(sections: DigestSections): string {
   html += `
   <hr style="border:none;border-top:1px solid #e2e8f0;margin:32px 0;">
   <p style="color:#6b7280;font-size:13px;">
-    This is an automated ops digest. View full reports in your MyWorkDay dashboard.
+    This is an automated ops digest. View full reports in your Digital Workday dashboard.
     Generated: ${date}
   </p>
 </body>

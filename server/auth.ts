@@ -1266,7 +1266,7 @@ export function setupPasswordResetEndpoints(app: Express): void {
           userEmail: user.email,
           resetUrl,
           expiryMinutes: "30",
-          appName: "MyWorkDay",
+          appName: "Digital Workday",
         };
         
         const rendered = await emailTemplateService.renderByKey(user.tenantId, "forgot_password", templateVars);
