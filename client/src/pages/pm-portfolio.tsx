@@ -932,7 +932,7 @@ export default function PmPortfolioDashboard() {
               <FolderKanban className="h-4.5 w-4.5 text-primary" />
             </div>
             <div>
-              <h1 className="text-xl font-semibold" data-testid="heading-pm-portfolio">PM Portfolio</h1>
+              <h1 className="text-xl font-semibold" data-testid="heading-pm-portfolio">PM Dashboard</h1>
               <p className="text-xs text-muted-foreground">Projects where you are the owner</p>
             </div>
           </div>
