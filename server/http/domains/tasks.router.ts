@@ -757,7 +757,7 @@ router.patch("/tasks/:id", async (req, res) => {
     const taskWithRelations = await storage.getTaskWithRelations(task.id);
 
     if (taskBefore && tenantId) {
-      const trackedFields = ["title", "description", "status", "priority", "dueDate", "startDate", "estimateMinutes", "milestoneId", "visibility", "sectionId"];
+      const trackedFields = ["title", "description", "status", "priority", "dueDate", "startDate", "estimateMinutes", "isBillable", "milestoneId", "visibility", "sectionId"];
       const changes = computeChanges(taskBefore as any, task as any, trackedFields);
       if (changes.length > 0) {
         recordHistory({

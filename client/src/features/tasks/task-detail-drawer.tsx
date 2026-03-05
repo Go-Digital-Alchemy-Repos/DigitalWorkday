@@ -176,6 +176,7 @@ export function TaskDetailDrawer({
     return projectMembersData.some(m => m.userId === currentUser.id && m.role === "owner");
   }, [currentUser?.id, projectMembersData]);
   const canClearReview = isAdmin || isProjectManager;
+  const canToggleBillable = isAdmin || isProjectManager || currentUser?.isProjectManager;
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);
@@ -1161,6 +1162,36 @@ export function TaskDetailDrawer({
               data-testid="input-estimate-minutes"
             />
             <span className="text-xs text-muted-foreground shrink-0">m</span>
+            <Separator orientation="vertical" className="h-5 mx-1" />
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant={task.isBillable === false ? "outline" : "default"}
+                  size="sm"
+                  className={cn(
+                    "h-8 px-2.5 shrink-0 text-xs font-medium gap-1.5",
+                    task.isBillable === false
+                      ? "text-muted-foreground border-dashed"
+                      : "bg-green-600 hover:bg-green-700 text-white"
+                  )}
+                  onClick={() => {
+                    if (canToggleBillable) {
+                      onUpdate?.(task.id, { isBillable: !task.isBillable });
+                    }
+                  }}
+                  disabled={!canToggleBillable}
+                  data-testid="button-toggle-billable"
+                >
+                  <DollarSign className="h-3.5 w-3.5" />
+                  {task.isBillable === false ? "Non-billable" : "Billable"}
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>
+                {canToggleBillable
+                  ? `Click to mark as ${task.isBillable === false ? "billable" : "non-billable"}`
+                  : "Only admins and project managers can change billable status"}
+              </TooltipContent>
+            </Tooltip>
           </div>
         </FormFieldWrapper>
 

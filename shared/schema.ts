@@ -1485,6 +1485,7 @@ export const tasks = pgTable("tasks", {
   pmReviewResolvedAt: timestamp("pm_review_resolved_at"),
   pmReviewResolvedBy: varchar("pm_review_resolved_by").references(() => users.id),
   pmReviewNote: text("pm_review_note"),
+  isBillable: boolean("is_billable").notNull().default(true),
   milestoneId: varchar("milestone_id").references(() => projectMilestones.id),
 }, (table) => [
   index("tasks_project_section_order").on(table.projectId, table.sectionId, table.orderIndex),
