@@ -74,6 +74,7 @@ router.get("/features/flags", async (_req, res) => {
       enableRevenueLeakageDetection: config.features.enableRevenueLeakageDetection,
       enableClientCommunicationHealth: config.features.enableClientCommunicationHealth,
       enableClientFollowups: config.features.enableClientFollowups,
+      enableWeeklyClientReports: config.features.enableWeeklyClientReports,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

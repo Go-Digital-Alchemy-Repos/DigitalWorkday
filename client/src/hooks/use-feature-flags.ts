@@ -43,6 +43,7 @@ export interface FeatureFlags {
   enableRevenueLeakageDetection: boolean;
   enableClientCommunicationHealth: boolean;
   enableClientFollowups: boolean;
+  enableWeeklyClientReports: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {

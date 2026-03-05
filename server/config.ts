@@ -239,6 +239,7 @@ export const config = {
     enableRevenueLeakageDetection: optionalEnvBool("ENABLE_REVENUE_LEAKAGE_DETECTION", true),
     enableClientCommunicationHealth: optionalEnvBool("ENABLE_CLIENT_COMMUNICATION_HEALTH", true),
     enableClientFollowups: optionalEnvBool("ENABLE_CLIENT_FOLLOWUPS", true),
+    enableWeeklyClientReports: optionalEnvBool("ENABLE_WEEKLY_CLIENT_REPORTS", true),
   },
 
   tenancyEnforcement: {
