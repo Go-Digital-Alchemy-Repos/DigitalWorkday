@@ -1,0 +1,209 @@
+PRODUCTION PERFORMANCE SPRINT (TASKS • PROJECTS • REPORTS)
+NON-DESTRUCTIVE • PERF-FIRST • NO API BREAKS • SAFE ROLLOUT • DOCUMENTED
+
+GOAL
+Improve real production latency and UI responsiveness for Tasks, Projects, and Reports.
+Do NOT remove features. Do NOT change permissions. Do NOT break API contracts.
+All changes must be additive or internal refactors behind feature flags when needed.
+
+Success targets (production):
+- /api/tasks/my p95 < 400ms
+- /api/projects list p95 < 400ms
+- key reports endpoints p95 < 800ms (cached)
+- reduce payload sizes for list views
+- eliminate N+1 patterns and unnecessary hydration
+
+============================================================
+PHASE 1 — MEASURE & TRACE (BEFORE CHANGES)
+============================================================
+
+1.1 Add endpoint-level timing instrumentation (server middleware):
+- log durationMs, route, status
+- include dbDurationMs (sum of query timers) if possible
+- sample logs to avoid IO overhead (e.g., 5% sampling, always log > 800ms)
+
+1.2 Add DB query timing wrapper:
+- wrap Drizzle queries with a timer
+- capture query count per request for hot endpoints
+- in dev: full logs
+- in prod: sampled + slow queries only
+
+1.3 Identify Top 10 slow endpoints in prod logs:
+Focus specifically on:
+- GET /api/tasks/my
+- any /api/tasks/project or project task hydration endpoint
+- GET /api/projects (list)
+- reports endpoints used on dashboard and tenant admin reporting pages
+
+Output a “before” report:
+- p50/p95 for each endpoint
+- avg query count/request
+- top slow DB queries
+
+============================================================
+PHASE 2 — TASKS: REMOVE N+1 HYDRATION PATH (HIGHEST IMPACT)
+============================================================
+
+2.1 Create a batched “list hydration” path (single fetch + relation batches):
+- fetch base tasks once
+- fetch relations in bulk by IN(taskIds):
+  assignees, watchers, tags, subtasks, section, project, children
+- stitch in-memory once
+- do NOT call getTaskWithRelations inside loops
+
+2.2 Update /api/tasks/my to use:
+storage.getTasksByUserBatchedHydrated(userId, opts)
+
+2.3 Update project task loading paths similarly:
+- if project page loads tasks, use batched hydration by projectId
+
+2.4 Payload shaping for list views:
+- return lightweight task list items by default:
+  id, title, status, priority, dueDate, projectId, sectionId,
+  counts/flags (subtaskCount, commentCount, needsReview)
+- ONLY fetch heavy relations when:
+  - opening task drawer (task detail endpoint)
+  - explicitly requested include=relations
+
+2.5 Add/verify indexes:
+- tasks(tenant_id, assigned_to_user_id?) or join-table indexes
+- tasks(tenant_id, project_id, status)
+- tasks(tenant_id, updated_at desc)
+- task_assignees(task_id, user_id) / (user_id, task_id)
+- task_watchers(task_id, user_id)
+- task_tags(task_id, tag_id)
+- subtasks(parent_task_id) or tasks(parent_task_id) if modeled that way
+
+============================================================
+PHASE 3 — PROJECTS: PUSH FILTERING + PAGINATION TO SQL
+============================================================
+
+3.1 Replace “load all then filter in JS” with SQL WHERE clauses:
+Support query params (without breaking existing behavior):
+- search
+- status
+- clientId
+- teamId
+- sort (createdAt, updatedAt, dueDate)
+- limit
+- cursor (preferred) or page
+
+Default behavior:
+- if no params provided, return first page (limit default 50)
+- to preserve any existing UI expecting full list, add feature flag to opt-in UI,
+  but backend must support pagination now.
+
+3.2 Return minimal columns for list views:
+- project id, name, clientId, status, updatedAt, dueDate
+- lightweight computed counts only when includeCounts=true
+
+3.3 Keep includeCounts=true optimized:
+- ensure batched counts query by IN(projectIds)
+- avoid per-project task count queries
+
+3.4 Add/verify indexes:
+- projects(tenant_id, status)
+- projects(tenant_id, client_id)
+- projects(tenant_id, updated_at desc)
+- projects(tenant_id, name) or trigram/full-text search index if supported
+- tasks(project_id, status) for counts
+
+============================================================
+PHASE 4 — REPORTS: CACHE, LIMIT, AND PRE-AGGREGATE
+============================================================
+
+4.1 Identify top 3 slow report queries and apply:
+- strict date range requirements (default last 30 days)
+- pagination for large breakdown lists (employees, clients, projects)
+- avoid scanning full tenant history
+
+4.2 Add short-lived caching for expensive reports:
+- cache TTL: 60–180 seconds (configurable)
+- cache keys include: tenantId, reportName, rangeStart/end, filters
+- if Redis exists, use Redis; otherwise in-memory LRU per instance
+
+4.3 Add “report payload slimming”:
+- return aggregated series and top-N lists, not full raw rows
+- add “drilldown endpoints” for details on demand
+
+4.4 Add/verify indexes for reporting hot paths:
+- time_entries(tenant_id, started_at) and/or (tenant_id, date)
+- time_entries(project_id, started_at)
+- activity_log(tenant_id, created_at)
+- tasks(tenant_id, created_at) and (tenant_id, completed_at) if used
+- messages(tenant_id, created_at) if used in analytics
+
+4.5 Where appropriate, add materialized rollups (optional but high impact):
+- daily_time_rollups by tenant/project/user
+- daily_task_rollups by tenant/project/status
+Start with a nightly job or incremental upsert on write (keep simple v1).
+
+============================================================
+PHASE 5 — FRONTEND: REDUCE RENDER COST + OVERFETCH
+============================================================
+
+5.1 Tasks / Projects / Reports lists:
+- ensure virtualization for large lists (TanStack Virtual / react-virtual)
+- memoize row components (React.memo) and stable props
+- avoid useMemo over huge arrays if server pagination exists
+- stop loading “detail-heavy” datasets on initial mount:
+  fetch details only when opening drawer/detail pages
+
+5.2 Network shaping:
+- ensure list pages call list endpoints with:
+  limit + cursor, filters, sort
+- reduce duplicate fetches (e.g., Clients-style multiple datasets)
+
+5.3 Code-splitting:
+- lazy load reports pages and heavy chart libs
+- keep initial bundle lean
+
+============================================================
+PHASE 6 — SERVER RUNTIME + LOGGING TUNING
+============================================================
+
+6.1 Reduce noisy logging on hot paths:
+- unread-count / notifications / tasks/my
+- only log slow requests and errors in prod
+
+6.2 Ensure compression is enabled for JSON responses in production.
+
+6.3 Ensure DB connection pooling settings are appropriate for prod:
+- max connections
+- idle timeouts
+- statement timeout for runaway queries (safe value)
+
+============================================================
+PHASE 7 — VERIFY & REGRESSION GUARDRAILS
+============================================================
+
+7.1 Add simple perf budgets to CI for critical endpoints (smoke-level):
+- integration tests that hit endpoints with seeded data
+- fail if query count > threshold (e.g., tasks/my > 12 queries)
+- fail if response time > threshold in CI environment (relative)
+
+7.2 Add “after” report:
+- p50/p95 improvements
+- payload size reductions
+- query counts per request
+
+============================================================
+PHASE 8 — DOCS UPDATE (MANDATORY)
+============================================================
+
+Update App Docs:
+- “Performance Architecture”
+- Batched task hydration
+- Projects pagination/filtering contract
+- Reports caching + rollups
+- Frontend virtualization guidelines
+- Observability (how to read perf logs)
+
+STOP CONDITIONS
+============================================================
+- Tasks endpoints no longer do per-task relation loops
+- Projects list filtering happens in SQL with pagination
+- Reports have caching and date range limits
+- Frontend lists are virtualized and not overfetching
+- Production logs show improved p95 on targeted endpoints
+- Docs updated

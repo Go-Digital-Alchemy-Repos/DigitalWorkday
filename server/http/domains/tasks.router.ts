@@ -59,6 +59,7 @@ import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { getCurrentUserId, getCurrentWorkspaceId, isSuperUser } from "../../routes/helpers";
 import { config } from "../../config";
 import { getTasksByUserBatched } from "../services/taskBatchHydrator";
+import { getTaskListItemsByUser } from "../services/taskListHydrator";
 import {
   insertTaskSchema,
   updateTaskSchema,
@@ -225,6 +226,14 @@ router.get("/tasks/my", async (req, res) => {
   try {
     const userId = getCurrentUserId(req);
     const includeArchived = req.query.includeArchived === "true" && isSuperUser(req);
+    const view = req.query.view as string | undefined;
+
+    if (view === "list") {
+      const tenantId = getEffectiveTenantId(req) ?? "";
+      const items = await getTaskListItemsByUser(userId, tenantId, includeArchived);
+      return res.json(items);
+    }
+
     let tasks;
     if (config.features.enableTasksBatchHydration) {
       const tenantId = getEffectiveTenantId(req) ?? "";

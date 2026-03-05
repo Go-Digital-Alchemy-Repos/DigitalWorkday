@@ -17,6 +17,13 @@ import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { getCurrentUserId } from "../../routes/helpers";
 import { getPmPortfolio } from "../../reports/pmPortfolioAggregator";
 import { config } from "../../config";
+import {
+  buildCacheKey,
+  getCached,
+  setCache,
+  shouldBypassCache,
+  setCacheHeaders,
+} from "../../lib/reportCache";
 
 const router = Router();
 
@@ -42,7 +49,21 @@ router.get("/pm/portfolio", async (req: Request, res: Response) => {
       return res.status(401).json({ error: "Unauthorized" });
     }
 
+    const bypass = shouldBypassCache(req.query as Record<string, unknown>);
+    const cacheKey = buildCacheKey(tenantId, "pm-portfolio", { pmUserId });
+
+    if (!bypass) {
+      const cached = getCached(cacheKey);
+      if (cached) {
+        setCacheHeaders(res, true);
+        return res.json(cached);
+      }
+    }
+
     const result = await getPmPortfolio({ tenantId, pmUserId });
+
+    setCache(cacheKey, result);
+    setCacheHeaders(res, false);
     return res.json(result);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/reports/pm/portfolio", req);

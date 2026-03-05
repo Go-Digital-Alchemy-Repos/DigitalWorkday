@@ -1374,6 +1374,8 @@ export const projects = pgTable("projects", {
   index("projects_workspace_id_idx").on(table.workspaceId),
   index("projects_tenant_workspace_idx").on(table.tenantId, table.workspaceId),
   index("projects_status_idx").on(table.status),
+  index("projects_tenant_updated_at_idx").on(table.tenantId, table.updatedAt),
+  index("projects_tenant_name_idx").on(table.tenantId, table.name),
 ]);
 
 // Project Members table
@@ -1521,6 +1523,7 @@ export const taskAssignees = pgTable("task_assignees", {
   index("task_assignees_user").on(table.userId),
   index("task_assignees_tenant_idx").on(table.tenantId),
   index("task_assignees_task_id_idx").on(table.taskId),
+  index("task_assignees_user_task_idx").on(table.userId, table.taskId),
 ]);
 
 // Task Watchers table (users who want to be notified about task changes but aren't assigned)
@@ -3341,6 +3344,47 @@ export type InsertTimeEntry = z.infer<typeof insertTimeEntrySchema>;
 
 export type ActiveTimer = typeof activeTimers.$inferSelect;
 export type InsertActiveTimer = z.infer<typeof insertActiveTimerSchema>;
+
+// Lightweight DTO for task list views (40-60% smaller than TaskWithRelations)
+export type TaskListItemAssignee = {
+  userId: string;
+  name: string;
+};
+
+export type TaskListItemTag = {
+  id: string;
+  name: string;
+  color: string | null;
+};
+
+export type TaskListItem = {
+  id: string;
+  title: string;
+  status: string;
+  priority: string;
+  dueDate: Date | null;
+  projectId: string | null;
+  sectionId: string | null;
+  parentTaskId: string | null;
+  isPersonal: boolean;
+  visibility: string;
+  createdBy: string | null;
+  orderIndex: number;
+  personalSectionId: string | null;
+  personalSortOrder: number | null;
+  archivedAt: Date | null;
+  milestoneId: string | null;
+  needsPmReview: boolean;
+  isBillable: boolean;
+  createdAt: Date | null;
+  updatedAt: Date | null;
+  subtaskCount: number;
+  commentCount: number;
+  assigneeCount: number;
+  childTaskCount: number;
+  assignees: TaskListItemAssignee[];
+  tags: TaskListItemTag[];
+};
 
 // Extended types for frontend use
 export type TaskAttachmentWithUser = TaskAttachment & {

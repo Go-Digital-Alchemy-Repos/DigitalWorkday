@@ -18,13 +18,16 @@ if (!databaseUrl) {
 
 // Create pool only if DATABASE_URL is available
 // Use a dummy URL if not available to allow module to load (will fail on actual use)
+const STATEMENT_TIMEOUT_MS = Number(process.env.DB_STATEMENT_TIMEOUT_MS) || 30000;
+
 export const pool = new Pool({
   connectionString: databaseUrl || "postgresql://dummy:dummy@localhost:5432/dummy",
   ssl: isProduction ? { rejectUnauthorized: false } : false,
-  max: 10,
-  min: databaseUrl ? 2 : 0, // Don't create connections if no URL
+  max: isProduction ? 15 : 10,
+  min: databaseUrl ? 2 : 0,
   idleTimeoutMillis: 30000,
   connectionTimeoutMillis: 5000,
+  statement_timeout: STATEMENT_TIMEOUT_MS,
 });
 
 export const db = drizzle(pool, { schema });
@@ -48,7 +51,8 @@ if (databaseUrl) {
 export const isDatabaseConfigured = !!databaseUrl;
 
 if (databaseUrl) {
-  console.log(`[db] Pool initialized: min=2 max=10 idleTimeout=30s connectTimeout=5s ssl=${isProduction}`);
+  const maxConns = isProduction ? 15 : 10;
+  console.log(`[db] Pool initialized: min=2 max=${maxConns} idleTimeout=30s connectTimeout=5s stmtTimeout=${STATEMENT_TIMEOUT_MS}ms ssl=${isProduction}`);
 } else {
   console.log(`[db] Pool NOT initialized - DATABASE_URL missing`);
 }

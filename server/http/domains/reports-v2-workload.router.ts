@@ -11,6 +11,13 @@ import {
   formatHours,
   formatMinutesToHours,
 } from "../../reports/utils";
+import {
+  buildCacheKey,
+  getCached,
+  setCache,
+  shouldBypassCache,
+  setCacheHeaders,
+} from "../../lib/reportCache";
 
 const router = Router();
 
@@ -26,6 +33,23 @@ router.get("/workload/team", async (req: Request, res: Response) => {
     const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
     const filters = normalizeFilters(params);
     const { limit, offset } = safePagination(params);
+
+    const bypass = shouldBypassCache(req.query as Record<string, unknown>);
+    const cacheKey = buildCacheKey(tenantId, "workload-team", {
+      startDate: startDate.toISOString(),
+      endDate: endDate.toISOString(),
+      userIds: filters.userIds,
+      limit,
+      offset,
+    });
+
+    if (!bypass) {
+      const cached = getCached(cacheKey);
+      if (cached) {
+        setCacheHeaders(res, true);
+        return res.json(cached);
+      }
+    }
 
     const userFilter = filters.userIds.length > 0
       ? sql`AND u.id = ANY(ARRAY[${sql.join(filters.userIds.map(id => sql`${id}`), sql`, `)}]::text[])`
@@ -128,7 +152,7 @@ router.get("/workload/team", async (req: Request, res: Response) => {
       };
     });
 
-    res.json({
+    const responseData = {
       team,
       pagination: {
         total: Number(countRow?.total ?? 0),
@@ -136,7 +160,11 @@ router.get("/workload/team", async (req: Request, res: Response) => {
         offset,
       },
       range: { startDate, endDate },
-    });
+    };
+
+    setCache(cacheKey, responseData);
+    setCacheHeaders(res, false);
+    res.json(responseData);
   } catch (error) {
     handleRouteError(res, error, "reports-v2/workload/team", req);
   }

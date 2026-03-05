@@ -3,7 +3,7 @@ import { useAuth } from "@/lib/auth";
 import { useQuery } from "@tanstack/react-query";
 import { Redirect } from "wouter";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
-import { WorkloadReportsV2 } from "@/components/reports/workload-reports-v2";
+const WorkloadReportsV2 = lazy(() => import("@/components/reports/workload-reports-v2").then(m => ({ default: m.WorkloadReportsV2 })));
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -25,7 +25,7 @@ import {
   CheckSquare,
   PieChart,
 } from "lucide-react";
-import { ReportsTab } from "@/components/settings/reports-tab";
+const ReportsTab = lazy(() => import("@/components/settings/reports-tab").then(m => ({ default: m.ReportsTab })));
 import { MobileTabSelect } from "@/components/reports/mobile-tab-select";
 import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
 import { cn } from "@/lib/utils";

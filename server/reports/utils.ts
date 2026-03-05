@@ -50,6 +50,12 @@ export function parseReportRange(query: Record<string, unknown>): {
     throw AppError.badRequest("startDate must be before endDate");
   }
 
+  const MAX_RANGE_DAYS = 365;
+  const rangeDays = (endDate.getTime() - startDate.getTime()) / (1000 * 60 * 60 * 24);
+  if (rangeDays > MAX_RANGE_DAYS) {
+    throw AppError.badRequest(`Date range cannot exceed ${MAX_RANGE_DAYS} days`);
+  }
+
   return { startDate, endDate, params: parsed };
 }
 

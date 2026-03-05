@@ -16,7 +16,21 @@ let sampledRequestCount = 0;
 let slowQueryCount = 0;
 let totalQueryCount = 0;
 
-function shouldSample(): boolean {
+const HOT_PATHS = new Set([
+  "/api/notifications/unread-count",
+  "/api/notifications",
+  "/api/tasks/my",
+  "/api/presence/heartbeat",
+  "/api/typing/active",
+  "/api/features/flags",
+]);
+
+const HOT_PATH_SAMPLE_RATE = IS_PRODUCTION ? 0.01 : 1;
+
+function shouldSample(path?: string): boolean {
+  if (path && HOT_PATHS.has(path) && IS_PRODUCTION) {
+    return Math.random() < HOT_PATH_SAMPLE_RATE;
+  }
   if (SAMPLE_RATE >= 1) return true;
   return Math.random() < SAMPLE_RATE;
 }
@@ -31,7 +45,7 @@ export function perfLoggerMiddleware(
   res: Response,
   next: NextFunction,
 ): void {
-  const sampled = shouldSample();
+  const sampled = shouldSample(req.path);
   totalRequestCount++;
   if (sampled) sampledRequestCount++;
 

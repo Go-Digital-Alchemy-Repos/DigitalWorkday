@@ -1,11 +1,13 @@
 import express, { type Request, Response, NextFunction } from "express";
 import { createServer, type Server as HttpServer } from "http";
+import compression from "compression";
 import { requestIdMiddleware } from "./middleware/requestId";
 import { errorHandler } from "./middleware/errorHandler";
 import { errorLoggingMiddleware } from "./middleware/errorLogging";
 import { apiJsonResponseGuard, apiNotFoundHandler } from "./middleware/apiJsonGuard";
 import { tenantContextMiddleware } from "./middleware/tenantContext";
 import { agreementEnforcementGuard } from "./middleware/agreementEnforcement";
+import { dbTimerMiddleware } from "./lib/dbTimer";
 
 declare module "http" {
   interface IncomingMessage {
@@ -35,7 +37,19 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
 
   app.set("trust proxy", 1);
 
+  if (!testMode) {
+    app.use(compression({
+      filter: (req, res) => {
+        if (req.headers['x-no-compression']) return false;
+        return compression.filter(req, res);
+      },
+      threshold: 1024,
+      level: 6,
+    }));
+  }
+
   app.use(requestIdMiddleware);
+  app.use(dbTimerMiddleware);
 
   app.use(
     express.json({

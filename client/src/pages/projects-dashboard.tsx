@@ -84,7 +84,7 @@ export default function ProjectsDashboard() {
   const isEmployee = user?.role === UserRole.EMPLOYEE;
 
   const { data: projects, isLoading: projectsLoading, error: projectsError, refetch: refetchProjects } = useQuery<ProjectWithCounts[]>({
-    queryKey: ["/api/v1/projects", { includeCounts: true }],
+    queryKey: ["/api/projects", { fields: "minimal", includeCounts: "true", limit: "200" }],
   });
 
   const { data: clients } = useQuery<Client[]>({
@@ -114,7 +114,6 @@ export default function ProjectsDashboard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
       setCreateProjectOpen(false);
       toast({ title: "Project created successfully" });
     },
@@ -137,20 +136,7 @@ export default function ProjectsDashboard() {
       }
       return { projectId, updatedProject };
     },
-    onSuccess: ({ projectId, updatedProject }) => {
-      queryClient.setQueryData<any[]>(["/api/projects"], (old) => {
-        if (!old) return old;
-        return old.map((p) =>
-          p.id === projectId ? { ...p, ...updatedProject } : p,
-        );
-      });
-      queryClient.setQueryData<any[]>(["/api/v1/projects", { includeCounts: true }], (old) => {
-        if (!old) return old;
-        return old.map((p: any) =>
-          p.id === projectId ? { ...p, ...updatedProject } : p,
-        );
-      });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+    onSuccess: ({ projectId }) => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "members"] });
       setEditProjectOpen(false);
@@ -175,7 +161,6 @@ export default function ProjectsDashboard() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
     },
     onError: () => {
       toast({ title: "Failed to update pin status", variant: "destructive" });

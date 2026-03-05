@@ -55,6 +55,17 @@ MyWorkDay is an Asana-inspired, multi-tenant project management application aime
 - **Collapsible Icon Sidebar**: Sidebar collapses to an icon-only strip with tooltips.
 - **Mobile & Responsiveness**: App-wide mobile-first patterns including responsive layouts, navigation, and touch targets.
 
+## Performance Architecture
+- **Task List DTOs**: `GET /api/tasks/my?view=list` returns lightweight `TaskListItem` objects (id, title, status, priority, dueDate, counts, assignee names) instead of full `TaskWithRelations`. Full data fetched on-demand when opening task drawer. Controlled by `enableTasksBatchHydration` flag.
+- **Batched Task Hydration**: `taskBatchHydrator.ts` fetches all task relations (assignees, watchers, tags, subtasks) in bulk via `IN(taskIds)` queries instead of per-task N+1 loops. `taskListHydrator.ts` does the same for lightweight DTOs.
+- **Projects SQL Filtering & Pagination**: `GET /api/projects` supports `?fields=minimal&includeCounts=true&limit=N&offset=N&cursor=X&search=X&status=X&clientId=X&teamId=X&sortBy=X&sortDir=X`. Batched task counts via single `GROUP BY` query. Controlled by `enableProjectsSqlFiltering` flag.
+- **Reports Caching**: In-memory LRU cache (`server/lib/reportCache.ts`) with 120s TTL for heavy report endpoints (workload/team, overview, pm/portfolio, task analytics, client analytics). Bypass with `?fresh=true`. Cache headers: `Cache-Control: max-age=60`, `X-Report-Cache: HIT/MISS`.
+- **Reports Date Range Limits**: Default 30-day range, max 365 days. Breakdown lists paginated (default top 20, configurable via `limit`/`offset`).
+- **Frontend Virtualization**: `react-virtuoso` for large task lists (>20 items). Controlled by `VIRTUALIZATION_V1` feature flag (default: true). Report pages lazy-loaded via `React.lazy`.
+- **Response Compression**: `compression` middleware (gzip, threshold 1KB, level 6) enabled for all non-test environments.
+- **DB Safety**: Statement timeout (30s default, `DB_STATEMENT_TIMEOUT_MS` env var). Pool: 15 connections in prod, 10 in dev.
+- **Observability**: Request logger includes `dbQueryCount` and `dbDurationMs`. Hot-path sampling (1% in prod for notifications, heartbeat, etc.). Slow requests (>800ms) always logged. `perfLoggerMiddleware` samples 5% in prod with 300ms slow threshold. DB pool instrumented via `instrumentDbPool`.
+
 ## External Dependencies
 - **PostgreSQL**: Primary database.
 - **Socket.IO**: Real-time communication.

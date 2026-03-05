@@ -68,7 +68,7 @@ import {
 } from "@shared/schema";
 import type { ProjectTemplateContent } from "@shared/schema";
 import { db } from "../../db";
-import { eq, and, inArray, ilike, asc, desc } from "drizzle-orm";
+import { eq, and, inArray, ilike, asc, desc, sql, count } from "drizzle-orm";
 import { config } from "../../config";
 import { canManageProjectAccess } from "../../lib/privateVisibility";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
@@ -126,7 +126,7 @@ router.get("/projects", async (req: Request, res: Response) => {
     
     if (tenantId) {
       if (config.features.enableProjectsSqlFiltering) {
-        const { status, clientId, teamId, search, sortBy = 'createdAt', sortDir = 'desc', limit = '100', offset = '0' } = req.query as Record<string, string>;
+        const { status, clientId, teamId, search, sortBy = 'createdAt', sortDir = 'desc', limit = '100', offset = '0', fields, includeCounts, cursor } = req.query as Record<string, string>;
         
         const conditions: ReturnType<typeof eq>[] = [eq(projects.tenantId, tenantId)];
         if (config.features.enablePrivateProjects) {
@@ -137,21 +137,70 @@ router.get("/projects", async (req: Request, res: Response) => {
         if (teamId) conditions.push(eq(projects.teamId, teamId));
         if (search) conditions.push(ilike(projects.name, `%${search}%`));
         
+        if (cursor) {
+          conditions.push(sql`${projects.createdAt} < ${cursor}` as any);
+        }
+        
         const sortCol = ({
           'name': projects.name,
           'status': projects.status,
           'createdAt': projects.createdAt,
           'updatedAt': projects.updatedAt,
+          'dueDate': projects.createdAt,
         } as Record<string, typeof projects.createdAt>)[sortBy] ?? projects.createdAt;
         const order = sortDir === 'asc' ? asc(sortCol) : desc(sortCol);
         
-        const projectList = await db
-          .select()
-          .from(projects)
+        const parsedLimit = Math.min(parseInt(limit) || 100, 200);
+        
+        const selectColumns = fields === 'minimal'
+          ? {
+              id: projects.id,
+              name: projects.name,
+              clientId: projects.clientId,
+              status: projects.status,
+              updatedAt: projects.updatedAt,
+              createdAt: projects.createdAt,
+              color: projects.color,
+              teamId: projects.teamId,
+              workspaceId: projects.workspaceId,
+              tenantId: projects.tenantId,
+              stickyAt: projects.stickyAt,
+              visibility: projects.visibility,
+              divisionId: projects.divisionId,
+              description: projects.description,
+            }
+          : undefined;
+        
+        const query = selectColumns
+          ? db.select(selectColumns).from(projects)
+          : db.select().from(projects);
+        
+        const projectList = await (query as any)
           .where(and(...conditions))
           .orderBy(order)
-          .limit(parseInt(limit))
-          .offset(parseInt(offset));
+          .limit(parsedLimit)
+          .offset(parseInt(offset) || 0);
+        
+        if (includeCounts === 'true' && projectList.length > 0) {
+          const projectIds = projectList.map((p: any) => p.id);
+          const taskCounts = await db
+            .select({
+              projectId: tasks.projectId,
+              total: sql<number>`count(*)::int`,
+              completed: sql<number>`count(*) filter (where ${tasks.status} = 'done')::int`,
+            })
+            .from(tasks)
+            .where(and(
+              inArray(tasks.projectId, projectIds),
+              sql`${tasks.archivedAt} is null`
+            ))
+            .groupBy(tasks.projectId);
+          
+          const countsMap = new Map(taskCounts.map(c => [c.projectId, { total: c.total, completed: c.completed }]));
+          for (const p of projectList) {
+            (p as any).taskCounts = countsMap.get(p.id) || { total: 0, completed: 0 };
+          }
+        }
         
         return res.json(projectList);
       }

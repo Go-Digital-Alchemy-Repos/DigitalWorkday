@@ -5,6 +5,13 @@ import { UserRole } from "@shared/schema";
 import { AppError, handleRouteError } from "../../lib/errors";
 import { db } from "../../db";
 import { sql } from "drizzle-orm";
+import {
+  buildCacheKey,
+  getCached,
+  setCache,
+  shouldBypassCache,
+  setCacheHeaders,
+} from "../../lib/reportCache";
 
 const router = createApiRouter({
   policy: "authTenant",
@@ -31,6 +38,17 @@ router.get("/reports/overview", async (req, res) => {
       throw AppError.forbidden("Admin access required");
     }
     const tenantId = getEffectiveTenantId(req);
+
+    const bypass = shouldBypassCache(req.query as Record<string, unknown>);
+    const cacheKey = buildCacheKey(tenantId, "reports-overview", {});
+
+    if (!bypass) {
+      const cached = getCached(cacheKey);
+      if (cached) {
+        setCacheHeaders(res, true);
+        return res.json(cached);
+      }
+    }
 
     const taskStats = firstRow(await db.execute(sql`
       SELECT
@@ -132,7 +150,7 @@ router.get("/reports/overview", async (req, res) => {
       ORDER BY d.day
     `);
 
-    res.json({
+    const responseData = {
       tasks: {
         total: taskStats.total_tasks ?? 0,
         completed: taskStats.completed_tasks ?? 0,
@@ -170,7 +188,11 @@ router.get("/reports/overview", async (req, res) => {
           hours: parseFloat(r.hours) || 0,
         })),
       },
-    });
+    };
+
+    setCache(cacheKey, responseData);
+    setCacheHeaders(res, false);
+    res.json(responseData);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/v1/reports/overview", req);
   }
@@ -183,6 +205,19 @@ router.get("/reports/tasks/analytics", async (req, res) => {
     }
     const tenantId = getEffectiveTenantId(req);
     const days = Math.min(parseInt(req.query.days as string) || 30, 365);
+    const breakdownLimit = Math.min(Math.max(parseInt(req.query.limit as string) || 20, 1), 100);
+    const breakdownOffset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+
+    const bypass = shouldBypassCache(req.query as Record<string, unknown>);
+    const cacheKey = buildCacheKey(tenantId, "tasks-analytics", { days, breakdownLimit, breakdownOffset });
+
+    if (!bypass) {
+      const cached = getCached(cacheKey);
+      if (cached) {
+        setCacheHeaders(res, true);
+        return res.json(cached);
+      }
+    }
 
     const statusDist = await db.execute(sql`
       SELECT status, COUNT(*)::int AS count
@@ -266,8 +301,20 @@ router.get("/reports/tasks/analytics", async (req, res) => {
       GROUP BY p.id, p.name, p.color
       HAVING COUNT(t.id) > 0
       ORDER BY total DESC
-      LIMIT 10
+      LIMIT ${breakdownLimit} OFFSET ${breakdownOffset}
     `);
+
+    const completionByProjectCount = firstRow(await db.execute(sql`
+      SELECT COUNT(*)::int AS total
+      FROM (
+        SELECT p.id
+        FROM projects p
+        LEFT JOIN tasks t ON t.project_id = p.id AND t.is_personal = false
+        WHERE p.tenant_id = ${tenantId} AND p.status = 'active'
+        GROUP BY p.id
+        HAVING COUNT(t.id) > 0
+      ) sub
+    `));
 
     const assigneeDistribution = await db.execute(sql`
       SELECT
@@ -284,10 +331,17 @@ router.get("/reports/tasks/analytics", async (req, res) => {
       WHERE ta.tenant_id = ${tenantId}
       GROUP BY u.id, u.first_name, u.last_name, u.email, u.avatar_url
       ORDER BY total_tasks DESC
-      LIMIT 10
+      LIMIT ${breakdownLimit} OFFSET ${breakdownOffset}
     `);
 
-    res.json({
+    const assigneeCount = firstRow(await db.execute(sql`
+      SELECT COUNT(DISTINCT ta.user_id)::int AS total
+      FROM task_assignees ta
+      JOIN tasks t ON t.id = ta.task_id AND t.is_personal = false AND t.tenant_id = ${tenantId}
+      WHERE ta.tenant_id = ${tenantId}
+    `));
+
+    const responseData = {
       statusDistribution: rows(statusDist),
       priorityDistribution: rows(priorityDist),
       overdueBuckets: rows(overdueBuckets),
@@ -297,7 +351,17 @@ router.get("/reports/tasks/analytics", async (req, res) => {
         completion_rate: parseFloat(r.completion_rate) || 0,
       })),
       assigneeDistribution: rows(assigneeDistribution),
-    });
+      pagination: {
+        limit: breakdownLimit,
+        offset: breakdownOffset,
+        projectsTotal: completionByProjectCount?.total ?? 0,
+        assigneesTotal: assigneeCount?.total ?? 0,
+      },
+    };
+
+    setCache(cacheKey, responseData);
+    setCacheHeaders(res, false);
+    res.json(responseData);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/v1/reports/tasks/analytics", req);
   }
@@ -309,6 +373,19 @@ router.get("/reports/clients/analytics", async (req, res) => {
       throw AppError.forbidden("Admin access required");
     }
     const tenantId = getEffectiveTenantId(req);
+    const breakdownLimit = Math.min(Math.max(parseInt(req.query.limit as string) || 20, 1), 100);
+    const breakdownOffset = Math.max(parseInt(req.query.offset as string) || 0, 0);
+
+    const bypass = shouldBypassCache(req.query as Record<string, unknown>);
+    const cacheKey = buildCacheKey(tenantId, "clients-analytics", { breakdownLimit, breakdownOffset });
+
+    if (!bypass) {
+      const cached = getCached(cacheKey);
+      if (cached) {
+        setCacheHeaders(res, true);
+        return res.json(cached);
+      }
+    }
 
     const clientSummary = await db.execute(sql`
       SELECT
@@ -355,8 +432,12 @@ router.get("/reports/clients/analytics", async (req, res) => {
       ) te ON te.client_id = c.id
       WHERE c.tenant_id = ${tenantId}
       ORDER BY COALESCE(te.total_seconds, 0) DESC
-      LIMIT 20
+      LIMIT ${breakdownLimit} OFFSET ${breakdownOffset}
     `);
+
+    const clientTotalCount = firstRow(await db.execute(sql`
+      SELECT COUNT(*)::int AS total FROM clients WHERE tenant_id = ${tenantId}
+    `));
 
     const stageDistribution = await db.execute(sql`
       SELECT stage, COUNT(*)::int AS count
@@ -378,7 +459,7 @@ router.get("/reports/clients/analytics", async (req, res) => {
       GROUP BY c.id, c.company_name
       HAVING SUM(te.duration_seconds) > 0
       ORDER BY hours DESC
-      LIMIT 10
+      LIMIT ${breakdownLimit} OFFSET ${breakdownOffset}
     `);
 
     const budgetUtilization = await db.execute(sql`
@@ -399,10 +480,10 @@ router.get("/reports/clients/analytics", async (req, res) => {
       GROUP BY c.id, c.company_name
       HAVING SUM(p.budget_minutes) > 0
       ORDER BY budget_minutes DESC
-      LIMIT 10
+      LIMIT ${breakdownLimit} OFFSET ${breakdownOffset}
     `);
 
-    res.json({
+    const responseData = {
       clients: rows(clientSummary).map((r: any) => ({
         ...r,
         total_hours: parseFloat(r.total_hours) || 0,
@@ -418,7 +499,16 @@ router.get("/reports/clients/analytics", async (req, res) => {
           ? Math.round((r.used_minutes / r.budget_minutes) * 100)
           : 0,
       })),
-    });
+      pagination: {
+        limit: breakdownLimit,
+        offset: breakdownOffset,
+        clientsTotal: clientTotalCount?.total ?? 0,
+      },
+    };
+
+    setCache(cacheKey, responseData);
+    setCacheHeaders(res, false);
+    res.json(responseData);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/v1/reports/clients/analytics", req);
   }

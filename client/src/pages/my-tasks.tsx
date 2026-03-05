@@ -104,27 +104,31 @@ import { TaskProgressBar } from "@/components/task-progress-bar";
 import { PageShell, PageHeader, EmptyState, LoadingState, DataToolbar } from "@/components/layout";
 import { LogTimeOnCompleteDialog } from "@/components/log-time-on-complete-dialog";
 import type { FilterConfig, SortOption } from "@/components/layout";
-import type { TaskWithRelations, Workspace, User as UserType, TimeEntry } from "@shared/schema";
+import type { TaskWithRelations, TaskListItem, Workspace, User as UserType, TimeEntry } from "@shared/schema";
 import { UserRole } from "@shared/schema";
+import { useFeatureFlags } from "@/hooks/use-feature-flags";
+import { Virtuoso } from "react-virtuoso";
+
+type MyTaskItem = TaskListItem | TaskWithRelations;
 
 type TaskSection = {
   id: string;
   title: string;
   icon: React.ElementType;
   iconColor?: string;
-  tasks: TaskWithRelations[];
+  tasks: MyTaskItem[];
   defaultOpen: boolean;
 };
 
-function categorizeTasksForTwoColumn(tasks: TaskWithRelations[]): {
+function categorizeTasksForTwoColumn(tasks: MyTaskItem[]): {
   leftColumn: TaskSection[];
   rightColumn: TaskSection[];
 } {
-  const personalTasks: TaskWithRelations[] = [];
-  const noDueDate: TaskWithRelations[] = [];
-  const overdue: TaskWithRelations[] = [];
-  const today: TaskWithRelations[] = [];
-  const upcoming: TaskWithRelations[] = [];
+  const personalTasks: MyTaskItem[] = [];
+  const noDueDate: MyTaskItem[] = [];
+  const overdue: MyTaskItem[] = [];
+  const today: MyTaskItem[] = [];
+  const upcoming: MyTaskItem[] = [];
 
   tasks.forEach((task) => {
     // Check isPersonal flag first, fall back to checking projectId for backwards compatibility
@@ -169,7 +173,7 @@ function categorizeTasksForTwoColumn(tasks: TaskWithRelations[]): {
 
 interface TaskSectionListProps {
   section: TaskSection;
-  onTaskSelect: (task: TaskWithRelations) => void;
+  onTaskSelect: (task: MyTaskItem) => void;
   onStatusChange: (taskId: string, completed: boolean) => void;
   onPriorityChange: (taskId: string, priority: "low" | "medium" | "high" | "urgent") => void;
   onDueDateChange: (taskId: string, dueDate: Date | null) => void;
@@ -177,11 +181,14 @@ interface TaskSectionListProps {
   onDragEnd: (event: DragEndEvent, sectionId: string) => void;
   onAddTask?: () => void;
   supportsAddTask?: boolean;
+  useVirtualization?: boolean;
 }
 
 const SECTION_INITIAL_SHOW = 20;
 
-function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChange, onDueDateChange, localOrder, onDragEnd, onAddTask, supportsAddTask = false }: TaskSectionListProps) {
+const VIRTUALIZATION_THRESHOLD = 20;
+
+function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChange, onDueDateChange, localOrder, onDragEnd, onAddTask, supportsAddTask = false, useVirtualization = false }: TaskSectionListProps) {
   const [showAll, setShowAll] = useState(false);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
@@ -191,7 +198,7 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
   const orderedTasks = useMemo(() => {
     if (localOrder.length === 0) return section.tasks;
     const taskMap = new Map(section.tasks.map(t => [t.id, t]));
-    const ordered: TaskWithRelations[] = [];
+    const ordered: MyTaskItem[] = [];
     localOrder.forEach(id => {
       const task = taskMap.get(id);
       if (task) ordered.push(task);
@@ -202,8 +209,9 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
     return ordered;
   }, [section.tasks, localOrder]);
 
-  const hasMore = orderedTasks.length > SECTION_INITIAL_SHOW;
-  const visibleTasks = showAll || !hasMore ? orderedTasks : orderedTasks.slice(0, SECTION_INITIAL_SHOW);
+  const shouldVirtualize = useVirtualization && orderedTasks.length > VIRTUALIZATION_THRESHOLD;
+  const hasMore = !shouldVirtualize && orderedTasks.length > SECTION_INITIAL_SHOW;
+  const visibleTasks = shouldVirtualize ? orderedTasks : (showAll || !hasMore ? orderedTasks : orderedTasks.slice(0, SECTION_INITIAL_SHOW));
   const hiddenCount = orderedTasks.length - SECTION_INITIAL_SHOW;
 
   return (
@@ -236,20 +244,42 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
             onDragEnd={(e) => onDragEnd(e, section.id)}
           >
             <SortableContext items={visibleTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
-              <div className="border border-border rounded-lg overflow-hidden mt-2">
-                {visibleTasks.map((task) => (
-                  <SortableTaskCard
-                    key={task.id}
-                    task={task}
-                    view="list"
-                    onSelect={() => onTaskSelect(task)}
-                    onStatusChange={(completed) => onStatusChange(task.id, completed)}
-                    onPriorityChange={(priority) => onPriorityChange(task.id, priority)}
-                    onDueDateChange={(dueDate) => onDueDateChange(task.id, dueDate)}
-                    showQuickActions
+              {shouldVirtualize ? (
+                <div className="border border-border rounded-lg overflow-hidden mt-2">
+                  <Virtuoso
+                    data={visibleTasks}
+                    style={{ height: Math.min(visibleTasks.length * 52, 600) }}
+                    overscan={200}
+                    itemContent={(_index, task) => (
+                      <SortableTaskCard
+                        key={task.id}
+                        task={task as TaskWithRelations}
+                        view="list"
+                        onSelect={() => onTaskSelect(task)}
+                        onStatusChange={(completed) => onStatusChange(task.id, completed)}
+                        onPriorityChange={(priority) => onPriorityChange(task.id, priority)}
+                        onDueDateChange={(dueDate) => onDueDateChange(task.id, dueDate)}
+                        showQuickActions
+                      />
+                    )}
                   />
-                ))}
-              </div>
+                </div>
+              ) : (
+                <div className="border border-border rounded-lg overflow-hidden mt-2">
+                  {visibleTasks.map((task) => (
+                    <SortableTaskCard
+                      key={task.id}
+                      task={task as TaskWithRelations}
+                      view="list"
+                      onSelect={() => onTaskSelect(task)}
+                      onStatusChange={(completed) => onStatusChange(task.id, completed)}
+                      onPriorityChange={(priority) => onPriorityChange(task.id, priority)}
+                      onDueDateChange={(dueDate) => onDueDateChange(task.id, dueDate)}
+                      showQuickActions
+                    />
+                  ))}
+                </div>
+              )}
             </SortableContext>
             {hasMore && !showAll && (
               <Button
@@ -308,31 +338,40 @@ interface DashboardStats {
   overdueCount: number;
   inProgressCount: number;
   completedThisWeek: number;
-  recentlyAdded: TaskWithRelations[];
-  recentlyCompleted: TaskWithRelations[];
+  recentlyAdded: MyTaskItem[];
+  recentlyCompleted: MyTaskItem[];
   completionRate: number;
   highPriorityCount: number;
   personalTaskCount: number;
   projectTaskCount: number;
 }
 
-function computeDashboardStats(tasks: TaskWithRelations[]): DashboardStats {
+function computeDashboardStats(tasks: MyTaskItem[]): DashboardStats {
   const now = new Date();
   const weekAgo = subDays(now, 7);
   
   const todayTasks = tasks.filter(t => t.dueDate && isToday(new Date(t.dueDate)) && t.status !== "done");
   const overdueTasks = tasks.filter(t => t.dueDate && isPast(new Date(t.dueDate)) && !isToday(new Date(t.dueDate)) && t.status !== "done");
   const inProgressTasks = tasks.filter(t => t.status === "in_progress");
-  const completedThisWeek = tasks.filter(t => t.status === "done" && t.updatedAt && new Date(t.updatedAt) >= weekAgo);
+  const completedThisWeek = tasks.filter(t => {
+    const updatedAt = (t as any).updatedAt;
+    return t.status === "done" && updatedAt && new Date(updatedAt) >= weekAgo;
+  });
   
   const recentlyAdded = tasks
-    .filter(t => t.createdAt && new Date(t.createdAt) >= weekAgo && t.status !== "done")
-    .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
+    .filter(t => {
+      const createdAt = (t as any).createdAt;
+      return createdAt && new Date(createdAt) >= weekAgo && t.status !== "done";
+    })
+    .sort((a, b) => new Date((b as any).createdAt).getTime() - new Date((a as any).createdAt).getTime())
     .slice(0, 5);
   
   const recentlyCompleted = tasks
-    .filter(t => t.status === "done" && t.updatedAt && new Date(t.updatedAt) >= weekAgo)
-    .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime())
+    .filter(t => {
+      const updatedAt = (t as any).updatedAt;
+      return t.status === "done" && updatedAt && new Date(updatedAt) >= weekAgo;
+    })
+    .sort((a, b) => new Date((b as any).updatedAt).getTime() - new Date((a as any).updatedAt).getTime())
     .slice(0, 5);
   
   const totalTasks = tasks.length;
@@ -359,7 +398,7 @@ function computeDashboardStats(tasks: TaskWithRelations[]): DashboardStats {
 
 interface DashboardSummaryProps {
   stats: DashboardStats;
-  onTaskSelect: (task: TaskWithRelations) => void;
+  onTaskSelect: (task: MyTaskItem) => void;
   isLoading: boolean;
 }
 
@@ -479,6 +518,7 @@ function DashboardSummary({ stats, onTaskSelect, isLoading }: DashboardSummaryPr
 export default function MyTasks() {
   const { user } = useAuth();
   const isEmployee = user?.role === UserRole.EMPLOYEE;
+  const { virtualizationV1 } = useFeatureFlags();
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
   const [showNewTaskDrawer, setShowNewTaskDrawer] = useState(false);
   const [searchQuery, setSearchQuery] = useState("");
@@ -513,8 +553,13 @@ export default function MyTasks() {
     saveOrders(sectionOrders);
   }, [sectionOrders]);
 
-  const { data: tasks, isLoading } = useQuery<TaskWithRelations[]>({
-    queryKey: ["/api/tasks/my"],
+  const { data: tasks, isLoading } = useQuery<MyTaskItem[]>({
+    queryKey: ["/api/tasks/my", { view: "list" }],
+    queryFn: async () => {
+      const res = await fetch("/api/tasks/my?view=list");
+      if (!res.ok) throw new Error("Failed to fetch tasks");
+      return res.json();
+    },
   });
 
   const { data: pendingTaskTimeEntries = [] } = useQuery<TimeEntry[]>({
@@ -538,18 +583,9 @@ export default function MyTasks() {
   useEffect(() => {
     if (isLoading || selectedTask || !urlTaskId) return;
     
-    // First check if the task is in our loaded list
-    if (tasks) {
-      const task = tasks.find(t => t.id === urlTaskId);
-      if (task) {
-        setSelectedTask(task);
-        return;
-      }
-    }
-    
-    // If not in list, use the separately fetched task
-    if (linkedTask) {
-      setSelectedTask(linkedTask);
+    const taskInList = tasks?.find(t => t.id === urlTaskId);
+    if (taskInList || linkedTask) {
+      setSelectedTask((linkedTask || taskInList) as TaskWithRelations);
     }
   }, [tasks, linkedTask, isLoading, selectedTask, urlTaskId]);
 
@@ -650,12 +686,21 @@ export default function MyTasks() {
     await createPersonalTaskMutation.mutateAsync(data);
   };
 
-  const handleTaskSelect = (task: TaskWithRelations) => {
-    setSelectedTask(task);
-    // Add taskId to URL for deep linking
+  const handleTaskSelect = async (task: MyTaskItem) => {
     const url = new URL(window.location.href);
     url.searchParams.set('taskId', task.id);
     window.history.replaceState({}, '', url.pathname + url.search);
+    try {
+      const response = await fetch(`/api/tasks/${task.id}`);
+      if (response.ok) {
+        const fullTask = await response.json();
+        setSelectedTask(fullTask);
+      } else {
+        setSelectedTask(task as TaskWithRelations);
+      }
+    } catch {
+      setSelectedTask(task as TaskWithRelations);
+    }
   };
 
   const handleStatusChange = useCallback((taskId: string, completed: boolean) => {
@@ -676,7 +721,7 @@ export default function MyTasks() {
       return;
     }
 
-    setPendingCompleteTask(task);
+    setPendingCompleteTask(task as TaskWithRelations);
     setShowLogTimeDialog(true);
   }, [tasks, updateTaskMutation]);
 
@@ -831,12 +876,11 @@ export default function MyTasks() {
         }
       }
       
-      // Search filter
       if (debouncedSearch) {
         const search = debouncedSearch.toLowerCase();
         const matchTitle = task.title.toLowerCase().includes(search);
-        const matchDescription = task.description?.toLowerCase().includes(search);
-        const matchProject = task.project?.name?.toLowerCase().includes(search);
+        const matchDescription = (task as any).description?.toLowerCase().includes(search);
+        const matchProject = (task as any).project?.name?.toLowerCase().includes(search);
         if (!matchTitle && !matchDescription && !matchProject) return false;
       }
       
@@ -856,8 +900,8 @@ export default function MyTasks() {
         return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
       }
       if (sortBy === "updated") {
-        const aTime = a.updatedAt ? new Date(a.updatedAt).getTime() : 0;
-        const bTime = b.updatedAt ? new Date(b.updatedAt).getTime() : 0;
+        const aTime = (a as any).updatedAt ? new Date((a as any).updatedAt).getTime() : 0;
+        const bTime = (b as any).updatedAt ? new Date((b as any).updatedAt).getTime() : 0;
         return bTime - aTime;
       }
       if (sortBy === "priority") {
@@ -1039,6 +1083,7 @@ export default function MyTasks() {
                     onDueDateChange={handleDueDateChange}
                     localOrder={sectionOrders[section.id] || []}
                     onDragEnd={handleDragEnd}
+                    useVirtualization={virtualizationV1}
                   />
                 ))}
               </div>
@@ -1057,6 +1102,7 @@ export default function MyTasks() {
                     onDragEnd={handleDragEnd}
                     onAddTask={section.id === "personal" ? () => setShowNewTaskDrawer(true) : undefined}
                     supportsAddTask={section.id === "personal"}
+                    useVirtualization={virtualizationV1}
                   />
                 ))}
               </div>
