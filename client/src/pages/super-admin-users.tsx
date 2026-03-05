@@ -193,6 +193,11 @@ export default function SuperAdminUsers() {
 
   const { data: platformAdmins = [], isLoading: adminsLoading, refetch: refetchAdmins } = useQuery<PlatformAdmin[]>({
     queryKey: ["/api/v1/super/admins"],
+    select: (data) => [...data].sort((a, b) => {
+      const nameA = `${a.firstName || ""} ${a.lastName || ""}`.trim() || a.email;
+      const nameB = `${b.firstName || ""} ${b.lastName || ""}`.trim() || b.email;
+      return nameA.localeCompare(nameB);
+    })
   });
 
   const { data: integrationStatus } = useQuery<IntegrationStatus>({
@@ -213,6 +218,14 @@ export default function SuperAdminUsers() {
   const { data: appUsersData, isLoading: appUsersLoading } = useQuery<AppUsersResponse>({
     queryKey: ["/api/v1/super/users", `?${appUserQueryString}`],
     enabled: activeTab === "app-users",
+    select: (data) => ({
+      ...data,
+      users: [...data.users].sort((a, b) => {
+        const nameA = `${a.firstName || ""} ${a.lastName || ""}`.trim() || a.email;
+        const nameB = `${b.firstName || ""} ${b.lastName || ""}`.trim() || b.email;
+        return nameA.localeCompare(nameB);
+      })
+    })
   });
 
   // Tenants list for filter dropdown

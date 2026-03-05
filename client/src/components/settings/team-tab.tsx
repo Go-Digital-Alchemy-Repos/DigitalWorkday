@@ -108,6 +108,11 @@ export function TeamTab({ isAdmin = true }: TeamTabProps) {
 
   const { data: users, isLoading: usersLoading } = useQuery<User[]>({
     queryKey: ["/api/users"],
+    select: (data) => [...data].sort((a, b) => {
+      const nameA = `${a.firstName || ""} ${a.lastName || ""}`.trim() || a.email || "";
+      const nameB = `${b.firstName || ""} ${b.lastName || ""}`.trim() || b.email || "";
+      return nameA.localeCompare(nameB);
+    })
   });
 
   const { data: teams } = useQuery<Team[]>({
