@@ -211,7 +211,7 @@ export function TaskDetailDrawer({
   const [shareModalOpen, setShareModalOpen] = useState(false);
   const [newTagName, setNewTagName] = useState("");
   const [newTagColor, setNewTagColor] = useState("#3b82f6");
-  const [activeTab, setActiveTab] = useState<"overview" | "history">("overview");
+  const [historyExpanded, setHistoryExpanded] = useState(false);
   
   const { isDirty, setDirty, markClean, confirmIfDirty, UnsavedChangesDialog } = useUnsavedChanges();
 
@@ -936,11 +936,6 @@ export function TaskDetailDrawer({
 
   if (PERF_ENABLED) perfLog("render-complete", renderStart);
 
-  const tabItems = [
-    { id: "overview" as const, label: "Overview", icon: <FileText className="h-3.5 w-3.5" /> },
-    { id: "history" as const, label: "History", icon: <History className="h-3.5 w-3.5" /> },
-  ];
-
   const panelHeader = (
     <div className="px-4 sm:px-6 py-3 space-y-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
@@ -1085,27 +1080,6 @@ export function TaskDetailDrawer({
             <span className="font-medium" data-testid="breadcrumb-task">{task.title?.slice(0, 30) || "Task"}{(task.title?.length || 0) > 30 ? "..." : ""}</span>
           </>
         )}
-      </div>
-      <div className="flex items-center gap-1 border-b border-border -mx-4 sm:-mx-6 px-4 sm:px-6">
-        {tabItems.map((tab) => (
-          <button
-            key={tab.id}
-            onClick={() => setActiveTab(tab.id)}
-            className={cn(
-              "flex items-center gap-1.5 px-3 py-2 text-sm font-medium border-b-2 transition-colors",
-              activeTab === tab.id
-                ? "border-primary text-primary"
-                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-            )}
-            data-testid={`tab-${tab.id}`}
-          >
-            {tab.icon}
-            {tab.label}
-            {tab.count !== undefined && tab.count > 0 && (
-              <Badge variant="secondary" className="h-5 min-w-[20px] px-1 text-[10px]">{tab.count}</Badge>
-            )}
-          </button>
-        ))}
       </div>
     </div>
   );
@@ -1419,78 +1393,89 @@ export function TaskDetailDrawer({
         data-testid="task-detail-drawer"
       >
         <div className="p-4 sm:p-6 space-y-6">
-          {activeTab === "overview" && (
-            <>
-              <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66] space-y-1.5 overflow-hidden">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <FileText className="h-4 w-4 text-muted-foreground" />
-                    <label className="font-medium text-[16px] text-[#171717]">Description</label>
-                  </div>
-                  {!editingDescription && (
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
-                      onClick={() => setEditingDescription(true)}
-                      data-testid="button-edit-description"
-                    >
-                      <Pencil className="h-3.5 w-3.5" />
-                    </Button>
-                  )}
-                </div>
-                <div className="max-w-full overflow-hidden">
-                  {editingDescription || !toPlainText(description).trim() ? (
-                    <RichTextEditor
-                      value={description}
-                      onChange={handleDescriptionChange}
-                      onBlur={handleDescriptionBlur}
-                      placeholder="Add a description... Type @ to mention someone"
-                      minHeight="120px"
-                      users={mentionUsers}
-                      data-testid="textarea-description"
-                    />
-                  ) : (
-                    <div
-                      className="cursor-pointer rounded-md border border-transparent hover:border-border p-2 -m-2 transition-colors text-sm"
-                      onClick={() => setEditingDescription(true)}
-                      data-testid="description-readonly"
-                    >
-                      <RichTextRenderer value={description} />
-                    </div>
-                  )}
-                </div>
+          <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66] space-y-1.5 overflow-hidden">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <FileText className="h-4 w-4 text-muted-foreground" />
+                <label className="font-medium text-[16px] text-[#171717]">Description</label>
               </div>
-
-              {task.projectId && (
-                <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66]">
-                  <AttachmentUploader taskId={task.id} projectId={task.projectId} />
-                </div>
+              {!editingDescription && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 w-6 p-0 text-muted-foreground hover:text-foreground"
+                  onClick={() => setEditingDescription(true)}
+                  data-testid="button-edit-description"
+                >
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
               )}
-              {!task.projectId && (
-                <div className="text-sm text-muted-foreground">Attachments are available for project tasks only</div>
-              )}
-
-              <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66]">
-                <CommentThread
-                  comments={taskComments}
-                  taskId={task.id}
-                  projectId={task.projectId}
-                  currentUserId={currentUser?.id}
-                  onAdd={(body, attachmentIds) => addCommentMutation.mutate({ body, attachmentIds })}
-                  onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
-                  onDelete={(id) => deleteCommentMutation.mutate(id)}
-                  onResolve={(id) => resolveCommentMutation.mutate(id)}
-                  onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
+            </div>
+            <div className="max-w-full overflow-hidden">
+              {editingDescription || !toPlainText(description).trim() ? (
+                <RichTextEditor
+                  value={description}
+                  onChange={handleDescriptionChange}
+                  onBlur={handleDescriptionBlur}
+                  placeholder="Add a description... Type @ to mention someone"
+                  minHeight="120px"
                   users={mentionUsers}
+                  data-testid="textarea-description"
                 />
-              </div>
-            </>
+              ) : (
+                <div
+                  className="cursor-pointer rounded-md border border-transparent hover:border-border p-2 -m-2 transition-colors text-sm"
+                  onClick={() => setEditingDescription(true)}
+                  data-testid="description-readonly"
+                >
+                  <RichTextRenderer value={description} />
+                </div>
+              )}
+            </div>
+          </div>
+
+          {task.projectId && (
+            <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66]">
+              <AttachmentUploader taskId={task.id} projectId={task.projectId} />
+            </div>
+          )}
+          {!task.projectId && (
+            <div className="text-sm text-muted-foreground">Attachments are available for project tasks only</div>
           )}
 
-          {activeTab === "history" && (
-            <TaskHistoryTab entityType="task" entityId={task.id} enabled={activeTab === "history"} />
-          )}
+          <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66]">
+            <CommentThread
+              comments={taskComments}
+              taskId={task.id}
+              projectId={task.projectId}
+              currentUserId={currentUser?.id}
+              onAdd={(body, attachmentIds) => addCommentMutation.mutate({ body, attachmentIds })}
+              onUpdate={(id, body) => updateCommentMutation.mutate({ id, body })}
+              onDelete={(id) => deleteCommentMutation.mutate(id)}
+              onResolve={(id) => resolveCommentMutation.mutate(id)}
+              onUnresolve={(id) => unresolveCommentMutation.mutate(id)}
+              users={mentionUsers}
+            />
+          </div>
+
+          <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66]">
+            <button
+              onClick={() => setHistoryExpanded(!historyExpanded)}
+              className="flex items-center justify-between w-full"
+              data-testid="button-toggle-history"
+            >
+              <div className="flex items-center gap-2">
+                <History className="h-4 w-4 text-muted-foreground" />
+                <label className="font-medium text-[16px] text-[#171717] cursor-pointer">Task History</label>
+              </div>
+              <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform", historyExpanded && "rotate-90")} />
+            </button>
+            {historyExpanded && (
+              <div className="mt-3">
+                <TaskHistoryTab entityType="task" entityId={task.id} enabled={historyExpanded} />
+              </div>
+            )}
+          </div>
         </div>
       </TaskPanelShell>
       <SubtaskDetailDrawer
