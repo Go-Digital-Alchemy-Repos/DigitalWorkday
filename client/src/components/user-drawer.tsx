@@ -72,7 +72,7 @@ export function UserDrawer({
   const currentUserRole = (currentUser as any)?.role;
   const isSuperUser = currentUserRole === "super_user";
   const isTenantOwner = currentUserRole === "tenant_owner";
-  const canManageProjectManager = isTenantOwner;
+  const canManageProjectManager = isTenantOwner || isSuperUser;
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),

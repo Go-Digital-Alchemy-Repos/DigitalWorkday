@@ -1360,6 +1360,7 @@ export const projects = pgTable("projects", {
   color: text("color").default("#3B82F6"),
   budgetMinutes: integer("budget_minutes"), // Optional project budget in minutes for workload forecasting
   stickyAt: timestamp("sticky_at"),
+  projectManagerId: varchar("project_manager_id").references(() => users.id),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),

@@ -145,6 +145,11 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
     enabled: open,
   });
 
+  const { data: tenantUsers = [] } = useQuery<Array<{ id: string; firstName?: string | null; lastName?: string | null; email: string }>>({
+    queryKey: ["/api/users"],
+    enabled: open,
+  });
+
   const { data: analytics, isLoading: analyticsLoading } = useQuery<ProjectAnalytics>({
     queryKey: ["/api/v1/projects", project?.id, "analytics"],
     enabled: !!project?.id && open && activeTab === "insights",

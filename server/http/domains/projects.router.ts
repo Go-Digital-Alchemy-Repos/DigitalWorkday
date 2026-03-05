@@ -261,6 +261,10 @@ router.post("/projects", async (req: Request, res: Response) => {
     if (tenantId && !body.clientId) {
       return sendError(res, AppError.badRequest("Client assignment is required for projects"), req);
     }
+
+    if (tenantId && !body.projectManagerId) {
+      body.projectManagerId = creatorId;
+    }
     
     if (body.clientId && tenantId) {
       const client = await storage.getClientByIdAndTenant(body.clientId, tenantId);
@@ -384,6 +388,15 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
       return sendError(res, AppError.notFound("Project"), req);
     }
     
+    if ((data as any).projectManagerId !== undefined && (data as any).projectManagerId !== existingProject.projectManagerId) {
+      const currentUser = await storage.getUser(currentUserId);
+      const role = currentUser?.role;
+      const canChangeProjectManager = role === "super_user" || role === "tenant_owner" || role === "admin";
+      if (!canChangeProjectManager) {
+        return sendError(res, AppError.forbidden("Only admins and owners can change the Project Manager"), req);
+      }
+    }
+
     const effectiveClientId = data.clientId !== undefined ? data.clientId : existingProject.clientId;
     const effectiveDivisionId = data.divisionId !== undefined ? data.divisionId : existingProject.divisionId;
     

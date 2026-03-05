@@ -66,9 +66,18 @@ const editProjectSchema = z.object({
   teamId: z.string().optional(),
   color: z.string().default("#3B82F6"),
   visibility: z.enum(["workspace", "private"]).default("workspace"),
+  projectManagerId: z.string().optional(),
 });
 
 type EditProjectFormData = z.infer<typeof editProjectSchema>;
+
+interface TenantUser {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email: string;
+  role?: string;
+}
 
 interface ProjectSettingsSheetProps {
   project: Project;
@@ -83,7 +92,8 @@ export function ProjectSettingsSheet({
 }: ProjectSettingsSheetProps) {
   const { toast } = useToast();
   const { user, isLoading: authLoading } = useAuth();
-  const isAdmin = user?.role === "admin" || user?.role === "super_user";
+  const isAdmin = user?.role === "admin" || user?.role === "super_user" || user?.role === "tenant_owner";
+  const canChangeProjectManager = user?.role === "tenant_owner" || user?.role === "admin" || user?.role === "super_user";
   const [, setLocation] = useLocation();
   const [clientSearch, setClientSearch] = useState("");
 
@@ -94,6 +104,20 @@ export function ProjectSettingsSheet({
   const { data: teams = [] } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
   });
+
+  const { data: tenantUsers = [] } = useQuery<TenantUser[]>({
+    queryKey: ["/api/users"],
+    enabled: open && canChangeProjectManager,
+  });
+
+  const eligibleManagers = tenantUsers.filter((u) => u.role !== "client");
+
+  const getManagerDisplayName = (u: TenantUser) => {
+    const first = u.firstName || "";
+    const last = u.lastName || "";
+    if (first || last) return `${first} ${last}`.trim();
+    return u.email;
+  };
 
   const filteredClients = clients.filter(
     (c) =>
@@ -109,6 +133,7 @@ export function ProjectSettingsSheet({
       teamId: project.teamId || "",
       color: project.color || "#3B82F6",
       visibility: (project.visibility as "workspace" | "private") || "workspace",
+      projectManagerId: (project as any).projectManagerId || "",
     },
   });
 
@@ -120,6 +145,7 @@ export function ProjectSettingsSheet({
         teamId: project.teamId || "",
         color: project.color || "#3B82F6",
         visibility: (project.visibility as "workspace" | "private") || "workspace",
+        projectManagerId: (project as any).projectManagerId || "",
       });
       setClientSearch("");
     }
@@ -127,13 +153,15 @@ export function ProjectSettingsSheet({
 
   const updateProjectMutation = useMutation({
     mutationFn: async (data: EditProjectFormData) => {
-      const res = await apiRequest("PATCH", `/api/projects/${project.id}`, {
+      const payload: Record<string, unknown> = {
         name: data.name,
         description: data.description || null,
         teamId: data.teamId || null,
         color: data.color,
         visibility: data.visibility,
-      });
+      };
+      if (data.projectManagerId) payload.projectManagerId = data.projectManagerId;
+      const res = await apiRequest("PATCH", `/api/projects/${project.id}`, payload);
       return await res.json();
     },
     onSuccess: (updatedProject) => {
@@ -418,6 +446,34 @@ export function ProjectSettingsSheet({
                   </FormItem>
                 )}
               />
+
+              {canChangeProjectManager && (
+                <FormField
+                  control={form.control}
+                  name="projectManagerId"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Project Manager</FormLabel>
+                      <Select onValueChange={(v) => field.onChange(v === "_none" ? "" : v)} value={field.value || "_none"}>
+                        <FormControl>
+                          <SelectTrigger data-testid="select-edit-project-manager">
+                            <SelectValue placeholder="Select project manager" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="_none">Unassigned</SelectItem>
+                          {eligibleManagers.map((u) => (
+                            <SelectItem key={u.id} value={u.id}>
+                              {getManagerDisplayName(u)}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
 
               <div className="grid grid-cols-2 gap-4">
                 {teams.length > 0 && (

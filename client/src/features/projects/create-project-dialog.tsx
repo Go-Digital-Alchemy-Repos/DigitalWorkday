@@ -50,9 +50,18 @@ const createProjectSchema = z.object({
   teamId: z.string().optional(),
   color: z.string().default("#3B82F6"),
   visibility: z.enum(["workspace", "private"]).default("workspace"),
+  projectManagerId: z.string().min(1, "Project Manager is required"),
 });
 
 type CreateProjectFormData = z.infer<typeof createProjectSchema>;
+
+interface TenantUser {
+  id: string;
+  firstName?: string | null;
+  lastName?: string | null;
+  email: string;
+  role?: string;
+}
 
 interface CreateProjectDialogProps {
   open: boolean;
@@ -81,6 +90,7 @@ export function CreateProjectDialog({
       teamId: "",
       color: "#3B82F6",
       visibility: "workspace",
+      projectManagerId: "",
     },
   });
 
@@ -90,6 +100,22 @@ export function CreateProjectDialog({
     queryKey: ["/api/v1/clients", selectedClientId, "divisions"],
     enabled: !!selectedClientId && open,
   });
+
+  const { data: tenantUsers = [] } = useQuery<TenantUser[]>({
+    queryKey: ["/api/users"],
+    enabled: open,
+  });
+
+  const eligibleManagers = tenantUsers.filter(
+    (u) => u.role !== "client"
+  );
+
+  const getDisplayName = (u: TenantUser) => {
+    const first = u.firstName || "";
+    const last = u.lastName || "";
+    if (first || last) return `${first} ${last}`.trim();
+    return u.email;
+  };
 
   const clientHasDivisions = divisions && divisions.length > 0;
 
@@ -158,6 +184,31 @@ export function CreateProjectDialog({
                       data-testid="textarea-project-description"
                     />
                   </FormControl>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+
+            <FormField
+              control={form.control}
+              name="projectManagerId"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Project Manager <span className="text-destructive">*</span></FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
+                    <FormControl>
+                      <SelectTrigger data-testid="select-project-manager">
+                        <SelectValue placeholder="Select a project manager" />
+                      </SelectTrigger>
+                    </FormControl>
+                    <SelectContent>
+                      {eligibleManagers.map((u) => (
+                        <SelectItem key={u.id} value={u.id}>
+                          {getDisplayName(u)}
+                        </SelectItem>
+                      ))}
+                    </SelectContent>
+                  </Select>
                   <FormMessage />
                 </FormItem>
               )}
