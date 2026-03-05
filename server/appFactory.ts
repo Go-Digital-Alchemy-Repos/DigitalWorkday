@@ -72,7 +72,10 @@ export function createApp(options: CreateAppOptions = {}): AppInstance {
 
   if (!testMode) {
     app.use(tenantContextMiddleware);
-    app.use(agreementEnforcementGuard);
+    const agreementEnforcementEnabled = process.env.ENABLE_AGREEMENT_ENFORCEMENT === "true";
+    if (agreementEnforcementEnabled) {
+      app.use(agreementEnforcementGuard);
+    }
   }
 
   app.use(apiJsonResponseGuard);
