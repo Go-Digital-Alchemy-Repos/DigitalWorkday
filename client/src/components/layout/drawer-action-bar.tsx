@@ -67,25 +67,7 @@ export function DrawerActionBar({
       )}
       data-testid="drawer-action-bar"
     >
-      <div className="flex items-center gap-2 flex-wrap ml-auto">
-        {showSave && onSave && (
-          <Button
-            size="default"
-            variant="outline"
-            onClick={onSave}
-            disabled={saveDisabled || isSaving}
-            className={actionBtn}
-            data-testid="button-action-save"
-          >
-            {isSaving ? (
-              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
-            ) : (
-              <Save className="h-4 w-4 mr-1.5 text-blue-500" />
-            )}
-            {isSaving ? "Saving..." : saveLabel}
-          </Button>
-        )}
-
+      <div className="flex items-center gap-2 flex-wrap">
         {showTimer && timerState === "idle" && onStartTimer && (
           <Button
             size="default"
@@ -163,8 +145,28 @@ export function DrawerActionBar({
         {showTimer && timerTotalLabel && (
           <span className="text-xs text-muted-foreground">{timerTotalLabel}</span>
         )}
+      </div>
 
+      <div className="flex items-center gap-2 flex-wrap ml-auto">
         {extraActions}
+
+        {showSave && onSave && (
+          <Button
+            size="default"
+            variant="outline"
+            onClick={onSave}
+            disabled={saveDisabled || isSaving}
+            className={actionBtn}
+            data-testid="button-action-save"
+          >
+            {isSaving ? (
+              <Loader2 className="h-4 w-4 mr-1.5 animate-spin" />
+            ) : (
+              <Save className="h-4 w-4 mr-1.5 text-blue-500" />
+            )}
+            {isSaving ? "Saving..." : saveLabel}
+          </Button>
+        )}
       </div>
 
       <div className="flex items-center gap-2">
