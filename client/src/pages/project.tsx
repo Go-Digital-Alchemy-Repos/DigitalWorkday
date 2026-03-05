@@ -903,16 +903,24 @@ export default function ProjectPage() {
                 </Button>
               )}
               {isAdmin && enableCapacityWhatIf && (
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="hidden md:flex"
-                  onClick={() => setWhatIfOpen(true)}
-                  data-testid="button-whatif"
-                >
-                  <Zap className="h-4 w-4 mr-1" />
-                  What-if
-                </Button>
+                <div className="relative">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="hidden md:flex"
+                    disabled
+                    data-testid="button-whatif"
+                  >
+                    <Zap className="h-4 w-4 mr-1" />
+                    What-if
+                  </Button>
+                  <Badge 
+                    className="absolute -top-2 -right-2 px-1.5 py-0.5 text-[10px] bg-amber-500 hover:bg-amber-500 text-white border-none shadow-sm z-10"
+                    data-testid="badge-whatif-coming-soon"
+                  >
+                    Coming Soon
+                  </Badge>
+                </div>
               )}
               <Button
                 variant="ghost"
