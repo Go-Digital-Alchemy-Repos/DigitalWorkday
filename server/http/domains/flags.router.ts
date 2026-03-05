@@ -76,6 +76,9 @@ router.get("/features/flags", async (_req, res) => {
       enableClientFollowups: config.features.enableClientFollowups,
       enableWeeklyClientReports: config.features.enableWeeklyClientReports,
       enableCommunicationTimeline: config.features.enableCommunicationTimeline,
+      enableClientConfidenceScore: config.features.enableClientConfidenceScore,
+      enableClientConfidenceDebug: config.features.enableClientConfidenceDebug,
+      enableGoogleCalendarFollowups: config.features.enableGoogleCalendarFollowups,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

@@ -241,6 +241,7 @@ export const config = {
     enableClientFollowups: optionalEnvBool("ENABLE_CLIENT_FOLLOWUPS", true),
     enableClientConfidenceScore: optionalEnvBool("ENABLE_CLIENT_CONFIDENCE_SCORE", true),
     enableClientConfidenceDebug: optionalEnvBool("ENABLE_CLIENT_CONFIDENCE_DEBUG", false),
+    enableGoogleCalendarFollowups: optionalEnvBool("ENABLE_GOOGLE_CALENDAR_FOLLOWUPS", true),
     enableWeeklyClientReports: optionalEnvBool("ENABLE_WEEKLY_CLIENT_REPORTS", true),
     enableCommunicationTimeline: optionalEnvBool("ENABLE_COMMUNICATION_TIMELINE", true),
   },

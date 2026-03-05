@@ -47,6 +47,7 @@ export interface FeatureFlags {
   enableCommunicationTimeline: boolean;
   enableClientConfidenceScore: boolean;
   enableClientConfidenceDebug: boolean;
+  enableGoogleCalendarFollowups: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -94,6 +95,9 @@ const ALL_OFF: FeatureFlags = {
   enableClientFollowups: false,
   enableWeeklyClientReports: false,
   enableCommunicationTimeline: false,
+  enableClientConfidenceScore: false,
+  enableClientConfidenceDebug: false,
+  enableGoogleCalendarFollowups: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

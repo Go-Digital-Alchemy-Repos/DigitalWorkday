@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
@@ -34,6 +34,7 @@ import {
   Phone,
   Send,
   CalendarClock,
+  CalendarPlus,
   PhoneCall,
   MailCheck,
 } from "lucide-react";
@@ -1220,12 +1221,84 @@ function CommStatusBadge({ status }: { status: CommStatus }) {
 function ClientFollowUpsCard() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const { enableGoogleCalendarFollowups } = useFeatureFlags();
+
+  const [scheduleOpen, setScheduleOpen] = useState(false);
+  const [selectedFollowup, setSelectedFollowup] = useState<FollowUpProject | null>(null);
+  const [scheduleDate, setScheduleDate] = useState("");
+  const [scheduleNotes, setScheduleNotes] = useState("");
 
   const { data: followups = [], isLoading } = useQuery<FollowUpProject[]>({
     queryKey: ["/api/communication/followups"],
     staleTime: 2 * 60_000,
     refetchOnWindowFocus: false,
   });
+
+  const { data: calendarStatus, refetch: refetchCalendarStatus } = useQuery<{ connected: boolean }>({
+    queryKey: ["/api/calendar/status"],
+    staleTime: 60_000,
+    refetchOnWindowFocus: false,
+    enabled: enableGoogleCalendarFollowups,
+  });
+
+  const createEventMutation = useMutation({
+    mutationFn: (body: { clientName: string; projectName: string; projectId: string; followupDueAt: string; notes?: string }) =>
+      apiRequest("POST", "/api/calendar/events/followup", body),
+    onSuccess: (data: { htmlLink?: string }) => {
+      setScheduleOpen(false);
+      setScheduleNotes("");
+      toast({
+        title: "Event created",
+        description: (
+          <span>
+            Follow-up scheduled in Google Calendar.{" "}
+            {data?.htmlLink && (
+              <a href={data.htmlLink} target="_blank" rel="noopener noreferrer" className="underline font-medium">
+                Open event
+              </a>
+            )}
+          </span>
+        ) as unknown as string,
+      });
+    },
+    onError: (err: Error) => {
+      if (err.message?.includes("not connected")) {
+        refetchCalendarStatus();
+      }
+      toast({ title: "Error", description: "Failed to create calendar event.", variant: "destructive" });
+    },
+  });
+
+  function openScheduleDialog(item: FollowUpProject) {
+    setSelectedFollowup(item);
+    const defaultDate = item.nextFollowupDueAt
+      ? new Date(item.nextFollowupDueAt).toISOString().slice(0, 16)
+      : new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString().slice(0, 16);
+    setScheduleDate(defaultDate);
+    setScheduleNotes("");
+    setScheduleOpen(true);
+  }
+
+  async function handleConnectCalendar() {
+    try {
+      const res = await apiRequest("GET", `/api/calendar/auth-url?returnTo=${encodeURIComponent("/pm-portfolio")}`);
+      const data = res as { url?: string };
+      if (data.url) {
+        window.location.href = data.url;
+      }
+    } catch {
+      toast({ title: "Error", description: "Could not get Google authorization URL.", variant: "destructive" });
+    }
+  }
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    if (params.get("calendarConnected") === "1") {
+      toast({ title: "Google Calendar connected", description: "You can now schedule follow-ups directly in Google Calendar." });
+      refetchCalendarStatus();
+      window.history.replaceState({}, "", window.location.pathname);
+    }
+  }, []);
 
   const logContactMutation = useMutation({
     mutationFn: (projectId: string) =>
@@ -1341,17 +1414,31 @@ function ClientFollowUpsCard() {
                       <CommStatusBadge status={item.communicationStatus} />
                     </td>
                     <td className="px-4 py-2.5 text-right">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        className="h-6 text-xs px-2 gap-1"
-                        data-testid={`button-log-contact-${item.projectId}`}
-                        disabled={logContactMutation.isPending}
-                        onClick={() => logContactMutation.mutate(item.projectId)}
-                      >
-                        <Phone className="h-3 w-3" />
-                        Log Contact
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="h-6 text-xs px-2 gap-1"
+                          data-testid={`button-log-contact-${item.projectId}`}
+                          disabled={logContactMutation.isPending}
+                          onClick={() => logContactMutation.mutate(item.projectId)}
+                        >
+                          <Phone className="h-3 w-3" />
+                          Log Contact
+                        </Button>
+                        {enableGoogleCalendarFollowups && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="h-6 text-xs px-2 gap-1 text-blue-600 border-blue-200 hover:bg-blue-50 dark:text-blue-400 dark:border-blue-800 dark:hover:bg-blue-950"
+                            data-testid={`button-schedule-followup-${item.projectId}`}
+                            onClick={() => openScheduleDialog(item)}
+                          >
+                            <CalendarPlus className="h-3 w-3" />
+                            Schedule
+                          </Button>
+                        )}
+                      </div>
                     </td>
                   </tr>
                 ))}
@@ -1360,6 +1447,106 @@ function ClientFollowUpsCard() {
           </div>
         )}
       </CardContent>
+
+      {enableGoogleCalendarFollowups && selectedFollowup && (
+        <Dialog open={scheduleOpen} onOpenChange={setScheduleOpen}>
+          <DialogContent className="max-w-md" data-testid="dialog-schedule-followup">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2">
+                <CalendarPlus className="h-4 w-4 text-blue-600" />
+                Schedule Follow-Up
+              </DialogTitle>
+              <DialogDescription>
+                Schedule a Google Calendar event for your follow-up with{" "}
+                <strong>{selectedFollowup.clientName ?? "the client"}</strong>.
+              </DialogDescription>
+            </DialogHeader>
+
+            {!calendarStatus?.connected ? (
+              <div className="space-y-4 py-2">
+                <p className="text-sm text-muted-foreground">
+                  Connect your Google Calendar to schedule follow-up reminders directly from MyWorkDay.
+                </p>
+                <Button
+                  className="w-full gap-2"
+                  onClick={handleConnectCalendar}
+                  data-testid="button-connect-google-calendar"
+                >
+                  <CalendarPlus className="h-4 w-4" />
+                  Connect Google Calendar
+                </Button>
+              </div>
+            ) : (
+              <div className="space-y-4 py-2">
+                <div className="space-y-1.5">
+                  <Label htmlFor="schedule-date" className="text-xs font-medium">Date & Time</Label>
+                  <input
+                    id="schedule-date"
+                    type="datetime-local"
+                    value={scheduleDate}
+                    onChange={(e) => setScheduleDate(e.target.value)}
+                    className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+                    data-testid="input-schedule-date"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label htmlFor="schedule-notes" className="text-xs font-medium">Notes (optional)</Label>
+                  <Textarea
+                    id="schedule-notes"
+                    placeholder="Add any context or talking points..."
+                    value={scheduleNotes}
+                    onChange={(e) => setScheduleNotes(e.target.value)}
+                    rows={3}
+                    className="text-sm resize-none"
+                    data-testid="input-schedule-notes"
+                  />
+                </div>
+                <div className="bg-muted/40 rounded-md p-3 space-y-0.5">
+                  <p className="text-xs text-muted-foreground font-medium">Event details</p>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-medium">Title:</span>{" "}
+                    Follow up with {selectedFollowup.clientName} — {selectedFollowup.projectName}
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-medium">Duration:</span> 30 minutes
+                  </p>
+                  <p className="text-xs text-muted-foreground">
+                    <span className="font-medium">Reminder:</span> 1 day before + 1 hour before
+                  </p>
+                </div>
+              </div>
+            )}
+
+            <DialogFooter>
+              <Button variant="outline" size="sm" onClick={() => setScheduleOpen(false)}>Cancel</Button>
+              {calendarStatus?.connected && (
+                <Button
+                  size="sm"
+                  disabled={!scheduleDate || createEventMutation.isPending}
+                  onClick={() => {
+                    if (!selectedFollowup || !scheduleDate) return;
+                    createEventMutation.mutate({
+                      clientName: selectedFollowup.clientName ?? "Client",
+                      projectName: selectedFollowup.projectName,
+                      projectId: selectedFollowup.projectId,
+                      followupDueAt: new Date(scheduleDate).toISOString(),
+                      notes: scheduleNotes || undefined,
+                    });
+                  }}
+                  data-testid="button-create-calendar-event"
+                  className="gap-1"
+                >
+                  {createEventMutation.isPending ? (
+                    <><Loader2 className="h-3 w-3 animate-spin" /> Creating...</>
+                  ) : (
+                    <><CalendarPlus className="h-3 w-3" /> Create Event</>
+                  )}
+                </Button>
+              )}
+            </DialogFooter>
+          </DialogContent>
+        </Dialog>
+      )}
     </Card>
   );
 }
