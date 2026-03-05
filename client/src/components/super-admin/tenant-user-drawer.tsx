@@ -102,6 +102,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
   const [editLastName, setEditLastName] = useState("");
   const [editEmail, setEditEmail] = useState("");
   const [editRole, setEditRole] = useState<string>("");
+  const [editIsProjectManager, setEditIsProjectManager] = useState(false);
 
   const { data: user, isLoading: userLoading } = useQuery<TenantUser>({
     queryKey: ["/api/v1/super/tenants", tenantId, "users", userId],
@@ -338,6 +339,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
       setEditLastName(user.lastName || "");
       setEditEmail(user.email || "");
       setEditRole(user.role || "employee");
+      setEditIsProjectManager(user.isProjectManager ?? false);
     }
   }, [user]);
 
@@ -360,6 +362,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
       setEditLastName(user.lastName || "");
       setEditEmail(user.email || "");
       setEditRole(user.role || "employee");
+      setEditIsProjectManager(user.isProjectManager ?? false);
     }
   };
 
@@ -384,7 +387,7 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
       return;
     }
 
-    const updates: { firstName?: string; lastName?: string; email?: string; role?: string } = {};
+    const updates: { firstName?: string; lastName?: string; email?: string; role?: string; isProjectManager?: boolean } = {};
     
     if (editFirstName !== (user?.firstName || "")) {
       updates.firstName = editFirstName;
@@ -397,6 +400,9 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
     }
     if (editRole !== user?.role) {
       updates.role = editRole;
+    }
+    if (editIsProjectManager !== (user?.isProjectManager ?? false)) {
+      updates.isProjectManager = editIsProjectManager;
     }
     
     if (Object.keys(updates).length === 0) {
@@ -575,6 +581,20 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
                             </SelectContent>
                           </Select>
                         </div>
+                        {(editRole === "admin" || editRole === "tenant_owner") && (
+                          <div className="flex items-center justify-between rounded-lg border p-3 col-span-2">
+                            <div className="space-y-0.5">
+                              <Label htmlFor="edit-is-pm" className="text-sm font-medium">Project Manager</Label>
+                              <p className="text-xs text-muted-foreground">Grants access to PM Portfolio, billing approval, and related reports</p>
+                            </div>
+                            <Switch
+                              id="edit-is-pm"
+                              checked={editIsProjectManager}
+                              onCheckedChange={setEditIsProjectManager}
+                              data-testid="switch-is-project-manager"
+                            />
+                          </div>
+                        )}
                         <div>
                           <Label className="text-xs text-muted-foreground">Status</Label>
                           <Badge className={user.isActive ? "bg-green-600 mt-1" : "bg-gray-500 mt-1"}>
@@ -598,7 +618,12 @@ export function TenantUserDrawer({ open, onClose, tenantId, userId, tenantName }
                         </div>
                         <div>
                           <Label className="text-xs text-muted-foreground">Role</Label>
-                          <Badge variant="outline" className="mt-1">{user.role}</Badge>
+                          <div className="flex items-center gap-1.5 mt-1">
+                            <Badge variant="outline">{user.role}</Badge>
+                            {(user.role === "admin" || user.role === "tenant_owner") && user.isProjectManager && (
+                              <Badge className="bg-blue-600 text-white text-xs">PM</Badge>
+                            )}
+                          </div>
                         </div>
                         <div>
                           <Label className="text-xs text-muted-foreground">Status</Label>

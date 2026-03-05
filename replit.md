@@ -24,7 +24,14 @@ MyWorkDay is an Asana-inspired, multi-tenant project management application desi
 
 ### Core Features and Design Patterns
 - **Multi-Tenancy**: Supports multiple tenants with an admin dashboard and per-tenant user management.
-- **Role Hierarchy & Access Control**: `super_user` > `tenant_owner` > `admin` > `employee` > `client`. Access to features like PM Portfolio is governed by this hierarchy and specific flags (`isProjectManager`). All access control is enforced both on the backend and frontend.
+- **Role Hierarchy & Access Control**: `super_user` > `tenant_owner` > `admin` > `employee` > `client`. All access control is enforced on both backend and frontend.
+  - `super_user`: Platform-level admin. Can assign `tenant_owner` role to existing admins. Can set `isProjectManager` on any user.
+  - `tenant_owner`: Highest per-tenant role. Has all admin privileges. Always has PM Portfolio access. Can set `isProjectManager` on `admin` and `tenant_owner` users. Only a `super_user` can grant or revoke this role.
+  - `admin`: Standard tenant administrator. Has PM Portfolio access **only if** `isProjectManager = true`. Cannot self-assign `tenant_owner` or set `isProjectManager` on others.
+  - `employee`: Standard user. Never has PM Portfolio access.
+  - `client`: External portal user. Restricted to client-facing views only.
+  - **`isProjectManager` flag** (`users.is_project_manager boolean`): Grants `admin` users access to PM Portfolio Dashboard, billing approval workflow, low-margin client reports, and invoice drafts. Set by `tenant_owner` or `super_user` only via PATCH `/api/users/:id`. Included in `/api/auth/me` response. UI: checkbox in User Drawer (visible to tenant_owner/super_user editing admin/tenant_owner users); "PM" badge in team tab.
+  - **Backend enforcement**: `requireAdmin` middleware allows `admin` and `tenant_owner`. `requireTenantOwnerOrSuper` is for endpoints restricted to tenant_owner/super_user. PATCH `/api/users/:id` blocks plain admins from setting `isProjectManager` or `tenant_owner` role (403).
 - **Authentication**: Session-based authentication using Passport.js.
 - **Real-time Communication**: Socket.IO for live updates.
 - **Project & Task Management**: Includes workspaces, teams, clients, projects, tasks (with subtasks), activity logs, time tracking, and project templates. Supports private visibility for tasks and projects.

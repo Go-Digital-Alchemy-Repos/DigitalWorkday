@@ -1,0 +1,232 @@
+CLIENT CONFIDENCE SCORE (CHURN-RISK SIGNAL FOR CLIENTS + PROJECTS)
+NON-DESTRUCTIVE • ADDITIVE • EXPLAINABLE • PERFORMANCE-SAFE • DOCUMENTED
+
+Feature flags:
+- ENABLE_CLIENT_CONFIDENCE_SCORE
+- ENABLE_CLIENT_CONFIDENCE_DEBUG
+
+GOAL
+Add a “Client Confidence Score” (0–100) that estimates how confident a client feels about delivery, based on objective signals:
+- communication recency/consistency
+- milestone progress/slips
+- overdue task pressure
+- project risk flags
+- (optional) budget/burn risk
+- (optional) client response latency
+
+Expose this score:
+- in Client Profile (primary)
+- in Project “Communication” tab (secondary)
+- in Project Management dashboard (portfolio view)
+
+IMPORTANT:
+- Score must be explainable (show drivers)
+- Score must be computed from data you already have
+- Must not leak private tasks/projects/communications
+- Must be fast (batched queries, cached)
+
+============================================================
+PHASE 1 — DATA MODEL (OPTIONAL STORAGE + SNAPSHOTS)
+============================================================
+
+1.1 Create table: client_confidence_snapshots (optional but recommended)
+Columns:
+- id
+- tenant_id
+- client_id
+- project_id (nullable)  // allow per-project score as well
+- score (int 0–100)
+- tier (text): "Strong" | "Stable" | "At Risk" | "Critical"
+- drivers_json (jsonb)   // list of driver objects
+- computed_range_start (date nullable)
+- computed_range_end (date nullable)
+- computed_at (timestamp)
+Indexes:
+- (tenant_id, client_id, computed_at desc)
+- (tenant_id, project_id, computed_at desc)
+
+NOTE:
+If you already have a generic snapshots/forecast table, reuse it instead of creating a new one.
+
+============================================================
+PHASE 2 — SCORING ENGINE (EXPLAINABLE + MODULAR)
+============================================================
+
+2.1 Create:
+server/src/services/confidence/clientConfidenceScoreService.ts
+
+Export:
+computeClientConfidenceScore({
+  tenantId,
+  clientId,
+  projectId?,              // if present compute per-project
+  rangeStart?, rangeEnd?,  // default last 30 days
+  viewerUserId
+})
+
+Return:
+{
+  score: number (0-100),
+  tier: "Strong"|"Stable"|"At Risk"|"Critical",
+  drivers: [
+    {
+      key: string,
+      label: string,
+      impact: number,           // negative reduces confidence, positive increases
+      severity: "low"|"medium"|"high",
+      evidence: { ... }         // numbers only, no message content
+    }
+  ],
+  componentScores: {
+    communication: number (0-100),
+    delivery: number (0-100),
+    risk: number (0-100),
+    financial: number (0-100) (optional),
+    responsiveness: number (0-100) (optional)
+  }
+}
+
+2.2 Recommended components + weights (v1)
+Base score: 100, subtract penalties (clamp 0–100).
+
+COMMUNICATION (weight ~35)
+- daysSinceLastClientContact:
+  0–7: 0 penalty
+  8–14: -8
+  15–21: -16
+  22+: -25
+- missedWeeklyReport (if enabled):
+  if last_status_report_at older than 7 days: -10
+
+DELIVERY (weight ~35)
+- milestoneOverdueCount:
+  each overdue milestone: -6 (cap -18)
+- milestoneSlipDays (if available):
+  >7 days slip: -6
+- overdueTasksCount:
+  ratio overdue/open > 10%: -8
+  >20%: -15
+
+RISK (weight ~20)
+- project risk flags present: -5 to -20 based on severity
+- needsRiskAck true: -8
+
+FINANCIAL (weight ~10, optional if budget/burn enabled)
+- burnRisk true: -8
+- projectedOverrunDays < 14: -10
+
+RESPONSIVENESS (optional later)
+- client response SLA breaches: -5 to -10
+
+2.3 Explainability requirement
+For every penalty, create a driver entry with:
+- label
+- impact
+- evidence numeric only (e.g., { daysSinceLastContact: 16 })
+
+2.4 Visibility rules
+- If viewerUserId does not have access to a project, do NOT include it in client-level score.
+- Only aggregate from visible projects/tasks.
+- Never include private task titles/descriptions.
+- Never include message bodies.
+
+============================================================
+PHASE 3 — PERFORMANCE + CACHING
+============================================================
+
+3.1 Add caching for computed score:
+- Cache key: confidence:{tenantId}:{clientId}:{projectId?}:{rangeStart}:{rangeEnd}:{viewerScope}
+- TTL: 5–15 minutes (short-lived, safe)
+
+3.2 Use batched queries:
+- Get project ids for client (visible to viewer)
+- Fetch counts via grouped queries (IN(projectIds)) and GROUP BY
+- Avoid per-project loops
+
+3.3 Optional snapshot job:
+- Nightly compute snapshots for active clients/projects and store in client_confidence_snapshots.
+
+============================================================
+PHASE 4 — API (ADDITIVE)
+============================================================
+
+GET /api/clients/:clientId/confidence?rangeStart=&rangeEnd=
+GET /api/projects/:projectId/confidence?rangeStart=&rangeEnd=   (optional helper)
+
+Return the structure from Phase 2.
+
+Permissions:
+- Tenant Admin always
+- PM for projects they manage
+- Employees only if they have access to the client/projects (existing rules)
+
+============================================================
+PHASE 5 — UI SURFACING
+============================================================
+
+5.1 Client Profile
+Add card: “Client Confidence”
+- Score 0–100
+- Tier badge color
+- Sparkline trend (optional if snapshots exist)
+- “Why this score?” expandable list of drivers:
+  - show label + impact + evidence numbers
+
+5.2 Project → Communication tab
+Show “Confidence Score” mini-card:
+- score + tier
+- top 3 drivers
+
+5.3 Project Management dashboard (formerly PM Portfolio)
+Add column/badge:
+- Confidence tier per client/project row
+Add filter:
+- show only At Risk / Critical confidence
+
+============================================================
+PHASE 6 — ALERTS (OPTIONAL BUT HIGH ROI)
+============================================================
+
+If you have alert automation/rules system:
+- Trigger when confidence drops by > 15 points week-over-week
+- Trigger when confidence enters “Critical”
+Notify:
+- PM
+- Tenant Admin
+
+All alerts must include:
+- top drivers (numbers only)
+
+============================================================
+PHASE 7 — APP DOCS UPDATE (MANDATORY)
+============================================================
+
+Add App Docs section:
+“Client Confidence Score”
+- Purpose and interpretation
+- Inputs (communication/delivery/risk/financial)
+- Scoring weights + thresholds
+- Explainability drivers format
+- Visibility/privacy rules
+- Caching strategy
+- How to tune thresholds later
+
+============================================================
+ACCEPTANCE CRITERIA
+============================================================
+
+- Confidence score appears on Client Profile
+- Score is explainable with driver list
+- No private content leakage
+- Computes quickly (no N+1)
+- Cached to avoid repeated heavy computation
+- Docs updated
+
+STOP CONDITION
+============================================================
+
+Stop after:
+- API + service + UI card in Client Profile are working
+- Project Communication tab shows mini score
+- Project Management dashboard shows tier and filtering
+- Docs updated
