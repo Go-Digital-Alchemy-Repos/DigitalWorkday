@@ -24,7 +24,7 @@
  * @see POST /api/tasks/:taskId/comments in server/routes.ts for mention parsing
  */
 import { useState, useRef, useCallback } from "react";
-import { Pencil, Trash2, Check, X, CheckCircle2, CircleDot, Paperclip, Loader2, RotateCcw } from "lucide-react";
+import { Pencil, Trash2, Check, X, CheckCircle2, CircleDot, Paperclip, Loader2, RotateCcw, MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { Button } from "@/components/ui/button";

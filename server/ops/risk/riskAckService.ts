@@ -72,7 +72,7 @@ export async function getProjectRiskState(
         AND archived_at IS NULL
     `),
     db.execute(sql`
-      SELECT COALESCE(SUM(duration_minutes), 0)::int AS total_minutes
+      SELECT COALESCE(SUM(duration_seconds), 0) / 60 AS total_minutes
       FROM time_entries
       WHERE project_id = ${projectId} AND tenant_id = ${tenantId}
     `),
