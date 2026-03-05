@@ -28,6 +28,7 @@ const STAGE_COLORS: Record<string, string> = {
   development: "hsl(var(--chart-3, 45 93% 47%))",
   final_testing: "hsl(var(--chart-5, 27 96% 61%))",
   active_maintenance: "hsl(var(--chart-2, 142 71% 45%))",
+  lost_inactive: "hsl(var(--muted-foreground, 240 4% 46%))",
   active: "hsl(var(--chart-2, 142 71% 45%))",
 };
 

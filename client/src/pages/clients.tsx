@@ -112,6 +112,7 @@ const STAGE_COLORS: Record<string, string> = {
   development: "bg-amber-500",
   final_testing: "bg-orange-500",
   active_maintenance: "bg-green-500",
+  lost_inactive: "bg-zinc-400",
 };
 
 const STAGE_TEXT_COLORS: Record<string, string> = {
@@ -122,6 +123,7 @@ const STAGE_TEXT_COLORS: Record<string, string> = {
   development: "text-amber-600 dark:text-amber-400",
   final_testing: "text-orange-600 dark:text-orange-400",
   active_maintenance: "text-green-600 dark:text-green-400",
+  lost_inactive: "text-zinc-500 dark:text-zinc-400",
 };
 
 const STAGE_FILTER: FilterConfig = {
@@ -344,7 +346,7 @@ function ClientGridCard({
           />
         </div>
       )}
-      <div onClick={() => onOpenProfile(client.id)} className="cursor-pointer">
+      <div onClick={() => onOpenProfile(client.id)} className={cn("cursor-pointer", client.stage === "lost_inactive" && "opacity-60 grayscale-[25%]")}>
         <Card
           className={cn(
             "cursor-pointer transition-colors hover-elevate overflow-hidden",
@@ -686,7 +688,8 @@ function ClientTableRow({
       className={cn(
         "flex items-center gap-3 border-b border-border hover:bg-accent/50 transition-colors cursor-pointer",
         compact ? "px-3 py-2" : "px-4 py-3",
-        isSelected && "bg-primary/5"
+        isSelected && "bg-primary/5",
+        client.stage === "lost_inactive" && "opacity-60 grayscale-[25%]"
       )}
       data-testid={`row-client-${client.id}`}
     >

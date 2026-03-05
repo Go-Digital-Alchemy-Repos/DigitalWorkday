@@ -114,6 +114,7 @@ export const ClientStage = {
   DEVELOPMENT: "development",
   FINAL_TESTING: "final_testing",
   ACTIVE_MAINTENANCE: "active_maintenance",
+  LOST_INACTIVE: "lost_inactive",
 } as const;
 
 export type ClientStageType = typeof ClientStage[keyof typeof ClientStage];
@@ -126,6 +127,7 @@ export const CLIENT_STAGE_LABELS: Record<ClientStageType, string> = {
   development: "Development",
   final_testing: "Final Testing",
   active_maintenance: "Active Maintenance",
+  lost_inactive: "Lost - Inactive",
 };
 
 export const CLIENT_STAGES_ORDERED: ClientStageType[] = [
@@ -136,6 +138,7 @@ export const CLIENT_STAGES_ORDERED: ClientStageType[] = [
   ClientStage.DEVELOPMENT,
   ClientStage.FINAL_TESTING,
   ClientStage.ACTIVE_MAINTENANCE,
+  ClientStage.LOST_INACTIVE,
 ];
 
 // =============================================================================
