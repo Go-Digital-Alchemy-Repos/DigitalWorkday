@@ -33,7 +33,7 @@ async function requireAdmin(req: any, res: any): Promise<boolean> {
     sendError(res, AppError.unauthorized("User not found"), req);
     return false;
   }
-  const isAdmin = currentUser.role === "admin" || isSuperUser(req);
+  const isAdmin = currentUser.role === "admin" || currentUser.role === "tenant_owner" || isSuperUser(req);
   if (!isAdmin) {
     sendError(res, AppError.forbidden("Only admins can use AI features"), req);
     return false;
@@ -45,7 +45,7 @@ router.get("/v1/ai/status", async (req, res) => {
   try {
     const currentUserId = getCurrentUserId(req);
     const currentUser = await storage.getUser(currentUserId);
-    const isAdmin = currentUser?.role === "admin" || isSuperUser(req);
+    const isAdmin = currentUser?.role === "admin" || currentUser?.role === "tenant_owner" || isSuperUser(req);
     if (!isAdmin) {
       return res.json({ enabled: false, isOperational: false, error: null });
     }
@@ -530,7 +530,7 @@ router.get("/v1/ai/pm/focus-summary", async (req, res) => {
     }
 
     const currentUser = req.user as any;
-    if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "super_user")) {
+    if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "tenant_owner" && currentUser.role !== "super_user")) {
       return res.status(403).json({ error: "PM Portfolio is only available to tenant admins.", code: "FORBIDDEN" });
     }
 
@@ -587,7 +587,7 @@ router.post("/v1/ai/pm/focus-summary/refresh", async (req, res) => {
     }
 
     const currentUser = req.user as any;
-    if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "super_user")) {
+    if (!currentUser || (currentUser.role !== "admin" && currentUser.role !== "tenant_owner" && currentUser.role !== "super_user")) {
       return res.status(403).json({ error: "PM Portfolio is only available to tenant admins.", code: "FORBIDDEN" });
     }
 

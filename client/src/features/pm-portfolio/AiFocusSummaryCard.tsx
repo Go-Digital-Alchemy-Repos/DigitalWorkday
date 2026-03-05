@@ -276,6 +276,7 @@ export function AiFocusSummaryCard({ rangeStart, rangeEnd }: AiFocusSummaryCardP
     const errMsg = (error as any)?.message || "Unknown error";
     const isNotConfigured = errMsg.toLowerCase().includes("not configured") || errMsg.toLowerCase().includes("ai is not");
     const isRateLimited = errMsg.toLowerCase().includes("rate limit") || errMsg.toLowerCase().includes("limit reached");
+    const isForbidden = errMsg.toLowerCase().includes("portfolio is only available") || errMsg.toLowerCase().includes("forbidden");
 
     return (
       <Card className="border-dashed border-violet-200 dark:border-violet-800 bg-violet-50/30 dark:bg-violet-950/10">
@@ -291,6 +292,10 @@ export function AiFocusSummaryCard({ rangeStart, rangeEnd }: AiFocusSummaryCardP
               ) : isRateLimited ? (
                 <p className="text-xs text-muted-foreground">
                   Daily generation limit reached. Your summary will refresh tomorrow, or an admin can increase the limit.
+                </p>
+              ) : isForbidden ? (
+                <p className="text-xs text-muted-foreground">
+                  Access denied. This AI feature is only available to tenant owners and authorized project managers.
                 </p>
               ) : (
                 <p className="text-xs text-muted-foreground">{errMsg}</p>
