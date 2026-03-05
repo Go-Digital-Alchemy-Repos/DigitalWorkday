@@ -1382,7 +1382,10 @@ export function TaskDetailDrawer({
             <>
               <div className="space-y-1.5 overflow-hidden">
                 <div className="flex items-center justify-between">
-                  <label className="font-medium text-[16px] text-[#171717]">Description</label>
+                  <div className="flex items-center gap-2">
+                    <FileText className="h-4 w-4 text-muted-foreground" />
+                    <label className="font-medium text-[16px] text-[#171717]">Description</label>
+                  </div>
                   {!editingDescription && (
                     <Button
                       variant="ghost"
