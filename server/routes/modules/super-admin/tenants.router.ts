@@ -528,10 +528,10 @@ tenantsRouter.delete("/tenants/:tenantId", requireSuperUser, async (req, res) =>
       await tx.delete(teamMembers).where(eq(teamMembers.teamId, tenantTeamIds));
       await tx.delete(teams).where(eq(teams.tenantId, tenantId));
 
+      await tx.delete(invitations).where(eq(invitations.tenantId, tenantId));
+
       await tx.delete(workspaceMembers).where(eq(workspaceMembers.workspaceId, tenantWorkspaceIds));
       await tx.delete(workspaces).where(eq(workspaces.tenantId, tenantId));
-
-      await tx.delete(invitations).where(eq(invitations.tenantId, tenantId));
 
       await tx.delete(integrationEntityMap).where(eq(integrationEntityMap.tenantId, tenantId));
       await tx.delete(backgroundJobs).where(eq(backgroundJobs.tenantId, tenantId));
