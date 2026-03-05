@@ -21,11 +21,19 @@ const DEV_TEST_ACCOUNTS = [
     variant: "outline" as const,
   },
   {
-    label: "Tenant Admin",
+    label: "Tenant Owner",
     email: "admin@alpha.com",
     password: "password123",
     icon: ShieldCheck,
-    description: "Alpha Corp admin",
+    description: "Alpha Corp — PM Portfolio + billing approvals",
+    variant: "outline" as const,
+  },
+  {
+    label: "Tenant Admin",
+    email: "admin@beta.com",
+    password: "password123",
+    icon: Shield,
+    description: "Beta Corp — standard admin, no PM access",
     variant: "outline" as const,
   },
   {
