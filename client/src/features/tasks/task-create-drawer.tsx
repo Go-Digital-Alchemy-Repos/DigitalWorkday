@@ -45,6 +45,9 @@ import {
   File,
   Trash2,
   DollarSign,
+  Flag,
+  FolderKanban,
+  Type,
 } from "lucide-react";
 import { format } from "date-fns";
 import { cn } from "@/lib/utils";
@@ -359,7 +362,10 @@ export function TaskCreateDrawer({
             name="title"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Title</FormLabel>
+                <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <Type className="h-3.5 w-3.5" />
+                  Title
+                </FormLabel>
                 <FormControl>
                   <Input
                     placeholder="Enter task title..."
@@ -377,7 +383,10 @@ export function TaskCreateDrawer({
             name="description"
             render={({ field }) => (
               <FormItem>
-                <FormLabel>Description</FormLabel>
+                <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                  <FileText className="h-3.5 w-3.5" />
+                  Description
+                </FormLabel>
                 <FormControl>
                   <RichTextEditor
                     value={field.value || ""}
@@ -402,7 +411,10 @@ export function TaskCreateDrawer({
                 name="sectionId"
                 render={({ field }) => (
                   <FormItem>
-                    <FormLabel>Section</FormLabel>
+                    <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                      <FolderKanban className="h-3.5 w-3.5" />
+                      Section
+                    </FormLabel>
                     <Select onValueChange={field.onChange} value={field.value}>
                       <FormControl>
                         <SelectTrigger data-testid="select-section">
@@ -428,7 +440,10 @@ export function TaskCreateDrawer({
               name="priority"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Priority</FormLabel>
+                  <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Flag className="h-3.5 w-3.5" />
+                    Priority
+                  </FormLabel>
                   <FormControl>
                     <PrioritySelector
                       value={field.value as PriorityLevel}
@@ -446,7 +461,10 @@ export function TaskCreateDrawer({
               name="status"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Status</FormLabel>
+                  <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Layers className="h-3.5 w-3.5" />
+                    Status
+                  </FormLabel>
                   <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger data-testid="select-status">
@@ -470,7 +488,10 @@ export function TaskCreateDrawer({
               name="dueDate"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Due Date</FormLabel>
+                  <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <CalendarIcon className="h-3.5 w-3.5" />
+                    Due Date
+                  </FormLabel>
                   <Popover>
                     <PopoverTrigger asChild>
                       <FormControl>
@@ -502,7 +523,7 @@ export function TaskCreateDrawer({
             />
 
             <FormItem>
-              <FormLabel className="flex items-center gap-1.5">
+              <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
                 <Clock className="h-3.5 w-3.5" />
                 Estimate
               </FormLabel>
@@ -565,8 +586,8 @@ export function TaskCreateDrawer({
           </div>
 
           <div className="space-y-3">
-            <FormLabel className="flex items-center gap-2">
-              <Users className="h-4 w-4" />
+            <FormLabel className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+              <Users className="h-3.5 w-3.5" />
               Assignees
             </FormLabel>
             

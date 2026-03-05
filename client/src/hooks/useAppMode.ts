@@ -14,7 +14,7 @@
  * - Auth/session state is preserved across transitions
  */
 import { useState, useEffect, useCallback, useRef } from "react";
-import { useAuth } from "@/lib/auth";
+import { useAuthSafe } from "@/lib/auth";
 import { useToast } from "@/hooks/use-toast";
 import { 
   getActingTenantId, 
@@ -48,7 +48,9 @@ interface AppModeHook {
 const ACTING_TENANT_NAME_KEY = "actingTenantName";
 
 export function useAppMode(): AppModeHook {
-  const { user, userImpersonation } = useAuth();
+  const authContext = useAuthSafe();
+  const user = authContext?.user ?? null;
+  const userImpersonation = authContext?.userImpersonation ?? null;
   const { toast } = useToast();
   const { prefetchV1 } = useFeatureFlags();
   const isSuperUser = user?.role === UserRole.SUPER_USER;

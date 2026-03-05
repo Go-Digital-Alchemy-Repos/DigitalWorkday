@@ -1,6 +1,6 @@
 import { useState, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Loader2, ChevronRight, CheckSquare, ListTodo, MessageSquare, FileText, History, Link2, Pencil } from "lucide-react";
+import { X, Calendar, Flag, Layers, ArrowLeft, Tag, Plus, Clock, Loader2, ChevronRight, CheckSquare, ListTodo, MessageSquare, FileText, History, Link2, Pencil, Users } from "lucide-react";
 import { TaskPanelShell } from "./task-panel/TaskPanelShell";
 import { TaskHistoryTab } from "./task-panel/TaskHistoryTab";
 import { Button } from "@/components/ui/button";
@@ -694,6 +694,7 @@ export function SubtaskDetailDrawer({
 
         <div className="space-y-2">
           <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+            <Users className="h-3.5 w-3.5" />
             Assignees
           </label>
           {isActualSubtask ? (
@@ -814,6 +815,34 @@ export function SubtaskDetailDrawer({
           {parentTaskTitle}
         </button>
       </div>
+
+      {timeEntries.length > 0 && (
+        <>
+          <Separator />
+          <div className="space-y-2" data-testid="section-time-tracked">
+            <label className="flex items-center gap-2 text-xs font-medium text-muted-foreground">
+              <Clock className="h-3.5 w-3.5" />
+              Time Tracked
+            </label>
+            <div className="flex items-center gap-2 px-2 py-1.5 rounded-md bg-muted/30">
+              <span className="text-sm font-semibold tabular-nums" data-testid="text-total-time-tracked">
+                {formatDurationShort(timeEntries.reduce((sum: number, e: any) => sum + e.durationSeconds, 0))}
+              </span>
+              <span className="text-xs text-muted-foreground">
+                across {timeEntries.length} {timeEntries.length === 1 ? "entry" : "entries"}
+              </span>
+            </div>
+            <div className="space-y-1.5">
+              {timeEntries.map((entry: any) => (
+                <div key={entry.id} className="flex items-center justify-between gap-2 text-xs py-1 px-2 rounded-md bg-muted/30" data-testid={`time-entry-row-${entry.id}`}>
+                  <span className="text-muted-foreground tabular-nums">{formatDurationShort(entry.durationSeconds)}</span>
+                  <span className="truncate flex-1 text-muted-foreground">{entry.description || format(new Date(entry.startTime), "MMM d")}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </>
+      )}
     </div>
   );
 

@@ -1,7 +1,7 @@
 # MyWorkDay - Project Management Application
 
 ## Overview
-MyWorkDay is an Asana-inspired, multi-tenant project management application designed to centralize project and client management. It aims to streamline workflows, enhance team collaboration, and improve productivity and client satisfaction through an intuitive user experience. Key capabilities include comprehensive CRM with a client portal, workload management, robust reporting, workspaces, tasks, subtasks, tags, comments, and activity tracking. The project envisions becoming a leading solution in project and client management by offering a robust, scalable, and user-friendly platform that meets the evolving demands of modern businesses.
+MyWorkDay is an Asana-inspired, multi-tenant project management application aimed at centralizing project and client management. It streamlines workflows, enhances team collaboration, and improves productivity and client satisfaction through an intuitive user experience. Key capabilities include comprehensive CRM with a client portal, workload management, robust reporting, workspaces, tasks, subtasks, tags, comments, and activity tracking. The project's ambition is to become a leading solution in project and client management by offering a robust, scalable, and user-friendly platform that meets the evolving demands of modern businesses.
 
 ## User Preferences
 - Professional, clean Asana-like design
@@ -12,16 +12,6 @@ MyWorkDay is an Asana-inspired, multi-tenant project management application desi
 - Projects Dashboard with search, status/client/team filters, table view showing project details via drawer, and budget utilization indicators
 - Workload Reports in Settings showing task distribution by employee with completion metrics
 - Workload Forecast with task time estimates, project budgets, budget tracking, and workload distribution by assignee
-
-## Role Hierarchy & Access Control
-
-- **Role Hierarchy**: `super_user` > `tenant_owner` > `admin` > `employee` > `client`
-- **Tenant Owner**: Has all admin privileges plus can assign `isProjectManager` to admins. Always has PM Portfolio access. Only Super Admin can grant this role.
-- **isProjectManager flag**: Boolean on `users` table (`is_project_manager` column). When `true` on an `admin` or `tenant_owner`, grants access to PM Portfolio dashboard. Only `tenant_owner` or `super_user` can set this flag.
-- **PM Portfolio Access**: Visible to `tenant_owner` (always), `admin` with `isProjectManager=true`, and `super_user`. Hidden from all other roles.
-- **Backend enforcement**: PATCH `/api/users/:id` — only `super_user` can assign/revoke `tenant_owner` role; only `tenant_owner` or `super_user` can set `isProjectManager`. Enforced in `server/routes/users.router.ts`.
-- **Frontend enforcement**: Sidebar `canSeePmPortfolio` = `tenant_owner || (admin && isProjectManager)`. PM Portfolio page redirects if `canAccessPmPortfolio` is false. User drawer shows `Tenant Owner` option only to `super_user`; shows `isProjectManager` checkbox only to `tenant_owner`/`super_user` when editing admin/tenant_owner users.
-- **Team tab badges**: `Owner` badge (violet) for `tenant_owner`, `PM` badge (cyan outline) for admins with `isProjectManager=true`.
 
 ## System Architecture
 
@@ -34,40 +24,36 @@ MyWorkDay is an Asana-inspired, multi-tenant project management application desi
 
 ### Core Features and Design Patterns
 - **Multi-Tenancy**: Supports multiple tenants with an admin dashboard and per-tenant user management.
-- **Role Hierarchy**: `super_user` > `tenant_owner` > `admin` > `employee` > `client`. Tenant Owner has all admin privileges plus can assign `isProjectManager` to admins. Only Super Admin can grant Tenant Owner role. `isProjectManager` flag on admins gates PM Portfolio access. Employees never see PM Portfolio.
-- **PM Portfolio Access**: Visible to `tenant_owner` (always), `admin` with `isProjectManager=true`, and `super_user`. Hidden from all other roles. Backend enforced in `pm-portfolio.router.ts`; frontend enforced in sidebar and page guard.
+- **Role-Based Access Control**: Hierarchical roles (`super_user` > `tenant_owner` > `admin` > `employee` > `client`) with granular permissions. `isProjectManager` flag grants specific dashboard access.
 - **Authentication**: Session-based authentication using Passport.js.
-- **Real-time Communication**: Socket.IO for live updates (chat, notifications).
-- **Project & Task Management**: Workspaces, teams, clients, projects, tasks (with subtasks), activity logs, time tracking, project templates, rich text comments.
-- **Client Relationship Management (CRM)**: Client detail pages, notes, documents, pipeline tracking, contacts, external client portal with Client 360 View and profitability reports.
+- **Real-time Communication**: Socket.IO for live updates.
+- **Project & Task Management**: Includes workspaces, teams, clients, projects, tasks (with subtasks), activity logs, time tracking, and templates.
+- **Client Relationship Management (CRM)**: Features client detail pages, notes, documents, pipeline tracking, contacts, and an external client portal with a Client 360 View.
 - **Workload Management**: Forecasting and reporting based on task distribution and budget utilization.
-- **Notifications**: Enhanced Notification Center with pagination, filters, deep-linking, and severity levels.
-- **User Experience**: Global command palette, keyboard shortcuts, dark mode, CSS-variable-based theming, Framer Motion animations, mobile-first responsive design, consistent drawer UI, global search.
-- **Modular Architecture**: API routes with policy enforcement, centralized query key builders, role-based frontend routing with lazy-loaded components.
-- **Reporting Engine V2**: Rebuilt system with feature flags for workload, task analysis, time tracking, project analysis, client analytics, messages, pipeline, and overview reports. Includes Employee/Client Command Centers, Health Indexes, Forecasting, and Alert Automation.
-- **Asset Library (Beta)**: Centralized asset management with folders, assets, links, presigned R2 upload/download, source tracking, and deduplication. Includes read-only Default Tenant Documents.
-- **Private Visibility (Tasks & Projects)**: Creator-only visibility with invite-based sharing via `task_access`/`project_access` tables, enforced across all list endpoints, search, calendar, dashboard, and client portal.
-- **Data Retention System**: Non-destructive soft-archive for tasks and chat messages.
-- **Task Review Queue**: "Send to PM for Review" feature from the Task Drawer.
-- **Task History (Audit Log)**: `task_history` table records field-level changes for tasks and subtasks, displayed as a timeline UI with diffs. History is recorded on every PATCH via `taskHistoryService.ts` (`recordHistory`, `computeChanges`, `getHistoryWithActors`). API: `GET /api/tasks/:id/history` and `GET /api/subtasks/:id/history`.
-- **Task/Subtask Panel**: Full-width centered overlay (max-w-[1400px]) using `TaskPanelShell` (portal to document.body, ESC-to-close, drag-resizable sidebar, depth-aware stacking for nested panels). 2-column layout: left content (description, attachments, comments) + right sidebar (assignees, status, priority, due date, estimate, watchers, milestone, tags, subtasks). Header has breadcrumbs, title, quick actions. Footer has timer, save, review queue, complete actions. Shell lives in `client/src/features/tasks/task-panel/TaskPanelShell.tsx`. History tab in `TaskHistoryTab.tsx`.
-- **Global Branding**: System-level branding configured in Super Admin settings, applied to login page and app, with a resolution chain from tenant settings to system defaults.
-- **Theme Packs**: 14 curated color schemes (light, dark, etc.), selectable via UI, stored in user preferences, with tenant default and fallback mechanisms.
-- **Employee Intelligence Profile**: Drill-down report page with AI-generated performance trend narrative, based on aggregated metrics, with caching and rate limiting.
-- **Client Intelligence Profile**: Drill-down report page with 6-metric summary, workload & aging, time tracking breakdown, SLA compliance, CHI health scores, and risk indicators.
-- **Sticky Chat Composer Focus**: Keyboard focus automatically restored to chat input after sending a message across all chat surfaces.
-- **Project Milestones**: Track key deliverables within projects with name, description, due date, status, and progress bar from linked tasks. Tasks can be assigned to milestones.
-- **Reassignment Suggestions Engine**: Advisory-only, capacity-aware task redistribution system. Identifies overloaded/underutilized users and scores candidate reassignments based on team, utilization, due date, and priority.
-- **Capacity What-If Simulator**: In-memory scenario planning for project managers. Allows reassigning tasks, moving due dates, and adjusting estimates virtually to see before/after impact on utilization and project risk. No DB writes during simulation — apply changes only on confirmation. Optional snapshot saving to `forecast_snapshots` table. Accessible via "What-if" button in project toolbar (admin-only, `enableCapacityWhatIf` feature flag).
-- **Billing Approval Workflow**: Non-destructive, additive feature gate (`enableBillingApprovalWorkflow`, default ON). Adds `billing_status` column to `time_entries` (values: `draft` | `pending_approval` | `approved` | `rejected` | `invoiced`, default `draft`). Service at `server/services/billing/billingApprovalService.ts` handles submit/approve/reject/queue. API routes: `GET /api/billing/pending-approval`, `POST /api/billing/submit-approval`, `POST /api/billing/approve`, `POST /api/billing/reject`. Permission: `tenant_owner`, `admin+isProjectManager`, `super_user`. PM Portfolio Dashboard shows "Time Awaiting Approval" queue card with per-row and bulk approve/reject actions. Task Drawer sidebar shows per-time-entry billing status badges when entries exist.
-- **Invoice Draft Builder**: Non-destructive, additive feature gate (`enableInvoiceDraftBuilder`, default ON). Creates `invoice_drafts` and `invoice_draft_items` tables. Service at `server/services/billing/invoiceDraftService.ts` handles generate/list/export/cancel. Generating pulls all `approved` time entries for a client+date range and creates a draft with line items. Exporting marks all linked `time_entries` as `invoiced`. API routes: `POST /api/billing/generate-invoice-draft`, `GET /api/billing/invoice-drafts`, `GET /api/billing/invoice-drafts/:id`, `POST /api/billing/invoice-drafts/:id/export`, `POST /api/billing/invoice-drafts/:id/cancel`. PM Portfolio Dashboard shows "Invoice Drafts" card with generate modal (client, project, date range, rate), expandable line items, and Export/Cancel actions.
-- **Risk Acknowledgment Workflow (Phase 2C)**: Governance layer for at-risk projects. When a project is `at_risk` or `critical`, a banner appears in the project detail requiring PM or admin acknowledgment within a configurable window (default 7 days). Acknowledgments include a mitigation note and optional next check-in date (suppresses re-prompting until that date). `project_risk_acknowledgments` table stores full audit trail. PM Portfolio shows "Ack Needed" chip for unacknowledged at-risk projects. Feature flag: `enableRiskAckWorkflow` (default ON). Endpoints: `GET/POST /api/projects/:projectId/risk-ack`.
-- **PM Portfolio Dashboard**: Portfolio-level intelligence for Project Managers, showing project health scores, milestone completion, burn rates, and overdue tasks for owned projects.
-- **AI PM Focus Summary**: Weekly AI-generated "What should I focus on this week?" card on the PM Portfolio Dashboard. Strictly grounded in aggregated portfolio metrics — no hallucination, no PII. Produces: headline, top priorities, risks, capacity concerns, budget concerns, confidence level, and supporting metrics. Cached 24h in `ai_summaries` table (`entity_type = "pm_portfolio"`), rate-limited (10/user/day, 30/tenant/day), refresh button. Feature flag: `enableAiPmFocusSummary`. Redaction post-check via `enableAiSummaryRedaction`. Files: `server/ai/pmFocus/buildPmFocusPayload.ts`, `server/ai/pmFocus/generatePmFocusSummary.ts`, `client/src/features/pm-portfolio/AiFocusSummaryCard.tsx`. Endpoints: `GET /api/v1/ai/pm/focus-summary`, `POST /api/v1/ai/pm/focus-summary/refresh`.
-- **Client Profitability Engine**: Non-destructive, additive feature gate (`enableClientProfitability`, default ON). Adds `cost_rate` and `billable_rate` numeric columns to `users` table. Service at `server/services/billing/clientProfitabilityService.ts` aggregates time entries to compute revenue (billable hours × billableRate), labor cost (total hours × costRate), gross margin, and margin %. Per-client card (`ClientProfitabilityCard.tsx`) shown in client detail overview tab with range selector (30/60/90/all days), revenue/cost/margin metrics, and per-assignee breakdown. PM Portfolio shows `LowMarginClientsCard` with adjustable threshold (10–40%) listing clients below the margin threshold with color-coded badges. User drawer shows cost/billable rate inputs for admin/tenant_owner/super_user. API routes: `GET /api/analytics/client-profitability` (list, accepts `marginThreshold`), `GET /api/analytics/client-profitability/:clientId` (detail, accepts `range`). Permission: `tenant_owner`, `admin+isProjectManager`, `super_user`.
-- **Task Billable Toggle**: `is_billable` boolean on `tasks` table (default `true`). Toggle displayed next to the Estimate field in the task drawer sidebar. Permission: only `admin`, `tenant_owner`, `super_user`, or users with `isProjectManager` flag can toggle; employees see it as read-only disabled. Changes tracked in task history. Migration: `0044_material_blockbuster.sql`.
-- **Collapsible Icon Sidebar**: Sidebar collapses to an icon-only strip with tooltips for navigation items.
-- **Mobile & Responsiveness**: App-wide mobile-first patterns including `overflow-x-auto` for tables, `MobileTabSelect` for tab navigation, mobile card views for Command Centers, responsive padding, and touch targets.
+- **Notifications**: Enhanced Notification Center with pagination, filters, and deep-linking.
+- **User Experience**: Global command palette, keyboard shortcuts, dark mode, CSS-variable-based theming, Framer Motion animations, mobile-first responsive design, and consistent drawer UI.
+- **Modular Architecture**: API routes with policy enforcement, centralized query key builders, and role-based frontend routing with lazy-loaded components.
+- **Reporting Engine V2**: Comprehensive reporting system with workload, task analysis, time tracking, project analysis, client analytics, and financial reports. Includes Employee/Client Command Centers, Health Indexes, Forecasting, and Alert Automation.
+- **Asset Library (Beta)**: Centralized asset management with folders, assets, links, presigned R2 upload/download, source tracking, and deduplication.
+- **Private Visibility**: Creator-only visibility for tasks and projects with invite-based sharing.
+- **Data Retention**: Non-destructive soft-archive for tasks and chat messages.
+- **Task Review Queue**: Feature to send tasks for project manager review.
+- **Task History (Audit Log)**: Records field-level changes for tasks and subtasks, displayed as a timeline.
+- **Task/Subtask Panel**: Full-width centered overlay with a 2-column layout for details, attachments, comments, and a sidebar for attributes.
+- **Global Branding & Theming**: System-level branding and 14 curated theme packs configurable via Super Admin settings and user preferences.
+- **AI Intelligence Profiles**: AI-generated performance trend narratives for employees and 6-metric summaries for clients, based on aggregated metrics.
+- **Project Milestones**: Track key deliverables within projects with progress bars linked to tasks.
+- **Reassignment Suggestions Engine**: Advisory system for capacity-aware task redistribution.
+- **Capacity What-If Simulator**: In-memory scenario planning for project managers to simulate task reassignments and due date changes without database writes until confirmation.
+- **Billing Approval Workflow**: Adds `billing_status` to time entries, enabling a workflow for submitting, approving, and rejecting time entries.
+- **Invoice Draft Builder**: Allows generating invoice drafts from approved time entries, with options to export and manage drafts.
+- **Risk Acknowledgment Workflow**: Governance for at-risk projects, requiring PM or admin acknowledgment with mitigation notes.
+- **PM Portfolio Dashboard**: Portfolio-level intelligence for Project Managers, showing project health scores, milestone completion, and burn rates.
+- **AI PM Focus Summary**: Weekly AI-generated summary of key priorities, risks, and capacity concerns for PMs.
+- **Client Profitability Engine**: Calculates client profitability based on time entries, cost rates, and billable rates.
+- **Task Billable Toggle**: Boolean `is_billable` on tasks, controllable by authorized roles.
+- **Collapsible Icon Sidebar**: Sidebar collapses to an icon-only strip with tooltips.
+- **Mobile & Responsiveness**: App-wide mobile-first patterns including responsive layouts, navigation, and touch targets.
 
 ## External Dependencies
 - **PostgreSQL**: Primary database.
