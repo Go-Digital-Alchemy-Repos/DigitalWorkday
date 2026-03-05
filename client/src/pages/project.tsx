@@ -35,6 +35,7 @@ import {
   Share2,
   Flag,
   Zap,
+  MessageSquare,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -45,6 +46,7 @@ import { ListSectionDroppable } from "@/features/tasks/list-section-droppable";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { TaskCreateDrawer } from "@/features/tasks/task-create-drawer";
 import { ProjectCalendar, ProjectSettingsSheet, ProjectMembersSheet, ProjectActivityFeed, AIProjectPlanner } from "@/features/projects";
+import { ProjectCommunicationTimeline } from "@/features/communication/CommunicationTimeline";
 import { WhatIfSimulator } from "@/features/projects/WhatIfSimulator";
 import { RiskAckBanner } from "@/features/projects/RiskAckBanner";
 import { MilestonesTab } from "@/features/projects/MilestonesTab";
@@ -115,7 +117,7 @@ export default function ProjectPage() {
 
   const { user: currentUser } = useAuth();
   const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
-  const { enableProjectMilestones, enableCapacityWhatIf } = useFeatureFlags();
+  const { enableProjectMilestones, enableCapacityWhatIf, enableCommunicationTimeline } = useFeatureFlags();
 
   // Subscribe to real-time updates for this project
   useProjectSocket(projectId);
@@ -126,6 +128,7 @@ export default function ProjectPage() {
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
   const [activityOpen, setActivityOpen] = useState(false);
+  const [commsOpen, setCommsOpen] = useState(false);
   const [aiPlannerOpen, setAiPlannerOpen] = useState(false);
   const [whatIfOpen, setWhatIfOpen] = useState(false);
   const [membersOpen, setMembersOpen] = useState(false);
@@ -942,6 +945,18 @@ export default function ProjectPage() {
               >
                 <Activity className="h-4 w-4" />
               </Button>
+              {enableCommunicationTimeline && (
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => setCommsOpen(true)}
+                  aria-label="Communication timeline"
+                  data-testid="button-project-comms"
+                  className="hidden md:flex"
+                >
+                  <MessageSquare className="h-4 w-4" />
+                </Button>
+              )}
               <Button 
                 variant="ghost" 
                 size="icon" 
@@ -973,6 +988,12 @@ export default function ProjectPage() {
                     <Activity className="h-4 w-4 mr-2" />
                     Activity
                   </DropdownMenuItem>
+                  {enableCommunicationTimeline && (
+                    <DropdownMenuItem onClick={() => setCommsOpen(true)} data-testid="menu-project-comms-mobile">
+                      <MessageSquare className="h-4 w-4 mr-2" />
+                      Communications
+                    </DropdownMenuItem>
+                  )}
                   <DropdownMenuItem onClick={() => setSettingsOpen(true)} data-testid="menu-project-settings-mobile">
                     <Settings className="h-4 w-4 mr-2" />
                     Settings
@@ -1289,6 +1310,26 @@ export default function ProjectPage() {
           )}
         </SheetContent>
       </Sheet>
+      {enableCommunicationTimeline && (
+        <Sheet open={commsOpen} onOpenChange={setCommsOpen}>
+          <SheetContent className="w-[420px] sm:w-[520px] overflow-y-auto">
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <MessageSquare className="h-5 w-5" />
+                Communication Timeline
+              </SheetTitle>
+            </SheetHeader>
+            {projectId && (
+              <div className="mt-4">
+                <ProjectCommunicationTimeline
+                  projectId={projectId}
+                  clientId={project?.clientId ?? undefined}
+                />
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
+      )}
       <SectionNameDialog />
       <Dialog open={showTimeTrackingPrompt} onOpenChange={setShowTimeTrackingPrompt}>
         <DialogContent className="sm:max-w-md">
