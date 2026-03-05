@@ -1411,7 +1411,7 @@ export function TaskDetailDrawer({
         <div className="p-4 sm:p-6 space-y-6">
           {activeTab === "overview" && (
             <>
-              <div className="space-y-1.5 overflow-hidden">
+              <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66] space-y-1.5 overflow-hidden">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4 text-muted-foreground" />
