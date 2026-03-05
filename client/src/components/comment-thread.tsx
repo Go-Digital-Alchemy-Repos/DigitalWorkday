@@ -24,7 +24,7 @@
  * @see POST /api/tasks/:taskId/comments in server/routes.ts for mention parsing
  */
 import { useState, useRef, useCallback } from "react";
-import { Pencil, Trash2, Check, X, CheckCircle2, CircleDot, Paperclip, Loader2, RotateCcw } from "lucide-react";
+import { Pencil, Trash2, Check, X, CheckCircle2, CircleDot, Paperclip, Loader2, RotateCcw, MessageSquare } from "lucide-react";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { Button } from "@/components/ui/button";
@@ -221,7 +221,7 @@ export function CommentThread({
 
   return (
     <div className="space-y-4" data-testid="comment-thread">
-      <h4 className="font-medium text-[16px]">{title}</h4>
+      <h4 className="font-medium text-[16px] flex items-center gap-2"><MessageSquare className="h-4 w-4 text-muted-foreground" />{title}</h4>
       {comments.length > 0 && (
         <div className="space-y-4">
           {comments.map((comment) => {
