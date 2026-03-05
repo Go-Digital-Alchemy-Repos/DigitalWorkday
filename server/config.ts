@@ -239,6 +239,8 @@ export const config = {
     enableRevenueLeakageDetection: optionalEnvBool("ENABLE_REVENUE_LEAKAGE_DETECTION", true),
     enableClientCommunicationHealth: optionalEnvBool("ENABLE_CLIENT_COMMUNICATION_HEALTH", true),
     enableClientFollowups: optionalEnvBool("ENABLE_CLIENT_FOLLOWUPS", true),
+    enableClientConfidenceScore: optionalEnvBool("ENABLE_CLIENT_CONFIDENCE_SCORE", true),
+    enableClientConfidenceDebug: optionalEnvBool("ENABLE_CLIENT_CONFIDENCE_DEBUG", false),
     enableWeeklyClientReports: optionalEnvBool("ENABLE_WEEKLY_CLIENT_REPORTS", true),
     enableCommunicationTimeline: optionalEnvBool("ENABLE_COMMUNICATION_TIMELINE", true),
   },

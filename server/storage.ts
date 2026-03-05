@@ -250,6 +250,7 @@ export interface IStorage {
   getTaskAttachment(id: string): Promise<TaskAttachment | undefined>;
   getTaskAttachmentsByIds(ids: string[]): Promise<TaskAttachment[]>;
   getTaskAttachmentsByTask(taskId: string): Promise<TaskAttachmentWithUser[]>;
+  getTaskAttachmentsBySubtask(subtaskId: string): Promise<TaskAttachmentWithUser[]>;
   createTaskAttachment(attachment: InsertTaskAttachment): Promise<TaskAttachment>;
   updateTaskAttachment(id: string, attachment: Partial<InsertTaskAttachment>): Promise<TaskAttachment | undefined>;
   deleteTaskAttachment(id: string): Promise<void>;
@@ -1865,6 +1866,23 @@ export class DatabaseStorage implements IStorage {
       .where(eq(taskAttachments.taskId, taskId))
       .orderBy(desc(taskAttachments.createdAt));
     
+    if (attachmentsList.length === 0) return [];
+    const uploaderIds = [...new Set(attachmentsList.map(a => a.uploadedByUserId).filter(Boolean))];
+    const uploaderList = uploaderIds.length > 0
+      ? await db.select().from(users).where(inArray(users.id, uploaderIds))
+      : [];
+    const uploaderMap = new Map(uploaderList.map(u => [u.id, u]));
+    return attachmentsList.map(attachment => ({
+      ...attachment,
+      uploadedByUser: uploaderMap.get(attachment.uploadedByUserId),
+    }));
+  }
+
+  async getTaskAttachmentsBySubtask(subtaskId: string): Promise<TaskAttachmentWithUser[]> {
+    const attachmentsList = await db.select().from(taskAttachments)
+      .where(eq(taskAttachments.subtaskId, subtaskId))
+      .orderBy(desc(taskAttachments.createdAt));
+
     if (attachmentsList.length === 0) return [];
     const uploaderIds = [...new Set(attachmentsList.map(a => a.uploadedByUserId).filter(Boolean))];
     const uploaderList = uploaderIds.length > 0

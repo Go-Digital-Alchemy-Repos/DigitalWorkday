@@ -45,6 +45,8 @@ export interface FeatureFlags {
   enableClientFollowups: boolean;
   enableWeeklyClientReports: boolean;
   enableCommunicationTimeline: boolean;
+  enableClientConfidenceScore: boolean;
+  enableClientConfidenceDebug: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {

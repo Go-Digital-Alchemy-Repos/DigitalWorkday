@@ -22,7 +22,8 @@ import { queryClient, apiRequest } from "@/lib/queryClient";
 import type { TaskAttachmentWithUser } from "@shared/schema";
 
 interface AttachmentUploaderProps {
-  taskId: string;
+  taskId?: string;
+  subtaskId?: string;
   projectId: string | null;
   onUploadSuccess?: () => void;
   onDeleteSuccess?: () => void;
@@ -156,19 +157,39 @@ async function compressImageIfNeeded(file: File): Promise<{ file: File; mimeType
   });
 }
 
-export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDeleteSuccess }: AttachmentUploaderProps) {
+export function AttachmentUploader({ taskId, subtaskId, projectId, onUploadSuccess, onDeleteSuccess }: AttachmentUploaderProps) {
   const { toast } = useToast();
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [uploadingFiles, setUploadingFiles] = useState<UploadingFile[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
+
+  const isSubtaskMode = !!subtaskId;
+  const entityId = subtaskId ?? taskId;
+
+  const attachmentsQueryKey = isSubtaskMode
+    ? ["/api/projects", projectId, "subtasks", subtaskId, "attachments"]
+    : ["/api/projects", projectId, "tasks", taskId, "attachments"];
+
+  const attachmentsUrl = isSubtaskMode
+    ? `/api/projects/${projectId}/subtasks/${subtaskId}/attachments`
+    : `/api/projects/${projectId}/tasks/${taskId}/attachments`;
+
+  const uploadUrl = isSubtaskMode
+    ? `/api/projects/${projectId}/subtasks/${subtaskId}/attachments/upload`
+    : `/api/projects/${projectId}/tasks/${taskId}/attachments/upload`;
 
   const { data: config } = useQuery<AttachmentConfig>({
     queryKey: ["/api/attachments/config"],
   });
 
   const { data: attachments = [], isLoading } = useQuery<TaskAttachmentWithUser[]>({
-    queryKey: ["/api/projects", projectId, "tasks", taskId, "attachments"],
-    enabled: !!taskId && !!projectId,
+    queryKey: attachmentsQueryKey,
+    enabled: !!entityId && !!projectId,
+    queryFn: async () => {
+      const res = await fetch(attachmentsUrl, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load attachments");
+      return res.json();
+    },
   });
 
   const uploadFile = useCallback(async (file: File) => {
@@ -186,14 +207,11 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
       const formData = new FormData();
       formData.append("file", processedFile);
 
-      const uploadResponse = await fetch(
-        `/api/projects/${projectId}/tasks/${taskId}/attachments/upload`,
-        {
-          method: "POST",
-          body: formData,
-          credentials: "include",
-        }
-      );
+      const uploadResponse = await fetch(uploadUrl, {
+        method: "POST",
+        body: formData,
+        credentials: "include",
+      });
 
       if (!uploadResponse.ok) {
         let errorMsg = "Failed to upload file";
@@ -204,13 +222,11 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
         throw new Error(errorMsg);
       }
 
-      const { attachment } = await uploadResponse.json();
+      await uploadResponse.json();
 
       setUploadingFiles(prev => prev.filter(f => f.id !== uploadId));
       
-      queryClient.invalidateQueries({ 
-        queryKey: ["/api/projects", projectId, "tasks", taskId, "attachments"] 
-      });
+      queryClient.invalidateQueries({ queryKey: attachmentsQueryKey });
 
       onUploadSuccess?.();
 
@@ -235,7 +251,7 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
         variant: "destructive",
       });
     }
-  }, [taskId, projectId, toast]);
+  }, [uploadUrl, attachmentsQueryKey, toast, onUploadSuccess]);
 
   const handleFileSelect = useCallback((files: FileList | null) => {
     if (!files || !config?.configured) return;
@@ -283,7 +299,6 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
   const handleDragLeave = useCallback((e: React.DragEvent) => {
     e.preventDefault();
     e.stopPropagation();
-    // Only set isDragOver to false if we're leaving the dropzone itself, not just entering a child
     const relatedTarget = e.relatedTarget as Node | null;
     const currentTarget = e.currentTarget as Node;
     if (!relatedTarget || !currentTarget.contains(relatedTarget)) {
@@ -299,10 +314,10 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
 
   const downloadMutation = useMutation({
     mutationFn: async (attachmentId: string) => {
-      const response = await apiRequest(
-        "GET",
-        `/api/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}/download`
-      );
+      const base = isSubtaskMode
+        ? `/api/projects/${projectId}/subtasks/${subtaskId}/attachments/${attachmentId}/download`
+        : `/api/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}/download`;
+      const response = await apiRequest("GET", base);
       return response.json();
     },
     onSuccess: (data: { url: string }) => {
@@ -319,15 +334,13 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
 
   const deleteMutation = useMutation({
     mutationFn: async (attachmentId: string) => {
-      return apiRequest(
-        "DELETE",
-        `/api/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}`
-      );
+      const base = isSubtaskMode
+        ? `/api/projects/${projectId}/subtasks/${subtaskId}/attachments/${attachmentId}`
+        : `/api/projects/${projectId}/tasks/${taskId}/attachments/${attachmentId}`;
+      return apiRequest("DELETE", base);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ 
-        queryKey: ["/api/projects", projectId, "tasks", taskId, "attachments"] 
-      });
+      queryClient.invalidateQueries({ queryKey: attachmentsQueryKey });
       onDeleteSuccess?.();
       toast({
         title: "Attachment deleted",

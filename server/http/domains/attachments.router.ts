@@ -353,4 +353,170 @@ router.delete(
   },
 );
 
+// ============================================================
+// SUBTASK ATTACHMENT ROUTES
+// ============================================================
+
+router.get(
+  "/projects/:projectId/subtasks/:subtaskId/attachments",
+  async (req, res) => {
+    try {
+      const { projectId, subtaskId } = req.params;
+
+      const subtask = await storage.getSubtask(subtaskId);
+      if (!subtask) throw AppError.notFound("Subtask");
+
+      const parentTask = await storage.getTask(subtask.taskId);
+      if (!parentTask || parentTask.projectId !== projectId) throw AppError.notFound("Subtask");
+
+      const attachments = await storage.getTaskAttachmentsBySubtask(subtaskId);
+
+      const enriched = await Promise.all(
+        attachments.map(async (att) => {
+          if (att.mimeType.startsWith("image/") && att.uploadStatus === "complete") {
+            try {
+              const thumbnailUrl = await createPresignedDownloadUrl(att.storageKey);
+              return { ...att, thumbnailUrl };
+            } catch {
+              return att;
+            }
+          }
+          return att;
+        })
+      );
+
+      res.json(enriched);
+    } catch (error) {
+      return handleRouteError(res, error, "GET /api/projects/:projectId/subtasks/:subtaskId/attachments", req);
+    }
+  },
+);
+
+router.post(
+  "/projects/:projectId/subtasks/:subtaskId/attachments/upload",
+  fileUpload.single("file"),
+  async (req, res) => {
+    try {
+      const { projectId, subtaskId } = req.params;
+
+      if (!isS3Configured()) {
+        throw new AppError(503, "INTERNAL_ERROR", "File storage is not configured.");
+      }
+
+      const file = (req as any).file;
+      if (!file) throw AppError.badRequest("No file provided");
+
+      const subtask = await storage.getSubtask(subtaskId);
+      if (!subtask) throw AppError.notFound("Subtask");
+
+      const parentTask = await storage.getTask(subtask.taskId);
+      if (!parentTask || parentTask.projectId !== projectId) throw AppError.notFound("Subtask");
+
+      const mimeType = file.mimetype || "application/octet-stream";
+      const fileName = file.originalname || "untitled";
+      const fileSizeBytes = file.size;
+
+      const validation = validateFile(mimeType, fileSizeBytes, fileName);
+      if (!validation.valid) throw AppError.badRequest(validation.error || "Invalid file");
+
+      if (isFilenameUnsafe(fileName)) throw AppError.badRequest("File type not allowed for security reasons");
+
+      const tempId = crypto.randomUUID();
+      const storageKey = generateStorageKey(projectId, subtaskId, tempId, fileName);
+
+      await uploadToS3(file.buffer, storageKey, mimeType);
+
+      const attachment = await storage.createTaskAttachment({
+        subtaskId,
+        projectId,
+        uploadedByUserId: getCurrentUserId(req),
+        originalFileName: fileName,
+        mimeType,
+        fileSizeBytes,
+        storageKey,
+        uploadStatus: "complete",
+      });
+
+      emitAttachmentAdded(
+        {
+          id: attachment.id,
+          fileName: attachment.originalFileName,
+          fileType: attachment.mimeType,
+          fileSize: attachment.fileSizeBytes,
+          storageKey: attachment.storageKey,
+          taskId: parentTask.id,
+          subtaskId,
+          uploadedBy: attachment.uploadedByUserId,
+          createdAt: attachment.createdAt!,
+        },
+        parentTask.id,
+        subtaskId,
+        projectId,
+      );
+
+      res.status(201).json({
+        attachment: {
+          id: attachment.id,
+          originalFileName: attachment.originalFileName,
+          mimeType: attachment.mimeType,
+          fileSizeBytes: attachment.fileSizeBytes,
+          uploadStatus: attachment.uploadStatus,
+          createdAt: attachment.createdAt,
+        },
+      });
+    } catch (error) {
+      return handleRouteError(res, error, "POST /api/projects/:projectId/subtasks/:subtaskId/attachments/upload", req);
+    }
+  },
+);
+
+router.get(
+  "/projects/:projectId/subtasks/:subtaskId/attachments/:attachmentId/download",
+  async (req, res) => {
+    try {
+      const { projectId, subtaskId, attachmentId } = req.params;
+
+      const attachment = await storage.getTaskAttachment(attachmentId);
+      if (!attachment || attachment.subtaskId !== subtaskId || attachment.projectId !== projectId) {
+        throw AppError.notFound("Attachment");
+      }
+
+      if (attachment.uploadStatus !== "complete") throw AppError.badRequest("Attachment upload is not complete");
+
+      const url = await createPresignedDownloadUrl(attachment.storageKey);
+      res.json({ url });
+    } catch (error) {
+      return handleRouteError(res, error, "GET /api/projects/:projectId/subtasks/:subtaskId/attachments/:attachmentId/download", req);
+    }
+  },
+);
+
+router.delete(
+  "/projects/:projectId/subtasks/:subtaskId/attachments/:attachmentId",
+  async (req, res) => {
+    try {
+      const { projectId, subtaskId, attachmentId } = req.params;
+
+      const attachment = await storage.getTaskAttachment(attachmentId);
+      if (!attachment || attachment.subtaskId !== subtaskId || attachment.projectId !== projectId) {
+        throw AppError.notFound("Attachment");
+      }
+
+      try {
+        await deleteS3Object(attachment.storageKey);
+      } catch (s3Error) {
+        console.warn("Failed to delete S3 object:", s3Error);
+      }
+
+      await storage.deleteTaskAttachment(attachmentId);
+
+      emitAttachmentDeleted(attachmentId, null, subtaskId, projectId);
+
+      res.status(204).send();
+    } catch (error) {
+      return handleRouteError(res, error, "DELETE /api/projects/:projectId/subtasks/:subtaskId/attachments/:attachmentId", req);
+    }
+  },
+);
+
 export default router;
