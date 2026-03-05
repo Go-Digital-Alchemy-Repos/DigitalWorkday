@@ -176,13 +176,18 @@ export function setupAuth(app: Express): void {
   });
 
   app.post("/api/auth/login", loginRateLimiter, (req, res, next) => {
+    const loginEmail = req.body?.email || "(empty)";
+    console.log(`[login] POST /api/auth/login attempt for: ${loginEmail}`);
     passport.authenticate("local", async (err: Error | null, user: Express.User | false, info: { message: string }) => {
       if (err) {
+        console.error(`[login] Auth error for ${loginEmail}:`, err.message);
         return res.status(500).json({ error: "Authentication error" });
       }
       if (!user) {
+        console.warn(`[login] Failed for ${loginEmail}: ${info?.message || "Invalid credentials"}`);
         return res.status(401).json({ error: info?.message || "Invalid credentials" });
       }
+      console.log(`[login] Success for ${loginEmail} (role=${user.role}, id=${user.id})`);
       req.logIn(user, async (loginErr) => {
         if (loginErr) {
           return res.status(500).json({ error: "Login failed" });
