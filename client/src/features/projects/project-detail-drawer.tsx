@@ -150,6 +150,12 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
     enabled: open,
   });
 
+  interface ProjectManagerEntry { userId: string; user?: { id: string; firstName?: string | null; lastName?: string | null; email: string } }
+  const { data: projectManagersList = [] } = useQuery<ProjectManagerEntry[]>({
+    queryKey: ["/api/projects", project?.id, "managers"],
+    enabled: !!project?.id && open,
+  });
+
   const { data: analytics, isLoading: analyticsLoading } = useQuery<ProjectAnalytics>({
     queryKey: ["/api/v1/projects", project?.id, "analytics"],
     enabled: !!project?.id && open && activeTab === "insights",
@@ -305,6 +311,29 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
                 </CardContent>
               </Card>
             </div>
+
+            {projectManagersList.length > 0 && (
+              <Card data-testid="card-project-managers">
+                <CardContent className="pt-4">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+                    <User className="h-4 w-4" />
+                    Project Manager{projectManagersList.length > 1 ? "s" : ""}
+                  </div>
+                  <div className="flex flex-wrap gap-1.5">
+                    {projectManagersList.map((m) => {
+                      const u = m.user;
+                      if (!u) return null;
+                      const name = [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email;
+                      return (
+                        <Badge key={m.userId} variant="secondary" className="text-xs" data-testid={`badge-project-manager-${m.userId}`}>
+                          {name}
+                        </Badge>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
 
             <div className="grid grid-cols-3 gap-4">
               <Card>

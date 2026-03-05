@@ -28,7 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Lock } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { Loader2, Lock, X } from "lucide-react";
 import type { Team, Client, ClientDivision } from "@shared/schema";
 
 const PROJECT_COLORS = [
@@ -50,7 +51,7 @@ const createProjectSchema = z.object({
   teamId: z.string().optional(),
   color: z.string().default("#3B82F6"),
   visibility: z.enum(["workspace", "private"]).default("workspace"),
-  projectManagerId: z.string().min(1, "Project Manager is required"),
+  managerIds: z.array(z.string()).default([]),
 });
 
 type CreateProjectFormData = z.infer<typeof createProjectSchema>;
@@ -90,11 +91,12 @@ export function CreateProjectDialog({
       teamId: "",
       color: "#3B82F6",
       visibility: "workspace",
-      projectManagerId: "",
+      managerIds: [],
     },
   });
 
   const selectedClientId = form.watch("clientId");
+  const selectedManagerIds = form.watch("managerIds");
 
   const { data: divisions, isLoading: divisionsLoading } = useQuery<ClientDivision[]>({
     queryKey: ["/api/v1/clients", selectedClientId, "divisions"],
@@ -139,6 +141,18 @@ export function CreateProjectDialog({
     }
     onOpenChange(open);
   };
+
+  const handleAddManager = (userId: string) => {
+    if (!selectedManagerIds.includes(userId)) {
+      form.setValue("managerIds", [...selectedManagerIds, userId]);
+    }
+  };
+
+  const handleRemoveManager = (userId: string) => {
+    form.setValue("managerIds", selectedManagerIds.filter(id => id !== userId));
+  };
+
+  const availableManagers = eligibleManagers.filter(u => !selectedManagerIds.includes(u.id));
 
   return (
     <Dialog open={open} onOpenChange={handleOpenChange}>
@@ -191,22 +205,47 @@ export function CreateProjectDialog({
 
             <FormField
               control={form.control}
-              name="projectManagerId"
-              render={({ field }) => (
+              name="managerIds"
+              render={() => (
                 <FormItem>
-                  <FormLabel>Project Manager <span className="text-destructive">*</span></FormLabel>
-                  <Select onValueChange={field.onChange} value={field.value}>
+                  <FormLabel>Project Managers</FormLabel>
+                  {selectedManagerIds.length > 0 && (
+                    <div className="flex flex-wrap gap-1.5 mb-2">
+                      {selectedManagerIds.map(id => {
+                        const user = eligibleManagers.find(u => u.id === id);
+                        if (!user) return null;
+                        return (
+                          <Badge key={id} variant="secondary" className="gap-1 pr-1" data-testid={`badge-manager-${id}`}>
+                            {getDisplayName(user)}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveManager(id)}
+                              className="ml-0.5 rounded-full hover:bg-muted-foreground/20 p-0.5"
+                              data-testid={`remove-manager-${id}`}
+                            >
+                              <X className="h-3 w-3" />
+                            </button>
+                          </Badge>
+                        );
+                      })}
+                    </div>
+                  )}
+                  <Select onValueChange={handleAddManager} value="">
                     <FormControl>
                       <SelectTrigger data-testid="select-project-manager">
-                        <SelectValue placeholder="Select a project manager" />
+                        <SelectValue placeholder={selectedManagerIds.length === 0 ? "Add a project manager (optional)" : "Add another manager"} />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
-                      {eligibleManagers.map((u) => (
-                        <SelectItem key={u.id} value={u.id}>
-                          {getDisplayName(u)}
-                        </SelectItem>
-                      ))}
+                      {availableManagers.length === 0 ? (
+                        <SelectItem value="_none" disabled>No more users to add</SelectItem>
+                      ) : (
+                        availableManagers.map((u) => (
+                          <SelectItem key={u.id} value={u.id}>
+                            {getDisplayName(u)}
+                          </SelectItem>
+                        ))
+                      )}
                     </SelectContent>
                   </Select>
                   <FormMessage />

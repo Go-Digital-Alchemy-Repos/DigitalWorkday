@@ -25,6 +25,7 @@ import {
   type TeamMember, type InsertTeamMember,
   type Project, type InsertProject,
   type ProjectMember, type InsertProjectMember,
+  type ProjectManager,
   type Section, type InsertSection,
   type Task, type InsertTask,
   type TaskAssignee, type InsertTaskAssignee,
@@ -69,7 +70,7 @@ import {
   type NotificationPreferences, type InsertNotificationPreferences,
   type UserUiPreferences,
   users, workspaces, workspaceMembers, teams, teamMembers,
-  projects, projectMembers, hiddenProjects, sections, tasks, taskAssignees, taskWatchers,
+  projects, projectMembers, projectManagers, hiddenProjects, sections, tasks, taskAssignees, taskWatchers,
   subtasks, subtaskAssignees, subtaskTags, tags, taskTags, comments, commentMentions, activityLog, taskAttachments,
   clients, clientContacts, clientInvites, clientUserAccess, clientStageHistory, clientStageAutomationRules, clientStageAutomationEvents,
   clientDivisions, divisionMembers,
@@ -165,6 +166,10 @@ export interface IStorage {
   addProjectMember(member: InsertProjectMember): Promise<ProjectMember>;
   removeProjectMember(projectId: string, userId: string): Promise<void>;
   setProjectMembers(projectId: string, userIds: string[]): Promise<void>;
+  getProjectManagersList(projectId: string): Promise<(ProjectManager & { user?: User })[]>;
+  setProjectManagers(projectId: string, tenantId: string | null, userIds: string[]): Promise<void>;
+  addProjectManagerEntry(projectId: string, userId: string, tenantId: string | null): Promise<void>;
+  removeProjectManagerEntry(projectId: string, userId: string): Promise<void>;
   isProjectMember(projectId: string, userId: string): Promise<boolean>;
   addAllTenantUsersToProject(projectId: string, tenantId: string, creatorId?: string): Promise<void>;
   addUserToAllTenantProjects(userId: string, tenantId: string): Promise<void>;
@@ -829,6 +834,44 @@ export class DatabaseStorage implements IStorage {
         .values({ projectId, userId, role: "member" })
         .onConflictDoNothing();
     }
+  }
+
+  async getProjectManagersList(projectId: string): Promise<(ProjectManager & { user?: User })[]> {
+    const managers = await db.select().from(projectManagers).where(eq(projectManagers.projectId, projectId));
+    const result = [];
+    for (const mgr of managers) {
+      const user = await this.getUser(mgr.userId);
+      result.push({ ...mgr, user });
+    }
+    return result;
+  }
+
+  async setProjectManagers(projectId: string, tenantId: string | null, userIds: string[]): Promise<void> {
+    const existing = await db.select().from(projectManagers).where(eq(projectManagers.projectId, projectId));
+    const existingIds = new Set(existing.map(m => m.userId));
+    const newIds = new Set(userIds);
+    const toRemove = existing.filter(m => !newIds.has(m.userId)).map(m => m.userId);
+    const toAdd = userIds.filter(id => !existingIds.has(id));
+    for (const userId of toRemove) {
+      await db.delete(projectManagers)
+        .where(and(eq(projectManagers.projectId, projectId), eq(projectManagers.userId, userId)));
+    }
+    for (const userId of toAdd) {
+      await db.insert(projectManagers)
+        .values({ projectId, userId, tenantId: tenantId || undefined })
+        .onConflictDoNothing();
+    }
+  }
+
+  async addProjectManagerEntry(projectId: string, userId: string, tenantId: string | null): Promise<void> {
+    await db.insert(projectManagers)
+      .values({ projectId, userId, tenantId: tenantId || undefined })
+      .onConflictDoNothing();
+  }
+
+  async removeProjectManagerEntry(projectId: string, userId: string): Promise<void> {
+    await db.delete(projectManagers)
+      .where(and(eq(projectManagers.projectId, projectId), eq(projectManagers.userId, userId)));
   }
 
   async isProjectMember(projectId: string, userId: string): Promise<boolean> {

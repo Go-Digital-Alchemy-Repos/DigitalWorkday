@@ -257,13 +257,15 @@ router.post("/projects", async (req: Request, res: Response) => {
     
     const memberIds: string[] = Array.isArray(body.memberIds) ? body.memberIds : [];
     delete body.memberIds;
+
+    // Extract managerIds before schema parse (not a DB column)
+    const managerIds: string[] = Array.isArray(body.managerIds) ? body.managerIds : [];
+    delete body.managerIds;
+    // Remove legacy field if sent
+    delete body.projectManagerId;
     
     if (tenantId && !body.clientId) {
       return sendError(res, AppError.badRequest("Client assignment is required for projects"), req);
-    }
-
-    if (tenantId && !body.projectManagerId) {
-      body.projectManagerId = creatorId;
     }
     
     if (body.clientId && tenantId) {
@@ -347,6 +349,12 @@ router.post("/projects", async (req: Request, res: Response) => {
       }
     }
 
+    // Set project managers (default to creator if none specified)
+    const effectiveManagerIds = managerIds.length > 0 ? managerIds : (creatorId ? [creatorId] : []);
+    if (effectiveManagerIds.length > 0) {
+      await storage.setProjectManagers(project.id, tenantId, effectiveManagerIds);
+    }
+
     emitProjectCreated(project as any);
 
     if (project.clientId && tenantId) {
@@ -372,7 +380,13 @@ router.post("/projects", async (req: Request, res: Response) => {
 
 router.patch("/projects/:id", async (req: Request, res: Response) => {
   try {
-    const data = validateBody(req.body, updateProjectSchema, res);
+    // Extract managerIds before schema validation
+    const rawBody = { ...req.body };
+    const managerIds: string[] | undefined = Array.isArray(rawBody.managerIds) ? rawBody.managerIds : undefined;
+    delete rawBody.managerIds;
+    delete rawBody.projectManagerId;
+
+    const data = validateBody(rawBody, updateProjectSchema, res);
     if (!data) return;
     
     const tenantId = getEffectiveTenantId(req);
@@ -388,12 +402,13 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
       return sendError(res, AppError.notFound("Project"), req);
     }
     
-    if ((data as any).projectManagerId !== undefined && (data as any).projectManagerId !== existingProject.projectManagerId) {
+    // If managerIds are being updated, enforce role check
+    if (managerIds !== undefined) {
       const currentUser = await storage.getUser(currentUserId);
       const role = currentUser?.role;
       const canChangeProjectManager = role === "super_user" || role === "tenant_owner" || role === "admin";
       if (!canChangeProjectManager) {
-        return sendError(res, AppError.forbidden("Only admins and owners can change the Project Manager"), req);
+        return sendError(res, AppError.forbidden("Only admins and owners can change Project Managers"), req);
       }
     }
 
@@ -452,6 +467,11 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
       }
     }
     
+    // Update project managers if provided
+    if (managerIds !== undefined) {
+      await storage.setProjectManagers(project!.id, tenantId, managerIds);
+    }
+
     emitProjectUpdated(project!.id, data);
     const members = await storage.getProjectMembers(project!.id);
     const updateDescription = getProjectUpdateDescription(data);
@@ -987,6 +1007,63 @@ router.post("/projects/:projectId/apply-template", async (req: Request, res: Res
     res.json({ success: true, sectionsCreated, tasksCreated });
   } catch (error) {
     return handleRouteError(res, error, "POST /api/projects/:projectId/apply-template", req);
+  }
+});
+
+router.get("/projects/:id/managers", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const project = tenantId
+      ? await storage.getProjectByIdAndTenant(req.params.id, tenantId)
+      : await storage.getProject(req.params.id);
+    if (!project) return sendError(res, AppError.notFound("Project"), req);
+    const managers = await storage.getProjectManagersList(req.params.id);
+    res.json(managers);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/projects/:id/managers", req);
+  }
+});
+
+router.post("/projects/:id/managers", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const currentUserId = getCurrentUserId(req);
+    const project = tenantId
+      ? await storage.getProjectByIdAndTenant(req.params.id, tenantId)
+      : await storage.getProject(req.params.id);
+    if (!project) return sendError(res, AppError.notFound("Project"), req);
+    const currentUser = await storage.getUser(currentUserId);
+    const role = currentUser?.role;
+    if (role !== "super_user" && role !== "tenant_owner" && role !== "admin") {
+      return sendError(res, AppError.forbidden("Only admins can manage Project Managers"), req);
+    }
+    const { userId } = req.body;
+    if (!userId) return sendError(res, AppError.badRequest("userId is required"), req);
+    await storage.addProjectManagerEntry(req.params.id, userId, tenantId);
+    const managers = await storage.getProjectManagersList(req.params.id);
+    res.json(managers);
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/projects/:id/managers", req);
+  }
+});
+
+router.delete("/projects/:id/managers/:userId", async (req: Request, res: Response) => {
+  try {
+    const tenantId = getEffectiveTenantId(req);
+    const currentUserId = getCurrentUserId(req);
+    const project = tenantId
+      ? await storage.getProjectByIdAndTenant(req.params.id, tenantId)
+      : await storage.getProject(req.params.id);
+    if (!project) return sendError(res, AppError.notFound("Project"), req);
+    const currentUser = await storage.getUser(currentUserId);
+    const role = currentUser?.role;
+    if (role !== "super_user" && role !== "tenant_owner" && role !== "admin") {
+      return sendError(res, AppError.forbidden("Only admins can manage Project Managers"), req);
+    }
+    await storage.removeProjectManagerEntry(req.params.id, req.params.userId);
+    res.json({ success: true });
+  } catch (error) {
+    return handleRouteError(res, error, "DELETE /api/projects/:id/managers/:userId", req);
   }
 });
 

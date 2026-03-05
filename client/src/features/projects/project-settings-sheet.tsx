@@ -45,8 +45,9 @@ import { Separator } from "@/components/ui/separator";
 import { Skeleton } from "@/components/ui/skeleton";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
-import { Building2, X, Archive, RotateCcw, Search, LogOut, Eye, Pin, Trash2 } from "lucide-react";
+import { Building2, X, Archive, RotateCcw, Search, LogOut, Eye, Pin, Trash2, UserCog } from "lucide-react";
 import { useLocation } from "wouter";
+import { Badge } from "@/components/ui/badge";
 import type { Project, ClientWithContacts, Team } from "@shared/schema";
 
 const PROJECT_COLORS = [
@@ -66,7 +67,7 @@ const editProjectSchema = z.object({
   teamId: z.string().optional(),
   color: z.string().default("#3B82F6"),
   visibility: z.enum(["workspace", "private"]).default("workspace"),
-  projectManagerId: z.string().optional(),
+  managerIds: z.array(z.string()).default([]),
 });
 
 type EditProjectFormData = z.infer<typeof editProjectSchema>;
@@ -110,6 +111,12 @@ export function ProjectSettingsSheet({
     enabled: open && canChangeProjectManager,
   });
 
+  interface ProjectManagerEntry { userId: string; user?: TenantUser }
+  const { data: projectManagers = [] } = useQuery<ProjectManagerEntry[]>({
+    queryKey: ["/api/projects", project.id, "managers"],
+    enabled: open && canChangeProjectManager,
+  });
+
   const eligibleManagers = tenantUsers.filter((u) => u.role !== "client");
 
   const getManagerDisplayName = (u: TenantUser) => {
@@ -125,6 +132,8 @@ export function ProjectSettingsSheet({
       c.displayName?.toLowerCase().includes(clientSearch.toLowerCase())
   );
 
+  const currentManagerIds = projectManagers.map(m => m.userId);
+
   const form = useForm<EditProjectFormData>({
     resolver: zodResolver(editProjectSchema),
     defaultValues: {
@@ -133,23 +142,25 @@ export function ProjectSettingsSheet({
       teamId: project.teamId || "",
       color: project.color || "#3B82F6",
       visibility: (project.visibility as "workspace" | "private") || "workspace",
-      projectManagerId: (project as any).projectManagerId || "",
+      managerIds: currentManagerIds,
     },
   });
 
   useEffect(() => {
     if (open) {
+      const mgrIds = projectManagers.map((m: any) => m.userId);
       form.reset({
         name: project.name,
         description: project.description || "",
         teamId: project.teamId || "",
         color: project.color || "#3B82F6",
         visibility: (project.visibility as "workspace" | "private") || "workspace",
-        projectManagerId: (project as any).projectManagerId || "",
+        managerIds: mgrIds,
       });
       setClientSearch("");
     }
-  }, [open, project, form]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, project.id, projectManagers.length]);
 
   const updateProjectMutation = useMutation({
     mutationFn: async (data: EditProjectFormData) => {
@@ -159,8 +170,8 @@ export function ProjectSettingsSheet({
         teamId: data.teamId || null,
         color: data.color,
         visibility: data.visibility,
+        managerIds: data.managerIds,
       };
-      if (data.projectManagerId) payload.projectManagerId = data.projectManagerId;
       const res = await apiRequest("PATCH", `/api/projects/${project.id}`, payload);
       return await res.json();
     },
@@ -183,6 +194,7 @@ export function ProjectSettingsSheet({
       queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id, "managers"] });
       toast({
         title: "Project updated",
         description: "Project details have been saved.",
@@ -450,28 +462,62 @@ export function ProjectSettingsSheet({
               {canChangeProjectManager && (
                 <FormField
                   control={form.control}
-                  name="projectManagerId"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormLabel>Project Manager</FormLabel>
-                      <Select onValueChange={(v) => field.onChange(v === "_none" ? "" : v)} value={field.value || "_none"}>
-                        <FormControl>
-                          <SelectTrigger data-testid="select-edit-project-manager">
-                            <SelectValue placeholder="Select project manager" />
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="_none">Unassigned</SelectItem>
-                          {eligibleManagers.map((u) => (
-                            <SelectItem key={u.id} value={u.id}>
-                              {getManagerDisplayName(u)}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
+                  name="managerIds"
+                  render={({ field }) => {
+                    const selectedIds: string[] = field.value || [];
+                    const available = eligibleManagers.filter(u => !selectedIds.includes(u.id));
+                    return (
+                      <FormItem>
+                        <FormLabel className="flex items-center gap-1.5">
+                          <UserCog className="h-3.5 w-3.5" />
+                          Project Managers
+                        </FormLabel>
+                        {selectedIds.length > 0 && (
+                          <div className="flex flex-wrap gap-1.5 mb-2">
+                            {selectedIds.map(id => {
+                              const u = eligibleManagers.find(u => u.id === id);
+                              if (!u) return null;
+                              return (
+                                <Badge key={id} variant="secondary" className="gap-1 pr-1" data-testid={`badge-manager-${id}`}>
+                                  {getManagerDisplayName(u)}
+                                  <button
+                                    type="button"
+                                    onClick={() => field.onChange(selectedIds.filter(i => i !== id))}
+                                    className="ml-0.5 rounded-full hover:bg-muted-foreground/20 p-0.5"
+                                    data-testid={`remove-manager-${id}`}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </button>
+                                </Badge>
+                              );
+                            })}
+                          </div>
+                        )}
+                        <Select
+                          onValueChange={(v) => { if (v && !selectedIds.includes(v)) field.onChange([...selectedIds, v]); }}
+                          value=""
+                        >
+                          <FormControl>
+                            <SelectTrigger data-testid="select-edit-project-manager">
+                              <SelectValue placeholder={selectedIds.length === 0 ? "Add a project manager" : "Add another manager"} />
+                            </SelectTrigger>
+                          </FormControl>
+                          <SelectContent>
+                            {available.length === 0 ? (
+                              <SelectItem value="_empty" disabled>No more users to add</SelectItem>
+                            ) : (
+                              available.map((u) => (
+                                <SelectItem key={u.id} value={u.id}>
+                                  {getManagerDisplayName(u)}
+                                </SelectItem>
+                              ))
+                            )}
+                          </SelectContent>
+                        </Select>
+                        <FormMessage />
+                      </FormItem>
+                    );
+                  }}
                 />
               )}
 
