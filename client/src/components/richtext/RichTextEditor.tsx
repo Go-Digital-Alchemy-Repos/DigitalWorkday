@@ -28,7 +28,6 @@ import { useTheme } from "@/lib/theme-provider";
 import { getDocForEditor, serializeDocToString } from "./richTextUtils";
 import { PromptDialog } from "@/components/prompt-dialog";
 import type { User } from "@shared/schema";
-import { buildUserDisplayName } from "@shared/userDisplay";
 
 interface RichTextEditorProps {
   value: string | null | undefined;
@@ -73,7 +72,7 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
 
     const filteredUsers = users.filter((user) => {
       const searchText = query.toLowerCase();
-      const name = buildUserDisplayName(user).toLowerCase();
+      const name = (user.displayName || user.name || "").toLowerCase();
       const email = user.email?.toLowerCase() || "";
       const firstName = user.firstName?.toLowerCase() || "";
       const lastName = user.lastName?.toLowerCase() || "";
@@ -95,7 +94,7 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
         if (user) {
           command({
             id: user.id,
-            label: buildUserDisplayName(user),
+            label: user.displayName || user.name || user.email,
           });
         }
       },
@@ -144,7 +143,7 @@ const MentionList = forwardRef<MentionListHandle, MentionSuggestionProps>(
             }}
             data-testid={`mention-option-${user.id}`}
           >
-            <span className="font-medium">{buildUserDisplayName(user)}</span>
+            <span className="font-medium">{user.displayName || user.name || "Unknown"}</span>
             <span className="text-xs text-muted-foreground">{user.email}</span>
           </button>
         ))}
@@ -383,7 +382,7 @@ export function RichTextEditor({
         items: ({ query }: { query: string }) => {
           return usersRef.current.filter((user) => {
             const searchText = query.toLowerCase();
-            const name = buildUserDisplayName(user).toLowerCase();
+            const name = (user.displayName || user.name || "").toLowerCase();
             const email = user.email?.toLowerCase() || "";
             return name.includes(searchText) || email.includes(searchText);
           }).slice(0, 5);

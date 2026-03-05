@@ -21,7 +21,6 @@ import {
   getClientProfitability,
   getTenantClientsProfitability,
 } from "../../services/billing/clientProfitabilityService";
-import { detectRevenueLeakage } from "../../services/billing/revenueLeakageService";
 import { clients as clientsTable } from "@shared/schema";
 import { db } from "../../db";
 import { eq, inArray } from "drizzle-orm";
@@ -301,29 +300,6 @@ router.get("/analytics/client-profitability", async (req: Request, res: Response
     res.json(results);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/analytics/client-profitability", req);
-  }
-});
-
-// ─────────────────────────────────────────────────────────────────────────────
-// Revenue Leakage Detection
-// GET /api/billing/revenue-leakage
-// Permission: tenant_owner | admin+isProjectManager | super_user
-// ─────────────────────────────────────────────────────────────────────────────
-router.get("/billing/revenue-leakage", async (req: Request, res: Response) => {
-  try {
-    if (!config.features.enableRevenueLeakageDetection) {
-      return sendError(res, AppError.forbidden("Revenue leakage detection feature is disabled"), req);
-    }
-    if (!checkPermission(req, res)) return;
-
-    const tenantId = getEffectiveTenantId(req);
-    if (!tenantId) return sendError(res, AppError.tenantRequired("Tenant context required"), req);
-
-    const { startDate, endDate } = req.query as Record<string, string>;
-    const result = await detectRevenueLeakage(tenantId, { startDate, endDate });
-    res.json(result);
-  } catch (error) {
-    return handleRouteError(res, error, "GET /api/billing/revenue-leakage", req);
   }
 });
 

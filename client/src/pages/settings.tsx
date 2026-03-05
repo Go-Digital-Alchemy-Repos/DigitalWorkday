@@ -29,7 +29,7 @@ export default function SettingsPage() {
   const [, params] = useRoute("/settings/:tab");
   const flags = useFeatureFlags();
 
-  if (user?.role !== "admin" && user?.role !== "tenant_owner" && user?.role !== "super_user") {
+  if (user?.role !== "admin" && user?.role !== "super_user") {
     return <Redirect to="/" />;
   }
 

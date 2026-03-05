@@ -13,7 +13,6 @@
 
 import { Router, Request, Response } from "express";
 import { handleRouteError } from "../../lib/errors";
-import { withCache } from "../../lib/reportCache";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { getCurrentUserId } from "../../routes/helpers";
 import { getPmPortfolio } from "../../reports/pmPortfolioAggregator";
@@ -21,7 +20,7 @@ import { config } from "../../config";
 
 const router = Router();
 
-router.get("/pm/portfolio", withCache(30_000), async (req: Request, res: Response) => {
+router.get("/pm/portfolio", async (req: Request, res: Response) => {
   try {
     if (!config.features.enablePmPortfolioDashboard) {
       return res.status(403).json({ error: "PM Portfolio Dashboard is not enabled." });

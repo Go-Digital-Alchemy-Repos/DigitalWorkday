@@ -109,7 +109,6 @@ import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
 import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, CONTROL_CENTER_CHILD_IDS, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState, ControlCenterSection, ClientProfitabilityCard } from "@/features/clients";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
 import { ClientNotesTab } from "@/components/client-notes-tab";
-import { ClientCommunicationTimeline } from "@/features/communication/CommunicationTimeline";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
 import { CrmOverviewSection, NotesTab as Crm360NotesTab, ActivityTab, ApprovalsTab, MessagesTab, type CrmSummary } from "@/components/client-360-tabs";
 import { ClientReportsTab } from "@/components/client-reports-tab";
@@ -2428,12 +2427,6 @@ export default function ClientDetailPage() {
           {featureFlags.assetLibraryV2 && (
             <TabsContent value="asset-library" className="p-6 h-[calc(100%-3rem)]">
               <AssetLibraryPanel clientId={clientId || ""} />
-            </TabsContent>
-          )}
-
-          {featureFlags.enableCommunicationTimeline && (
-            <TabsContent value="communication" className="p-6">
-              <ClientCommunicationTimeline clientId={clientId || ""} />
             </TabsContent>
           )}
         </Tabs>

@@ -433,12 +433,12 @@ export function TenantSidebar() {
                     <SidebarMenuItem>
                       <SidebarMenuButton
                         asChild
-                        isActive={location === "/project-management" || location === "/pm-portfolio"}
-                        tooltip="Project Management"
+                        isActive={location === "/pm-portfolio"}
+                        tooltip="PM Portfolio"
                       >
-                        <Link href="/project-management" data-testid="link-pm-portfolio">
+                        <Link href="/pm-portfolio" data-testid="link-pm-portfolio">
                           <BarChart3 className="h-4 w-4 text-cyan-500" />
-                          <span>Project Management</span>
+                          <span>PM Portfolio</span>
                         </Link>
                       </SidebarMenuButton>
                     </SidebarMenuItem>

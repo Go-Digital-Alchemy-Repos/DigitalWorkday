@@ -389,7 +389,7 @@ export function UserProfilePanel({ open, onClose, user, invitations }: UserProfi
                         />
                         <div className="space-y-0.5">
                           <Label htmlFor="edit-pm" className="text-xs font-medium cursor-pointer">Is Project Manager</Label>
-                          <p className="text-xs text-muted-foreground">Grants access to the Project Management dashboard</p>
+                          <p className="text-xs text-muted-foreground">Grants access to the PM Portfolio dashboard</p>
                         </div>
                       </div>
                     )}

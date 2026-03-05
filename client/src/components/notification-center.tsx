@@ -18,7 +18,6 @@ import { apiRequest } from "@/lib/queryClient";
 import { getSocket } from "@/lib/realtime/socket";
 import { formatDistanceToNow } from "date-fns";
 import { cn } from "@/lib/utils";
-import type { NotificationPreferences } from "@shared/schema";
 import { prefersReducedMotion } from "@/lib/motion";
 import type { ServerToClientEvents } from "@shared/events";
 import { useTaskDrawerOptional } from "@/lib/task-drawer-context";
@@ -70,6 +69,24 @@ interface PaginatedResponse {
   items: Notification[];
   nextCursor: string | null;
   hasMore: boolean;
+}
+
+interface NotificationPreferences {
+  id: string;
+  userId: string;
+  taskDeadline: boolean;
+  taskAssigned: boolean;
+  taskCompleted: boolean;
+  commentAdded: boolean;
+  commentMention: boolean;
+  projectUpdate: boolean;
+  projectMemberAdded: boolean;
+  taskStatusChanged: boolean;
+  chatMessage: boolean;
+  clientMessage: boolean;
+  supportTicket: boolean;
+  workOrder: boolean;
+  emailEnabled: boolean;
 }
 
 type NotificationType =
@@ -465,7 +482,6 @@ export function NotificationCenter() {
 
   const defaultPreferences: NotificationPreferences = {
     id: "",
-    tenantId: null,
     userId: "",
     taskDeadline: true,
     taskAssigned: true,
@@ -480,20 +496,6 @@ export function NotificationCenter() {
     supportTicket: true,
     workOrder: true,
     emailEnabled: false,
-    taskDeadlineEmail: false,
-    taskAssignedEmail: false,
-    taskCompletedEmail: false,
-    commentAddedEmail: false,
-    commentMentionEmail: false,
-    projectUpdateEmail: false,
-    projectMemberAddedEmail: false,
-    taskStatusChangedEmail: false,
-    chatMessageEmail: false,
-    clientMessageEmail: false,
-    supportTicketEmail: false,
-    workOrderEmail: false,
-    createdAt: new Date(),
-    updatedAt: new Date(),
   };
 
   const { data: preferences = defaultPreferences, isLoading: preferencesLoading } = useQuery<NotificationPreferences>({

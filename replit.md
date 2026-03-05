@@ -13,6 +13,16 @@ MyWorkDay is an Asana-inspired, multi-tenant project management application desi
 - Workload Reports in Settings showing task distribution by employee with completion metrics
 - Workload Forecast with task time estimates, project budgets, budget tracking, and workload distribution by assignee
 
+## Role Hierarchy & Access Control
+
+- **Role Hierarchy**: `super_user` > `tenant_owner` > `admin` > `employee` > `client`
+- **Tenant Owner**: Has all admin privileges plus can assign `isProjectManager` to admins. Always has PM Portfolio access. Only Super Admin can grant this role.
+- **isProjectManager flag**: Boolean on `users` table (`is_project_manager` column). When `true` on an `admin` or `tenant_owner`, grants access to PM Portfolio dashboard. Only `tenant_owner` or `super_user` can set this flag.
+- **PM Portfolio Access**: Visible to `tenant_owner` (always), `admin` with `isProjectManager=true`, and `super_user`. Hidden from all other roles.
+- **Backend enforcement**: PATCH `/api/users/:id` — only `super_user` can assign/revoke `tenant_owner` role; only `tenant_owner` or `super_user` can set `isProjectManager`. Enforced in `server/routes/users.router.ts`.
+- **Frontend enforcement**: Sidebar `canSeePmPortfolio` = `tenant_owner || (admin && isProjectManager)`. PM Portfolio page redirects if `canAccessPmPortfolio` is false. User drawer shows `Tenant Owner` option only to `super_user`; shows `isProjectManager` checkbox only to `tenant_owner`/`super_user` when editing admin/tenant_owner users.
+- **Team tab badges**: `Owner` badge (violet) for `tenant_owner`, `PM` badge (cyan outline) for admins with `isProjectManager=true`.
+
 ## System Architecture
 
 ### Tech Stack
@@ -24,99 +34,39 @@ MyWorkDay is an Asana-inspired, multi-tenant project management application desi
 
 ### Core Features and Design Patterns
 - **Multi-Tenancy**: Supports multiple tenants with an admin dashboard and per-tenant user management.
-- **Role Hierarchy & Access Control**: `super_user` > `tenant_owner` > `admin` > `employee` > `client`. All access control is enforced on both backend and frontend.
-  - `super_user`: Platform-level admin. Can assign `tenant_owner` role to existing admins. Can set `isProjectManager` on any user.
-  - `tenant_owner`: Highest per-tenant role. Has all admin privileges. Always has Project Management dashboard access. Can set `isProjectManager` on `admin` and `tenant_owner` users. Only a `super_user` can grant or revoke this role.
-  - `admin`: Standard tenant administrator. Has Project Management dashboard access **only if** `isProjectManager = true`. Cannot self-assign `tenant_owner` or set `isProjectManager` on others.
-  - `employee`: Standard user. Never has Project Management dashboard access.
-  - `client`: External portal user. Restricted to client-facing views only.
-  - **`isProjectManager` flag** (`users.is_project_manager boolean`): Grants `admin` users access to the Project Management dashboard, billing approval workflow, low-margin client reports, and invoice drafts. Set by `tenant_owner` or `super_user` only via PATCH `/api/users/:id`. Included in `/api/auth/me` response. UI: checkbox in User Drawer (visible to tenant_owner/super_user editing admin/tenant_owner users); "PM" badge in team tab.
-  - **Backend enforcement**: `requireAdmin` middleware allows `admin` and `tenant_owner`. `requireTenantOwnerOrSuper` is for endpoints restricted to tenant_owner/super_user. PATCH `/api/users/:id` blocks plain admins from setting `isProjectManager` or `tenant_owner` role (403).
+- **Role Hierarchy**: `super_user` > `tenant_owner` > `admin` > `employee` > `client`. Tenant Owner has all admin privileges plus can assign `isProjectManager` to admins. Only Super Admin can grant Tenant Owner role. `isProjectManager` flag on admins gates PM Portfolio access. Employees never see PM Portfolio.
+- **PM Portfolio Access**: Visible to `tenant_owner` (always), `admin` with `isProjectManager=true`, and `super_user`. Hidden from all other roles. Backend enforced in `pm-portfolio.router.ts`; frontend enforced in sidebar and page guard.
 - **Authentication**: Session-based authentication using Passport.js.
-- **Real-time Communication**: Socket.IO for live updates.
-- **Project & Task Management**: Includes workspaces, teams, clients, projects, tasks (with subtasks), activity logs, time tracking, and project templates. Supports private visibility for tasks and projects.
-- **Client Relationship Management (CRM)**: Features client detail pages, notes, documents, pipeline tracking, contacts, and an external client portal.
-- **Workload Management**: Tools for forecasting and reporting based on task distribution and budget utilization.
-- **Notifications**: An enhanced Notification Center with advanced features.
-- **User Experience**: Global command palette, keyboard shortcuts, dark mode, responsive design, and consistent UI components.
-- **Modular Architecture**: API routes with policy enforcement, centralized query key builders, and role-based frontend routing.
-- **Reporting Engine V2**: A rebuilt system offering various reports like workload, task analysis, time tracking, project analysis, and client analytics, with Employee/Client Command Centers.
-- **Asset Library (Beta)**: Centralized asset management with cloud storage integration, source tracking, and deduplication.
+- **Real-time Communication**: Socket.IO for live updates (chat, notifications).
+- **Project & Task Management**: Workspaces, teams, clients, projects, tasks (with subtasks), activity logs, time tracking, project templates, rich text comments.
+- **Client Relationship Management (CRM)**: Client detail pages, notes, documents, pipeline tracking, contacts, external client portal with Client 360 View and profitability reports.
+- **Workload Management**: Forecasting and reporting based on task distribution and budget utilization.
+- **Notifications**: Enhanced Notification Center with pagination, filters, deep-linking, and severity levels.
+- **User Experience**: Global command palette, keyboard shortcuts, dark mode, CSS-variable-based theming, Framer Motion animations, mobile-first responsive design, consistent drawer UI, global search.
+- **Modular Architecture**: API routes with policy enforcement, centralized query key builders, role-based frontend routing with lazy-loaded components.
+- **Reporting Engine V2**: Rebuilt system with feature flags for workload, task analysis, time tracking, project analysis, client analytics, messages, pipeline, and overview reports. Includes Employee/Client Command Centers, Health Indexes, Forecasting, and Alert Automation.
+- **Asset Library (Beta)**: Centralized asset management with folders, assets, links, presigned R2 upload/download, source tracking, and deduplication. Includes read-only Default Tenant Documents.
+- **Private Visibility (Tasks & Projects)**: Creator-only visibility with invite-based sharing via `task_access`/`project_access` tables, enforced across all list endpoints, search, calendar, dashboard, and client portal.
 - **Data Retention System**: Non-destructive soft-archive for tasks and chat messages.
-- **Task Review Queue**: A feature to send tasks for review to project managers.
-- **Task History (Audit Log)**: Records field-level changes for tasks and subtasks, displayed as a timeline.
-- **Task/Subtask Panel**: A full-width overlay for detailed task management with a two-column layout and various interactive elements.
-- **Global Branding & Theming**: System-level branding configurable by Super Admin, applied across the application, with curated theme packs.
-- **AI-Powered Insights**: Employee and Client Intelligence Profiles with AI-generated performance narratives and summaries, including a weekly AI PM Focus Summary.
-- **Project Milestones**: Functionality to track key deliverables within projects.
-- **Reassignment Suggestions Engine**: An advisory system for capacity-aware task redistribution.
-- **Capacity What-If Simulator**: An in-memory tool for project managers to simulate changes and their impact on utilization and risk.
-- **Billing Approval Workflow**: A system for managing time entry approval statuses and related actions.
-- **Invoice Draft Builder**: A tool to generate, manage, and export invoice drafts from approved time entries.
-- **Risk Acknowledgment Workflow**: A governance layer for at-risk projects requiring PM or admin acknowledgment.
-- **Project Management Dashboard** (formerly PM Portfolio): Provides portfolio-level intelligence for project managers. UI route: `/project-management` (legacy `/pm-portfolio` redirects here). Accessible to `tenant_owner` and `admin` with `isProjectManager=true`.
-- **Multi-PM Projects**: Allows projects to have multiple assigned project managers.
-- **Mobile & Responsiveness**: App-wide mobile-first design patterns for optimal mobile user experience.
-- **Client Communication Health Engine** (`ENABLE_CLIENT_COMMUNICATION_HEALTH`): Tracks communication recency with clients per project. Adds `last_client_contact_at`, `last_status_report_at`, `next_followup_due_at` columns to the `projects` table. Health rules: 0–7 days → healthy, 7–14 days → warning, 14+ days → stale. Service: `server/services/communication/communicationHealthService.ts`. APIs: `GET /api/projects/:id/communication-health`, `POST /api/projects/:id/client-contact`, `GET /api/communication/health-summary`. Card visible on Project Management dashboard.
-- **Client Follow-Up Queue** (`ENABLE_CLIENT_FOLLOWUPS`): Queue of projects needing client follow-up, surfaced in Project Management dashboard. Shows Client, Project, Last Contact, Next Follow-Up, Status, and a "Log Contact" action. Service: `server/services/communication/followUpService.ts`. API: `GET /api/communication/followups`. Card: `data-testid="card-client-followups"`.
-- **Google Calendar Follow-Up Integration** (`ENABLE_GOOGLE_CALENDAR_FOLLOWUPS`): Allows PMs to schedule client follow-up reminders directly in Google Calendar from the PM Dashboard. Requires `GOOGLE_CLIENT_ID` and `GOOGLE_CLIENT_SECRET` env secrets. Per-user OAuth tokens stored in `google_calendar_tokens` table. Service: `server/services/calendarIntegrationService.ts`. Routes: `GET /api/calendar/auth-url`, `GET /api/calendar/callback`, `GET /api/calendar/status`, `POST /api/calendar/events/followup`, `DELETE /api/calendar/disconnect`. UI: "Schedule" button in the Client Follow-Ups table on the PM Dashboard (`data-testid="button-schedule-followup-{projectId}"`); dialog with date/time picker and notes field; connect flow via OAuth redirect. Created event title: "Follow up with [Client] — [Project]", includes project link, 30-minute duration, email+popup reminders. Token refresh handled automatically by googleapis library.
-- **Client Communication Timeline** (`ENABLE_COMMUNICATION_TIMELINE`): Non-destructive, additive event log tracking all client-facing communication events per project and client. Table: `client_communication_events` (id, tenant_id, client_id, project_id, event_type, event_description, created_by_user_id, created_at). Event types: `status_report_sent`, `client_contact_logged`, `follow_up_created`, `milestone_update`, `client_email_sent`, `manual_note`. APIs: `GET /api/projects/:id/communication-events`, `POST /api/projects/:id/communication-events`, `GET /api/clients/:clientId/communication-events`. Auto-logged when client contact or status report endpoints are called. UI: "Comms" button (`data-testid="button-project-comms"`) in individual project page header opens a Sheet panel (`data-testid="project-communication-timeline"`); "Communication" section in Client Profile page. Service: `server/services/communication/communicationTimelineService.ts`. Component: `client/src/features/communication/CommunicationTimeline.tsx`.
-
-## System Performance Architecture
-
-### Route Modularization
-All API routes are organized as Express Router modules under `server/http/domains/`. Each domain (tasks, projects, reports, billing, communication, calendar, etc.) is its own file registered in `server/http/mount.ts`. No monolithic `routes.ts` exists.
-
-### Query Batching (Anti-N+1)
-Task hydration uses `getTasksByUserBatched` in `server/http/domains/tasks.router.ts` (controlled by `config.features.enableTasksBatchHydration`). This fetches all related records (assignees, tags, watchers, attachments) in bulk INs rather than per-task queries.
-
-### Report Caching
-All expensive aggregate report endpoints use an in-memory TTL cache via `server/lib/reportCache.ts`:
-- `withCache(ttlMs)` middleware factory intercepts JSON responses and caches by `tenantId + path + queryString`
-- Workload reports: 30s TTL
-- Client/employee analytics: 60s TTL
-- Forecasting reports: 120s TTL
-- PM Portfolio: 30s TTL
-- Cache is per-process (single instance), zero external dependencies
-- `X-Cache: HIT/MISS` header visible in responses for debugging
-
-### DB Indexes
-Comprehensive indexes exist on all high-query tables. Key patterns:
-- `tasks(tenant_id)`, `tasks(project_id)`, `tasks(status)`, compound indexes for multi-column filters
-- `task_assignees(task_id)` via unique(task_id, user_id), `task_tags(task_id)` via unique(task_id, tag_id)
-- `notifications(user_id, read)` for unread count queries
-- `time_entries(tenant_id, project_id, start_time)` for time reports
-
-### Request Log Sampling
-`server/middleware/requestLogger.ts` samples high-frequency polling endpoints at 5% to reduce log noise:
-- `/api/notifications/unread-count`
-- `/api/tasks/my`
-- `/api/communication/followups`
-- `/api/communication/health-summary`
-- Errors (4xx/5xx) are always logged regardless
-
-### Bundle Code Splitting
-`client/src/routing/tenantRouter.tsx` uses `React.lazy()` with `trackChunkLoad()` for every page. Each page loads its JS chunk on demand. Layouts (TenantLayout, SuperLayout, ClientPortalLayout) are also lazy-split in `App.tsx`.
-
-### Performance Monitoring
-`server/lib/perfLogger.ts` instruments both HTTP requests and DB queries:
-- Slow requests (>300ms default) → warning log
-- Slow queries (>300ms default) → warning log with truncated SQL
-- `PERF_SLOW_THRESHOLD_MS` and `PERF_SLOW_QUERY_MS` env vars for tuning
-
-### Session Cookie Configuration
-`server/auth.ts` configures session cookies as follows:
-- **Production**: `Secure: true`, `SameSite: none`, cookie name `__Host-sid` (required for cross-origin deployment)
-- **Development**: `Secure: false`, `SameSite: lax`, cookie name `connect.sid` (works over HTTP in Replit embedded webview and local browsers)
-- Sessions are stored in PostgreSQL `user_sessions` table and survive server restarts
-- `needsSecureCookie = isProduction` only — the `isReplit` flag is NOT used for cookie security because Replit's embedded webview accesses the app over HTTP and Secure cookies would silently block session creation
-
-### Dev Test Accounts
-Quick-login buttons on the login page (visible when `import.meta.env.DEV = true`):
-- `admin@digitalworkday.com` / `admin123` → super_user
-- `admin@alpha.com` / `password123` → tenant_owner (Alpha Corp)
-- `admin@beta.com` / `password123` → admin (Beta Systems)
-- `sarah@digitalworkday.com` / `password123` → employee
+- **Task Review Queue**: "Send to PM for Review" feature from the Task Drawer.
+- **Task History (Audit Log)**: `task_history` table records field-level changes for tasks and subtasks, displayed as a timeline UI with diffs. History is recorded on every PATCH via `taskHistoryService.ts` (`recordHistory`, `computeChanges`, `getHistoryWithActors`). API: `GET /api/tasks/:id/history` and `GET /api/subtasks/:id/history`.
+- **Task/Subtask Panel**: Full-width centered overlay (max-w-[1400px]) using `TaskPanelShell` (portal to document.body, ESC-to-close, drag-resizable sidebar, depth-aware stacking for nested panels). 2-column layout: left content (description, attachments, comments) + right sidebar (assignees, status, priority, due date, estimate, watchers, milestone, tags, subtasks). Header has breadcrumbs, title, quick actions. Footer has timer, save, review queue, complete actions. Shell lives in `client/src/features/tasks/task-panel/TaskPanelShell.tsx`. History tab in `TaskHistoryTab.tsx`.
+- **Global Branding**: System-level branding configured in Super Admin settings, applied to login page and app, with a resolution chain from tenant settings to system defaults.
+- **Theme Packs**: 14 curated color schemes (light, dark, etc.), selectable via UI, stored in user preferences, with tenant default and fallback mechanisms.
+- **Employee Intelligence Profile**: Drill-down report page with AI-generated performance trend narrative, based on aggregated metrics, with caching and rate limiting.
+- **Client Intelligence Profile**: Drill-down report page with 6-metric summary, workload & aging, time tracking breakdown, SLA compliance, CHI health scores, and risk indicators.
+- **Sticky Chat Composer Focus**: Keyboard focus automatically restored to chat input after sending a message across all chat surfaces.
+- **Project Milestones**: Track key deliverables within projects with name, description, due date, status, and progress bar from linked tasks. Tasks can be assigned to milestones.
+- **Reassignment Suggestions Engine**: Advisory-only, capacity-aware task redistribution system. Identifies overloaded/underutilized users and scores candidate reassignments based on team, utilization, due date, and priority.
+- **Capacity What-If Simulator**: In-memory scenario planning for project managers. Allows reassigning tasks, moving due dates, and adjusting estimates virtually to see before/after impact on utilization and project risk. No DB writes during simulation — apply changes only on confirmation. Optional snapshot saving to `forecast_snapshots` table. Accessible via "What-if" button in project toolbar (admin-only, `enableCapacityWhatIf` feature flag).
+- **Billing Approval Workflow**: Non-destructive, additive feature gate (`enableBillingApprovalWorkflow`, default ON). Adds `billing_status` column to `time_entries` (values: `draft` | `pending_approval` | `approved` | `rejected` | `invoiced`, default `draft`). Service at `server/services/billing/billingApprovalService.ts` handles submit/approve/reject/queue. API routes: `GET /api/billing/pending-approval`, `POST /api/billing/submit-approval`, `POST /api/billing/approve`, `POST /api/billing/reject`. Permission: `tenant_owner`, `admin+isProjectManager`, `super_user`. PM Portfolio Dashboard shows "Time Awaiting Approval" queue card with per-row and bulk approve/reject actions. Task Drawer sidebar shows per-time-entry billing status badges when entries exist.
+- **Invoice Draft Builder**: Non-destructive, additive feature gate (`enableInvoiceDraftBuilder`, default ON). Creates `invoice_drafts` and `invoice_draft_items` tables. Service at `server/services/billing/invoiceDraftService.ts` handles generate/list/export/cancel. Generating pulls all `approved` time entries for a client+date range and creates a draft with line items. Exporting marks all linked `time_entries` as `invoiced`. API routes: `POST /api/billing/generate-invoice-draft`, `GET /api/billing/invoice-drafts`, `GET /api/billing/invoice-drafts/:id`, `POST /api/billing/invoice-drafts/:id/export`, `POST /api/billing/invoice-drafts/:id/cancel`. PM Portfolio Dashboard shows "Invoice Drafts" card with generate modal (client, project, date range, rate), expandable line items, and Export/Cancel actions.
+- **Risk Acknowledgment Workflow (Phase 2C)**: Governance layer for at-risk projects. When a project is `at_risk` or `critical`, a banner appears in the project detail requiring PM or admin acknowledgment within a configurable window (default 7 days). Acknowledgments include a mitigation note and optional next check-in date (suppresses re-prompting until that date). `project_risk_acknowledgments` table stores full audit trail. PM Portfolio shows "Ack Needed" chip for unacknowledged at-risk projects. Feature flag: `enableRiskAckWorkflow` (default ON). Endpoints: `GET/POST /api/projects/:projectId/risk-ack`.
+- **PM Portfolio Dashboard**: Portfolio-level intelligence for Project Managers, showing project health scores, milestone completion, burn rates, and overdue tasks for owned projects.
+- **AI PM Focus Summary**: Weekly AI-generated "What should I focus on this week?" card on the PM Portfolio Dashboard. Strictly grounded in aggregated portfolio metrics — no hallucination, no PII. Produces: headline, top priorities, risks, capacity concerns, budget concerns, confidence level, and supporting metrics. Cached 24h in `ai_summaries` table (`entity_type = "pm_portfolio"`), rate-limited (10/user/day, 30/tenant/day), refresh button. Feature flag: `enableAiPmFocusSummary`. Redaction post-check via `enableAiSummaryRedaction`. Files: `server/ai/pmFocus/buildPmFocusPayload.ts`, `server/ai/pmFocus/generatePmFocusSummary.ts`, `client/src/features/pm-portfolio/AiFocusSummaryCard.tsx`. Endpoints: `GET /api/v1/ai/pm/focus-summary`, `POST /api/v1/ai/pm/focus-summary/refresh`.
+- **Client Profitability Engine**: Non-destructive, additive feature gate (`enableClientProfitability`, default ON). Adds `cost_rate` and `billable_rate` numeric columns to `users` table. Service at `server/services/billing/clientProfitabilityService.ts` aggregates time entries to compute revenue (billable hours × billableRate), labor cost (total hours × costRate), gross margin, and margin %. Per-client card (`ClientProfitabilityCard.tsx`) shown in client detail overview tab with range selector (30/60/90/all days), revenue/cost/margin metrics, and per-assignee breakdown. PM Portfolio shows `LowMarginClientsCard` with adjustable threshold (10–40%) listing clients below the margin threshold with color-coded badges. User drawer shows cost/billable rate inputs for admin/tenant_owner/super_user. API routes: `GET /api/analytics/client-profitability` (list, accepts `marginThreshold`), `GET /api/analytics/client-profitability/:clientId` (detail, accepts `range`). Permission: `tenant_owner`, `admin+isProjectManager`, `super_user`.
+- **Collapsible Icon Sidebar**: Sidebar collapses to an icon-only strip with tooltips for navigation items.
+- **Mobile & Responsiveness**: App-wide mobile-first patterns including `overflow-x-auto` for tables, `MobileTabSelect` for tab navigation, mobile card views for Command Centers, responsive padding, and touch targets.
 
 ## External Dependencies
 - **PostgreSQL**: Primary database.

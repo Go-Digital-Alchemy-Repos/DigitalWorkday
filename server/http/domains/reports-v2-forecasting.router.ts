@@ -2,7 +2,6 @@ import { Router, Request, Response } from "express";
 import { db } from "../../db";
 import { sql } from "drizzle-orm";
 import { handleRouteError } from "../../lib/errors";
-import { withCache } from "../../lib/reportCache";
 import {
   reportingGuard,
   getTenantId,
@@ -68,7 +67,7 @@ function buildDataQualityFlags(timePct: number, estimatePct: number, histWeeks: 
 
 // ── CAPACITY OVERLOAD FORECAST ────────────────────────────────────────────────
 // GET /forecasting/capacity-overload?weeks=2|4|8
-router.get("/forecasting/capacity-overload", withCache(120_000), async (req: Request, res: Response) => {
+router.get("/forecasting/capacity-overload", async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const horizonWeeks = parseHorizonWeeks(req);
@@ -253,7 +252,7 @@ router.get("/forecasting/capacity-overload", withCache(120_000), async (req: Req
 
 // ── PROJECT DEADLINE RISK FORECAST ───────────────────────────────────────────
 // GET /forecasting/project-deadline-risk?weeks=2|4|8
-router.get("/forecasting/project-deadline-risk", withCache(120_000), async (req: Request, res: Response) => {
+router.get("/forecasting/project-deadline-risk", async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const horizonWeeks = parseHorizonWeeks(req);
@@ -403,7 +402,7 @@ router.get("/forecasting/project-deadline-risk", withCache(120_000), async (req:
 
 // ── CLIENT RISK TREND FORECAST ────────────────────────────────────────────────
 // GET /forecasting/client-risk-trend?weeks=2|4|8
-router.get("/forecasting/client-risk-trend", withCache(120_000), async (req: Request, res: Response) => {
+router.get("/forecasting/client-risk-trend", async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const horizonWeeks = parseHorizonWeeks(req);

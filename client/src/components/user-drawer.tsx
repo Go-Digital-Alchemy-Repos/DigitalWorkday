@@ -285,7 +285,7 @@ export function UserDrawer({
                   <div className="space-y-1 leading-none">
                     <FormLabel>Is Project Manager</FormLabel>
                     <FormDescription>
-                      Grants access to the Project Management dashboard and its reports
+                      Grants access to the PM Portfolio dashboard and its reports
                     </FormDescription>
                   </div>
                 </FormItem>

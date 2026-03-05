@@ -40,14 +40,6 @@ export interface FeatureFlags {
   enableBillingApprovalWorkflow: boolean;
   enableInvoiceDraftBuilder: boolean;
   enableClientProfitability: boolean;
-  enableRevenueLeakageDetection: boolean;
-  enableClientCommunicationHealth: boolean;
-  enableClientFollowups: boolean;
-  enableWeeklyClientReports: boolean;
-  enableCommunicationTimeline: boolean;
-  enableClientConfidenceScore: boolean;
-  enableClientConfidenceDebug: boolean;
-  enableGoogleCalendarFollowups: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -90,14 +82,6 @@ const ALL_OFF: FeatureFlags = {
   enableBillingApprovalWorkflow: false,
   enableInvoiceDraftBuilder: false,
   enableClientProfitability: false,
-  enableRevenueLeakageDetection: false,
-  enableClientCommunicationHealth: false,
-  enableClientFollowups: false,
-  enableWeeklyClientReports: false,
-  enableCommunicationTimeline: false,
-  enableClientConfidenceScore: false,
-  enableClientConfidenceDebug: false,
-  enableGoogleCalendarFollowups: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

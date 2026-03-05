@@ -28,7 +28,7 @@ function requireTenantAdmin(req: any, res: any, next: any) {
   if (!effectiveTenantId) {
     throw AppError.forbidden("No tenant context");
   }
-  if (user.role !== UserRole.ADMIN && user.role !== UserRole.TENANT_OWNER && user.role !== UserRole.SUPER_USER) {
+  if (user.role !== UserRole.ADMIN && user.role !== UserRole.SUPER_USER) {
     throw AppError.forbidden("Admin access required");
   }
 

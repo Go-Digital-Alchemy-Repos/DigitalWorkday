@@ -888,10 +888,7 @@ export function SubtaskDetailDrawer({
 
               {projectId && (
                 <div className="p-3 sm:p-4 bg-muted/40 border border-border rounded-xl">
-                  {isActualSubtask
-                    ? <AttachmentUploader subtaskId={subtask.id} projectId={projectId} />
-                    : <AttachmentUploader taskId={subtask.id} projectId={projectId} />
-                  }
+                  <AttachmentUploader taskId={subtask.id} projectId={projectId} />
                 </div>
               )}
 

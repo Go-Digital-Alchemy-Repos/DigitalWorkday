@@ -30,21 +30,6 @@ export default defineConfig({
   build: {
     outDir: path.resolve(import.meta.dirname, "dist/public"),
     emptyOutDir: true,
-    rollupOptions: {
-      output: {
-        manualChunks(id) {
-          if (id.includes("node_modules")) {
-            if (id.includes("@tiptap") || id.includes("prosemirror")) return "vendor-editor";
-            if (id.includes("@fullcalendar")) return "vendor-calendar";
-            if (id.includes("emoji-picker-react")) return "vendor-emoji";
-            if (id.includes("recharts") || id.includes("d3-")) return "vendor-charts";
-            if (id.includes("@dnd-kit")) return "vendor-dnd";
-            if (id.includes("xlsx")) return "vendor-xlsx";
-            if (id.includes("@radix-ui")) return "vendor-radix";
-          }
-        },
-      },
-    },
   },
   server: {
     fs: {

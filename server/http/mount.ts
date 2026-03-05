@@ -54,8 +54,6 @@ import reassignmentRouter from "./domains/reassignment.router";
 import whatIfRouter from "./domains/whatif.router";
 import riskAckRouter from "./domains/risk-ack.router";
 import billingRouter from "./domains/billing.router";
-import communicationRouter from "./domains/communication.router";
-import calendarRouter from "./domains/calendar.router";
 
 import usersRouter from "../routes/users.router";
 import crmRouter from "../routes/crm.router";
@@ -388,20 +386,6 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "billing",
     description: "Billing Approval Workflow: submit, approve, reject, and queue time entries for billing review.",
-  },
-  {
-    path: "/api",
-    router: communicationRouter,
-    policy: "authTenant",
-    domain: "communication",
-    description: "Client Communication Health: record contacts, status reports, and follow-up queue.",
-  },
-  {
-    path: "/api",
-    router: calendarRouter,
-    policy: "authTenant",
-    domain: "calendar",
-    description: "Google Calendar integration: OAuth connect, follow-up event creation.",
   },
   {
     path: "/api",

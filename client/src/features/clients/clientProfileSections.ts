@@ -13,7 +13,6 @@ import {
   Globe,
   PackageOpen,
   Settings2,
-  History,
 } from "lucide-react";
 
 export interface ClientProfileSection {
@@ -37,7 +36,6 @@ interface CrmFlagRequirements {
 interface FeatureFlagRequirements {
   assetLibraryV2: boolean;
   clientControlCenterPremium: boolean;
-  enableCommunicationTimeline: boolean;
 }
 
 export const CONTROL_CENTER_CHILD_IDS = new Set([
@@ -59,7 +57,6 @@ export const ALL_CLIENT_PROFILE_SECTIONS: ClientProfileSection[] = [
   { id: "messages", label: "Messages", icon: MessageSquare, testId: "tab-messages", primary: false, requiresCrmFlag: "clientMessaging" },
   { id: "portal", label: "Portal Users", icon: Globe, testId: "tab-portal", primary: false },
   { id: "asset-library", label: "Asset Library", icon: PackageOpen, testId: "tab-asset-library", primary: true, requiresFeatureFlag: "assetLibraryV2" },
-  { id: "communication", label: "Communication", icon: History, testId: "tab-communication", primary: false, requiresFeatureFlag: "enableCommunicationTimeline" },
 ];
 
 export function getVisibleSections(

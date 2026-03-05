@@ -13,7 +13,7 @@ const requireTenantAdmin = (req: Request, res: Response, next: NextFunction) => 
   if (!req.user) {
     return res.status(401).json({ ok: false, error: { code: "UNAUTHORIZED", message: "Not authenticated" } });
   }
-  if (req.user.role !== "admin" && req.user.role !== "tenant_owner" && req.user.role !== "super_user") {
+  if (req.user.role !== "admin" && req.user.role !== "super_user") {
     return res.status(403).json({ ok: false, error: { code: "FORBIDDEN", message: "Admin access required" } });
   }
   next();

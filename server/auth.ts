@@ -103,9 +103,8 @@ export function setupAuth(app: Express): void {
   `).catch(err => console.error("Session table creation error:", err));
 
   const isProduction = process.env.NODE_ENV === "production";
-  // Only use secure cookies in production — dev environments (including Replit dev)
-  // use HTTP internally and secure cookies prevent the session cookie from being set.
-  const needsSecureCookie = isProduction;
+  const isReplit = !!process.env.REPL_OWNER;
+  const needsSecureCookie = isProduction || isReplit;
 
   sessionMiddlewareInstance = session({
     store: new PgSession({
@@ -176,18 +175,13 @@ export function setupAuth(app: Express): void {
   });
 
   app.post("/api/auth/login", loginRateLimiter, (req, res, next) => {
-    const loginEmail = req.body?.email || "(empty)";
-    console.log(`[login] POST /api/auth/login attempt for: ${loginEmail}`);
     passport.authenticate("local", async (err: Error | null, user: Express.User | false, info: { message: string }) => {
       if (err) {
-        console.error(`[login] Auth error for ${loginEmail}:`, err.message);
         return res.status(500).json({ error: "Authentication error" });
       }
       if (!user) {
-        console.warn(`[login] Failed for ${loginEmail}: ${info?.message || "Invalid credentials"}`);
         return res.status(401).json({ error: info?.message || "Invalid credentials" });
       }
-      console.log(`[login] Success for ${loginEmail} (role=${user.role}, id=${user.id})`);
       req.logIn(user, async (loginErr) => {
         if (loginErr) {
           return res.status(500).json({ error: "Login failed" });
@@ -241,7 +235,8 @@ export function setupAuth(app: Express): void {
           console.error("Session destroy error:", sessionErr);
         }
         const isProduction = process.env.NODE_ENV === "production";
-        const needsSecureCookie = isProduction;
+        const isReplit = !!process.env.REPL_OWNER;
+        const needsSecureCookie = isProduction || isReplit;
         const cookieName = isProduction ? "__Host-sid" : "connect.sid";
         res.clearCookie(cookieName, {
           path: "/",
@@ -491,10 +486,9 @@ export function setupBootstrapEndpoints(app: Express): void {
     app.get("/api/v1/auth/dev-accounts", (_req, res) => {
       res.json({
         accounts: [
-          { role: "super_user", email: "admin@digitalworkday.com", password: "admin123", name: "Super Admin" },
-          { role: "tenant_owner", email: "admin@alpha.com", password: "password123", name: "Alpha Corp Owner" },
-          { role: "admin", email: "admin@beta.com", password: "password123", name: "Beta Systems Admin" },
-          { role: "employee", email: "emily@digitalworkday.com", password: "password123", name: "Emily Rodriguez" },
+          { role: "super_admin", email: "admin@myworkday.dev", password: "SuperAdmin123!", name: "Dev Super Admin" },
+          { role: "tenant_admin", email: "alex@brightstudio.com", password: "Password123!", name: "Alex Rivera" },
+          { role: "tenant_member", email: "mike@brightstudio.com", password: "Password123!", name: "Mike Johnson" },
         ],
       });
     });

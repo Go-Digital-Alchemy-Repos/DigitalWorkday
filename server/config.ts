@@ -236,14 +236,6 @@ export const config = {
     enableBillingApprovalWorkflow: optionalEnvBool("ENABLE_BILLING_APPROVAL_WORKFLOW", true),
     enableInvoiceDraftBuilder: optionalEnvBool("ENABLE_INVOICE_DRAFT_BUILDER", true),
     enableClientProfitability: optionalEnvBool("ENABLE_CLIENT_PROFITABILITY", true),
-    enableRevenueLeakageDetection: optionalEnvBool("ENABLE_REVENUE_LEAKAGE_DETECTION", true),
-    enableClientCommunicationHealth: optionalEnvBool("ENABLE_CLIENT_COMMUNICATION_HEALTH", true),
-    enableClientFollowups: optionalEnvBool("ENABLE_CLIENT_FOLLOWUPS", true),
-    enableClientConfidenceScore: optionalEnvBool("ENABLE_CLIENT_CONFIDENCE_SCORE", true),
-    enableClientConfidenceDebug: optionalEnvBool("ENABLE_CLIENT_CONFIDENCE_DEBUG", false),
-    enableGoogleCalendarFollowups: optionalEnvBool("ENABLE_GOOGLE_CALENDAR_FOLLOWUPS", true),
-    enableWeeklyClientReports: optionalEnvBool("ENABLE_WEEKLY_CLIENT_REPORTS", true),
-    enableCommunicationTimeline: optionalEnvBool("ENABLE_COMMUNICATION_TIMELINE", true),
   },
 
   tenancyEnforcement: {

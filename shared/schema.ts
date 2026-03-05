@@ -909,7 +909,6 @@ export const clientContacts = pgTable("client_contacts", {
   email: text("email"),
   phone: text("phone"),
   isPrimary: boolean("is_primary").default(false).notNull(),
-  receiveStatusReports: boolean("receive_status_reports").default(false).notNull(),
   notes: text("notes"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -1361,11 +1360,7 @@ export const projects = pgTable("projects", {
   color: text("color").default("#3B82F6"),
   budgetMinutes: integer("budget_minutes"), // Optional project budget in minutes for workload forecasting
   stickyAt: timestamp("sticky_at"),
-  lastClientContactAt: timestamp("last_client_contact_at"),
-  lastStatusReportAt: timestamp("last_status_report_at"),
-  nextFollowupDueAt: timestamp("next_followup_due_at"),
-  weeklyReportAutoSend: boolean("weekly_report_auto_send").default(false).notNull(),
-  lastWeeklyReportSentAt: timestamp("last_weekly_report_sent_at"),
+  projectManagerId: varchar("project_manager_id").references(() => users.id),
   createdBy: varchar("created_by").references(() => users.id),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
@@ -1379,7 +1374,6 @@ export const projects = pgTable("projects", {
   index("projects_workspace_id_idx").on(table.workspaceId),
   index("projects_tenant_workspace_idx").on(table.tenantId, table.workspaceId),
   index("projects_status_idx").on(table.status),
-  index("projects_tenant_last_contact_idx").on(table.tenantId, table.lastClientContactAt),
 ]);
 
 // Project Members table
@@ -1391,20 +1385,6 @@ export const projectMembers = pgTable("project_members", {
   createdAt: timestamp("created_at").defaultNow().notNull(),
 }, (table) => [
   uniqueIndex("project_members_unique").on(table.projectId, table.userId),
-]);
-
-// Project Managers junction table — supports multiple PMs per project
-export const projectManagers = pgTable("project_managers", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  projectId: varchar("project_id").references(() => projects.id, { onDelete: "cascade" }).notNull(),
-  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
-  tenantId: varchar("tenant_id").references(() => tenants.id),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (table) => [
-  uniqueIndex("project_managers_unique").on(table.projectId, table.userId),
-  index("project_managers_project_idx").on(table.projectId),
-  index("project_managers_user_idx").on(table.userId),
-  index("project_managers_tenant_idx").on(table.tenantId),
 ]);
 
 // Hidden Projects table - tracks which users have hidden which projects from their view
@@ -1788,8 +1768,7 @@ export const UploadStatus = {
 // Task Attachments table
 export const taskAttachments = pgTable("task_attachments", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  taskId: varchar("task_id").references(() => tasks.id),
-  subtaskId: varchar("subtask_id").references(() => subtasks.id),
+  taskId: varchar("task_id").references(() => tasks.id).notNull(),
   projectId: varchar("project_id").references(() => projects.id).notNull(),
   uploadedByUserId: varchar("uploaded_by_user_id").references(() => users.id).notNull(),
   originalFileName: text("original_file_name").notNull(),
@@ -1801,7 +1780,6 @@ export const taskAttachments = pgTable("task_attachments", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   index("task_attachments_task").on(table.taskId),
-  index("task_attachments_subtask_idx").on(table.subtaskId),
   index("task_attachments_project").on(table.projectId),
   index("task_attachments_uploader_idx").on(table.uploadedByUserId),
 ]);
@@ -2342,17 +2320,6 @@ export const projectMembersRelations = relations(projectMembers, ({ one }) => ({
   }),
 }));
 
-export const projectManagersRelations = relations(projectManagers, ({ one }) => ({
-  project: one(projects, {
-    fields: [projectManagers.projectId],
-    references: [projects.id],
-  }),
-  user: one(users, {
-    fields: [projectManagers.userId],
-    references: [users.id],
-  }),
-}));
-
 export const hiddenProjectsRelations = relations(hiddenProjects, ({ one }) => ({
   project: one(projects, {
     fields: [hiddenProjects.projectId],
@@ -2405,10 +2372,6 @@ export const taskAttachmentsRelations = relations(taskAttachments, ({ one }) => 
   task: one(tasks, {
     fields: [taskAttachments.taskId],
     references: [tasks.id],
-  }),
-  subtask: one(subtasks, {
-    fields: [taskAttachments.subtaskId],
-    references: [subtasks.id],
   }),
   project: one(projects, {
     fields: [taskAttachments.projectId],
@@ -2832,11 +2795,6 @@ export const insertProjectMemberSchema = createInsertSchema(projectMembers).omit
   createdAt: true,
 });
 
-export const insertProjectManagerSchema = createInsertSchema(projectManagers).omit({
-  id: true,
-  createdAt: true,
-});
-
 export const insertProjectTemplateSchema = createInsertSchema(projectTemplates).omit({
   id: true,
   createdAt: true,
@@ -3239,9 +3197,6 @@ export type InsertProject = z.infer<typeof insertProjectSchema>;
 
 export type ProjectMember = typeof projectMembers.$inferSelect;
 export type InsertProjectMember = z.infer<typeof insertProjectMemberSchema>;
-
-export type ProjectManager = typeof projectManagers.$inferSelect;
-export type InsertProjectManager = z.infer<typeof insertProjectManagerSchema>;
 
 export type ProjectTemplate = typeof projectTemplates.$inferSelect;
 export type InsertProjectTemplate = z.infer<typeof insertProjectTemplateSchema>;
@@ -4498,60 +4453,3 @@ export const invoiceDraftItems = pgTable("invoice_draft_items", {
 
 export type InvoiceDraftItem = typeof invoiceDraftItems.$inferSelect;
 export type InsertInvoiceDraftItem = typeof invoiceDraftItems.$inferInsert;
-
-// =============================================================================
-// CLIENT COMMUNICATION TIMELINE
-// =============================================================================
-
-export const CommunicationEventType = {
-  STATUS_REPORT_SENT: "status_report_sent",
-  CLIENT_CONTACT_LOGGED: "client_contact_logged",
-  FOLLOW_UP_CREATED: "follow_up_created",
-  MILESTONE_UPDATE: "milestone_update",
-  CLIENT_EMAIL_SENT: "client_email_sent",
-  MANUAL_NOTE: "manual_note",
-} as const;
-
-export type CommunicationEventTypeValue = typeof CommunicationEventType[keyof typeof CommunicationEventType];
-
-export const clientCommunicationEvents = pgTable("client_communication_events", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  tenantId: varchar("tenant_id").notNull(),
-  clientId: varchar("client_id").references(() => clients.id, { onDelete: "cascade" }),
-  projectId: varchar("project_id").references(() => projects.id, { onDelete: "cascade" }),
-  eventType: text("event_type").notNull(),
-  eventDescription: text("event_description"),
-  createdByUserId: varchar("created_by_user_id").references(() => users.id, { onDelete: "set null" }),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-}, (table) => [
-  index("comm_events_tenant_idx").on(table.tenantId),
-  index("comm_events_client_idx").on(table.tenantId, table.clientId),
-  index("comm_events_project_idx").on(table.tenantId, table.projectId),
-  index("comm_events_created_idx").on(table.createdAt),
-]);
-
-export type ClientCommunicationEvent = typeof clientCommunicationEvents.$inferSelect;
-export type InsertClientCommunicationEvent = typeof clientCommunicationEvents.$inferInsert;
-
-export const insertClientCommunicationEventSchema = createInsertSchema(clientCommunicationEvents).omit({
-  id: true,
-  createdAt: true,
-});
-
-export const googleCalendarTokens = pgTable("google_calendar_tokens", {
-  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
-  userId: varchar("user_id").notNull().references(() => users.id, { onDelete: "cascade" }),
-  tenantId: varchar("tenant_id").notNull(),
-  accessToken: text("access_token").notNull(),
-  refreshToken: text("refresh_token"),
-  expiresAt: timestamp("expires_at"),
-  scope: text("scope"),
-  createdAt: timestamp("created_at").defaultNow().notNull(),
-  updatedAt: timestamp("updated_at").defaultNow().notNull(),
-}, (table) => [
-  index("gcal_tokens_user_idx").on(table.userId),
-  index("gcal_tokens_tenant_idx").on(table.tenantId),
-]);
-
-export type GoogleCalendarToken = typeof googleCalendarTokens.$inferSelect;
-export type InsertGoogleCalendarToken = typeof googleCalendarTokens.$inferInsert;

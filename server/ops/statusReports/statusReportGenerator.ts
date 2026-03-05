@@ -165,19 +165,19 @@ export async function generateWeeklyStatusReport(params: {
 
     // 6. Burn / budget summary
     db.execute(sql`
-      SELECT COALESCE(SUM(duration_seconds) / 60, 0)::int AS total_minutes
+      SELECT COALESCE(SUM(duration_minutes), 0)::int AS total_minutes
       FROM time_entries
       WHERE project_id = ${projectId} AND tenant_id = ${tenantId}
     `),
 
     // 7. Time tracked in range
     db.execute(sql`
-      SELECT COALESCE(SUM(duration_seconds) / 60, 0)::int AS period_minutes
+      SELECT COALESCE(SUM(duration_minutes), 0)::int AS period_minutes
       FROM time_entries
       WHERE project_id = ${projectId}
         AND tenant_id = ${tenantId}
-        AND start_time >= ${rangeStart}::timestamp
-        AND start_time <= ${rangeEnd}::timestamp
+        AND started_at >= ${rangeStart}::timestamp
+        AND started_at <= ${rangeEnd}::timestamp
     `),
 
     // 8. Capacity concerns (users with >80% utilization)

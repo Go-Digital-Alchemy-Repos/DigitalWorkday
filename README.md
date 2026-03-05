@@ -114,15 +114,11 @@ npm start
 - [Regression Checklist](docs/REGRESSION_CHECKLIST.md) - Manual test plan
 - [Audit Findings](docs/AUDIT_FINDINGS.md) - Latest audit report
 
-## Scripts
+## Testing
 
 ```bash
-npm run dev              # Start development server (port 5000)
-npm run check            # TypeScript type check
-npm run build            # Type check + production build (skip check: SKIP_TYPECHECK=1)
-npm start                # Start production server
-npx vitest run           # Run tests
-npx vitest               # Watch mode tests
+npm test                 # Run all tests
+npm run test:watch       # Watch mode
 ```
 
 ## Key Features

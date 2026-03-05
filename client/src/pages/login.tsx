@@ -25,7 +25,7 @@ const DEV_TEST_ACCOUNTS = [
     email: "admin@alpha.com",
     password: "password123",
     icon: ShieldCheck,
-    description: "Alpha Corp — Project Management + billing approvals",
+    description: "Alpha Corp — PM Portfolio + billing approvals",
     variant: "outline" as const,
   },
   {

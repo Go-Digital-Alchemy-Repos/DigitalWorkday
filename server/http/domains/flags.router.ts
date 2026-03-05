@@ -71,14 +71,6 @@ router.get("/features/flags", async (_req, res) => {
       enableBillingApprovalWorkflow: config.features.enableBillingApprovalWorkflow,
       enableInvoiceDraftBuilder: config.features.enableInvoiceDraftBuilder,
       enableClientProfitability: config.features.enableClientProfitability,
-      enableRevenueLeakageDetection: config.features.enableRevenueLeakageDetection,
-      enableClientCommunicationHealth: config.features.enableClientCommunicationHealth,
-      enableClientFollowups: config.features.enableClientFollowups,
-      enableWeeklyClientReports: config.features.enableWeeklyClientReports,
-      enableCommunicationTimeline: config.features.enableCommunicationTimeline,
-      enableClientConfidenceScore: config.features.enableClientConfidenceScore,
-      enableClientConfidenceDebug: config.features.enableClientConfidenceDebug,
-      enableGoogleCalendarFollowups: config.features.enableGoogleCalendarFollowups,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

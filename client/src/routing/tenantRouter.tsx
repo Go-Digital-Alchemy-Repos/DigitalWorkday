@@ -165,11 +165,8 @@ function TenantRouter() {
         <Route path="/support/:id">
           {() => <TenantRouteGuard component={SupportTicketDetail} />}
         </Route>
-        <Route path="/project-management">
-          {() => <TenantRouteGuard component={PmPortfolioDashboard} />}
-        </Route>
         <Route path="/pm-portfolio">
-          {() => <Redirect to="/project-management" />}
+          {() => <TenantRouteGuard component={PmPortfolioDashboard} />}
         </Route>
         <Route path="/design-system">
           {() => <TenantRouteGuard component={DesignSystemPage} />}

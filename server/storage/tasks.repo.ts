@@ -18,7 +18,7 @@ import {
   projects, users, timeEntries, activeTimers, sections,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, asc, gte, lte, inArray, sql, isNull } from "drizzle-orm";
+import { eq, and, desc, asc, gte, lte, inArray, sql } from "drizzle-orm";
 import { assertInsertHasTenantId } from "../lib/errors";
 
 export type CalendarTask = {
