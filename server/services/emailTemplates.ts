@@ -66,11 +66,31 @@ export class EmailTemplateService {
     return sys?.defaultLogoUrl || null;
   }
 
-  buildLogoBlock(logoUrl: string | null): string {
-    if (!logoUrl) return "";
-    return `<tr>
+  buildLogoBlock(logoUrl: string | null, tenantId?: string | null): string {
+    if (!logoUrl) {
+      return `<tr>
             <td style="padding: 24px 40px 0; text-align: center;">
-              <img src="${logoUrl}" alt="Logo" style="max-height: 60px; max-width: 220px; object-fit: contain; display: block; margin: 0 auto;" />
+              <span style="font-size: 20px; font-weight: 700; color: #18181b; letter-spacing: -0.5px;">MyWorkDay</span>
+            </td>
+          </tr>`;
+    }
+    const appBase = process.env.PUBLIC_URL ||
+      (process.env.REPLIT_DOMAINS ? `https://${process.env.REPLIT_DOMAINS.split(",")[0]}` : "");
+    let proxySrc = logoUrl;
+    if (appBase) {
+      const scope = tenantId || "system";
+      if (scope === "system") {
+        proxySrc = `${appBase}/email/logo/system`;
+      } else {
+        const crypto = require("crypto");
+        const secret = process.env.SESSION_SECRET || process.env.APP_ENCRYPTION_KEY || "email-logo-key";
+        const token = crypto.createHmac("sha256", secret).update(scope).digest("hex").slice(0, 16);
+        proxySrc = `${appBase}/email/logo/${scope}?t=${token}`;
+      }
+    }
+    return `<tr>
+            <td align="center" style="padding: 24px 40px 0;">
+              <img src="${proxySrc}" alt="MyWorkDay" width="180" height="50" border="0" style="display: block; max-width: 220px; height: auto;" />
             </td>
           </tr>`;
   }
@@ -96,7 +116,7 @@ export class EmailTemplateService {
 
     if (!("logoBlock" in variables)) {
       const logoUrl = await this.resolveLogoUrl(tenantId);
-      injected.logoBlock = this.buildLogoBlock(logoUrl);
+      injected.logoBlock = this.buildLogoBlock(logoUrl, tenantId);
     }
     if (!("primaryColor" in variables)) {
       injected.primaryColor = await this.resolvePrimaryColor(tenantId);

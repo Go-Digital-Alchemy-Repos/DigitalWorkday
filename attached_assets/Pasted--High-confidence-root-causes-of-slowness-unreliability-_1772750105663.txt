@@ -1,0 +1,52 @@
+
+High-confidence root causes of slowness/unreliability
+1) Search endpoint does broad fetch + in-memory filtering (scales poorly)
+GET /api/search first loads large tenant datasets (clients/projects/users/teams/tasks), then filters/scorers in memory. That means query time grows with tenant size, not with limit.
+
+It fetches all projects for tenant, then all tasks for those projects, then filters by text.
+
+maxResults only truncates after filtering/scoring, so backend still does large work for small limits.
+
+2) N+1 behavior in client loading path
+getClientsByTenant() queries clients, then loops each client and performs additional queries (getContactsByClient, getProjectsByClient) per client. This is classic N+1 and can dominate search latency as client count grows.
+
+(There is a batched alternative in storage, but search route does not use it.)
+
+3) Comment search uses IN (...) over all visible task IDs + %ILIKE%
+For comments, route builds visibleTaskIds from all fetched tasks and runs inArray(comments.taskId, visibleTaskIds) plus ilike(comments.body, '%query%'). On large tenants this gets expensive and can be unstable under load/timeouts.
+
+4) No text-search indexes for the fields being searched
+You do have tenant/status/etc indexes, but not search-oriented indexes for:
+
+clients.company_name
+
+projects.name
+
+tasks.title
+
+comments.body
+
+The schema shows operational indexes but not trigram/full-text style indexes for these text fields, so %...% lookups are likely sequential scans at scale.
+
+5) Reliability gap: “No results” can mask backend errors
+Global search UI only consumes data + isLoading; it does not surface isError/error. So backend failures can appear as empty/no result behavior, which users interpret as unreliable search.
+
+6) Retry policy can prolong spinner during transient failures
+Default React Query retries up to 2 times with exponential backoff for many errors (except 401/403/404). For a struggling endpoint, users see longer spinner and inconsistent completion timing.
+
+7) Result matching is narrower than users expect
+Global /api/search currently matches:
+
+client: companyName
+
+project: name
+
+task: title
+
+user: name/email
+
+team: name
+
+comment: body
+
+So “known keyword” in project description / client displayName / task description may not return hits, which feels unreliable to users.

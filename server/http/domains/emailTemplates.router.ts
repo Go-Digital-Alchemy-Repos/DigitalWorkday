@@ -165,7 +165,7 @@ router.post("/email-templates/preview", requireSuperUser, async (req: Request, r
 
     // Resolve logo for preview and inject logoBlock
     const logoUrl = await emailTemplateService.resolveLogoUrl(null);
-    sampleVars.logoBlock = emailTemplateService.buildLogoBlock(logoUrl);
+    sampleVars.logoBlock = emailTemplateService.buildLogoBlock(logoUrl, null);
 
     const templateToRender = {
       subject: data.subject || defaultTemplate?.subject || "",

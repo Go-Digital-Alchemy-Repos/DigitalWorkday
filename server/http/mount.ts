@@ -549,6 +549,42 @@ export async function mountAllRoutes(
 ): Promise<Server> {
   clearRouteRegistry();
 
+  app.get("/email/logo/:scope", async (req, res) => {
+    try {
+      const crypto = await import("crypto");
+      const { emailTemplateService } = await import("../services/emailTemplates");
+      const scope = req.params.scope;
+      let tenantId: string | null = null;
+      if (scope !== "system") {
+        const token = req.query.t as string;
+        if (!token) {
+          return res.status(403).send("Forbidden");
+        }
+        const secret = process.env.SESSION_SECRET || process.env.APP_ENCRYPTION_KEY || "email-logo-key";
+        const expected = crypto.createHmac("sha256", secret).update(scope).digest("hex").slice(0, 16);
+        if (token !== expected) {
+          return res.status(403).send("Forbidden");
+        }
+        tenantId = scope;
+      }
+      const logoUrl = await emailTemplateService.resolveLogoUrl(tenantId);
+      if (!logoUrl) {
+        return res.status(404).send("No logo configured");
+      }
+      const response = await fetch(logoUrl);
+      if (!response.ok) {
+        return res.status(502).send("Could not fetch logo");
+      }
+      const contentType = response.headers.get("content-type") || "image/png";
+      res.set("Content-Type", contentType);
+      res.set("Cache-Control", "public, max-age=86400");
+      const buffer = Buffer.from(await response.arrayBuffer());
+      res.send(buffer);
+    } catch {
+      res.status(500).send("Error loading logo");
+    }
+  });
+
   app.use("/api", apiNoCacheMiddleware);
 
   for (const entry of REGISTERED_DOMAINS) {
