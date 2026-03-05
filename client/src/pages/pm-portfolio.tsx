@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
@@ -854,6 +854,17 @@ export default function PmPortfolioDashboard() {
   const [sortDir, setSortDir] = useState<SortDir>("asc");
   const [riskFilter, setRiskFilter] = useState<"all" | "at_risk" | "critical" | "burn">("all");
 
+  const showBillingTab = enableBillingApprovalWorkflow || enableInvoiceDraftBuilder || enableClientProfitability;
+  const showInsightsTab = enableAiPmFocusSummary || enableReassignmentSuggestions;
+
+  type DashboardTab = "portfolio" | "billing" | "insights";
+  const [activeTab, setActiveTab] = useState<DashboardTab>("portfolio");
+
+  useEffect(() => {
+    if (activeTab === "billing" && !showBillingTab) setActiveTab("portfolio");
+    if (activeTab === "insights" && !showInsightsTab) setActiveTab("portfolio");
+  }, [activeTab, showBillingTab, showInsightsTab]);
+
   const { data, isLoading, isError, refetch, isFetching } = useQuery<PmPortfolioResult>({
     queryKey: ["/api/reports/pm/portfolio"],
     staleTime: 60_000,
@@ -1071,6 +1082,54 @@ export default function PmPortfolioDashboard() {
           )}
         </div>
 
+        <div className="flex items-center gap-1 border-b border-border -mx-3 sm:-mx-4 lg:-mx-6 px-3 sm:px-4 lg:px-6">
+          <button
+            onClick={() => setActiveTab("portfolio")}
+            className={cn(
+              "flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors",
+              activeTab === "portfolio"
+                ? "border-primary text-primary"
+                : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+            )}
+            data-testid="tab-portfolio"
+          >
+            <FolderKanban className="h-3.5 w-3.5" />
+            Portfolio
+          </button>
+          {showBillingTab && (
+            <button
+              onClick={() => setActiveTab("billing")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors",
+                activeTab === "billing"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+              )}
+              data-testid="tab-billing"
+            >
+              <DollarSign className="h-3.5 w-3.5" />
+              Billing & Finance
+            </button>
+          )}
+          {showInsightsTab && (
+            <button
+              onClick={() => setActiveTab("insights")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors",
+                activeTab === "insights"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+              )}
+              data-testid="tab-insights"
+            >
+              <Activity className="h-3.5 w-3.5" />
+              Insights
+            </button>
+          )}
+        </div>
+
+        {activeTab === "portfolio" && (
+          <>
         <Card>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -1295,26 +1354,6 @@ export default function PmPortfolioDashboard() {
           </CardContent>
         </Card>
 
-        {enableAiPmFocusSummary && (
-          <AiFocusSummaryCard />
-        )}
-
-        {enableBillingApprovalWorkflow && (
-          <BillingApprovalQueueCard />
-        )}
-
-        {enableInvoiceDraftBuilder && (
-          <InvoiceDraftsCard />
-        )}
-
-        {enableClientProfitability && (
-          <LowMarginClientsCard />
-        )}
-
-        {enableReassignmentSuggestions && (
-          <ReassignmentSuggestionsCard limit={5} />
-        )}
-
         {!isLoading && summary && summary.atRiskCount > 0 && (
           <Card className="border-amber-200 dark:border-amber-800 bg-amber-50/50 dark:bg-amber-900/10">
             <CardHeader className="pb-2 pt-4 px-4">
@@ -1351,6 +1390,36 @@ export default function PmPortfolioDashboard() {
                 ))}
             </CardContent>
           </Card>
+        )}
+          </>
+        )}
+
+        {activeTab === "billing" && (
+          <div className="space-y-6">
+            {enableBillingApprovalWorkflow && (
+              <BillingApprovalQueueCard />
+            )}
+
+            {enableInvoiceDraftBuilder && (
+              <InvoiceDraftsCard />
+            )}
+
+            {enableClientProfitability && (
+              <LowMarginClientsCard />
+            )}
+          </div>
+        )}
+
+        {activeTab === "insights" && (
+          <div className="space-y-6">
+            {enableAiPmFocusSummary && (
+              <AiFocusSummaryCard />
+            )}
+
+            {enableReassignmentSuggestions && (
+              <ReassignmentSuggestionsCard limit={5} />
+            )}
+          </div>
         )}
       </div>
     </div>

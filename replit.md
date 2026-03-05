@@ -48,7 +48,7 @@ Digital Workday is an Asana-inspired, multi-tenant project management applicatio
 - **Billing Approval Workflow**: Adds `billing_status` to time entries, enabling a workflow for submitting, approving, and rejecting time entries.
 - **Invoice Draft Builder**: Allows generating invoice drafts from approved time entries, with options to export and manage drafts.
 - **Risk Acknowledgment Workflow**: Governance for at-risk projects, requiring PM or admin acknowledgment with mitigation notes.
-- **PM Portfolio Dashboard**: Portfolio-level intelligence for Project Managers, showing project health scores, milestone completion, and burn rates.
+- **PM Portfolio Dashboard**: Portfolio-level intelligence for Project Managers with 3-tab layout: **Portfolio** (project table + needs attention), **Billing & Finance** (approval queue, invoice drafts, low margin clients), **Insights** (AI focus summary, reassignment suggestions). Summary stats visible above tabs. Tabs conditionally shown based on feature flags.
 - **AI PM Focus Summary**: Weekly AI-generated summary of key priorities, risks, and capacity concerns for PMs.
 - **Client Profitability Engine**: Calculates client profitability based on time entries, cost rates, and billable rates.
 - **Task Billable Toggle**: Boolean `is_billable` on tasks, controllable by authorized roles.
