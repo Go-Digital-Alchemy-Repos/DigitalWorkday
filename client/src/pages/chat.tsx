@@ -3365,7 +3365,7 @@ export default function ChatPage() {
                           {isCurrentUser && " (you)"}
                         </p>
                         {isCreator && (
-                          <Badge variant="outline" className="text-xs">Owner</Badge>
+                          <Badge variant="outline" className="text-xs">Project Manager</Badge>
                         )}
                       </div>
                       {canRemove && !isCreator && (

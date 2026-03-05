@@ -296,11 +296,17 @@ export function ProjectDetailDrawer({ project, open, onOpenChange, onEdit }: Pro
               <Card>
                 <CardContent className="pt-4">
                   <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                    <Users className="h-4 w-4" />
-                    Team
+                    <User className="h-4 w-4" />
+                    Project Manager
                   </div>
-                  <div className="font-medium">
-                    {team?.name || <span className="text-muted-foreground">No team assigned</span>}
+                  <div className="font-medium flex items-center gap-2">
+                    {(currentProject as any).projectManager ? (
+                      <>
+                        <span className="text-sm">{(currentProject as any).projectManager.name}</span>
+                      </>
+                    ) : (
+                      <span className="text-sm text-muted-foreground italic">No manager assigned</span>
+                    )}
                   </div>
                 </CardContent>
               </Card>

@@ -171,11 +171,11 @@ export function TaskDetailDrawer({
     queryKey: [`/api/projects/${task?.projectId}/milestones`],
     enabled: !!task?.projectId && enableProjectMilestones && open,
   });
-  const isProjectOwner = useMemo(() => {
+  const isProjectManager = useMemo(() => {
     if (!currentUser?.id || !projectMembersData) return false;
     return projectMembersData.some(m => m.userId === currentUser.id && m.role === "owner");
   }, [currentUser?.id, projectMembersData]);
-  const canClearReview = isAdmin || isProjectOwner;
+  const canClearReview = isAdmin || isProjectManager;
   const isMobile = useIsMobile();
   const [editingTitle, setEditingTitle] = useState(false);
   const [editingDescription, setEditingDescription] = useState(false);

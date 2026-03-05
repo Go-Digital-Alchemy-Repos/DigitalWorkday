@@ -598,6 +598,7 @@ export default function ProjectsDashboard() {
                 <TableRow>
                   <TableHead className="w-[250px]">Project Name</TableHead>
                   <TableHead>Client</TableHead>
+                  <TableHead>Project Manager</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead className="text-center">
                     <div className="flex items-center justify-center gap-1">
@@ -666,6 +667,15 @@ export default function ProjectsDashboard() {
                       </div>
                     </TableCell>
                     <TableCell>{getClientName(project.clientId)}</TableCell>
+                    <TableCell>
+                      <div className="flex items-center gap-2">
+                        {(project as any).projectManager ? (
+                          <span className="text-sm">{(project as any).projectManager.name}</span>
+                        ) : (
+                          <span className="text-xs text-muted-foreground italic">Unassigned</span>
+                        )}
+                      </div>
+                    </TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
                         <Badge variant={project.status === "archived" ? "secondary" : "default"}>
