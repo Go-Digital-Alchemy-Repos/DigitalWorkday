@@ -1,0 +1,364 @@
+END OF DAY SYSTEM INTEGRITY + PERFORMANCE OPTIMIZATION SPRINT
+NON-DESTRUCTIVE • SAFE REFACTOR • SYSTEM CHECK • DOCUMENTED
+
+GOAL
+Run a full application integrity check followed by a performance optimization pass.
+
+Focus areas:
+
+- Tasks
+- Projects
+- Reports
+- Route architecture
+- Bundle size
+- Query performance
+- API integrity
+- Documentation completeness
+
+DO NOT remove features.
+DO NOT break API contracts.
+DO NOT change user permissions.
+
+All changes must be additive or internal refactors only.
+
+============================================================
+PHASE 1 — FULL SYSTEM HEALTH CHECK
+============================================================
+
+Run an application-wide integrity audit.
+
+Check the following areas:
+
+API endpoints
+database integrity
+frontend runtime errors
+missing imports
+type errors
+broken routes
+unhandled promise rejections
+slow endpoints
+invalid queries
+
+Produce a report listing:
+
+Broken endpoints
+Unhandled exceptions
+Missing DB indexes
+Slow queries (>500ms)
+Unused routes
+Large files (>800 lines)
+Duplicate services
+Potential N+1 query patterns
+
+============================================================
+PHASE 2 — END TO END FUNCTIONAL TEST
+============================================================
+
+Simulate full system workflows:
+
+User login
+Tenant switching
+Task creation
+Task editing
+Task assignment
+Project creation
+Client creation
+Time tracking
+Chat messaging
+Reports generation
+Billing workflows
+PM dashboards
+Communication systems
+
+Verify:
+
+No console errors
+No API errors
+No failing UI states
+All data persists correctly
+
+Output summary of any issues discovered.
+
+============================================================
+PHASE 3 — ROUTE SEGMENTATION
+============================================================
+
+Audit server route files.
+
+If any file exceeds ~400–500 lines, split by feature.
+
+Example transformation:
+
+Before:
+
+routes.ts
+
+After:
+
+routes/
+  tasks/
+    tasks.routes.ts
+    tasks.controller.ts
+    tasks.service.ts
+
+  projects/
+    projects.routes.ts
+    projects.controller.ts
+    projects.service.ts
+
+  reports/
+    reports.routes.ts
+    reports.controller.ts
+    reports.service.ts
+
+  billing/
+    billing.routes.ts
+    billing.service.ts
+
+  communication/
+    communication.routes.ts
+
+Use Express Router modularization.
+
+Register routers in server bootstrap:
+
+app.use("/api/tasks", tasksRouter)
+app.use("/api/projects", projectsRouter)
+app.use("/api/reports", reportsRouter)
+
+Ensure existing routes remain compatible.
+
+============================================================
+PHASE 4 — TASK PERFORMANCE OPTIMIZATION
+============================================================
+
+Audit these endpoints:
+
+/api/tasks/my
+/api/tasks/project
+/api/tasks
+/api/tasks/:id
+
+Ensure:
+
+No N+1 queries
+Relations loaded in batches
+
+Example pattern:
+
+SELECT * FROM tasks WHERE id IN (...)
+
+Then:
+
+SELECT * FROM task_assignees WHERE task_id IN (...)
+SELECT * FROM task_tags WHERE task_id IN (...)
+SELECT * FROM task_watchers WHERE task_id IN (...)
+
+Group results in memory.
+
+Add indexes if missing:
+
+tasks(tenant_id)
+tasks(project_id)
+tasks(status)
+tasks(assignee_id)
+
+============================================================
+PHASE 5 — PROJECT QUERY OPTIMIZATION
+============================================================
+
+Audit endpoint:
+
+GET /api/projects
+
+Move client-side filters into SQL:
+
+status
+client
+search
+team
+
+Add pagination support:
+
+limit
+cursor or page
+
+Ensure list views only return required columns.
+
+============================================================
+PHASE 6 — REPORT ENGINE OPTIMIZATION
+============================================================
+
+Reports aggregate large datasets.
+
+Introduce caching for expensive queries.
+
+Cache TTL:
+
+30–120 seconds
+
+Example keys:
+
+reports:employeeWorkload
+reports:clientSummary
+reports:portfolioHealth
+
+Ensure report APIs support:
+
+date filters
+pagination
+
+Avoid loading entire tenant history.
+
+============================================================
+PHASE 7 — FRONTEND RENDER PERFORMANCE
+============================================================
+
+Audit large UI lists:
+
+Tasks
+Projects
+Reports tables
+
+Implement virtualization where needed.
+
+Recommended libraries:
+
+react-virtual
+TanStack virtualization
+
+Memoize heavy row components:
+
+React.memo
+
+Avoid recomputing filters each render.
+
+Move filtering to API where possible.
+
+============================================================
+PHASE 8 — BUNDLE SIZE OPTIMIZATION
+============================================================
+
+Audit frontend bundle.
+
+Apply code splitting for:
+
+Reports
+Admin tools
+Analytics
+Billing
+Integrations
+
+Example:
+
+const ReportsPage = lazy(() => import("./pages/Reports"))
+
+Ensure chart libraries only load when needed.
+
+============================================================
+PHASE 9 — LOGGING OPTIMIZATION
+============================================================
+
+Reduce noisy logs for high-frequency endpoints:
+
+/unread-count
+/notifications
+/tasks/my
+
+Add sampling:
+
+Only log slow requests >500ms
+
+Example:
+
+if(duration > 500ms) logSlowRequest()
+
+============================================================
+PHASE 10 — ENDPOINT PERFORMANCE METRICS
+============================================================
+
+Add endpoint performance tracking.
+
+Track:
+
+p50 latency
+p95 latency
+
+Critical endpoints:
+
+/api/tasks/my
+/api/projects
+/api/reports/*
+/api/clients
+
+Log summary every 5 minutes.
+
+============================================================
+PHASE 11 — FILE SIZE AUDIT
+============================================================
+
+Identify files larger than:
+
+800 lines
+
+Recommend splitting by:
+
+controllers
+services
+utilities
+
+Maintain import compatibility.
+
+============================================================
+PHASE 12 — FINAL DOCUMENTATION PASS
+============================================================
+
+Update App Docs Library.
+
+Verify documentation exists for:
+
+Architecture
+Route Structure
+Task Engine
+Project Engine
+Reporting System
+Billing System
+Client Communication System
+AI Summaries
+QuickBooks Integration
+Confidence Score Engine
+Performance Strategy
+
+Add new section:
+
+SYSTEM PERFORMANCE ARCHITECTURE
+
+Explain:
+
+route modularization
+query batching
+caching
+virtualized rendering
+
+============================================================
+PHASE 13 — FINAL VALIDATION
+============================================================
+
+Verify:
+
+Tasks load faster
+Projects load faster
+Reports render faster
+All routes work
+No broken APIs
+No console errors
+Docs updated
+
+Output final report:
+
+files refactored
+routes segmented
+queries optimized
+caching added
+documentation updated
+issues fixed

@@ -40,6 +40,7 @@ export interface FeatureFlags {
   enableBillingApprovalWorkflow: boolean;
   enableInvoiceDraftBuilder: boolean;
   enableClientProfitability: boolean;
+  enableRevenueLeakageDetection: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -82,6 +83,7 @@ const ALL_OFF: FeatureFlags = {
   enableBillingApprovalWorkflow: false,
   enableInvoiceDraftBuilder: false,
   enableClientProfitability: false,
+  enableRevenueLeakageDetection: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

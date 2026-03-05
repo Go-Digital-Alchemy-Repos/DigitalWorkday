@@ -27,6 +27,10 @@ import {
   ChevronDown as ChevronDownIcon,
   Ban,
   Loader2,
+  AlertCircle,
+  Zap,
+  Timer,
+  Users,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -842,8 +846,257 @@ function InvoiceDraftsCard() {
   );
 }
 
+// ─────────────────────────────────────────────────────────────────────────────
+// Revenue Leakage Alerts Card
+// ─────────────────────────────────────────────────────────────────────────────
+interface RevenueLeakageResult {
+  unbilledApprovedHours: {
+    totalHours: number;
+    totalEstimatedRevenue: number;
+    byClient: { clientId: string; clientName: string; totalHours: number; estimatedRevenue: number; entryCount: number; oldestApprovedDate: string | null }[];
+  };
+  misclassifiedTimeEntries: {
+    totalOutOfScopeHours: number;
+    byClient: { clientId: string; clientName: string; outOfScopeHours: number; totalHours: number; nonBillablePct: number; entryCount: number }[];
+  };
+  billableTasksMissingTime: {
+    count: number;
+    tasks: { taskId: string; taskTitle: string; projectId: string; projectName: string; status: string; dueDate: string | null }[];
+  };
+  clientOverServiceRisk: {
+    count: number;
+    totalUnbillableHours: number;
+    byClient: { clientId: string; clientName: string; inScopeHoursWithNoRate: number; entryCount: number; estimatedRevenueLost: number }[];
+  };
+  computedAt: string;
+}
+
+function RevenueLeakageCard() {
+  const [expanded, setExpanded] = useState<"unbilled" | "misclassified" | "overservice" | "tasks" | null>(null);
+
+  const { data, isLoading } = useQuery<RevenueLeakageResult>({
+    queryKey: ["/api/billing/revenue-leakage"],
+    staleTime: 5 * 60_000,
+    refetchOnWindowFocus: false,
+  });
+
+  const hasAlerts =
+    (data?.unbilledApprovedHours.totalHours ?? 0) > 0 ||
+    (data?.misclassifiedTimeEntries.byClient.length ?? 0) > 0 ||
+    (data?.clientOverServiceRisk.count ?? 0) > 0 ||
+    (data?.billableTasksMissingTime.count ?? 0) > 0;
+
+  if (!isLoading && !hasAlerts) return null;
+
+  const toggle = (key: typeof expanded) =>
+    setExpanded((prev) => (prev === key ? null : key));
+
+  return (
+    <Card className="border-red-200 dark:border-red-900 bg-red-50/40 dark:bg-red-950/20" data-testid="card-revenue-leakage">
+      <CardHeader className="pb-3 pt-4 px-4">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2 text-red-700 dark:text-red-400">
+          <Zap className="h-4 w-4" />
+          Revenue Leakage Alerts
+          {hasAlerts && (
+            <Badge className="ml-auto bg-red-600 text-white text-xs" data-testid="badge-leakage-count">
+              Action Required
+            </Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="px-4 pb-4 space-y-3">
+        {isLoading ? (
+          <div className="space-y-2">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-10 w-full" />)}
+          </div>
+        ) : (
+          <>
+            {/* ── Unbilled approved hours ── */}
+            {(data?.unbilledApprovedHours.totalHours ?? 0) > 0 && (
+              <div className="rounded-lg border border-red-200 dark:border-red-900 overflow-hidden" data-testid="section-unbilled-hours">
+                <button
+                  className="w-full flex items-center justify-between px-3 py-2.5 bg-white dark:bg-red-950/30 hover:bg-red-50 dark:hover:bg-red-900/30 transition-colors"
+                  onClick={() => toggle("unbilled")}
+                  data-testid="button-toggle-unbilled"
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    <Clock className="h-3.5 w-3.5 text-red-500" />
+                    <span className="font-medium text-red-700 dark:text-red-300">Unbilled Approved Hours</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="outline" className="text-xs border-red-300 text-red-700 dark:text-red-300" data-testid="stat-unbilled-hours">
+                      {data?.unbilledApprovedHours.totalHours.toFixed(1)}h
+                    </Badge>
+                    {(data?.unbilledApprovedHours.totalEstimatedRevenue ?? 0) > 0 && (
+                      <Badge className="text-xs bg-red-100 text-red-700 dark:bg-red-900/50 dark:text-red-300 border-0" data-testid="stat-unbilled-revenue">
+                        ${data?.unbilledApprovedHours.totalEstimatedRevenue.toFixed(0)}
+                      </Badge>
+                    )}
+                    {expanded === "unbilled" ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </div>
+                </button>
+                {expanded === "unbilled" && (
+                  <div className="divide-y divide-red-100 dark:divide-red-900/40">
+                    {data?.unbilledApprovedHours.byClient.slice(0, 8).map((c) => (
+                      <Link key={c.clientId} href={`/clients/${c.clientId}`}>
+                        <div
+                          className="flex items-center justify-between px-4 py-2 hover:bg-red-50/60 dark:hover:bg-red-900/20 cursor-pointer transition-colors"
+                          data-testid={`unbilled-client-${c.clientId}`}
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium truncate">{c.clientName}</p>
+                            <p className="text-xs text-muted-foreground">{c.entryCount} approved {c.entryCount === 1 ? "entry" : "entries"}</p>
+                          </div>
+                          <div className="flex items-center gap-2 shrink-0 text-xs">
+                            <span className="text-red-600 dark:text-red-400 font-medium">{c.totalHours.toFixed(1)}h</span>
+                            {c.estimatedRevenue > 0 && (
+                              <span className="text-muted-foreground">${c.estimatedRevenue.toFixed(0)}</span>
+                            )}
+                          </div>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Misclassified / high non-billable ── */}
+            {(data?.misclassifiedTimeEntries.byClient.length ?? 0) > 0 && (
+              <div className="rounded-lg border border-amber-200 dark:border-amber-800 overflow-hidden" data-testid="section-misclassified">
+                <button
+                  className="w-full flex items-center justify-between px-3 py-2.5 bg-white dark:bg-amber-950/20 hover:bg-amber-50 dark:hover:bg-amber-900/20 transition-colors"
+                  onClick={() => toggle("misclassified")}
+                  data-testid="button-toggle-misclassified"
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-500" />
+                    <span className="font-medium text-amber-700 dark:text-amber-300">High Non-Billable Concentration</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 dark:text-amber-300" data-testid="stat-nonbillable-hours">
+                      {data?.misclassifiedTimeEntries.totalOutOfScopeHours.toFixed(1)}h out-of-scope
+                    </Badge>
+                    {expanded === "misclassified" ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </div>
+                </button>
+                {expanded === "misclassified" && (
+                  <div className="divide-y divide-amber-100 dark:divide-amber-900/30">
+                    {data?.misclassifiedTimeEntries.byClient.slice(0, 8).map((c) => (
+                      <Link key={c.clientId} href={`/clients/${c.clientId}`}>
+                        <div
+                          className="flex items-center justify-between px-4 py-2 hover:bg-amber-50/60 dark:hover:bg-amber-900/10 cursor-pointer transition-colors"
+                          data-testid={`misclassified-client-${c.clientId}`}
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium truncate">{c.clientName}</p>
+                            <p className="text-xs text-muted-foreground">{c.nonBillablePct.toFixed(0)}% non-billable of {c.totalHours.toFixed(1)}h total</p>
+                          </div>
+                          <span className="text-xs text-amber-600 dark:text-amber-400 font-medium shrink-0">{c.outOfScopeHours.toFixed(1)}h lost</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Over-serviced clients (no billing rate) ── */}
+            {(data?.clientOverServiceRisk.count ?? 0) > 0 && (
+              <div className="rounded-lg border border-orange-200 dark:border-orange-800 overflow-hidden" data-testid="section-overservice">
+                <button
+                  className="w-full flex items-center justify-between px-3 py-2.5 bg-white dark:bg-orange-950/20 hover:bg-orange-50 dark:hover:bg-orange-900/20 transition-colors"
+                  onClick={() => toggle("overservice")}
+                  data-testid="button-toggle-overservice"
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    <Users className="h-3.5 w-3.5 text-orange-500" />
+                    <span className="font-medium text-orange-700 dark:text-orange-300">Over-serviced Clients</span>
+                    <span className="text-xs text-muted-foreground">(missing billing rate)</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="outline" className="text-xs border-orange-300 text-orange-700 dark:text-orange-300" data-testid="stat-overservice-hours">
+                      {data?.clientOverServiceRisk.totalUnbillableHours.toFixed(1)}h unbillable
+                    </Badge>
+                    {expanded === "overservice" ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </div>
+                </button>
+                {expanded === "overservice" && (
+                  <div className="divide-y divide-orange-100 dark:divide-orange-900/30">
+                    {data?.clientOverServiceRisk.byClient.slice(0, 8).map((c) => (
+                      <Link key={c.clientId} href={`/clients/${c.clientId}`}>
+                        <div
+                          className="flex items-center justify-between px-4 py-2 hover:bg-orange-50/60 dark:hover:bg-orange-900/10 cursor-pointer transition-colors"
+                          data-testid={`overservice-client-${c.clientId}`}
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium truncate">{c.clientName}</p>
+                            <p className="text-xs text-muted-foreground">{c.entryCount} {c.entryCount === 1 ? "entry" : "entries"} — no billable rate set</p>
+                          </div>
+                          <span className="text-xs text-orange-600 dark:text-orange-400 font-medium shrink-0">{c.inScopeHoursWithNoRate.toFixed(1)}h</span>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* ── Tasks missing time ── */}
+            {(data?.billableTasksMissingTime.count ?? 0) > 0 && (
+              <div className="rounded-lg border border-blue-200 dark:border-blue-800 overflow-hidden" data-testid="section-tasks-missing-time">
+                <button
+                  className="w-full flex items-center justify-between px-3 py-2.5 bg-white dark:bg-blue-950/20 hover:bg-blue-50 dark:hover:bg-blue-900/20 transition-colors"
+                  onClick={() => toggle("tasks")}
+                  data-testid="button-toggle-missing-time"
+                >
+                  <div className="flex items-center gap-2 text-sm">
+                    <Timer className="h-3.5 w-3.5 text-blue-500" />
+                    <span className="font-medium text-blue-700 dark:text-blue-300">Open Tasks with No Time Logged</span>
+                  </div>
+                  <div className="flex items-center gap-2 shrink-0">
+                    <Badge variant="outline" className="text-xs border-blue-300 text-blue-700 dark:text-blue-300" data-testid="stat-tasks-missing-time">
+                      {data?.billableTasksMissingTime.count} tasks
+                    </Badge>
+                    {expanded === "tasks" ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                  </div>
+                </button>
+                {expanded === "tasks" && (
+                  <div className="divide-y divide-blue-100 dark:divide-blue-900/30">
+                    {data?.billableTasksMissingTime.tasks.slice(0, 10).map((t) => (
+                      <Link key={t.taskId} href={`/projects/${t.projectId}`}>
+                        <div
+                          className="flex items-center justify-between px-4 py-2 hover:bg-blue-50/60 dark:hover:bg-blue-900/10 cursor-pointer transition-colors"
+                          data-testid={`missing-time-task-${t.taskId}`}
+                        >
+                          <div className="min-w-0">
+                            <p className="text-xs font-medium truncate">{t.taskTitle}</p>
+                            <p className="text-xs text-muted-foreground truncate">{t.projectName}</p>
+                          </div>
+                          <Badge variant="outline" className="text-xs shrink-0 capitalize">{t.status}</Badge>
+                        </div>
+                      </Link>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
+
+            {!hasAlerts && (
+              <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400 py-2">
+                <CheckCircle2 className="h-4 w-4" />
+                No revenue leakage detected in the current period.
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function PmPortfolioDashboard() {
-  const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary, enableBillingApprovalWorkflow, enableInvoiceDraftBuilder, enableClientProfitability } = useFeatureFlags();
+  const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary, enableBillingApprovalWorkflow, enableInvoiceDraftBuilder, enableClientProfitability, enableRevenueLeakageDetection } = useFeatureFlags();
   const { user } = useAuth();
   const canAccessPmPortfolio =
     user?.role === "super_user" ||
@@ -1309,6 +1562,10 @@ export default function PmPortfolioDashboard() {
 
         {enableClientProfitability && (
           <LowMarginClientsCard />
+        )}
+
+        {enableRevenueLeakageDetection && (
+          <RevenueLeakageCard />
         )}
 
         {enableReassignmentSuggestions && (

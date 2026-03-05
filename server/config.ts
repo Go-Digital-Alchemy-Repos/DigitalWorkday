@@ -236,6 +236,7 @@ export const config = {
     enableBillingApprovalWorkflow: optionalEnvBool("ENABLE_BILLING_APPROVAL_WORKFLOW", true),
     enableInvoiceDraftBuilder: optionalEnvBool("ENABLE_INVOICE_DRAFT_BUILDER", true),
     enableClientProfitability: optionalEnvBool("ENABLE_CLIENT_PROFITABILITY", true),
+    enableRevenueLeakageDetection: optionalEnvBool("ENABLE_REVENUE_LEAKAGE_DETECTION", true),
   },
 
   tenancyEnforcement: {
