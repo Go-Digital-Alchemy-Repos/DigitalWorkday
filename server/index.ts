@@ -151,6 +151,28 @@ app.get("/readyz", async (_req, res) => {
 });
 
 // ============================================================================
+// SPA boot fallback: serve a lightweight auto-retry page for browser requests
+// that arrive before routes/Vite are ready. Without this, navigating to any
+// client-side route (e.g. /account/profile) during a restart shows "Cannot GET".
+// ============================================================================
+app.use((req, res, next) => {
+  if (appReady) return next();
+  if (req.method !== "GET") return next();
+  if (req.path.startsWith("/api") || req.path.startsWith("/_") || req.path.startsWith("/health") || req.path.startsWith("/vite-hmr")) return next();
+
+  const accept = req.headers.accept || "";
+  if (!accept.includes("text/html")) return next();
+
+  res.status(200).set({ "Content-Type": "text/html", "Cache-Control": "no-store" }).end(`<!DOCTYPE html>
+<html><head><meta charset="utf-8"><title>Loading...</title>
+<style>body{display:flex;justify-content:center;align-items:center;height:100vh;margin:0;font-family:system-ui;background:#0f172a;color:#e2e8f0}
+.wrap{text-align:center}.spinner{width:32px;height:32px;border:3px solid #334155;border-top-color:#60a5fa;border-radius:50%;animation:spin .8s linear infinite;margin:0 auto 16px}
+@keyframes spin{to{transform:rotate(360deg)}}p{font-size:14px;opacity:.7}</style></head>
+<body><div class="wrap"><div class="spinner"></div><p>Starting up&hellip;</p></div>
+<script>setTimeout(()=>location.reload(),1500)</script></body></html>`);
+});
+
+// ============================================================================
 // Now register middleware after health checks
 // ============================================================================
 

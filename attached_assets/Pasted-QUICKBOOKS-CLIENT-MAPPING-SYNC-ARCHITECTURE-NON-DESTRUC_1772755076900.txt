@@ -1,0 +1,424 @@
+QUICKBOOKS CLIENT MAPPING + SYNC ARCHITECTURE
+NON-DESTRUCTIVE • ADDITIVE • SAFE MAPPING • AUDITABLE • DOCUMENTED
+
+You are working in the DigitalWorkday codebase (React frontend, Node/Express backend, PostgreSQL + Drizzle ORM).
+
+GOAL
+Implement a safe QuickBooks Online client/customer mapping and sync architecture so that:
+- Digital Workday clients can be linked to QuickBooks customers
+- mismatched naming does NOT cause incorrect automatic linking
+- admins can manually map, review suggestions, create new QuickBooks customers, and remap safely
+- future billing/invoice sync can depend on a trusted customer mapping layer
+
+CRITICAL RULES
+- NON-DESTRUCTIVE: do not change existing client behavior or billing behavior.
+- Do NOT auto-map clients solely by name.
+- Do NOT auto-overwrite existing mappings.
+- Keep all changes additive and feature-flagged.
+- Mapping must be tenant-scoped.
+- QuickBooks sync must be auditable.
+
+Feature flags:
+- ENABLE_QUICKBOOKS_SYNC
+- ENABLE_QUICKBOOKS_CLIENT_MAPPING
+- ENABLE_QUICKBOOKS_CUSTOMER_IMPORT
+- ENABLE_QUICKBOOKS_MAPPING_SUGGESTIONS
+
+============================================================
+PHASE 0 — DISCOVERY (NO BEHAVIOR CHANGES)
+============================================================
+
+0.1 Identify existing QuickBooks integration work, if any:
+- OAuth/token tables
+- connection service
+- invoice sync work
+- existing QuickBooks customer references on clients
+
+0.2 Identify existing client model fields:
+- company name
+- display name
+- legal name
+- billing contact
+- email
+- phone
+- address
+- archived/inactive status
+
+0.3 Identify tenant isolation rules and admin permissions.
+
+Do not refactor yet.
+
+============================================================
+PHASE 1 — DATA MODEL (ADD A PROPER MAPPING LAYER)
+============================================================
+
+Create table:
+quickbooks_customer_mappings
+
+Columns:
+- id
+- tenant_id (indexed)
+- client_id (indexed, FK to local clients)
+- quickbooks_customer_id (text, indexed)
+- quickbooks_display_name (text nullable)
+- mapping_status (enum/text):
+    "unmapped"
+  | "suggested"
+  | "mapped"
+  | "sync_error"
+  | "archived"
+- mapping_method (enum/text):
+    "manual"
+  | "exact_name"
+  | "email_match"
+  | "created_from_dw"
+  | "imported_from_qbo"
+  | "reviewed_suggestion"
+- mapping_confidence (decimal nullable)   // 0.00–1.00
+- is_locked (boolean default false)       // prevents auto-remap
+- last_synced_at (timestamp nullable)
+- last_sync_status (text nullable)
+- last_sync_error (text nullable)
+- created_by_user_id
+- updated_by_user_id
+- created_at
+- updated_at
+
+Constraints:
+- unique (tenant_id, client_id)
+- unique (tenant_id, quickbooks_customer_id)  // prevent one QB customer mapped to multiple active clients
+
+Indexes:
+- (tenant_id, mapping_status)
+- (tenant_id, quickbooks_display_name)
+- (tenant_id, last_synced_at)
+
+OPTIONAL separate log table:
+quickbooks_sync_logs
+
+Columns:
+- id
+- tenant_id
+- entity_type ("client_mapping")
+- client_id nullable
+- mapping_id nullable
+- quickbooks_customer_id nullable
+- action ("suggested" | "mapped" | "unmapped" | "created_in_qbo" | "sync_updated" | "sync_failed")
+- status ("success" | "error")
+- message
+- payload_json (jsonb nullable)
+- created_by_user_id nullable
+- created_at
+
+IMPORTANT:
+Do NOT rely only on a quickbooks_customer_id column directly on clients as the primary architecture.
+If such a field already exists, keep it for compatibility but make the mapping table the source of truth.
+
+============================================================
+PHASE 2 — QUICKBOOKS CUSTOMER SERVICE LAYER
+============================================================
+
+Create:
+server/src/integrations/quickbooks/customers/quickbooksCustomerService.ts
+
+Functions:
+- listQuickBooksCustomers({ tenantId, search?, limit?, cursor? })
+- getQuickBooksCustomer({ tenantId, quickbooksCustomerId })
+- createQuickBooksCustomerFromClient({ tenantId, clientId, actingUserId })
+- updateQuickBooksCustomerFromClient({ tenantId, clientId, quickbooksCustomerId, actingUserId })
+
+Use existing OAuth connection/token refresh logic if present.
+Do NOT duplicate token handling logic.
+
+Normalize QuickBooks customer shape into a local DTO:
+{
+  id,
+  displayName,
+  companyName?,
+  primaryEmail?,
+  primaryPhone?,
+  billingAddress?,
+  active
+}
+
+============================================================
+PHASE 3 — MAPPING SUGGESTION ENGINE (ASSISTED, NOT AUTO-LINKING)
+============================================================
+
+Create:
+server/src/integrations/quickbooks/customers/customerMappingSuggestionService.ts
+
+Function:
+getSuggestedQuickBooksMatches({
+  tenantId,
+  clientId
+})
+
+Logic:
+Generate candidate matches from QuickBooks customers using weighted signals:
+- exact normalized company/display name match
+- exact email match
+- phone match
+- strong string similarity on name
+- address similarity (optional)
+- active/inactive compatibility
+
+Return:
+[
+  {
+    quickbooksCustomerId,
+    displayName,
+    confidence,
+    reasons: ["Exact normalized name match", "Email match"],
+    matchedFields: { name: true, email: false, phone: false }
+  }
+]
+
+CRITICAL:
+- Suggestions only.
+- Do NOT auto-link based on this.
+- If confidence is high, still require admin confirmation unless explicitly allowed later.
+- If mapping is locked, do not generate replacement suggestions unless forced.
+
+============================================================
+PHASE 4 — BACKEND MAPPING WORKFLOW
+============================================================
+
+Create:
+server/src/integrations/quickbooks/customers/customerMappingService.ts
+
+Functions:
+- getClientMapping({ tenantId, clientId })
+- listClientMappings({ tenantId, status?, search?, limit?, cursor? })
+- linkClientToQuickBooksCustomer({ tenantId, clientId, quickbooksCustomerId, actingUserId, method })
+- unlinkClientMapping({ tenantId, clientId, actingUserId })
+- lockClientMapping({ tenantId, clientId, actingUserId, locked })
+- refreshClientMappingStatus({ tenantId, clientId })
+
+Rules:
+1) linkClientToQuickBooksCustomer:
+- must fail if quickbooks_customer_id already mapped to another active client in same tenant
+- must fail if mapping is locked and user is not allowed
+- writes mapping_status = "mapped"
+- writes mapping_method
+- updates display name and sync timestamps
+
+2) unlinkClientMapping:
+- soft reset to mapping_status = "unmapped" or archive old mapping log
+- do NOT delete audit history
+
+3) lockClientMapping:
+- prevents accidental remapping
+
+4) refreshClientMappingStatus:
+- fetches latest QB customer details and updates sync metadata
+
+============================================================
+PHASE 5 — API ENDPOINTS (ADDITIVE)
+============================================================
+
+Add endpoints:
+
+Connection/status
+- GET /api/integrations/quickbooks/customers/status
+
+QuickBooks customer browse/search
+- GET /api/integrations/quickbooks/customers?search=&limit=&cursor=
+
+Mapping list / detail
+- GET /api/integrations/quickbooks/client-mappings?status=&search=&limit=&cursor=
+- GET /api/integrations/quickbooks/client-mappings/:clientId
+
+Suggestions
+- GET /api/integrations/quickbooks/client-mappings/:clientId/suggestions
+
+Actions
+- POST /api/integrations/quickbooks/client-mappings/:clientId/link
+  body: { quickbooksCustomerId, method? }
+
+- POST /api/integrations/quickbooks/client-mappings/:clientId/unlink
+
+- POST /api/integrations/quickbooks/client-mappings/:clientId/lock
+  body: { locked: true|false }
+
+- POST /api/integrations/quickbooks/client-mappings/:clientId/create-customer
+  // creates customer in QBO from DW client, then maps it
+
+- POST /api/integrations/quickbooks/client-mappings/:clientId/sync-update
+  // pushes updated local client fields into mapped QB customer
+
+Permissions:
+- Tenant Admin only by default
+- Super Admin if your app allows integration oversight
+- Not for regular employees
+
+============================================================
+PHASE 6 — UI: QUICKBOOKS CLIENT MAPPING MANAGER
+============================================================
+
+Add a new settings/admin screen:
+Tenant Admin → Integrations → QuickBooks → Client Mapping
+
+Primary layout:
+A) Summary cards
+- Total clients
+- Mapped
+- Unmapped
+- Suggested
+- Sync errors
+
+B) Mapping table
+Columns:
+- Client Name
+- QuickBooks Customer
+- Status
+- Confidence
+- Mapping Method
+- Last Synced
+- Actions
+
+Actions:
+- View suggestions
+- Link existing QuickBooks customer
+- Create new QuickBooks customer
+- Unlink
+- Lock/Unlock
+- Sync update
+
+C) Mapping detail drawer/modal
+For one client show:
+- local client data
+- mapped QB customer data (if mapped)
+- suggested QB matches
+- action buttons
+
+UI behaviors:
+- Unmapped: show “Find Match” / “Create in QuickBooks”
+- Suggested: show candidate list with confidence + reasons
+- Mapped: show linked customer + sync status
+- Sync Error: show error message and retry action
+
+IMPORTANT:
+Do NOT auto-map on screen load.
+Suggestions may be precomputed, but require explicit admin action.
+
+============================================================
+PHASE 7 — CLIENT PROFILE INTEGRATION
+============================================================
+
+In Client Profile add a small QuickBooks section/card:
+- QuickBooks Sync Status
+- Mapped Customer Name
+- Last Synced At
+- Button: “Manage Mapping”
+
+This should be visible only to allowed admin roles.
+
+============================================================
+PHASE 8 — SAFE CREATE / IMPORT FLOWS
+============================================================
+
+8.1 DW → QBO create flow
+When admin clicks “Create in QuickBooks”:
+- Build a customer payload from local client:
+  display/company name
+  billing email
+  phone
+  billing address
+- Create QBO customer
+- Insert mapping row with:
+  mapping_status = "mapped"
+  mapping_method = "created_from_dw"
+
+8.2 QBO → DW import flow (optional in this sprint, but architecture ready)
+If customer exists in QuickBooks but not locally:
+- do NOT auto-create local client unless admin explicitly confirms
+- optionally add an “Import as new client” action later
+
+============================================================
+PHASE 9 — SYNC SAFETY RULES
+============================================================
+
+Implement these safeguards:
+- Never auto-link one QB customer to multiple local clients
+- Never auto-remap an existing locked mapping
+- Never overwrite local client name purely from QB unless admin approves
+- Keep sync logs for all changes
+- Handle renamed QuickBooks customers gracefully by updating quickbooks_display_name, not breaking mapping
+
+If QuickBooks customer is deleted/inactivated:
+- mark last_sync_status accordingly
+- do not silently unmap
+
+============================================================
+PHASE 10 — BILLING/INVOICE INTEGRATION READINESS
+============================================================
+
+Prepare for later invoice sync:
+- Invoice draft builder and billing systems should read the mapping table first
+- When sending invoice draft to QuickBooks:
+  use mapped quickbooks_customer_id
+- If no mapping exists:
+  block invoice push with clear message:
+  “Client must be mapped to a QuickBooks customer before invoicing.”
+
+Do not implement invoice sync in this sprint if it is not already built; just wire the dependency safely.
+
+============================================================
+PHASE 11 — PERFORMANCE + RELIABILITY
+============================================================
+
+- Use paginated QuickBooks customer fetches
+- Cache QBO customer lookups briefly if appropriate (short TTL)
+- Do not fetch every QuickBooks customer on every screen load if search-based browsing is enough
+- Use indexed searches on local mapping table
+- Surface sync errors clearly in UI
+- Handle token refresh failures gracefully
+
+============================================================
+PHASE 12 — APP DOCS UPDATE (MANDATORY)
+============================================================
+
+Add App Docs sections:
+1) “QuickBooks Client Mapping Architecture”
+   - why mapping table exists
+   - source of truth rules
+   - uniqueness rules
+   - lock behavior
+
+2) “QuickBooks Customer Sync Workflow”
+   - DW → QBO create
+   - manual link flow
+   - suggestion flow
+   - sync update flow
+
+3) “Billing Dependency on QBO Mapping”
+   - how invoice sync depends on mapped customer IDs
+
+============================================================
+ACCEPTANCE CRITERIA
+============================================================
+
+- Tenant Admin can browse/search QuickBooks customers
+- Local clients can be manually linked to QuickBooks customers
+- Suggested matches appear with confidence + reasons
+- Admin can create a new QuickBooks customer from a local client
+- Mappings are unique and auditable
+- Lock/unlock works
+- Client Profile shows mapping status
+- No existing client workflows are broken
+- Docs updated
+
+============================================================
+STOP CONDITION
+============================================================
+
+Stop after:
+- mapping table + services + APIs + admin UI are complete
+- mapping safety rules enforced
+- client profile integration added
+- docs updated
+
+Do NOT implement full invoice push in this prompt unless already partially built.
+Do NOT auto-import all QuickBooks customers into local clients by default.
+Keep this sprint focused on safe mapping + sync architecture.
