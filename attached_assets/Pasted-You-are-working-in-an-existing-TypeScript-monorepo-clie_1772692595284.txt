@@ -1,0 +1,210 @@
+You are working in an existing TypeScript monorepo (client + server + shared) where `npm run check` (tsc) is failing and now correctly blocks `npm run build`. Your job is to restore a GREEN TypeScript baseline in focused batches without breaking runtime behavior and without doing a sweeping “fix everything at once” rewrite.
+
+NON-DESTRUCTIVE RULES
+- Do not remove features or UI functionality.
+- Prefer the smallest change that makes types consistent.
+- Do not weaken type safety globally (no turning off strict, no broad `any`, no `as unknown as` except as a last-resort *local* shim with a TODO).
+- Keep the typecheck->build gate strict (already in place); do not change the SKIP_TYPECHECK behavior.
+
+GOAL
+- Make `npm run check` pass.
+- Ensure the changes align UI/data/realtime/storage contracts and establish single sources of truth for high-churn shapes.
+
+WORK PLAN (execute in order, commit after each batch)
+===================================================
+
+BATCH A — UI primitives + handler mismatches
+--------------------------------------------
+1) BUTTON VARIANT CONTRACT (client-notes-tab)
+- Find where `variant="link"` is used (noted in `client-notes-tab`).
+- Inspect `client/src/components/ui/button.tsx` (or equivalent) and its `variant` union type / `cva` variants.
+- Choose ONE of these approaches:
+  A) Add `"link"` as a supported variant in the Button component (preferred if you actually want link styling),
+     with appropriate classes matching your design system.
+  B) If your design system intentionally doesn’t support `"link"`, replace call sites with the closest existing
+     variant (e.g. `"ghost"` + underline classes) and ensure styling remains link-like.
+- Update any story/demo usages if present so types match.
+
+2) onClick HANDLER SIGNATURE MISMATCH
+- Locate the failing call site where `onClick={handleSaveEdit}` is assigned.
+- The error indicates `onClick` expects `(e: React.MouseEvent<HTMLButtonElement>) => void`
+  but `handleSaveEdit` currently has the shape `(maybeString?: string) => void`.
+- Fix by refactoring:
+  - Make `handleSaveEdit` a proper mouse handler wrapper, and move the string parameter into an inner function.
+  Example target shape:
+    const saveEdit = (id?: string) => { ... }
+    const handleSaveEditClick: React.MouseEventHandler<HTMLButtonElement> = (e) => { e.preventDefault(); saveEdit(currentId) }
+  - Ensure no runtime behavior changes (still saves the same edit).
+
+3) EMOJI PICKER THEME TYPE MISMATCH
+- Find the emoji picker component usage where it passes:
+  `theme={theme === "dark" ? 1 : 0}`
+- Inspect the package types; it expects `Theme` (likely `"dark" | "light" | "auto"` or an enum).
+- Replace the number with the correct type:
+  - If package expects `"dark" | "light"`, map accordingly:
+    `theme={theme === "dark" ? "dark" : "light"}`
+  - If it expects an enum, import it and pass the enum value.
+- Confirm that any other emoji picker props remain valid.
+
+After Batch A:
+- Run `npm run check` and ensure these errors are gone.
+- If new errors appear in adjacent files due to stricter types, fix only the minimal related ones.
+
+BATCH B — Feature flags hook contract normalization
+---------------------------------------------------
+4) FIX useFeatureFlags() RETURN SHAPE MISUSE
+- Find the hook implementation `useFeatureFlags()` (likely `client/src/hooks/useFeatureFlags.ts`).
+- Confirm its return type: per report, it returns the flag object directly, NOT `{ flags }`.
+- Fix all call sites that destructure `{ flags }` to use the object directly:
+  - Replace:
+    `const { flags } = useFeatureFlags();`
+    with:
+    `const flags = useFeatureFlags();`
+  - Or if you need a stable API, change the hook to return `{ flags }` *but then update every call site*.
+- Pick one single contract and enforce it across the codebase.
+- Add an explicit exported type:
+  `export type FeatureFlags = { ... }`
+  and ensure the hook returns `FeatureFlags`.
+
+5) SINGLE SOURCE OF TRUTH FOR FLAGS
+- Create/confirm a shared type location, preferably:
+  `shared/types/featureFlags.ts` (or your existing shared contract folder).
+- Export:
+  - `FeatureFlagKey` union (or keys derived from object)
+  - `FeatureFlags` interface/type
+  - a default flags object (optional)
+- Update hook + any server endpoints (if any) to use the shared type.
+
+After Batch B:
+- Run `npm run check`.
+- Ensure no remaining “Property flags does not exist” type errors.
+
+BATCH C — Chat page shape drift + message types + state setters
+---------------------------------------------------------------
+6) CHAT INPUT STATE SETTER DRIFT
+- Locate Chat page file flagged by report.
+- Fix state naming mismatch:
+  - If state is `const [messageInput, setMessageInput] = useState("")`, then update all references from
+    `setNewMessage(...)` to `setMessageInput(...)`.
+  - Ensure the displayed input value and send action still use the same state.
+
+7) ChatMessage SHAPE UNIFICATION (authorId + payload)
+- Identify the canonical chat message type used across client/server/realtime (search: `ChatMessage`, `MessageDTO`, `ChatEvent`, etc).
+- Establish one shared DTO in `shared/contracts/chat.ts` (or existing shared contract area):
+  Example fields (adapt to your actual code):
+    export type ChatMessageDTO = {
+      id: string;
+      threadId: string;
+      body: string;
+      authorId: string;
+      createdAt: string; // or Date, but be consistent
+      attachments?: AttachmentDTO[];
+    }
+- Update:
+  - Chat page usage of `authorId` to match the DTO (or change DTO if the server truly uses `userId` etc).
+  - Any timeline callbacks/props to reference `ChatMessageDTO[]`.
+  - Any reducers/state initializers to use the shared type.
+
+8) TIMELINE / REALTIME CALLBACK SIGNATURES
+- If there are props like `onMessage`/`onNewMessage` in chat timeline components, unify signatures:
+  - `onNewMessage: (msg: ChatMessageDTO) => void`
+  - `onMessagesLoaded: (msgs: ChatMessageDTO[]) => void`
+- Fix components to conform without changing behavior.
+
+After Batch C:
+- Run `npm run check`.
+- Then do a quick runtime sanity check locally: open chat page, type, send, see it appear.
+
+BATCH D — Storage/schema parity fixes (clientsRepo + task attachments)
+----------------------------------------------------------------------
+9) clientsRepo UNDEFINED IN storage.ts
+- Open `server/src/storage/storage.ts` (or your path).
+- Find `clientsRepo` usage and confirm whether:
+  - It should be imported from another module (e.g. `./repos/clientsRepo`)
+  - Or it should be instantiated in that file (e.g. `const clientsRepo = new ClientsRepo(db)`).
+- Fix by:
+  - Adding correct import and wiring to shared DB instance, OR
+  - Exposing it from your storage factory function.
+- Ensure export surface is consistent with other repos in the module.
+
+10) TASK ATTACHMENT QUERY FIELD DRIFT
+- Locate the schema definition for task attachments (Drizzle schema or ORM model).
+- The code queries for fields that do NOT exist:
+  - code expects: tenantId, uploadedAt, uploadedBy
+  - schema has: uploadedByUserId, and lacks tenantId/uploadedAt/uploadedBy
+- Fix by aligning queries and DTOs with schema:
+  - Replace `uploadedBy` -> `uploadedByUserId`
+  - For `uploadedAt`: confirm the actual schema field (often `createdAt`). If schema truly lacks it,
+    do NOT invent it unless migration is intended; instead use the existing timestamp field or remove it
+    from select/insert and adjust consuming code accordingly.
+  - For `tenantId`: if multi-tenant scoping is handled elsewhere (taskId join to tenant), remove it
+    from attachment table operations; otherwise, if tenantId *should* exist, create a migration + update schema
+    *only if the project already supports migrations and this is required by business logic*.
+- Update any server response DTOs + client types to match the final schema.
+
+11) STORAGE REPO TYPE ASSERTIONS (“CONTRACT TESTS”)
+Add compile-only tests (no runtime dependency) that ensure the storage layer and schema stay aligned:
+- Create `server/src/storage/__typechecks__/taskAttachments.typecheck.ts`:
+  - Import schema types + repo methods
+  - Ensure insert/select shapes match expected DTOs via `satisfies` and `ReturnType<>` checks.
+- Create `server/src/realtime/__typechecks__/events.typecheck.ts` for event map typing (next batch below).
+
+After Batch D:
+- Run `npm run check`.
+- Run the smallest relevant unit tests (if vitest exists): `npm test -- task` or your targeted suites.
+
+BATCH E — Typed Socket.IO override vs strict event name typing
+--------------------------------------------------------------
+12) STOP REASSIGNING socket.on WITH (event: string, handler: Function)
+- Find where you override/monkeypatch socket.on.
+- Replace the override with a typed wrapper that preserves the library’s types:
+  - If you have a typed event map union, keep it:
+    type ClientToServerEvents = { ... }
+    type ServerToClientEvents = { ... }
+  - Provide a helper:
+    function onSocket<E extends keyof ServerToClientEvents>(
+      socket: Socket<ServerToClientEvents, ClientToServerEvents>,
+      event: E,
+      handler: ServerToClientEvents[E]
+    ) { socket.on(event, handler); }
+- If you need dynamic event subscription, isolate it behind a safe “untyped” escape hatch *only* for truly dynamic strings,
+  and keep all known events typed.
+
+13) REALTIME EVENT MAP CONTRACT TEST
+- Add `server/src/realtime/__typechecks__/eventMap.typecheck.ts`:
+  - Assert that all event names referenced in code exist in the event map
+  - Assert handler signatures match payload types
+  - Use `satisfies` and `const eventMap = {...} as const` pattern.
+
+After Batch E:
+- Run `npm run check` again.
+
+ERROR BURN-DOWN + OWNERSHIP (fast tracking)
+===========================================
+14) EXPORT TSC ERROR LIST INTO OWNER BUCKETS
+- Add a small script `scripts/tsc-errors.js` (Node) that runs `tsc --noEmit --pretty false`,
+  parses output, and groups by top-level folder (chat/tasks/storage/notifications/realtime/ui).
+- Output markdown summary to `docs/tsc-burndown.md`.
+- Use this to tackle the top 20 errors first and prevent thrash.
+
+ACCEPTANCE CRITERIA
+===================
+- `npm run check` passes with zero TS errors.
+- `npm run build` passes (with the existing typecheck gate intact).
+- No feature regression: notes tab still renders, buttons work, emoji picker works, feature flags panel works,
+  chat page can send/receive messages, storage layer compiles and repo exports are defined.
+- Shared types exist for: FeatureFlags, ChatMessageDTO, TaskAttachmentDTO (or aligned schema type).
+- Contract “typecheck” files exist for realtime event map, storage attachments, and chat timeline props.
+
+IMPLEMENTATION NOTES
+====================
+- Prefer fixing call sites over weakening component types, unless the component truly should support the variant/prop.
+- Use `satisfies` (TS 4.9+) instead of `as` where possible.
+- Keep changes localized and commit per batch to make review/rollback easy.
+
+NOW DO THE WORK
+===============
+Start with Batch A and proceed in order. After each batch, run `npm run check` and include in your output:
+- what files were changed
+- what errors were resolved
+- what errors remain (next batch focus)
