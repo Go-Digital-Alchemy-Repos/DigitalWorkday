@@ -6,7 +6,7 @@ import { Toaster } from "@/components/ui/toaster";
 import { TooltipProvider } from "@/components/ui/tooltip";
 import { ThemeProvider } from "@/lib/theme-provider";
 import { ImpersonationBanner } from "@/components/impersonation-banner";
-import { AuthProvider, useAuth } from "@/lib/auth";
+import { AuthProvider, useAuth, useAuthSafe } from "@/lib/auth";
 import { TenantThemeProvider } from "@/lib/tenant-theme-loader";
 import { useAppMode } from "@/hooks/useAppMode";
 import { PresenceProvider } from "@/hooks/use-presence";
@@ -72,7 +72,8 @@ function AppLayout() {
 }
 
 function UserImpersonationWrapper({ children }: { children: React.ReactNode }) {
-  const { userImpersonation } = useAuth();
+  const auth = useAuthSafe();
+  const userImpersonation = auth?.userImpersonation ?? null;
   
   if (userImpersonation?.isImpersonating) {
     return (
