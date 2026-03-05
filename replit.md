@@ -65,6 +65,7 @@ Digital Workday is an Asana-inspired, multi-tenant project management applicatio
 - **Response Compression**: `compression` middleware (gzip, threshold 1KB, level 6) enabled for all non-test environments.
 - **DB Safety**: Statement timeout (30s default, `DB_STATEMENT_TIMEOUT_MS` env var). Pool: 15 connections in prod, 10 in dev.
 - **Observability**: Request logger includes `dbQueryCount` and `dbDurationMs`. Hot-path sampling (1% in prod for notifications, heartbeat, etc.). Slow requests (>800ms) always logged. `perfLoggerMiddleware` samples 5% in prod with 300ms slow threshold. DB pool instrumented via `instrumentDbPool`.
+- **Global Search (SQL-first)**: `searchTenantEntities()` in `server/services/search/globalSearchService.ts` runs parallel SQL queries per entity type (clients, projects, tasks, users, teams, comments) with `pg_trgm` GIN trigram indexes for fast `ILIKE` matching. Replaces old broad-fetch + in-memory filter pattern. Visibility filters (`taskVisibilityFilter`/`projectVisibilityFilter`) enforce private task/project access. Comment search uses direct `comments → tasks → projects` JOIN instead of loading all visible task IDs. Prefix matches scored higher. `X-Search-Duration` response header. Slow search logging at >500ms threshold. Frontend: error states, retry=1, previous results kept visible during loading.
 
 ## External Dependencies
 - **PostgreSQL**: Primary database.

@@ -1,7 +1,7 @@
 import { useState, useRef, useEffect, useCallback } from "react";
 import { useLocation } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { Search, X, Building2, FolderKanban, CheckSquare, Users, UserCircle, MessageSquare, Loader2 } from "lucide-react";
+import { Search, X, Building2, FolderKanban, CheckSquare, Users, UserCircle, MessageSquare, Loader2, AlertCircle } from "lucide-react";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -38,9 +38,11 @@ export function GlobalSearchBar() {
   const inputRef = useRef<HTMLInputElement>(null);
   const isMobile = useIsMobile();
 
-  const { data: results, isLoading } = useQuery<SearchResults>({
+  const { data: results, isLoading, isError } = useQuery<SearchResults>({
     queryKey: ["/api/search", { q: debouncedSearch, limit: "8" }],
     enabled: debouncedSearch.length >= 2,
+    retry: 1,
+    placeholderData: (prev) => prev,
   });
 
   const flatResults = useCallback(() => {
@@ -48,7 +50,7 @@ export function GlobalSearchBar() {
     const items: Array<{ type: string; id: string; name: string; meta?: Record<string, any> }> = [];
     for (const cat of categoryConfig) {
       const arr = results[cat.key];
-      if (arr && arr.length > 0) {
+      if (arr && Array.isArray(arr) && arr.length > 0) {
         for (const item of arr) {
           items.push({ type: cat.key, id: item.id, name: item.name, meta: item as any });
         }
@@ -191,20 +193,27 @@ export function GlobalSearchBar() {
           "absolute top-full mt-1 bg-popover border border-border rounded-lg shadow-lg z-50 overflow-hidden",
           isMobile ? "left-0 right-0" : "w-[420px] left-0"
         )} data-testid="global-search-results">
-          {isLoading && (
+          {isLoading && !hasResults && (
             <div className="flex items-center justify-center py-6 text-sm text-muted-foreground" data-testid="search-loading">
               <Loader2 className="h-4 w-4 mr-2 animate-spin" />
               Searching...
             </div>
           )}
 
-          {!isLoading && !hasResults && debouncedSearch.length >= 2 && (
+          {isError && !hasResults && (
+            <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground" data-testid="search-error">
+              <AlertCircle className="h-4 w-4 text-destructive" />
+              Search is temporarily unavailable
+            </div>
+          )}
+
+          {!isLoading && !isError && !hasResults && debouncedSearch.length >= 2 && (
             <div className="py-6 text-center text-sm text-muted-foreground" data-testid="search-no-results">
               No results found for "{debouncedSearch}"
             </div>
           )}
 
-          {!isLoading && hasResults && (
+          {hasResults && (
             <ScrollArea className="max-h-[400px]">
               <div className="py-1">
                 {categoryConfig.map(cat => {

@@ -36,6 +36,7 @@ import {
   Plus,
   Timer,
   Search,
+  AlertCircle,
 } from "lucide-react";
 import { useDebounce } from "@/hooks/use-debounce";
 
@@ -58,9 +59,10 @@ export function CommandPalette({ onNewTask, onNewProject, onStartTimer }: Comman
   const [, setLocation] = useLocation();
   const debouncedSearch = useDebounce(search, 200);
 
-  const { data: searchResults, isLoading } = useQuery<SearchResult>({
+  const { data: searchResults, isLoading, isError } = useQuery<SearchResult>({
     queryKey: ["/api/search", { q: debouncedSearch }],
     enabled: debouncedSearch.length >= 2,
+    retry: 1,
   });
 
   useEffect(() => {
@@ -101,7 +103,14 @@ export function CommandPalette({ onNewTask, onNewProject, onStartTimer }: Comman
           data-testid="input-command-search"
         />
         <CommandList>
-          {debouncedSearch.length >= 2 && !hasResults && !isLoading && (
+          {debouncedSearch.length >= 2 && isError && !hasResults && (
+            <div className="flex items-center justify-center gap-2 py-6 text-sm text-muted-foreground" data-testid="command-search-error">
+              <AlertCircle className="h-4 w-4 text-destructive" />
+              Search is temporarily unavailable
+            </div>
+          )}
+
+          {debouncedSearch.length >= 2 && !hasResults && !isLoading && !isError && (
             <CommandEmpty>No results found.</CommandEmpty>
           )}
 

@@ -2,8 +2,7 @@
  * Search Router
  * 
  * Global search endpoint for command palette and quick navigation.
- * Provides tenant-scoped search across clients, projects, tasks,
- * users, teams, and client notes.
+ * SQL-first search with tenant scoping, visibility filters, and trigram indexes.
  * Also provides client-scoped search for the client command palette.
  */
 import { createApiRouter } from '../../../http/routerFactory';
@@ -13,12 +12,14 @@ import { getEffectiveTenantId, getCurrentWorkspaceIdAsync, getCurrentUserId } fr
 import { config } from '../../../config';
 import { getAccessiblePrivateProjectIds, getAccessiblePrivateTaskIds } from '../../../lib/privateVisibility';
 import { db } from '../../../db';
-import { comments, tasks } from '@shared/schema';
-import { eq, ilike, and, inArray } from 'drizzle-orm';
+import { searchTenantEntities } from '../../../services/search/globalSearchService';
 
 export const searchRouter = createApiRouter({ policy: "authTenant" });
 
+const SLOW_SEARCH_THRESHOLD_MS = 500;
+
 searchRouter.get("/search", async (req, res) => {
+  const searchStart = performance.now();
   try {
     const tenantId = getEffectiveTenantId(req);
     
@@ -27,123 +28,51 @@ searchRouter.get("/search", async (req, res) => {
     }
 
     const { q, limit = "10" } = req.query;
-    const searchQuery = String(q || "").trim().toLowerCase();
+    const searchQuery = String(q || "").trim();
     const maxResults = Math.min(parseInt(String(limit), 10) || 10, 50);
     
     if (!searchQuery || searchQuery.length < 2) {
       return res.json({ clients: [], projects: [], tasks: [], users: [], teams: [], comments: [] });
     }
 
-    const workspaceId = await getCurrentWorkspaceIdAsync(req);
     const userId = getCurrentUserId(req);
 
-    const [clientsList, projectsList, tenantUsers, tenantTeams] = await Promise.all([
-      storage.getClientsByTenant(tenantId, workspaceId),
-      storage.getProjectsByTenant(tenantId, workspaceId),
-      storage.getUsersByTenant(tenantId),
-      storage.getTeamsByTenant(tenantId, workspaceId),
-    ]);
-
-    let filteredProjectsList = projectsList;
-    if (config.features.enablePrivateProjects) {
-      const accessibleProjectIds = await getAccessiblePrivateProjectIds(userId, tenantId);
-      const accessibleProjectSet = new Set(accessibleProjectIds);
-      filteredProjectsList = projectsList.filter(p =>
-        (p as any).visibility !== 'private' || accessibleProjectSet.has(p.id)
-      );
-    }
-
-    const projectIds = filteredProjectsList.map(p => p.id);
-    let tasksList: Array<{ id: string; title: string; projectId: string | null; status: string | null; tenantId: string | null; visibility?: string }> = [];
-    
-    if (projectIds.length > 0) {
-      const taskMap = await storage.getTasksByProjectIds(projectIds);
-      for (const tasks of taskMap.values()) {
-        tasksList.push(...tasks.map(t => ({
-          id: t.id,
-          title: t.title || "",
-          projectId: t.projectId,
-          status: t.status,
-          tenantId: tenantId,
-          visibility: (t as any).visibility || 'workspace',
-        })));
-      }
-    }
-
-    if (config.features.enablePrivateTasks) {
-      const privateAccessibleTaskIds = await getAccessiblePrivateTaskIds(userId, tenantId);
-      const accessibleTaskSet = new Set(privateAccessibleTaskIds);
-      tasksList = tasksList.filter(t =>
-        t.visibility !== 'private' || accessibleTaskSet.has(t.id)
-      );
-    }
-
-    const visibleTaskIds = tasksList.map(t => t.id);
-    let commentResults: Array<{ id: string; body: string; taskId: string | null }> = [];
-    if (visibleTaskIds.length > 0) {
-      commentResults = await db.select({
-        id: comments.id,
-        body: comments.body,
-        taskId: comments.taskId,
-      })
-        .from(comments)
-        .where(and(
-          inArray(comments.taskId, visibleTaskIds),
-          ilike(comments.body, `%${searchQuery}%`)
-        ))
-        .limit(maxResults);
-    }
-
-    const filterAndScore = <T extends { id: string }>(
-      items: T[],
-      getSearchText: (item: T) => string
-    ) => {
-      return items
-        .map(item => {
-          const text = getSearchText(item).toLowerCase();
-          if (!text.includes(searchQuery)) return null;
-          const score = text.startsWith(searchQuery) ? 2 : 1;
-          return { item, score };
-        })
-        .filter((r): r is { item: T; score: number } => r !== null)
-        .sort((a, b) => b.score - a.score)
-        .slice(0, maxResults)
-        .map(r => r.item);
-    };
-
-    const clients = filterAndScore(clientsList, c => c.companyName);
-    const projects = filterAndScore(filteredProjectsList, p => p.name);
-    const filteredTasks = filterAndScore(tasksList, t => t.title);
-    const filteredUsers = filterAndScore(tenantUsers, u => {
-      const parts = [u.firstName, u.lastName, u.email].filter(Boolean);
-      return parts.join(" ");
+    const results = await searchTenantEntities({
+      tenantId,
+      userId,
+      query: searchQuery,
+      maxResults,
     });
-    const filteredTeams = filterAndScore(tenantTeams, t => t.name);
 
-    const taskIdToProjectId = new Map(tasksList.map(t => [t.id, t.projectId]));
+    const durationMs = Math.round(performance.now() - searchStart);
+
+    res.set("X-Search-Duration", String(durationMs));
+
+    if (durationMs > SLOW_SEARCH_THRESHOLD_MS) {
+      console.warn(`[search] Slow search: q="${searchQuery.substring(0, 30)}" tenant=${tenantId.substring(0, 8)} duration=${durationMs}ms counts=${JSON.stringify(Object.fromEntries(Object.entries(results).filter(([k]) => k !== "timing").map(([k, v]) => [k, Array.isArray(v) ? v.length : 0])))}`);
+    } else if (Math.random() < 0.1) {
+      console.log(`[search] q="${searchQuery.substring(0, 20)}" duration=${durationMs}ms timing=${JSON.stringify(results.timing.perEntity)}`);
+    }
 
     res.json({ 
-      clients: clients.map(c => ({ id: c.id, name: c.companyName, type: "client" })),
-      projects: projects.map(p => ({ id: p.id, name: p.name, type: "project", status: p.status })),
-      tasks: filteredTasks.map(t => ({ id: t.id, name: t.title, type: "task", projectId: t.projectId, status: t.status })),
-      users: filteredUsers.map(u => ({
-        id: u.id,
-        name: [u.firstName, u.lastName].filter(Boolean).join(" ") || u.email,
-        email: u.email,
+      clients: results.clients.map(r => ({ id: r.id, name: r.title, type: "client" })),
+      projects: results.projects.map(r => ({ id: r.id, name: r.title, type: "project", status: r.meta.status })),
+      tasks: results.tasks.map(r => ({ id: r.id, name: r.title, type: "task", projectId: r.meta.projectId, status: r.meta.status })),
+      users: results.users.map(r => ({
+        id: r.id,
+        name: r.title,
+        email: r.meta.email,
         type: "user",
-        role: u.role,
+        role: r.meta.role,
       })),
-      teams: filteredTeams.map(t => ({ id: t.id, name: t.name, type: "team" })),
-      comments: commentResults.map(c => {
-        const plainBody = (c.body || "").replace(/<[^>]*>/g, "").slice(0, 80);
-        return {
-          id: c.id,
-          name: plainBody + (plainBody.length >= 80 ? "..." : ""),
-          type: "comment",
-          taskId: c.taskId,
-          projectId: taskIdToProjectId.get(c.taskId || "") || null,
-        };
-      }),
+      teams: results.teams.map(r => ({ id: r.id, name: r.title, type: "team" })),
+      comments: results.comments.map(r => ({
+        id: r.id,
+        name: r.title,
+        type: "comment",
+        taskId: r.meta.taskId,
+        projectId: r.meta.projectId,
+      })),
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/search", req);
