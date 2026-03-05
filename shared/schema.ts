@@ -541,6 +541,8 @@ export const users = pgTable("users", {
   role: text("role").notNull().default("employee"),
   isProjectManager: boolean("is_project_manager").notNull().default(false),
   isActive: boolean("is_active").notNull().default(true),
+  costRate: numeric("cost_rate").notNull().default("0"),
+  billableRate: numeric("billable_rate").notNull().default("0"),
   googleId: text("google_id").unique(),
   mustChangePasswordOnNextLogin: boolean("must_change_password_on_next_login").notNull().default(false),
   createdAt: timestamp("created_at").defaultNow().notNull(),

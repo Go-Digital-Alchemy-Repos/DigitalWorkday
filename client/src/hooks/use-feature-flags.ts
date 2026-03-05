@@ -39,6 +39,7 @@ export interface FeatureFlags {
   enableAiPmFocusSummary: boolean;
   enableBillingApprovalWorkflow: boolean;
   enableInvoiceDraftBuilder: boolean;
+  enableClientProfitability: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -80,6 +81,7 @@ const ALL_OFF: FeatureFlags = {
   enableAiPmFocusSummary: false,
   enableBillingApprovalWorkflow: false,
   enableInvoiceDraftBuilder: false,
+  enableClientProfitability: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

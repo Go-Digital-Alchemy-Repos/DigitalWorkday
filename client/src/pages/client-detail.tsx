@@ -95,6 +95,10 @@ import {
   Check,
   Settings2,
   ShieldCheck,
+  DollarSign,
+  TrendingUp,
+  TrendingDown,
+  Clock,
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
@@ -102,7 +106,7 @@ import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { AssetLibraryPanel } from "@/features/assetLibrary/AssetLibraryPanel";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
-import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, CONTROL_CENTER_CHILD_IDS, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState, ControlCenterSection } from "@/features/clients";
+import { DivisionDrawer, ClientSectionSwitcher, getVisibleSections, CONTROL_CENTER_CHILD_IDS, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState, ControlCenterSection, ClientProfitabilityCard } from "@/features/clients";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
 import { ClientNotesTab } from "@/components/client-notes-tab";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
@@ -1782,6 +1786,10 @@ export default function ClientDetailPage() {
                   )}
                 </CardContent>
               </Card>
+
+              {featureFlags.enableClientProfitability && clientId && (
+                <ClientProfitabilityCard clientId={clientId} />
+              )}
 
               {(divisions.length > 0 || childClients.length > 0) && (
                 <Card>

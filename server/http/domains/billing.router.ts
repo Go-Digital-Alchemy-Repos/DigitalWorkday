@@ -17,6 +17,13 @@ import {
   exportInvoiceDraft,
   cancelInvoiceDraft,
 } from "../../services/billing/invoiceDraftService";
+import {
+  getClientProfitability,
+  getTenantClientsProfitability,
+} from "../../services/billing/clientProfitabilityService";
+import { clients as clientsTable } from "@shared/schema";
+import { db } from "../../db";
+import { eq, inArray } from "drizzle-orm";
 
 const router = createApiRouter({ policy: "authTenant", skipEnvelope: true });
 
@@ -31,6 +38,14 @@ function checkFeatureFlag(res: Response, req: Request): boolean {
 function checkInvoiceFlag(res: Response, req: Request): boolean {
   if (!config.features.enableInvoiceDraftBuilder) {
     sendError(res, AppError.forbidden("Invoice draft builder feature is disabled"), req);
+    return false;
+  }
+  return true;
+}
+
+function checkProfitabilityFlag(res: Response, req: Request): boolean {
+  if (!config.features.enableClientProfitability) {
+    sendError(res, AppError.forbidden("Client profitability feature is disabled"), req);
     return false;
   }
   return true;
@@ -236,6 +251,55 @@ router.post("/billing/invoice-drafts/:id/cancel", async (req: Request, res: Resp
     res.json({ ok: true });
   } catch (error) {
     return handleRouteError(res, error, "POST /api/billing/invoice-drafts/:id/cancel", req);
+  }
+});
+
+router.get("/analytics/client-profitability/:clientId", async (req: Request, res: Response) => {
+  try {
+    if (!checkProfitabilityFlag(res, req)) return;
+
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.unauthorized("Tenant context required"), req);
+
+    const { clientId } = req.params;
+    const { startDate, endDate } = req.query as { startDate?: string; endDate?: string };
+
+    const result = await getClientProfitability(clientId, tenantId, { startDate, endDate });
+    res.json(result);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/analytics/client-profitability/:clientId", req);
+  }
+});
+
+router.get("/analytics/client-profitability", async (req: Request, res: Response) => {
+  try {
+    if (!checkProfitabilityFlag(res, req)) return;
+
+    const tenantId = getEffectiveTenantId(req);
+    if (!tenantId) return sendError(res, AppError.unauthorized("Tenant context required"), req);
+
+    const { startDate, endDate, marginThreshold } = req.query as {
+      startDate?: string;
+      endDate?: string;
+      marginThreshold?: string;
+    };
+
+    const threshold = marginThreshold !== undefined ? parseFloat(marginThreshold) : undefined;
+    const results = await getTenantClientsProfitability(tenantId, { startDate, endDate }, threshold);
+
+    if (results.length > 0) {
+      const clientIds = results.map((r) => r.clientId);
+      const clientRows = await db
+        .select({ id: clientsTable.id, name: clientsTable.companyName })
+        .from(clientsTable)
+        .where(inArray(clientsTable.id, clientIds));
+      const nameMap = new Map(clientRows.map((c) => [c.id, c.name]));
+      results.forEach((r) => { r.clientName = nameMap.get(r.clientId) ?? "Unknown"; });
+    }
+
+    res.json(results);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/analytics/client-profitability", req);
   }
 });
 
