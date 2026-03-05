@@ -103,8 +103,9 @@ export function setupAuth(app: Express): void {
   `).catch(err => console.error("Session table creation error:", err));
 
   const isProduction = process.env.NODE_ENV === "production";
-  const isReplit = !!process.env.REPL_OWNER;
-  const needsSecureCookie = isProduction || isReplit;
+  // Only use secure cookies in production — dev environments (including Replit dev)
+  // use HTTP internally and secure cookies prevent the session cookie from being set.
+  const needsSecureCookie = isProduction;
 
   sessionMiddlewareInstance = session({
     store: new PgSession({
@@ -235,8 +236,7 @@ export function setupAuth(app: Express): void {
           console.error("Session destroy error:", sessionErr);
         }
         const isProduction = process.env.NODE_ENV === "production";
-        const isReplit = !!process.env.REPL_OWNER;
-        const needsSecureCookie = isProduction || isReplit;
+        const needsSecureCookie = isProduction;
         const cookieName = isProduction ? "__Host-sid" : "connect.sid";
         res.clearCookie(cookieName, {
           path: "/",

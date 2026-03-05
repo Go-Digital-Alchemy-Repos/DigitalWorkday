@@ -1,0 +1,207 @@
+CODEX FIX SPRINT — TYPE SAFETY + BUILD GATES + SCHEMA DRIFT + PERF CHUNKING + DOCS PARITY
+NON-DESTRUCTIVE • SAFE FIXES • RESTORE BASELINE • KEEP FEATURES • DOCUMENTED
+
+Goal:
+Make these commands all pass cleanly:
+- npm run check  ✅ (TypeScript baseline restored)
+- npm run build  ✅ (no duplicate method warnings; chunk warnings reduced)
+- vitest smoke tests ✅
+And align docs/scripts with reality.
+
+Do NOT remove product features.
+Do NOT change runtime behavior unless required to fix correctness.
+Prefer additive changes and shared types.
+
+============================================================
+PHASE 1 — FIX TS BASELINE (tsconfig target/excludes)  [HIGH PRIORITY]
+============================================================
+
+1.1 Update root tsconfig.json (and any client/server tsconfigs if present):
+- Set explicit target to ES2020 (or ES2022 if already compatible)
+- Set lib to include DOM (client) + ES2020
+- Ensure module remains compatible with Vite/Node settings in the repo
+- Enable "useDefineForClassFields": true if consistent with existing setup
+- Only add "downlevelIteration": true if you still target < ES2015 (you will not)
+
+Example intent (do not blindly overwrite; merge with existing settings):
+compilerOptions:
+  target: "ES2020"
+  lib: ["ES2020", "DOM", "DOM.Iterable"]
+  moduleResolution: "Bundler" (or keep current if already set for Vite)
+  noEmit: true
+  skipLibCheck: true (keep if already used)
+  strict: keep existing (do not weaken unless necessary)
+
+1.2 Fix test file typechecking drift:
+- Ensure tsconfig excludes BOTH:
+  **/*.test.ts
+  **/*.test.tsx
+  **/*.spec.ts
+  **/*.spec.tsx
+- If you prefer, create separate tsconfig.test.json for tests and exclude them from main check.
+
+1.3 Re-run npm run check and address TS errors in practical order (below phases).
+
+============================================================
+PHASE 2 — ENFORCE BUILD GATE (prevent shipping broken typing)
+============================================================
+
+2.1 Update package.json scripts:
+- Ensure "build" runs "check" first:
+  "build": "npm run check && <existing build command>"
+
+2.2 If there is a CI workflow (GitHub Actions):
+- Ensure CI runs in order:
+  npm ci
+  npm run check
+  npm run test (or vitest)
+  npm run build
+
+Do not remove existing scripts; only add/adjust to gate build.
+
+============================================================
+PHASE 3 — UNIFY NOTIFICATION PREFERENCES TYPES (frontend + backend drift)
+============================================================
+
+3.1 Locate frontend NotificationPreferences interface that omits email-specific keys but maps to Email fields.
+- Remove the duplicated local interface.
+- Replace with a single shared type inferred from schema:
+  - Use @shared/schema (Drizzle infer type) or your existing shared types module.
+
+3.2 Backend notifications.repo.ts fallback object:
+- Update fallback preferences object to include ALL schema email columns with defaults.
+- Type it using the same shared inferred type so drift cannot recur.
+
+3.3 Add a small type-level test (or compile-only assert) that the fallback satisfies the inferred type.
+
+============================================================
+PHASE 4 — REMOVE DUPLICATE CLASS METHOD (TenantIntegrationService)
+============================================================
+
+4.1 Find TenantIntegrationService getDecryptedSecrets duplicate methods.
+- Keep ONE canonical implementation.
+- If you need two behaviors, rename one to a clear private helper and have the public method delegate.
+- Remove ambiguity/build warning.
+
+4.2 Add unit tests in server/tests (vitest):
+- tenant-specific secrets decrypt works
+- tenant null/global decrypt works (if supported)
+- missing secrets returns expected safe value
+
+============================================================
+PHASE 5 — FIX IMMEDIATE COMPILE REGRESSIONS (missing imports / no-undef)
+============================================================
+
+5.1 tasks.repo.ts:
+- Add missing import for isNull(...) from the correct query builder source.
+- Ensure any other referenced helpers are imported.
+
+5.2 Add a lightweight lint/TS safeguard:
+- If ESLint exists, ensure rule catches undefined symbols.
+- If no ESLint, at minimum add a CI step that runs:
+  npm run check
+so these fail early (already done in Phase 2).
+
+============================================================
+PHASE 6 — TIME TRACKING SCHEMA/REPO MISMATCH (divisionId)
+============================================================
+
+6.1 In timeTracking.repo.ts, locate filter using timeEntries.divisionId.
+Confirm truth:
+- If product requirements need division-based filtering:
+  - Add migration to add time_entries.division_id (uuid nullable)
+  - Update Drizzle schema
+  - Backfill logic:
+    - When creating time entries, populate division_id from task/project/client division if applicable
+- If division filtering is not required or division is derived:
+  - Remove direct divisionId filter from time_entries
+  - Replace with JOIN-based filtering via projects/clients/divisions tables (preferred) OR omit filter and document
+
+Pick the least disruptive path that matches current UI expectations:
+- If UI already exposes "Division" filter in time tracking reports, implement the JOIN-based approach first (no schema change).
+- Only add column if necessary for performance and simplicity.
+
+Add a regression test for the chosen behavior.
+
+============================================================
+PHASE 7 — USER DISPLAY NAME STANDARDIZATION (rich-text mentions)
+============================================================
+
+7.1 CommentEditor and mention components reference user.displayName, but users schema has:
+name, firstName, lastName
+
+Create a shared helper/DTO:
+- server: buildUserDisplayName(user) => first+last || name || email prefix
+- client: map API user to UserDisplay DTO with displayName
+
+Preferred:
+- Update API responses for users used by mention/autocomplete endpoints to include displayName explicitly.
+- Avoid binding UI to raw DB columns.
+
+Refactor mention components to only require:
+{ id, displayName, avatarUrl? }
+
+Add TS types so UI cannot regress.
+
+============================================================
+PHASE 8 — DOCS/SCRIPTS PARITY (README)
+============================================================
+
+8.1 Update README to match actual scripts OR add missing scripts.
+Based on repo state:
+- If you want npm test / npm run test:watch:
+  - Add scripts using Vitest:
+    "test": "vitest run"
+    "test:watch": "vitest"
+- Or update README to:
+  "npx vitest run ..." and whatever scripts actually exist.
+
+Keep onboarding friction low:
+- add "npm run check"
+- add "npm run build"
+- add "npm run dev"
+- add smoke test command
+
+============================================================
+PHASE 9 — FRONTEND CHUNK SPLITTING (Vite oversized chunks)
+============================================================
+
+9.1 Update Vite config with a conservative manualChunks strategy:
+- Split heavy feature areas:
+  - editor/rich-text
+  - charts/analytics
+  - admin modules
+  - emoji picker
+  - reporting pages
+- Ensure route-level lazy loading for:
+  - Reports
+  - Admin
+  - Billing
+  - Integrations
+
+9.2 Confirm no runtime regressions:
+- routes still load correctly
+- chunks are created and warnings reduced
+
+============================================================
+PHASE 10 — FINAL VERIFICATION + REPORT
+============================================================
+
+10.1 Run and confirm:
+- npm run check  (must pass)
+- npm run build  (must pass; no duplicate class member warnings; chunk warnings reduced)
+- npx vitest run server/tests/smoke.test.ts
+- If DB available locally, run scripts/verify-indexes.ts, otherwise document how to run it.
+
+10.2 Output a short “Fix Sprint Report” in App Docs:
+- What changed (tsconfig, build gating, type unification, repo fixes, chunking)
+- How to verify locally
+- Known limitations / next steps
+
+STOP when:
+- TypeScript baseline is restored
+- Build is gated by typecheck
+- Drift issues resolved (#3, #6, #7)
+- Duplicate method warning removed (#4)
+- Docs/scripts aligned (#8)
+- Chunking warnings reduced (#9)

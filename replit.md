@@ -104,6 +104,20 @@ Comprehensive indexes exist on all high-query tables. Key patterns:
 - Slow queries (>300ms default) → warning log with truncated SQL
 - `PERF_SLOW_THRESHOLD_MS` and `PERF_SLOW_QUERY_MS` env vars for tuning
 
+### Session Cookie Configuration
+`server/auth.ts` configures session cookies as follows:
+- **Production**: `Secure: true`, `SameSite: none`, cookie name `__Host-sid` (required for cross-origin deployment)
+- **Development**: `Secure: false`, `SameSite: lax`, cookie name `connect.sid` (works over HTTP in Replit embedded webview and local browsers)
+- Sessions are stored in PostgreSQL `user_sessions` table and survive server restarts
+- `needsSecureCookie = isProduction` only — the `isReplit` flag is NOT used for cookie security because Replit's embedded webview accesses the app over HTTP and Secure cookies would silently block session creation
+
+### Dev Test Accounts
+Quick-login buttons on the login page (visible when `import.meta.env.DEV = true`):
+- `admin@digitalworkday.com` / `admin123` → super_user
+- `admin@alpha.com` / `password123` → tenant_owner (Alpha Corp)
+- `admin@beta.com` / `password123` → admin (Beta Systems)
+- `sarah@digitalworkday.com` / `password123` → employee
+
 ## External Dependencies
 - **PostgreSQL**: Primary database.
 - **Socket.IO**: Real-time communication.
