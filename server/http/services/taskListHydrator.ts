@@ -1,5 +1,5 @@
 import { db } from "../../db";
-import { tasks, taskAssignees, taskTags, tags, comments, users } from "@shared/schema";
+import { tasks, taskAssignees, taskTags, tags, comments, users, subtasks } from "@shared/schema";
 import { eq, inArray, and, isNull, sql } from "drizzle-orm";
 import type { TaskListItem } from "@shared/schema";
 import { getAccessiblePrivateTaskIds } from "../../lib/privateVisibility";
@@ -89,7 +89,13 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
       .where(inArray(tasks.parentTaskId, taskIds))
       .groupBy(tasks.parentTaskId),
 
-    db.execute(sql`SELECT task_id as "taskId", count(*)::int as count FROM subtasks WHERE task_id = ANY(${taskIds}) GROUP BY task_id`),
+    db.select({
+      taskId: subtasks.taskId,
+      count: sql<number>`count(*)::int`.as('count'),
+    })
+      .from(subtasks)
+      .where(inArray(subtasks.taskId, taskIds))
+      .groupBy(subtasks.taskId),
   ]);
 
   const assigneesByTask = new Map<string, { userId: string; name: string }[]>();
@@ -128,8 +134,7 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
   }
 
   const subtaskCountByTask = new Map<string, number>();
-  const subtaskRows = subtaskCounts.rows as Array<{ taskId: string; count: number }>;
-  for (const row of subtaskRows) {
+  for (const row of subtaskCounts) {
     subtaskCountByTask.set(row.taskId, row.count);
   }
 
