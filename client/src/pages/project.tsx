@@ -1103,7 +1103,25 @@ export default function ProjectPage() {
       </div>
       {projectId && (
         <div className="px-3 sm:px-4 lg:px-6 pt-3">
-          <RiskAckBanner projectId={projectId} />
+          <RiskAckBanner
+            projectId={projectId}
+            projectName={project?.name}
+            onOpenTask={(taskId) => {
+              const url = new URL(window.location.href);
+              url.searchParams.set('task', taskId);
+              window.history.replaceState({}, '', url.pathname + url.search);
+              const allTasks = displaySections?.flatMap((s) => s.tasks || []) || [];
+              const found = allTasks.find(t => t.id === taskId) || tasks?.find(t => t.id === taskId);
+              if (found) {
+                setSelectedTask(found);
+              } else {
+                fetch(`/api/tasks/${taskId}`, { credentials: "include" })
+                  .then(r => r.ok ? r.json() : null)
+                  .then(t => { if (t) setSelectedTask(t); });
+              }
+            }}
+            onViewMilestones={() => setView("milestones")}
+          />
         </div>
       )}
       <div className="flex-1 overflow-hidden">

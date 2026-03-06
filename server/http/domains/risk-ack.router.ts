@@ -59,7 +59,7 @@ router.post("/:projectId/risk-ack", async (req: Request, res: Response) => {
     if (!userId) return res.status(401).json({ error: "Authentication required" });
 
     const currentUser = req.user as any;
-    const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
+    const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user" || currentUser?.role === "tenant_owner";
 
     const { projectId } = req.params;
 

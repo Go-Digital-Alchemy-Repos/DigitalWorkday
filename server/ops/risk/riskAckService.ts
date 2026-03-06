@@ -16,6 +16,20 @@ import { AppError } from "../../lib/errors";
 
 export type RiskLevel = "stable" | "at_risk" | "critical";
 
+export interface OverdueTaskInfo {
+  id: string;
+  title: string;
+  dueDate: string;
+  status: string;
+  priority: string | null;
+}
+
+export interface OverdueMilestoneInfo {
+  id: string;
+  title: string;
+  dueDate: string;
+}
+
 export interface ProjectRiskState {
   riskLevel: RiskLevel;
   riskScore: number;
@@ -23,6 +37,8 @@ export interface ProjectRiskState {
   burnPercent: number | null;
   hasMilestoneOverdue: boolean;
   drivers: string[];
+  overdueTasks: OverdueTaskInfo[];
+  overdueMilestones: OverdueMilestoneInfo[];
 }
 
 export interface RiskAckStatus {
@@ -54,13 +70,23 @@ export async function getProjectRiskState(
   tenantId: string,
   projectId: string
 ): Promise<ProjectRiskState> {
-  // Fetch project, overdue tasks, burn minutes, milestone overdue in parallel
-  const [projectRows, overdueRows, burnRows, milestoneRows] = await Promise.all([
+  const [projectRows, overdueTaskRows, overdueCountRows, burnRows, milestoneRows, overdueMilestoneRows] = await Promise.all([
     db.execute(sql`
       SELECT id, budget_minutes
       FROM projects
       WHERE id = ${projectId} AND tenant_id = ${tenantId}
       LIMIT 1
+    `),
+    db.execute(sql`
+      SELECT id, title, due_date, status, priority
+      FROM tasks
+      WHERE project_id = ${projectId}
+        AND tenant_id = ${tenantId}
+        AND status NOT IN ('done','completed','cancelled')
+        AND due_date < now()
+        AND archived_at IS NULL
+      ORDER BY due_date ASC
+      LIMIT 10
     `),
     db.execute(sql`
       SELECT COUNT(*)::int AS cnt
@@ -84,16 +110,38 @@ export async function getProjectRiskState(
       FROM project_milestones
       WHERE project_id = ${projectId} AND tenant_id = ${tenantId}
     `),
+    db.execute(sql`
+      SELECT id, name AS title, due_date
+      FROM project_milestones
+      WHERE project_id = ${projectId}
+        AND tenant_id = ${tenantId}
+        AND status != 'completed'
+        AND due_date < now()
+      ORDER BY due_date ASC
+      LIMIT 5
+    `),
   ]);
 
   const project = projectRows.rows[0] as { id: string; budget_minutes: number | null } | undefined;
-  const overdueCount = (overdueRows.rows[0] as { cnt: number })?.cnt ?? 0;
+  const overdueCount = (overdueCountRows.rows[0] as { cnt: number })?.cnt ?? 0;
+  const overdueTasks: OverdueTaskInfo[] = overdueTaskRows.rows.map((r: any) => ({
+    id: r.id,
+    title: r.title,
+    dueDate: r.due_date instanceof Date ? r.due_date.toISOString() : String(r.due_date),
+    status: r.status,
+    priority: r.priority ?? null,
+  }));
   const burnMinutes = (burnRows.rows[0] as { total_minutes: number })?.total_minutes ?? 0;
   const milestoneData = milestoneRows.rows[0] as {
     total: number;
     completed: number;
     overdue_count: number;
   } | undefined;
+  const overdueMilestones: OverdueMilestoneInfo[] = overdueMilestoneRows.rows.map((r: any) => ({
+    id: r.id,
+    title: r.title,
+    dueDate: r.due_date instanceof Date ? r.due_date.toISOString() : String(r.due_date),
+  }));
 
   const budgetMinutes = project?.budget_minutes ?? null;
   const burnPercent =
@@ -127,7 +175,7 @@ export async function getProjectRiskState(
     riskLevel = "at_risk";
   }
 
-  return { riskLevel, riskScore: healthScore, overdueCount, burnPercent, hasMilestoneOverdue, drivers };
+  return { riskLevel, riskScore: healthScore, overdueCount, burnPercent, hasMilestoneOverdue, drivers, overdueTasks, overdueMilestones };
 }
 
 /**
