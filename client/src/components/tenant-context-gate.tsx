@@ -209,6 +209,17 @@ export function TenantContextGate({ children }: TenantContextGateProps) {
       requestId = error.requestId;
       rawBody = error.body;
       
+      // 401 means session expired — redirect to login instead of showing error
+      if (error.status === 401) {
+        window.location.href = "/login";
+        return (
+          <div className="flex flex-col items-center justify-center h-full gap-3" data-testid="tenant-context-redirecting">
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Session expired. Redirecting to login...</p>
+          </div>
+        );
+      }
+      
       // Detect HTML response (404/routing issue)
       if (rawBody?.includes("<!DOCTYPE") || rawBody?.includes("<html")) {
         errorMessage = "Server returned HTML instead of JSON. This usually means the API endpoint doesn't exist or there's a routing issue.";
