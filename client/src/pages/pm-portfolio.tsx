@@ -858,10 +858,10 @@ export default function PmPortfolioDashboard() {
   const showInsightsTab = enableAiPmFocusSummary || enableReassignmentSuggestions;
 
   type DashboardTab = "portfolio" | "billing" | "insights";
-  const [activeTab, setActiveTab] = useState<DashboardTab>("portfolio");
+  const [activeTab, setActiveTab] = useState<DashboardTab>(showInsightsTab ? "insights" : "portfolio");
 
   useEffect(() => {
-    if (activeTab === "billing" && !showBillingTab) setActiveTab("portfolio");
+    if (activeTab === "billing" && !showBillingTab) setActiveTab(showInsightsTab ? "insights" : "portfolio");
     if (activeTab === "insights" && !showInsightsTab) setActiveTab("portfolio");
   }, [activeTab, showBillingTab, showInsightsTab]);
 
@@ -1083,6 +1083,21 @@ export default function PmPortfolioDashboard() {
         </div>
 
         <div className="flex items-center gap-1 border-b border-border -mx-3 sm:-mx-4 lg:-mx-6 px-3 sm:px-4 lg:px-6">
+          {showInsightsTab && (
+            <button
+              onClick={() => setActiveTab("insights")}
+              className={cn(
+                "flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors",
+                activeTab === "insights"
+                  ? "border-primary text-primary"
+                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
+              )}
+              data-testid="tab-insights"
+            >
+              <Activity className="h-3.5 w-3.5" />
+              Insights
+            </button>
+          )}
           <button
             onClick={() => setActiveTab("portfolio")}
             className={cn(
@@ -1109,21 +1124,6 @@ export default function PmPortfolioDashboard() {
             >
               <DollarSign className="h-3.5 w-3.5" />
               Billing & Finance
-            </button>
-          )}
-          {showInsightsTab && (
-            <button
-              onClick={() => setActiveTab("insights")}
-              className={cn(
-                "flex items-center gap-1.5 px-3 py-2.5 text-sm font-medium border-b-2 transition-colors",
-                activeTab === "insights"
-                  ? "border-primary text-primary"
-                  : "border-transparent text-muted-foreground hover:text-foreground hover:border-border"
-              )}
-              data-testid="tab-insights"
-            >
-              <Activity className="h-3.5 w-3.5" />
-              Insights
             </button>
           )}
         </div>
