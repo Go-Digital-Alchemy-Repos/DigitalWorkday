@@ -52,6 +52,7 @@ Digital Workday is an Asana-inspired, multi-tenant project management applicatio
 - **AI PM Focus Summary**: Weekly AI-generated summary of key priorities, risks, and capacity concerns for PMs.
 - **Client Profitability Engine**: Calculates client profitability based on time entries, cost rates, and billable rates.
 - **Task Billable Toggle**: Boolean `is_billable` on tasks, controllable by authorized roles.
+- **QuickBooks Online Integration**: OAuth 2.0 connection to QuickBooks Online for client/customer mapping and billing sync. Features: encrypted token management via `tenant_integrations`, client-to-QBO-customer mapping with manual link/unlink/lock, AI-assisted suggestion engine (weighted name/email/phone matching), customer creation in QBO from DW data, sync status tracking with audit logs. Tables: `quickbooks_customer_mappings`, `quickbooks_sync_logs`. Feature flags: `enableQuickbooksSync`, `enableQuickbooksClientMapping`, `enableQuickbooksCustomerImport`, `enableQuickbooksMappingSuggestions` (all default false). API at `/api/integrations/quickbooks`. Settings tab visible when sync flag enabled. Client detail page shows QB sync card for admin roles. Invoice export blocked for unmapped clients when mapping flag enabled. Requires `QUICKBOOKS_CLIENT_ID`, `QUICKBOOKS_CLIENT_SECRET`, `QUICKBOOKS_REDIRECT_URI` env vars.
 - **Collapsible Icon Sidebar**: Sidebar collapses to an icon-only strip with tooltips.
 - **Mobile & Responsiveness**: App-wide mobile-first patterns including responsive layouts, navigation, and touch targets.
 

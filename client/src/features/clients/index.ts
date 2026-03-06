@@ -9,3 +9,4 @@ export { ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientComma
 export type { ClientCommandPaletteProps } from "./ClientCommandPalette";
 export { ControlCenterSection } from "./ControlCenterSection";
 export { ClientProfitabilityCard } from "./ClientProfitabilityCard";
+export { ClientQuickBooksCard } from "./ClientQuickBooksCard";

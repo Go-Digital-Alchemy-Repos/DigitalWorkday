@@ -4498,3 +4498,85 @@ export const invoiceDraftItems = pgTable("invoice_draft_items", {
 
 export type InvoiceDraftItem = typeof invoiceDraftItems.$inferSelect;
 export type InsertInvoiceDraftItem = typeof invoiceDraftItems.$inferInsert;
+
+export const QuickBooksMappingStatus = {
+  UNMAPPED: "unmapped",
+  SUGGESTED: "suggested",
+  MAPPED: "mapped",
+  SYNC_ERROR: "sync_error",
+  ARCHIVED: "archived",
+} as const;
+
+export const QuickBooksMappingMethod = {
+  MANUAL: "manual",
+  EXACT_NAME: "exact_name",
+  EMAIL_MATCH: "email_match",
+  CREATED_FROM_DW: "created_from_dw",
+  IMPORTED_FROM_QBO: "imported_from_qbo",
+  REVIEWED_SUGGESTION: "reviewed_suggestion",
+} as const;
+
+export const quickbooksCustomerMappings = pgTable("quickbooks_customer_mappings", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  quickbooksCustomerId: text("quickbooks_customer_id"),
+  quickbooksDisplayName: text("quickbooks_display_name"),
+  mappingStatus: text("mapping_status").notNull().default("unmapped"),
+  mappingMethod: text("mapping_method"),
+  mappingConfidence: numeric("mapping_confidence"),
+  isLocked: boolean("is_locked").notNull().default(false),
+  lastSyncedAt: timestamp("last_synced_at"),
+  lastSyncStatus: text("last_sync_status"),
+  lastSyncError: text("last_sync_error"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  updatedByUserId: varchar("updated_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("qb_mappings_tenant_client_unique").on(table.tenantId, table.clientId),
+  uniqueIndex("qb_mappings_tenant_qb_customer_unique").on(table.tenantId, table.quickbooksCustomerId),
+  index("qb_mappings_tenant_status_idx").on(table.tenantId, table.mappingStatus),
+  index("qb_mappings_tenant_display_name_idx").on(table.tenantId, table.quickbooksDisplayName),
+  index("qb_mappings_tenant_synced_idx").on(table.tenantId, table.lastSyncedAt),
+]);
+
+export type QuickBooksCustomerMapping = typeof quickbooksCustomerMappings.$inferSelect;
+export type InsertQuickBooksCustomerMapping = typeof quickbooksCustomerMappings.$inferInsert;
+
+export const quickbooksSyncLogs = pgTable("quickbooks_sync_logs", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  entityType: text("entity_type").notNull().default("client_mapping"),
+  clientId: varchar("client_id").references(() => clients.id),
+  mappingId: varchar("mapping_id").references(() => quickbooksCustomerMappings.id),
+  quickbooksCustomerId: text("quickbooks_customer_id"),
+  action: text("action").notNull(),
+  status: text("status").notNull().default("success"),
+  message: text("message"),
+  payloadJson: jsonb("payload_json"),
+  createdByUserId: varchar("created_by_user_id").references(() => users.id),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+}, (table) => [
+  index("qb_sync_logs_tenant_idx").on(table.tenantId, table.createdAt),
+  index("qb_sync_logs_client_idx").on(table.tenantId, table.clientId),
+  index("qb_sync_logs_mapping_idx").on(table.mappingId),
+]);
+
+export type QuickBooksSyncLog = typeof quickbooksSyncLogs.$inferSelect;
+export type InsertQuickBooksSyncLog = typeof quickbooksSyncLogs.$inferInsert;
+
+export const quickbooksCustomerMappingsRelations = relations(quickbooksCustomerMappings, ({ one, many }) => ({
+  tenant: one(tenants, { fields: [quickbooksCustomerMappings.tenantId], references: [tenants.id] }),
+  client: one(clients, { fields: [quickbooksCustomerMappings.clientId], references: [clients.id] }),
+  createdBy: one(users, { fields: [quickbooksCustomerMappings.createdByUserId], references: [users.id], relationName: "qbMappingCreatedBy" }),
+  updatedBy: one(users, { fields: [quickbooksCustomerMappings.updatedByUserId], references: [users.id], relationName: "qbMappingUpdatedBy" }),
+  syncLogs: many(quickbooksSyncLogs),
+}));
+
+export const quickbooksSyncLogsRelations = relations(quickbooksSyncLogs, ({ one }) => ({
+  tenant: one(tenants, { fields: [quickbooksSyncLogs.tenantId], references: [tenants.id] }),
+  client: one(clients, { fields: [quickbooksSyncLogs.clientId], references: [clients.id] }),
+  mapping: one(quickbooksCustomerMappings, { fields: [quickbooksSyncLogs.mappingId], references: [quickbooksCustomerMappings.id] }),
+  createdBy: one(users, { fields: [quickbooksSyncLogs.createdByUserId], references: [users.id] }),
+}));

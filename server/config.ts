@@ -236,6 +236,10 @@ export const config = {
     enableBillingApprovalWorkflow: optionalEnvBool("ENABLE_BILLING_APPROVAL_WORKFLOW", true),
     enableInvoiceDraftBuilder: optionalEnvBool("ENABLE_INVOICE_DRAFT_BUILDER", true),
     enableClientProfitability: optionalEnvBool("ENABLE_CLIENT_PROFITABILITY", true),
+    enableQuickbooksSync: optionalEnvBool("ENABLE_QUICKBOOKS_SYNC", false),
+    enableQuickbooksClientMapping: optionalEnvBool("ENABLE_QUICKBOOKS_CLIENT_MAPPING", false),
+    enableQuickbooksCustomerImport: optionalEnvBool("ENABLE_QUICKBOOKS_CUSTOMER_IMPORT", false),
+    enableQuickbooksMappingSuggestions: optionalEnvBool("ENABLE_QUICKBOOKS_MAPPING_SUGGESTIONS", false),
   },
 
   tenancyEnforcement: {

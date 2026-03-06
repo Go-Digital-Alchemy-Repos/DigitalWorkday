@@ -7,10 +7,12 @@ import { AgreementTab } from "@/components/settings/agreement-tab";
 import { EmailLogsTab } from "@/components/settings/email-logs-tab";
 import { MessagesTab } from "@/components/settings/messages-tab";
 import { PipelineAutomationTab } from "@/components/settings/pipeline-automation-tab";
+import { QuickBooksMappingTab } from "@/components/settings/quickbooks-mapping-tab";
 import { DefaultTenantDocumentsManager } from "@/features/tenantDefaultDocs";
 import AlertRulesPage from "@/pages/settings-alerts";
 import DigestConfigPage from "@/pages/settings-digest";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
+import { SiQuickbooks } from "react-icons/si";
 
 const BASE_SETTINGS_TABS = [
   { id: "integrations", label: "Integrations", icon: Puzzle, flag: null },
@@ -21,6 +23,7 @@ const BASE_SETTINGS_TABS = [
   { id: "default-docs", label: "Default Docs", icon: FileArchive, flag: null },
   { id: "alerts", label: "Alerts", icon: Bell, flag: "enableAlertAutomation" as const },
   { id: "digest", label: "Ops Digest", icon: Newspaper, flag: "enableWeeklyOpsDigest" as const },
+  { id: "quickbooks", label: "QuickBooks", icon: SiQuickbooks, flag: "enableQuickbooksSync" as const },
 ];
 
 export default function SettingsPage() {
@@ -29,7 +32,7 @@ export default function SettingsPage() {
   const [, params] = useRoute("/settings/:tab");
   const flags = useFeatureFlags();
 
-  if (user?.role !== "admin" && user?.role !== "super_user") {
+  if (user?.role !== "admin" && user?.role !== "super_user" && user?.role !== "tenant_owner") {
     return <Redirect to="/" />;
   }
 
@@ -109,6 +112,12 @@ export default function SettingsPage() {
           {flags.enableWeeklyOpsDigest && (
             <TabsContent value="digest" className="mt-6">
               <DigestConfigPage />
+            </TabsContent>
+          )}
+
+          {flags.enableQuickbooksSync && (
+            <TabsContent value="quickbooks" className="mt-6">
+              <QuickBooksMappingTab />
             </TabsContent>
           )}
         </Tabs>

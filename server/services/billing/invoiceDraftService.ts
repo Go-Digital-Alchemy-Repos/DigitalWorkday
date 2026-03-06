@@ -2,6 +2,7 @@ import { db } from "../../db";
 import { invoiceDrafts, invoiceDraftItems, timeEntries, users, tasks, projects, clients } from "@shared/schema";
 import { eq, and, gte, lte, sql, isNull, ne } from "drizzle-orm";
 import { AppError } from "../../lib/errors";
+import { config } from "../../config";
 
 export interface GenerateDraftOptions {
   tenantId: string;
@@ -201,6 +202,14 @@ export async function exportInvoiceDraft(
   if (!draft) throw new AppError(404, "Invoice draft not found");
   if (draft.status !== "draft") {
     throw new AppError(400, `Cannot export a draft with status "${draft.status}"`);
+  }
+
+  if (config.features.enableQuickbooksSync && config.features.enableQuickbooksClientMapping && draft.clientId) {
+    const { getClientMapping } = await import("../../integrations/quickbooks/customerMappingService");
+    const mapping = await getClientMapping(tenantId, draft.clientId);
+    if (!mapping || mapping.mappingStatus !== "mapped") {
+      throw new AppError(400, "This client is not linked to a QuickBooks customer. Please map the client in Settings > QuickBooks before exporting.");
+    }
   }
 
   await db

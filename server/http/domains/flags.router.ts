@@ -71,6 +71,10 @@ router.get("/features/flags", async (_req, res) => {
       enableBillingApprovalWorkflow: config.features.enableBillingApprovalWorkflow,
       enableInvoiceDraftBuilder: config.features.enableInvoiceDraftBuilder,
       enableClientProfitability: config.features.enableClientProfitability,
+      enableQuickbooksSync: config.features.enableQuickbooksSync,
+      enableQuickbooksClientMapping: config.features.enableQuickbooksClientMapping,
+      enableQuickbooksCustomerImport: config.features.enableQuickbooksCustomerImport,
+      enableQuickbooksMappingSuggestions: config.features.enableQuickbooksMappingSuggestions,
     });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/features/flags", _req);

@@ -40,6 +40,10 @@ export interface FeatureFlags {
   enableBillingApprovalWorkflow: boolean;
   enableInvoiceDraftBuilder: boolean;
   enableClientProfitability: boolean;
+  enableQuickbooksSync: boolean;
+  enableQuickbooksClientMapping: boolean;
+  enableQuickbooksCustomerImport: boolean;
+  enableQuickbooksMappingSuggestions: boolean;
 }
 
 const ALL_OFF: FeatureFlags = {
@@ -82,6 +86,10 @@ const ALL_OFF: FeatureFlags = {
   enableBillingApprovalWorkflow: false,
   enableInvoiceDraftBuilder: false,
   enableClientProfitability: false,
+  enableQuickbooksSync: false,
+  enableQuickbooksClientMapping: false,
+  enableQuickbooksCustomerImport: false,
+  enableQuickbooksMappingSuggestions: false,
 };
 
 export function useFeatureFlags(): FeatureFlags {

@@ -54,6 +54,7 @@ import reassignmentRouter from "./domains/reassignment.router";
 import whatIfRouter from "./domains/whatif.router";
 import riskAckRouter from "./domains/risk-ack.router";
 import billingRouter from "./domains/billing.router";
+import quickbooksRouter from "./domains/quickbooks.router";
 
 import usersRouter from "../routes/users.router";
 import crmRouter from "../routes/crm.router";
@@ -386,6 +387,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "billing",
     description: "Billing Approval Workflow: submit, approve, reject, and queue time entries for billing review.",
+  },
+  {
+    path: "/api/integrations/quickbooks",
+    router: quickbooksRouter,
+    policy: "authTenant",
+    domain: "quickbooks",
+    description: "QuickBooks Online integration: OAuth, customer mapping, sync, suggestions.",
   },
   {
     path: "/api",
