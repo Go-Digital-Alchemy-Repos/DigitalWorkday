@@ -120,7 +120,7 @@ export function setupAuth(app: Express): void {
       maxAge: 30 * 24 * 60 * 60 * 1000,
       httpOnly: true,
       secure: needsSecureCookie,
-      sameSite: needsSecureCookie ? "none" : "lax",
+      sameSite: isProduction ? "none" as const : "lax" as const,
       path: "/",
     },
   });
@@ -242,7 +242,7 @@ export function setupAuth(app: Express): void {
           path: "/",
           httpOnly: true,
           secure: needsSecureCookie,
-          sameSite: needsSecureCookie ? "none" : "lax",
+          sameSite: isProduction ? "none" as const : "lax" as const,
         });
         res.json({ success: true });
       });
