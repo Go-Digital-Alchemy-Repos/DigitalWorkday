@@ -11,7 +11,7 @@ import { handleRouteError, AppError } from "../../lib/errors";
 const router = Router();
 
 function isAdmin(req: Request): boolean {
-  return req.user?.role === UserRole.ADMIN || req.user?.role === UserRole.SUPER_USER;
+  return req.user?.role === UserRole.ADMIN || req.user?.role === UserRole.SUPER_USER || req.user?.role === UserRole.TENANT_OWNER;
 }
 
 const templateContentSchema = z.object({

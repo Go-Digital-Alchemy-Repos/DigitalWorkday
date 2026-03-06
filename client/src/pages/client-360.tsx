@@ -1369,7 +1369,7 @@ interface EffectivePermissions {
 function MessagesTab({ clientId }: { clientId: string }) {
   const { toast } = useToast();
   const { user: authUser } = useAuth();
-  const isAdmin = authUser?.role === "admin" || authUser?.role === "super_user";
+  const isAdmin = authUser?.role === "admin" || authUser?.role === "super_user" || authUser?.role === "tenant_owner";
 
   const { data: permsData } = useQuery<{ permissions: any; effective: EffectivePermissions }>({
     queryKey: ["/api/crm/message-permissions"],

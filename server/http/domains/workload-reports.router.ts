@@ -22,7 +22,7 @@ function isSuperUser(req: Request): boolean {
 
 function isAdmin(req: Request): boolean {
   const role = (req.user as any)?.role;
-  return role === UserRole.ADMIN || role === UserRole.SUPER_USER;
+  return role === UserRole.ADMIN || role === UserRole.SUPER_USER || role === UserRole.TENANT_OWNER;
 }
 
 interface EmployeeWorkload {

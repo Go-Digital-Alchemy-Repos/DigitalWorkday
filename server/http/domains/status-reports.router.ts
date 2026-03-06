@@ -61,7 +61,7 @@ router.post("/:projectId/status-reports/generate", async (req: Request, res: Res
     if (!userId) return res.status(401).json({ error: "Authentication required" });
 
     const currentUser = req.user as any;
-    const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
+    const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user" || currentUser?.role === "tenant_owner";
 
     const { projectId } = req.params;
     await assertProjectAccess(tenantId, projectId, userId, isAdmin);
@@ -108,7 +108,7 @@ router.get("/:projectId/status-reports", async (req: Request, res: Response) => 
     if (!userId) return res.status(401).json({ error: "Authentication required" });
 
     const currentUser = req.user as any;
-    const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
+    const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user" || currentUser?.role === "tenant_owner";
 
     const { projectId } = req.params;
     await assertProjectAccess(tenantId, projectId, userId, isAdmin);

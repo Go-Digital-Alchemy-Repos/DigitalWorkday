@@ -294,7 +294,7 @@ export default function TemplatesPage() {
   const [isDialogOpen, setIsDialogOpen] = useState(false);
   const [editingTemplate, setEditingTemplate] = useState<ProjectTemplate | undefined>();
 
-  const isAdmin = user?.role === "admin" || user?.role === "super_user";
+  const isAdmin = user?.role === "admin" || user?.role === "super_user" || user?.role === "tenant_owner";
 
   const { data: templates = [], isLoading } = useQuery<ProjectTemplate[]>({
     queryKey: ["/api/project-templates"],

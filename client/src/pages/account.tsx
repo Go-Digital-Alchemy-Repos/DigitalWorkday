@@ -26,12 +26,13 @@ export default function AccountPage() {
 
   const isAdmin = user?.role === "admin";
   const isSuperUser = user?.role === "super_user";
+  const isTenantOwner = user?.role === "tenant_owner";
 
   if (isLoading) {
     return <PageSkeleton variant="compact" />;
   }
 
-  if (!isAdmin && !isSuperUser) {
+  if (!isAdmin && !isSuperUser && !isTenantOwner) {
     return <Redirect to="/" />;
   }
 

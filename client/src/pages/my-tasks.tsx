@@ -615,7 +615,7 @@ export default function MyTasks() {
   });
 
   const { data: tenantUsers } = useQuery<UserType[]>({
-    queryKey: ["/api/v1/users"],
+    queryKey: ["/api/users"],
   });
 
   const createPersonalTaskMutation = useCreatePersonalTask({

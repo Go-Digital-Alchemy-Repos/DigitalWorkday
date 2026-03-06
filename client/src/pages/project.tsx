@@ -115,7 +115,7 @@ export default function ProjectPage() {
   const [, navigate] = useLocation();
 
   const { user: currentUser } = useAuth();
-  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
+  const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user" || currentUser?.role === "tenant_owner";
   const { enableProjectMilestones, enableCapacityWhatIf } = useFeatureFlags();
 
   // Subscribe to real-time updates for this project

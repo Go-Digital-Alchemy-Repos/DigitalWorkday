@@ -720,7 +720,7 @@ export default function Home() {
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [selectedTask, setSelectedTask] = useState<TaskWithRelations | null>(null);
 
-  const isAdmin = user?.role === "admin" || user?.role === "super_user";
+  const isAdmin = user?.role === "admin" || user?.role === "super_user" || user?.role === "tenant_owner";
   const { enableReassignmentSuggestions } = useFeatureFlags();
 
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({

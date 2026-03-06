@@ -17,8 +17,9 @@ function requireTenantAdmin(req: any, res: any, next: any) {
   
   const isSuperUser = user.role === UserRole.SUPER_USER;
   const isAdmin = user.role === UserRole.ADMIN;
+  const isTenantOwner = user.role === UserRole.TENANT_OWNER;
   
-  if (!isSuperUser && !isAdmin) {
+  if (!isSuperUser && !isAdmin && !isTenantOwner) {
     throw AppError.forbidden("Admin access required");
   }
   

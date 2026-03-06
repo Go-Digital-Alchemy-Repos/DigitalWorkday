@@ -20,7 +20,7 @@ const router = createApiRouter({
 
 function isAdmin(req: Request): boolean {
   const role = (req.user as any)?.role;
-  return role === UserRole.ADMIN || role === UserRole.SUPER_USER;
+  return role === UserRole.ADMIN || role === UserRole.SUPER_USER || role === UserRole.TENANT_OWNER;
 }
 
 function rows(result: any): any[] {
