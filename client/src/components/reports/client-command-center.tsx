@@ -10,7 +10,7 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Building2, ShieldAlert, Activity, CheckSquare, Clock, TrendingUp, Users, HeartPulse, ArrowUpDown, ChevronUp, ChevronDown, Sparkles, Info, Camera, Tag, Factory, X, FolderKanban, Wallet } from "lucide-react";
-import { CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
+import { CLIENT_STAGE_LABELS, CLIENT_STAGES_ORDERED, type ClientStageType } from "@shared/schema";
 import {
   ResponsiveContainer,
   PieChart,
@@ -1275,6 +1275,217 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
 
 // ── MAIN COMPONENT ─────────────────────────────────────────────────────────────
 
+const PIPELINE_BAR_COLORS: Record<string, string> = {
+  lead: "bg-slate-500",
+  proposal: "bg-blue-500",
+  content_strategy: "bg-indigo-500",
+  design: "bg-violet-500",
+  development: "bg-amber-500",
+  final_testing: "bg-orange-500",
+  active_maintenance: "bg-green-500",
+};
+
+const PIPELINE_TEXT_COLORS: Record<string, string> = {
+  lead: "text-slate-600 dark:text-slate-400",
+  proposal: "text-blue-600 dark:text-blue-400",
+  content_strategy: "text-indigo-600 dark:text-indigo-400",
+  design: "text-violet-600 dark:text-violet-400",
+  development: "text-amber-600 dark:text-amber-400",
+  final_testing: "text-orange-600 dark:text-orange-400",
+  active_maintenance: "text-green-600 dark:text-green-400",
+};
+
+interface StageSummaryItem {
+  stage: string;
+  clientCount: number;
+  projectCount: number;
+}
+
+function PipelineTab() {
+  const { data: stageSummary, isLoading } = useQuery<StageSummaryItem[]>({
+    queryKey: ["/api/v1/clients/stages/summary"],
+  });
+
+  const totalClients = useMemo(() => {
+    if (!stageSummary) return 0;
+    return stageSummary.reduce((sum, s) => sum + s.clientCount, 0);
+  }, [stageSummary]);
+
+  const totalProjects = useMemo(() => {
+    if (!stageSummary) return 0;
+    return stageSummary.reduce((sum, s) => sum + s.projectCount, 0);
+  }, [stageSummary]);
+
+  const stageMap = useMemo(() => {
+    const map: Record<string, StageSummaryItem> = {};
+    if (stageSummary) stageSummary.forEach((s) => { map[s.stage] = s; });
+    return map;
+  }, [stageSummary]);
+
+  if (isLoading) {
+    return (
+      <div className="space-y-6">
+        <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+          {Array.from({ length: 4 }).map((_, i) => (
+            <Card key={i}><CardContent className="p-4"><Skeleton className="h-3 w-20 mb-2" /><Skeleton className="h-7 w-16" /></CardContent></Card>
+          ))}
+        </div>
+        <Card><CardContent className="p-6"><Skeleton className="h-48 w-full" /></CardContent></Card>
+      </div>
+    );
+  }
+
+  const activeStages = CLIENT_STAGES_ORDERED.filter(s => (stageMap[s]?.clientCount || 0) > 0);
+  const earlyCount = ["lead", "proposal"].reduce((sum, s) => sum + (stageMap[s]?.clientCount || 0), 0);
+  const midCount = ["content_strategy", "design", "development"].reduce((sum, s) => sum + (stageMap[s]?.clientCount || 0), 0);
+  const lateCount = ["final_testing", "active_maintenance"].reduce((sum, s) => sum + (stageMap[s]?.clientCount || 0), 0);
+
+  return (
+    <div className="space-y-6" data-testid="pipeline-report">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
+        <Card data-testid="metric-total-clients">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Total Clients</p>
+            <p className="text-2xl font-semibold">{totalClients}</p>
+          </CardContent>
+        </Card>
+        <Card data-testid="metric-total-projects">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Total Projects</p>
+            <p className="text-2xl font-semibold">{totalProjects}</p>
+          </CardContent>
+        </Card>
+        <Card data-testid="metric-stages-used">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Active Stages</p>
+            <p className="text-2xl font-semibold">
+              {stageSummary?.filter(s => s.clientCount > 0).length || 0}
+              <span className="text-sm text-muted-foreground font-normal"> / {CLIENT_STAGES_ORDERED.length}</span>
+            </p>
+          </CardContent>
+        </Card>
+        <Card data-testid="metric-avg-per-stage">
+          <CardContent className="p-4">
+            <p className="text-xs text-muted-foreground">Avg Clients/Stage</p>
+            <p className="text-2xl font-semibold">
+              {totalClients > 0 ? (totalClients / CLIENT_STAGES_ORDERED.length).toFixed(1) : 0}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardHeader className="pb-2">
+          <CardTitle className="text-base">Pipeline Distribution</CardTitle>
+          <CardDescription>Visual breakdown of clients across pipeline stages</CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex h-4 rounded-full overflow-hidden bg-muted mb-6">
+            {activeStages.map((stage) => {
+              const count = stageMap[stage]?.clientCount || 0;
+              const pct = totalClients > 0 ? (count / totalClients) * 100 : 0;
+              return (
+                <div
+                  key={stage}
+                  className={cn(PIPELINE_BAR_COLORS[stage], "transition-all duration-300")}
+                  style={{ width: `${pct}%`, minWidth: activeStages.length > 1 ? "4px" : undefined }}
+                  title={`${CLIENT_STAGE_LABELS[stage as ClientStageType]}: ${count} (${pct.toFixed(1)}%)`}
+                  data-testid={`report-pipeline-segment-${stage}`}
+                />
+              );
+            })}
+          </div>
+          <div className="space-y-3">
+            {CLIENT_STAGES_ORDERED.map((stage) => {
+              const count = stageMap[stage]?.clientCount || 0;
+              const projects = stageMap[stage]?.projectCount || 0;
+              const pct = totalClients > 0 ? (count / totalClients) * 100 : 0;
+              return (
+                <div key={stage} className="flex items-center gap-3 flex-wrap" data-testid={`report-stage-row-${stage}`}>
+                  <span className={cn("h-3 w-3 rounded-full shrink-0", PIPELINE_BAR_COLORS[stage])} />
+                  <span className="text-sm font-medium w-40 shrink-0">{CLIENT_STAGE_LABELS[stage as ClientStageType]}</span>
+                  <div className="flex-1 min-w-[120px] h-6 bg-muted rounded-md overflow-hidden relative">
+                    {pct > 0 && (
+                      <div className={cn(PIPELINE_BAR_COLORS[stage], "h-full rounded-md transition-all duration-500 opacity-80")} style={{ width: `${pct}%` }} />
+                    )}
+                    <span className="absolute inset-0 flex items-center justify-center text-xs font-medium text-foreground">
+                      {count} client{count !== 1 ? "s" : ""} ({pct.toFixed(0)}%)
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-1 text-xs text-muted-foreground w-24 shrink-0 justify-end">
+                    <FolderKanban className="h-3 w-3" />
+                    <span>{projects} project{projects !== 1 ? "s" : ""}</span>
+                  </div>
+                </div>
+              );
+            })}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="grid gap-4 md:grid-cols-2">
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Stage Details</CardTitle>
+            <CardDescription>Clients and projects per stage</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {CLIENT_STAGES_ORDERED.map((stage) => {
+                const count = stageMap[stage]?.clientCount || 0;
+                const projects = stageMap[stage]?.projectCount || 0;
+                return (
+                  <div key={stage} className="flex items-center justify-between gap-2 py-2 border-b last:border-b-0" data-testid={`report-stage-detail-${stage}`}>
+                    <div className="flex items-center gap-2">
+                      <span className={cn("h-2 w-2 rounded-full", PIPELINE_BAR_COLORS[stage])} />
+                      <span className="text-sm">{CLIENT_STAGE_LABELS[stage as ClientStageType]}</span>
+                    </div>
+                    <div className="flex items-center gap-3">
+                      <Badge variant="outline" className={cn("text-xs", PIPELINE_TEXT_COLORS[stage])}>
+                        {count} client{count !== 1 ? "s" : ""}
+                      </Badge>
+                      <span className="text-xs text-muted-foreground">{projects} proj.</span>
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Pipeline Health</CardTitle>
+            <CardDescription>Distribution insights</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-4">
+              {[
+                { label: "Early Pipeline", description: "Lead & Proposal", count: earlyCount, color: "text-blue-600 dark:text-blue-400" },
+                { label: "Mid Pipeline", description: "Strategy, Design & Development", count: midCount, color: "text-violet-600 dark:text-violet-400" },
+                { label: "Late Pipeline", description: "Testing & Maintenance", count: lateCount, color: "text-green-600 dark:text-green-400" },
+              ].map((group) => (
+                <div key={group.label} className="flex items-center justify-between gap-3" data-testid={`report-pipeline-health-${group.label.toLowerCase().replace(/\s+/g, '-')}`}>
+                  <div>
+                    <p className="font-medium">{group.label}</p>
+                    <p className="text-xs text-muted-foreground">{group.description}</p>
+                  </div>
+                  <div className="text-right">
+                    <p className={cn("text-lg font-semibold", group.color)}>{group.count}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {totalClients > 0 ? `${((group.count / totalClients) * 100).toFixed(0)}%` : "0%"}
+                    </p>
+                  </div>
+                </div>
+              ))}
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+  );
+}
+
 export function ClientCommandCenter() {
   const [rangeDays, setRangeDays] = useState(30);
   const [activeTab, setActiveTab] = useState("overview");
@@ -1384,6 +1595,7 @@ export function ClientCommandCenter() {
             { value: "risk", label: "Risk" },
             ...(flags.enableClientHealthIndex ? [{ value: "health", label: "Health" }] : []),
             ...(flags.enableForecastingLayer ? [{ value: "forecasts", label: "Forecasts" }] : []),
+            { value: "pipeline", label: "Pipeline" },
           ]}
           value={activeTab}
           onValueChange={setActiveTab}
@@ -1427,6 +1639,10 @@ export function ClientCommandCenter() {
               Forecasts
             </TabsTrigger>
           )}
+          <TabsTrigger value="pipeline" className="text-xs gap-1.5" data-testid="tab-client-pipeline">
+            <FolderKanban className="h-3.5 w-3.5" />
+            Pipeline
+          </TabsTrigger>
         </TabsList>
         </div>
 
@@ -1492,6 +1708,9 @@ export function ClientCommandCenter() {
             </Tabs>
           </TabsContent>
         )}
+        <TabsContent value="pipeline" className="mt-4">
+          <PipelineTab />
+        </TabsContent>
       </Tabs>
     </ReportCommandCenterLayout>
   );
