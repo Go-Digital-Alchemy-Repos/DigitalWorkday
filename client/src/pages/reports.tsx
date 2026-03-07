@@ -22,6 +22,9 @@ import { MobileTabSelect } from "@/components/reports/mobile-tab-select";
 import { cn } from "@/lib/utils";
 
 const ProjectCommandCenter = lazy(() => import("@/components/reports/project-command-center").then(m => ({ default: m.ProjectCommandCenter })));
+const MessagesReports = lazy(() => import("@/components/reports/messages-reports").then(m => ({ default: m.MessagesReports })));
+const EmployeeCommandCenter = lazy(() => import("@/components/reports/employee-command-center").then(m => ({ default: m.EmployeeCommandCenter })));
+const ClientCommandCenter = lazy(() => import("@/components/reports/client-command-center").then(m => ({ default: m.ClientCommandCenter })));
 
 type ReportView = "landing" | "workload" | "time" | "project-cc" | "messages" | "employee-cc" | "client-cc";
 
