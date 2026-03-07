@@ -363,7 +363,7 @@
     pointer-events: none;
     opacity: var(--texture-opacity, 0);
     background-image: var(--texture-bg, none);
-    mix-blend-mode: multiply;
+    mix-blend-mode: overlay;
   }
 
   body > #root {
