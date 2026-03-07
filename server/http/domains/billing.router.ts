@@ -23,7 +23,7 @@ import {
 } from "../../services/billing/clientProfitabilityService";
 import { clients as clientsTable } from "@shared/schema";
 import { db } from "../../db";
-import { eq, inArray } from "drizzle-orm";
+import { eq, inArray, sql } from "drizzle-orm";
 
 const router = createApiRouter({ policy: "authTenant", skipEnvelope: true });
 
@@ -300,6 +300,45 @@ router.get("/analytics/client-profitability", async (req: Request, res: Response
     res.json(results);
   } catch (error) {
     return handleRouteError(res, error, "GET /api/analytics/client-profitability", req);
+  }
+});
+
+router.get("/billing/billable-tasks/completed", async (req, res) => {
+  try {
+    if (!checkInvoiceFlag(res, req)) return;
+    if (!checkPermission(req, res)) return;
+    const tenantId = getEffectiveTenantId(req);
+
+    const result = await db.execute(sql`
+      SELECT
+        t.id,
+        t.title,
+        t.description,
+        t.updated_at AS completed_at,
+        t.estimate_minutes,
+        t.project_id,
+        p.name AS project_name,
+        COALESCE(te_agg.total_seconds, 0)::int AS actual_seconds
+      FROM tasks t
+      LEFT JOIN projects p ON p.id = t.project_id
+      LEFT JOIN (
+        SELECT task_id, SUM(duration_seconds) AS total_seconds
+        FROM time_entries
+        WHERE tenant_id = ${tenantId}
+        GROUP BY task_id
+      ) te_agg ON te_agg.task_id = t.id
+      WHERE t.tenant_id = ${tenantId}
+        AND t.status = 'done'
+        AND t.is_billable = true
+        AND t.is_personal = false
+      ORDER BY t.updated_at DESC
+      LIMIT 50
+    `);
+
+    const rows = result.rows ?? result ?? [];
+    res.json(rows);
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/billing/billable-tasks/completed", req);
   }
 });
 

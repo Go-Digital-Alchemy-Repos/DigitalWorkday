@@ -27,6 +27,8 @@ import {
   ChevronDown as ChevronDownIcon,
   Ban,
   Loader2,
+  Send,
+  CheckCircle,
 } from "lucide-react";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
@@ -842,6 +844,111 @@ function InvoiceDraftsCard() {
   );
 }
 
+interface BillableTask {
+  id: string;
+  title: string;
+  description: string | null;
+  completed_at: string;
+  estimate_minutes: number | null;
+  project_id: string | null;
+  project_name: string | null;
+  actual_seconds: number;
+}
+
+function formatDuration(minutes: number): string {
+  const h = Math.floor(minutes / 60);
+  const m = minutes % 60;
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function formatSeconds(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function BillableTasksCard() {
+  const { data: tasks = [], isLoading } = useQuery<BillableTask[]>({
+    queryKey: ["/api/billing/billable-tasks/completed"],
+  });
+
+  return (
+    <Card data-testid="card-billable-tasks">
+      <CardHeader className="pb-3">
+        <CardTitle className="text-sm font-semibold flex items-center gap-2">
+          <CheckCircle className="h-4 w-4 text-emerald-500" />
+          Billable Tasks
+          {tasks.length > 0 && (
+            <Badge className="bg-emerald-100 text-emerald-700 border-emerald-200 dark:bg-emerald-900/30 dark:text-emerald-400 dark:border-emerald-700 ml-1" data-testid="badge-billable-count">
+              {tasks.length}
+            </Badge>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="p-0">
+        {isLoading ? (
+          <div className="px-4 pb-4 space-y-2">
+            {[1, 2, 3].map((i) => <Skeleton key={i} className="h-12 w-full rounded" />)}
+          </div>
+        ) : tasks.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-muted-foreground">
+            <CheckCircle className="h-8 w-8 mb-2 opacity-20" />
+            <p className="text-sm">No completed billable tasks</p>
+            <p className="text-xs mt-0.5">Completed tasks marked as billable will appear here</p>
+          </div>
+        ) : (
+          <div className="divide-y divide-border">
+            <div className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 px-4 py-2 text-[10px] font-medium text-muted-foreground uppercase tracking-wide border-b border-border/50">
+              <span>Task</span>
+              <span className="text-right">Completed</span>
+              <span className="text-right">Estimate</span>
+              <span className="text-right">Actual</span>
+              <span></span>
+            </div>
+            <div className="max-h-[400px] overflow-y-auto divide-y divide-border">
+              {tasks.map((task) => (
+                <div key={task.id} className="grid grid-cols-[1fr_auto_auto_auto_auto] gap-2 items-center px-4 py-2.5 hover:bg-muted/30 transition-colors" data-testid={`billable-task-${task.id}`}>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate" data-testid={`text-billable-title-${task.id}`}>{task.title}</p>
+                    {task.description && (
+                      <p className="text-xs text-muted-foreground truncate mt-0.5" data-testid={`text-billable-desc-${task.id}`}>{task.description}</p>
+                    )}
+                    {task.project_name && (
+                      <p className="text-[10px] text-muted-foreground/70 mt-0.5">{task.project_name}</p>
+                    )}
+                  </div>
+                  <span className="text-xs text-muted-foreground tabular-nums whitespace-nowrap" data-testid={`text-billable-date-${task.id}`}>
+                    {new Date(task.completed_at).toLocaleDateString()}
+                  </span>
+                  <span className="text-xs tabular-nums text-right whitespace-nowrap" data-testid={`text-billable-estimate-${task.id}`}>
+                    {task.estimate_minutes ? formatDuration(task.estimate_minutes) : "—"}
+                  </span>
+                  <span className="text-xs tabular-nums text-right whitespace-nowrap" data-testid={`text-billable-actual-${task.id}`}>
+                    {task.actual_seconds > 0 ? formatSeconds(task.actual_seconds) : "—"}
+                  </span>
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="h-7 text-xs gap-1.5 whitespace-nowrap"
+                    data-testid={`button-send-qb-${task.id}`}
+                  >
+                    <Send className="h-3 w-3" />
+                    Send to QuickBooks
+                  </Button>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
 export default function PmPortfolioDashboard() {
   const { enablePmPortfolioDashboard, enableReassignmentSuggestions, enableAiPmFocusSummary, enableBillingApprovalWorkflow, enableInvoiceDraftBuilder, enableClientProfitability } = useFeatureFlags();
   const { user } = useAuth();
@@ -1401,7 +1508,10 @@ export default function PmPortfolioDashboard() {
             )}
 
             {enableInvoiceDraftBuilder && (
-              <InvoiceDraftsCard />
+              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <InvoiceDraftsCard />
+                <BillableTasksCard />
+              </div>
             )}
 
             {enableClientProfitability && (
