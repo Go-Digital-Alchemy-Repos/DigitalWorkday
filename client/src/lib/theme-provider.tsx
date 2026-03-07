@@ -58,13 +58,22 @@ function readStoredSystemFlag(): boolean {
   return oldMode === "system";
 }
 
+const FONT_DEFAULTS: Record<string, string> = {
+  "--font-sans": "Inter, system-ui, sans-serif",
+  "--font-serif": "Georgia, serif",
+  "--font-mono": "'JetBrains Mono', monospace",
+};
+
 function applyPackTokens(pack: ThemePack) {
   const root = document.documentElement;
+  Object.entries(FONT_DEFAULTS).forEach(([key, defaultVal]) => {
+    root.style.setProperty(key, pack.tokens[key] ?? defaultVal);
+  });
   Object.entries(pack.tokens).forEach(([key, value]) => {
     root.style.setProperty(key, value);
   });
-  root.classList.remove("light", "dark");
-  root.classList.add(pack.kind);
+  root.classList.remove("light", "dark", "funky");
+  root.classList.add(pack.kind === "light" ? "light" : "dark");
 }
 
 export function ThemeProvider({ children }: { children: React.ReactNode }) {
