@@ -99,12 +99,57 @@ function isChunkLoadError(error: unknown): boolean {
 
 const CHUNK_RELOAD_KEY = "__chunk_reload_ts";
 
+function showReloadOverlay(): void {
+  try {
+    if (document.getElementById("__mwd_reload_overlay")) return;
+    const overlay = document.createElement("div");
+    overlay.id = "__mwd_reload_overlay";
+    overlay.style.cssText = [
+      "position:fixed",
+      "inset:0",
+      "background:var(--background,#ffffff)",
+      "display:flex",
+      "flex-direction:column",
+      "align-items:center",
+      "justify-content:center",
+      "gap:12px",
+      "z-index:99999",
+      "font-family:inherit",
+    ].join(";");
+
+    const spinner = document.createElement("div");
+    spinner.style.cssText = [
+      "width:32px",
+      "height:32px",
+      "border:3px solid #e5e7eb",
+      "border-top-color:#6b7280",
+      "border-radius:50%",
+      "animation:__mwd_spin 0.7s linear infinite",
+    ].join(";");
+
+    const style = document.createElement("style");
+    style.textContent = "@keyframes __mwd_spin{to{transform:rotate(360deg)}}";
+    document.head.appendChild(style);
+
+    const text = document.createElement("p");
+    text.style.cssText = "margin:0;font-size:0.875rem;color:#6b7280";
+    text.textContent = "Updating to latest version\u2026";
+
+    overlay.appendChild(spinner);
+    overlay.appendChild(text);
+    document.body.appendChild(overlay);
+  } catch {
+    // Never let the overlay injection crash anything
+  }
+}
+
 function handleChunkLoadError(error: unknown): never {
   if (isChunkLoadError(error)) {
     const lastReload = sessionStorage.getItem(CHUNK_RELOAD_KEY);
     const now = Date.now();
     if (!lastReload || now - Number(lastReload) > 10_000) {
       sessionStorage.setItem(CHUNK_RELOAD_KEY, String(now));
+      showReloadOverlay();
       window.location.reload();
     }
   }

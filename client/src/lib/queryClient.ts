@@ -1,5 +1,6 @@
-import { QueryClient, QueryFunction } from "@tanstack/react-query";
+import { QueryClient, QueryCache, QueryFunction } from "@tanstack/react-query";
 import { parseApiError, isAgreementError } from "./parseApiError";
+import { toast } from "@/hooks/use-toast";
 
 /**
  * Handle agreement-required responses by redirecting to accept-terms page.
@@ -304,7 +305,34 @@ export const getQueryFn: <T>(options: {
     return await res.json();
   };
 
+// Track recently toasted query keys to avoid spamming identical error toasts.
+const recentlyToasted = new Set<string>();
+
+const queryCache = new QueryCache({
+  onError: (error, query) => {
+    // Skip errors that have their own dedicated handling paths
+    if (error instanceof ApiError) {
+      if (error.status === 401 || error.status === 403 || error.status === 404 || error.status === 451) {
+        return;
+      }
+    }
+
+    // Deduplicate: only show once per query key per 60 seconds
+    const cacheKey = String(query.queryKey[0] ?? "unknown");
+    if (recentlyToasted.has(cacheKey)) return;
+    recentlyToasted.add(cacheKey);
+    setTimeout(() => recentlyToasted.delete(cacheKey), 60_000);
+
+    toast({
+      title: "Something went wrong",
+      description: "A request failed. Please try again or refresh the page.",
+      variant: "destructive",
+    });
+  },
+});
+
 export const queryClient = new QueryClient({
+  queryCache,
   defaultOptions: {
     queries: {
       queryFn: getQueryFn({ on401: "throw" }),

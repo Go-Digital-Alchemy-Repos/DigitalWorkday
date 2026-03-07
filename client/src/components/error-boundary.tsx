@@ -1,5 +1,5 @@
 import { Component, type ReactNode } from "react";
-import { AlertCircle, RefreshCw } from "lucide-react";
+import { AlertCircle, RefreshCw, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { isChunkLoadError } from "@/lib/perf";
 
@@ -48,32 +48,34 @@ interface ErrorBoundaryProps {
 interface ErrorBoundaryState {
   hasError: boolean;
   error: Error | null;
+  isAwaitingReload: boolean;
 }
 
 export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundaryState> {
   constructor(props: ErrorBoundaryProps) {
     super(props);
-    this.state = { hasError: false, error: null };
+    this.state = { hasError: false, error: null, isAwaitingReload: false };
   }
 
   static getDerivedStateFromError(error: Error): ErrorBoundaryState {
-    return { hasError: true, error };
+    return { hasError: true, error, isAwaitingReload: false };
   }
 
   componentDidCatch(error: Error, errorInfo: React.ErrorInfo) {
-    console.error("[ErrorBoundary]", error, errorInfo);
-
     if (isChunkLoadError(error)) {
       const key = "__chunk_reload_ts";
       const lastReload = sessionStorage.getItem(key);
       const now = Date.now();
       if (!lastReload || now - Number(lastReload) > 10_000) {
         sessionStorage.setItem(key, String(now));
+        this.setState({ isAwaitingReload: true });
         window.location.reload();
         return;
       }
+      // Already reloaded recently — fall through to normal error UI
     }
 
+    console.error("[ErrorBoundary]", error, errorInfo);
     reportErrorToBackend(error, {
       source: "ErrorBoundary",
       componentStack: errorInfo.componentStack?.slice(0, 2000),
@@ -82,11 +84,25 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
   }
 
   handleReset = () => {
-    this.setState({ hasError: false, error: null });
+    this.setState({ hasError: false, error: null, isAwaitingReload: false });
   };
 
   render() {
     if (this.state.hasError) {
+      // Chunk load error: show a clean loading state instead of the error UI.
+      // The page is about to reload — no need to scare the user with an error screen.
+      if (this.state.isAwaitingReload || isChunkLoadError(this.state.error)) {
+        return (
+          <div
+            className="flex flex-col items-center justify-center h-full gap-3 py-12"
+            data-testid="error-boundary-updating"
+          >
+            <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">Updating to latest version…</p>
+          </div>
+        );
+      }
+
       if (this.props.fallback) {
         return this.props.fallback;
       }
