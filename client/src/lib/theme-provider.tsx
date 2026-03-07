@@ -125,9 +125,9 @@ export function ThemeProvider({ children }: { children: React.ReactNode }) {
     localStorage.setItem(LS_ACCENT_KEY, a);
   }, []);
 
-  const resolvedTheme: ResolvedTheme = activePack.kind;
+  const resolvedTheme: ResolvedTheme = activePack.kind === "light" ? "light" : "dark";
 
-  const mode: ThemeMode = isSystemMode ? "system" : activePack.kind;
+  const mode: ThemeMode = isSystemMode ? "system" : (activePack.kind === "light" ? "light" : "dark");
 
   const setMode = useCallback((m: ThemeMode) => {
     if (m === "system") {

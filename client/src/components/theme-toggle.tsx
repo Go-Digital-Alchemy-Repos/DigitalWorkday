@@ -37,6 +37,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
 
   const lightPacks = availablePacks.filter((p) => p.kind === "light");
   const darkPacks = availablePacks.filter((p) => p.kind === "dark");
+  const funkyPacks = availablePacks.filter((p) => p.kind === "funky");
 
   return (
     <DropdownMenu>
@@ -89,6 +90,27 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
             {packId === pack.id && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
           </DropdownMenuItem>
         ))}
+        {funkyPacks.length > 0 && (
+          <>
+            <DropdownMenuSeparator />
+            <DropdownMenuLabel className="flex items-center gap-2 text-xs">
+              <Palette className="h-3.5 w-3.5" />
+              Funky Themes
+            </DropdownMenuLabel>
+            {funkyPacks.map((pack) => (
+              <DropdownMenuItem
+                key={pack.id}
+                onClick={() => setPackId(pack.id)}
+                data-testid={`theme-pack-${pack.id}`}
+                className="flex items-center gap-2"
+              >
+                <PackSwatch pack={pack} />
+                <span className="flex-1 truncate">{pack.name}</span>
+                {packId === pack.id && <Check className="h-3.5 w-3.5 shrink-0 text-primary" />}
+              </DropdownMenuItem>
+            ))}
+          </>
+        )}
       </DropdownMenuContent>
     </DropdownMenu>
   );

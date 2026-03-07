@@ -449,6 +449,7 @@ function AppearanceCard() {
 
   const lightPacks = availablePacks.filter((p) => p.kind === "light");
   const darkPacks = availablePacks.filter((p) => p.kind === "dark");
+  const funkyPacks = availablePacks.filter((p) => p.kind === "funky");
 
   return (
     <Card>
@@ -495,6 +496,25 @@ function AppearanceCard() {
             ))}
           </div>
         </div>
+
+        {funkyPacks.length > 0 && (
+          <div className="space-y-3">
+            <Label className="flex items-center gap-1.5">
+              <Palette className="h-3.5 w-3.5" />
+              Funky Themes
+            </Label>
+            <div className="flex gap-2 flex-wrap">
+              {funkyPacks.map((pack) => (
+                <PackPreview
+                  key={pack.id}
+                  pack={pack}
+                  isActive={packId === pack.id}
+                  onClick={() => setPackId(pack.id)}
+                />
+              ))}
+            </div>
+          </div>
+        )}
 
         <p className="text-xs text-muted-foreground">
           Changes are saved automatically
