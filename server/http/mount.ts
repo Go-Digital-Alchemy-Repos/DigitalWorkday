@@ -33,6 +33,7 @@ import reportsV2ForecastingRouter from "./domains/reports-v2-forecasting.router"
 import reportsV2SnapshotsRouter from "./domains/reports-v2-snapshots.router";
 import reportsV2AlertsRouter from "./domains/reports-v2-alerts.router";
 import reportsV2DigestRouter from "./domains/reports-v2-digest.router";
+import reportsV2ProjectsRouter from "./domains/reports-v2-projects.router";
 import { startAlertScheduler, stopAlertScheduler } from "../alerts/alertScheduler";
 import { startDigestScheduler, stopDigestScheduler } from "../digests/digestScheduler";
 import { startRetentionScheduler, stopRetentionScheduler } from "../retention/retentionScheduler";
@@ -275,6 +276,13 @@ const REGISTERED_DOMAINS: DomainEntry[] = [
     policy: "authTenant",
     domain: "reports-v2-digest",
     description: "Weekly ops digest: schedule config and preview.",
+  },
+  {
+    path: "/api/reports/v2",
+    router: reportsV2ProjectsRouter,
+    policy: "authTenant",
+    domain: "reports-v2-projects",
+    description: "Project Command Center: overview, tasks, time, progress, risk.",
   },
   {
     path: "/api",

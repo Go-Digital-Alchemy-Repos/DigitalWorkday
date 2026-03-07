@@ -21,20 +21,16 @@ const ReportsTab = lazy(() => import("@/components/settings/reports-tab").then(m
 import { MobileTabSelect } from "@/components/reports/mobile-tab-select";
 import { cn } from "@/lib/utils";
 
-const MessagesReports = lazy(() => import("@/components/reports/messages-reports"));
-const TaskAnalytics = lazy(() => import("@/components/reports/task-analytics"));
-const EmployeeCommandCenter = lazy(() => import("@/components/reports/employee-command-center").then(m => ({ default: m.EmployeeCommandCenter })));
-const ClientCommandCenter = lazy(() => import("@/components/reports/client-command-center").then(m => ({ default: m.ClientCommandCenter })));
+const ProjectCommandCenter = lazy(() => import("@/components/reports/project-command-center").then(m => ({ default: m.ProjectCommandCenter })));
 
-type ReportView = "landing" | "workload" | "time" | "projects" | "messages" | "task-analytics" | "employee-cc" | "client-cc";
+type ReportView = "landing" | "workload" | "time" | "project-cc" | "messages" | "employee-cc" | "client-cc";
 
 const REPORT_TABS: Array<{ view: Exclude<ReportView, "landing">; label: string; Icon: React.ElementType; flag?: keyof import("@/hooks/use-feature-flags").FeatureFlags }> = [
+  { view: "project-cc",      label: "Project Command Center", Icon: BarChart3 },
   { view: "employee-cc",     label: "Employee Command Center", Icon: Users,          flag: "enableEmployeeCommandCenter" },
   { view: "client-cc",       label: "Client Command Center",   Icon: Building2,      flag: "enableClientCommandCenter" },
-  { view: "task-analytics",  label: "Task Analysis",           Icon: CheckSquare },
   { view: "workload",        label: "Workload Reports",        Icon: Users },
   { view: "time",            label: "Time Tracking",           Icon: Clock },
-  { view: "projects",        label: "Project Analysis",        Icon: Target },
   { view: "messages",        label: "Messages",                Icon: MessageSquare },
 ];
 
@@ -108,11 +104,11 @@ export default function ReportsPage() {
       color: "bg-violet-600",
     }] : []),
     {
-      icon: <CheckSquare className="h-6 w-6 text-white" />,
-      title: "Task Analytics",
-      description: "Completion rates, overdue analysis, priority & status distribution, assignee workload",
-      view: "task-analytics" as ReportView,
-      color: "bg-emerald-500",
+      icon: <BarChart3 className="h-6 w-6 text-white" />,
+      title: "Project Command Center",
+      description: "Complete project health: progress, tasks, time, milestones and risk scoring",
+      view: "project-cc" as ReportView,
+      color: "bg-indigo-600",
     },
     {
       icon: <Users className="h-6 w-6 text-white" />,
@@ -127,13 +123,6 @@ export default function ReportsPage() {
       description: "Analyze time entries by project, employee, and date range with detailed breakdowns",
       view: "time" as ReportView,
       color: "bg-green-500",
-    },
-    {
-      icon: <Target className="h-6 w-6 text-white" />,
-      title: "Project Analytics",
-      description: "Project progress, budget utilization, and milestone tracking across all projects",
-      view: "projects" as ReportView,
-      color: "bg-purple-500",
     },
     {
       icon: <MessageSquare className="h-6 w-6 text-white" />,
@@ -198,10 +187,9 @@ export default function ReportsPage() {
     switch (currentView) {
       case "employee-cc": return "Employee Command Center";
       case "client-cc": return "Client Command Center";
-      case "task-analytics": return "Task Analytics";
+      case "project-cc": return "Project Command Center";
       case "workload": return "Workload Reports";
       case "time": return "Time Tracking Reports";
-      case "projects": return "Project Analytics";
       case "messages": return "Messages Reports";
       default: return "Reports";
     }
@@ -211,7 +199,7 @@ export default function ReportsPage() {
     switch (currentView) {
       case "employee-cc": return "Workload, time, capacity, risk and trend analysis per employee";
       case "client-cc": return "Client engagement, time, task load, SLA and risk analysis per client";
-      case "task-analytics": return "Task completion rates, overdue analysis, and distribution metrics";
+      case "project-cc": return "Project health, task metrics, time distribution, and risk scoring";
       case "messages": return "Response times, SLA compliance, and conversation analytics";
       default: return "Detailed analytics and exportable reports";
     }
@@ -221,7 +209,7 @@ export default function ReportsPage() {
     switch (currentView) {
       case "employee-cc": return <Users className="h-5 w-5 text-primary" />;
       case "client-cc": return <Building2 className="h-5 w-5 text-primary" />;
-      case "task-analytics": return <CheckSquare className="h-5 w-5 text-primary" />;
+      case "project-cc": return <BarChart3 className="h-5 w-5 text-primary" />;
       case "messages": return <MessageSquare className="h-5 w-5 text-primary" />;
       default: return <BarChart3 className="h-5 w-5 text-primary" />;
     }
@@ -301,8 +289,8 @@ export default function ReportsPage() {
             <EmployeeCommandCenter />
           ) : currentView === "client-cc" && flags.enableClientCommandCenter ? (
             <ClientCommandCenter />
-          ) : currentView === "task-analytics" ? (
-            <TaskAnalytics />
+          ) : currentView === "project-cc" ? (
+            <ProjectCommandCenter />
           ) : currentView === "messages" ? (
             <MessagesReports />
           ) : currentView === "workload" && flags?.reportWorkloadV2 ? (
