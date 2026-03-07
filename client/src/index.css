@@ -351,6 +351,23 @@
 
   body {
     @apply font-sans antialiased bg-background text-foreground;
+    position: relative;
+  }
+
+  body::before {
+    content: "";
+    position: fixed;
+    inset: 0;
+    z-index: 0;
+    pointer-events: none;
+    opacity: var(--texture-opacity, 0);
+    background-image: var(--texture-bg, none);
+    mix-blend-mode: multiply;
+  }
+
+  body > #root {
+    position: relative;
+    z-index: 1;
   }
 
   input, textarea, select, button {

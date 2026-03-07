@@ -58,15 +58,17 @@ function readStoredSystemFlag(): boolean {
   return oldMode === "system";
 }
 
-const FONT_DEFAULTS: Record<string, string> = {
+const TOKEN_DEFAULTS: Record<string, string> = {
   "--font-sans": "Inter, system-ui, sans-serif",
   "--font-serif": "Georgia, serif",
   "--font-mono": "'JetBrains Mono', monospace",
+  "--texture-opacity": "0",
+  "--texture-bg": "none",
 };
 
 function applyPackTokens(pack: ThemePack) {
   const root = document.documentElement;
-  Object.entries(FONT_DEFAULTS).forEach(([key, defaultVal]) => {
+  Object.entries(TOKEN_DEFAULTS).forEach(([key, defaultVal]) => {
     root.style.setProperty(key, pack.tokens[key] ?? defaultVal);
   });
   Object.entries(pack.tokens).forEach(([key, value]) => {
