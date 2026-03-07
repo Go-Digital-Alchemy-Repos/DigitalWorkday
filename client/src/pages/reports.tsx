@@ -2,7 +2,6 @@ import { useState, lazy, Suspense } from "react";
 import { useAuth } from "@/lib/auth";
 import { Redirect } from "wouter";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
-const WorkloadReportsV2 = lazy(() => import("@/components/reports/workload-reports-v2").then(m => ({ default: m.WorkloadReportsV2 })));
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -12,12 +11,9 @@ import {
   Users, 
   ArrowLeft,
   FileText,
-  Target,
   MessageSquare,
   Building2,
-  CheckSquare,
 } from "lucide-react";
-const ReportsTab = lazy(() => import("@/components/settings/reports-tab").then(m => ({ default: m.ReportsTab })));
 import { MobileTabSelect } from "@/components/reports/mobile-tab-select";
 import { cn } from "@/lib/utils";
 
@@ -25,16 +21,16 @@ const ProjectCommandCenter = lazy(() => import("@/components/reports/project-com
 const MessagesReports = lazy(() => import("@/components/reports/messages-reports").then(m => ({ default: m.MessagesReports })));
 const EmployeeCommandCenter = lazy(() => import("@/components/reports/employee-command-center").then(m => ({ default: m.EmployeeCommandCenter })));
 const ClientCommandCenter = lazy(() => import("@/components/reports/client-command-center").then(m => ({ default: m.ClientCommandCenter })));
+const TimeWorkloadCommandCenter = lazy(() => import("@/components/reports/time-workload-command-center").then(m => ({ default: m.TimeWorkloadCommandCenter })));
 
-type ReportView = "landing" | "workload" | "time" | "project-cc" | "messages" | "employee-cc" | "client-cc";
+type ReportView = "landing" | "time-workload-cc" | "project-cc" | "messages" | "employee-cc" | "client-cc";
 
 const REPORT_TABS: Array<{ view: Exclude<ReportView, "landing">; label: string; Icon: React.ElementType; flag?: keyof import("@/hooks/use-feature-flags").FeatureFlags }> = [
-  { view: "project-cc",      label: "Project Command Center", Icon: BarChart3 },
-  { view: "employee-cc",     label: "Employee Command Center", Icon: Users,          flag: "enableEmployeeCommandCenter" },
-  { view: "client-cc",       label: "Client Command Center",   Icon: Building2,      flag: "enableClientCommandCenter" },
-  { view: "workload",        label: "Workload Reports",        Icon: Users },
-  { view: "time",            label: "Time Tracking",           Icon: Clock },
-  { view: "messages",        label: "Messages",                Icon: MessageSquare },
+  { view: "project-cc",        label: "Project Command Center",         Icon: BarChart3 },
+  { view: "employee-cc",       label: "Employee Command Center",        Icon: Users,         flag: "enableEmployeeCommandCenter" },
+  { view: "client-cc",         label: "Client Command Center",          Icon: Building2,     flag: "enableClientCommandCenter" },
+  { view: "time-workload-cc",  label: "Time & Workload Command Center", Icon: Clock },
+  { view: "messages",          label: "Messages",                       Icon: MessageSquare },
 ];
 
 
@@ -114,18 +110,11 @@ export default function ReportsPage() {
       color: "bg-indigo-600",
     },
     {
-      icon: <Users className="h-6 w-6 text-white" />,
-      title: "Workload Reports",
-      description: "View task distribution and workload across your team members with completion metrics",
-      view: "workload" as ReportView,
-      color: "bg-blue-500",
-    },
-    {
       icon: <Clock className="h-6 w-6 text-white" />,
-      title: "Time Tracking",
-      description: "Analyze time entries by project, employee, and date range with detailed breakdowns",
-      view: "time" as ReportView,
-      color: "bg-green-500",
+      title: "Time & Workload Command Center",
+      description: "Unified time tracking, workload distribution, capacity planning and risk analysis across your team",
+      view: "time-workload-cc" as ReportView,
+      color: "bg-teal-600",
     },
     {
       icon: <MessageSquare className="h-6 w-6 text-white" />,
@@ -188,33 +177,34 @@ export default function ReportsPage() {
 
   const getViewTitle = () => {
     switch (currentView) {
-      case "employee-cc": return "Employee Command Center";
-      case "client-cc": return "Client Command Center";
-      case "project-cc": return "Project Command Center";
-      case "workload": return "Workload Reports";
-      case "time": return "Time Tracking Reports";
-      case "messages": return "Messages Reports";
-      default: return "Reports";
+      case "employee-cc":      return "Employee Command Center";
+      case "client-cc":        return "Client Command Center";
+      case "project-cc":       return "Project Command Center";
+      case "time-workload-cc": return "Time & Workload Command Center";
+      case "messages":         return "Messages Reports";
+      default:                 return "Reports";
     }
   };
 
   const getViewDescription = () => {
     switch (currentView) {
-      case "employee-cc": return "Workload, time, capacity, risk and trend analysis per employee";
-      case "client-cc": return "Client engagement, time, task load, SLA and risk analysis per client";
-      case "project-cc": return "Project health, task metrics, time distribution, and risk scoring";
-      case "messages": return "Response times, SLA compliance, and conversation analytics";
-      default: return "Detailed analytics and exportable reports";
+      case "employee-cc":      return "Workload, time, capacity, risk and trend analysis per employee";
+      case "client-cc":        return "Client engagement, time, task load, SLA and risk analysis per client";
+      case "project-cc":       return "Project health, task metrics, time distribution, and risk scoring";
+      case "time-workload-cc": return "Unified time tracking, workload distribution, capacity planning and risk analysis";
+      case "messages":         return "Response times, SLA compliance, and conversation analytics";
+      default:                 return "Detailed analytics and exportable reports";
     }
   };
 
   const getViewIcon = () => {
     switch (currentView) {
-      case "employee-cc": return <Users className="h-5 w-5 text-primary" />;
-      case "client-cc": return <Building2 className="h-5 w-5 text-primary" />;
-      case "project-cc": return <BarChart3 className="h-5 w-5 text-primary" />;
-      case "messages": return <MessageSquare className="h-5 w-5 text-primary" />;
-      default: return <BarChart3 className="h-5 w-5 text-primary" />;
+      case "employee-cc":      return <Users className="h-5 w-5 text-primary" />;
+      case "client-cc":        return <Building2 className="h-5 w-5 text-primary" />;
+      case "project-cc":       return <BarChart3 className="h-5 w-5 text-primary" />;
+      case "time-workload-cc": return <Clock className="h-5 w-5 text-primary" />;
+      case "messages":         return <MessageSquare className="h-5 w-5 text-primary" />;
+      default:                 return <BarChart3 className="h-5 w-5 text-primary" />;
     }
   };
 
@@ -294,13 +284,11 @@ export default function ReportsPage() {
             <ClientCommandCenter />
           ) : currentView === "project-cc" ? (
             <ProjectCommandCenter />
+          ) : currentView === "time-workload-cc" ? (
+            <TimeWorkloadCommandCenter />
           ) : currentView === "messages" ? (
             <MessagesReports />
-          ) : currentView === "workload" && flags?.reportWorkloadV2 ? (
-            <WorkloadReportsV2 />
-          ) : (
-            <ReportsTab defaultTab={currentView === "workload" ? "workload" : currentView === "time" ? "time" : undefined} />
-          )}
+          ) : null}
         </Suspense>
       </div>
     </ScrollArea>

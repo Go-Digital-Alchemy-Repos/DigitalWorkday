@@ -23,6 +23,17 @@ const router = Router();
 
 router.use(reportingGuard);
 
+async function dbRows<T extends Record<string, unknown>>(
+  q: Parameters<typeof db.execute>[0]
+): Promise<T[]> {
+  const result = await db.execute<T>(q);
+  if (Array.isArray(result)) return result as T[];
+  if (result && typeof result === "object" && "rows" in result) {
+    return (result as { rows: T[] }).rows;
+  }
+  return result as unknown as T[];
+}
+
 function firstRow<T>(rows: T[]): T | null {
   return rows[0] ?? null;
 }
@@ -55,7 +66,7 @@ router.get("/workload/team", async (req: Request, res: Response) => {
       ? sql`AND u.id = ANY(ARRAY[${sql.join(filters.userIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       user_id: string;
       first_name: string | null;
       last_name: string | null;
@@ -114,7 +125,7 @@ router.get("/workload/team", async (req: Request, res: Response) => {
       LIMIT ${limit} OFFSET ${offset}
     `);
 
-    const countRow = firstRow(await db.execute<{ total: string }>(sql`
+    const countRow = firstRow(await dbRows<{ total: string }>(sql`
       SELECT COUNT(DISTINCT u.id) AS total
       FROM users u
       WHERE u.tenant_id = ${tenantId} AND u.role IN ('admin', 'employee')
@@ -176,7 +187,7 @@ router.get("/workload/users/:userId", async (req: Request, res: Response) => {
     const { userId } = req.params;
     const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
 
-    const userRow = firstRow(await db.execute<{
+    const userRow = firstRow(await dbRows<{
       id: string;
       first_name: string | null;
       last_name: string | null;
@@ -191,7 +202,7 @@ router.get("/workload/users/:userId", async (req: Request, res: Response) => {
       return res.status(404).json({ error: "User not found" });
     }
 
-    const summaryRow = firstRow(await db.execute<{
+    const summaryRow = firstRow(await dbRows<{
       active_tasks: string;
       overdue_count: string;
       completed_count: string;
@@ -211,7 +222,7 @@ router.get("/workload/users/:userId", async (req: Request, res: Response) => {
       WHERE u.id = ${userId} AND u.tenant_id = ${tenantId}
     `));
 
-    const dailyTrend = await db.execute<{
+    const dailyTrend = await dbRows<{
       day: string;
       completed_tasks: string;
       hours_tracked: string;
@@ -228,7 +239,7 @@ router.get("/workload/users/:userId", async (req: Request, res: Response) => {
       ORDER BY gs.day
     `);
 
-    const topProjects = await db.execute<{
+    const topProjects = await dbRows<{
       project_id: string;
       project_name: string;
       hours_tracked: string;
@@ -251,7 +262,7 @@ router.get("/workload/users/:userId", async (req: Request, res: Response) => {
       LIMIT 5
     `);
 
-    const overdueTaskSample = await db.execute<{
+    const overdueTaskSample = await dbRows<{
       id: string;
       title: string;
       due_date: string;
@@ -320,7 +331,7 @@ router.get("/workload/capacity", async (req: Request, res: Response) => {
       ? sql`AND u.id = ANY(ARRAY[${sql.join(filters.userIds.map(id => sql`${id}`), sql`, `)}]::text[])`
       : sql``;
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       user_id: string;
       first_name: string | null;
       last_name: string | null;
@@ -412,7 +423,7 @@ router.get("/workload/risk", async (req: Request, res: Response) => {
     const tenantId = getTenantId(req);
     const { startDate, endDate } = parseReportRange(req.query as Record<string, unknown>);
 
-    const rows = await db.execute<{
+    const rows = await dbRows<{
       user_id: string;
       first_name: string | null;
       last_name: string | null;
