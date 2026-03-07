@@ -425,6 +425,16 @@
 
   .no-default-active-elevate {}
 
+  .qb-action-btn {
+    background-color: hsl(var(--qb-btn-bg)) !important;
+    color: hsl(var(--qb-btn-fg)) !important;
+    border-color: transparent !important;
+  }
+  .qb-action-btn:hover {
+    background-color: hsl(var(--qb-btn-bg-hover)) !important;
+    color: hsl(var(--qb-btn-fg)) !important;
+  }
+
 
   /**
    * Toggleable backgrounds go behind the content. Hoverable/active goes on top.

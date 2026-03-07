@@ -67,6 +67,9 @@ const TOKEN_DEFAULTS: Record<string, string> = {
   "--card-glow": "none",
   "--tracking-global": "normal",
   "--icon-saturation": "1",
+  "--qb-btn-bg": "142 63% 42%",
+  "--qb-btn-bg-hover": "142 63% 36%",
+  "--qb-btn-fg": "0 0% 100%",
 };
 
 function applyPackTokens(pack: ThemePack) {

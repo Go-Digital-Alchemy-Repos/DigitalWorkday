@@ -932,10 +932,10 @@ function BillableTasksCard() {
                   </span>
                   <Button
                     size="sm"
-                    className="h-7 text-xs gap-1.5 whitespace-nowrap bg-emerald-600 hover:bg-emerald-700 text-white dark:bg-emerald-500 dark:hover:bg-emerald-600"
+                    className="h-7 text-xs gap-1.5 whitespace-nowrap qb-action-btn"
                     data-testid={`button-send-qb-${task.id}`}
                   >
-                    <Send className="h-3 w-3 text-white" />
+                    <Send className="h-3 w-3" />
                     Send to QuickBooks
                   </Button>
                 </div>

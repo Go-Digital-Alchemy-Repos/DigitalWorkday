@@ -141,6 +141,9 @@ export const THEME_PACKS: ThemePack[] = [
       "--section-comments-border": "215 12% 18%",
       "--section-time": "30 12% 10%",
       "--section-time-border": "30 12% 18%",
+      "--qb-btn-bg": "172 58% 38%",
+      "--qb-btn-bg-hover": "172 58% 32%",
+      "--qb-btn-fg": "0 0% 100%",
     },
   },
   {
@@ -192,6 +195,9 @@ export const THEME_PACKS: ThemePack[] = [
       "--section-comments-border": "230 12% 15%",
       "--section-time": "35 12% 9%",
       "--section-time-border": "35 12% 15%",
+      "--qb-btn-bg": "255 65% 58%",
+      "--qb-btn-bg-hover": "255 65% 50%",
+      "--qb-btn-fg": "0 0% 100%",
     },
   },
   {
@@ -243,6 +249,9 @@ export const THEME_PACKS: ThemePack[] = [
       "--section-comments-border": "210 6% 16%",
       "--section-time": "30 6% 10%",
       "--section-time-border": "30 6% 16%",
+      "--qb-btn-bg": "185 42% 40%",
+      "--qb-btn-bg-hover": "185 42% 34%",
+      "--qb-btn-fg": "0 0% 100%",
     },
   },
   {
@@ -296,6 +305,9 @@ export const THEME_PACKS: ThemePack[] = [
       "--section-comments-border": "210 100% 94%",
       "--section-time": "30 100% 97%",
       "--section-time-border": "30 100% 92%",
+      "--qb-btn-bg": "148 42% 36%",
+      "--qb-btn-bg-hover": "148 42% 30%",
+      "--qb-btn-fg": "0 0% 100%",
     },
   },
   {
@@ -356,6 +368,9 @@ export const THEME_PACKS: ThemePack[] = [
       "--section-comments-border": "227 21% 18%",
       "--section-time": "197 21% 19%",
       "--section-time-border": "227 21% 18%",
+      "--qb-btn-bg": "150 27% 61%",
+      "--qb-btn-bg-hover": "150 27% 50%",
+      "--qb-btn-fg": "224 23% 16%",
     },
   },
   {
@@ -418,6 +433,9 @@ export const THEME_PACKS: ThemePack[] = [
       "--section-comments-border": "330 30% 16%",
       "--section-time": "55 25% 8%",
       "--section-time-border": "55 35% 16%",
+      "--qb-btn-bg": "185 100% 46%",
+      "--qb-btn-bg-hover": "185 100% 38%",
+      "--qb-btn-fg": "320 20% 2%",
     },
   },
   {
@@ -478,6 +496,9 @@ export const THEME_PACKS: ThemePack[] = [
       "--section-comments-border": "160 15% 12%",
       "--section-time": "80 12% 6%",
       "--section-time-border": "80 18% 12%",
+      "--qb-btn-bg": "120 100% 38%",
+      "--qb-btn-bg-hover": "120 100% 32%",
+      "--qb-btn-fg": "0 0% 2%",
     },
   },
 ];
