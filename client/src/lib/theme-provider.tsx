@@ -64,6 +64,7 @@ const TOKEN_DEFAULTS: Record<string, string> = {
   "--font-mono": "'JetBrains Mono', monospace",
   "--texture-opacity": "0",
   "--texture-bg": "none",
+  "--card-glow": "none",
 };
 
 function applyPackTokens(pack: ThemePack) {

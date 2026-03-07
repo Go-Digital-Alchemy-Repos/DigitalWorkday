@@ -370,6 +370,10 @@
     z-index: 1;
   }
 
+  .shadcn-card {
+    box-shadow: var(--card-glow, none);
+  }
+
   input, textarea, select, button {
     font-family: inherit;
   }

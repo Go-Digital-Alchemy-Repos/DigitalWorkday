@@ -306,6 +306,7 @@ export const THEME_PACKS: ThemePack[] = [
     tokens: {
       ...SHARED_TOKENS_DARK,
       "--font-sans": "'Orbitron', system-ui, sans-serif",
+      "--card-glow": "0 0 12px hsla(330, 100%, 50%, 0.25), 0 0 30px hsla(330, 100%, 50%, 0.08)",
       "--background": "320 20% 2%",
       "--foreground": "330 100% 95%",
       "--border": "330 40% 18%",
