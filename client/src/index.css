@@ -342,6 +342,7 @@
 
   html {
     font-family: var(--font-sans);
+    letter-spacing: var(--tracking-global, normal);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     text-rendering: optimizeLegibility;

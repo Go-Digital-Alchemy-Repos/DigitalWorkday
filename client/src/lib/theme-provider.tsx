@@ -65,6 +65,7 @@ const TOKEN_DEFAULTS: Record<string, string> = {
   "--texture-opacity": "0",
   "--texture-bg": "none",
   "--card-glow": "none",
+  "--tracking-global": "normal",
 };
 
 function applyPackTokens(pack: ThemePack) {
