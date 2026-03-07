@@ -1508,10 +1508,10 @@ export default function PmPortfolioDashboard() {
             )}
 
             {enableInvoiceDraftBuilder && (
-              <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-                <InvoiceDraftsCard />
+              <>
                 <BillableTasksCard />
-              </div>
+                <InvoiceDraftsCard />
+              </>
             )}
 
             {enableClientProfitability && (
