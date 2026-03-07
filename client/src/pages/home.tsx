@@ -545,15 +545,6 @@ function EmployeeDashboardSection({
         </Card>
       </div>
 
-      <Card>
-        <CardContent className="pt-6">
-          <TaskProgressBar 
-            stats={taskBreakdown.stats} 
-            showMilestones 
-          />
-        </CardContent>
-      </Card>
-
       {(taskBreakdown.overdue.length > 0 || taskBreakdown.dueToday.length > 0) && (
         <Card className="border-amber-200 dark:border-amber-800">
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
