@@ -81,6 +81,12 @@ router.get("/integrations/status", requireSuperUser, async (req, res) => {
       settings?.stripePublishableKey && 
       settings?.stripeSecretKeyEncrypted
     );
+
+    const quickbooksConfigured = !!(
+      process.env.QUICKBOOKS_CLIENT_ID &&
+      process.env.QUICKBOOKS_CLIENT_SECRET &&
+      process.env.QUICKBOOKS_REDIRECT_URI
+    );
     
     const encryptionConfigured = isEncryptionAvailable();
     
@@ -89,6 +95,7 @@ router.get("/integrations/status", requireSuperUser, async (req, res) => {
       r2: r2Configured,
       s3: s3Configured,
       stripe: stripeConfigured,
+      quickbooks: quickbooksConfigured,
       encryptionConfigured,
     });
   } catch (error) {
@@ -98,6 +105,7 @@ router.get("/integrations/status", requireSuperUser, async (req, res) => {
       r2: false,
       s3: false,
       stripe: false,
+      quickbooks: false,
       encryptionConfigured: isEncryptionAvailable(),
     });
   }
@@ -684,6 +692,26 @@ router.delete("/integrations/stripe/secret/:secretName", requireSuperUser, async
   } catch (error) {
     console.error("[integrations] Failed to clear Stripe secret:", error);
     res.status(500).json({ error: "Failed to clear secret" });
+  }
+});
+
+router.get("/integrations/quickbooks", requireSuperUser, async (_req, res) => {
+  try {
+    const clientId = process.env.QUICKBOOKS_CLIENT_ID || "";
+    const clientSecret = process.env.QUICKBOOKS_CLIENT_SECRET || "";
+    const redirectUri = process.env.QUICKBOOKS_REDIRECT_URI || "";
+
+    res.json({
+      configured: !!(clientId && clientSecret && redirectUri),
+      config: {
+        clientId: clientId ? maskSecret(clientId) : null,
+        clientSecret: clientSecret ? maskSecret(clientSecret) : null,
+        redirectUri: redirectUri || null,
+      },
+    });
+  } catch (error) {
+    console.error("[integrations] Failed to get QuickBooks status:", error);
+    res.status(500).json({ error: "Failed to get QuickBooks status" });
   }
 });
 

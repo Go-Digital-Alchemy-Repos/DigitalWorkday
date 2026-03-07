@@ -70,7 +70,17 @@ interface IntegrationStatus {
   mailgun: boolean;
   r2: boolean;
   stripe: boolean;
+  quickbooks: boolean;
   encryptionConfigured: boolean;
+}
+
+interface QuickBooksSettings {
+  configured: boolean;
+  config: {
+    clientId: string | null;
+    clientSecret: string | null;
+    redirectUri: string | null;
+  };
 }
 
 interface MailgunSettings {
@@ -1038,6 +1048,11 @@ export default function SuperAdminSettingsPage() {
     enabled: activeTab === "integrations",
   });
 
+  const { data: quickbooksSettings } = useQuery<QuickBooksSettings>({
+    queryKey: ["/api/v1/super/integrations/quickbooks"],
+    enabled: activeTab === "integrations",
+  });
+
   const { data: stripeSettings, isLoading: stripeLoading } = useQuery<StripeSettings>({
     queryKey: ["/api/v1/super/integrations/stripe"],
     enabled: activeTab === "integrations",
@@ -1519,6 +1534,21 @@ export default function SuperAdminSettingsPage() {
                         <span className="font-medium">Stripe</span>
                         <Badge variant={integrationStatus?.stripe ? "default" : "secondary"} className="ml-2">
                           {integrationStatus?.stripe ? "Configured" : "Not Configured"}
+                        </Badge>
+                      </a>
+                      <a 
+                        href="#section-quickbooks" 
+                        className="flex items-center gap-2 p-3 border rounded-lg hover-elevate cursor-pointer"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          document.getElementById("section-quickbooks")?.scrollIntoView({ behavior: "smooth" });
+                        }}
+                        data-testid="link-quickbooks-section"
+                      >
+                        <FileText className="h-4 w-4 text-muted-foreground" />
+                        <span className="font-medium">QuickBooks</span>
+                        <Badge variant={integrationStatus?.quickbooks ? "default" : "secondary"} className="ml-2">
+                          {integrationStatus?.quickbooks ? "Configured" : "Not Configured"}
                         </Badge>
                       </a>
                     </div>
@@ -2137,6 +2167,82 @@ export default function SuperAdminSettingsPage() {
                       </div>
                     </div>
                   )}
+                </CardContent>
+              </Card>
+
+              <Card id="section-quickbooks">
+                <CardHeader>
+                  <div>
+                    <CardTitle className="flex items-center gap-2">
+                      <FileText className="h-5 w-5" />
+                      QuickBooks Online Configuration
+                    </CardTitle>
+                    <CardDescription>Configure QuickBooks Online OAuth integration for invoicing and billing sync</CardDescription>
+                  </div>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-4">
+                    <div className="flex items-center gap-2 mb-4">
+                      <Badge variant={quickbooksSettings?.configured ? "default" : "secondary"} data-testid="badge-quickbooks-status">
+                        {quickbooksSettings?.configured ? "Configured" : "Not Configured"}
+                      </Badge>
+                      {quickbooksSettings?.configured && (
+                        <span className="text-xs text-muted-foreground">OAuth credentials are set</span>
+                      )}
+                    </div>
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label>Client ID</Label>
+                        <Input
+                          value={quickbooksSettings?.config?.clientId || ""}
+                          disabled
+                          placeholder="Not configured"
+                          data-testid="input-quickbooks-client-id"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label>Client Secret</Label>
+                        <Input
+                          type="password"
+                          value={quickbooksSettings?.config?.clientSecret || ""}
+                          disabled
+                          placeholder="Not configured"
+                          data-testid="input-quickbooks-client-secret"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      <Label>Redirect URI</Label>
+                      <Input
+                        value={quickbooksSettings?.config?.redirectUri || ""}
+                        disabled
+                        placeholder="Not configured"
+                        data-testid="input-quickbooks-redirect-uri"
+                      />
+                    </div>
+
+                    <div className="rounded-lg border border-border bg-muted/30 p-4">
+                      <div className="flex items-start gap-3">
+                        <AlertCircle className="h-5 w-5 text-muted-foreground mt-0.5 shrink-0" />
+                        <div className="space-y-1">
+                          <p className="text-sm font-medium">Environment Variable Configuration</p>
+                          <p className="text-xs text-muted-foreground">
+                            QuickBooks credentials are configured via environment variables in your deployment settings. Set the following variables:
+                          </p>
+                          <ul className="text-xs text-muted-foreground mt-2 space-y-1 font-mono">
+                            <li>QUICKBOOKS_CLIENT_ID</li>
+                            <li>QUICKBOOKS_CLIENT_SECRET</li>
+                            <li>QUICKBOOKS_REDIRECT_URI</li>
+                          </ul>
+                          <p className="text-xs text-muted-foreground mt-2">
+                            Once configured, enable QuickBooks sync via feature flags: ENABLE_QUICKBOOKS_SYNC, ENABLE_QUICKBOOKS_CLIENT_MAPPING
+                          </p>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
                 </CardContent>
               </Card>
 
