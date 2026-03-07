@@ -933,7 +933,7 @@ function BillableTasksCard() {
                   <Button
                     size="sm"
                     variant="outline"
-                    className="h-7 text-xs gap-1.5 whitespace-nowrap"
+                    className="h-7 text-xs gap-1.5 whitespace-nowrap border-emerald-500/50 text-emerald-600 hover:bg-emerald-50 hover:text-emerald-700 dark:text-emerald-400 dark:hover:bg-emerald-900/20"
                     data-testid={`button-send-qb-${task.id}`}
                   >
                     <Send className="h-3 w-3" />
