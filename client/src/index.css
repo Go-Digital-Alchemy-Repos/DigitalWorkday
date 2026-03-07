@@ -375,6 +375,10 @@
     box-shadow: var(--card-glow, none);
   }
 
+  svg {
+    filter: saturate(var(--icon-saturation, 1));
+  }
+
   input, textarea, select, button {
     font-family: inherit;
   }
