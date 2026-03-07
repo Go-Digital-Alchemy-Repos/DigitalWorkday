@@ -95,7 +95,7 @@ export function ThemeToggle({ className }: ThemeToggleProps) {
             <DropdownMenuSeparator />
             <DropdownMenuLabel className="flex items-center gap-2 text-xs">
               <Palette className="h-3.5 w-3.5" />
-              Funky Themes
+              What The Heck
             </DropdownMenuLabel>
             {funkyPacks.map((pack) => (
               <DropdownMenuItem

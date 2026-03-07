@@ -501,7 +501,7 @@ function AppearanceCard() {
           <div className="space-y-3">
             <Label className="flex items-center gap-1.5">
               <Palette className="h-3.5 w-3.5" />
-              Funky Themes
+              What The Heck
             </Label>
             <div className="flex gap-2 flex-wrap">
               {funkyPacks.map((pack) => (
