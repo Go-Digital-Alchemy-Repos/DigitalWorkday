@@ -273,6 +273,26 @@ router.get("/reports/clients/analytics", async (req, res) => {
       SELECT COUNT(*)::int AS total FROM clients WHERE tenant_id = ${tenantId}
     `));
 
+    const clientAggregateSummary = firstRow(await db.execute(sql`
+      SELECT
+        COUNT(DISTINCT c.id)::int AS total_clients,
+        COUNT(DISTINCT CASE WHEN c.status = 'active' THEN c.id END)::int AS active_clients,
+        COUNT(DISTINCT p.id)::int AS total_projects,
+        COALESCE(ROUND(SUM(te.duration_seconds)::numeric / 3600, 1), 0) AS total_hours,
+        (
+          SELECT COUNT(DISTINCT c2.id)
+          FROM clients c2
+          JOIN projects p2 ON p2.client_id = c2.id AND p2.tenant_id = ${tenantId}
+          WHERE c2.tenant_id = ${tenantId}
+            AND p2.budget_minutes IS NOT NULL
+            AND p2.budget_minutes > 0
+        )::int AS budgeted_clients
+      FROM clients c
+      LEFT JOIN projects p ON p.client_id = c.id AND p.tenant_id = ${tenantId}
+      LEFT JOIN time_entries te ON te.client_id = c.id AND te.tenant_id = ${tenantId}
+      WHERE c.tenant_id = ${tenantId}
+    `)) as any;
+
     const stageDistribution = await db.execute(sql`
       SELECT stage, COUNT(*)::int AS count
       FROM clients
@@ -333,6 +353,13 @@ router.get("/reports/clients/analytics", async (req, res) => {
           ? Math.round((r.used_minutes / r.budget_minutes) * 100)
           : 0,
       })),
+      summary: {
+        totalClients: parseInt(clientAggregateSummary?.total_clients ?? "0", 10),
+        activeClients: parseInt(clientAggregateSummary?.active_clients ?? "0", 10),
+        totalProjects: parseInt(clientAggregateSummary?.total_projects ?? "0", 10),
+        totalHours: parseFloat(clientAggregateSummary?.total_hours ?? "0"),
+        budgetedClients: parseInt(clientAggregateSummary?.budgeted_clients ?? "0", 10),
+      },
       pagination: {
         limit: breakdownLimit,
         offset: breakdownOffset,

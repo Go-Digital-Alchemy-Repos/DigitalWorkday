@@ -62,6 +62,18 @@ interface ClientAnalyticsSummary {
     used_minutes: number;
     utilizationPercent: number;
   }[];
+  summary?: {
+    totalClients: number;
+    activeClients: number;
+    totalProjects: number;
+    totalHours: number;
+    budgetedClients: number;
+  };
+  pagination?: {
+    limit: number;
+    offset: number;
+    clientsTotal: number;
+  };
 }
 
 function formatAnalyticsHours(hours: number) {
@@ -82,10 +94,11 @@ function ClientSummaryCards() {
     </div>
   );
 
-  const totalClients = data.clients.length;
-  const activeClients = data.clients.filter((c) => c.status === "active").length;
-  const totalProjects = data.clients.reduce((s, c) => s + c.project_count, 0);
-  const totalHours = data.clients.reduce((s, c) => s + c.total_hours, 0);
+  const totalClients = data.summary?.totalClients ?? data.clients.length;
+  const activeClients = data.summary?.activeClients ?? data.clients.filter((c) => c.status === "active").length;
+  const totalProjects = data.summary?.totalProjects ?? data.clients.reduce((s, c) => s + c.project_count, 0);
+  const totalHours = data.summary?.totalHours ?? data.clients.reduce((s, c) => s + c.total_hours, 0);
+  const budgetedClients = data.summary?.budgetedClients ?? data.budgetUtilization.length;
 
   const stageData = data.stageDistribution.map((s) => ({
     name: CLIENT_STAGE_LABELS[s.stage as ClientStageType] || s.stage,
@@ -99,7 +112,7 @@ function ClientSummaryCards() {
         <MetricCard label="Total Clients" value={totalClients} sub={`${activeClients} active`} icon={<Users className="h-4 w-4 text-white" />} color="bg-blue-500" testId="metric-total-clients" />
         <MetricCard label="Client Projects" value={totalProjects} icon={<FolderKanban className="h-4 w-4 text-white" />} color="bg-violet-500" testId="metric-total-projects" />
         <MetricCard label="Total Hours" value={formatAnalyticsHours(Math.round(totalHours * 10) / 10)} icon={<Clock className="h-4 w-4 text-white" />} color="bg-green-500" testId="metric-total-hours" />
-        <MetricCard label="Budgeted Clients" value={data.budgetUtilization.length} icon={<Wallet className="h-4 w-4 text-white" />} color="bg-orange-500" testId="metric-budget-clients" />
+        <MetricCard label="Budgeted Clients" value={budgetedClients} icon={<Wallet className="h-4 w-4 text-white" />} color="bg-orange-500" testId="metric-budget-clients" />
       </div>
       {stageData.length > 0 && (
         <Card data-testid="card-stage-distribution">
@@ -246,17 +259,6 @@ function OverviewTab({ rangeDays, filters }: { rangeDays: number; filters: Clien
     return sortDir === "asc" ? <ChevronUp className="h-3 w-3 ml-1 inline" /> : <ChevronDown className="h-3 w-3 ml-1 inline" />;
   }
 
-  const totals = useMemo(() => {
-    if (!data?.clients) return null;
-    const clients = data.clients;
-    return {
-      totalClients: clients.length,
-      totalOpenTasks: clients.reduce((s, c) => s + c.openTasks, 0),
-      totalHours: Math.round(clients.reduce((s, c) => s + c.totalHours, 0) * 10) / 10,
-      avgEngagement: clients.length > 0 ? Math.round(clients.reduce((s, c) => s + c.engagementScore, 0) / clients.length) : 0,
-    };
-  }, [data?.clients]);
-
   if (isLoading) return (
     <div className="space-y-3">
       {Array.from({ length: 6 }).map((_, i) => <Skeleton key={i} className="h-12 w-full" />)}
@@ -271,14 +273,6 @@ function OverviewTab({ rangeDays, filters }: { rangeDays: number; filters: Clien
 
   return (
     <div className="space-y-4">
-      {totals && (
-        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-          <MetricCard label="Total Clients" value={totals.totalClients} icon={<Users className="h-4 w-4 text-white" />} color="bg-blue-500" />
-          <MetricCard label="Open Tasks" value={totals.totalOpenTasks} icon={<CheckSquare className="h-4 w-4 text-white" />} color="bg-violet-500" />
-          <MetricCard label="Hours Tracked" value={`${totals.totalHours}h`} icon={<Clock className="h-4 w-4 text-white" />} color="bg-green-500" />
-          <MetricCard label="Avg Engagement" value={`${totals.avgEngagement}%`} icon={<TrendingUp className="h-4 w-4 text-white" />} color="bg-orange-500" />
-        </div>
-      )}
       {sortedClients.length > 0 && (
         <div className="md:hidden space-y-3">
           {sortedClients.map((c) => (
