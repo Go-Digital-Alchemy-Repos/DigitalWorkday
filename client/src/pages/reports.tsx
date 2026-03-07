@@ -23,7 +23,6 @@ import {
   FolderKanban,
   LayoutDashboard,
   CheckSquare,
-  PieChart,
 } from "lucide-react";
 const ReportsTab = lazy(() => import("@/components/settings/reports-tab").then(m => ({ default: m.ReportsTab })));
 import { MobileTabSelect } from "@/components/reports/mobile-tab-select";
@@ -33,18 +32,16 @@ import { cn } from "@/lib/utils";
 const MessagesReports = lazy(() => import("@/components/reports/messages-reports"));
 const OverviewDashboard = lazy(() => import("@/components/reports/overview-dashboard"));
 const TaskAnalytics = lazy(() => import("@/components/reports/task-analytics"));
-const ClientAnalytics = lazy(() => import("@/components/reports/client-analytics"));
 const EmployeeCommandCenter = lazy(() => import("@/components/reports/employee-command-center").then(m => ({ default: m.EmployeeCommandCenter })));
 const ClientCommandCenter = lazy(() => import("@/components/reports/client-command-center").then(m => ({ default: m.ClientCommandCenter })));
 
-type ReportView = "landing" | "overview" | "workload" | "time" | "projects" | "messages" | "pipeline" | "task-analytics" | "client-analytics" | "employee-cc" | "client-cc";
+type ReportView = "landing" | "overview" | "workload" | "time" | "projects" | "messages" | "pipeline" | "task-analytics" | "employee-cc" | "client-cc";
 
 const REPORT_TABS: Array<{ view: Exclude<ReportView, "landing">; label: string; Icon: React.ElementType; flag?: keyof import("@/hooks/use-feature-flags").FeatureFlags }> = [
   { view: "employee-cc",     label: "Employee Command Center", Icon: Users,          flag: "enableEmployeeCommandCenter" },
   { view: "client-cc",       label: "Client Command Center",   Icon: Building2,      flag: "enableClientCommandCenter" },
   { view: "overview",        label: "Overview",                Icon: LayoutDashboard },
   { view: "task-analytics",  label: "Task Analysis",           Icon: CheckSquare },
-  { view: "client-analytics",label: "Client Analytics",        Icon: PieChart },
   { view: "workload",        label: "Workload Reports",        Icon: Users },
   { view: "time",            label: "Time Tracking",           Icon: Clock },
   { view: "projects",        label: "Project Analysis",        Icon: Target },
@@ -378,13 +375,6 @@ export default function ReportsPage() {
       color: "bg-emerald-500",
     },
     {
-      icon: <PieChart className="h-6 w-6 text-white" />,
-      title: "Client Analytics",
-      description: "Client profitability, budget utilization, project metrics, and activity breakdown",
-      view: "client-analytics" as ReportView,
-      color: "bg-rose-500",
-    },
-    {
       icon: <Users className="h-6 w-6 text-white" />,
       title: "Workload Reports",
       description: "View task distribution and workload across your team members with completion metrics",
@@ -477,7 +467,6 @@ export default function ReportsPage() {
       case "client-cc": return "Client Command Center";
       case "overview": return "Overview Dashboard";
       case "task-analytics": return "Task Analytics";
-      case "client-analytics": return "Client Analytics";
       case "workload": return "Workload Reports";
       case "time": return "Time Tracking Reports";
       case "projects": return "Project Analytics";
@@ -493,7 +482,6 @@ export default function ReportsPage() {
       case "client-cc": return "Client engagement, time, task load, SLA and risk analysis per client";
       case "overview": return "Executive KPIs and trends across your entire organization";
       case "task-analytics": return "Task completion rates, overdue analysis, and distribution metrics";
-      case "client-analytics": return "Client profitability, budget utilization, and activity breakdown";
       case "messages": return "Response times, SLA compliance, and conversation analytics";
       case "pipeline": return "Pipeline stage distribution and client progression";
       default: return "Detailed analytics and exportable reports";
@@ -506,7 +494,6 @@ export default function ReportsPage() {
       case "client-cc": return <Building2 className="h-5 w-5 text-primary" />;
       case "overview": return <LayoutDashboard className="h-5 w-5 text-primary" />;
       case "task-analytics": return <CheckSquare className="h-5 w-5 text-primary" />;
-      case "client-analytics": return <PieChart className="h-5 w-5 text-primary" />;
       case "messages": return <MessageSquare className="h-5 w-5 text-primary" />;
       case "pipeline": return <Building2 className="h-5 w-5 text-primary" />;
       default: return <BarChart3 className="h-5 w-5 text-primary" />;
@@ -591,8 +578,6 @@ export default function ReportsPage() {
             <OverviewDashboard />
           ) : currentView === "task-analytics" ? (
             <TaskAnalytics />
-          ) : currentView === "client-analytics" ? (
-            <ClientAnalytics />
           ) : currentView === "messages" ? (
             <MessagesReports />
           ) : currentView === "pipeline" ? (

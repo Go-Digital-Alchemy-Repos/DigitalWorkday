@@ -9,7 +9,16 @@ import { Skeleton } from "@/components/ui/skeleton";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { Progress } from "@/components/ui/progress";
 import { Button } from "@/components/ui/button";
-import { AlertTriangle, Building2, ShieldAlert, Activity, CheckSquare, Clock, TrendingUp, Users, HeartPulse, ArrowUpDown, ChevronUp, ChevronDown, Sparkles, Info, Camera, Tag, Factory, X } from "lucide-react";
+import { AlertTriangle, Building2, ShieldAlert, Activity, CheckSquare, Clock, TrendingUp, Users, HeartPulse, ArrowUpDown, ChevronUp, ChevronDown, Sparkles, Info, Camera, Tag, Factory, X, FolderKanban, Wallet } from "lucide-react";
+import { CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
+import {
+  ResponsiveContainer,
+  PieChart,
+  Pie,
+  Cell,
+  Tooltip,
+  Legend,
+} from "recharts";
 import { cn } from "@/lib/utils";
 import { buildHeaders } from "@/lib/queryClient";
 import { ReportCommandCenterLayout, buildDateParams } from "./report-command-center-layout";
@@ -21,17 +30,124 @@ function rfetch(url: string) {
   return fetch(url, { credentials: "include", headers: buildHeaders() });
 }
 
+const STAGE_COLORS: Record<string, string> = {
+  lead: "hsl(var(--muted-foreground))",
+  proposal: "hsl(var(--primary))",
+  prospect: "hsl(var(--chart-3, 45 93% 47%))",
+  content_strategy: "hsl(var(--chart-4, 280 65% 60%))",
+  design: "hsl(var(--chart-4, 280 65% 60%))",
+  development: "hsl(var(--chart-3, 45 93% 47%))",
+  final_testing: "hsl(var(--chart-5, 27 96% 61%))",
+  active_maintenance: "hsl(var(--chart-2, 142 71% 45%))",
+  lost_inactive: "hsl(var(--muted-foreground, 240 4% 46%))",
+  active: "hsl(var(--chart-2, 142 71% 45%))",
+};
+
+interface ClientAnalyticsSummary {
+  clients: {
+    id: string;
+    company_name: string;
+    stage: string;
+    status: string;
+    project_count: number;
+    active_projects: number;
+    total_hours: number;
+    budget_minutes: number;
+  }[];
+  stageDistribution: { stage: string; count: number }[];
+  budgetUtilization: {
+    id: string;
+    company_name: string;
+    budget_minutes: number;
+    used_minutes: number;
+    utilizationPercent: number;
+  }[];
+}
+
+function formatAnalyticsHours(hours: number) {
+  if (hours === 0) return "0h";
+  if (hours < 1) return `${Math.round(hours * 60)}m`;
+  return `${hours}h`;
+}
+
+function ClientSummaryCards() {
+  const { data, isLoading } = useQuery<ClientAnalyticsSummary>({
+    queryKey: ["/api/v1/reports/clients/analytics"],
+    staleTime: 2 * 60 * 1000,
+  });
+
+  if (isLoading || !data) return (
+    <div className="grid gap-3 grid-cols-2 lg:grid-cols-4 mb-4">
+      {Array.from({ length: 4 }).map((_, i) => <Skeleton key={i} className="h-20 w-full rounded-lg" />)}
+    </div>
+  );
+
+  const totalClients = data.clients.length;
+  const activeClients = data.clients.filter((c) => c.status === "active").length;
+  const totalProjects = data.clients.reduce((s, c) => s + c.project_count, 0);
+  const totalHours = data.clients.reduce((s, c) => s + c.total_hours, 0);
+
+  const stageData = data.stageDistribution.map((s) => ({
+    name: CLIENT_STAGE_LABELS[s.stage as ClientStageType] || s.stage,
+    value: s.count,
+    fill: STAGE_COLORS[s.stage] || "#6B7280",
+  }));
+
+  return (
+    <div className="space-y-4 mb-4" data-testid="client-summary-cards">
+      <div className="grid gap-3 grid-cols-2 lg:grid-cols-4">
+        <MetricCard label="Total Clients" value={totalClients} sub={`${activeClients} active`} icon={<Users className="h-4 w-4 text-white" />} color="bg-blue-500" testId="metric-total-clients" />
+        <MetricCard label="Client Projects" value={totalProjects} icon={<FolderKanban className="h-4 w-4 text-white" />} color="bg-violet-500" testId="metric-total-projects" />
+        <MetricCard label="Total Hours" value={formatAnalyticsHours(Math.round(totalHours * 10) / 10)} icon={<Clock className="h-4 w-4 text-white" />} color="bg-green-500" testId="metric-total-hours" />
+        <MetricCard label="Budgeted Clients" value={data.budgetUtilization.length} icon={<Wallet className="h-4 w-4 text-white" />} color="bg-orange-500" testId="metric-budget-clients" />
+      </div>
+      {stageData.length > 0 && (
+        <Card data-testid="card-stage-distribution">
+          <CardHeader className="pb-2">
+            <CardTitle className="text-base">Client Stage Distribution</CardTitle>
+            <CardDescription>Clients across pipeline stages</CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="h-[250px]">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={stageData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }) => percent > 0.05 ? `${name} ${(percent * 100).toFixed(0)}%` : ""}
+                    outerRadius={80}
+                    dataKey="value"
+                  >
+                    {stageData.map((entry, index) => (
+                      <Cell key={`stage-${index}`} fill={entry.fill} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </PieChart>
+              </ResponsiveContainer>
+            </div>
+          </CardContent>
+        </Card>
+      )}
+    </div>
+  );
+}
+
 interface MetricCardProps {
   label: string;
   value: string | number;
   sub?: string;
   icon: React.ReactNode;
   color: string;
+  testId?: string;
 }
 
-function MetricCard({ label, value, sub, icon, color }: MetricCardProps) {
+function MetricCard({ label, value, sub, icon, color, testId }: MetricCardProps) {
   return (
-    <Card>
+    <Card data-testid={testId}>
       <CardContent className="p-4">
         <div className="flex items-center gap-3">
           <div className={cn("w-9 h-9 rounded-lg flex items-center justify-center shrink-0", color)}>
@@ -1256,6 +1372,7 @@ export function ClientCommandCenter() {
           )}
         </div>
       )}
+      <ClientSummaryCards />
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <MobileTabSelect
           tabs={[
