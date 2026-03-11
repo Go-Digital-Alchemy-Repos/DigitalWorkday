@@ -387,8 +387,8 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
       className={cn(
         "group relative grid items-center gap-2 px-4 py-2 min-h-[44px] border-b border-border hover-elevate cursor-pointer transition-premium",
         showQuickActions 
-          ? (dragHandleProps ? "grid-cols-[auto_auto_1fr_auto_auto_auto_auto_auto]" : "grid-cols-[auto_1fr_auto_auto_auto_auto_auto]")
-          : (dragHandleProps ? "grid-cols-[auto_auto_1fr_auto_auto_auto_auto]" : "grid-cols-[auto_1fr_auto_auto_auto_auto]"),
+          ? (dragHandleProps ? "grid-cols-[16px_20px_1fr_160px_160px_110px_100px_auto]" : "grid-cols-[20px_1fr_160px_160px_110px_100px_auto]")
+          : (dragHandleProps ? "grid-cols-[16px_20px_1fr_160px_160px_110px_100px]" : "grid-cols-[20px_1fr_160px_160px_110px_100px]"),
         isCompleted && "opacity-60",
         isDragging && "opacity-50 shadow-lg bg-card",
         justCompleted && "task-complete-pulse"
