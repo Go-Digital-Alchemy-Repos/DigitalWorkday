@@ -16,6 +16,7 @@ export type {
   TourScope,
   TourRole,
   TourType,
+  TourSource,
   TourVersionState,
   TourEngineAdapter,
   TourEngineOptions,
@@ -25,6 +26,7 @@ export type {
 
 // Registry
 export {
+  getToursBySource,
   getAllTours,
   getTourById,
   getToursForRoute,

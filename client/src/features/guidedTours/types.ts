@@ -74,6 +74,18 @@ export interface GuidedTourStep {
  */
 export type TourType = "guided" | "release";
 
+/**
+ * Where the tour definition originates:
+ *   "code"        — defined in tourRegistry.ts (default; immutable at runtime)
+ *   "tenant"      — tenant admin authored via admin UI (future phase)
+ *   "super_admin" — platform-level tour added via Super Admin CMS (future phase)
+ *
+ * Stored on each tour record so the Guidance Center can render
+ * appropriate badges, and the eligibility layer can apply the right
+ * trust / permission level to each definition.
+ */
+export type TourSource = "code" | "tenant" | "super_admin";
+
 /** Full definition of a named tour — registered in tourRegistry.ts */
 export interface GuidedTour {
   id: string;
@@ -97,6 +109,21 @@ export interface GuidedTour {
   steps: GuidedTourStep[];
   /** Marks sample/placeholder tours — strip before shipping to production */
   isDemoContent?: boolean;
+
+  /**
+   * Where this tour definition originates.
+   * Defaults to "code" for all registry-defined tours.
+   * "tenant" and "super_admin" are reserved for future DB-backed tours.
+   * Code that renders the tour should never enforce security based on this
+   * field alone — the backend must enforce access rules server-side.
+   */
+  source?: TourSource;
+  /**
+   * The tenant this tour belongs to (only relevant for source === "tenant").
+   * Code-defined tours always have tenantId === undefined (global).
+   * Future: set when loading tenant-specific tours from the DB.
+   */
+  tenantId?: string;
 
   // ── Release tour extensions (optional — only on tourType "release") ────────
   /** Defaults to "guided". Set to "release" for What's New announcements. */

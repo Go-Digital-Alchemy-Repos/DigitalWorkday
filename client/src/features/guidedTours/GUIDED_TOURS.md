@@ -274,6 +274,173 @@ No other files need to change.
 
 ---
 
+## Future Architecture — Admin-Configurable Tours
+
+> **Status: Pre-planned / not built.** This section records the agreed architecture so the team can implement incrementally without disrupting the current code-defined model.
+
+### Recommendation: Hybrid Model (code-baseline + DB overrides)
+
+Tours will remain code-defined as the authoritative global baseline. A DB overlay layer is added on top so that tenant admins (and Super Admins) can customize copy, visibility, and ordering without touching code.
+
+**Key principle:** code tours are always the fallback. No admin action can break a tour — they can only enable, disable, reorder, or reword it.
+
+---
+
+### What Should Stay Code-Owned (Never Admin-Editable)
+
+| Concern | Why it stays in code |
+|---|---|
+| **Engine behavior** (step resolution, target polling, keyboard nav, spotlight) | Runtime, not content — wrong for non-engineers to edit |
+| **Core schema / types** (`GuidedTour`, `GuidedTourStep`, `TourSource`, `TourRole`) | Changing types would require code releases anyway |
+| **Role/security enforcement** — who can see a tour (`allowedRoles`) | An admin cannot escalate their own permissions; backend must validate |
+| **`data-tour` target hook conventions** | Selectors are tied to DOM elements; must be changed in code |
+| **Step navigation logic** (multi-route, route guards, trigger conditions) | Application behavior, not content |
+| **Feature flag key names** (`requiredFeatureFlags`) | Defined in code alongside the flag evaluation logic |
+| **Adapter swap** (NoOp ↔ Driver.js) | Infrastructure, not content |
+| **Auto-trigger timing** (1500ms delay in `useReleaseTourAutoLaunch`) | Should not be tunable per tenant |
+
+---
+
+### What Can Become Admin-Configurable
+
+| Configurable Item | Who Can Edit | Enforcement Layer |
+|---|---|---|
+| Tour title / description (display copy) | `tenant_owner`, `admin` (within tenant) | DB override merged on top of code definition |
+| Step `title` / `description` body copy | `tenant_owner`, `admin` | Per-step JSONB override |
+| Tour enabled / disabled per tenant | `tenant_owner`, `admin` | Eligibility hook checks DB `enabled` field |
+| Tour display order in Guidance Center | `tenant_owner`, `admin` | DB `display_order` column |
+| Release tour visibility per tenant | `super_admin` | Platform-level visibility flag |
+| Allowed roles narrowing (restrict further, not broaden) | `tenant_owner` (up to their own role level) | Backend validates: admins cannot add `super_user` to `allowedRoles` |
+| Contextual hint copy (title, body, CTA label) | `super_admin` only (initially) | Global hint override table |
+| Welcome guide headline / branding copy | `super_admin` (per tenant branding settings) | Merged into `FirstRunModal` props |
+| Feature-flag-gated tour visibility | `super_admin` | Tenant feature flag assignment table |
+
+---
+
+### Proposed DB Schema (future migration — do not add yet)
+
+```sql
+-- Tenant-level overrides for code-defined tours
+CREATE TABLE guided_tour_overrides (
+  id            uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  tenant_id     integer NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  tour_id       text NOT NULL,                -- matches code-defined tour ID
+  name_override text,                         -- null = use code default
+  description_override text,
+  enabled       boolean NOT NULL DEFAULT true,
+  display_order integer,                      -- null = use registry order
+  -- Narrowed role list: must be a subset of the code-defined allowedRoles
+  allowed_roles_override text[],              -- null = inherit from code
+  -- Per-step body copy: [{stepIndex: 0, title: "...", description: "..."}]
+  step_overrides jsonb,
+  created_by    integer REFERENCES users(id),
+  created_at    timestamptz NOT NULL DEFAULT now(),
+  updated_at    timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (tenant_id, tour_id)
+);
+
+-- Platform-level release tour visibility per tenant
+CREATE TABLE guided_tour_release_visibility (
+  tenant_id       integer NOT NULL REFERENCES tenants(id) ON DELETE CASCADE,
+  release_version text    NOT NULL,           -- matches tour.releaseVersion slug
+  visible         boolean NOT NULL DEFAULT true,
+  created_at      timestamptz NOT NULL DEFAULT now(),
+  PRIMARY KEY (tenant_id, release_version)
+);
+
+-- Hint copy overrides (global platform level; super_admin only)
+CREATE TABLE contextual_hint_overrides (
+  hint_id         text PRIMARY KEY,           -- matches hintRegistry key
+  title_override  text,
+  body_override   text,
+  cta_label       text,
+  enabled         boolean NOT NULL DEFAULT true,
+  updated_at      timestamptz NOT NULL DEFAULT now()
+);
+```
+
+---
+
+### Merge Strategy (runtime resolution order)
+
+When building the effective tour list presented to a user, the precedence chain is:
+
+```
+1. Code registry (TOURS[] in tourRegistry.ts)    ← always present; the fallback
+        ↓ merged with
+2. guided_tour_overrides for the current tenant  ← copy + enabled/order overrides
+        ↓ filtered by
+3. guided_tour_release_visibility                ← platform can hide release tours
+        ↓ filtered by
+4. useTourEligibility                            ← role + feature flag enforcement
+        ↓ rendered by
+5. GuidanceCenter + TourStepOverlay              ← current frontend (unchanged)
+```
+
+Implementation: a `resolveTourDefinitions(tenantId)` server helper merges steps 1–3 and returns the effective `GuidedTour[]`. The frontend continues to receive the same `GuidedTour` type — no frontend interface changes needed.
+
+---
+
+### Injection Point (already in code)
+
+`registerTour()` in `tourRegistry.ts` is the intended hook for loading DB-backed tours at app startup:
+
+```typescript
+// Future: in GuidedToursProvider or app bootstrap
+const tenantTours = await fetchTenantTours(currentTenantId); // GET /api/guided-tours/tenant
+tenantTours.forEach(tour => registerTour({ ...tour, source: "tenant", tenantId }));
+```
+
+Code-defined tours in `TOURS[]` are registered first (at module load time) and are never overwritten by tenant tours because they use globally-unique IDs. Tenant tours use IDs scoped to their tenant (e.g. `tenant_123_welcome`).
+
+---
+
+### Feature-Flagged Tours (already wired)
+
+`requiredFeatureFlags` on `GuidedTour` is already enforced in `useTourEligibility`. To gate a tour behind a flag:
+
+1. Set `requiredFeatureFlags: ["qbo_integration"]` in the tour definition
+2. Pass active flags via `useFeatureFlags()` (or equivalent) to `useTourEligibility`
+
+Future: tenant feature flags can be stored in the DB and fetched at login, making tours automatically gated per tenant subscription tier.
+
+---
+
+### Tenant-Specific Onboarding Tours
+
+For white-label or vertically-specific onboarding:
+
+1. Super Admin creates a new tour via admin CMS (future) with `source: "super_admin"`, scoped to one or more tenant IDs
+2. Tour is returned from `GET /api/guided-tours/tenant` on login
+3. Registered via `registerTour()` with `source: "tenant"` and `tenantId`
+4. `GuidanceCenter` renders a "Custom" badge for tours where `source !== "code"`
+5. `FirstRunModal` can be configured to launch the tenant-specific tour instead of the default welcome tour (pass `customOnboardingTourId` via tenant branding settings)
+
+---
+
+### Admin Tour Builder UI — Recommended Scope (future phase)
+
+When the time comes to build the admin UI, keep scope tight:
+
+**Super Admin Panel (platform-level)**
+- Table of all code-defined tours with enable/disable toggles per tenant
+- Release tour visibility per tenant
+- Global hint override form (title / body / CTA)
+
+**Tenant Admin Panel**
+- Per-tour: enable/disable, custom display name, custom step copy (rich text)
+- Reorder tours in Guidance Center list
+- Preview mode: view the tour as a specific role before publishing
+
+**What to explicitly exclude from admin UI (forever)**
+- DOM target selectors (`data-tour` values) — require code review
+- Tour type / scope changes
+- `allowedRoles` broadening beyond the admin's own role
+- Auto-trigger timing
+- Engine adapter configuration
+
+---
+
 ## Known Limitations & Recommended Follow-Up
 
 1. **`isDemoContent: true` on `RELEASE_Q1_2025`** — this flag marks the sample release tour as preview content. Remove it when shipping a real release tour.

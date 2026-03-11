@@ -268,9 +268,30 @@ export function getLatestReleaseTour(): GuidedTour | null {
 /**
  * Registers a new tour at runtime (for dynamic or plugin-style tours).
  * Will overwrite an existing tour with the same ID.
+ *
+ * This is the intended injection point for future DB-backed tours:
+ *   - Call once at app startup after fetching tenant tours from the API
+ *   - Set { source: "tenant", tenantId: currentTenantId } on each tour
+ *   - Code-defined tours in TOURS[] are never overwritten (use a unique ID)
  */
 export function registerTour(tour: GuidedTour): void {
   _registry.set(tour.id, tour);
+}
+
+/**
+ * Returns all tours that match a given source.
+ * Useful for separating code-defined tours from DB-backed ones.
+ *
+ * Future usage:
+ *   getToursBySource("tenant")      → tenant-authored tours
+ *   getToursBySource("super_admin") → platform tours from Super Admin CMS
+ *   getToursBySource("code")        → all built-in registry tours (default)
+ */
+export function getToursBySource(source: import("../types").TourSource): GuidedTour[] {
+  return Array.from(_registry.values()).filter(
+    // Tours with no explicit source default to "code"
+    (t) => (t.source ?? "code") === source
+  );
 }
 
 // ── Route Matching ────────────────────────────────────────────────────────────
