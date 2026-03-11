@@ -262,7 +262,72 @@ router.get("/dashboard/review-queue", async (req: Request, res: Response) => {
       requesterLastName: row.requester_last_name,
     }));
 
-    res.json({ items });
+    let clearedQuery = sql`
+      SELECT
+        t.id AS task_id,
+        t.title,
+        t.status,
+        t.priority,
+        t.due_date,
+        t.project_id,
+        t.visibility,
+        t.created_by,
+        p.name AS project_name,
+        t.pm_review_resolved_at,
+        t.pm_review_requested_by,
+        u.first_name AS requester_first_name,
+        u.last_name AS requester_last_name
+      FROM tasks t
+      LEFT JOIN projects p ON t.project_id = p.id
+      LEFT JOIN users u ON t.pm_review_requested_by = u.id
+      WHERE t.tenant_id = ${tenantId}
+        AND t.needs_pm_review = false
+        AND t.pm_review_resolved_at IS NOT NULL
+        AND t.status != 'done'
+        AND t.archived_at IS NULL
+        AND t.pm_review_resolved_at >= NOW() - INTERVAL '30 days'
+    `;
+
+    if (!isAdmin) {
+      clearedQuery = sql`${clearedQuery}
+        AND t.project_id IN (
+          SELECT pm.project_id FROM project_members pm
+          WHERE pm.user_id = ${userId} AND pm.role = 'owner'
+        )
+      `;
+    }
+
+    if (config.features.enablePrivateTasks) {
+      clearedQuery = sql`${clearedQuery}
+        AND (t.visibility != 'private' OR t.created_by = ${userId}
+          OR EXISTS (
+            SELECT 1 FROM task_access ta WHERE ta.task_id = t.id AND ta.user_id = ${userId}
+          ))
+      `;
+    }
+
+    clearedQuery = sql`${clearedQuery}
+      ORDER BY t.pm_review_resolved_at DESC
+      LIMIT 20
+    `;
+
+    const clearedResult = await db.execute(clearedQuery);
+    const clearedRows = clearedResult.rows || [];
+
+    const clearedItems = clearedRows.map((row: any) => ({
+      taskId: row.task_id,
+      title: row.title,
+      status: row.status,
+      priority: row.priority,
+      dueDate: row.due_date,
+      projectId: row.project_id,
+      projectName: row.project_name,
+      pmReviewResolvedAt: row.pm_review_resolved_at,
+      requesterFirstName: row.requester_first_name,
+      requesterLastName: row.requester_last_name,
+    }));
+
+    res.json({ items, clearedItems });
   } catch (error) {
     return handleRouteError(res, error, "GET /api/dashboard/review-queue", req);
   }
