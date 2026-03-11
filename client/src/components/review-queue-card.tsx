@@ -154,9 +154,12 @@ export function ReviewQueueCard({ onTaskClick }: ReviewQueueCardProps) {
       <CardContent className="pt-0">
         <div className="grid grid-cols-2 gap-0 divide-x divide-border">
           <div className="pr-4">
-            <div className="flex items-center gap-2 mb-2">
+            <div className="flex items-center gap-2 mb-1">
               <span className="text-sm font-semibold text-foreground">Pending Review</span>
             </div>
+            <p className="text-[11px] text-muted-foreground mb-2 leading-tight">
+              Here are the tasks you've submitted to the PM for review.
+            </p>
             {visiblePending.length === 0 ? (
               <p className="text-xs text-muted-foreground py-3 text-center">No tasks pending review</p>
             ) : (
