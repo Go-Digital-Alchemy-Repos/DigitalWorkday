@@ -391,8 +391,8 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
       className={cn(
         "group relative grid items-center gap-2 px-4 py-2 min-h-[44px] border-b border-border hover-elevate cursor-pointer transition-premium",
         showQuickActions 
-          ? (dragHandleProps ? "grid-cols-[16px_20px_1fr_160px_160px_110px_100px_auto]" : "grid-cols-[20px_1fr_160px_160px_110px_100px_auto]")
-          : (dragHandleProps ? "grid-cols-[16px_20px_1fr_160px_160px_110px_100px]" : "grid-cols-[20px_1fr_160px_160px_110px_100px]"),
+          ? (dragHandleProps ? "grid-cols-[16px_20px_1fr_160px_130px_130px_110px_100px_auto]" : "grid-cols-[20px_1fr_160px_130px_130px_110px_100px_auto]")
+          : (dragHandleProps ? "grid-cols-[16px_20px_1fr_160px_130px_130px_110px_100px]" : "grid-cols-[20px_1fr_160px_130px_130px_110px_100px]"),
         isCompleted && "opacity-60",
         isDragging && "opacity-50 shadow-lg bg-card",
         justCompleted && "task-complete-pulse"
@@ -503,19 +503,22 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
       </div>
 
       <div className="flex items-center overflow-hidden">
-        {(clientName || projectName) && (
-          <div className="flex flex-col leading-tight overflow-hidden w-full" data-testid={`badge-project-${task.id}`}>
-            {clientName && (
-              <span className="text-xs font-medium text-foreground truncate" title={clientName}>
-                {clientName}
-              </span>
-            )}
-            {projectName && (
-              <span className="text-[11px] text-muted-foreground truncate" title={projectName}>
-                {projectName}
-              </span>
-            )}
-          </div>
+        {clientName ? (
+          <span className="text-xs text-foreground truncate" title={clientName} data-testid={`badge-client-${task.id}`}>
+            {clientName}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground/40">—</span>
+        )}
+      </div>
+
+      <div className="flex items-center overflow-hidden">
+        {projectName ? (
+          <span className="text-xs text-muted-foreground truncate" title={projectName} data-testid={`badge-project-${task.id}`}>
+            {projectName}
+          </span>
+        ) : (
+          <span className="text-xs text-muted-foreground/40">—</span>
         )}
       </div>
 

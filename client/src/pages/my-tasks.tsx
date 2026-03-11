@@ -239,12 +239,13 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
       </div>
       <CollapsibleContent>
         {section.tasks.length > 0 && (
-          <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[16px_20px_1fr_160px_160px_110px_100px_auto] bg-muted/30 border-b border-border">
+          <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[16px_20px_1fr_160px_130px_130px_110px_100px_auto] bg-muted/30 border-b border-border">
             <div />
             <div />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Task</span>
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Assignee</span>
-            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Client / Project</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Client</span>
+            <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Project</span>
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Due Date</span>
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Priority</span>
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Actions</span>
