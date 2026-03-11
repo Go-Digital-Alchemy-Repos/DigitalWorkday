@@ -414,11 +414,11 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
         data-testid={`checkbox-task-${task.id}`}
       />
 
-      <div className="flex flex-col gap-1 min-w-0">
-        <div className="flex items-center gap-2">
+      <div className="flex flex-col gap-1 min-w-0 overflow-hidden">
+        <div className="flex items-center gap-2 min-w-0 overflow-hidden">
           <span
             className={cn(
-              "text-sm font-medium truncate",
+              "text-sm font-medium truncate shrink",
               isCompleted && "line-through text-muted-foreground"
             )}
           >
@@ -484,11 +484,11 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
         )}
       </div>
 
-      <div className="flex items-center gap-1.5 min-w-0">
+      <div className="flex items-center gap-1.5 overflow-hidden">
         {assigneeUsers.length > 0 ? (
           <>
             <AvatarGroup users={assigneeUsers.slice(0, 1)} max={1} size="sm" />
-            <span className="text-xs text-muted-foreground truncate max-w-[90px]">
+            <span className="text-xs text-muted-foreground truncate min-w-0">
               {assigneeUsers[0].name}
               {assigneeUsers.length > 1 && <span className="text-muted-foreground/70"> +{assigneeUsers.length - 1}</span>}
             </span>
@@ -498,16 +498,16 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
         )}
       </div>
 
-      <div className="flex items-center min-w-0">
+      <div className="flex items-center overflow-hidden">
         {(clientName || projectName) && (
-          <div className="flex flex-col leading-tight min-w-0" data-testid={`badge-project-${task.id}`}>
+          <div className="flex flex-col leading-tight overflow-hidden w-full" data-testid={`badge-project-${task.id}`}>
             {clientName && (
-              <span className="text-xs font-medium text-foreground truncate max-w-[130px]" title={clientName}>
+              <span className="text-xs font-medium text-foreground truncate" title={clientName}>
                 {clientName}
               </span>
             )}
             {projectName && (
-              <span className="text-[11px] text-muted-foreground truncate max-w-[130px]" title={projectName}>
+              <span className="text-[11px] text-muted-foreground truncate" title={projectName}>
                 {projectName}
               </span>
             )}
