@@ -445,7 +445,7 @@ function EmployeeDashboardSection({
 
   return (
     <div className="space-y-4 md:space-y-6">
-      <div className="grid gap-3 md:gap-4 grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 md:gap-4 grid-cols-2 lg:grid-cols-4" data-tour="home-stat-cards">
         <Card 
           className={`hover-elevate cursor-pointer active:scale-[0.98] touch-manipulation ${taskBreakdown.overdue.length > 0 ? "border-red-200 dark:border-red-800" : ""}`}
           onClick={() => setLocation("/my-tasks")}
@@ -546,7 +546,7 @@ function EmployeeDashboardSection({
       </div>
 
       {(taskBreakdown.overdue.length > 0 || taskBreakdown.dueToday.length > 0) && (
-        <Card className="border-amber-200 dark:border-amber-800">
+        <Card className="border-amber-200 dark:border-amber-800" data-tour="home-focus-tasks">
           <CardHeader className="flex flex-row items-center justify-between gap-2 pb-2">
             <div className="flex items-center gap-2">
               <Flame className="h-5 w-5 text-amber-500" />
@@ -598,7 +598,7 @@ function EmployeeDashboardSection({
       )}
 
       <div className="grid gap-4 md:gap-6 lg:grid-cols-2">
-        <Card>
+        <Card data-tour="home-upcoming">
           <CardHeader className="flex flex-row items-center justify-between gap-2">
             <div>
               <CardTitle>Upcoming Deadlines</CardTitle>

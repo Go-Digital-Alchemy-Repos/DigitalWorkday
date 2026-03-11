@@ -273,7 +273,7 @@ export default function ProjectsDashboard() {
         subtitle="View and manage all projects across your workspace"
         icon={<FolderKanban className="h-6 w-6" />}
         actions={
-          <Button onClick={() => setCreateProjectOpen(true)} data-testid="button-new-project">
+          <Button onClick={() => setCreateProjectOpen(true)} data-testid="button-new-project" data-tour="projects-create-btn">
             <Plus className="h-4 w-4 mr-2" />
             New Project
           </Button>
@@ -396,7 +396,7 @@ export default function ProjectsDashboard() {
       )}
 
       <div className="flex flex-col gap-3 md:gap-4 mb-4 md:mb-6">
-        <div className="relative w-full md:max-w-md">
+        <div className="relative w-full md:max-w-md" data-tour="projects-search">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
           <Input
             placeholder="Search projects..."
@@ -407,7 +407,7 @@ export default function ProjectsDashboard() {
           />
         </div>
         
-        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-hide">
+        <div className="flex items-center gap-2 overflow-x-auto pb-1 -mb-1 scrollbar-hide" data-tour="projects-filter-bar">
           <Filter className="h-4 w-4 text-muted-foreground shrink-0" />
           
           <Select value={statusFilter} onValueChange={setStatusFilter}>

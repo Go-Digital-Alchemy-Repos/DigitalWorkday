@@ -2,10 +2,6 @@
 // Tour Registry
 // Central catalog of all named tours in the application.
 // Tours are plain data objects — no side effects on import.
-//
-// DEMO CONTENT: The tours below are starter/placeholder definitions.
-// They are marked `isDemoContent: true` and use hypothetical selectors.
-// Replace with real selectors (data-tour="...") as pages are wired.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import type { GuidedTour } from "../types";
@@ -24,7 +20,7 @@ export type TourId = (typeof TOUR_IDS)[keyof typeof TOUR_IDS];
 // ── Tour Definitions ──────────────────────────────────────────────────────────
 
 const TOURS: GuidedTour[] = [
-  // ── [DEMO] Dashboard Introduction ─────────────────────────────────────────
+  // ── Dashboard Introduction ─────────────────────────────────────────────────
   {
     id: TOUR_IDS.DASHBOARD_INTRO,
     version: 1,
@@ -36,40 +32,39 @@ const TOURS: GuidedTour[] = [
     allowedRoles: ["*"],
     relevantRoutes: ["/", "/home"],
     requiredFeatureFlags: [],
-    autoTrigger: false, // keep false until production-ready
-    isDemoContent: true,
+    autoTrigger: false,
     steps: [
       {
-        // Wire: add data-tour="home-focus-tasks" to the Focus Tasks card
         target: "home-focus-tasks",
         title: "Your Focus Tasks",
         description:
           "These are the tasks most relevant to you right now — overdue items and things due today rise to the top automatically.",
         placement: "bottom",
-        waitForTargetMs: 2000,
+        waitForTargetMs: 3000,
+        requiredRoute: "/",
       },
       {
-        // Wire: add data-tour="home-upcoming" to the Upcoming Deadlines card
         target: "home-upcoming",
         title: "Upcoming Deadlines",
         description:
           "Tasks due in the next 7 days are surfaced here so nothing sneaks up on you.",
         placement: "bottom",
-        waitForTargetMs: 2000,
+        waitForTargetMs: 2500,
+        requiredRoute: "/",
       },
       {
-        // Wire: add data-tour="home-my-tasks" to the My Tasks card
-        target: "home-my-tasks",
-        title: "My Tasks",
+        target: "home-stat-cards",
+        title: "At-a-Glance Stats",
         description:
-          "A consolidated view of every task assigned to you across all projects.",
-        placement: "top",
-        waitForTargetMs: 2000,
+          "Your key metrics — active projects, tasks overdue, tasks due today, and unassigned work — all in one row.",
+        placement: "bottom",
+        waitForTargetMs: 2500,
+        requiredRoute: "/",
       },
     ],
   },
 
-  // ── [DEMO] Projects Overview ───────────────────────────────────────────────
+  // ── Projects Overview ──────────────────────────────────────────────────────
   {
     id: TOUR_IDS.PROJECTS_OVERVIEW,
     version: 1,
@@ -82,39 +77,38 @@ const TOURS: GuidedTour[] = [
     relevantRoutes: ["/projects"],
     requiredFeatureFlags: [],
     autoTrigger: false,
-    isDemoContent: true,
     steps: [
       {
-        // Wire: add data-tour="projects-search" to the project search input
-        target: "projects-search",
-        title: "Search Your Projects",
-        description:
-          "Filter projects by name, client, status, or team member instantly.",
-        placement: "bottom",
-        waitForTargetMs: 2000,
-      },
-      {
-        // Wire: add data-tour="projects-filter-bar" to the filter bar
-        target: "projects-filter-bar",
-        title: "Filter & Sort",
-        description:
-          "Narrow projects by status, client, or team. Combine filters to zero in on exactly what you need.",
-        placement: "bottom",
-        waitForTargetMs: 2000,
-      },
-      {
-        // Wire: add data-tour="projects-create-btn" to the New Project button
         target: "projects-create-btn",
         title: "Create a Project",
         description:
           "Start a new project, assign it to a client, set a budget, and invite your team — all in one place.",
-        placement: "left",
-        waitForTargetMs: 2000,
+        placement: "bottom-end",
+        waitForTargetMs: 2500,
+        requiredRoute: "/projects",
+      },
+      {
+        target: "projects-search",
+        title: "Search Your Projects",
+        description:
+          "Filter projects by name instantly as you type. Great for large workspaces.",
+        placement: "bottom",
+        waitForTargetMs: 2500,
+        requiredRoute: "/projects",
+      },
+      {
+        target: "projects-filter-bar",
+        title: "Filter & Sort",
+        description:
+          "Narrow projects by status, client, or team. Combine multiple filters to zero in on exactly what you need.",
+        placement: "bottom",
+        waitForTargetMs: 2500,
+        requiredRoute: "/projects",
       },
     ],
   },
 
-  // ── [DEMO] Task Basics ─────────────────────────────────────────────────────
+  // ── Task Management Basics ─────────────────────────────────────────────────
   {
     id: TOUR_IDS.TASKS_BASICS,
     version: 1,
@@ -128,34 +122,24 @@ const TOURS: GuidedTour[] = [
     relevantRoutes: ["/my-tasks"],
     requiredFeatureFlags: [],
     autoTrigger: false,
-    isDemoContent: true,
     steps: [
       {
-        // Wire: add data-tour="my-tasks-search" to the task search input
-        target: "my-tasks-search",
-        title: "Find Your Tasks",
-        description:
-          "Search across all tasks assigned to you. Results update as you type.",
-        placement: "bottom",
-        waitForTargetMs: 2000,
-      },
-      {
-        // Wire: add data-tour="my-tasks-group-by" to the grouping control
-        target: "my-tasks-group-by",
-        title: "Group by Date or Section",
-        description:
-          "Switch between date-based grouping (overdue, today, upcoming) and your personal sections.",
-        placement: "bottom",
-        waitForTargetMs: 2000,
-      },
-      {
-        // Wire: add data-tour="my-tasks-personal-task-btn" to the Personal Task button
         target: "my-tasks-personal-task-btn",
         title: "Add a Personal Task",
         description:
           "Personal tasks live in your workspace — visible only to you, not tied to any project.",
-        placement: "left",
-        waitForTargetMs: 2000,
+        placement: "bottom-end",
+        waitForTargetMs: 2500,
+        requiredRoute: "/my-tasks",
+      },
+      {
+        target: "my-tasks-search",
+        title: "Find Your Tasks",
+        description:
+          "Search across all tasks assigned to you. Filter by priority, status, or due date to focus your work.",
+        placement: "bottom",
+        waitForTargetMs: 2500,
+        requiredRoute: "/my-tasks",
       },
     ],
   },

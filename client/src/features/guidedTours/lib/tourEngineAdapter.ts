@@ -46,12 +46,16 @@ function createNoOpAdapter(): TourEngineAdapter {
 
     nextStep() {
       if (!_active) return;
-      _stepIndex = Math.min(_stepIndex + 1, _steps.length - 1);
-      log("nextStep (no-op)", _stepIndex);
-      _options.onStepChange?.(_stepIndex);
-      if (_stepIndex === _steps.length - 1) {
+      const next = _stepIndex + 1;
+      if (next >= _steps.length) {
+        // User clicked Done on the last step — complete the tour
+        log("nextStep → complete (no-op)");
         _active = false;
         _options.onComplete?.();
+      } else {
+        _stepIndex = next;
+        log("nextStep (no-op)", _stepIndex);
+        _options.onStepChange?.(_stepIndex);
       }
     },
 

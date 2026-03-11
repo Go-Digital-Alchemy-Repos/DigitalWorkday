@@ -15,6 +15,7 @@ import { FeaturesProvider } from "@/contexts/features-context";
 import { FeaturesBanner } from "@/components/features-banner";
 import { GuidedTourProvider } from "@/features/guidedTours/components/GuidedTourProvider";
 import { GuidanceCenter } from "@/features/guidedTours/components/GuidanceCenter";
+import { TourStepOverlay } from "@/features/guidedTours/components/TourStepOverlay";
 import { isAuthRoute, AuthRouter } from "@/routing/authRouter";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -111,6 +112,7 @@ function App() {
                         <FeaturesBanner />
                         <AppLayout />
                         <GuidanceCenter />
+                        <TourStepOverlay />
                       </UserImpersonationWrapper>
                     </TenantThemeProvider>
                   </GuidedTourProvider>

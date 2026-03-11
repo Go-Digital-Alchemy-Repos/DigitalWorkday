@@ -854,6 +854,7 @@ export default function MyTasks() {
               <Button
                 onClick={() => setShowNewTaskDrawer(true)}
                 data-testid="button-add-personal-task-desktop"
+                data-tour="my-tasks-personal-task-btn"
                 className="hidden md:flex"
               >
                 <Plus className="h-4 w-4 mr-1" />
@@ -862,6 +863,7 @@ export default function MyTasks() {
             </div>
           </div>
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <div className="flex-1" data-tour="my-tasks-search">
             <DataToolbar
               searchValue={searchQuery}
               onSearchChange={setSearchQuery}
@@ -873,8 +875,9 @@ export default function MyTasks() {
               sortOptions={sortOptions}
               sortValue={sortBy}
               onSortChange={setSortBy}
-              className="mb-0 flex-1"
+              className="mb-0"
             />
+            </div>
             {taskStats.total > 0 && (
               <div className="hidden md:flex items-center gap-3 md:gap-4 flex-wrap pl-4 border-l border-border">
                 <div className="flex items-center gap-1.5" data-testid="stat-done-header">

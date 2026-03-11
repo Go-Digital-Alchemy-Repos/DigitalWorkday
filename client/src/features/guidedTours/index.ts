@@ -69,5 +69,6 @@ export type { TourPreferencesResponse } from "./hooks/useTourApi";
 // Components
 export { GuidedTourProvider } from "./components/GuidedTourProvider";
 export { GuidanceCenter } from "./components/GuidanceCenter";
+export { TourStepOverlay } from "./components/TourStepOverlay";
 export { TourLauncher } from "./components/TourLauncher";
 export { ContextualHint } from "./components/ContextualHint";
