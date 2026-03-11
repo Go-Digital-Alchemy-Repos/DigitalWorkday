@@ -357,7 +357,7 @@ export function AttachmentUploader({ taskId, projectId, onUploadSuccess, onDelet
     <div className="space-y-3">
       <div className="flex items-center gap-2 mb-3">
         <Paperclip className="h-4 w-4 text-muted-foreground" />
-        <span className="font-medium text-[16px] text-[#171717]">Attachments</span>
+        <span className="font-medium text-[16px] text-foreground">Attachments</span>
       </div>
       <div className="space-y-3">
         <div

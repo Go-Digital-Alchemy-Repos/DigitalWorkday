@@ -162,17 +162,17 @@
   --chart-4: 43 74% 70%;
   --chart-5: 27 87% 75%;
 
-  /* Drawer section tinted backgrounds (Updated for better depth in dark mode) */
-  --section-attachments: 250 15% 10%;
-  --section-attachments-border: 250 15% 18%;
-  --section-subtasks: 217 10% 10%;
-  --section-subtasks-border: 217 10% 18%;
-  --section-tags: 190 12% 10%;
-  --section-tags-border: 190 12% 18%;
-  --section-comments: 215 12% 10%;
-  --section-comments-border: 215 12% 18%;
-  --section-time: 30 12% 10%;
-  --section-time-border: 30 12% 18%;
+  /* Drawer section tinted backgrounds — slightly lighter than card for clear visual grouping */
+  --section-attachments: 250 14% 13%;
+  --section-attachments-border: 250 14% 20%;
+  --section-subtasks: 217 10% 13%;
+  --section-subtasks-border: 217 10% 20%;
+  --section-tags: 190 12% 13%;
+  --section-tags-border: 190 12% 20%;
+  --section-comments: 215 12% 13%;
+  --section-comments-border: 215 12% 20%;
+  --section-time: 30 12% 13%;
+  --section-time-border: 30 12% 20%;
 
   --shadow-2xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);
   --shadow-xs: 0px 2px 0px 0px hsl(0 0% 0% / 0.00);

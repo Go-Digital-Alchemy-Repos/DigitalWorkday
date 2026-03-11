@@ -1420,11 +1420,11 @@ export function TaskDetailDrawer({
         data-testid="task-detail-drawer"
       >
         <div className="p-4 sm:p-6 space-y-6">
-          <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66] space-y-1.5 overflow-hidden">
+          <div className="p-3 sm:p-4 border border-[hsl(var(--section-subtasks-border))] rounded-xl bg-[hsl(var(--section-subtasks))] space-y-1.5 overflow-hidden">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <FileText className="h-4 w-4 text-muted-foreground" />
-                <label className="font-medium text-[16px] text-[#171717]">Description</label>
+                <label className="font-medium text-[16px] text-foreground">Description</label>
               </div>
               {!editingDescription && (
                 <Button
@@ -1462,7 +1462,7 @@ export function TaskDetailDrawer({
           </div>
 
           {task.projectId && (
-            <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66]">
+            <div className="p-3 sm:p-4 border border-[hsl(var(--section-attachments-border))] rounded-xl bg-[hsl(var(--section-attachments))]">
               <AttachmentUploader taskId={task.id} projectId={task.projectId} />
             </div>
           )}
@@ -1470,7 +1470,7 @@ export function TaskDetailDrawer({
             <div className="text-sm text-muted-foreground">Attachments are available for project tasks only</div>
           )}
 
-          <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66]">
+          <div className="p-3 sm:p-4 border border-[hsl(var(--section-comments-border))] rounded-xl bg-[hsl(var(--section-comments))]">
             <CommentThread
               comments={taskComments}
               taskId={task.id}
@@ -1485,7 +1485,7 @@ export function TaskDetailDrawer({
             />
           </div>
 
-          <div className="p-3 sm:p-4 border border-border rounded-xl bg-[#fafafa66]">
+          <div className="p-3 sm:p-4 border border-[hsl(var(--section-subtasks-border))] rounded-xl bg-[hsl(var(--section-subtasks))]">
             <button
               onClick={() => setHistoryExpanded(!historyExpanded)}
               className="flex items-center justify-between w-full"
@@ -1493,7 +1493,7 @@ export function TaskDetailDrawer({
             >
               <div className="flex items-center gap-2">
                 <History className="h-4 w-4 text-muted-foreground" />
-                <label className="font-medium text-[16px] text-[#171717] cursor-pointer">Task History</label>
+                <label className="font-medium text-[16px] text-foreground cursor-pointer">Task History</label>
               </div>
               <ChevronRight className={cn("h-4 w-4 text-muted-foreground transition-transform", historyExpanded && "rotate-90")} />
             </button>
