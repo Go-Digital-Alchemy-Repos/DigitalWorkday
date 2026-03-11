@@ -981,6 +981,16 @@ export class DatabaseStorage implements IStorage {
   async getSectionsWithTasks(projectId: string): Promise<SectionWithTasks[]> {
     const sectionsList = await this.getSectionsByProject(projectId);
     const result: SectionWithTasks[] = [];
+
+    // Fetch the project + its client once for all sections/tasks
+    const project = await this.getProject(projectId);
+    let projectWithClient: any = project;
+    if (project?.clientId) {
+      const [clientRecord] = await db.select().from(clients).where(eq(clients.id, project.clientId));
+      if (clientRecord) {
+        projectWithClient = { ...project, client: clientRecord };
+      }
+    }
     
     for (const section of sectionsList) {
       const sectionTasks = await db.select().from(tasks)
@@ -995,7 +1005,7 @@ export class DatabaseStorage implements IStorage {
       for (const task of sectionTasks) {
         const taskWithRelations = await this.getTaskWithRelations(task.id);
         if (taskWithRelations) {
-          tasksWithRelations.push(taskWithRelations);
+          tasksWithRelations.push({ ...taskWithRelations, project: projectWithClient ?? taskWithRelations.project });
         }
       }
       
@@ -1090,12 +1100,22 @@ export class DatabaseStorage implements IStorage {
     const tasksList = await db.select().from(tasks)
       .where(and(...conditions))
       .orderBy(asc(tasks.orderIndex));
+
+    // Fetch the project + its client once for all tasks
+    const project = await this.getProject(projectId);
+    let projectWithClient: any = project;
+    if (project?.clientId) {
+      const [clientRecord] = await db.select().from(clients).where(eq(clients.id, project.clientId));
+      if (clientRecord) {
+        projectWithClient = { ...project, client: clientRecord };
+      }
+    }
     
     const result: TaskWithRelations[] = [];
     for (const task of tasksList) {
       const taskWithRelations = await this.getTaskWithRelations(task.id);
       if (taskWithRelations) {
-        result.push(taskWithRelations);
+        result.push({ ...taskWithRelations, project: projectWithClient ?? taskWithRelations.project });
       }
     }
     return result;
