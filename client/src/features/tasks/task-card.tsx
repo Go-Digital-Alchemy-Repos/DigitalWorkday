@@ -28,6 +28,7 @@ import {
   Flag,
   CalendarDays,
   MoreHorizontal,
+  Link2,
   Lock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
