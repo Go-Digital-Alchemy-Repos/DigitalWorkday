@@ -625,6 +625,14 @@ export default function ProjectPage() {
     resetCompletionState();
   };
 
+  const handlePriorityChange = (taskId: string, priority: "low" | "medium" | "high" | "urgent") => {
+    updateTaskMutation.mutate({ taskId, data: { priority } });
+  };
+
+  const handleDueDateChange = (taskId: string, dueDate: Date | null) => {
+    updateTaskMutation.mutate({ taskId, data: { dueDate: dueDate ? dueDate.toISOString() : null } });
+  };
+
   const handleTimeTrackingNo = () => {
     if (pendingCompletionTaskId) {
       completeTaskDirectly(pendingCompletionTaskId);
@@ -1185,6 +1193,8 @@ export default function ProjectPage() {
                   onAddTask={() => handleAddTask(section.id)}
                   onTaskSelect={handleTaskSelect}
                   onTaskStatusChange={handleStatusChange}
+                  onPriorityChange={handlePriorityChange}
+                  onDueDateChange={handleDueDateChange}
                 />
               ))}
               <Button
