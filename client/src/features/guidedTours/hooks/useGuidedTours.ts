@@ -7,6 +7,7 @@
 //   - Sync step progress, completion, dismissal to backend API
 //   - Navigate to requiredRoute before showing a step (multi-route tours)
 //   - Prevent duplicate launches (isRunning guard)
+//   - Persist preference toggles to both localStorage and backend API
 //   - Expose Guidance Center open/close helpers
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -20,11 +21,15 @@ import {
   markTourCompleted,
   resetTourProgress,
   saveLocalProgress,
+  saveLocalPreferences,
+  loadLocalPreferences,
 } from "../lib/tourPersistence";
 import {
   useCompleteTour,
   useDismissTour,
   useUpdateTourProgress,
+  useUpdateTourPreferences,
+  useResetTour,
 } from "./useTourApi";
 import type { TourTriggerSource, GuidedTourProgress } from "../types";
 
@@ -43,18 +48,18 @@ export function useGuidedTours() {
   const completeMutation = useCompleteTour();
   const dismissMutation = useDismissTour();
   const progressMutation = useUpdateTourProgress();
+  const prefsMutation = useUpdateTourPreferences();
+  const resetTourMutation = useResetTour();
 
   // ── Start a tour ─────────────────────────────────────────────────────────
 
   const startTour = useCallback(
     (tourId: string, triggerSource: TourTriggerSource = "manual") => {
-      // Guard: don't start if tours are disabled
       if (!state.toursEnabled) {
         log("Tours disabled — skipping", tourId);
         return;
       }
 
-      // Guard: don't allow overlapping tours
       if (state.isRunning && state.activeTourId !== tourId) {
         log("Another tour is already running — skipping", tourId, "active:", state.activeTourId);
         return;
@@ -104,7 +109,6 @@ export function useGuidedTours() {
         onComplete: () => {
           dispatch({ type: "COMPLETE_TOUR", tourId });
           markTourCompleted(tourId, tour.version);
-          // Sync completion to backend
           completeMutation.mutate({ tourKey: tourId, tourVersion: tour.version });
           log("Tour completed:", tourId);
         },
@@ -113,7 +117,6 @@ export function useGuidedTours() {
           const currentStep = state.activeStepIndex;
           dispatch({ type: "DISMISS_TOUR", tourId });
           markTourDismissed(tourId);
-          // Sync dismissal to backend
           dismissMutation.mutate({
             tourKey: tourId,
             tourVersion: tour.version,
@@ -163,6 +166,7 @@ export function useGuidedTours() {
 
   const replayTour = useCallback(
     (tourId: string) => {
+      // Reset localStorage progress for this tour
       resetTourProgress(tourId);
       const tour = getTourById(tourId);
       const resetted: GuidedTourProgress = {
@@ -174,14 +178,16 @@ export function useGuidedTours() {
         dismissedAt: null,
         updatedAt: new Date().toISOString(),
       };
-      dispatch({
-        type: "LOAD_PROGRESS",
-        progress: { ...state.progress, [tourId]: resetted },
-      });
-      saveLocalProgress({ ...state.progress, [tourId]: resetted });
+      const updatedProgress = { ...state.progress, [tourId]: resetted };
+      dispatch({ type: "LOAD_PROGRESS", progress: updatedProgress });
+      saveLocalProgress(updatedProgress);
+
+      // Sync reset to backend (fire-and-forget — don't block the UI)
+      resetTourMutation.mutate(tourId);
+
       startTour(tourId, "manual");
     },
-    [state.progress, dispatch, startTour]
+    [state.progress, dispatch, startTour, resetTourMutation]
   );
 
   // ── Guidance Center ──────────────────────────────────────────────────────
@@ -205,19 +211,36 @@ export function useGuidedTours() {
   }, [dispatch]);
 
   // ── Preferences ──────────────────────────────────────────────────────────
+  // Each toggle updates local store, persists to localStorage, and syncs to backend.
 
   const toggleToursEnabled = useCallback(
     (enabled: boolean) => {
       dispatch({ type: "TOGGLE_TOURS", enabled });
+      // Persist locally
+      const currentPrefs = loadLocalPreferences() ?? {
+        contextualHintsEnabled: state.preferences.contextualHintsEnabled,
+        autoplayOnboarding: false,
+      };
+      saveLocalPreferences({ ...currentPrefs });
+      // Sync to backend (fire-and-forget)
+      prefsMutation.mutate({ toursEnabled: enabled });
     },
-    [dispatch]
+    [dispatch, state.preferences.contextualHintsEnabled, prefsMutation]
   );
 
   const toggleContextualHints = useCallback(
     (enabled: boolean) => {
       dispatch({ type: "TOGGLE_CONTEXTUAL_HINTS", enabled });
+      // Persist locally
+      const newPrefs = {
+        contextualHintsEnabled: enabled,
+        autoplayOnboarding: false,
+      };
+      saveLocalPreferences(newPrefs);
+      // Sync to backend (fire-and-forget)
+      prefsMutation.mutate({ contextualHintsEnabled: enabled });
     },
-    [dispatch]
+    [dispatch, prefsMutation]
   );
 
   // ── Derived helpers ──────────────────────────────────────────────────────

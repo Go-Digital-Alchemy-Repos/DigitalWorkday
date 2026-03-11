@@ -8,6 +8,13 @@
 //
 // The dot anchors to the top-right corner of its target element and repositions
 // on scroll/resize via a ResizeObserver + scroll listener.
+//
+// Accessibility:
+//   - Beacon has role="button" + tabIndex=0 + aria-expanded + aria-haspopup
+//   - Popup card has role="dialog" + aria-label
+//   - Respects prefers-reduced-motion (disables the ping animation)
+//   - Escape key closes the popup
+//   - Focus moves to the close button when the popup opens
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef, useCallback } from "react";
@@ -37,7 +44,12 @@ function getDotPosition(el: Element): DotPosition {
 }
 
 /** Clamp the popup card so it never overflows the viewport */
-function clampPosition(left: number, top: number, cardW = 244, cardH = 140): { left: number; top: number } {
+function clampPosition(
+  left: number,
+  top: number,
+  cardW = 244,
+  cardH = 140
+): { left: number; top: number } {
   const vw = window.innerWidth;
   const vh = window.innerHeight;
   return {
@@ -62,6 +74,8 @@ export function ContextualHintBeacon({ hint }: Props) {
   const hoverTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const targetRef = useRef<Element | null>(null);
   const raf = useRef<number | null>(null);
+  const closeBtnRef = useRef<HTMLButtonElement | null>(null);
+
   // Stable ref so scroll/resize listeners always call the latest updatePosition
   const updatePositionRef = useRef<() => void>(() => {});
 
@@ -80,21 +94,17 @@ export function ContextualHintBeacon({ hint }: Props) {
       const spaceBelow = window.innerHeight - dotScreenTop - 20;
       const preferTop = spaceBelow < 160;
 
-      const rawTop = preferTop
-        ? dotScreenTop - 150
-        : dotScreenTop + 20;
+      const rawTop = preferTop ? dotScreenTop - 150 : dotScreenTop + 20;
       const rawLeft = dotScreenLeft - 224 + 10;
 
       setPopupPos(clampPosition(rawLeft, rawTop));
     }
   }, [popupOpen]);
 
-  // Keep ref current so the stable scheduleUpdate callback always uses latest logic
   useEffect(() => {
     updatePositionRef.current = updatePosition;
   });
 
-  // Stable callback — safe to pass to addEventListener once
   const scheduleUpdate = useCallback(() => {
     if (raf.current) cancelAnimationFrame(raf.current);
     raf.current = requestAnimationFrame(() => updatePositionRef.current());
@@ -110,7 +120,7 @@ export function ContextualHintBeacon({ hint }: Props) {
       if (cancelled || !el) return;
 
       targetRef.current = el;
-      updatePosition();
+      updatePositionRef.current();
 
       ro = new ResizeObserver(scheduleUpdate);
       ro.observe(el);
@@ -126,8 +136,10 @@ export function ContextualHintBeacon({ hint }: Props) {
       window.removeEventListener("scroll", scheduleUpdate, { capture: true });
       window.removeEventListener("resize", scheduleUpdate);
       if (raf.current) cancelAnimationFrame(raf.current);
+      // Clear hover timer so it doesn't fire after unmount
+      if (hoverTimerRef.current) clearTimeout(hoverTimerRef.current);
     };
-  // eslint-disable-next-line react-hooks/exhaustive-deps
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [hint.target]);
 
   // Re-run position whenever popup opens/closes so the card is correctly placed
@@ -135,7 +147,17 @@ export function ContextualHintBeacon({ hint }: Props) {
     scheduleUpdate();
   }, [popupOpen, scheduleUpdate]);
 
-  // Close popup when clicking outside
+  // Move focus to the close button when the popup opens
+  useEffect(() => {
+    if (popupOpen) {
+      const raf = requestAnimationFrame(() => {
+        closeBtnRef.current?.focus();
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [popupOpen]);
+
+  // Close popup on outside click
   useEffect(() => {
     if (!popupOpen) return;
     const handler = (e: MouseEvent) => {
@@ -148,6 +170,19 @@ export function ContextualHintBeacon({ hint }: Props) {
     document.addEventListener("mousedown", handler);
     return () => document.removeEventListener("mousedown", handler);
   }, [popupOpen, hint.id]);
+
+  // Close popup on Escape
+  useEffect(() => {
+    if (!popupOpen) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        e.stopPropagation();
+        setPopupOpen(false);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [popupOpen]);
 
   // ── Interaction handlers ───────────────────────────────────────────────────
 
@@ -180,7 +215,7 @@ export function ContextualHintBeacon({ hint }: Props) {
 
   // ── Render ─────────────────────────────────────────────────────────────────
 
-  if (!dotPos) return null; // target not in DOM yet
+  if (!dotPos) return null;
 
   const BEACON_SIZE = 10;
 
@@ -189,13 +224,21 @@ export function ContextualHintBeacon({ hint }: Props) {
       {/* Pulsing dot */}
       <div
         id={`hint-beacon-${hint.id}`}
+        data-testid={`hint-beacon-${hint.id}`}
         role="button"
         tabIndex={0}
-        aria-label={`Hint: ${hint.title}`}
+        aria-label={`Hint: ${hint.title}. Click for details.`}
+        aria-expanded={popupOpen}
+        aria-haspopup="dialog"
         onMouseEnter={handleDotMouseEnter}
         onMouseLeave={handleDotMouseLeave}
         onClick={handleDotClick}
-        onKeyDown={(e) => e.key === "Enter" && handleDotClick()}
+        onKeyDown={(e) => {
+          if (e.key === "Enter" || e.key === " ") {
+            e.preventDefault();
+            handleDotClick();
+          }
+        }}
         style={{
           position: "fixed",
           top: dotPos.top,
@@ -205,11 +248,11 @@ export function ContextualHintBeacon({ hint }: Props) {
           zIndex: 9000,
           cursor: "pointer",
         }}
-        className="focus:outline-none"
+        className="focus:outline-none focus-visible:ring-2 focus-visible:ring-primary focus-visible:ring-offset-1 rounded-full"
       >
-        {/* Outer ping ring */}
+        {/* Outer ping ring — suppressed when user prefers reduced motion */}
         <span
-          className="absolute inset-0 rounded-full bg-primary opacity-40 animate-ping"
+          className="absolute inset-0 rounded-full bg-primary opacity-40 motion-safe:animate-ping"
           style={{ animationDuration: "2s" }}
           aria-hidden="true"
         />
@@ -224,7 +267,9 @@ export function ContextualHintBeacon({ hint }: Props) {
       {popupOpen && (
         <div
           id={`hint-card-${hint.id}`}
-          role="tooltip"
+          role="dialog"
+          aria-label={hint.title}
+          aria-modal="false"
           onMouseEnter={handleCardMouseEnter}
           onMouseLeave={handleCardMouseLeave}
           style={{
@@ -234,15 +279,12 @@ export function ContextualHintBeacon({ hint }: Props) {
             width: 244,
             zIndex: 9001,
           }}
-          className={cn(
-            "transition-all duration-150 origin-top-right",
-            "scale-100 opacity-100"
-          )}
+          className="transition-all duration-150 origin-top-right"
         >
           <Card className="shadow-xl border border-border/80">
             <CardContent className="p-3">
               <div className="flex items-start gap-2">
-                <Lightbulb className="h-4 w-4 text-primary mt-0.5 shrink-0" />
+                <Lightbulb className="h-4 w-4 text-primary mt-0.5 shrink-0" aria-hidden="true" />
                 <div className="flex-1 min-w-0">
                   <p className="text-xs font-semibold text-foreground leading-tight">
                     {hint.title}
@@ -263,8 +305,9 @@ export function ContextualHintBeacon({ hint }: Props) {
                   )}
                 </div>
                 <button
+                  ref={closeBtnRef}
                   onClick={() => setPopupOpen(false)}
-                  className="shrink-0 ml-1 opacity-50 hover:opacity-100 transition-opacity"
+                  className="shrink-0 ml-1 opacity-50 hover:opacity-100 transition-opacity focus:outline-none focus-visible:ring-1 focus-visible:ring-primary rounded"
                   aria-label="Close hint"
                   data-testid={`hint-close-${hint.id}`}
                 >

@@ -16,6 +16,7 @@ import {
   SheetTitle,
   SheetDescription,
 } from "@/components/ui/sheet";
+import { useAuthSafe } from "@/lib/auth";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Switch } from "@/components/ui/switch";
@@ -86,11 +87,19 @@ export function GuidanceCenter() {
   } = useGuidedTours();
 
   const { state, dispatch } = useGuidedToursContext();
+  const auth = useAuthSafe();
+  const userRole = auth?.user?.role ?? null;
 
-  // Guided tours only (release tours are shown separately)
-  const guidedTours = getAllTours().filter(
-    (t) => t.replayable && t.tourType !== "release"
-  );
+  // Guided tours filtered by replayable, type, and role eligibility
+  const guidedTours = getAllTours().filter((t) => {
+    if (!t.replayable) return false;
+    if (t.tourType === "release") return false;
+    if (!userRole) return false;
+    return (
+      t.allowedRoles.includes("*") ||
+      t.allowedRoles.includes(userRole as typeof t.allowedRoles[number])
+    );
+  });
 
   // Latest release tour — drives the "What's New" card
   const latestReleaseTour = getLatestReleaseTour();

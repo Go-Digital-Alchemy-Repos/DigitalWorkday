@@ -72,6 +72,7 @@ export function ContextualHintRenderer() {
   if (!state.contextualHintsEnabled) return null;
   if (state.isRunning) return null;               // tour is active
   if (state.isGuidanceCenterOpen) return null;    // sheet is open
+  if (state.isOnboardingModalOpen) return null;   // onboarding dialog is open
   if (isSmallViewport) return null;               // too small for beacons
 
   // ── Filter & prioritize ────────────────────────────────────────────────────

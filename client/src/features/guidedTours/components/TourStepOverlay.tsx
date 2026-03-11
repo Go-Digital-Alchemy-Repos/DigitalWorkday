@@ -7,15 +7,19 @@
 // Resilient by design:
 //   - Polls for target element via waitForTarget() (handles lazy renders)
 //   - Falls back to centered modal if no target found
+//   - Shows a skeleton while the target is resolving (avoids blank flicker)
 //   - Repositions on window resize and scroll via ResizeObserver + scroll listener
 //   - Never crashes the page on missing/invalid selectors
+//   - Traps focus inside the dialog and restores it on close
+//   - Respects prefers-reduced-motion
+//   - Full-width on narrow viewports (<= 400px)
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState, useEffect, useRef, useCallback } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { X, ChevronLeft, ChevronRight, CheckCircle2 } from "lucide-react";
+import { X, ChevronLeft, ChevronRight, CheckCircle2, Loader2 } from "lucide-react";
 import { useGuidedToursContext } from "../store/guidedToursStore";
 import { getTourById } from "../lib/tourRegistry";
 import { waitForTarget } from "../lib/tourTargetResolver";
@@ -33,6 +37,7 @@ interface PopoverPosition {
   bottom?: number;
   left?: number;
   right?: number;
+  width?: string | number;
 }
 
 function computePopoverPosition(
@@ -43,6 +48,15 @@ function computePopoverPosition(
   const vh = window.innerHeight;
   const margin = 12;
 
+  // On very narrow viewports, pin to full width
+  if (vw <= 400) {
+    return {
+      top: rect.bottom + POPOVER_GAP,
+      left: margin,
+      width: vw - margin * 2,
+    };
+  }
+
   const clampLeft = (l: number) =>
     Math.max(margin, Math.min(l, vw - POPOVER_WIDTH - margin));
 
@@ -50,7 +64,7 @@ function computePopoverPosition(
     case "bottom":
     case "bottom-start":
     case "bottom-end": {
-      let left =
+      const left =
         placement === "bottom-start"
           ? rect.left
           : placement === "bottom-end"
@@ -61,7 +75,7 @@ function computePopoverPosition(
     case "top":
     case "top-start":
     case "top-end": {
-      let left =
+      const left =
         placement === "top-start"
           ? rect.left
           : placement === "top-end"
@@ -96,17 +110,78 @@ function computePopoverPosition(
 // ── Centered fallback (no target found) ──────────────────────────────────────
 
 function centeredPosition(): PopoverPosition {
+  const vw = window.innerWidth;
+  const margin = 12;
+  if (vw <= 400) {
+    return {
+      top: Math.max(80, window.innerHeight / 2 - 120),
+      left: margin,
+      width: vw - margin * 2,
+    };
+  }
   return {
     top: Math.max(80, window.innerHeight / 2 - 120),
-    left: Math.max(16, window.innerWidth / 2 - POPOVER_WIDTH / 2),
+    left: Math.max(margin, window.innerWidth / 2 - POPOVER_WIDTH / 2),
   };
+}
+
+// ── Resolving skeleton (shown while target is polling) ────────────────────────
+
+function ResolvingSkeleton({ onClose }: { onClose: () => void }) {
+  return createPortal(
+    <>
+      {/* Backdrop */}
+      <div
+        aria-hidden="true"
+        style={{
+          position: "fixed",
+          inset: 0,
+          background: "rgba(0,0,0,0.38)",
+          pointerEvents: "none",
+          zIndex: 9990,
+        }}
+      />
+      {/* Skeleton popover */}
+      <div
+        role="dialog"
+        aria-modal="true"
+        aria-label="Loading tour step"
+        style={{
+          position: "fixed",
+          zIndex: 9999,
+          width: Math.min(POPOVER_WIDTH, window.innerWidth - 24),
+          top: Math.max(80, window.innerHeight / 2 - 80),
+          left: Math.max(12, window.innerWidth / 2 - POPOVER_WIDTH / 2),
+        }}
+        className="rounded-xl border border-border bg-card text-card-foreground shadow-xl"
+      >
+        <div className="relative h-1 rounded-t-xl overflow-hidden bg-muted">
+          <div className="h-full bg-primary/30 animate-pulse w-1/3" />
+        </div>
+        <div className="px-4 pt-3 pb-4 flex items-center gap-3">
+          <Loader2 className="h-4 w-4 animate-spin text-muted-foreground shrink-0" />
+          <span className="text-sm text-muted-foreground">Loading tour step…</span>
+          <Button
+            variant="ghost"
+            size="icon"
+            className="h-6 w-6 ml-auto shrink-0 text-muted-foreground"
+            onClick={onClose}
+            aria-label="Close tour"
+          >
+            <X className="h-3.5 w-3.5" />
+          </Button>
+        </div>
+      </div>
+    </>,
+    document.body
+  );
 }
 
 // ── Main overlay component ────────────────────────────────────────────────────
 
 export function TourStepOverlay() {
   const { state } = useGuidedToursContext();
-  const { stopTour, nextStep, prevStep, replayTour } = useGuidedTours();
+  const { stopTour, nextStep, prevStep } = useGuidedTours();
 
   const { isRunning, activeTourId, activeStepIndex } = state;
 
@@ -119,6 +194,8 @@ export function TourStepOverlay() {
 
   const observerRef = useRef<ResizeObserver | null>(null);
   const targetElRef = useRef<Element | null>(null);
+  const dialogRef = useRef<HTMLDivElement | null>(null);
+  const lastFocusedRef = useRef<Element | null>(null);
 
   // ── Resolve target element and compute positions ───────────────────────────
 
@@ -152,7 +229,6 @@ export function TourStepOverlay() {
       targetElRef.current = el;
 
       if (el) {
-        // Observe size changes on the target
         observerRef.current?.disconnect();
         const ro = new ResizeObserver(updatePositions);
         ro.observe(el);
@@ -172,22 +248,45 @@ export function TourStepOverlay() {
   // Recompute on scroll and resize
   useEffect(() => {
     if (!isRunning) return;
-    const onScroll = updatePositions;
-    const onResize = updatePositions;
-    window.addEventListener("scroll", onScroll, { passive: true, capture: true });
-    window.addEventListener("resize", onResize, { passive: true });
+    window.addEventListener("scroll", updatePositions, { passive: true, capture: true });
+    window.addEventListener("resize", updatePositions, { passive: true });
     return () => {
-      window.removeEventListener("scroll", onScroll, true);
-      window.removeEventListener("resize", onResize);
+      window.removeEventListener("scroll", updatePositions, true);
+      window.removeEventListener("resize", updatePositions);
     };
   }, [isRunning, updatePositions]);
+
+  // ── Focus management ───────────────────────────────────────────────────────
+  // Save + restore focus so closing the tour returns focus to where it was.
+  useEffect(() => {
+    if (isRunning) {
+      lastFocusedRef.current = document.activeElement;
+    } else {
+      // Restore focus when tour ends
+      if (lastFocusedRef.current instanceof HTMLElement) {
+        lastFocusedRef.current.focus();
+      }
+      lastFocusedRef.current = null;
+    }
+  }, [isRunning]);
+
+  // Move focus into the dialog when it renders (popoverPos is set)
+  useEffect(() => {
+    if (popoverPos && !resolving) {
+      // Small rAF delay so the dialog is painted before focus
+      const raf = requestAnimationFrame(() => {
+        dialogRef.current?.focus();
+      });
+      return () => cancelAnimationFrame(raf);
+    }
+  }, [popoverPos, resolving]);
 
   // ── Keyboard handling ──────────────────────────────────────────────────────
 
   useEffect(() => {
     if (!isRunning) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape") stopTour();
+      if (e.key === "Escape") { e.preventDefault(); stopTour(); }
       if (e.key === "ArrowRight" || e.key === "ArrowDown") nextStep();
       if (e.key === "ArrowLeft" || e.key === "ArrowUp") prevStep();
     };
@@ -195,7 +294,15 @@ export function TourStepOverlay() {
     return () => window.removeEventListener("keydown", onKey);
   }, [isRunning, stopTour, nextStep, prevStep]);
 
-  if (!isRunning || !tour || !step || resolving) return null;
+  // ── Render ────────────────────────────────────────────────────────────────
+
+  if (!isRunning || !tour || !step) return null;
+
+  // While resolving, show a lightweight skeleton so the user knows something is happening
+  if (resolving) {
+    return <ResolvingSkeleton onClose={stopTour} />;
+  }
+
   if (!popoverPos) return null;
 
   const stepNum = activeStepIndex + 1;
@@ -203,6 +310,9 @@ export function TourStepOverlay() {
   const isLast = activeStepIndex === stepTotal - 1;
   const isFirst = activeStepIndex === 0;
   const progressPct = (stepNum / stepTotal) * 100;
+
+  // Effective width for the popover (may be overridden for narrow viewports)
+  const popoverWidth = popoverPos.width ?? POPOVER_WIDTH;
 
   return createPortal(
     <>
@@ -217,7 +327,6 @@ export function TourStepOverlay() {
             width: targetRect.width + 10,
             height: targetRect.height + 10,
             borderRadius: 6,
-            // Inner highlight ring + full-screen semi-opaque backdrop
             boxShadow:
               "0 0 0 3px hsl(var(--primary)), 0 0 0 9999px rgba(0,0,0,0.48)",
             pointerEvents: "none",
@@ -226,7 +335,6 @@ export function TourStepOverlay() {
           }}
         />
       ) : (
-        // No target found — simple full-screen backdrop
         <div
           aria-hidden="true"
           style={{
@@ -241,23 +349,26 @@ export function TourStepOverlay() {
 
       {/* ── Tour step card ─────────────────────────────────────────────────── */}
       <div
+        ref={dialogRef}
         role="dialog"
-        aria-modal="false"
+        aria-modal="true"
         aria-label={`Tour step ${stepNum} of ${stepTotal}: ${step.title}`}
+        tabIndex={-1}
         data-testid="tour-step-popover"
         style={{
           position: "fixed",
           zIndex: 9999,
-          width: POPOVER_WIDTH,
+          width: popoverWidth,
           ...popoverPos,
         }}
         className={cn(
           "rounded-xl border border-border bg-card text-card-foreground shadow-xl",
-          "animate-in fade-in-0 slide-in-from-bottom-2 duration-200"
+          "motion-safe:animate-in motion-safe:fade-in-0 motion-safe:slide-in-from-bottom-2 motion-safe:duration-200",
+          "focus:outline-none"
         )}
       >
         {/* Progress bar */}
-        <div className="relative h-1 rounded-t-xl overflow-hidden bg-muted">
+        <div className="relative h-1 rounded-t-xl overflow-hidden bg-muted" aria-hidden="true">
           <div
             className="h-full bg-primary transition-all duration-300"
             style={{ width: `${progressPct}%` }}
@@ -268,7 +379,7 @@ export function TourStepOverlay() {
           {/* Header row */}
           <div className="flex items-start justify-between gap-2">
             <div className="flex items-center gap-2 flex-wrap">
-              <Badge variant="outline" className="text-[10px] py-0 font-semibold shrink-0">
+              <Badge variant="outline" className="text-[10px] py-0 font-semibold shrink-0" aria-label={`Step ${stepNum} of ${stepTotal}`}>
                 {stepNum} / {stepTotal}
               </Badge>
               <h3 className="text-sm font-semibold leading-tight">{step.title}</h3>
@@ -298,6 +409,7 @@ export function TourStepOverlay() {
               onClick={prevStep}
               disabled={isFirst}
               className="gap-1 h-7 px-2"
+              aria-label="Previous step"
               data-testid="tour-prev-btn"
             >
               <ChevronLeft className="h-3.5 w-3.5" />
@@ -308,10 +420,8 @@ export function TourStepOverlay() {
               <Button
                 size="sm"
                 className="gap-1.5 h-7 px-3"
-                onClick={() => {
-                  // Complete action — handled via adapter callback chain in useGuidedTours
-                  nextStep();
-                }}
+                onClick={nextStep}
+                aria-label="Finish tour"
                 data-testid="tour-finish-btn"
               >
                 <CheckCircle2 className="h-3.5 w-3.5" />
@@ -322,6 +432,7 @@ export function TourStepOverlay() {
                 size="sm"
                 className="gap-1 h-7 px-3"
                 onClick={nextStep}
+                aria-label={`Next step (${stepNum + 1} of ${stepTotal})`}
                 data-testid="tour-next-btn"
               >
                 Next

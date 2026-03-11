@@ -51,6 +51,12 @@ export function useReleaseTourAutoLaunch() {
   const firedRef = useRef(false);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Keep a ref to `isRunning` so the timeout callback never reads a stale closure.
+  const isRunningRef = useRef(state.isRunning);
+  useEffect(() => {
+    isRunningRef.current = state.isRunning;
+  }, [state.isRunning]);
+
   useEffect(() => {
     // Guard 1: user not authenticated yet
     if (!auth?.user) return;
@@ -89,16 +95,20 @@ export function useReleaseTourAutoLaunch() {
     ) return;
 
     // All guards passed — schedule the auto-launch
+    // Capture releaseVersion in the closure (stable string value)
+    const releaseVersion = tour.releaseVersion;
+    const tourId = tour.id;
+
     timerRef.current = setTimeout(() => {
-      // Re-check running state at time of launch (state may have changed)
-      if (state.isRunning) return;
+      // Re-check via ref to avoid stale closure reading old state
+      if (isRunningRef.current) return;
 
       // Mark as seen immediately so we never auto-launch twice, even if the
       // tour errors out or the user dismisses it on step 1.
-      markReleaseTourSeen(tour.releaseVersion!, "seen");
+      markReleaseTourSeen(releaseVersion, "seen");
       firedRef.current = true;
 
-      startTour(tour.id, "programmatic");
+      startTour(tourId, "programmatic");
     }, AUTO_LAUNCH_DELAY_MS);
 
     return () => {
