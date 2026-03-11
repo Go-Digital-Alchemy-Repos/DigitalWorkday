@@ -441,18 +441,6 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
               <TooltipContent>Private task</TooltipContent>
             </Tooltip>
           )}
-          {hasProject && (
-            <Button
-              variant="ghost"
-              size="icon"
-              className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-              onClick={copyLink}
-              title="Copy task link"
-              data-testid={`button-copy-link-${task.id}`}
-            >
-              <Link2 className="h-3.5 w-3.5" />
-            </Button>
-          )}
           {task.isPersonal && (
             <Badge variant="outline" className="text-xs shrink-0 gap-1 px-1.5 py-0">
               <UserIcon className="h-3 w-3" />
