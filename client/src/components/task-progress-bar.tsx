@@ -15,11 +15,12 @@ interface TaskProgressBarProps {
   className?: string;
   showMilestones?: boolean;
   compact?: boolean;
+  hideStats?: boolean;
 }
 
 const MILESTONES = [25, 50, 75, 100];
 
-export function TaskProgressBar({ stats, className, showMilestones = false, compact = false }: TaskProgressBarProps) {
+export function TaskProgressBar({ stats, className, showMilestones = false, compact = false, hideStats = false }: TaskProgressBarProps) {
   const { total, done, inProgress, todo, blocked } = stats;
   const completionPercentage = total > 0 ? Math.round((done / total) * 100) : 0;
 
@@ -98,34 +99,36 @@ export function TaskProgressBar({ stats, className, showMilestones = false, comp
           </span>
         </div>
       )}
-      <div className="flex items-center gap-3 md:gap-4 flex-wrap">
-        <div className="flex items-center gap-1.5" data-testid="stat-done">
-          <CheckCircle2 className="h-4 w-4 text-green-500" />
-          <span className="text-xs md:text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{done}</span> Done
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5" data-testid="stat-in-progress">
-          <Clock className="h-4 w-4 text-blue-500" />
-          <span className="text-xs md:text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{inProgress}</span> In Progress
-          </span>
-        </div>
-        <div className="flex items-center gap-1.5" data-testid="stat-todo">
-          <Circle className="h-4 w-4 text-muted-foreground" />
-          <span className="text-xs md:text-sm text-muted-foreground">
-            <span className="font-medium text-foreground">{todo}</span> To Do
-          </span>
-        </div>
-        {blocked > 0 && (
-          <div className="flex items-center gap-1.5" data-testid="stat-blocked">
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
+      {!hideStats && (
+        <div className="flex items-center gap-3 md:gap-4 flex-wrap">
+          <div className="flex items-center gap-1.5" data-testid="stat-done">
+            <CheckCircle2 className="h-4 w-4 text-green-500" />
             <span className="text-xs md:text-sm text-muted-foreground">
-              <span className="font-medium text-foreground">{blocked}</span> Blocked
+              <span className="font-medium text-foreground">{done}</span> Done
             </span>
           </div>
-        )}
-      </div>
+          <div className="flex items-center gap-1.5" data-testid="stat-in-progress">
+            <Clock className="h-4 w-4 text-blue-500" />
+            <span className="text-xs md:text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{inProgress}</span> In Progress
+            </span>
+          </div>
+          <div className="flex items-center gap-1.5" data-testid="stat-todo">
+            <Circle className="h-4 w-4 text-muted-foreground" />
+            <span className="text-xs md:text-sm text-muted-foreground">
+              <span className="font-medium text-foreground">{todo}</span> To Do
+            </span>
+          </div>
+          {blocked > 0 && (
+            <div className="flex items-center gap-1.5" data-testid="stat-blocked">
+              <AlertTriangle className="h-4 w-4 text-amber-500" />
+              <span className="text-xs md:text-sm text-muted-foreground">
+                <span className="font-medium text-foreground">{blocked}</span> Blocked
+              </span>
+            </div>
+          )}
+        </div>
+      )}
     </div>
   );
 }

@@ -85,6 +85,8 @@ import {
   ListTodo,
   Zap,
   Flame,
+  Circle,
+  AlertTriangle,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -978,24 +980,56 @@ export default function MyTasks() {
               </Button>
             </div>
           </div>
-          <DataToolbar
-            searchValue={searchQuery}
-            onSearchChange={setSearchQuery}
-            searchPlaceholder="Search tasks..."
-            filters={filterConfigs}
-            filterValues={filterValues}
-            onFilterChange={handleFilterChange}
-            onClearFilters={handleClearFilters}
-            sortOptions={sortOptions}
-            sortValue={sortBy}
-            onSortChange={setSortBy}
-            className="mb-0"
-          />
+          <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
+            <DataToolbar
+              searchValue={searchQuery}
+              onSearchChange={setSearchQuery}
+              searchPlaceholder="Search tasks..."
+              filters={filterConfigs}
+              filterValues={filterValues}
+              onFilterChange={handleFilterChange}
+              onClearFilters={handleClearFilters}
+              sortOptions={sortOptions}
+              sortValue={sortBy}
+              onSortChange={setSortBy}
+              className="mb-0 flex-1"
+            />
+            {taskStats.total > 0 && (
+              <div className="hidden md:flex items-center gap-3 md:gap-4 flex-wrap pl-4 border-l border-border">
+                <div className="flex items-center gap-1.5" data-testid="stat-done-header">
+                  <CheckCircle2 className="h-4 w-4 text-green-500" />
+                  <span className="text-xs md:text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{taskStats.done}</span> Done
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5" data-testid="stat-in-progress-header">
+                  <Clock className="h-4 w-4 text-blue-500" />
+                  <span className="text-xs md:text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{taskStats.inProgress}</span> In Progress
+                  </span>
+                </div>
+                <div className="flex items-center gap-1.5" data-testid="stat-todo-header">
+                  <Circle className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-xs md:text-sm text-muted-foreground">
+                    <span className="font-medium text-foreground">{taskStats.todo}</span> To Do
+                  </span>
+                </div>
+                {taskStats.blocked > 0 && (
+                  <div className="flex items-center gap-1.5" data-testid="stat-blocked-header">
+                    <AlertTriangle className="h-4 w-4 text-amber-500" />
+                    <span className="text-xs md:text-sm text-muted-foreground">
+                      <span className="font-medium text-foreground">{taskStats.blocked}</span> Blocked
+                    </span>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
         </div>
 
         {taskStats.total > 0 && (
           <div className="hidden md:block px-3 sm:px-4 lg:px-6 pb-4">
-            <TaskProgressBar stats={taskStats} showMilestones />
+            <TaskProgressBar stats={taskStats} showMilestones hideStats />
           </div>
         )}
 
