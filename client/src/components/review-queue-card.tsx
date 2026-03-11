@@ -14,6 +14,7 @@ interface ReviewQueueItem {
   dueDate: string | null;
   projectId: string | null;
   projectName: string | null;
+  clientName: string | null;
   pmReviewRequestedAt: string | null;
   pmReviewRequestedBy: string | null;
   requesterFirstName: string | null;
@@ -28,6 +29,7 @@ interface ClearedReviewItem {
   dueDate: string | null;
   projectId: string | null;
   projectName: string | null;
+  clientName: string | null;
   pmReviewResolvedAt: string | null;
   requesterFirstName: string | null;
   requesterLastName: string | null;
@@ -55,7 +57,7 @@ function TaskRow({
   onClick,
   testId,
 }: {
-  item: { taskId: string; title: string; priority: string; projectName: string | null; requesterFirstName: string | null; requesterLastName: string | null };
+  item: { taskId: string; title: string; priority: string; clientName: string | null; projectName: string | null; requesterFirstName: string | null; requesterLastName: string | null };
   timestamp: string | null;
   onClick: () => void;
   testId: string;
@@ -75,6 +77,14 @@ function TaskRow({
               className={`text-[10px] px-1.5 py-0 shrink-0 ${PRIORITY_COLORS[item.priority] || ""}`}
             >
               {item.priority}
+            </Badge>
+          )}
+          {item.clientName && (
+            <Badge
+              variant="outline"
+              className="text-[10px] px-1.5 py-0 shrink-0 font-normal"
+            >
+              {item.clientName}
             </Badge>
           )}
         </div>

@@ -210,12 +210,14 @@ router.get("/dashboard/review-queue", async (req: Request, res: Response) => {
         t.visibility,
         t.created_by,
         p.name AS project_name,
+        c.name AS client_name,
         t.pm_review_requested_at,
         t.pm_review_requested_by,
         u.first_name AS requester_first_name,
         u.last_name AS requester_last_name
       FROM tasks t
       LEFT JOIN projects p ON t.project_id = p.id
+      LEFT JOIN clients c ON p.client_id = c.id
       LEFT JOIN users u ON t.pm_review_requested_by = u.id
       WHERE t.tenant_id = ${tenantId}
         AND t.needs_pm_review = true
@@ -256,6 +258,7 @@ router.get("/dashboard/review-queue", async (req: Request, res: Response) => {
       dueDate: row.due_date,
       projectId: row.project_id,
       projectName: row.project_name,
+      clientName: row.client_name,
       pmReviewRequestedAt: row.pm_review_requested_at,
       pmReviewRequestedBy: row.pm_review_requested_by,
       requesterFirstName: row.requester_first_name,
@@ -273,12 +276,14 @@ router.get("/dashboard/review-queue", async (req: Request, res: Response) => {
         t.visibility,
         t.created_by,
         p.name AS project_name,
+        c.name AS client_name,
         t.pm_review_resolved_at,
         t.pm_review_requested_by,
         u.first_name AS requester_first_name,
         u.last_name AS requester_last_name
       FROM tasks t
       LEFT JOIN projects p ON t.project_id = p.id
+      LEFT JOIN clients c ON p.client_id = c.id
       LEFT JOIN users u ON t.pm_review_requested_by = u.id
       WHERE t.tenant_id = ${tenantId}
         AND t.needs_pm_review = false
@@ -322,6 +327,7 @@ router.get("/dashboard/review-queue", async (req: Request, res: Response) => {
       dueDate: row.due_date,
       projectId: row.project_id,
       projectName: row.project_name,
+      clientName: row.client_name,
       pmReviewResolvedAt: row.pm_review_resolved_at,
       requesterFirstName: row.requester_first_name,
       requesterLastName: row.requester_last_name,
