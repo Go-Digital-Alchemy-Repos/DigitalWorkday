@@ -78,6 +78,12 @@ import {
   chatChannels, chatChannelMembers, chatDmThreads, chatDmMembers, chatMessages, chatAttachments, chatReads, chatExportJobs, errorLogs,
   notifications, notificationPreferences,
   userUiPreferences,
+  userGuidedTourPreferences,
+  userGuidedTourProgress,
+  type UserGuidedTourPreferences,
+  type InsertUserGuidedTourPreferences,
+  type UserGuidedTourProgress,
+  type InsertUserGuidedTourProgress,
   UserRole,
   type CommentMention, type InsertCommentMention,
   type SupportTicket, type InsertSupportTicket,
@@ -578,6 +584,14 @@ export interface IStorage {
   // User UI Preferences
   getUserUiPreferences(userId: string): Promise<UserUiPreferences | undefined>;
   upsertUserUiPreferences(userId: string, tenantId: string | null, prefs: { themeMode?: string | null; themePackId?: string | null; themeAccent?: string | null; sidebarProjectOrder?: string[] | null }): Promise<UserUiPreferences>;
+
+  // Guided Tours
+  getGuidedTourPreferences(userId: string, tenantId: string): Promise<UserGuidedTourPreferences | undefined>;
+  upsertGuidedTourPreferences(userId: string, tenantId: string, prefs: Partial<Pick<InsertUserGuidedTourPreferences, "toursEnabled" | "contextualHintsEnabled" | "onboardingCompleted" | "lastSeenReleaseTourVersion">>): Promise<UserGuidedTourPreferences>;
+  getGuidedTourProgressList(userId: string, tenantId: string): Promise<UserGuidedTourProgress[]>;
+  getGuidedTourProgress(userId: string, tenantId: string, tourKey: string): Promise<UserGuidedTourProgress | undefined>;
+  upsertGuidedTourProgress(userId: string, tenantId: string, tourKey: string, data: Partial<Pick<InsertUserGuidedTourProgress, "tourVersion" | "status" | "currentStepIndex" | "startedAt" | "completedAt" | "dismissedAt" | "lastInteractedAt">>): Promise<UserGuidedTourProgress>;
+  resetGuidedTourProgress(userId: string, tenantId: string, tourKey: string): Promise<void>;
 
   // Support Tickets
   getSupportTicket(id: string): Promise<SupportTicket | undefined>;
@@ -4291,6 +4305,84 @@ export class DatabaseStorage implements IStorage {
       })
       .returning();
     return result;
+  }
+
+  // ============================================================
+  // Guided Tours
+  // ============================================================
+
+  async getGuidedTourPreferences(userId: string, tenantId: string): Promise<UserGuidedTourPreferences | undefined> {
+    const [prefs] = await db
+      .select()
+      .from(userGuidedTourPreferences)
+      .where(and(eq(userGuidedTourPreferences.userId, userId), eq(userGuidedTourPreferences.tenantId, tenantId)))
+      .limit(1);
+    return prefs ?? undefined;
+  }
+
+  async upsertGuidedTourPreferences(
+    userId: string,
+    tenantId: string,
+    prefs: Partial<Pick<InsertUserGuidedTourPreferences, "toursEnabled" | "contextualHintsEnabled" | "onboardingCompleted" | "lastSeenReleaseTourVersion">>
+  ): Promise<UserGuidedTourPreferences> {
+    const now = new Date();
+    const [result] = await db
+      .insert(userGuidedTourPreferences)
+      .values({ userId, tenantId, ...prefs, createdAt: now, updatedAt: now })
+      .onConflictDoUpdate({
+        target: [userGuidedTourPreferences.userId, userGuidedTourPreferences.tenantId],
+        set: { ...prefs, updatedAt: now },
+      })
+      .returning();
+    return result;
+  }
+
+  async getGuidedTourProgressList(userId: string, tenantId: string): Promise<UserGuidedTourProgress[]> {
+    return db
+      .select()
+      .from(userGuidedTourProgress)
+      .where(and(eq(userGuidedTourProgress.userId, userId), eq(userGuidedTourProgress.tenantId, tenantId)));
+  }
+
+  async getGuidedTourProgress(userId: string, tenantId: string, tourKey: string): Promise<UserGuidedTourProgress | undefined> {
+    const [row] = await db
+      .select()
+      .from(userGuidedTourProgress)
+      .where(and(
+        eq(userGuidedTourProgress.userId, userId),
+        eq(userGuidedTourProgress.tenantId, tenantId),
+        eq(userGuidedTourProgress.tourKey, tourKey)
+      ))
+      .limit(1);
+    return row ?? undefined;
+  }
+
+  async upsertGuidedTourProgress(
+    userId: string,
+    tenantId: string,
+    tourKey: string,
+    data: Partial<Pick<InsertUserGuidedTourProgress, "tourVersion" | "status" | "currentStepIndex" | "startedAt" | "completedAt" | "dismissedAt" | "lastInteractedAt">>
+  ): Promise<UserGuidedTourProgress> {
+    const now = new Date();
+    const [result] = await db
+      .insert(userGuidedTourProgress)
+      .values({ userId, tenantId, tourKey, ...data, lastInteractedAt: now, createdAt: now, updatedAt: now })
+      .onConflictDoUpdate({
+        target: [userGuidedTourProgress.userId, userGuidedTourProgress.tenantId, userGuidedTourProgress.tourKey],
+        set: { ...data, lastInteractedAt: now, updatedAt: now },
+      })
+      .returning();
+    return result;
+  }
+
+  async resetGuidedTourProgress(userId: string, tenantId: string, tourKey: string): Promise<void> {
+    await db
+      .delete(userGuidedTourProgress)
+      .where(and(
+        eq(userGuidedTourProgress.userId, userId),
+        eq(userGuidedTourProgress.tenantId, tenantId),
+        eq(userGuidedTourProgress.tourKey, tourKey)
+      ));
   }
 
   // ============================================================

@@ -54,6 +54,17 @@ export { resolveTarget, waitForTarget } from "./lib/tourTargetResolver";
 // Hooks
 export { useGuidedTours } from "./hooks/useGuidedTours";
 export { useTourEligibility } from "./hooks/useTourEligibility";
+export {
+  useTourPreferences,
+  useUpdateTourPreferences,
+  useTourProgressList,
+  useUpdateTourProgress,
+  useCompleteTour,
+  useDismissTour,
+  useResetTour,
+  TOUR_QUERY_KEYS,
+} from "./hooks/useTourApi";
+export type { TourPreferencesResponse } from "./hooks/useTourApi";
 
 // Components
 export { GuidedTourProvider } from "./components/GuidedTourProvider";

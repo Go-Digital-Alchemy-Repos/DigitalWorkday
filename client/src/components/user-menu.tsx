@@ -9,10 +9,11 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { LogOut, User, Shield, Users } from "lucide-react";
+import { LogOut, User, Shield, Users, BookOpen } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { useLocation } from "wouter";
 import { getStorageUrl } from "@/lib/storageUrl";
+import { useGuidedTours } from "@/features/guidedTours/hooks/useGuidedTours";
 
 function getRoleIcon(role: string) {
   switch (role) {
@@ -47,6 +48,7 @@ function getRoleLabel(role: string) {
 export function UserMenu() {
   const { user, logout, isAuthenticated } = useAuth();
   const [, setLocation] = useLocation();
+  const { openGuidanceCenter } = useGuidedTours();
 
   if (!isAuthenticated || !user) {
     return null;
@@ -96,6 +98,16 @@ export function UserMenu() {
           <User className="mr-2 h-4 w-4" />
           My Profile
         </DropdownMenuItem>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onClick={openGuidanceCenter}
+          className="cursor-pointer"
+          data-testid="button-guidance-center"
+        >
+          <BookOpen className="mr-2 h-4 w-4" />
+          Help &amp; Tours
+        </DropdownMenuItem>
+        <DropdownMenuSeparator />
         <DropdownMenuItem
           onClick={logout}
           className="text-destructive focus:text-destructive cursor-pointer"

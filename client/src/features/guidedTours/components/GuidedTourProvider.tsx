@@ -2,12 +2,10 @@
 // GuidedTourProvider
 // Top-level provider that:
 //  - Bootstraps the store (useReducer)
-//  - Loads persisted preferences and progress from localStorage
+//  - Loads preferences + progress from backend API (graceful fallback on error)
+//  - Hydrates store from localStorage until API responds (fast initial render)
 //  - Manages the adapter lifecycle (cleanup on unmount)
-//  - Exposes context to children via GuidedToursContext
-//  - Remains fully inert until a tour is explicitly started
-//
-// Mount this once inside App.tsx, inside AuthProvider + FeaturesProvider.
+//  - Exposes context via GuidedToursContext
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useReducer, useEffect, type ReactNode } from "react";
@@ -20,53 +18,93 @@ import { getAdapter, resetAdapter } from "../lib/tourEngineAdapter";
 import {
   loadLocalPreferences,
   loadLocalProgress,
+  saveLocalPreferences,
+  saveLocalProgress,
 } from "../lib/tourPersistence";
+import type { GuidedTourProgress } from "../types";
+import { useTourPreferences, useTourProgressList } from "../hooks/useTourApi";
+import { useAuthSafe } from "@/lib/auth";
 
 interface GuidedTourProviderProps {
   children: ReactNode;
-  /** Set to false to disable the entire tour system (e.g. feature flag off) */
+  /** Set false to disable the entire system (e.g. feature flag off) */
   enabled?: boolean;
 }
 
-export function GuidedTourProvider({
+// Inner component — needs to be inside QueryClientProvider to use hooks
+function GuidedTourProviderInner({
   children,
-  enabled = true,
+  enabled,
 }: GuidedTourProviderProps) {
-  const [state, dispatch] = useReducer(
-    guidedToursReducer,
-    {
-      ...initialGuidedToursState,
-      toursEnabled: enabled,
-    }
-  );
+  const [state, dispatch] = useReducer(guidedToursReducer, {
+    ...initialGuidedToursState,
+    toursEnabled: enabled ?? true,
+  });
 
-  // ── Hydrate from localStorage on first mount ──────────────────────────────
+  // Only fire API calls when the user is actually authenticated
+  const { isAuthenticated } = useAuthSafe() ?? { isAuthenticated: false };
+
+  // ── Load API data ─────────────────────────────────────────────────────────
+  const { data: apiPrefs } = useTourPreferences({ enabled: isAuthenticated });
+  const { data: apiProgress } = useTourProgressList({ enabled: isAuthenticated });
+
+  // Hydrate preferences: localStorage first (instant), then API (authoritative)
   useEffect(() => {
     if (!enabled) return;
-
-    const savedPrefs = loadLocalPreferences();
-    if (savedPrefs) {
-      dispatch({ type: "LOAD_PREFERENCES", preferences: savedPrefs });
-    }
-
-    const savedProgress = loadLocalProgress();
-    if (Object.keys(savedProgress).length > 0) {
-      dispatch({ type: "LOAD_PROGRESS", progress: savedProgress });
+    const local = loadLocalPreferences();
+    if (local) {
+      dispatch({ type: "LOAD_PREFERENCES", preferences: local });
     }
   }, [enabled]);
 
-  // ── Sync toursEnabled if the prop changes at runtime ──────────────────────
   useEffect(() => {
-    dispatch({ type: "TOGGLE_TOURS", enabled });
+    if (!enabled || !apiPrefs) return;
+    const prefs = {
+      contextualHintsEnabled: apiPrefs.contextualHintsEnabled,
+      autoplayOnboarding: false, // never auto-play
+    };
+    dispatch({ type: "LOAD_PREFERENCES", preferences: prefs });
+    dispatch({ type: "TOGGLE_TOURS", enabled: apiPrefs.toursEnabled });
+    saveLocalPreferences(prefs);
+  }, [enabled, apiPrefs]);
+
+  // Hydrate progress: localStorage first, then API
+  useEffect(() => {
+    if (!enabled) return;
+    const local = loadLocalProgress();
+    if (Object.keys(local).length > 0) {
+      dispatch({ type: "LOAD_PROGRESS", progress: local });
+    }
   }, [enabled]);
 
-  // ── Cleanup adapter on unmount ────────────────────────────────────────────
+  useEffect(() => {
+    if (!enabled || !apiProgress) return;
+    const progressMap: Record<string, GuidedTourProgress> = {};
+    for (const row of apiProgress) {
+      progressMap[row.tourKey] = {
+        tourId: row.tourKey,
+        tourVersion: row.tourVersion,
+        status: row.status as GuidedTourProgress["status"],
+        currentStepIndex: row.currentStepIndex,
+        completedAt: row.completedAt?.toString() ?? null,
+        dismissedAt: row.dismissedAt?.toString() ?? null,
+        updatedAt: row.updatedAt?.toString() ?? new Date().toISOString(),
+      };
+    }
+    dispatch({ type: "LOAD_PROGRESS", progress: progressMap });
+    saveLocalProgress(progressMap);
+  }, [enabled, apiProgress]);
+
+  // Sync enabled prop at runtime
+  useEffect(() => {
+    dispatch({ type: "TOGGLE_TOURS", enabled: enabled ?? true });
+  }, [enabled]);
+
+  // Cleanup adapter on unmount
   useEffect(() => {
     const adapter = getAdapter();
     return () => {
-      if (adapter.isActive()) {
-        adapter.cleanup();
-      }
+      if (adapter.isActive()) adapter.cleanup();
       resetAdapter();
     };
   }, []);
@@ -76,4 +114,18 @@ export function GuidedTourProvider({
       {children}
     </GuidedToursContext.Provider>
   );
+}
+
+export function GuidedTourProvider({ children, enabled = true }: GuidedTourProviderProps) {
+  // Outer wrapper is inert if disabled — saves hook calls
+  if (!enabled) {
+    return (
+      <GuidedToursContext.Provider
+        value={{ state: { ...initialGuidedToursState, toursEnabled: false }, dispatch: () => {} }}
+      >
+        {children}
+      </GuidedToursContext.Provider>
+    );
+  }
+  return <GuidedTourProviderInner enabled={enabled}>{children}</GuidedTourProviderInner>;
 }

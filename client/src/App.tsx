@@ -13,6 +13,8 @@ import { PresenceProvider } from "@/hooks/use-presence";
 import { TypingProvider } from "@/hooks/use-typing";
 import { FeaturesProvider } from "@/contexts/features-context";
 import { FeaturesBanner } from "@/components/features-banner";
+import { GuidedTourProvider } from "@/features/guidedTours/components/GuidedTourProvider";
+import { GuidanceCenter } from "@/features/guidedTours/components/GuidanceCenter";
 import { isAuthRoute, AuthRouter } from "@/routing/authRouter";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -103,12 +105,15 @@ function App() {
             <PresenceProvider>
               <TypingProvider>
                 <FeaturesProvider>
-                  <TenantThemeProvider>
-                    <UserImpersonationWrapper>
-                      <FeaturesBanner />
-                      <AppLayout />
-                    </UserImpersonationWrapper>
-                  </TenantThemeProvider>
+                  <GuidedTourProvider>
+                    <TenantThemeProvider>
+                      <UserImpersonationWrapper>
+                        <FeaturesBanner />
+                        <AppLayout />
+                        <GuidanceCenter />
+                      </UserImpersonationWrapper>
+                    </TenantThemeProvider>
+                  </GuidedTourProvider>
                 </FeaturesProvider>
               </TypingProvider>
             </PresenceProvider>

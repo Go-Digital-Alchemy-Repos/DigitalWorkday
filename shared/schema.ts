@@ -4582,3 +4582,48 @@ export const quickbooksSyncLogsRelations = relations(quickbooksSyncLogs, ({ one 
   mapping: one(quickbooksCustomerMappings, { fields: [quickbooksSyncLogs.mappingId], references: [quickbooksCustomerMappings.id] }),
   createdBy: one(users, { fields: [quickbooksSyncLogs.createdByUserId], references: [users.id] }),
 }));
+
+// =============================================================================
+// GUIDED TOURS
+// =============================================================================
+
+export const userGuidedTourPreferences = pgTable("user_guided_tour_preferences", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  toursEnabled: boolean("tours_enabled").notNull().default(true),
+  contextualHintsEnabled: boolean("contextual_hints_enabled").notNull().default(true),
+  onboardingCompleted: boolean("onboarding_completed").notNull().default(false),
+  lastSeenReleaseTourVersion: varchar("last_seen_release_tour_version"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("ugt_prefs_user_tenant_uniq").on(table.userId, table.tenantId),
+  index("ugt_prefs_tenant_idx").on(table.tenantId),
+]);
+
+export type UserGuidedTourPreferences = typeof userGuidedTourPreferences.$inferSelect;
+export type InsertUserGuidedTourPreferences = typeof userGuidedTourPreferences.$inferInsert;
+
+export const userGuidedTourProgress = pgTable("user_guided_tour_progress", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  userId: varchar("user_id").references(() => users.id, { onDelete: "cascade" }).notNull(),
+  tourKey: varchar("tour_key").notNull(),
+  tourVersion: integer("tour_version").notNull().default(1),
+  status: varchar("status").notNull().default("not_started"), // not_started | in_progress | completed | dismissed
+  currentStepIndex: integer("current_step_index").notNull().default(0),
+  startedAt: timestamp("started_at"),
+  completedAt: timestamp("completed_at"),
+  dismissedAt: timestamp("dismissed_at"),
+  lastInteractedAt: timestamp("last_interacted_at"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+}, (table) => [
+  uniqueIndex("ugt_progress_user_tenant_key_uniq").on(table.userId, table.tenantId, table.tourKey),
+  index("ugt_progress_tenant_idx").on(table.tenantId),
+  index("ugt_progress_user_idx").on(table.userId),
+]);
+
+export type UserGuidedTourProgress = typeof userGuidedTourProgress.$inferSelect;
+export type InsertUserGuidedTourProgress = typeof userGuidedTourProgress.$inferInsert;
