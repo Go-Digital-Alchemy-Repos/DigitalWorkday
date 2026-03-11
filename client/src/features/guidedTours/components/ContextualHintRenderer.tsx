@@ -70,6 +70,7 @@ export function ContextualHintRenderer() {
 
   // ── Suppression guards ─────────────────────────────────────────────────────
   if (!state.contextualHintsEnabled) return null;
+  if (!state.toursEnabled) return null;            // global tours toggle is off
   if (state.isRunning) return null;               // tour is active
   if (state.isGuidanceCenterOpen) return null;    // sheet is open
   if (state.isOnboardingModalOpen) return null;   // onboarding dialog is open

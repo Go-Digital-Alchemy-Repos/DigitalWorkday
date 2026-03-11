@@ -252,13 +252,13 @@ export function ContextualHintBeacon({ hint }: Props) {
       >
         {/* Outer ping ring — suppressed when user prefers reduced motion */}
         <span
-          className="absolute inset-0 rounded-full bg-primary opacity-40 motion-safe:animate-ping"
+          className="absolute inset-0 rounded-full bg-pink-500 opacity-40 motion-safe:animate-ping"
           style={{ animationDuration: "2s" }}
           aria-hidden="true"
         />
         {/* Inner solid dot */}
         <span
-          className="absolute inset-0 rounded-full bg-primary"
+          className="absolute inset-0 rounded-full bg-pink-500"
           aria-hidden="true"
         />
       </div>
