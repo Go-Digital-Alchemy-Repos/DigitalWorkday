@@ -3364,6 +3364,8 @@ export type TaskListItem = {
   priority: string;
   dueDate: Date | null;
   projectId: string | null;
+  projectName: string | null;
+  clientName: string | null;
   sectionId: string | null;
   parentTaskId: string | null;
   isPersonal: boolean;

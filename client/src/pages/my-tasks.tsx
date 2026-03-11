@@ -87,6 +87,8 @@ import {
   Flame,
   Circle,
   AlertTriangle,
+  ChevronDown,
+  ChevronRight,
 } from "lucide-react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -122,10 +124,7 @@ type TaskSection = {
   defaultOpen: boolean;
 };
 
-function categorizeTasksForTwoColumn(tasks: MyTaskItem[]): {
-  leftColumn: TaskSection[];
-  rightColumn: TaskSection[];
-} {
+function categorizeTasks(tasks: MyTaskItem[]): TaskSection[] {
   const personalTasks: MyTaskItem[] = [];
   const noDueDate: MyTaskItem[] = [];
   const overdue: MyTaskItem[] = [];
@@ -133,15 +132,11 @@ function categorizeTasksForTwoColumn(tasks: MyTaskItem[]): {
   const upcoming: MyTaskItem[] = [];
 
   tasks.forEach((task) => {
-    // Check isPersonal flag first, fall back to checking projectId for backwards compatibility
     const isPersonalTask = task.isPersonal === true || (!task.projectId && task.isPersonal !== false);
-    
-    // Personal tasks go to their dedicated section AND to date-based sections
     if (isPersonalTask) {
       personalTasks.push(task);
     }
-    
-    // ALL tasks (including personal) are categorized by due date
+
     if (!task.dueDate) {
       noDueDate.push(task);
     } else {
@@ -159,18 +154,13 @@ function categorizeTasksForTwoColumn(tasks: MyTaskItem[]): {
     }
   });
 
-  const leftColumn: TaskSection[] = [
+  return [
     { id: "overdue", title: "Overdue", icon: AlertCircle, iconColor: "text-red-500", tasks: overdue, defaultOpen: true },
     { id: "today", title: "Today", icon: Clock, iconColor: "text-blue-500", tasks: today, defaultOpen: true },
     { id: "upcoming", title: "Upcoming", icon: Calendar, iconColor: "text-green-500", tasks: upcoming, defaultOpen: true },
-  ];
-
-  const rightColumn: TaskSection[] = [
     { id: "personal", title: "Personal Tasks", icon: User, tasks: personalTasks, defaultOpen: true },
     { id: "no-date", title: "No Due Date", icon: CalendarX, tasks: noDueDate, defaultOpen: true },
   ];
-
-  return { leftColumn, rightColumn };
 }
 
 interface TaskSectionListProps {
@@ -192,6 +182,7 @@ const VIRTUALIZATION_THRESHOLD = 20;
 
 function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChange, onDueDateChange, localOrder, onDragEnd, onAddTask, supportsAddTask = false, useVirtualization = false }: TaskSectionListProps) {
   const [showAll, setShowAll] = useState(false);
+  const [isOpen, setIsOpen] = useState(section.defaultOpen);
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } }),
     useSensor(KeyboardSensor, { coordinateGetter: sortableKeyboardCoordinates })
@@ -217,12 +208,19 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
   const hiddenCount = orderedTasks.length - SECTION_INITIAL_SHOW;
 
   return (
-    <Collapsible defaultOpen={section.defaultOpen}>
-      <div className="flex items-center gap-1">
-        <CollapsibleTrigger className="flex items-center gap-2 flex-1 py-2 hover-elevate rounded-md px-2">
-          <section.icon className={`h-4 w-4 ${section.iconColor || "text-muted-foreground"}`} />
-          <span className="font-medium text-[16px]">{section.title}</span>
-          <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded">
+    <Collapsible open={isOpen} onOpenChange={setIsOpen}>
+      <div className="flex items-center gap-1 border-b border-border">
+        <CollapsibleTrigger
+          className="flex items-center gap-2 flex-1 py-2 px-2 hover:bg-muted/50 rounded-md transition-colors"
+          data-testid={`section-trigger-${section.id}`}
+        >
+          {isOpen
+            ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+            : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground shrink-0" />
+          }
+          <section.icon className={`h-3.5 w-3.5 ${section.iconColor || "text-muted-foreground"}`} />
+          <span className="font-semibold text-sm">{section.title}</span>
+          <span className="text-xs text-muted-foreground bg-muted px-1.5 py-0.5 rounded-full tabular-nums">
             {section.tasks.length}
           </span>
         </CollapsibleTrigger>
@@ -230,11 +228,12 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
           <Button
             variant="ghost"
             size="icon"
+            className="h-7 w-7 shrink-0"
             onClick={onAddTask}
             aria-label="Add task"
             data-testid={`button-add-${section.id}-task`}
           >
-            <Plus className="h-4 w-4" />
+            <Plus className="h-3.5 w-3.5" />
           </Button>
         )}
       </div>
@@ -247,27 +246,25 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
           >
             <SortableContext items={visibleTasks.map(t => t.id)} strategy={verticalListSortingStrategy}>
               {shouldVirtualize ? (
-                <div className="border border-border rounded-lg overflow-hidden mt-2">
-                  <Virtuoso
-                    data={visibleTasks}
-                    style={{ height: Math.min(visibleTasks.length * 52, 600) }}
-                    overscan={200}
-                    itemContent={(_index, task) => (
-                      <SortableTaskCard
-                        key={task.id}
-                        task={task as TaskWithRelations}
-                        view="list"
-                        onSelect={() => onTaskSelect(task)}
-                        onStatusChange={(completed) => onStatusChange(task.id, completed)}
-                        onPriorityChange={(priority) => onPriorityChange(task.id, priority)}
-                        onDueDateChange={(dueDate) => onDueDateChange(task.id, dueDate)}
-                        showQuickActions
-                      />
-                    )}
-                  />
-                </div>
+                <Virtuoso
+                  data={visibleTasks}
+                  style={{ height: Math.min(visibleTasks.length * 44, 600) }}
+                  overscan={200}
+                  itemContent={(_index, task) => (
+                    <SortableTaskCard
+                      key={task.id}
+                      task={task as TaskWithRelations}
+                      view="list"
+                      onSelect={() => onTaskSelect(task)}
+                      onStatusChange={(completed) => onStatusChange(task.id, completed)}
+                      onPriorityChange={(priority) => onPriorityChange(task.id, priority)}
+                      onDueDateChange={(dueDate) => onDueDateChange(task.id, dueDate)}
+                      showQuickActions
+                    />
+                  )}
+                />
               ) : (
-                <div className="border border-border rounded-lg overflow-hidden mt-2">
+                <div>
                   {visibleTasks.map((task) => (
                     <SortableTaskCard
                       key={task.id}
@@ -284,49 +281,38 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
               )}
             </SortableContext>
             {hasMore && !showAll && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full mt-2 text-muted-foreground"
+              <button
+                className="w-full py-2 px-4 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 border-b border-border text-left transition-colors"
                 onClick={() => setShowAll(true)}
                 data-testid={`button-show-all-${section.id}`}
               >
-                Show {hiddenCount} more tasks
-              </Button>
+                + Show {hiddenCount} more tasks
+              </button>
             )}
             {hasMore && showAll && (
-              <Button
-                variant="ghost"
-                size="sm"
-                className="w-full mt-2 text-muted-foreground"
+              <button
+                className="w-full py-2 px-4 text-xs text-muted-foreground hover:text-foreground hover:bg-muted/50 border-b border-border text-left transition-colors"
                 onClick={() => setShowAll(false)}
                 data-testid={`button-show-less-${section.id}`}
               >
                 Show fewer tasks
-              </Button>
+              </button>
             )}
           </DndContext>
         ) : (
-          <div className="border border-border border-dashed rounded-lg mt-2 px-4 py-6 text-center text-sm text-muted-foreground">
+          <div className="px-4 py-3 text-sm text-muted-foreground border-b border-border flex items-center gap-3">
             {supportsAddTask && onAddTask ? (
-              <div className="flex flex-col items-center gap-2">
-                <p>No tasks yet</p>
-                <Button
-                  variant="outline"
-                  size="sm"
+              <>
+                <button
+                  className="text-xs text-muted-foreground hover:text-foreground transition-colors"
                   onClick={onAddTask}
-                  className="gap-1"
                   data-testid={`button-empty-add-${section.id}-task`}
                 >
-                  <Plus className="h-4 w-4" />
-                  Add a task
-                </Button>
-              </div>
+                  + Add a task
+                </button>
+              </>
             ) : (
-              <div className="flex flex-col items-center gap-1">
-                <GripVertical className="h-4 w-4 text-muted-foreground/50" />
-                <p>Drag tasks here to prioritize this section</p>
-              </div>
+              <span className="text-xs">No tasks in this section</span>
             )}
           </div>
         )}
@@ -800,7 +786,7 @@ export default function MyTasks() {
     });
   }, [filteredTasks, sortBy]);
 
-  const { leftColumn, rightColumn } = categorizeTasksForTwoColumn(sortedTasks);
+  const allSections = categorizeTasks(sortedTasks);
 
   const totalTasks = filteredTasks.length;
 
@@ -974,47 +960,27 @@ export default function MyTasks() {
           </div>
           
           {isLoading ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
+            <div className="space-y-4">
               <LoadingState type="list" rows={4} />
               <LoadingState type="list" rows={4} />
             </div>
           ) : totalTasks > 0 ? (
-            <div className="grid grid-cols-1 lg:grid-cols-2 gap-4 md:gap-6">
-              <div className="space-y-4">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Scheduled Tasks</h2>
-                {leftColumn.map((section) => (
-                  <TaskSectionList
-                    key={section.id}
-                    section={section}
-                    onTaskSelect={handleTaskSelect}
-                    onStatusChange={handleStatusChange}
-                    onPriorityChange={handlePriorityChange}
-                    onDueDateChange={handleDueDateChange}
-                    localOrder={sectionOrders[section.id] || []}
-                    onDragEnd={handleDragEnd}
-                    useVirtualization={virtualizationV1}
-                  />
-                ))}
-              </div>
-
-              <div className="space-y-4">
-                <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Personal & Unscheduled</h2>
-                {rightColumn.map((section) => (
-                  <TaskSectionList
-                    key={section.id}
-                    section={section}
-                    onTaskSelect={handleTaskSelect}
-                    onStatusChange={handleStatusChange}
-                    onPriorityChange={handlePriorityChange}
-                    onDueDateChange={handleDueDateChange}
-                    localOrder={sectionOrders[section.id] || []}
-                    onDragEnd={handleDragEnd}
-                    onAddTask={section.id === "personal" ? () => setShowNewTaskDrawer(true) : undefined}
-                    supportsAddTask={section.id === "personal"}
-                    useVirtualization={virtualizationV1}
-                  />
-                ))}
-              </div>
+            <div className="space-y-1">
+              {allSections.map((section) => (
+                <TaskSectionList
+                  key={section.id}
+                  section={section}
+                  onTaskSelect={handleTaskSelect}
+                  onStatusChange={handleStatusChange}
+                  onPriorityChange={handlePriorityChange}
+                  onDueDateChange={handleDueDateChange}
+                  localOrder={sectionOrders[section.id] || []}
+                  onDragEnd={handleDragEnd}
+                  onAddTask={section.id === "personal" ? () => setShowNewTaskDrawer(true) : undefined}
+                  supportsAddTask={section.id === "personal"}
+                  useVirtualization={virtualizationV1}
+                />
+              ))}
             </div>
           ) : (
             <EmptyState

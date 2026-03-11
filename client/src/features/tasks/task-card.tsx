@@ -377,15 +377,18 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
     );
   }
 
+  const projectName = (task as any).projectName ?? (task as any).project?.name ?? null;
+  const clientName = (task as any).clientName ?? (task as any).project?.client?.companyName ?? null;
+
   return (
     <>
     <div
       ref={ref}
       className={cn(
-        "group relative grid items-center gap-3 px-4 py-3 min-h-[52px] border-b border-border hover-elevate cursor-pointer transition-premium",
+        "group relative grid items-center gap-2 px-4 py-2 min-h-[44px] border-b border-border hover-elevate cursor-pointer transition-premium",
         showQuickActions 
-          ? (dragHandleProps ? "grid-cols-[auto_auto_1fr_auto_auto_auto_auto]" : "grid-cols-[auto_1fr_auto_auto_auto_auto]")
-          : (dragHandleProps ? "grid-cols-[auto_auto_1fr_auto_auto_auto]" : "grid-cols-[auto_1fr_auto_auto_auto]"),
+          ? (dragHandleProps ? "grid-cols-[auto_auto_1fr_auto_auto_auto_auto_auto]" : "grid-cols-[auto_1fr_auto_auto_auto_auto_auto]")
+          : (dragHandleProps ? "grid-cols-[auto_auto_1fr_auto_auto_auto_auto]" : "grid-cols-[auto_1fr_auto_auto_auto_auto]"),
         isCompleted && "opacity-60",
         isDragging && "opacity-50 shadow-lg bg-card",
         justCompleted && "task-complete-pulse"
@@ -483,6 +486,18 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
 
       <div className="flex items-center">
         {assigneeUsers.length > 0 && <AvatarGroup users={assigneeUsers} max={3} size="sm" />}
+      </div>
+
+      <div className="flex items-center min-w-0">
+        {projectName && (
+          <span
+            className="text-xs text-muted-foreground bg-muted rounded px-1.5 py-0.5 truncate max-w-[140px] inline-block"
+            title={clientName ? `${clientName} / ${projectName}` : projectName}
+            data-testid={`badge-project-${task.id}`}
+          >
+            {clientName ? `${clientName} · ${projectName}` : projectName}
+          </span>
+        )}
       </div>
 
       <div className="flex items-center">

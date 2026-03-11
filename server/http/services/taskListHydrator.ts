@@ -1,5 +1,5 @@
 import { db } from "../../db";
-import { tasks, taskAssignees, taskTags, tags, comments, users, subtasks } from "@shared/schema";
+import { tasks, taskAssignees, taskTags, tags, comments, users, subtasks, projects, clients } from "@shared/schema";
 import { eq, inArray, and, isNull, sql } from "drizzle-orm";
 import type { TaskListItem } from "@shared/schema";
 import { getAccessiblePrivateTaskIds } from "../../lib/privateVisibility";
@@ -52,6 +52,21 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
   if (filteredTasks.length === 0) return [];
 
   const taskIds = filteredTasks.map(t => t.id);
+
+  const projectIds = Array.from(new Set(filteredTasks.map(t => t.projectId).filter(Boolean))) as string[];
+  const projectNameMap = new Map<string, { name: string; clientName: string | null }>();
+  if (projectIds.length > 0) {
+    for (const batch of chunk(projectIds, 200)) {
+      const projectRows = await db
+        .select({ id: projects.id, name: projects.name, clientName: clients.companyName })
+        .from(projects)
+        .leftJoin(clients, eq(projects.clientId, clients.id))
+        .where(inArray(projects.id, batch));
+      for (const row of projectRows) {
+        projectNameMap.set(row.id, { name: row.name, clientName: row.clientName ?? null });
+      }
+    }
+  }
 
   const [assigneeRows2, tagRows, commentCounts, childTaskCounts, subtaskCounts] = await Promise.all([
     db.select({
@@ -140,6 +155,7 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
 
   const result: TaskListItem[] = filteredTasks.map(task => {
     const taskAssigneeList = assigneesByTask.get(task.id) ?? [];
+    const projectInfo = task.projectId ? projectNameMap.get(task.projectId) : undefined;
     return {
       id: task.id,
       title: task.title,
@@ -147,6 +163,8 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
       priority: task.priority,
       dueDate: task.dueDate,
       projectId: task.projectId,
+      projectName: projectInfo?.name ?? null,
+      clientName: projectInfo?.clientName ?? null,
       sectionId: task.sectionId,
       parentTaskId: task.parentTaskId,
       isPersonal: task.isPersonal,
