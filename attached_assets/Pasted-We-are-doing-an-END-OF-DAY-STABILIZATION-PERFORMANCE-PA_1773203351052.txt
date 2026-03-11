@@ -1,0 +1,177 @@
+We are doing an END-OF-DAY STABILIZATION + PERFORMANCE PASS on Digital Workday.
+
+This must be NONDESTRUCTIVE.
+
+Do not remove working features. Do not do broad rewrites unless absolutely necessary. Prefer profiling, targeted fixes, and safe refactors. The goal is to clean up today’s work, reduce performance bottlenecks, improve reliability, and update docs.
+
+PRIMARY ISSUE TO INVESTIGATE
+- In production, projects and sometimes task lists are taking too long to load
+- Sometimes loading a single project or product profile with related tasks can take up to ~8 seconds
+- We need to identify likely causes and make meaningful performance improvements safely
+
+GOALS
+1. Run an end-of-day cleanup / stabilization pass
+2. Identify and fix obvious performance bottlenecks
+3. Improve project/task/product profile loading times
+4. Reduce unnecessary frontend and backend work
+5. Preserve behavior and functionality
+6. Update docs with findings and changes
+
+WORKSTREAM A — END-OF-DAY CLEANUP / STABILIZATION
+1. Audit all changes from the current work session and clean up:
+   - dead code
+   - unused imports
+   - temporary logs/debug code
+   - duplicated logic introduced during recent work
+   - inconsistent naming
+   - TODO/FIXME items that can be safely resolved now
+   - unsafe any types introduced recently
+   - fragile fallback logic
+   - obvious type regressions
+
+2. Run a focused typecheck/build sanity pass and fix issues caused by the recent work.
+
+3. Review for:
+   - route safety
+   - provider duplication
+   - memory leaks
+   - duplicate listeners/subscriptions
+   - unbounded effects
+   - repeated fetch triggers
+   - stale query invalidation patterns
+
+WORKSTREAM B — PERFORMANCE INVESTIGATION
+We need a profiling-first pass before broad changes.
+
+1. Identify the main data flows for:
+   - projects list
+   - project detail/profile page
+   - product detail/profile page if that exists separately
+   - task list views
+   - related tasks shown inside a project/product profile
+
+2. Trace the full request path for those pages:
+   - frontend route/component entry
+   - query hooks
+   - API endpoints hit
+   - service/storage calls
+   - database queries
+   - joins/aggregations
+   - post-processing / mapping / enrichment
+   - websocket side effects if any
+
+3. Specifically look for:
+   - N+1 queries
+   - duplicate requests for the same page load
+   - nested awaits in loops
+   - serial fetching that should be parallel
+   - over-fetching too much related data
+   - large payloads returned when only summaries are needed
+   - expensive comment/activity/history/attachment hydration on initial page load
+   - repeated permission checks done inefficiently
+   - repeated tenant/user lookups
+   - missing DB indexes on common filters/sorts/joins
+   - expensive computed fields done inline on every request
+   - client-side re-renders causing query churn
+
+4. Add temporary instrumentation where useful:
+   - request timing
+   - route timing
+   - DB query timing if feasible
+   - service-layer timing around project/task/product fetch flows
+Do this cleanly and safely, and keep or guard only what is useful.
+
+WORKSTREAM C — BACKEND PERFORMANCE IMPROVEMENTS
+Implement safe targeted improvements based on findings.
+
+Priority targets:
+1. Eliminate N+1 query patterns in project/product/task loading flows
+2. Batch related entity fetches where possible
+3. Convert serial awaits to Promise.all where safe
+4. Split “summary” vs “full detail” endpoints if currently over-fetching
+5. Defer noncritical related data:
+   - activity history
+   - comments
+   - attachments
+   - audit logs
+   - analytics summaries
+   - deep child collections
+6. Add/selectively improve pagination or lazy loading for large related task lists
+7. Add/adjust indexes for the highest-value filters and joins
+8. Reduce repeated mapping/transformation work in handlers/services
+9. Ensure tenant scoping remains intact and is not weakened by optimization work
+
+Check likely hot-path query patterns such as:
+- WHERE tenant_id = ?
+- WHERE project_id = ?
+- WHERE product_id = ?
+- WHERE assignee_id = ?
+- WHERE status = ?
+- ORDER BY updated_at / created_at / due_date
+- joins between projects/tasks/products/clients/workspaces/teams
+Add missing indexes only where justified by actual usage patterns.
+
+WORKSTREAM D — FRONTEND PERFORMANCE IMPROVEMENTS
+Implement safe frontend improvements for heavy views.
+
+Investigate and improve:
+1. Duplicate TanStack Query fetches / unstable query keys
+2. Overly eager refetch-on-mount/refetch-on-focus behavior
+3. Queries that refetch more often than needed
+4. Large components causing excessive rerenders
+5. Derived data recalculated unnecessarily
+6. Heavy task/project/product subpanels loading immediately instead of lazily
+7. Drawers/modals/tabs hydrating too much data on initial page load
+8. Missing skeleton/loading boundaries causing the whole page to wait
+9. Client-side sorting/filtering on huge datasets when the server should do it
+10. Chat/presence/typing systems attaching to pages that do not need them immediately
+
+Potential improvements:
+- stabilize query keys
+- tune staleTime/cacheTime where appropriate
+- lazy-load secondary tabs/panels
+- split initial page load from secondary detail fetches
+- memoize expensive derived transforms
+- virtualize very large task lists if appropriate
+- reduce unnecessary prop churn
+- avoid mounting hidden heavy components until needed
+
+WORKSTREAM E — PAGE-LEVEL UX IMPROVEMENTS
+For project/product profile pages and task-heavy views:
+1. Make the page feel faster even before all secondary data loads
+2. Load the essential profile header/summary first
+3. Load related tasks in a staged way if needed
+4. Defer secondary modules until after core content is visible
+5. Add clearer loading states/skeletons where helpful
+6. Ensure failures in secondary panels do not block the whole page
+
+WORKSTREAM F — DOCUMENTATION UPDATE
+Update internal docs for this pass with:
+- what bottlenecks were found
+- what was optimized
+- what remains for later
+- any new indexes added
+- any endpoint contract changes
+- any query behavior changes
+- recommendations for future profiling and scaling
+
+IMPORTANT RULES
+- NONDESTRUCTIVE ONLY
+- No feature removal
+- No weakening of tenant isolation, auth, or role-based access
+- No broad schema redesign unless absolutely necessary
+- Do not blindly cache everything
+- Do not optimize at the cost of correctness
+- Prefer high-impact, low-risk improvements first
+- Preserve current UX/behavior as much as possible
+- If there are multiple bottlenecks, fix the biggest practical ones first
+
+EXPECTED OUTPUT
+1. Audit findings
+2. Performance findings ranked by impact
+3. Exact fixes implemented
+4. Any indexes/migrations added
+5. Any frontend query/loading improvements made
+6. Measured or estimated performance improvement areas
+7. Remaining known bottlenecks
+8. Docs updated summary
