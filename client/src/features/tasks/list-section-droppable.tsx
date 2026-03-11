@@ -3,6 +3,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Plus, ChevronDown, ChevronRight, LayoutList } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible";
 import { SortableTaskCard } from "./sortable-task-card";
 import { cn } from "@/lib/utils";
@@ -52,16 +53,21 @@ export function ListSectionDroppable({
           </span>
         </CollapsibleTrigger>
         {onAddTask && (
-          <Button
-            variant="ghost"
-            size="icon"
-            className="h-7 w-7 shrink-0"
-            onClick={onAddTask}
-            aria-label="Add task"
-            data-testid={`button-add-task-list-${section.id}`}
-          >
-            <Plus className="h-3.5 w-3.5" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button
+                variant="ghost"
+                size="icon"
+                className="h-7 w-7 shrink-0"
+                onClick={onAddTask}
+                aria-label="Add task"
+                data-testid={`button-add-task-list-${section.id}`}
+              >
+                <Plus className="h-3.5 w-3.5" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Add task</TooltipContent>
+          </Tooltip>
         )}
       </div>
 

@@ -59,6 +59,7 @@ import {
   useSidebar,
 } from "@/components/ui/sidebar";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   Collapsible,
   CollapsibleContent,
@@ -478,14 +479,19 @@ export function TenantSidebar() {
                     <span className="ml-1">Projects</span>
                   </SidebarGroupLabel>
                 </CollapsibleTrigger>
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => setCreateProjectOpen(true)}
-                  data-testid="button-add-project"
-                >
-                  <Plus className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => setCreateProjectOpen(true)}
+                      data-testid="button-add-project"
+                    >
+                      <Plus className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>New project</TooltipContent>
+                </Tooltip>
               </div>
               <CollapsibleContent>
                 <SidebarGroupContent>

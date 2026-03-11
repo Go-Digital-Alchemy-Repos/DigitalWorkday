@@ -28,6 +28,7 @@ import { Pencil, Trash2, Check, X, CheckCircle2, CircleDot, Paperclip, Loader2, 
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { getStorageUrl } from "@/lib/storageUrl";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { formatDistanceToNow } from "date-fns";
 import { useQuery } from "@tanstack/react-query";
 import { CommentEditor, RichTextRenderer, type CommentEditorRef } from "@/components/richtext";
@@ -383,15 +384,20 @@ export function CommentThread({
                 data-testid="textarea-comment"
                 attachButton={
                   canAttach ? (
-                    <Button
-                      type="button"
-                      variant="ghost"
-                      size="icon"
-                      onClick={() => fileInputRef.current?.click()}
-                      data-testid="button-comment-attach"
-                    >
-                      <Paperclip className="h-3 w-3" />
-                    </Button>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button
+                          type="button"
+                          variant="ghost"
+                          size="icon"
+                          onClick={() => fileInputRef.current?.click()}
+                          data-testid="button-comment-attach"
+                        >
+                          <Paperclip className="h-3 w-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Attach file</TooltipContent>
+                    </Tooltip>
                   ) : undefined
                 }
               />
@@ -427,26 +433,36 @@ export function CommentThread({
                           <span className="text-destructive shrink-0 truncate max-w-[140px]" title={upload.error}>
                             {upload.error || "Failed"}
                           </span>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-5 w-5 shrink-0"
+                                onClick={() => retryUpload(upload.id)}
+                                data-testid={`button-retry-upload-${upload.id}`}
+                              >
+                                <RotateCcw className="h-3 w-3" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Retry upload</TooltipContent>
+                          </Tooltip>
+                        </>
+                      )}
+                      <Tooltip>
+                        <TooltipTrigger asChild>
                           <Button
                             size="icon"
                             variant="ghost"
                             className="h-5 w-5 shrink-0"
-                            onClick={() => retryUpload(upload.id)}
-                            data-testid={`button-retry-upload-${upload.id}`}
+                            onClick={() => removePending(upload.id)}
+                            data-testid={`button-remove-pending-${upload.id}`}
                           >
-                            <RotateCcw className="h-3 w-3" />
+                            <X className="h-3 w-3" />
                           </Button>
-                        </>
-                      )}
-                      <Button
-                        size="icon"
-                        variant="ghost"
-                        className="h-5 w-5 shrink-0"
-                        onClick={() => removePending(upload.id)}
-                        data-testid={`button-remove-pending-${upload.id}`}
-                      >
-                        <X className="h-3 w-3" />
-                      </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Remove</TooltipContent>
+                      </Tooltip>
                     </div>
                   ))}
                 </div>

@@ -38,6 +38,7 @@ import {
   DollarSign,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { SectionColumn } from "@/features/tasks/section-column";
@@ -859,16 +860,21 @@ export default function ProjectPage() {
             </Tabs>
 
             <div className="flex items-center gap-1 md:gap-2 shrink-0">
-              <Button 
-                variant="default" 
-                size="icon"
-                className="md:hidden"
-                onClick={() => setTimerDrawerOpen(true)}
-                aria-label="Start timer"
-                data-testid="button-start-timer-project-mobile"
-              >
-                <Play className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="default" 
+                    size="icon"
+                    className="md:hidden"
+                    onClick={() => setTimerDrawerOpen(true)}
+                    aria-label="Start timer"
+                    data-testid="button-start-timer-project-mobile"
+                  >
+                    <Play className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Start Timer</TooltipContent>
+              </Tooltip>
               <Button 
                 variant="default" 
                 size="sm"
@@ -880,16 +886,21 @@ export default function ProjectPage() {
                 Start Timer
               </Button>
               {isAdmin && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="md:hidden"
-                  onClick={() => setAiPlannerOpen(true)}
-                  aria-label="AI planner"
-                  data-testid="button-ai-planner-mobile"
-                >
-                  <Sparkles className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="md:hidden"
+                      onClick={() => setAiPlannerOpen(true)}
+                      aria-label="AI planner"
+                      data-testid="button-ai-planner-mobile"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>AI Project Planner</TooltipContent>
+                </Tooltip>
               )}
               {isAdmin && (
                 <Button
@@ -904,16 +915,21 @@ export default function ProjectPage() {
                 </Button>
               )}
               {isAdmin && enableCapacityWhatIf && (
-                <Button
-                  variant="outline"
-                  size="icon"
-                  className="md:hidden"
-                  onClick={() => setWhatIfOpen(true)}
-                  aria-label="What-if simulator"
-                  data-testid="button-whatif-mobile"
-                >
-                  <Zap className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="icon"
+                      className="md:hidden"
+                      onClick={() => setWhatIfOpen(true)}
+                      aria-label="What-if simulator"
+                      data-testid="button-whatif-mobile"
+                    >
+                      <Zap className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>What-if Simulator</TooltipContent>
+                </Tooltip>
               )}
               {isAdmin && enableCapacityWhatIf && (
                 <div className="relative">
@@ -935,36 +951,51 @@ export default function ProjectPage() {
                   </Badge>
                 </div>
               )}
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setMembersOpen(true)}
-                aria-label="Project members"
-                data-testid="button-project-members"
-                className="hidden md:flex"
-              >
-                <Users className="h-4 w-4" />
-              </Button>
-              <Button
-                variant="ghost"
-                size="icon"
-                onClick={() => setActivityOpen(true)}
-                aria-label="Project activity"
-                data-testid="button-project-activity"
-                className="hidden md:flex"
-              >
-                <Activity className="h-4 w-4" />
-              </Button>
-              <Button 
-                variant="ghost" 
-                size="icon" 
-                onClick={() => setSettingsOpen(true)}
-                aria-label="Project settings"
-                data-testid="button-project-settings"
-                className="hidden md:flex"
-              >
-                <Settings className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setMembersOpen(true)}
+                    aria-label="Project members"
+                    data-testid="button-project-members"
+                    className="hidden md:flex"
+                  >
+                    <Users className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Project Members</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    onClick={() => setActivityOpen(true)}
+                    aria-label="Project activity"
+                    data-testid="button-project-activity"
+                    className="hidden md:flex"
+                  >
+                    <Activity className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Project Activity</TooltipContent>
+              </Tooltip>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button 
+                    variant="ghost" 
+                    size="icon" 
+                    onClick={() => setSettingsOpen(true)}
+                    aria-label="Project settings"
+                    data-testid="button-project-settings"
+                    className="hidden md:flex"
+                  >
+                    <Settings className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Project Settings</TooltipContent>
+              </Tooltip>
               <DropdownMenu>
                 <DropdownMenuTrigger asChild>
                   <Button
@@ -1069,22 +1100,26 @@ export default function ProjectPage() {
                   </ScrollArea>
                 </PopoverContent>
               </Popover>
-              <Button
-                variant="ghost"
-                size="icon"
-                aria-label="Copy project link"
-                title="Copy Project Link"
-                data-testid="button-copy-project-link"
-                className="hidden md:flex"
-                onClick={() => {
-                  const url = `${window.location.origin}/projects/${projectId}`;
-                  navigator.clipboard.writeText(url).then(() => {
-                    toast({ title: "Link copied", description: "Project link copied to clipboard" });
-                  });
-                }}
-              >
-                <Link2 className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    aria-label="Copy project link"
+                    data-testid="button-copy-project-link"
+                    className="hidden md:flex"
+                    onClick={() => {
+                      const url = `${window.location.origin}/projects/${projectId}`;
+                      navigator.clipboard.writeText(url).then(() => {
+                        toast({ title: "Link copied", description: "Project link copied to clipboard" });
+                      });
+                    }}
+                  >
+                    <Link2 className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Copy Project Link</TooltipContent>
+              </Tooltip>
             </div>
           </div>
           {project.status === "archived" ? (

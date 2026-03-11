@@ -7,6 +7,7 @@ import {
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Separator } from "@/components/ui/separator";
@@ -295,27 +296,37 @@ function NotificationGroupRow({
               </p>
               <div className="flex items-center gap-0.5 shrink-0">
                 {group.isUnread && (
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                    onClick={(e) => { e.stopPropagation(); onGroupRead(group.dedupeKey); }}
-                    disabled={isGroupReadPending}
-                    data-testid={`group-read-${group.dedupeKey}`}
-                  >
-                    <Check className="h-3 w-3" />
-                  </Button>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                        onClick={(e) => { e.stopPropagation(); onGroupRead(group.dedupeKey); }}
+                        disabled={isGroupReadPending}
+                        data-testid={`group-read-${group.dedupeKey}`}
+                      >
+                        <Check className="h-3 w-3" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Mark as read</TooltipContent>
+                  </Tooltip>
                 )}
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
-                  onClick={(e) => { e.stopPropagation(); onGroupDismiss(group.dedupeKey); }}
-                  disabled={isGroupDismissPending}
-                  data-testid={`group-dismiss-${group.dedupeKey}`}
-                >
-                  <X className="h-3 w-3" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-5 w-5 opacity-0 group-hover:opacity-100 transition-opacity"
+                      onClick={(e) => { e.stopPropagation(); onGroupDismiss(group.dedupeKey); }}
+                      disabled={isGroupDismissPending}
+                      data-testid={`group-dismiss-${group.dedupeKey}`}
+                    >
+                      <X className="h-3 w-3" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Dismiss</TooltipContent>
+                </Tooltip>
               </div>
             </div>
             {meta?.lastMessagePreview && (
@@ -748,6 +759,7 @@ export function NotificationCenter() {
           variant="ghost"
           size="icon"
           className="relative"
+          title="Notifications"
           data-testid="button-notification-center"
         >
           <span className={cn("inline-flex", bellBounce && "animate-bell-bounce")}>
@@ -896,18 +908,23 @@ export function NotificationCenter() {
                               )}>
                                 {notification.title}
                               </p>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  dismissMutation.mutate(notification.id);
-                                }}
-                                data-testid={`dismiss-notification-${notification.id}`}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      dismissMutation.mutate(notification.id);
+                                    }}
+                                    data-testid={`dismiss-notification-${notification.id}`}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Dismiss</TooltipContent>
+                              </Tooltip>
                             </div>
                             {notification.message && (
                               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">
@@ -988,18 +1005,23 @@ export function NotificationCenter() {
                               )}>
                                 {notification.title}
                               </p>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  dismissMutation.mutate(notification.id);
-                                }}
-                                data-testid={`dismiss-notification-${notification.id}`}
-                              >
-                                <X className="h-3 w-3" />
-                              </Button>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <Button
+                                    variant="ghost"
+                                    size="icon"
+                                    className="h-5 w-5 shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                                    onClick={(e) => {
+                                      e.stopPropagation();
+                                      dismissMutation.mutate(notification.id);
+                                    }}
+                                    data-testid={`dismiss-notification-${notification.id}`}
+                                  >
+                                    <X className="h-3 w-3" />
+                                  </Button>
+                                </TooltipTrigger>
+                                <TooltipContent>Dismiss</TooltipContent>
+                              </Tooltip>
                             </div>
                             {notification.message && (
                               <p className="text-xs text-muted-foreground mt-0.5 line-clamp-2">

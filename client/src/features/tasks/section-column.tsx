@@ -3,6 +3,7 @@ import { useDroppable } from "@dnd-kit/core";
 import { SortableContext, verticalListSortingStrategy } from "@dnd-kit/sortable";
 import { Plus, MoreHorizontal, Pencil, Trash2, XCircle } from "lucide-react";
 import { Button } from "@/components/ui/button";
+import { Tooltip, TooltipContent, TooltipTrigger } from "@/components/ui/tooltip";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -85,25 +86,35 @@ export function SectionColumn({
             </span>
           </div>
           <div className="flex items-center gap-1 shrink-0">
-            <Button
-              variant="ghost"
-              size="icon"
-              className="h-6 w-6"
-              onClick={onAddTask}
-              data-testid={`button-add-task-${section.id}`}
-            >
-              <Plus className="h-3.5 w-3.5" />
-            </Button>
-            <DropdownMenu>
-              <DropdownMenuTrigger asChild>
+            <Tooltip>
+              <TooltipTrigger asChild>
                 <Button
                   variant="ghost"
                   size="icon"
                   className="h-6 w-6"
-                  data-testid={`button-section-menu-${section.id}`}
+                  onClick={onAddTask}
+                  data-testid={`button-add-task-${section.id}`}
                 >
-                  <MoreHorizontal className="h-3.5 w-3.5" />
+                  <Plus className="h-3.5 w-3.5" />
                 </Button>
+              </TooltipTrigger>
+              <TooltipContent>Add task</TooltipContent>
+            </Tooltip>
+            <DropdownMenu>
+              <DropdownMenuTrigger asChild>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      className="h-6 w-6"
+                      data-testid={`button-section-menu-${section.id}`}
+                    >
+                      <MoreHorizontal className="h-3.5 w-3.5" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Section options</TooltipContent>
+                </Tooltip>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end">
                 <DropdownMenuItem

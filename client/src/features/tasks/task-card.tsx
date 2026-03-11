@@ -175,16 +175,20 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
               </Tooltip>
             )}
             {hasProject && (
-              <Button
-                variant="ghost"
-                size="icon"
-                className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
-                onClick={copyLink}
-                title="Copy task link"
-                data-testid={`button-copy-link-${task.id}`}
-              >
-                <Link2 className="h-3.5 w-3.5" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="shrink-0 opacity-0 group-hover:opacity-100 transition-opacity"
+                    onClick={copyLink}
+                    data-testid={`button-copy-link-${task.id}`}
+                  >
+                    <Link2 className="h-3.5 w-3.5" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Copy task link</TooltipContent>
+              </Tooltip>
             )}
           </div>
 
@@ -528,28 +532,36 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
           className="flex items-center gap-1"
           onClick={(e) => e.stopPropagation()}
         >
-          <Button
-            variant="ghost"
-            size="icon"
-            className="text-muted-foreground hover:text-foreground"
-            onClick={() => onStatusChange?.(!isCompleted)}
-            title={isCompleted ? "Mark incomplete" : "Mark complete"}
-            data-testid={`quick-complete-${task.id}`}
-          >
-            <CheckCircle2 className={cn("h-4 w-4", isCompleted && "text-green-500")} />
-          </Button>
-          
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
+          <Tooltip>
+            <TooltipTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
                 className="text-muted-foreground hover:text-foreground"
-                title="Set priority"
-                data-testid={`quick-priority-${task.id}`}
+                onClick={() => onStatusChange?.(!isCompleted)}
+                data-testid={`quick-complete-${task.id}`}
               >
-                <Flag className="h-4 w-4" />
+                <CheckCircle2 className={cn("h-4 w-4", isCompleted && "text-green-500")} />
               </Button>
+            </TooltipTrigger>
+            <TooltipContent>{isCompleted ? "Mark incomplete" : "Mark complete"}</TooltipContent>
+          </Tooltip>
+
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-foreground"
+                    data-testid={`quick-priority-${task.id}`}
+                  >
+                    <Flag className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Set priority</TooltipContent>
+              </Tooltip>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end">
               <DropdownMenuItem onClick={() => onPriorityChange?.("urgent")}>
@@ -581,15 +593,19 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
           
           <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
             <PopoverTrigger asChild>
-              <Button
-                variant="ghost"
-                size="icon"
-                className="text-muted-foreground hover:text-foreground"
-                title="Set due date"
-                data-testid={`quick-duedate-${task.id}`}
-              >
-                <CalendarDays className="h-4 w-4" />
-              </Button>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button
+                    variant="ghost"
+                    size="icon"
+                    className="text-muted-foreground hover:text-foreground"
+                    data-testid={`quick-duedate-${task.id}`}
+                  >
+                    <CalendarDays className="h-4 w-4" />
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Set due date</TooltipContent>
+              </Tooltip>
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end">
               <Calendar

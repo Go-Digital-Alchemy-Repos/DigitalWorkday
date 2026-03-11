@@ -993,32 +993,46 @@ export function TaskDetailDrawer({
             </Tooltip>
           )}
           {(task as any).visibility === "private" && (
-            <Button variant="ghost" size="icon" onClick={() => setShareModalOpen(true)} title="Share task" data-testid="button-share-task">
-              <Share2 className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button variant="ghost" size="icon" onClick={() => setShareModalOpen(true)} data-testid="button-share-task">
+                  <Share2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Share task</TooltipContent>
+            </Tooltip>
           )}
           {task.projectId && (
-            <Button
-              variant="ghost"
-              size="icon"
-              onClick={() => {
-                const url = `${window.location.origin}/projects/${task.projectId}?task=${task.id}`;
-                navigator.clipboard.writeText(url).then(() => {
-                  toast({ title: "Link copied", description: "Task link copied to clipboard" });
-                });
-              }}
-              title="Copy task link"
-              data-testid="button-copy-task-link"
-            >
-              <Link2 className="h-4 w-4" />
-            </Button>
+            <Tooltip>
+              <TooltipTrigger asChild>
+                <Button
+                  variant="ghost"
+                  size="icon"
+                  onClick={() => {
+                    const url = `${window.location.origin}/projects/${task.projectId}?task=${task.id}`;
+                    navigator.clipboard.writeText(url).then(() => {
+                      toast({ title: "Link copied", description: "Task link copied to clipboard" });
+                    });
+                  }}
+                  data-testid="button-copy-task-link"
+                >
+                  <Link2 className="h-4 w-4" />
+                </Button>
+              </TooltipTrigger>
+              <TooltipContent>Copy task link</TooltipContent>
+            </Tooltip>
           )}
           {isAdmin && (
             <AlertDialog>
               <AlertDialogTrigger asChild>
-                <Button variant="ghost" size="icon" disabled={deleteTaskMutation.isPending} aria-label="Delete task" data-testid="button-delete-task">
-                  <Trash2 className="h-4 w-4" />
-                </Button>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button variant="ghost" size="icon" disabled={deleteTaskMutation.isPending} aria-label="Delete task" data-testid="button-delete-task">
+                      <Trash2 className="h-4 w-4" />
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Delete task</TooltipContent>
+                </Tooltip>
               </AlertDialogTrigger>
               <AlertDialogContent>
                 <AlertDialogHeader>
@@ -1036,9 +1050,14 @@ export function TaskDetailDrawer({
               </AlertDialogContent>
             </AlertDialog>
           )}
-          <Button variant="secondary" size="icon" onClick={saveAndClose} aria-label="Close drawer" data-testid="button-close-drawer">
-            <X className="h-4 w-4" />
-          </Button>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="secondary" size="icon" onClick={saveAndClose} aria-label="Close drawer" data-testid="button-close-drawer">
+                <X className="h-4 w-4" />
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Close</TooltipContent>
+          </Tooltip>
         </div>
       </div>
       <div className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap" data-testid="task-breadcrumbs">
