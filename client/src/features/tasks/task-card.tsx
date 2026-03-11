@@ -79,8 +79,12 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
   const [justCompleted, setJustCompleted] = useState(false);
   const [showTimeDialog, setShowTimeDialog] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const assigneeUsers: Partial<User>[] = task.assignees?.map((a) => a.user).filter(Boolean) as Partial<User>[] || [];
-  const taskTags: Tag[] = task.tags?.map((tt) => tt.tag).filter(Boolean) as Tag[] || [];
+  const assigneeUsers: Partial<User>[] = task.assignees?.map((a: any) =>
+    a.user ?? (a.userId ? { id: a.userId, name: a.name } : null)
+  ).filter(Boolean) as Partial<User>[] || [];
+  const taskTags: Tag[] = task.tags?.map((tt: any) =>
+    tt.tag ?? (tt.id ? tt : null)
+  ).filter(Boolean) as Tag[] || [];
   const subtaskCount = task.subtasks?.length || 0;
   const completedSubtasks = task.subtasks?.filter((s) => s.completed).length || 0;
 
