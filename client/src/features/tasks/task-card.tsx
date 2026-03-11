@@ -10,6 +10,7 @@ import {
   DropdownMenu,
   DropdownMenuContent,
   DropdownMenuItem,
+  DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import {
@@ -26,7 +27,7 @@ import {
   CheckCircle2,
   Flag,
   CalendarDays,
-  Link2,
+  MoreHorizontal,
   Lock,
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
@@ -391,7 +392,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
       className={cn(
         "group relative grid items-center gap-2 px-4 py-2 min-h-[44px] border-b border-border hover-elevate cursor-pointer transition-premium",
         showQuickActions 
-          ? (dragHandleProps ? "grid-cols-[16px_20px_1fr_120px_100px_100px_96px_80px_auto]" : "grid-cols-[20px_1fr_120px_100px_100px_96px_80px_auto]")
+          ? (dragHandleProps ? "grid-cols-[16px_20px_1fr_120px_100px_100px_96px_80px_32px]" : "grid-cols-[20px_1fr_120px_100px_100px_96px_80px_32px]")
           : (dragHandleProps ? "grid-cols-[16px_20px_1fr_120px_100px_100px_96px_80px]" : "grid-cols-[20px_1fr_120px_100px_100px_96px_80px]"),
         isCompleted && "opacity-60",
         isDragging && "opacity-50 shadow-lg bg-card",
@@ -529,84 +530,60 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
       </div>
 
       {showQuickActions && (
-        <div 
-          className="flex items-center gap-1"
+        <div
+          className="flex items-center justify-center"
           onClick={(e) => e.stopPropagation()}
         >
-          <Tooltip>
-            <TooltipTrigger asChild>
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
               <Button
                 variant="ghost"
                 size="icon"
-                className="text-muted-foreground hover:text-foreground"
+                className="h-7 w-7 text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                data-testid={`quick-actions-${task.id}`}
+              >
+                <MoreHorizontal className="h-4 w-4" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-48">
+              <DropdownMenuItem
                 onClick={() => onStatusChange?.(!isCompleted)}
                 data-testid={`quick-complete-${task.id}`}
               >
-                <CheckCircle2 className={cn("h-4 w-4", isCompleted && "text-green-500")} />
-              </Button>
-            </TooltipTrigger>
-            <TooltipContent>{isCompleted ? "Mark incomplete" : "Mark complete"}</TooltipContent>
-          </Tooltip>
-
-          <DropdownMenu>
-            <DropdownMenuTrigger asChild>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-muted-foreground hover:text-foreground"
-                    data-testid={`quick-priority-${task.id}`}
-                  >
-                    <Flag className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Set priority</TooltipContent>
-              </Tooltip>
-            </DropdownMenuTrigger>
-            <DropdownMenuContent align="end">
+                <CheckCircle2 className={cn("h-4 w-4 mr-2", isCompleted && "text-green-500")} />
+                {isCompleted ? "Mark incomplete" : "Mark complete"}
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
               <DropdownMenuItem onClick={() => onPriorityChange?.("urgent")}>
-                <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-red-500" />
-                  Urgent
-                </span>
+                <span className="h-2 w-2 rounded-full bg-red-500 mr-2 shrink-0" />
+                Urgent
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onPriorityChange?.("high")}>
-                <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-orange-500" />
-                  High
-                </span>
+                <span className="h-2 w-2 rounded-full bg-orange-500 mr-2 shrink-0" />
+                High
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onPriorityChange?.("medium")}>
-                <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-yellow-500" />
-                  Medium
-                </span>
+                <span className="h-2 w-2 rounded-full bg-yellow-500 mr-2 shrink-0" />
+                Medium
               </DropdownMenuItem>
               <DropdownMenuItem onClick={() => onPriorityChange?.("low")}>
-                <span className="flex items-center gap-2">
-                  <span className="h-2 w-2 rounded-full bg-blue-500" />
-                  Low
-                </span>
+                <span className="h-2 w-2 rounded-full bg-blue-500 mr-2 shrink-0" />
+                Low
+              </DropdownMenuItem>
+              <DropdownMenuSeparator />
+              <DropdownMenuItem
+                onClick={() => setDueDatePopoverOpen(true)}
+                data-testid={`quick-duedate-${task.id}`}
+              >
+                <CalendarDays className="h-4 w-4 mr-2" />
+                Set due date
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-          
+
           <Popover open={dueDatePopoverOpen} onOpenChange={setDueDatePopoverOpen}>
             <PopoverTrigger asChild>
-              <Tooltip>
-                <TooltipTrigger asChild>
-                  <Button
-                    variant="ghost"
-                    size="icon"
-                    className="text-muted-foreground hover:text-foreground"
-                    data-testid={`quick-duedate-${task.id}`}
-                  >
-                    <CalendarDays className="h-4 w-4" />
-                  </Button>
-                </TooltipTrigger>
-                <TooltipContent>Set due date</TooltipContent>
-              </Tooltip>
+              <span className="sr-only" />
             </PopoverTrigger>
             <PopoverContent className="w-auto p-0" align="end">
               <Calendar
