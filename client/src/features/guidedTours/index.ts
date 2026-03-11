@@ -74,6 +74,7 @@ export { TourLauncher } from "./components/TourLauncher";
 export { ContextualHint } from "./components/ContextualHint";
 export { ContextualHintBeacon } from "./components/ContextualHintBeacon";
 export { ContextualHintRenderer } from "./components/ContextualHintRenderer";
+export { FirstRunModal } from "./components/FirstRunModal";
 
 // Hint registry
 export { getAllHints, getHintById, registerHint } from "./lib/hintRegistry";
@@ -86,3 +87,17 @@ export {
   resetAllDismissedHintsLocally,
   isHintDismissedLocally,
 } from "./lib/hintPersistence";
+
+// Onboarding persistence
+export {
+  isOnboardingAcknowledged,
+  acknowledgeOnboarding,
+  resetOnboardingState,
+  isOnboardingDeferredThisSession,
+  deferOnboardingThisSession,
+  ONBOARDING_VERSION,
+} from "./lib/onboardingPersistence";
+
+// Onboarding profiles
+export { getOnboardingProfile } from "./lib/onboardingProfiles";
+export type { OnboardingProfile, RecommendedArea } from "./lib/onboardingProfiles";

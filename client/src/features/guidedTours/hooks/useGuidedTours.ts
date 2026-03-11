@@ -194,6 +194,16 @@ export function useGuidedTours() {
     dispatch({ type: "CLOSE_GUIDANCE_CENTER" });
   }, [dispatch]);
 
+  // ── Onboarding modal ─────────────────────────────────────────────────────
+
+  const openOnboarding = useCallback(() => {
+    dispatch({ type: "OPEN_ONBOARDING" });
+  }, [dispatch]);
+
+  const closeOnboarding = useCallback(() => {
+    dispatch({ type: "CLOSE_ONBOARDING" });
+  }, [dispatch]);
+
   // ── Preferences ──────────────────────────────────────────────────────────
 
   const toggleToursEnabled = useCallback(
@@ -235,6 +245,7 @@ export function useGuidedTours() {
     toursEnabled: state.toursEnabled,
     contextualHintsEnabled: state.contextualHintsEnabled,
     isGuidanceCenterOpen: state.isGuidanceCenterOpen,
+    isOnboardingModalOpen: state.isOnboardingModalOpen,
     preferences: state.preferences,
     progress: state.progress,
 
@@ -246,6 +257,8 @@ export function useGuidedTours() {
     replayTour,
     openGuidanceCenter,
     closeGuidanceCenter,
+    openOnboarding,
+    closeOnboarding,
     toggleToursEnabled,
     toggleContextualHints,
 

@@ -29,11 +29,13 @@ import {
   BookOpen,
   Lightbulb,
   RefreshCw,
+  Sparkles,
 } from "lucide-react";
 import { useGuidedTours } from "../hooks/useGuidedTours";
 import { useGuidedToursContext } from "../store/guidedToursStore";
 import { getAllTours } from "../lib/tourRegistry";
 import { resetAllDismissedHintsLocally } from "../lib/hintPersistence";
+import { resetOnboardingState } from "../lib/onboardingPersistence";
 import type { GuidedTourStatus } from "../types";
 import { cn } from "@/lib/utils";
 
@@ -63,6 +65,7 @@ export function GuidanceCenter() {
   const {
     isGuidanceCenterOpen,
     closeGuidanceCenter,
+    openOnboarding,
     startTour,
     replayTour,
     toursEnabled,
@@ -82,6 +85,13 @@ export function GuidanceCenter() {
     dispatch({ type: "RESET_DISMISSED_HINTS" });
   };
 
+  const handleReplayWelcome = () => {
+    resetOnboardingState();
+    closeGuidanceCenter();
+    // Small delay so the sheet closes before the modal opens
+    setTimeout(() => openOnboarding(), 200);
+  };
+
   return (
     <Sheet open={isGuidanceCenterOpen} onOpenChange={(open) => !open && closeGuidanceCenter()}>
       <SheetContent side="right" className="w-[380px] sm:w-[420px] flex flex-col gap-0 p-0">
@@ -97,6 +107,29 @@ export function GuidanceCenter() {
         </SheetHeader>
 
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-5">
+          {/* ── Replay welcome guide ───────────────────────────────────────── */}
+          <button
+            onClick={handleReplayWelcome}
+            className={cn(
+              "w-full flex items-center gap-3 rounded-lg border border-dashed border-border/70 px-4 py-3",
+              "hover:bg-muted/50 hover:border-border transition-colors group",
+              "focus:outline-none focus-visible:ring-2 focus-visible:ring-primary"
+            )}
+            data-testid="replay-welcome-guide"
+          >
+            <Sparkles className="h-4 w-4 text-primary shrink-0" />
+            <div className="text-left">
+              <p className="text-sm font-medium text-foreground leading-tight">
+                Replay Welcome Guide
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                See onboarding options and quick-start tours again
+              </p>
+            </div>
+          </button>
+
+          <Separator />
+
           {/* ── Preferences toggles ────────────────────────────────────────── */}
           <div className="space-y-3">
             <div className="flex items-center justify-between">

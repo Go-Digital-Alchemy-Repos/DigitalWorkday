@@ -25,11 +25,19 @@ import { loadDismissedHints } from "../lib/hintPersistence";
 import type { GuidedTourProgress } from "../types";
 import { useTourPreferences, useTourProgressList } from "../hooks/useTourApi";
 import { useAuthSafe } from "@/lib/auth";
+import { useFirstRunOnboarding } from "../hooks/useFirstRunOnboarding";
 
 interface GuidedTourProviderProps {
   children: ReactNode;
   /** Set false to disable the entire system (e.g. feature flag off) */
   enabled?: boolean;
+}
+
+// ── First-run trigger — must live inside the context so it can dispatch ───────
+
+function FirstRunOnboardingTrigger() {
+  useFirstRunOnboarding();
+  return null;
 }
 
 // Inner component — needs to be inside QueryClientProvider to use hooks
@@ -113,6 +121,7 @@ function GuidedTourProviderInner({
 
   return (
     <GuidedToursContext.Provider value={{ state, dispatch }}>
+      <FirstRunOnboardingTrigger />
       {children}
     </GuidedToursContext.Provider>
   );

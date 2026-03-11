@@ -196,6 +196,8 @@ export interface GuidedToursState {
   toursEnabled: boolean;
   contextualHintsEnabled: boolean;
   isGuidanceCenterOpen: boolean;
+  /** Controls the first-run onboarding dialog */
+  isOnboardingModalOpen: boolean;
   preferences: GuidedTourPreference;
   /** Progress keyed by tourId */
   progress: Record<string, GuidedTourProgress>;
@@ -221,4 +223,6 @@ export type GuidedToursAction =
   | { type: "LOAD_PREFERENCES"; preferences: GuidedTourPreference }
   | { type: "DISMISS_HINT"; hintId: string; version: number }
   | { type: "RESET_DISMISSED_HINTS" }
-  | { type: "LOAD_DISMISSED_HINTS"; dismissedHintVersions: Record<string, number> };
+  | { type: "LOAD_DISMISSED_HINTS"; dismissedHintVersions: Record<string, number> }
+  | { type: "OPEN_ONBOARDING" }
+  | { type: "CLOSE_ONBOARDING" };

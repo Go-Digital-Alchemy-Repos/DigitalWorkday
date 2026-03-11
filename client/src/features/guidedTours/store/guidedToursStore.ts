@@ -20,6 +20,7 @@ export const initialGuidedToursState: GuidedToursState = {
   toursEnabled: true,
   contextualHintsEnabled: true,
   isGuidanceCenterOpen: false,
+  isOnboardingModalOpen: false,
   preferences: {
     contextualHintsEnabled: true,
     autoplayOnboarding: false,
@@ -169,6 +170,16 @@ export function guidedToursReducer(
 
     case "LOAD_DISMISSED_HINTS":
       return { ...state, dismissedHintVersions: action.dismissedHintVersions };
+
+    case "OPEN_ONBOARDING":
+      return {
+        ...state,
+        isOnboardingModalOpen: true,
+        isGuidanceCenterOpen: false, // close guidance center if open
+      };
+
+    case "CLOSE_ONBOARDING":
+      return { ...state, isOnboardingModalOpen: false };
 
     default:
       return state;
