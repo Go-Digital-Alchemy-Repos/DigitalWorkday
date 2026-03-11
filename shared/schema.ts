@@ -1317,6 +1317,7 @@ export const timeEntries = pgTable("time_entries", {
   index("time_entries_tenant_project_start_idx").on(table.tenantId, table.projectId, table.startTime),
   index("time_entries_tenant_client_idx").on(table.tenantId, table.clientId),
   index("time_entries_tenant_created_at_idx").on(table.tenantId, table.createdAt),
+  index("time_entries_tenant_billing_status_idx").on(table.tenantId, table.billingStatus),
 ]);
 
 /**
@@ -1376,6 +1377,7 @@ export const projects = pgTable("projects", {
   index("projects_status_idx").on(table.status),
   index("projects_tenant_updated_at_idx").on(table.tenantId, table.updatedAt),
   index("projects_tenant_name_idx").on(table.tenantId, table.name),
+  index("projects_manager_idx").on(table.projectManagerId),
 ]);
 
 // Project Members table
@@ -1602,6 +1604,7 @@ export const subtasks = pgTable("subtasks", {
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [
   index("subtasks_task_order").on(table.taskId, table.orderIndex),
+  index("subtasks_assignee_id_idx").on(table.assigneeId),
 ]);
 
 // Subtask Assignees junction table (for multiple assignees)

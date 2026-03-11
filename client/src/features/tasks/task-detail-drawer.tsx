@@ -505,23 +505,31 @@ export function TaskDetailDrawer({
       const projectRes = await fetch(`/api/projects/${task.projectId}`, { credentials: "include" });
       if (!projectRes.ok) throw new Error("Failed to load project");
       const project = await projectRes.json();
-      let client = null;
-      let division = null;
-      if (project?.clientId) {
-        const clientRes = await fetch(`/api/clients/${project.clientId}`, { credentials: "include" });
-        if (clientRes.ok) client = await clientRes.json();
-      }
-      if (project?.divisionId && project?.clientId) {
-        const divisionsRes = await fetch(`/api/v1/clients/${project.clientId}/divisions`, { credentials: "include" });
-        if (divisionsRes.ok) {
-          const divisions = await divisionsRes.json();
-          division = divisions.find((d: any) => d.id === project.divisionId) || null;
-        }
-      }
+
+      // Fetch client and divisions in parallel rather than serial
+      const [client, division] = await (async () => {
+        if (!project?.clientId) return [null, null];
+        const [clientRes, divisionsRes] = await Promise.all([
+          fetch(`/api/clients/${project.clientId}`, { credentials: "include" }),
+          project?.divisionId
+            ? fetch(`/api/v1/clients/${project.clientId}/divisions`, { credentials: "include" })
+            : Promise.resolve(null),
+        ]);
+        const clientData = clientRes.ok ? await clientRes.json() : null;
+        const divisionData = (() => {
+          if (!divisionsRes || !project?.divisionId) return null;
+          return divisionsRes.ok
+            ? divisionsRes.json().then((divs: any[]) => divs.find(d => d.id === project.divisionId) || null)
+            : null;
+        })();
+        return [clientData, await divisionData];
+      })();
+
       return { ...project, client, division };
     },
     enabled: !!task?.projectId && open,
     retry: 1,
+    staleTime: 60000,
   });
 
   const canQuickStartTimer = !task?.projectId || (projectContext && projectContext.clientId);

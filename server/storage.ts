@@ -1055,14 +1055,19 @@ export class DatabaseStorage implements IStorage {
     const task = await this.getTask(id);
     if (!task) return undefined;
 
-    const assignees = await this.getTaskAssignees(id);
-    const watchers = await this.getTaskWatchers(id);
-    const taskTagsList = await this.getTaskTags(id);
-    const subtasksList = await this.getSubtasksByTask(id);
-    const section = task.sectionId ? await this.getSection(task.sectionId) : undefined;
-    const project = task.projectId ? await this.getProject(task.projectId) : undefined;
-    
-    const childTasksList = await this.getChildTasks(id);
+    // Fetch independent relations in parallel — reduces ~7 serial queries to 2 parallel rounds
+    const [assignees, watchers, taskTagsList, subtasksList, childTasksList] = await Promise.all([
+      this.getTaskAssignees(id),
+      this.getTaskWatchers(id),
+      this.getTaskTags(id),
+      this.getSubtasksByTask(id),
+      this.getChildTasks(id),
+    ]);
+
+    const [section, project] = await Promise.all([
+      task.sectionId ? this.getSection(task.sectionId) : Promise.resolve(undefined),
+      task.projectId ? this.getProject(task.projectId) : Promise.resolve(undefined),
+    ]);
 
     return {
       ...task,
@@ -1106,33 +1111,108 @@ export class DatabaseStorage implements IStorage {
   async getTasksByProject(projectId: string, includeArchived = false): Promise<TaskWithRelations[]> {
     const conditions: any[] = [
       eq(tasks.projectId, projectId),
-      eq(tasks.isPersonal, false)
+      eq(tasks.isPersonal, false),
     ];
     if (!includeArchived) {
       conditions.push(isNull(tasks.archivedAt));
     }
+
+    // 1. Fetch all tasks for the project in one query
     const tasksList = await db.select().from(tasks)
       .where(and(...conditions))
       .orderBy(asc(tasks.orderIndex));
 
-    // Fetch the project + its client once for all tasks
-    const project = await this.getProject(projectId);
+    if (tasksList.length === 0) return [];
+
+    const taskIds = tasksList.map(t => t.id);
+
+    // 2. Batch-fetch all relations in parallel — ONE query per relation type (not per task)
+    const [assigneeRows, watcherRows, tagRows, childTaskRows, project] = await Promise.all([
+      db.select().from(taskAssignees).where(inArray(taskAssignees.taskId, taskIds)),
+      db.select().from(taskWatchers).where(inArray(taskWatchers.taskId, taskIds)),
+      db.select({
+        id: taskTags.id,
+        taskId: taskTags.taskId,
+        tagId: taskTags.tagId,
+        tag: tags,
+      })
+        .from(taskTags)
+        .leftJoin(tags, eq(taskTags.tagId, tags.id))
+        .where(inArray(taskTags.taskId, taskIds)),
+      db.select().from(tasks).where(inArray(tasks.parentTaskId, taskIds)),
+      this.getProject(projectId),
+    ]);
+
+    // 3. Fetch sections for the unique set of sectionIds in one query
+    const uniqueSectionIds = Array.from(
+      new Set(tasksList.map(t => t.sectionId).filter((id): id is string => !!id))
+    );
+    const sectionRows = uniqueSectionIds.length > 0
+      ? await db.select().from(sections).where(inArray(sections.id, uniqueSectionIds))
+      : [];
+
+    // 4. Fetch the project's client (already have project from above)
     let projectWithClient: any = project;
     if (project?.clientId) {
       const [clientRecord] = await db.select().from(clients).where(eq(clients.id, project.clientId));
-      if (clientRecord) {
-        projectWithClient = { ...project, client: clientRecord };
-      }
+      if (clientRecord) projectWithClient = { ...project, client: clientRecord };
     }
-    
-    const result: TaskWithRelations[] = [];
-    for (const task of tasksList) {
-      const taskWithRelations = await this.getTaskWithRelations(task.id);
-      if (taskWithRelations) {
-        result.push({ ...taskWithRelations, project: projectWithClient ?? taskWithRelations.project });
-      }
+
+    // 5. Build lookup maps
+    const assigneesByTask = new Map<string, (typeof taskAssignees.$inferSelect)[]>();
+    for (const row of assigneeRows) {
+      if (!assigneesByTask.has(row.taskId)) assigneesByTask.set(row.taskId, []);
+      assigneesByTask.get(row.taskId)!.push(row);
     }
-    return result;
+
+    const watchersByTask = new Map<string, (typeof taskWatchers.$inferSelect)[]>();
+    for (const row of watcherRows) {
+      if (!watchersByTask.has(row.taskId)) watchersByTask.set(row.taskId, []);
+      watchersByTask.get(row.taskId)!.push(row);
+    }
+
+    const tagsByTask = new Map<string, { id: string; taskId: string; tagId: string; tag: typeof tags.$inferSelect | null }[]>();
+    for (const row of tagRows) {
+      if (!tagsByTask.has(row.taskId)) tagsByTask.set(row.taskId, []);
+      tagsByTask.get(row.taskId)!.push(row);
+    }
+
+    const childsByParent = new Map<string, (typeof tasks.$inferSelect)[]>();
+    for (const row of childTaskRows) {
+      if (!row.parentTaskId) continue;
+      if (!childsByParent.has(row.parentTaskId)) childsByParent.set(row.parentTaskId, []);
+      childsByParent.get(row.parentTaskId)!.push(row);
+    }
+
+    const sectionById = new Map(sectionRows.map(s => [s.id, s]));
+
+    const buildChildStub = (ct: typeof tasks.$inferSelect): TaskWithRelations => ({
+      ...ct,
+      assignees: [],
+      watchers: [],
+      tags: [],
+      subtasks: [],
+      childTasks: [],
+      section: undefined,
+      project: undefined,
+    });
+
+    // 6. Assemble results in memory — zero additional DB queries
+    return tasksList.map(task => ({
+      ...task,
+      assignees: assigneesByTask.get(task.id) ?? [],
+      watchers: watchersByTask.get(task.id) ?? [],
+      tags: (tagsByTask.get(task.id) ?? []).map(r => ({
+        id: r.id,
+        taskId: r.taskId,
+        tagId: r.tagId,
+        tag: r.tag ?? undefined,
+      })),
+      subtasks: [],
+      childTasks: (childsByParent.get(task.id) ?? []).map(buildChildStub),
+      section: task.sectionId ? sectionById.get(task.sectionId) : undefined,
+      project: projectWithClient ?? undefined,
+    }));
   }
 
   // Get tasks with due dates before the specified date (for deadline notifications)
