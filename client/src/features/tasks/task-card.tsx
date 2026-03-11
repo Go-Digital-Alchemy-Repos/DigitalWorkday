@@ -497,8 +497,13 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
         {assigneeUsers.length > 0 ? (
           <>
             <AvatarGroup users={assigneeUsers.slice(0, 1)} max={1} size="sm" />
-            <span className="text-xs text-muted-foreground truncate min-w-0">
-              {assigneeUsers[0].name}
+            <span className="text-xs text-muted-foreground truncate min-w-0" title={assigneeUsers[0].name}>
+              {(() => {
+                const parts = assigneeUsers[0].name.trim().split(/\s+/);
+                return parts.length > 1
+                  ? `${parts[0]} ${parts[parts.length - 1][0]}.`
+                  : parts[0];
+              })()}
               {assigneeUsers.length > 1 && <span className="text-muted-foreground/70"> +{assigneeUsers.length - 1}</span>}
             </span>
           </>

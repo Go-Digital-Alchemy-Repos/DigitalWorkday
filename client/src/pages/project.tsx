@@ -931,7 +931,7 @@ export default function ProjectPage() {
                   <TooltipContent>What-if Simulator</TooltipContent>
                 </Tooltip>
               )}
-              {isAdmin && enableCapacityWhatIf && (
+              {false && isAdmin && enableCapacityWhatIf && (
                 <div className="relative">
                   <Button
                     variant="outline"
