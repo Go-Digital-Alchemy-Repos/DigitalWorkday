@@ -398,124 +398,6 @@ function computeDashboardStats(tasks: MyTaskItem[]): DashboardStats {
   };
 }
 
-interface DashboardSummaryProps {
-  stats: DashboardStats;
-  onTaskSelect: (task: MyTaskItem) => void;
-  isLoading: boolean;
-}
-
-function DashboardSummary({ stats, onTaskSelect, isLoading }: DashboardSummaryProps) {
-  if (isLoading) {
-    return null;
-  }
-
-  return (
-    <div className="space-y-4">
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 md:gap-4">
-        <Card data-testid="card-quick-insights">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <TrendingUp className="h-4 w-4 text-blue-500" />
-              Quick Insights
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4 space-y-2">
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Completion Rate</span>
-              <span className="font-medium">{stats.completionRate}%</span>
-            </div>
-            <div className="w-full bg-muted rounded-full h-2">
-              <div 
-                className="bg-primary h-2 rounded-full transition-all" 
-                style={{ width: `${stats.completionRate}%` }}
-              />
-            </div>
-            <div className="flex items-center justify-between text-sm pt-1">
-              <span className="text-muted-foreground">High Priority</span>
-              <span className={`font-medium ${stats.highPriorityCount > 0 ? "text-orange-500" : ""}`}>
-                {stats.highPriorityCount} tasks
-              </span>
-            </div>
-            <div className="flex items-center justify-between text-sm">
-              <span className="text-muted-foreground">Personal / Project</span>
-              <span className="font-medium">{stats.personalTaskCount} / {stats.projectTaskCount}</span>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-recently-added">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Sparkles className="h-4 w-4 text-purple-500" />
-              Recently Added
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            {stats.recentlyAdded.length > 0 ? (
-              <div className="space-y-1">
-                {stats.recentlyAdded.slice(0, 3).map((task) => (
-                  <Button
-                    key={task.id}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onTaskSelect(task)}
-                    className="w-full justify-start text-left gap-2"
-                    data-testid={`task-recent-${task.id}`}
-                  >
-                    <ListTodo className="h-3 w-3 text-muted-foreground shrink-0" />
-                    <span className="truncate">{task.title}</span>
-                  </Button>
-                ))}
-                {stats.recentlyAdded.length > 3 && (
-                  <p className="text-xs text-muted-foreground px-2 pt-1">
-                    +{stats.recentlyAdded.length - 3} more this week
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground py-2">No new tasks this week</p>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-recently-completed">
-          <CardHeader className="pb-2 pt-4 px-4">
-            <CardTitle className="text-sm font-medium flex items-center gap-2">
-              <Target className="h-4 w-4 text-green-500" />
-              Recently Completed
-            </CardTitle>
-          </CardHeader>
-          <CardContent className="px-4 pb-4">
-            {stats.recentlyCompleted.length > 0 ? (
-              <div className="space-y-1">
-                {stats.recentlyCompleted.slice(0, 3).map((task) => (
-                  <Button
-                    key={task.id}
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => onTaskSelect(task)}
-                    className="w-full justify-start text-left gap-2"
-                    data-testid={`task-completed-${task.id}`}
-                  >
-                    <CheckCircle2 className="h-3 w-3 text-green-500 shrink-0" />
-                    <span className="truncate text-muted-foreground line-through">{task.title}</span>
-                  </Button>
-                ))}
-                {stats.recentlyCompleted.length > 3 && (
-                  <p className="text-xs text-muted-foreground px-2 pt-1">
-                    +{stats.recentlyCompleted.length - 3} more this week
-                  </p>
-                )}
-              </div>
-            ) : (
-              <p className="text-sm text-muted-foreground py-2">Complete tasks to see them here</p>
-            )}
-          </CardContent>
-        </Card>
-      </div>
-    </div>
-  );
-}
 
 export default function MyTasks() {
   const { user } = useAuth();
@@ -1089,13 +971,6 @@ export default function MyTasks() {
                 </div>
               </div>
             )}
-          </div>
-          <div className="hidden md:block">
-            <DashboardSummary 
-              stats={dashboardStats} 
-              onTaskSelect={handleTaskSelect} 
-              isLoading={isLoading} 
-            />
           </div>
           
           {isLoading ? (
