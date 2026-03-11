@@ -573,7 +573,7 @@ function EmployeeDashboardSection({
               </div>
             ) : focusTasks.length > 0 ? (
               <div>
-                <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[20px_1fr_40px_110px_110px_88px_76px] bg-muted/30 border-b border-border">
+                <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[20px_minmax(200px,2fr)_40px_minmax(80px,1fr)_minmax(80px,1fr)_90px_76px] bg-muted/30 border-b border-border">
                   <div />
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Task</span>
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Assignee</span>
@@ -620,7 +620,7 @@ function EmployeeDashboardSection({
               </div>
             ) : taskBreakdown.upcoming.length > 0 ? (
               <div>
-                <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[20px_1fr_40px_110px_110px_88px_76px] bg-muted/30 border-b border-border">
+                <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[20px_minmax(200px,2fr)_40px_minmax(80px,1fr)_minmax(80px,1fr)_90px_76px] bg-muted/30 border-b border-border">
                   <div />
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Task</span>
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Assignee</span>
@@ -948,7 +948,7 @@ export default function Home() {
                   </div>
                 ) : myTasks && myTasks.length > 0 ? (
                   <div>
-                    <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[20px_1fr_40px_110px_110px_88px_76px] bg-muted/30 border-b border-border">
+                    <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[20px_minmax(200px,2fr)_40px_minmax(80px,1fr)_minmax(80px,1fr)_90px_76px] bg-muted/30 border-b border-border">
                       <div />
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Task</span>
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Assignee</span>
