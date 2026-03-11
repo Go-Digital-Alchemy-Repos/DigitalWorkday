@@ -32,6 +32,7 @@ import {
 import { MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check, Search, Compass } from "lucide-react";
 import { useGuidedTours } from "@/features/guidedTours/hooks/useGuidedTours";
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
+import { useToast } from "@/hooks/use-toast";
 import { GlobalSearchBar } from "@/components/global-search-bar";
 import { type Workspace } from "@shared/schema";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
@@ -202,10 +203,19 @@ function ChatToggleButton() {
 
 function TourToggleButton() {
   const { toursEnabled, toggleToursEnabled, isRunning, stopTour } = useGuidedTours();
+  const { toast } = useToast();
 
   const handleToggle = () => {
+    const next = !toursEnabled;
     if (toursEnabled && isRunning) stopTour();
-    toggleToursEnabled(!toursEnabled);
+    toggleToursEnabled(next);
+    toast({
+      title: next ? "Guided tours enabled" : "Guided tours disabled",
+      description: next
+        ? "Tours will appear as you navigate the app."
+        : "Tours are paused. Toggle again to re-enable.",
+      duration: 2500,
+    });
   };
 
   return (
@@ -213,7 +223,7 @@ function TourToggleButton() {
       <Tooltip>
         <TooltipTrigger asChild>
           <Button
-            variant="ghost"
+            variant={toursEnabled ? "secondary" : "ghost"}
             size="icon"
             onClick={handleToggle}
             aria-label={toursEnabled ? "Disable guided tours" : "Enable guided tours"}
