@@ -21,6 +21,7 @@ import {
   saveLocalPreferences,
   saveLocalProgress,
 } from "../lib/tourPersistence";
+import { loadDismissedHints } from "../lib/hintPersistence";
 import type { GuidedTourProgress } from "../types";
 import { useTourPreferences, useTourProgressList } from "../hooks/useTourApi";
 import { useAuthSafe } from "@/lib/auth";
@@ -39,6 +40,7 @@ function GuidedTourProviderInner({
   const [state, dispatch] = useReducer(guidedToursReducer, {
     ...initialGuidedToursState,
     toursEnabled: enabled ?? true,
+    dismissedHintVersions: loadDismissedHints(),
   });
 
   // Only fire API calls when the user is actually authenticated

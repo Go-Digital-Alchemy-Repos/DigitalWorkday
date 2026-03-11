@@ -22,10 +22,11 @@ export const initialGuidedToursState: GuidedToursState = {
   isGuidanceCenterOpen: false,
   preferences: {
     contextualHintsEnabled: true,
-    autoplayOnboarding: false, // off by default — never surprise users
+    autoplayOnboarding: false,
   },
   progress: {},
   dismissedTourIds: new Set(),
+  dismissedHintVersions: {},
 };
 
 // ── Reducer ───────────────────────────────────────────────────────────────────
@@ -153,6 +154,21 @@ export function guidedToursReducer(
         preferences: action.preferences,
         contextualHintsEnabled: action.preferences.contextualHintsEnabled,
       };
+
+    case "DISMISS_HINT":
+      return {
+        ...state,
+        dismissedHintVersions: {
+          ...state.dismissedHintVersions,
+          [action.hintId]: action.version,
+        },
+      };
+
+    case "RESET_DISMISSED_HINTS":
+      return { ...state, dismissedHintVersions: {} };
+
+    case "LOAD_DISMISSED_HINTS":
+      return { ...state, dismissedHintVersions: action.dismissedHintVersions };
 
     default:
       return state;

@@ -72,3 +72,17 @@ export { GuidanceCenter } from "./components/GuidanceCenter";
 export { TourStepOverlay } from "./components/TourStepOverlay";
 export { TourLauncher } from "./components/TourLauncher";
 export { ContextualHint } from "./components/ContextualHint";
+export { ContextualHintBeacon } from "./components/ContextualHintBeacon";
+export { ContextualHintRenderer } from "./components/ContextualHintRenderer";
+
+// Hint registry
+export { getAllHints, getHintById, registerHint } from "./lib/hintRegistry";
+
+// Hint persistence
+export {
+  loadDismissedHints,
+  saveDismissedHints,
+  dismissHintLocally,
+  resetAllDismissedHintsLocally,
+  isHintDismissedLocally,
+} from "./lib/hintPersistence";

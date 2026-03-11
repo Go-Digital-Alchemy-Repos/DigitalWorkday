@@ -351,7 +351,7 @@ export default function MyTimePage() {
           </h1>
           <p className="text-sm text-muted-foreground">Your personal time tracking overview</p>
         </div>
-        <Button onClick={handleStartTimer} data-testid="button-start-timer">
+        <Button onClick={handleStartTimer} data-testid="button-start-timer" data-tour="my-time-start-timer">
           <Play className="h-4 w-4 mr-2" />
           Start Timer
         </Button>

@@ -95,15 +95,31 @@ export interface GuidedTour {
 // Contextual Hints
 // ─────────────────────────────────────────────────────────────────────────────
 
-/** A passive, always-on hint anchored to a specific element (pulsing dot) */
+/** Visual display mode for a contextual hint */
+export type HintDisplayMode =
+  | "beacon"         // pulsing dot + popup card on hover/click (default)
+  | "highlight"      // subtle glow ring around the target element
+  | "tooltip"        // always-visible text badge near the element
+  | "none";          // tracked but not rendered (future/programmatic use)
+
+/** A passive, always-on hint anchored to a specific element */
 export interface ContextualHintDefinition {
   id: string;
-  /** data-tour attribute value or CSS selector */
+  /** Increment to re-show for users who dismissed an older version */
+  version: number;
+  title: string;
+  body: string;
+  /** data-tour attribute value or raw CSS selector */
   target: string;
-  message: string;
+  displayMode?: HintDisplayMode;
+  /** Whether the user can permanently dismiss this hint (default: true) */
+  dismissible?: boolean;
+  /** 0–10: higher priority hints are shown first when the per-screen cap is hit */
+  priority?: number;
   placement?: TourStepPlacement;
   requiredRoute?: string;
   allowedRoles?: TourRole[];
+  requiredFeatureFlags?: string[];
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -185,6 +201,8 @@ export interface GuidedToursState {
   progress: Record<string, GuidedTourProgress>;
   /** Fast-access set of dismissed tour IDs (sourced from progress) */
   dismissedTourIds: Set<string>;
+  /** Dismissed hint versions — { [hintId]: dismissedVersion } */
+  dismissedHintVersions: Record<string, number>;
 }
 
 export type GuidedToursAction =
@@ -200,4 +218,7 @@ export type GuidedToursAction =
   | { type: "OPEN_GUIDANCE_CENTER" }
   | { type: "CLOSE_GUIDANCE_CENTER" }
   | { type: "LOAD_PROGRESS"; progress: Record<string, GuidedTourProgress> }
-  | { type: "LOAD_PREFERENCES"; preferences: GuidedTourPreference };
+  | { type: "LOAD_PREFERENCES"; preferences: GuidedTourPreference }
+  | { type: "DISMISS_HINT"; hintId: string; version: number }
+  | { type: "RESET_DISMISSED_HINTS" }
+  | { type: "LOAD_DISMISSED_HINTS"; dismissedHintVersions: Record<string, number> };

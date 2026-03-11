@@ -28,9 +28,12 @@ import {
   RotateCcw,
   BookOpen,
   Lightbulb,
+  RefreshCw,
 } from "lucide-react";
 import { useGuidedTours } from "../hooks/useGuidedTours";
+import { useGuidedToursContext } from "../store/guidedToursStore";
 import { getAllTours } from "../lib/tourRegistry";
+import { resetAllDismissedHintsLocally } from "../lib/hintPersistence";
 import type { GuidedTourStatus } from "../types";
 import { cn } from "@/lib/utils";
 
@@ -69,7 +72,15 @@ export function GuidanceCenter() {
     progress,
   } = useGuidedTours();
 
+  const { state, dispatch } = useGuidedToursContext();
   const tours = getAllTours().filter((t) => t.replayable);
+
+  const dismissedHintCount = Object.keys(state.dismissedHintVersions).length;
+
+  const handleResetHints = () => {
+    resetAllDismissedHintsLocally();
+    dispatch({ type: "RESET_DISMISSED_HINTS" });
+  };
 
   return (
     <Sheet open={isGuidanceCenterOpen} onOpenChange={(open) => !open && closeGuidanceCenter()}>
@@ -112,6 +123,25 @@ export function GuidanceCenter() {
                 data-testid="toggle-hints-enabled"
               />
             </div>
+
+            {/* Re-enable dismissed hints */}
+            {dismissedHintCount > 0 && (
+              <div className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-2">
+                <span className="text-xs text-muted-foreground">
+                  {dismissedHintCount} hint{dismissedHintCount !== 1 ? "s" : ""} dismissed
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-2 text-xs gap-1"
+                  onClick={handleResetHints}
+                  data-testid="reset-dismissed-hints"
+                >
+                  <RefreshCw className="h-3 w-3" />
+                  Re-enable all
+                </Button>
+              </div>
+            )}
           </div>
 
           <Separator />
