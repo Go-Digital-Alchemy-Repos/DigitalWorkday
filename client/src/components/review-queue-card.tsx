@@ -79,14 +79,6 @@ function TaskRow({
               {item.priority}
             </Badge>
           )}
-          {item.clientName && (
-            <Badge
-              variant="outline"
-              className="text-[10px] px-1.5 py-0 shrink-0 font-normal"
-            >
-              {item.clientName}
-            </Badge>
-          )}
         </div>
         <div className="flex items-center gap-2 mt-0.5 text-xs text-muted-foreground">
           {item.projectName && <span className="truncate">{item.projectName}</span>}
@@ -99,6 +91,14 @@ function TaskRow({
               <span>·</span>
               <span>{formatDistanceToNow(new Date(timestamp), { addSuffix: true })}</span>
             </>
+          )}
+          {item.clientName && (
+            <Badge
+              variant="outline"
+              className="text-[10px] px-1.5 py-0 shrink-0 font-normal"
+            >
+              {item.clientName}
+            </Badge>
           )}
         </div>
       </div>
