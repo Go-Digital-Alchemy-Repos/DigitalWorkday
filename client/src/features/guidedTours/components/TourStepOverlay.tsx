@@ -3,9 +3,11 @@
 // Portal-rendered tour step UI:
 //   1. A spotlight (box-shadow) highlighting the target DOM element
 //   2. A floating card popover with step info and prev/next navigation
+//   3. An arrow connector pointing from the popover toward the target
 //
 // Resilient by design:
 //   - Polls for target element via waitForTarget() (handles lazy renders)
+//   - Scrolls the target into view before measuring position
 //   - Falls back to centered modal if no target found
 //   - Shows a skeleton while the target is resolving (avoids blank flicker)
 //   - Repositions on window resize and scroll via ResizeObserver + scroll listener
@@ -15,7 +17,7 @@
 //   - Full-width on narrow viewports (<= 400px)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState, useEffect, useRef, useCallback } from "react";
+import { useState, useEffect, useRef, useCallback, useMemo } from "react";
 import { createPortal } from "react-dom";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,9 +30,12 @@ import type { TourStepPlacement } from "../types";
 import { cn } from "@/lib/utils";
 
 const POPOVER_WIDTH = 320;
-const POPOVER_GAP = 14; // px between target edge and popover
+const POPOVER_GAP = 14;
+const ARROW_SIZE = 8;
 
 // ── Positioning ───────────────────────────────────────────────────────────────
+
+type ResolvedSide = "top" | "bottom" | "left" | "right";
 
 interface PopoverPosition {
   top?: number;
@@ -38,6 +43,7 @@ interface PopoverPosition {
   left?: number;
   right?: number;
   width?: string | number;
+  resolvedSide: ResolvedSide;
 }
 
 function computePopoverPosition(
@@ -48,12 +54,12 @@ function computePopoverPosition(
   const vh = window.innerHeight;
   const margin = 12;
 
-  // On very narrow viewports, pin to full width
   if (vw <= 400) {
     return {
       top: rect.bottom + POPOVER_GAP,
       left: margin,
       width: vw - margin * 2,
+      resolvedSide: "bottom",
     };
   }
 
@@ -70,7 +76,7 @@ function computePopoverPosition(
           : placement === "bottom-end"
           ? rect.right - POPOVER_WIDTH
           : rect.left + rect.width / 2 - POPOVER_WIDTH / 2;
-      return { top: rect.bottom + POPOVER_GAP, left: clampLeft(left) };
+      return { top: rect.bottom + POPOVER_GAP, left: clampLeft(left), resolvedSide: "bottom" };
     }
     case "top":
     case "top-start":
@@ -81,28 +87,103 @@ function computePopoverPosition(
           : placement === "top-end"
           ? rect.right - POPOVER_WIDTH
           : rect.left + rect.width / 2 - POPOVER_WIDTH / 2;
-      return { bottom: vh - rect.top + POPOVER_GAP, left: clampLeft(left) };
+      return { bottom: vh - rect.top + POPOVER_GAP, left: clampLeft(left), resolvedSide: "top" };
     }
     case "left": {
       const right = vw - rect.left + POPOVER_GAP;
       const top = Math.max(margin, rect.top + rect.height / 2 - 90);
-      return { top, right: Math.max(margin, right) };
+      return { top, right: Math.max(margin, right), resolvedSide: "left" };
     }
     case "right": {
       const left = rect.right + POPOVER_GAP;
       const top = Math.max(margin, rect.top + rect.height / 2 - 90);
-      return { top, left: Math.min(left, vw - POPOVER_WIDTH - margin) };
+      return { top, left: Math.min(left, vw - POPOVER_WIDTH - margin), resolvedSide: "right" };
     }
     default: {
-      // "auto": prefer bottom if enough space, otherwise top
       const spaceBelow = vh - rect.bottom;
       const spaceAbove = rect.top;
       const useBottom = spaceBelow >= 180 || spaceBelow >= spaceAbove;
       const left = clampLeft(rect.left + rect.width / 2 - POPOVER_WIDTH / 2);
       if (useBottom) {
-        return { top: rect.bottom + POPOVER_GAP, left };
+        return { top: rect.bottom + POPOVER_GAP, left, resolvedSide: "bottom" };
       }
-      return { bottom: vh - rect.top + POPOVER_GAP, left };
+      return { bottom: vh - rect.top + POPOVER_GAP, left, resolvedSide: "top" };
+    }
+  }
+}
+
+// ── Arrow positioning ─────────────────────────────────────────────────────────
+
+function computeArrowStyle(
+  side: ResolvedSide,
+  targetRect: DOMRect | null,
+  popoverPos: PopoverPosition,
+  popoverWidth: number | string
+): React.CSSProperties | null {
+  if (!targetRect) return null;
+
+  const pw = typeof popoverWidth === "number" ? popoverWidth : POPOVER_WIDTH;
+  const targetCenterX = targetRect.left + targetRect.width / 2;
+  const targetCenterY = targetRect.top + targetRect.height / 2;
+  const popLeft = popoverPos.left ?? 0;
+
+  const shared: React.CSSProperties = {
+    position: "absolute",
+    width: 0,
+    height: 0,
+    pointerEvents: "none",
+  };
+
+  switch (side) {
+    case "bottom": {
+      const arrowX = Math.max(16, Math.min(targetCenterX - popLeft, pw - 16));
+      return {
+        ...shared,
+        top: -ARROW_SIZE,
+        left: arrowX,
+        transform: "translateX(-50%)",
+        borderLeft: `${ARROW_SIZE}px solid transparent`,
+        borderRight: `${ARROW_SIZE}px solid transparent`,
+        borderBottom: `${ARROW_SIZE}px solid hsl(var(--border))`,
+      };
+    }
+    case "top": {
+      const arrowX = Math.max(16, Math.min(targetCenterX - popLeft, pw - 16));
+      return {
+        ...shared,
+        bottom: -ARROW_SIZE,
+        left: arrowX,
+        transform: "translateX(-50%)",
+        borderLeft: `${ARROW_SIZE}px solid transparent`,
+        borderRight: `${ARROW_SIZE}px solid transparent`,
+        borderTop: `${ARROW_SIZE}px solid hsl(var(--border))`,
+      };
+    }
+    case "left": {
+      const popTop = popoverPos.top ?? 0;
+      const arrowY = Math.max(16, Math.min(targetCenterY - popTop, 160));
+      return {
+        ...shared,
+        right: -ARROW_SIZE,
+        top: arrowY,
+        transform: "translateY(-50%)",
+        borderTop: `${ARROW_SIZE}px solid transparent`,
+        borderBottom: `${ARROW_SIZE}px solid transparent`,
+        borderLeft: `${ARROW_SIZE}px solid hsl(var(--border))`,
+      };
+    }
+    case "right": {
+      const popTop = popoverPos.top ?? 0;
+      const arrowY = Math.max(16, Math.min(targetCenterY - popTop, 160));
+      return {
+        ...shared,
+        left: -ARROW_SIZE,
+        top: arrowY,
+        transform: "translateY(-50%)",
+        borderTop: `${ARROW_SIZE}px solid transparent`,
+        borderBottom: `${ARROW_SIZE}px solid transparent`,
+        borderRight: `${ARROW_SIZE}px solid hsl(var(--border))`,
+      };
     }
   }
 }
@@ -117,12 +198,29 @@ function centeredPosition(): PopoverPosition {
       top: Math.max(80, window.innerHeight / 2 - 120),
       left: margin,
       width: vw - margin * 2,
+      resolvedSide: "bottom",
     };
   }
   return {
     top: Math.max(80, window.innerHeight / 2 - 120),
     left: Math.max(margin, window.innerWidth / 2 - POPOVER_WIDTH / 2),
+    resolvedSide: "bottom",
   };
+}
+
+// ── Scroll into view helper ──────────────────────────────────────────────────
+
+function scrollTargetIntoView(el: Element): Promise<void> {
+  return new Promise((resolve) => {
+    el.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "nearest" });
+    const timeout = setTimeout(resolve, 350);
+    const onScroll = () => {
+      clearTimeout(timeout);
+      window.removeEventListener("scrollend", onScroll);
+      requestAnimationFrame(() => resolve());
+    };
+    window.addEventListener("scrollend", onScroll, { once: true });
+  });
 }
 
 // ── Resolving skeleton (shown while target is polling) ────────────────────────
@@ -130,7 +228,6 @@ function centeredPosition(): PopoverPosition {
 function ResolvingSkeleton({ onClose }: { onClose: () => void }) {
   return createPortal(
     <>
-      {/* Backdrop */}
       <div
         aria-hidden="true"
         style={{
@@ -141,7 +238,6 @@ function ResolvingSkeleton({ onClose }: { onClose: () => void }) {
           zIndex: 9990,
         }}
       />
-      {/* Skeleton popover */}
       <div
         role="dialog"
         aria-modal="true"
@@ -223,18 +319,22 @@ export function TourStepOverlay() {
     let cancelled = false;
     setResolving(true);
 
-    waitForTarget(step.target, step.waitForTargetMs ?? 2500).then((el) => {
+    waitForTarget(step.target, step.waitForTargetMs ?? 2500).then(async (el) => {
       if (cancelled) return;
-      setResolving(false);
+
       targetElRef.current = el;
 
       if (el) {
+        await scrollTargetIntoView(el);
+        if (cancelled) return;
+
         observerRef.current?.disconnect();
         const ro = new ResizeObserver(updatePositions);
         ro.observe(el);
         observerRef.current = ro;
       }
 
+      setResolving(false);
       updatePositions();
     });
 
@@ -257,12 +357,10 @@ export function TourStepOverlay() {
   }, [isRunning, updatePositions]);
 
   // ── Focus management ───────────────────────────────────────────────────────
-  // Save + restore focus so closing the tour returns focus to where it was.
   useEffect(() => {
     if (isRunning) {
       lastFocusedRef.current = document.activeElement;
     } else {
-      // Restore focus when tour ends
       if (lastFocusedRef.current instanceof HTMLElement) {
         lastFocusedRef.current.focus();
       }
@@ -270,10 +368,8 @@ export function TourStepOverlay() {
     }
   }, [isRunning]);
 
-  // Move focus into the dialog when it renders (popoverPos is set)
   useEffect(() => {
     if (popoverPos && !resolving) {
-      // Small rAF delay so the dialog is painted before focus
       const raf = requestAnimationFrame(() => {
         dialogRef.current?.focus();
       });
@@ -294,11 +390,22 @@ export function TourStepOverlay() {
     return () => window.removeEventListener("keydown", onKey);
   }, [isRunning, stopTour, nextStep, prevStep]);
 
+  // ── Arrow style (memoized to avoid recalc on every render) ─────────────────
+
+  const arrowStyle = useMemo(() => {
+    if (!popoverPos || !targetRect) return null;
+    return computeArrowStyle(
+      popoverPos.resolvedSide,
+      targetRect,
+      popoverPos,
+      popoverPos.width ?? POPOVER_WIDTH
+    );
+  }, [popoverPos, targetRect]);
+
   // ── Render ────────────────────────────────────────────────────────────────
 
   if (!isRunning || !tour || !step) return null;
 
-  // While resolving, show a lightweight skeleton so the user knows something is happening
   if (resolving) {
     return <ResolvingSkeleton onClose={stopTour} />;
   }
@@ -310,9 +417,8 @@ export function TourStepOverlay() {
   const isLast = activeStepIndex === stepTotal - 1;
   const isFirst = activeStepIndex === 0;
   const progressPct = (stepNum / stepTotal) * 100;
-
-  // Effective width for the popover (may be overridden for narrow viewports)
   const popoverWidth = popoverPos.width ?? POPOVER_WIDTH;
+  const hasTarget = !!targetRect;
 
   return createPortal(
     <>
@@ -320,18 +426,20 @@ export function TourStepOverlay() {
       {targetRect ? (
         <div
           aria-hidden="true"
+          className="tour-spotlight-ring"
+          data-testid="tour-spotlight"
           style={{
             position: "fixed",
-            top: targetRect.top - 5,
-            left: targetRect.left - 5,
-            width: targetRect.width + 10,
-            height: targetRect.height + 10,
-            borderRadius: 6,
+            top: targetRect.top - 6,
+            left: targetRect.left - 6,
+            width: targetRect.width + 12,
+            height: targetRect.height + 12,
+            borderRadius: 8,
             boxShadow:
               "0 0 0 3px hsl(var(--primary)), 0 0 0 9999px rgba(0,0,0,0.48)",
             pointerEvents: "none",
             zIndex: 9990,
-            transition: "top 0.15s ease, left 0.15s ease, width 0.15s ease, height 0.15s ease",
+            transition: "top 0.2s ease, left 0.2s ease, width 0.2s ease, height 0.2s ease",
           }}
         />
       ) : (
@@ -359,7 +467,10 @@ export function TourStepOverlay() {
           position: "fixed",
           zIndex: 9999,
           width: popoverWidth,
-          ...popoverPos,
+          top: popoverPos.top,
+          bottom: popoverPos.bottom,
+          left: popoverPos.left,
+          right: popoverPos.right,
         }}
         className={cn(
           "rounded-xl border border-border bg-card text-card-foreground shadow-xl",
@@ -367,6 +478,9 @@ export function TourStepOverlay() {
           "focus:outline-none"
         )}
       >
+        {/* Arrow connector pointing toward the target */}
+        {arrowStyle && <div aria-hidden="true" style={arrowStyle} />}
+
         {/* Progress bar */}
         <div className="relative h-1 rounded-t-xl overflow-hidden bg-muted" aria-hidden="true">
           <div
@@ -400,6 +514,13 @@ export function TourStepOverlay() {
           <p className="text-sm text-muted-foreground leading-relaxed">
             {step.description}
           </p>
+
+          {/* No-target fallback indicator */}
+          {!hasTarget && (
+            <p className="text-xs text-muted-foreground/60 italic" data-testid="tour-no-target-hint">
+              This step has no highlighted element on the current page.
+            </p>
+          )}
 
           {/* Navigation */}
           <div className="flex items-center justify-between gap-2 pt-1">
