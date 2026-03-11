@@ -573,7 +573,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
               </DropdownMenuItem>
               <DropdownMenuSeparator />
               <DropdownMenuItem
-                onClick={() => setDueDatePopoverOpen(true)}
+                onClick={() => setTimeout(() => setDueDatePopoverOpen(true), 0)}
                 data-testid={`quick-duedate-${task.id}`}
               >
                 <CalendarDays className="h-4 w-4 mr-2" />
