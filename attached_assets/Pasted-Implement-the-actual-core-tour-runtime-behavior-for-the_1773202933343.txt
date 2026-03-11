@@ -1,0 +1,81 @@
+Implement the actual core tour runtime behavior for the Guided Tour / Contextual Help system in Digital Workday.
+
+This must be NONDESTRUCTIVE and resilient in a complex SPA with:
+- route changes
+- lazy-loaded pages
+- modals/drawers
+- tabs
+- conditional rendering
+- role-based UI differences
+
+GOAL
+Make tours actually work safely and reliably without causing brittle crashes when selectors are missing or UI renders late.
+
+IMPLEMENT
+1. Complete the tour engine adapter integration.
+If using Driver.js or another supported library:
+- integrate it through the adapter abstraction only
+- do not scatter direct third-party usage around the app
+
+2. Implement robust target resolution support:
+- wait for selector/element with timeout
+- retry while route/page content loads
+- safely skip or abort steps if target never appears
+- log gracefully in dev
+- never hard crash the page
+
+3. Add step capabilities for:
+- title
+- description/body
+- target selector
+- placement
+- route
+- optional action before step
+- optional waitFor selector
+- optional role guard
+- optional feature flag guard
+- optional condition callback
+- optional “skip if unavailable” behavior
+
+4. Support multi-route tours:
+- if the next step belongs to another route, navigate safely using the existing routing mechanism
+- wait for the destination UI to load before continuing
+- preserve progress
+
+5. Implement progress syncing:
+- when a tour starts, progress becomes in_progress
+- current step updates as user advances
+- completion and dismissal sync back to server
+- replay/reset works cleanly
+
+6. Add protection against duplicate launches:
+- avoid multiple overlapping tours
+- prevent repeated adapter mounts
+- ensure cleanup on unmount/route changes
+
+7. Add a clean API for one-off highlight mode so future contextual hints can reuse the same engine.
+
+8. Add starter tours for:
+- Dashboard
+- Projects
+- Tasks
+Use modest, realistic steps and keep selectors maintainable.
+Prefer stable data attributes if possible.
+
+9. If needed, add safe data attributes for tour targeting in the UI:
+- data-tour="dashboard-overview"
+- data-tour="project-create-button"
+etc.
+Use this selectively and nondestructively.
+
+IMPORTANT
+- Prefer stable tour target hooks over fragile CSS selectors
+- Do not refactor whole pages just to support tours
+- Do not create giant 20-step tours
+- Keep each starter tour short and useful
+- Maintain accessibility as much as possible
+
+OUTPUT
+- implement runtime tour behavior and starter tours
+- summarize any places where stable target attributes were added
+- note any UI areas that still need better hooks later

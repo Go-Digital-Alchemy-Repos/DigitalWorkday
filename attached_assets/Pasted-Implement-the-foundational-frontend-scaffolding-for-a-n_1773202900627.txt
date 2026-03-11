@@ -1,0 +1,91 @@
+Implement the foundational frontend scaffolding for a new Guided Tour / Contextual Help system in Digital Workday.
+
+This must be NONDESTRUCTIVE. Do not break existing routes, layouts, providers, or user menus.
+
+GOAL
+Create the typed frontend foundation for the guided tours system without yet wiring full production tours across the app.
+
+IMPLEMENT
+1. Create a new feature module:
+   - client/src/features/guidedTours/
+
+2. Add strongly typed shared frontend models for:
+   - GuidedTour
+   - GuidedTourStep
+   - GuidedTourStatus
+   - GuidedTourPreference
+   - GuidedTourProgress
+   - TourEligibilityContext
+   - ContextualHintDefinition
+   - TourTriggerSource
+   - TourScope
+   - TourAudience / allowed roles
+   - TourVersionState
+
+3. Create a registry-based architecture:
+   - tourRegistry.ts
+   - support registering named tours
+   - support filtering by route, role, layout, feature flag, and audience
+   - include placeholder sample tours only (dashboard, projects, tasks)
+   - make sample steps clearly marked as starter/demo content
+
+4. Create a rendering adapter abstraction:
+   - tourEngineAdapter.ts
+   - define a clean interface for:
+     - startTour
+     - stopTour
+     - nextStep
+     - prevStep
+     - highlightElement
+     - cleanup
+   - if a tour library is installed, wrap it
+   - otherwise create a safe no-op/mock adapter so the app still compiles
+
+5. Create a guided tours store/hook layer:
+   - guidedToursStore.ts
+   - useGuidedTours.ts
+   Support:
+   - current active tour
+   - active step index
+   - tours enabled/disabled
+   - contextual hints enabled/disabled
+   - replaying tours
+   - dismissing tours
+   - loading persisted preferences later
+
+6. Create a top-level provider component:
+   - GuidedTourProvider.tsx
+   Responsibilities:
+   - manage adapter lifecycle
+   - expose context/hooks
+   - prepare for route-aware tour behavior
+   - remain inert until fully wired
+
+7. Create a lightweight UI entry component:
+   - TourLauncher.tsx
+   This is not the final UX, just a safe starter control that can later be inserted into a menu/help area.
+
+8. Add developer-safe logging and guards so:
+   - missing selectors do not crash the app
+   - missing route targets do not break rendering
+   - adapter errors fail gracefully
+
+DO NOT YET
+- add database tables
+- add backend routes
+- force a tour on login
+- inject tours across every page
+- hardcode fragile selectors everywhere
+- create massive page rewrites
+
+REQUIREMENTS
+- TypeScript-safe
+- minimal, modular, and future-ready
+- clean exports
+- no dead code warnings if possible
+- keep current app behavior unchanged unless the new provider is explicitly used
+
+OUTPUT
+- implement the scaffolding
+- add comments only where useful
+- summarize what was created and what remains next

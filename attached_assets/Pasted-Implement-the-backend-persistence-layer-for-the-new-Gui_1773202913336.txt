@@ -1,0 +1,99 @@
+Implement the backend persistence layer for the new Guided Tour / Contextual Help system in Digital Workday.
+
+This must be NONDESTRUCTIVE and must follow existing architecture patterns for:
+- tenant scoping
+- auth/session enforcement
+- route registration
+- validation
+- error handling
+- shared schema/type conventions
+
+GOAL
+Create a safe persistence model so each user can:
+- enable/disable tours
+- enable/disable contextual hints
+- complete/dismiss/replay tours
+- track progress by tour key + version
+- preserve onboarding/help state across sessions
+
+IMPLEMENT
+1. Add database schema/tables for guided tour state.
+Prefer a normalized but practical model.
+
+Recommended entities:
+- user_guided_tour_preferences
+- user_guided_tour_progress
+
+Suggested fields:
+
+user_guided_tour_preferences
+- id
+- tenant_id (nullable only if your architecture requires it for super/global users; otherwise use standard tenant scoping)
+- user_id
+- tours_enabled
+- contextual_hints_enabled
+- onboarding_completed
+- last_seen_release_tour_version (nullable)
+- created_at
+- updated_at
+
+user_guided_tour_progress
+- id
+- tenant_id
+- user_id
+- tour_key
+- tour_version
+- status (not_started / in_progress / completed / dismissed)
+- current_step_index
+- started_at
+- completed_at
+- dismissed_at
+- last_interacted_at
+- created_at
+- updated_at
+
+2. Add Drizzle schema definitions and migrations.
+
+3. Add Zod request/response schemas and shared contracts where appropriate.
+
+4. Add backend service/storage methods for:
+- get preferences
+- upsert preferences
+- get user tour progress list
+- get one tour progress record
+- start/update progress
+- mark completed
+- mark dismissed
+- reset/replay a tour
+
+5. Add secure API routes under an appropriate namespace, for example:
+- GET /api/guided-tours/preferences
+- PATCH /api/guided-tours/preferences
+- GET /api/guided-tours/progress
+- PUT /api/guided-tours/progress/:tourKey
+- POST /api/guided-tours/progress/:tourKey/complete
+- POST /api/guided-tours/progress/:tourKey/dismiss
+- POST /api/guided-tours/progress/:tourKey/reset
+
+6. Ensure proper auth + tenant enforcement.
+These routes must never expose one user’s tour state to another.
+Follow existing tenant/auth policy conventions.
+
+7. Make sure error envelopes and validation patterns match the rest of the app.
+
+8. Add minimal test coverage if there is an established server test pattern:
+- preference fetch/update
+- progress create/update
+- complete/dismiss/reset
+- unauthorized protection
+
+DO NOT
+- add admin-facing CMS for tours yet
+- add analytics dashboards yet
+- add release tours yet
+- expose cross-tenant data
+- introduce weak typing
+
+OUTPUT
+- implement schema, migration, services, routes, and shared contracts
+- summarize what was added and any migration/environment steps needed

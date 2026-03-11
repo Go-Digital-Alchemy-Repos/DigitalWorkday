@@ -1,0 +1,61 @@
+Implement the next phase of the Guided Tour system: contextual help mode.
+
+This must be NONDESTRUCTIVE and subtle. The goal is not to clutter the UI, but to let users optionally turn on “learn as I go” guidance.
+
+GOAL
+When users enable contextual hints, the app can surface lightweight guidance for important UI areas without forcing a step-by-step tour.
+
+IMPLEMENT
+1. Add a contextual hint system inside the guidedTours feature module.
+
+2. Support a hint definition model with:
+- id
+- title
+- body
+- target selector or anchor
+- route/layout scope
+- allowed roles
+- optional feature flag
+- priority
+- display mode (beacon / tooltip / inline helper / highlight only)
+- dismissibility
+- version
+
+3. Implement a lightweight contextual hint renderer that:
+- only activates when contextual hints are enabled
+- only renders on eligible routes
+- gracefully skips missing targets
+- avoids overwhelming the user with too many simultaneous hints
+
+4. Add a hint/beacon component that fits the existing design system.
+Keep styling modern and subtle.
+
+5. Add starter contextual hints for a few high-value areas:
+- Dashboard summary area
+- Projects creation / filtering area
+- Task actions or task drawer entry
+- Time tracking area if present
+- Team chat entry if present
+
+6. Add persistence for dismissed hint versions if needed using the existing progress/preference model, or extend the model carefully if necessary.
+
+7. Add controls in the Guidance Center to:
+- enable/disable contextual hints
+- re-enable dismissed hints
+- explain what hint mode does
+
+8. Ensure:
+- hints do not block interaction
+- hints do not appear for unauthorized roles
+- hints do not render in broken positions on mobile/small screens
+- route transitions clean up correctly
+
+DO NOT
+- add hints everywhere in the app
+- add noisy animations
+- show more than a sensible number of hints per screen
+- force hints on users who turned them off
+
+OUTPUT
+- implement contextual hint mode with starter hints
+- summarize where hints were added and how they can be expanded later

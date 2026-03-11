@@ -1,0 +1,99 @@
+We need to add a new Guided Tour / Contextual Help system to Digital Workday.
+
+This must be implemented NONDESTRUCTIVELY and in safe phases. Do not remove or rewrite existing features unless absolutely necessary. Prefer extension over replacement.
+
+First, perform an architecture audit and implementation planning pass for a new in-app guidance system that can be toggled on and off by users on demand.
+
+GOALS
+- Add a reusable guided tour engine for the app
+- Support route-based product tours
+- Support contextual help/highlight mode
+- Support per-user on/off preferences
+- Support replaying tours later
+- Support role-aware and route-aware tours
+- Be future-ready for “What’s New” release tours
+- Fit existing multi-tenant and role-based architecture
+- Avoid hardcoded one-off logic scattered around the app
+
+TASKS
+1. Audit current frontend architecture and identify:
+   - app shell / main layout locations
+   - header/user-menu/help-menu locations
+   - router structure
+   - role-based layouts (tenant, super, portal, auth)
+   - global providers
+   - state management patterns
+   - existing modals/drawers/toast/help patterns
+   - feature flag support if present
+
+2. Propose a clean module structure for a new frontend feature:
+   - client/src/features/guidedTours/
+   Include suggested files such as:
+   - components/GuidedTourProvider.tsx
+   - components/GuidanceCenter.tsx
+   - components/TourLauncher.tsx
+   - components/ContextualHint.tsx
+   - hooks/useGuidedTours.ts
+   - hooks/useTourEligibility.ts
+   - lib/tourRegistry.ts
+   - lib/tourEngineAdapter.ts
+   - lib/tourTargetResolver.ts
+   - lib/tourPersistence.ts
+   - store/guidedToursStore.ts
+   - types.ts
+
+3. Recommend the best rendering approach:
+   - Prefer a library like Driver.js or React Joyride only as the rendering layer
+   - Wrap it behind our own adapter so the product logic remains ours
+   - Do not tightly couple product behavior to a third-party library
+
+4. Define a tour architecture that supports:
+   - short route-based tours
+   - multi-route tours
+   - one-off contextual highlights
+   - target selectors
+   - placement
+   - step text/title
+   - step prerequisites
+   - optional role restrictions
+   - optional route restrictions
+   - optional feature flag requirements
+   - async wait-for-target behavior
+   - resume/replay support
+
+5. Define the persistence/data contract needed for:
+   - user tour preferences
+   - user tour progress
+   - contextual hints enabled/disabled
+   - completed tours
+   - dismissed tours
+   - per-version tour completion
+   - first-run onboarding status
+
+6. Propose backend API endpoints and storage strategy without implementing everything yet.
+
+7. Produce:
+   - an implementation plan
+   - file-by-file recommendations
+   - data model recommendations
+   - integration points
+   - technical risks and mitigation notes
+
+IMPORTANT RULES
+- Do not yet build the full feature
+- Do not yet wire every page
+- Do not remove existing help/onboarding UX if any exists
+- Keep this as an audit + architecture + scaffolding plan pass
+- Favor strongly typed shared contracts
+- Respect existing role segmentation and tenancy rules
+- Keep future extensibility high
+
+OUTPUT FORMAT
+Return:
+1. Findings
+2. Recommended architecture
+3. Proposed file structure
+4. Proposed shared types/contracts
+5. Backend persistence plan
+6. Risks / caveats
+7. Safe next-step implementation plan

@@ -1,0 +1,74 @@
+Wire the new Guided Tour / Contextual Help frontend foundation to the backend persistence layer.
+
+This must be NONDESTRUCTIVE and must not disrupt current navigation or layout behavior.
+
+GOAL
+Allow authenticated users to:
+- turn guided tours on/off
+- turn contextual hints on/off
+- manually launch/replay tours
+- persist those choices per user
+- load their preferences on app start
+
+IMPLEMENT
+1. Connect the guided tours store/hooks to the backend API using the app’s existing fetch/query patterns.
+Prefer the project’s existing TanStack Query conventions if already in use.
+
+2. Add frontend query/mutation logic for:
+- load preferences
+- update preferences
+- load progress
+- start/update progress
+- complete
+- dismiss
+- reset/replay
+
+3. Insert the GuidedTourProvider into the correct app/provider hierarchy.
+It must have access to:
+- auth/user context
+- route awareness
+- tenant context if needed
+But it must not interfere with existing providers.
+
+4. Add a user-facing control entry point in an appropriate existing UI location:
+Prefer one of:
+- user profile dropdown
+- help menu
+- top-right utility menu
+Use the most appropriate existing pattern in the app.
+
+Add options such as:
+- Start Guided Tour
+- Replay Tours
+- Guided Tours: On/Off
+- Contextual Tips: On/Off
+
+5. Add a simple Guidance Center UI panel/modal/sheet using the project’s existing UI system.
+This can be modest for now, but should support:
+- list available tours for current role/route
+- launch a tour
+- toggle contextual hints
+- toggle guided tours
+- show completion state if available
+
+6. Keep all UX clean and minimal:
+- do not spam users with modals
+- do not auto-launch anything yet unless already explicitly requested
+- do not block page usage
+- do not break small screens
+
+7. Ensure:
+- preferences load safely even if API is unavailable
+- default behavior is sane
+- app remains usable if tour state fails to load
+- all states are typed and resilient
+
+DO NOT YET
+- create first-login onboarding modal
+- build contextual help beacons everywhere
+- add route auto-launch
+- create super-admin management screens for tours
+
+OUTPUT
+- implement frontend wiring and a basic user-facing Guidance Center
+- summarize files changed and remaining next steps
