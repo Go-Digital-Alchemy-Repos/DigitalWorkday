@@ -484,19 +484,34 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
         )}
       </div>
 
-      <div className="flex items-center">
-        {assigneeUsers.length > 0 && <AvatarGroup users={assigneeUsers} max={3} size="sm" />}
+      <div className="flex items-center gap-1.5 min-w-0">
+        {assigneeUsers.length > 0 ? (
+          <>
+            <AvatarGroup users={assigneeUsers.slice(0, 1)} max={1} size="sm" />
+            <span className="text-xs text-muted-foreground truncate max-w-[90px]">
+              {assigneeUsers[0].name}
+              {assigneeUsers.length > 1 && <span className="text-muted-foreground/70"> +{assigneeUsers.length - 1}</span>}
+            </span>
+          </>
+        ) : (
+          <span className="text-xs text-muted-foreground/50 italic">Unassigned</span>
+        )}
       </div>
 
       <div className="flex items-center min-w-0">
-        {projectName && (
-          <span
-            className="text-xs text-muted-foreground bg-muted rounded px-1.5 py-0.5 truncate max-w-[140px] inline-block"
-            title={clientName ? `${clientName} / ${projectName}` : projectName}
-            data-testid={`badge-project-${task.id}`}
-          >
-            {clientName ? `${clientName} · ${projectName}` : projectName}
-          </span>
+        {(clientName || projectName) && (
+          <div className="flex flex-col leading-tight min-w-0" data-testid={`badge-project-${task.id}`}>
+            {clientName && (
+              <span className="text-xs font-medium text-foreground truncate max-w-[130px]" title={clientName}>
+                {clientName}
+              </span>
+            )}
+            {projectName && (
+              <span className="text-[11px] text-muted-foreground truncate max-w-[130px]" title={projectName}>
+                {projectName}
+              </span>
+            )}
+          </div>
         )}
       </div>
 
@@ -505,7 +520,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
       </div>
 
       <div className="flex items-center">
-        <PriorityBadge priority={task.priority as any} showLabel={false} size="sm" />
+        <PriorityBadge priority={task.priority as any} showLabel={true} size="sm" />
       </div>
 
       {showQuickActions && (
