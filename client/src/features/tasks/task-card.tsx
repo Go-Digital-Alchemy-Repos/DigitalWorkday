@@ -420,14 +420,19 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
 
       <div className="flex flex-col gap-1 min-w-0 overflow-hidden">
         <div className="flex items-center gap-2 min-w-0 overflow-hidden">
-          <span
-            className={cn(
-              "text-sm font-medium truncate shrink",
-              isCompleted && "line-through text-muted-foreground"
-            )}
-          >
-            {task.title}
-          </span>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span
+                className={cn(
+                  "text-sm font-medium truncate shrink",
+                  isCompleted && "line-through text-muted-foreground"
+                )}
+              >
+                {task.title}
+              </span>
+            </TooltipTrigger>
+            <TooltipContent className="max-w-xs">{task.title}</TooltipContent>
+          </Tooltip>
           {(task as any).visibility === "private" && (
             <Tooltip>
               <TooltipTrigger asChild>
