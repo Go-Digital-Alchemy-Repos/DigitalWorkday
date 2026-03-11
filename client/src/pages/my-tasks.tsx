@@ -239,7 +239,7 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
       </div>
       <CollapsibleContent>
         {section.tasks.length > 0 && (
-          <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[16px_20px_1fr_160px_130px_130px_110px_100px_auto] bg-muted/30 border-b border-border">
+          <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[16px_20px_1fr_120px_100px_100px_96px_80px_auto] bg-muted/30 border-b border-border">
             <div />
             <div />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Task</span>
