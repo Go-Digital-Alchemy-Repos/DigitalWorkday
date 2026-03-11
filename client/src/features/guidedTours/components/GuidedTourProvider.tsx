@@ -26,6 +26,7 @@ import type { GuidedTourProgress } from "../types";
 import { useTourPreferences, useTourProgressList } from "../hooks/useTourApi";
 import { useAuthSafe } from "@/lib/auth";
 import { useFirstRunOnboarding } from "../hooks/useFirstRunOnboarding";
+import { useReleaseTourAutoLaunch } from "../hooks/useReleaseTourAutoLaunch";
 
 interface GuidedTourProviderProps {
   children: ReactNode;
@@ -33,10 +34,16 @@ interface GuidedTourProviderProps {
   enabled?: boolean;
 }
 
-// ── First-run trigger — must live inside the context so it can dispatch ───────
+// ── Side-effect triggers — must live inside the context ──────────────────────
+// These are null-rendering components that run hooks needing context access.
 
 function FirstRunOnboardingTrigger() {
   useFirstRunOnboarding();
+  return null;
+}
+
+function ReleaseTourAutoLaunchTrigger() {
+  useReleaseTourAutoLaunch();
   return null;
 }
 
@@ -122,6 +129,7 @@ function GuidedTourProviderInner({
   return (
     <GuidedToursContext.Provider value={{ state, dispatch }}>
       <FirstRunOnboardingTrigger />
+      <ReleaseTourAutoLaunchTrigger />
       {children}
     </GuidedToursContext.Provider>
   );

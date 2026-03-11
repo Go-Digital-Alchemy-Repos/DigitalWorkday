@@ -66,6 +66,14 @@ export interface GuidedTourStep {
   onAfterHide?: () => void;
 }
 
+/**
+ * Tour classification:
+ *   "guided"  — standard walkthrough tour (default, most tours)
+ *   "release" — short "What's New" announcement tied to a product release;
+ *               auto-surfaced once per user per releaseVersion key
+ */
+export type TourType = "guided" | "release";
+
 /** Full definition of a named tour — registered in tourRegistry.ts */
 export interface GuidedTour {
   id: string;
@@ -89,6 +97,21 @@ export interface GuidedTour {
   steps: GuidedTourStep[];
   /** Marks sample/placeholder tours — strip before shipping to production */
   isDemoContent?: boolean;
+
+  // ── Release tour extensions (optional — only on tourType "release") ────────
+  /** Defaults to "guided". Set to "release" for What's New announcements. */
+  tourType?: TourType;
+  /**
+   * Stable version key for this release tour (e.g. "q1-2025", "2025.03").
+   * Used as the persistence key to track whether the user has seen it.
+   * Must be unique across all release tours. Required when tourType is "release".
+   */
+  releaseVersion?: string;
+  /**
+   * Human-readable label displayed in the Guidance Center "What's New" badge
+   * (e.g. "Q1 2025", "v2.5"). Falls back to releaseVersion if absent.
+   */
+  releaseLabel?: string;
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

@@ -8,11 +8,16 @@ import type { GuidedTour } from "../types";
 
 // ── Tour IDs ─────────────────────────────────────────────────────────────────
 // Define as constants so referencing code never uses raw strings.
+//
+// Release tours: add a new RELEASE_* entry when shipping a release tour.
+// Convention: RELEASE_<YEAR>_<QUARTER> or RELEASE_<SEMVER>
 
 export const TOUR_IDS = {
-  DASHBOARD_INTRO: "dashboard-intro",
+  DASHBOARD_INTRO:  "dashboard-intro",
   PROJECTS_OVERVIEW: "projects-overview",
-  TASKS_BASICS: "tasks-basics",
+  TASKS_BASICS:     "tasks-basics",
+  // ── Release tours — add new ones at the bottom of this block ────────────
+  RELEASE_Q1_2025:  "release-q1-2025",
 } as const;
 
 export type TourId = (typeof TOUR_IDS)[keyof typeof TOUR_IDS];
@@ -143,6 +148,66 @@ const TOURS: GuidedTour[] = [
       },
     ],
   },
+
+  // ── Release Tours ─────────────────────────────────────────────────────────
+  // Add new release tours at the END of this block.
+  // getLatestReleaseTour() picks the last entry with tourType === "release".
+  // Convention: releaseVersion uses lowercase slug format: "q1-2025", "q2-2025", "v2-1"
+  //
+  // To ship a new release tour:
+  //   1. Add RELEASE_<NAME> to TOUR_IDS above
+  //   2. Add a tour definition here with tourType: "release" and a unique releaseVersion
+  //   3. Keep it to 2–4 steps; use existing data-tour attributes where possible
+  //   4. Remove isDemoContent: true flag before shipping to production
+  // ──────────────────────────────────────────────────────────────────────────
+
+  {
+    id: TOUR_IDS.RELEASE_Q1_2025,
+    version: 1,
+    tourType: "release",
+    releaseVersion: "q1-2025",
+    releaseLabel: "Q1 2025",
+    name: "What's New — Q1 2025",
+    description:
+      "A quick look at the biggest additions this quarter: dashboard refreshes, billing approvals, and project milestones.",
+    icon: "Sparkles",
+    scope: "multi_route",
+    replayable: true,
+    allowedRoles: ["tenant_owner", "admin", "employee"],
+    relevantRoutes: ["/", "/home", "/my-time", "/projects"],
+    requiredFeatureFlags: [],
+    autoTrigger: false, // auto-surface handled by useReleaseTourAutoLaunch
+    isDemoContent: true, // ← remove this flag when using in production
+    steps: [
+      {
+        target: "home-stat-cards",
+        title: "Dashboard, Refreshed",
+        description:
+          "Your key metrics — active projects, overdue tasks, and unassigned work — are now front and center every time you open the app.",
+        placement: "bottom",
+        waitForTargetMs: 3000,
+        requiredRoute: "/",
+      },
+      {
+        target: "my-time-start-timer",
+        title: "Billing Approval Workflow",
+        description:
+          "Time entries can now be submitted for approval before invoicing. Each entry flows through Submit → Approve → Invoice — giving managers full visibility before anything goes out.",
+        placement: "bottom-end",
+        waitForTargetMs: 3000,
+        requiredRoute: "/my-time",
+      },
+      {
+        target: "projects-create-btn",
+        title: "Project Milestones",
+        description:
+          "Projects now support milestones. Link tasks to key deliverables and watch live completion bars update as your team makes progress.",
+        placement: "bottom-end",
+        waitForTargetMs: 3000,
+        requiredRoute: "/projects",
+      },
+    ],
+  },
 ];
 
 // ── Registry API ──────────────────────────────────────────────────────────────
@@ -172,9 +237,32 @@ export function getToursForRoute(pathname: string): GuidedTour[] {
 export function getToursForRole(role: string): GuidedTour[] {
   return Array.from(_registry.values()).filter(
     (tour) =>
-      tour.allowedRoles.includes("*") ||
-      tour.allowedRoles.includes(role as GuidedTour["allowedRoles"][number])
+      tour.tourType !== "release" && // exclude release tours from onboarding profiles
+      (tour.allowedRoles.includes("*") ||
+        tour.allowedRoles.includes(role as GuidedTour["allowedRoles"][number]))
   );
+}
+
+/**
+ * Returns all release tours (tourType === "release") in registration order.
+ * The last entry in the array is considered the most recent release.
+ */
+export function getReleaseTours(): GuidedTour[] {
+  return Array.from(_registry.values()).filter(
+    (tour) => tour.tourType === "release"
+  );
+}
+
+/**
+ * Returns the most recently registered release tour, or null if none exist.
+ * "Most recent" is determined by position in the TOURS array — the last defined
+ * release tour is the latest. To introduce a new release, add it at the end.
+ */
+export function getLatestReleaseTour(): GuidedTour | null {
+  const releaseTours = getReleaseTours();
+  return releaseTours.length > 0
+    ? releaseTours[releaseTours.length - 1]
+    : null;
 }
 
 /**

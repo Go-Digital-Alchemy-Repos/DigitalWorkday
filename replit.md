@@ -55,7 +55,7 @@ Digital Workday is an Asana-inspired, multi-tenant project management applicatio
 - **QuickBooks Online Integration**: OAuth 2.0 connection for client/customer mapping and billing sync.
 - **Collapsible Icon Sidebar**: Sidebar collapses to an icon-only strip with tooltips.
 - **Mobile & Responsiveness**: App-wide mobile-first patterns.
-- **Guided Tour / Contextual Help System**: Three-phase in-app help system including Tour Runtime, Contextual Hints, and First-Run Onboarding.
+- **Guided Tour / Contextual Help System**: Four-phase in-app help system: Tour Runtime (step tours, TourStepOverlay, GuidedTourProvider), Contextual Hints (HintBeacon, hintPersistence), First-Run Onboarding (FirstRunModal, role-aware paths, onboardingPersistence/Profiles), and Release Tours (Phase 4 — "What's New" auto-launch mechanism). Release tours: `tourType:"release"`, `releaseVersion` slug, `dw_release_tours` localStorage, `useReleaseTourAutoLaunch` hook (1500ms delay, 10 guards), GuidanceCenter "What's New" card (data-testid="whats-new-card") with "See What's New"/"Replay" CTA (driven by both localStorage + progress state), registry helpers `getReleaseTours()`/`getLatestReleaseTour()`. Add new release tours at END of TOURS array with unique `releaseVersion`.
 - **Performance Architecture**: Includes Task List DTOs, Batched Task Hydration, Projects SQL Filtering & Pagination, Reports Caching, Reports Date Range Limits, Frontend Virtualization, Response Compression, DB Safety measures, Observability, and Global Search (SQL-first with trigram indexes).
 
 ## External Dependencies

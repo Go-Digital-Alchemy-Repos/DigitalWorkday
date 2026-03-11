@@ -15,6 +15,7 @@ export type {
   TourTriggerSource,
   TourScope,
   TourRole,
+  TourType,
   TourVersionState,
   TourEngineAdapter,
   TourEngineOptions,
@@ -28,6 +29,8 @@ export {
   getTourById,
   getToursForRoute,
   getToursForRole,
+  getReleaseTours,
+  getLatestReleaseTour,
   registerTour,
   TOUR_IDS,
 } from "./lib/tourRegistry";
@@ -97,6 +100,15 @@ export {
   deferOnboardingThisSession,
   ONBOARDING_VERSION,
 } from "./lib/onboardingPersistence";
+
+// Release tour persistence
+export {
+  isReleaseTourSeen,
+  markReleaseTourSeen,
+  getSeenReleaseTours,
+  resetSeenReleaseTour,
+  resetAllSeenReleaseTours,
+} from "./lib/releaseTourPersistence";
 
 // Onboarding profiles
 export { getOnboardingProfile } from "./lib/onboardingProfiles";
