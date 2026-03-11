@@ -525,12 +525,13 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
 
       {showQuickActions && (
         <div 
-          className="flex items-center gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+          className="flex items-center gap-1"
           onClick={(e) => e.stopPropagation()}
         >
           <Button
             variant="ghost"
             size="icon"
+            className="text-muted-foreground hover:text-foreground"
             onClick={() => onStatusChange?.(!isCompleted)}
             title={isCompleted ? "Mark incomplete" : "Mark complete"}
             data-testid={`quick-complete-${task.id}`}
@@ -543,6 +544,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
               <Button
                 variant="ghost"
                 size="icon"
+                className="text-muted-foreground hover:text-foreground"
                 title="Set priority"
                 data-testid={`quick-priority-${task.id}`}
               >
@@ -582,6 +584,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
               <Button
                 variant="ghost"
                 size="icon"
+                className="text-muted-foreground hover:text-foreground"
                 title="Set due date"
                 data-testid={`quick-duedate-${task.id}`}
               >
