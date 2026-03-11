@@ -397,8 +397,8 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
       className={cn(
         "group relative grid items-center gap-2 px-4 py-2 min-h-[44px] border-b border-border hover-elevate cursor-pointer transition-premium",
         showQuickActions 
-          ? (dragHandleProps ? "grid-cols-[16px_20px_minmax(200px,2fr)_40px_minmax(80px,1fr)_minmax(80px,1fr)_90px_76px_32px]" : "grid-cols-[20px_minmax(200px,2fr)_40px_minmax(80px,1fr)_minmax(80px,1fr)_90px_76px_32px]")
-          : (dragHandleProps ? "grid-cols-[16px_20px_minmax(200px,2fr)_40px_minmax(80px,1fr)_minmax(80px,1fr)_90px_76px]" : "grid-cols-[20px_minmax(200px,2fr)_40px_minmax(80px,1fr)_minmax(80px,1fr)_90px_76px]"),
+          ? (dragHandleProps ? "grid-cols-[16px_20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px_32px]" : "grid-cols-[20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px_32px]")
+          : (dragHandleProps ? "grid-cols-[16px_20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px]" : "grid-cols-[20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px]"),
         isCompleted && "opacity-60",
         isDragging && "opacity-50 shadow-lg bg-card",
         justCompleted && "task-complete-pulse"
@@ -491,10 +491,13 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
         {assigneeUsers.length > 0 ? (
           <Tooltip>
             <TooltipTrigger asChild>
-              <div className="flex items-center gap-1">
+              <div className="flex items-center gap-1.5 min-w-0">
                 <AvatarGroup users={assigneeUsers.slice(0, 1)} max={1} size="sm" />
+                <span className="text-xs text-foreground truncate">
+                  {assigneeUsers[0].name.split(" ")[0]}
+                </span>
                 {assigneeUsers.length > 1 && (
-                  <span className="text-xs text-muted-foreground/70">+{assigneeUsers.length - 1}</span>
+                  <span className="text-xs text-muted-foreground/70 shrink-0">+{assigneeUsers.length - 1}</span>
                 )}
               </div>
             </TooltipTrigger>

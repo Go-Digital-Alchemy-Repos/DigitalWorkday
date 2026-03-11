@@ -73,7 +73,7 @@ export function ListSectionDroppable({
 
       <CollapsibleContent>
         {tasks.length > 0 && (
-          <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[16px_20px_minmax(200px,2fr)_40px_minmax(80px,1fr)_minmax(80px,1fr)_90px_76px_32px] bg-muted/30 border-b border-border">
+          <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[16px_20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px_32px] bg-muted/30 border-b border-border">
             <div />
             <div />
             <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Task</span>
