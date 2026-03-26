@@ -14,7 +14,6 @@ import {
 } from "@/components/ui/select";
 import { TaskSelectorWithCreate } from "@/features/tasks/task-selector-with-create";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
 import { RichTextEditor } from "@/components/richtext";
 
 const BROADCAST_CHANNEL_NAME = "active-timer-sync";
@@ -43,7 +42,6 @@ export function StartTimerDrawer({
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [clientId, setClientId] = useState<string | null>(null);
-  const [divisionId, setDivisionId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [taskId, setTaskId] = useState<string | null>(null);
   const broadcastChannelRef = useRef<BroadcastChannel | null>(null);
@@ -82,23 +80,11 @@ export function StartTimerDrawer({
     enabled: open,
   });
 
-  const { data: clientDivisions = [], isLoading: divisionsLoading } = useQuery<Array<{ id: string; name: string; color?: string | null }>>({
-    queryKey: ["/api/v1/clients", clientId, "divisions"],
-    queryFn: () => fetch(`/api/v1/clients/${clientId}/divisions`, { credentials: "include" }).then((r) => r.json()),
-    enabled: !!clientId && open,
-  });
-
-  const clientHasDivisions = clientDivisions.length > 0;
-
-  const { data: clientProjects = [] } = useQuery<Array<{ id: string; name: string; divisionId?: string | null }>>({
+  const { data: projects = [] } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/clients", clientId, "projects"],
     queryFn: () => fetch(`/api/clients/${clientId}/projects`, { credentials: "include" }).then((r) => r.json()),
     enabled: !!clientId && open,
   });
-
-  const projects = clientHasDivisions && divisionId
-    ? clientProjects.filter(p => p.divisionId === divisionId)
-    : clientProjects;
 
   const startMutation = useMutation({
     mutationFn: async (data: { clientId?: string | null; projectId?: string | null; taskId?: string | null; title?: string; description?: string }) => {
@@ -138,7 +124,6 @@ export function StartTimerDrawer({
     setTitle("");
     setDescription("");
     setClientId(initialClientId);
-    setDivisionId(null);
     setProjectId(initialProjectId);
     setTaskId(initialTaskId);
     setHasChanges(false);
@@ -156,14 +141,6 @@ export function StartTimerDrawer({
 
   const handleClientChange = (value: string | null) => {
     setClientId(value);
-    setDivisionId(null);
-    setProjectId(null);
-    setTaskId(null);
-    handleFieldChange();
-  };
-
-  const handleDivisionChange = (value: string | null) => {
-    setDivisionId(value);
     setProjectId(null);
     setTaskId(null);
     handleFieldChange();
@@ -218,43 +195,6 @@ export function StartTimerDrawer({
             </SelectContent>
           </Select>
         </div>
-
-        {clientId && divisionsLoading && (
-          <div className="flex items-center gap-2 text-sm text-muted-foreground">
-            <Loader2 className="h-4 w-4 animate-spin" />
-            Loading divisions...
-          </div>
-        )}
-
-        {clientHasDivisions && (
-          <div className="space-y-2">
-            <Label>Division</Label>
-            <Select 
-              value={divisionId || "none"} 
-              onValueChange={(v) => handleDivisionChange(v === "none" ? null : v)}
-            >
-              <SelectTrigger data-testid="select-start-timer-division">
-                <SelectValue placeholder="Select division" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="none">All divisions</SelectItem>
-                {clientDivisions.map((division) => (
-                  <SelectItem key={division.id} value={division.id}>
-                    <div className="flex items-center gap-2">
-                      {division.color && (
-                        <div
-                          className="h-3 w-3 rounded-full shrink-0"
-                          style={{ backgroundColor: division.color }}
-                        />
-                      )}
-                      {division.name}
-                    </div>
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        )}
 
         <div className="space-y-2">
           <Label>Project</Label>

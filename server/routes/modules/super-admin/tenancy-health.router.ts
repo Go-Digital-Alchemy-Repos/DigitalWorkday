@@ -220,7 +220,7 @@ tenancyHealthRouter.post("/tenancy/backfill", requireSuperUser, async (req, res)
     const TENANT_SCOPED_TABLES = [
       "workspaces", "teams", "clients", "projects", "tasks", "time_entries",
       "active_timers", "invitations", "personal_task_sections", "task_assignees",
-      "task_watchers", "client_divisions", "division_members", "chat_channels",
+      "task_watchers", "chat_channels",
       "chat_channel_members", "chat_dm_threads", "chat_dm_members", "chat_messages",
       "chat_mentions", "chat_reads", "chat_attachments"
     ];

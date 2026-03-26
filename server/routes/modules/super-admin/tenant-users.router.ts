@@ -14,7 +14,6 @@ import {
   UserRole,
   teamMembers,
   projectMembers,
-  divisionMembers,
   taskAssignees,
   projects,
   timeEntries,

@@ -1,6 +1,5 @@
 export { ClientDrawer } from "./client-drawer";
 export { ClientProfileDrawer } from "./client-profile-drawer";
-export { DivisionDrawer } from "./division-drawer";
 export { ClientSectionSwitcher } from "./ClientSectionSwitcher";
 export { getVisibleSections, ALL_CLIENT_PROFILE_SECTIONS, CONTROL_CENTER_CHILD_IDS } from "./clientProfileSections";
 export type { ClientProfileSection } from "./clientProfileSections";

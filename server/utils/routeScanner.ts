@@ -47,7 +47,6 @@ const DOMAIN_MAP: Record<string, { domain: string; displayName: string }> = {
   "router.ts": { domain: "clients", displayName: "Clients" },
   "notes.router.ts": { domain: "client-notes", displayName: "Client Notes" },
   "documents.router.ts": { domain: "client-documents", displayName: "Client Documents" },
-  "divisions.router.ts": { domain: "divisions", displayName: "Divisions" },
   "portal.router.ts": { domain: "client-portal", displayName: "Client Portal" },
   "notifications.router.ts": { domain: "notifications", displayName: "Notifications" },
   "systemStatus.router.ts": { domain: "super-system-status", displayName: "Super System Status" },
@@ -83,7 +82,6 @@ const BASE_PATH_MAP: Record<string, string> = {
   "notes.router.ts": "/api/clients",        // router.use("/clients", notesRouter)
   "documents.router.ts": "/api/clients",    // router.use("/clients", documentsRouter)
   "portal.router.ts": "/api/clients",       // router.use("/clients", portalRouter)
-  "divisions.router.ts": "/api/v1",         // router.use("/v1", divisionsRouter) - routes already have /clients prefix
   "notifications.router.ts": "/api/v1/notifications", // features/notifications
   // Routes in server/routes/super/
   "systemStatus.router.ts": "/api/v1/super", // router.use("/v1/super", superSystemStatusRouter)

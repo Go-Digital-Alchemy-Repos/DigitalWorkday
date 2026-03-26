@@ -75,7 +75,6 @@ type ActiveTimer = {
 
 type ProjectContext = Project & {
   client?: Client;
-  division?: { id: string; name: string; color?: string | null };
 };
 
 type TimeEntry = {
@@ -506,26 +505,13 @@ export function TaskDetailDrawer({
       if (!projectRes.ok) throw new Error("Failed to load project");
       const project = await projectRes.json();
 
-      // Fetch client and divisions in parallel rather than serial
-      const [client, division] = await (async () => {
-        if (!project?.clientId) return [null, null];
-        const [clientRes, divisionsRes] = await Promise.all([
-          fetch(`/api/clients/${project.clientId}`, { credentials: "include" }),
-          project?.divisionId
-            ? fetch(`/api/v1/clients/${project.clientId}/divisions`, { credentials: "include" })
-            : Promise.resolve(null),
-        ]);
-        const clientData = clientRes.ok ? await clientRes.json() : null;
-        const divisionData = (() => {
-          if (!divisionsRes || !project?.divisionId) return null;
-          return divisionsRes.ok
-            ? divisionsRes.json().then((divs: any[]) => divs.find(d => d.id === project.divisionId) || null)
-            : null;
-        })();
-        return [clientData, await divisionData];
+      const client = await (async () => {
+        if (!project?.clientId) return null;
+        const clientRes = await fetch(`/api/clients/${project.clientId}`, { credentials: "include" });
+        return clientRes.ok ? await clientRes.json() : null;
       })();
 
-      return { ...project, client, division };
+      return { ...project, client };
     },
     enabled: !!task?.projectId && open,
     retry: 1,
@@ -1082,17 +1068,6 @@ export function TaskDetailDrawer({
                 <span className="font-medium" data-testid="breadcrumb-client">
                   {projectContext.client.displayName || projectContext.client.companyName}
                 </span>
-                <ChevronRight className="h-3 w-3 shrink-0" />
-              </>
-            )}
-            {task.projectId && projectContext?.division && (
-              <>
-                <div className="flex items-center gap-1">
-                  {projectContext.division.color && (
-                    <div className="h-2.5 w-2.5 rounded-full shrink-0" style={{ backgroundColor: projectContext.division.color }} />
-                  )}
-                  <span data-testid="breadcrumb-division">{projectContext.division.name}</span>
-                </div>
                 <ChevronRight className="h-3 w-3 shrink-0" />
               </>
             )}

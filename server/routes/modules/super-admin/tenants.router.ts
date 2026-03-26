@@ -16,7 +16,6 @@ import {
   tenantAuditEvents,
   clients,
   clientContacts,
-  clientDivisions,
   projects,
   tasks,
   users,
@@ -28,7 +27,6 @@ import {
   workspaceMembers,
   teamMembers,
   projectMembers,
-  divisionMembers,
   activityLog,
   comments,
   chatReads,
@@ -533,9 +531,6 @@ tenantsRouter.delete("/tenants/:tenantId", requireSuperUser, async (req, res) =>
       await tx.delete(clientInvites).where(eq(clientInvites.clientId, tenantClientIds));
       await tx.delete(clientCrm).where(eq(clientCrm.clientId, tenantClientIds));
       await tx.delete(clientContacts).where(eq(clientContacts.clientId, tenantClientIds));
-
-      await tx.delete(divisionMembers).where(eq(divisionMembers.tenantId, tenantId));
-      await tx.delete(clientDivisions).where(eq(clientDivisions.tenantId, tenantId));
 
       await tx.delete(clients).where(eq(clients.tenantId, tenantId));
 

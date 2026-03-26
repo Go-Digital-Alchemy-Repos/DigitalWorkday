@@ -302,9 +302,6 @@ async function cleanupByTenant(tenantId: string) {
   await db.execute(sql`DELETE FROM client_documents WHERE tenant_id = ${tenantId}`);
   await db.execute(sql`DELETE FROM client_document_categories WHERE tenant_id = ${tenantId}`);
   await db.execute(sql`DELETE FROM client_note_categories WHERE tenant_id = ${tenantId}`);
-  await db.execute(sql`DELETE FROM division_members WHERE tenant_id = ${tenantId}`);
-  await db.execute(sql`DELETE FROM client_divisions WHERE tenant_id = ${tenantId}`);
-
   // Level 9: Teams, clients
   await db.delete(teams).where(eq(teams.tenantId, tenantId));
   await db.delete(clients).where(eq(clients.tenantId, tenantId));
@@ -434,8 +431,6 @@ export async function safeDeleteAllUsers() {
   await db.execute(sql`DELETE FROM client_conversation_reads`);
   await db.execute(sql`DELETE FROM client_conversations`);
   await db.execute(sql`DELETE FROM client_crm`);
-  await db.execute(sql`DELETE FROM division_members`);
-  await db.execute(sql`DELETE FROM client_divisions`);
   await db.execute(sql`DELETE FROM client_document_categories`);
   await db.execute(sql`DELETE FROM client_document_folders`);
   await db.execute(sql`DELETE FROM client_documents`);

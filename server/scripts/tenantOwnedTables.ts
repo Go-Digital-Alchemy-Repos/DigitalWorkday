@@ -16,8 +16,6 @@ export const TENANT_OWNED_TABLES_LIST = [
   "task_watchers",
   "notifications",
   "notification_preferences",
-  "client_divisions",
-  "division_members",
   "chat_channels",
   "chat_channel_members",
   "chat_messages",

@@ -45,8 +45,6 @@ const TENANT_SCOPED_TABLES = [
   "personal_task_sections",
   "task_assignees",
   "task_watchers",
-  "client_divisions",
-  "division_members",
   "notifications",
   "notification_preferences",
   // Chat tables
@@ -250,30 +248,6 @@ async function backfillTable(
         WHERE np.user_id = u.id
           AND np.tenant_id IS NULL
           AND u.tenant_id IS NOT NULL
-      `;
-      break;
-
-    // Client divisions -> client -> tenant
-    case "client_divisions":
-      updateQuery = `
-        UPDATE client_divisions cd
-        SET tenant_id = c.tenant_id
-        FROM clients c
-        WHERE cd.client_id = c.id
-          AND cd.tenant_id IS NULL
-          AND c.tenant_id IS NOT NULL
-      `;
-      break;
-
-    // Division members -> division -> client -> tenant
-    case "division_members":
-      updateQuery = `
-        UPDATE division_members dm
-        SET tenant_id = cd.tenant_id
-        FROM client_divisions cd
-        WHERE dm.division_id = cd.id
-          AND dm.tenant_id IS NULL
-          AND cd.tenant_id IS NOT NULL
       `;
       break;
 

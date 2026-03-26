@@ -210,7 +210,6 @@ export class TenantScopedStorage {
     clientId?: string;
     projectId?: string;
     taskId?: string;
-    divisionId?: string;
     scope?: "in_scope" | "out_of_scope";
     startDate?: Date;
     endDate?: Date;

@@ -178,7 +178,6 @@ export class TimeTrackingRepository {
     clientId?: string;
     projectId?: string;
     taskId?: string;
-    divisionId?: string;
     scope?: 'in_scope' | 'out_of_scope';
     startDate?: Date;
     endDate?: Date;
@@ -199,9 +198,6 @@ export class TimeTrackingRepository {
     }
     if (filters?.taskId) {
       conditions.push(eq(timeEntries.taskId, filters.taskId));
-    }
-    if (filters?.divisionId) {
-      conditions.push(eq(timeEntries.divisionId, filters.divisionId));
     }
     if (filters?.scope) {
       conditions.push(eq(timeEntries.scope, filters.scope));

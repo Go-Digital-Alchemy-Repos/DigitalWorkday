@@ -24,7 +24,6 @@ export const queryKeys = {
     all: ["/api/clients"] as const,
     detail: (id: string) => ["/api/clients", id] as const,
     notes: (id: string) => ["/api/clients", id, "notes"] as const,
-    divisions: (id: string) => ["/api/v1/clients", id, "divisions"] as const,
   },
 
   teams: {

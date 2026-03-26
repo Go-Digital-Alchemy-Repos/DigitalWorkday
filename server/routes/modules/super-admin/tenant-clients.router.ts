@@ -2,7 +2,7 @@ import { Router } from 'express';
 import { requireSuperUser } from '../../../middleware/tenantContext';
 import { storage } from '../../../storage';
 import { db } from '../../../db';
-import { clients, clientContacts, clientDivisions, divisionMembers, clientUserAccess, clientInvites, projects, tasks, sections, projectMembers, taskAttachments, subtasks, taskTags, taskAssignees, taskWatchers, commentMentions, comments, activityLog, timeEntries, activeTimers, workspaces } from '@shared/schema';
+import { clients, clientContacts, clientUserAccess, clientInvites, projects, tasks, sections, projectMembers, taskAttachments, subtasks, taskTags, taskAssignees, taskWatchers, commentMentions, comments, activityLog, timeEntries, activeTimers, workspaces } from '@shared/schema';
 import { eq, and, ilike, isNull, inArray } from 'drizzle-orm';
 import { z } from 'zod';
 import { recordTenantAuditEvent } from '../../superAdmin';
@@ -412,11 +412,6 @@ tenantClientsRouter.delete("/tenants/:tenantId/clients/:clientId", requireSuperU
         .where(eq(projects.clientId, clientId));
       const projectIds = clientProjects.map(p => p.id);
 
-      const clientDivisionsList = await tx.select({ id: clientDivisions.id })
-        .from(clientDivisions)
-        .where(eq(clientDivisions.clientId, clientId));
-      const divisionIds = clientDivisionsList.map(d => d.id);
-
       await tx.delete(timeEntries).where(eq(timeEntries.clientId, clientId));
 
       await tx.delete(activeTimers).where(eq(activeTimers.clientId, clientId));
@@ -455,15 +450,9 @@ tenantClientsRouter.delete("/tenants/:tenantId/clients/:clientId", requireSuperU
         await tx.delete(projects).where(inArray(projects.id, projectIds));
       }
 
-      if (divisionIds.length > 0) {
-        await tx.delete(divisionMembers).where(inArray(divisionMembers.divisionId, divisionIds));
-      }
-
       await tx.delete(clientUserAccess).where(eq(clientUserAccess.clientId, clientId));
 
       await tx.delete(clientInvites).where(eq(clientInvites.clientId, clientId));
-
-      await tx.delete(clientDivisions).where(eq(clientDivisions.clientId, clientId));
 
       await tx.delete(clientContacts).where(eq(clientContacts.clientId, clientId));
 

@@ -6,7 +6,6 @@ import {
   insertClientSchema,
   insertClientContactSchema,
   insertClientInviteSchema,
-  insertClientDivisionSchema,
   CLIENT_STAGES_ORDERED,
   ClientStage,
 } from "@shared/schema";

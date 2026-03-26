@@ -15,7 +15,6 @@ import {
   workspaceMembers,
   teamMembers,
   projectMembers,
-  divisionMembers,
   activityLog,
   comments,
   commentMentions,

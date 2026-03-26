@@ -28,8 +28,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import { Loader2, Lock } from "lucide-react";
-import type { Team, Client, ClientDivision } from "@shared/schema";
+import { Lock } from "lucide-react";
+import type { Team, Client } from "@shared/schema";
 
 const PROJECT_COLORS = [
   { name: "Blue", value: "#3B82F6" },
@@ -46,7 +46,6 @@ const createProjectSchema = z.object({
   name: z.string().min(1, "Project name is required"),
   description: z.string().optional(),
   clientId: z.string().min(1, "Client is required"),
-  divisionId: z.string().optional(),
   teamId: z.string().optional(),
   color: z.string().default("#3B82F6"),
   visibility: z.enum(["workspace", "private"]).default("workspace"),
@@ -86,7 +85,6 @@ export function CreateProjectDialog({
       name: "",
       description: "",
       clientId: "",
-      divisionId: "",
       teamId: "",
       color: "#3B82F6",
       visibility: "workspace",
@@ -95,11 +93,6 @@ export function CreateProjectDialog({
   });
 
   const selectedClientId = form.watch("clientId");
-
-  const { data: divisions, isLoading: divisionsLoading } = useQuery<ClientDivision[]>({
-    queryKey: ["/api/v1/clients", selectedClientId, "divisions"],
-    enabled: !!selectedClientId && open,
-  });
 
   const { data: tenantUsers = [] } = useQuery<TenantUser[]>({
     queryKey: ["/api/users"],
@@ -117,20 +110,13 @@ export function CreateProjectDialog({
     return u.email;
   };
 
-  const clientHasDivisions = divisions && divisions.length > 0;
-
   const handleSubmit = (data: CreateProjectFormData) => {
-    if (clientHasDivisions && !data.divisionId) {
-      form.setError("divisionId", { message: "Division is required for this client" });
-      return;
-    }
     onSubmit(data);
     form.reset();
   };
 
   const handleClientChange = (clientId: string) => {
     form.setValue("clientId", clientId);
-    form.setValue("divisionId", "");
   };
 
   const handleOpenChange = (open: boolean) => {
@@ -238,48 +224,6 @@ export function CreateProjectDialog({
                 </FormItem>
               )}
             />
-
-            {selectedClientId && divisionsLoading && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading divisions...
-              </div>
-            )}
-
-            {clientHasDivisions && (
-              <FormField
-                control={form.control}
-                name="divisionId"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormLabel>Division</FormLabel>
-                    <Select onValueChange={field.onChange} value={field.value}>
-                      <FormControl>
-                        <SelectTrigger data-testid="select-division">
-                          <SelectValue placeholder="Select a division" />
-                        </SelectTrigger>
-                      </FormControl>
-                      <SelectContent>
-                        {divisions.map((division) => (
-                          <SelectItem key={division.id} value={division.id}>
-                            <div className="flex items-center gap-2">
-                              {division.color && (
-                                <div
-                                  className="h-3 w-3 rounded-full"
-                                  style={{ backgroundColor: division.color }}
-                                />
-                              )}
-                              {division.name}
-                            </div>
-                          </SelectItem>
-                        ))}
-                      </SelectContent>
-                    </Select>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-            )}
 
             <div className="grid grid-cols-2 gap-4">
               {teams.length > 0 && (

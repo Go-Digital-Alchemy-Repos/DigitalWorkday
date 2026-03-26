@@ -6,7 +6,6 @@ import {
   workspaceMembers,
   teamMembers,
   projectMembers,
-  divisionMembers,
   hiddenProjects,
   personalTaskSections,
   subtaskAssignees,
@@ -68,7 +67,6 @@ export async function cleanupUserReferences(tx: TxOrDb, userId: string, actorId:
   await tx.delete(workspaceMembers).where(eq(workspaceMembers.userId, userId));
   await tx.delete(teamMembers).where(eq(teamMembers.userId, userId));
   await tx.delete(projectMembers).where(eq(projectMembers.userId, userId));
-  await tx.delete(divisionMembers).where(eq(divisionMembers.userId, userId));
   await tx.delete(hiddenProjects).where(eq(hiddenProjects.userId, userId));
   await tx.delete(personalTaskSections).where(eq(personalTaskSections.userId, userId));
   await tx.delete(subtaskAssignees).where(eq(subtaskAssignees.userId, userId));

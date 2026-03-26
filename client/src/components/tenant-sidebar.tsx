@@ -73,7 +73,7 @@ import { TeamDrawer } from "@/features/teams";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
-import type { Project, Team, Workspace, Client, ClientDivision } from "@shared/schema";
+import type { Project, Team, Workspace, Client } from "@shared/schema";
 
 interface UiPreferences {
   sidebarProjectOrder?: string[] | null;
@@ -83,10 +83,9 @@ interface SortableProjectItemProps {
   project: Project;
   isActive: boolean;
   clientName: string | null;
-  divisionName: string | null;
 }
 
-function SortableProjectItem({ project, isActive, clientName, divisionName }: SortableProjectItemProps) {
+function SortableProjectItem({ project, isActive, clientName }: SortableProjectItemProps) {
   const {
     attributes,
     listeners,
@@ -135,18 +134,11 @@ function SortableProjectItem({ project, isActive, clientName, divisionName }: So
               style={{ backgroundColor: project.color || "#3B82F6" }}
             />
             <span className="truncate flex-1">{project.name}</span>
-            {(clientName || divisionName) && (
+            {clientName && (
               <div className="flex items-center gap-1 shrink-0">
-                {clientName && (
-                  <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-client-${project.id}`}>
-                    {clientName.length > 10 ? clientName.slice(0, 10) + "\u2026" : clientName}
-                  </Badge>
-                )}
-                {divisionName && (
-                  <Badge variant="outline" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-division-${project.id}`}>
-                    {divisionName.length > 8 ? divisionName.slice(0, 8) + "\u2026" : divisionName}
-                  </Badge>
-                )}
+                <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-client-${project.id}`}>
+                  {clientName.length > 10 ? clientName.slice(0, 10) + "\u2026" : clientName}
+                </Badge>
               </div>
             )}
           </div>
@@ -206,20 +198,10 @@ export function TenantSidebar() {
     queryKey: ["/api/clients"],
   });
 
-  const { data: allDivisions = [] } = useQuery<ClientDivision[]>({
-    queryKey: ["/api/v1/divisions/all"],
-  });
-
   const getClientName = (clientId: string | null) => {
     if (!clientId || !clients) return null;
     const client = clients.find(c => c.id === clientId);
     return client ? (client.displayName || client.companyName) : null;
-  };
-
-  const getDivisionName = (divisionId: string | null) => {
-    if (!divisionId) return null;
-    const division = allDivisions.find(d => d.id === divisionId);
-    return division?.name || null;
   };
 
 
@@ -499,7 +481,6 @@ export function TenantSidebar() {
                     <SidebarMenu>
                       {visibleStickyProjects.map((project) => {
                         const clientName = getClientName(project.clientId);
-                        const divisionName = getDivisionName(project.divisionId);
                         return (
                           <SidebarMenuItem key={project.id}>
                             <SidebarMenuButton
@@ -517,18 +498,11 @@ export function TenantSidebar() {
                                   />
                                   <span className="truncate flex-1 font-semibold">{project.name}</span>
                                   <Pin className="h-3 w-3 shrink-0 text-muted-foreground" data-testid={`icon-pinned-${project.id}`} />
-                                  {(clientName || divisionName) && (
+                                  {clientName && (
                                     <div className="flex items-center gap-1 shrink-0">
-                                      {clientName && (
-                                        <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-client-${project.id}`}>
-                                          {clientName.length > 10 ? clientName.slice(0, 10) + "\u2026" : clientName}
-                                        </Badge>
-                                      )}
-                                      {divisionName && (
-                                        <Badge variant="outline" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-division-${project.id}`}>
-                                          {divisionName.length > 8 ? divisionName.slice(0, 8) + "\u2026" : divisionName}
-                                        </Badge>
-                                      )}
+                                      <Badge variant="secondary" className="text-[10px] px-1 py-0 h-4" data-testid={`badge-project-client-${project.id}`}>
+                                        {clientName.length > 10 ? clientName.slice(0, 10) + "\u2026" : clientName}
+                                      </Badge>
                                     </div>
                                   )}
                                 </div>
@@ -554,7 +528,6 @@ export function TenantSidebar() {
                               project={project}
                               isActive={location === `/projects/${project.id}`}
                               clientName={getClientName(project.clientId)}
-                              divisionName={getDivisionName(project.divisionId)}
                             />
                           ))}
                         </SidebarMenu>

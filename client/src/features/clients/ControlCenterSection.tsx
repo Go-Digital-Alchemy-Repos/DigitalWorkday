@@ -32,7 +32,6 @@ import {
   Activity,
   BarChart3,
   Globe,
-  Layers,
   HeartPulse,
   AlertTriangle,
   MessageSquare,
@@ -83,7 +82,6 @@ const WIDGET_ICONS: Record<string, LucideIcon> = {
   tiles_activity: Activity,
   tiles_reports: BarChart3,
   tiles_portal_users: Globe,
-  tiles_divisions: Layers,
   stats_health_snapshot: HeartPulse,
   stats_operational_alerts: AlertTriangle,
   feed_recent_messages: MessageSquare,
@@ -124,7 +122,7 @@ export function ControlCenterSection({ clientId, onNavigateTab }: ControlCenterS
   const role = isAdmin ? "admin" : "employee";
   const layout = useMemo(() => {
     const base = !layoutData ? getDefaultLayout(role) : filterLayoutByRole(layoutData.layout, role);
-    return base.filter((item) => item.id !== "tiles_divisions");
+    return base;
   }, [layoutData, role]);
 
   if (isLoading) {
@@ -359,7 +357,6 @@ function WidgetRenderer({ widgetId, def, clientId, onNavigateTab }: WidgetRender
     tiles_activity: "activity",
     tiles_reports: "reports",
     tiles_portal_users: "portal",
-    tiles_divisions: "divisions",
     feed_recent_messages: "messages",
     stats_assets_summary: "asset-library",
     stats_projects_summary: "projects",
@@ -407,19 +404,6 @@ function WidgetRenderer({ widgetId, def, clientId, onNavigateTab }: WidgetRender
           iconColorClass={colorClass}
         >
           <PortalUsersTileContent clientId={clientId} />
-        </TileCard>
-      );
-    case "tiles_divisions":
-      return (
-        <TileCard
-          icon={Icon}
-          title="Divisions"
-          description="Client division structure"
-          onClick={navigateTo ? () => onNavigateTab(navigateTo) : undefined}
-          testId="widget-tiles-divisions"
-          iconColorClass={colorClass}
-        >
-          <DivisionsTileContent clientId={clientId} />
         </TileCard>
       );
     case "stats_health_snapshot":
@@ -498,7 +482,6 @@ const WIDGET_ICON_COLORS: Record<string, string> = {
   tiles_activity: "text-blue-500 bg-blue-500/10",
   tiles_reports: "text-amber-500 bg-amber-500/10",
   tiles_portal_users: "text-emerald-500 bg-emerald-500/10",
-  tiles_divisions: "text-indigo-500 bg-indigo-500/10",
   stats_health_snapshot: "text-rose-500 bg-rose-500/10",
   stats_operational_alerts: "text-orange-500 bg-orange-500/10",
   feed_recent_messages: "text-violet-500 bg-violet-500/10",
@@ -596,27 +579,6 @@ function PortalUsersTileContent({ clientId }: { clientId: string }) {
     <div className="flex items-center gap-4">
       <StatValue label="Portal Users" value={count} />
       <p className="text-xs text-muted-foreground ml-auto">Manage access →</p>
-    </div>
-  );
-}
-
-function DivisionsTileContent({ clientId }: { clientId: string }) {
-  const { data = [], isLoading } = useQuery<any[]>({
-    queryKey: ["/api/v1/clients", clientId, "divisions"],
-    enabled: !!clientId,
-  });
-  
-  if (isLoading) return <Skeleton className="h-12 w-full" />;
-  
-  // The API returns divisions with counts, so we check data.length
-  const divisionCount = Array.isArray(data) ? data.length : 0;
-  
-  return (
-    <div className="flex items-center gap-4">
-      <StatValue label="Divisions" value={divisionCount} />
-      <p className="text-xs text-muted-foreground ml-auto">
-        {divisionCount > 0 ? "View all →" : "No divisions"}
-      </p>
     </div>
   );
 }
@@ -746,7 +708,6 @@ function CustomizeSheet({ open, onOpenChange, currentLayout, role }: CustomizeSh
   const availableWidgets = useMemo(
     () =>
       WIDGET_CATALOG.filter((w) => {
-        if (w.id === "tiles_divisions") return false;
         if (pinnedIds.has(w.id)) return false;
         if (role !== "admin" && w.minRole === "admin") return false;
         return true;

@@ -24,7 +24,7 @@ import { sql, eq, isNull, and, ne, inArray, count } from "drizzle-orm";
 import {
   users, projects, tasks, teams, clients, workspaces,
   timeEntries, sections, projectMembers, teamMembers,
-  divisionMembers, taskAssignees, UserRole, tenants
+  taskAssignees, UserRole, tenants
 } from "@shared/schema";
 
 // Types for health check results

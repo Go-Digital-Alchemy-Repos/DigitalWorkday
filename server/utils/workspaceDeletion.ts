@@ -79,14 +79,6 @@ export async function deleteWorkspaceCascade(workspaceId: string): Promise<{ del
       await tx.execute(sql`DELETE FROM client_notes WHERE client_id = ANY(${cIds})`);
       await tx.execute(sql`DELETE FROM client_user_access WHERE client_id = ANY(${cIds})`);
       await tx.execute(sql`DELETE FROM client_invites WHERE client_id = ANY(${cIds})`);
-      const divisionIds = await tx.execute(
-        sql`SELECT id FROM client_divisions WHERE client_id = ANY(${cIds})`
-      );
-      const dIds = (divisionIds.rows as any[]).map((r: any) => r.id);
-      if (dIds.length > 0) {
-        await tx.execute(sql`DELETE FROM division_members WHERE division_id = ANY(${dIds})`);
-      }
-      await tx.execute(sql`DELETE FROM client_divisions WHERE client_id = ANY(${cIds})`);
       await tx.execute(sql`DELETE FROM user_client_access WHERE client_id = ANY(${cIds})`);
       await tx.execute(sql`DELETE FROM active_timers WHERE client_id = ANY(${cIds})`);
       await tx.execute(sql`DELETE FROM approval_requests WHERE client_id = ANY(${cIds})`);

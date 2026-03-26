@@ -10,7 +10,6 @@ export * from './comments/comments.router';
 export * from './activity/activity.router';
 export * from './attachments/attachments.router';
 export * from './clients/clients.router';
-export * from './divisions/divisions.router';
 export * from './timer/timer.router';
 export * from './time-entries/time-entries.router';
 export * from './users/users.router';

@@ -104,7 +104,6 @@ function getProjectUpdateDescription(updates: Record<string, unknown>): string |
   if ('startDate' in updates || 'endDate' in updates) descriptions.push('updated the project timeline');
   if ('budget' in updates || 'budgetHours' in updates) descriptions.push('updated the budget');
   if ('clientId' in updates) descriptions.push('changed the client');
-  if ('divisionId' in updates) descriptions.push('changed the division');
   if ('teamId' in updates) descriptions.push('changed the team assignment');
   
   if (descriptions.length === 0) return null;
@@ -166,7 +165,6 @@ router.get("/projects", async (req: Request, res: Response) => {
               tenantId: projects.tenantId,
               stickyAt: projects.stickyAt,
               visibility: projects.visibility,
-              divisionId: projects.divisionId,
               description: projects.description,
             }
           : undefined;
@@ -300,10 +298,6 @@ router.post("/projects", async (req: Request, res: Response) => {
     if (body.teamId === "") {
       body.teamId = null;
     }
-    if (body.divisionId === "") {
-      body.divisionId = null;
-    }
-    
     const memberIds: string[] = Array.isArray(body.memberIds) ? body.memberIds : [];
     delete body.memberIds;
     
@@ -323,21 +317,6 @@ router.post("/projects", async (req: Request, res: Response) => {
           return sendError(res, AppError.forbidden("Access denied: client belongs to a different tenant"), req);
         }
         return sendError(res, AppError.notFound("Client not found"), req);
-      }
-      
-      const clientDivisions = await storage.getClientDivisionsByClient(body.clientId, tenantId);
-      if (clientDivisions.length > 0) {
-        if (!body.divisionId) {
-          return sendError(res, AppError.badRequest("Division is required when client has divisions"), req);
-        }
-        const divisionValid = await storage.validateDivisionBelongsToClientTenant(
-          body.divisionId, body.clientId, tenantId
-        );
-        if (!divisionValid) {
-          return sendError(res, AppError.badRequest("Division does not belong to the selected client"), req);
-        }
-      } else if (body.divisionId) {
-        return sendError(res, AppError.badRequest("Cannot assign division to a client without divisions"), req);
       }
     }
     
@@ -447,27 +426,11 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
     }
 
     const effectiveClientId = data.clientId !== undefined ? data.clientId : existingProject.clientId;
-    const effectiveDivisionId = data.divisionId !== undefined ? data.divisionId : existingProject.divisionId;
     
     if (effectiveClientId && tenantId) {
       const client = await storage.getClientByIdAndTenant(effectiveClientId, tenantId);
       if (!client) {
         return sendError(res, AppError.badRequest("Client not found or does not belong to tenant"), req);
-      }
-      
-      const clientDivisions = await storage.getClientDivisionsByClient(effectiveClientId, tenantId);
-      if (clientDivisions.length > 0) {
-        if (!effectiveDivisionId) {
-          return sendError(res, AppError.badRequest("Division is required when client has divisions"), req);
-        }
-        const divisionValid = await storage.validateDivisionBelongsToClientTenant(
-          effectiveDivisionId, effectiveClientId, tenantId
-        );
-        if (!divisionValid) {
-          return sendError(res, AppError.badRequest("Division does not belong to the selected client"), req);
-        }
-      } else if (effectiveDivisionId) {
-        (data as any).divisionId = null;
       }
     }
     

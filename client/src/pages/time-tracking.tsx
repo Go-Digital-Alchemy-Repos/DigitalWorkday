@@ -567,7 +567,6 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
   const [minutes, setMinutes] = useState("30");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
   const [clientId, setClientId] = useState<string | null>(null);
-  const [divisionId, setDivisionId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [subtaskId, setSubtaskId] = useState<string | null>(null);
@@ -578,23 +577,11 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
     enabled: open,
   });
 
-  const { data: clientDivisions = [] } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ["/api/v1/clients", clientId, "divisions"],
-    queryFn: () => fetch(`/api/v1/clients/${clientId}/divisions`, { credentials: "include" }).then((r) => r.json()),
-    enabled: !!clientId && open,
-  });
-
-  const clientHasDivisions = clientDivisions.length > 0;
-
-  const { data: clientProjects = [] } = useQuery<Array<{ id: string; name: string; clientId: string | null; divisionId?: string | null }>>({
+  const { data: clientProjects = [] } = useQuery<Array<{ id: string; name: string; clientId: string | null }>>({
     queryKey: ["/api/clients", clientId, "projects"],
     queryFn: () => fetch(`/api/clients/${clientId}/projects`, { credentials: "include" }).then((r) => r.json()),
     enabled: !!clientId && open,
   });
-
-  const filteredProjects = clientHasDivisions && divisionId
-    ? clientProjects.filter(p => p.divisionId === divisionId)
-    : clientProjects;
 
   const { data: projectTasks = [] } = useQuery<Array<{ id: string; title: string; parentTaskId: string | null; status: string }>>({
     queryKey: ["/api/projects", projectId, "tasks"],
@@ -608,14 +595,6 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
 
   const handleClientChange = (newClientId: string | null) => {
     setClientId(newClientId);
-    setDivisionId(null);
-    setProjectId(null);
-    setTaskId(null);
-    setSubtaskId(null);
-  };
-
-  const handleDivisionChange = (newDivisionId: string | null) => {
-    setDivisionId(newDivisionId);
     setProjectId(null);
     setTaskId(null);
     setSubtaskId(null);
@@ -653,7 +632,6 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
       setHours("0");
       setMinutes("30");
       setClientId(null);
-      setDivisionId(null);
       setProjectId(null);
       setTaskId(null);
       setSubtaskId(null);
@@ -696,7 +674,6 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
     hours !== "0" || 
     minutes !== "30" || 
     clientId !== null || 
-    divisionId !== null ||
     projectId !== null || 
     taskId !== null ||
     subtaskId !== null ||
@@ -792,29 +769,8 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
               </SelectContent>
             </Select>
           </div>
-          {clientHasDivisions && (
-            <div className="space-y-2">
-              <Label>Division</Label>
-              <Select 
-                value={divisionId || "none"} 
-                onValueChange={(v) => handleDivisionChange(v === "none" ? null : v)}
-              >
-                <SelectTrigger data-testid="select-manual-division">
-                  <SelectValue placeholder="Select division" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="none">All divisions</SelectItem>
-                  {clientDivisions.map((division) => (
-                    <SelectItem key={division.id} value={division.id}>
-                      {division.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
         </div>
-        <div className={`grid grid-cols-1 ${clientHasDivisions ? "" : "md:grid-cols-2"} gap-6`}>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
           <div className="space-y-2">
             <Label>Project</Label>
             <Select 
@@ -827,7 +783,7 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">No project</SelectItem>
-                {filteredProjects.map((project) => (
+                {clientProjects.map((project) => (
                   <SelectItem key={project.id} value={project.id}>
                     {project.name}
                   </SelectItem>
@@ -918,7 +874,6 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
   const [hasChanges, setHasChanges] = useState(false);
   
   const [clientId, setClientId] = useState<string | null>(null);
-  const [divisionId, setDivisionId] = useState<string | null>(null);
   const [projectId, setProjectId] = useState<string | null>(null);
   const [taskId, setTaskId] = useState<string | null>(null);
   const [subtaskId, setSubtaskId] = useState<string | null>(null);
@@ -935,7 +890,6 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
   useEffect(() => {
     if (entry && open) {
       setClientId(entry.clientId);
-      setDivisionId(null);
       setProjectId(entry.projectId);
       setTaskId(entry.taskId);
       setSubtaskId(null);
@@ -970,32 +924,11 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
     enabled: open,
   });
 
-  const { data: clientDivisions = [], isLoading: divisionsLoading } = useQuery<Array<{ id: string; name: string; color?: string | null }>>({
-    queryKey: ["/api/v1/clients", clientId, "divisions"],
-    queryFn: () => fetch(`/api/v1/clients/${clientId}/divisions`, { credentials: "include" }).then((r) => r.json()),
-    enabled: !!clientId && open,
-  });
-
-  const clientHasDivisions = clientDivisions.length > 0;
-
-  const { data: allClientProjects = [] } = useQuery<Array<{ id: string; name: string; divisionId?: string | null }>>({
+  const { data: clientProjects = [] } = useQuery<Array<{ id: string; name: string }>>({
     queryKey: ["/api/clients", clientId, "projects"],
     queryFn: () => fetch(`/api/clients/${clientId}/projects`, { credentials: "include" }).then((r) => r.json()),
     enabled: !!clientId && open,
   });
-
-  useEffect(() => {
-    if (projectId && allClientProjects.length > 0 && clientHasDivisions && divisionId === null) {
-      const currentProject = allClientProjects.find(p => p.id === projectId);
-      if (currentProject?.divisionId) {
-        setDivisionId(currentProject.divisionId);
-      }
-    }
-  }, [projectId, allClientProjects, clientHasDivisions, divisionId]);
-
-  const clientProjects = clientHasDivisions && divisionId
-    ? allClientProjects.filter(p => p.divisionId === divisionId)
-    : allClientProjects;
 
   const { data: projectTasks = [] } = useQuery<Array<{ id: string; title: string; parentTaskId: string | null; status: string }>>({
     queryKey: ["/api/projects", projectId, "tasks"],
@@ -1049,15 +982,6 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
 
   const handleClientChange = (newClientId: string | null) => {
     setClientId(newClientId);
-    setDivisionId(null);
-    setProjectId(null);
-    setTaskId(null);
-    setSubtaskId(null);
-    markChanged();
-  };
-
-  const handleDivisionChange = (newDivisionId: string | null) => {
-    setDivisionId(newDivisionId);
     setProjectId(null);
     setTaskId(null);
     setSubtaskId(null);
@@ -1202,45 +1126,9 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
               </Select>
             </div>
 
-            {clientId && divisionsLoading && (
-              <div className="flex items-center gap-2 text-sm text-muted-foreground mt-2">
-                <Loader2 className="h-4 w-4 animate-spin" />
-                Loading divisions...
-              </div>
-            )}
-
-            {clientHasDivisions && (
-              <div>
-                <Label>Division</Label>
-                <Select
-                  value={divisionId || "none"}
-                  onValueChange={(v) => handleDivisionChange(v === "none" ? null : v)}
-                >
-                  <SelectTrigger className="mt-2" data-testid="select-edit-division">
-                    <SelectValue placeholder="Select division" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="none">All divisions</SelectItem>
-                    {clientDivisions.map((division) => (
-                      <SelectItem key={division.id} value={division.id}>
-                        <div className="flex items-center gap-2">
-                          {division.color && (
-                            <div
-                              className="h-3 w-3 rounded-full shrink-0"
-                              style={{ backgroundColor: division.color }}
-                            />
-                          )}
-                          {division.name}
-                        </div>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              </div>
-            )}
           </div>
 
-          <div className={`grid grid-cols-1 ${clientHasDivisions ? "" : "md:grid-cols-2"} gap-6`}>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <div>
               <Label>Project</Label>
               <Select

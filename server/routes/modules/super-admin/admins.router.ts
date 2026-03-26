@@ -15,7 +15,6 @@ import {
   workspaceMembers,
   teamMembers,
   projectMembers,
-  divisionMembers,
   hiddenProjects,
   personalTaskSections,
   subtaskAssignees,

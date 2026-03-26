@@ -29,7 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { PageShell, PageHeader, EmptyState, LoadingState, ErrorState } from "@/components/layout";
-import type { Project, Client, Team, ClientDivision } from "@shared/schema";
+import type { Project, Client, Team } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 import { format } from "date-fns";
 import { useLocation } from "wouter";
@@ -74,7 +74,6 @@ export default function ProjectsDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [clientFilter, setClientFilter] = useState<string>("all");
-  const [divisionFilter, setDivisionFilter] = useState<string>("all");
   const [teamFilter, setTeamFilter] = useState<string>("all");
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [editProjectOpen, setEditProjectOpen] = useState(false);
@@ -94,14 +93,6 @@ export default function ProjectsDashboard() {
   const { data: teams } = useQuery<Team[]>({
     queryKey: ["/api/teams"],
   });
-
-  const { data: clientDivisions = [] } = useQuery<ClientDivision[]>({
-    queryKey: ["/api/v1/clients", clientFilter, "divisions"],
-    queryFn: () => fetch(`/api/v1/clients/${clientFilter}/divisions`, { credentials: "include" }).then(r => r.json()),
-    enabled: clientFilter !== "all",
-  });
-
-  const selectedClientHasDivisions = clientDivisions.length > 0;
 
   const { data: analytics } = useQuery<ProjectAnalyticsSummary>({
     queryKey: ["/api/v1/projects/analytics/summary"],
@@ -179,16 +170,14 @@ export default function ProjectsDashboard() {
 
   const handleClientFilterChange = (newClientId: string) => {
     setClientFilter(newClientId);
-    setDivisionFilter("all");
   };
 
-  const hasActiveFilters = searchQuery || statusFilter !== "active" || clientFilter !== "all" || divisionFilter !== "all" || teamFilter !== "all";
+  const hasActiveFilters = searchQuery || statusFilter !== "active" || clientFilter !== "all" || teamFilter !== "all";
 
   const handleClearFilters = () => {
     setSearchQuery("");
     setStatusFilter("active");
     setClientFilter("all");
-    setDivisionFilter("all");
     setTeamFilter("all");
   };
 
@@ -208,11 +197,9 @@ export default function ProjectsDashboard() {
         
         const matchesClient = clientFilter === "all" || project.clientId === clientFilter;
         
-        const matchesDivision = divisionFilter === "all" || project.divisionId === divisionFilter;
-        
         const matchesTeam = teamFilter === "all" || project.teamId === teamFilter;
         
-        return matchesSearch && matchesStatus && matchesClient && matchesDivision && matchesTeam;
+        return matchesSearch && matchesStatus && matchesClient && matchesTeam;
       })
       .sort((a, b) => {
         const aSticky = a.stickyAt ? new Date(a.stickyAt).getTime() : 0;
@@ -222,7 +209,7 @@ export default function ProjectsDashboard() {
         if (aSticky && bSticky) return bSticky - aSticky;
         return a.name.localeCompare(b.name);
       });
-  }, [projects, searchQuery, statusFilter, clientFilter, divisionFilter, teamFilter]);
+  }, [projects, searchQuery, statusFilter, clientFilter, teamFilter]);
 
   const [, navigate] = useLocation();
 
@@ -434,22 +421,6 @@ export default function ProjectsDashboard() {
               ))}
             </SelectContent>
           </Select>
-
-          {selectedClientHasDivisions && (
-            <Select value={divisionFilter} onValueChange={setDivisionFilter}>
-              <SelectTrigger className="w-[110px] md:w-[150px] shrink-0" data-testid="select-division-filter">
-                <SelectValue placeholder="Division" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem value="all">All Divisions</SelectItem>
-                {clientDivisions.map((division) => (
-                  <SelectItem key={division.id} value={division.id}>
-                    {division.name}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          )}
 
           <Select value={teamFilter} onValueChange={setTeamFilter}>
             <SelectTrigger className="w-[100px] md:w-[130px] shrink-0" data-testid="select-team-filter">
