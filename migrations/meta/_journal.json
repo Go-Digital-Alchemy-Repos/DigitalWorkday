@@ -330,6 +330,13 @@
       "when": 1772755906067,
       "tag": "0046_same_gorilla_man",
       "breakpoints": true
+    },
+    {
+      "idx": 47,
+      "version": "7",
+      "when": 1774549200000,
+      "tag": "0047_remove_client_divisions",
+      "breakpoints": true
     }
   ]
 }

@@ -1,0 +1,13 @@
+{
+  "id": "0047_remove_client_divisions",
+  "prevId": "0046_same_gorilla_man",
+  "version": "7",
+  "dialect": "postgresql",
+  "tables": {},
+  "enums": {},
+  "_meta": {
+    "schemas": {},
+    "tables": {},
+    "columns": {}
+  }
+}
