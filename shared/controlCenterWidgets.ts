@@ -54,17 +54,6 @@ export const WIDGET_CATALOG: WidgetDefinition[] = [
     category: "tiles",
   },
   {
-    id: "tiles_divisions",
-    title: "Divisions",
-    description: "Client division breakdown",
-    minRole: "employee",
-    defaultPinned: true,
-    defaultOrder: 3,
-    sizeOptions: ["sm", "md"],
-    defaultSize: "sm",
-    category: "tiles",
-  },
-  {
     id: "stats_health_snapshot",
     title: "Health Snapshot",
     description: "Client health overview with key indicators",
