@@ -25,7 +25,7 @@ router.get("/divisions/all", async (req, res) => {
 
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    const canSeeAll = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canSeeAll = user?.role === 'super_user' || user?.role === 'tenant_owner' || user?.role === 'admin' || user?.role === 'employee';
 
     let divisions = await storage.getClientDivisionsByTenant(tenantId);
 
@@ -57,8 +57,7 @@ router.get("/clients/:clientId/divisions", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    // Allow super users, tenant admins, and tenant employees to see all divisions
-    const canSeeAll = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canSeeAll = user?.role === 'super_user' || user?.role === 'tenant_owner' || user?.role === 'admin' || user?.role === 'employee';
     
     let divisions = await storage.getClientDivisionsByClient(clientId, tenantId);
     
@@ -99,8 +98,7 @@ router.post("/clients/:clientId/divisions", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    // Allow super users, tenant admins, and tenant employees to create divisions
-    const canCreate = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canCreate = user?.role === 'super_user' || user?.role === 'tenant_owner' || user?.role === 'admin' || user?.role === 'employee';
     
     if (!canCreate) {
       throw AppError.forbidden("You do not have permission to create divisions");
@@ -133,8 +131,7 @@ router.patch("/divisions/:divisionId", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    // Allow super users, tenant admins, and tenant employees to update divisions
-    const canUpdate = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canUpdate = user?.role === 'super_user' || user?.role === 'tenant_owner' || user?.role === 'admin' || user?.role === 'employee';
     
     if (!canUpdate) {
       throw AppError.forbidden("You do not have permission to update divisions");
@@ -176,8 +173,7 @@ router.get("/divisions/:divisionId/members", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    // Allow super users, tenant admins, and tenant employees to view division members
-    const isPrivileged = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const isPrivileged = user?.role === 'super_user' || user?.role === 'tenant_owner' || user?.role === 'admin' || user?.role === 'employee';
     
     if (!isPrivileged) {
       const isMember = await storage.isDivisionMember(divisionId, userId);
@@ -209,8 +205,7 @@ router.post("/divisions/:divisionId/members", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    // Allow super users, tenant admins, and tenant employees to manage division members
-    const canManage = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canManage = user?.role === 'super_user' || user?.role === 'tenant_owner' || user?.role === 'admin' || user?.role === 'employee';
     
     if (!canManage) {
       throw AppError.forbidden("You do not have permission to manage division members");
@@ -248,8 +243,7 @@ router.delete("/divisions/:divisionId/members/:userId", async (req, res) => {
     
     const currentUserId = getCurrentUserId(req);
     const user = await storage.getUser(currentUserId);
-    // Allow super users, tenant admins, and tenant employees to remove division members
-    const canManage = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canManage = user?.role === 'super_user' || user?.role === 'tenant_owner' || user?.role === 'admin' || user?.role === 'employee';
     
     if (!canManage) {
       throw AppError.forbidden("You do not have permission to remove division members");
@@ -284,7 +278,7 @@ router.get("/divisions/:divisionId/projects", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    const canView = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canView = user?.role === 'super_user' || user?.role === 'tenant_owner' || user?.role === 'admin' || user?.role === 'employee';
     
     if (!canView) {
       const isMember = await storage.isDivisionMember(divisionId, userId);
@@ -320,7 +314,7 @@ router.get("/divisions/:divisionId/tasks", async (req, res) => {
     
     const userId = getCurrentUserId(req);
     const user = await storage.getUser(userId);
-    const canView = user?.role === 'super_user' || user?.role === 'tenant_admin' || user?.role === 'tenant_employee';
+    const canView = user?.role === 'super_user' || user?.role === 'tenant_owner' || user?.role === 'admin' || user?.role === 'employee';
     
     if (!canView) {
       const isMember = await storage.isDivisionMember(divisionId, userId);
