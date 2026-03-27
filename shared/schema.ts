@@ -659,6 +659,27 @@ export const clients = pgTable("clients", {
   index("clients_tenant_stage_idx").on(table.tenantId, table.stage),
 ]);
 
+export const clientDivisions = pgTable("client_divisions", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  clientId: varchar("client_id").references(() => clients.id).notNull(),
+  name: text("name").notNull(),
+  description: text("description"),
+  color: text("color"),
+  isActive: boolean("is_active").notNull().default(true),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+  updatedAt: timestamp("updated_at").defaultNow().notNull(),
+});
+
+export const divisionMembers = pgTable("division_members", {
+  id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
+  tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),
+  divisionId: varchar("division_id").references(() => clientDivisions.id).notNull(),
+  userId: varchar("user_id").references(() => users.id).notNull(),
+  role: text("role").default("member"),
+  createdAt: timestamp("created_at").defaultNow().notNull(),
+});
+
 /**
  * Client Stage History - tracks pipeline stage transitions
  */
@@ -1304,6 +1325,7 @@ export const projects = pgTable("projects", {
   workspaceId: varchar("workspace_id").references(() => workspaces.id).notNull(),
   teamId: varchar("team_id").references(() => teams.id),
   clientId: varchar("client_id").references(() => clients.id),
+  divisionId: varchar("division_id").references(() => clientDivisions.id),
   name: text("name").notNull(),
   description: text("description"),
   visibility: text("visibility").notNull().default("workspace"),
