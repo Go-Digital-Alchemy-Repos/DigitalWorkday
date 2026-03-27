@@ -2570,7 +2570,7 @@ export class DatabaseStorage implements IStorage {
     
     const clientIds = allClients.map(c => c.id);
     
-    const [contactCounts, projectCounts, hoursRows, openTaskCounts, lastActivities, overdueCounts] = await Promise.all([
+    const [contactCounts, projectCounts, hoursRows, taskAggregates, lastActivities] = await Promise.all([
       db.select({
         clientId: clientContacts.clientId,
         count: sql<number>`count(*)::int`,
@@ -2599,9 +2599,11 @@ export class DatabaseStorage implements IStorage {
           isNotNull(timeEntries.clientId)
         ))
         .groupBy(timeEntries.clientId),
+      // Consolidated query: open task counts + overdue counts in a single scan
       db.select({
         clientId: projects.clientId,
-        count: sql<number>`count(*)::int`,
+        openCount: sql<number>`count(*)::int`,
+        overdueCount: sql<number>`count(*) filter (where ${tasks.dueDate} < now())::int`,
       })
         .from(tasks)
         .innerJoin(projects, eq(tasks.projectId, projects.id))
@@ -2611,32 +2613,16 @@ export class DatabaseStorage implements IStorage {
           inArray(tasks.status, ['todo', 'in_progress'])
         ))
         .groupBy(projects.clientId),
+      // Optimized last-activity: uses MAX(tasks.updatedAt) instead of joining through activityLog
       db.select({
         clientId: projects.clientId,
-        lastActivity: sql<string>`max(${activityLog.createdAt})`,
-      })
-        .from(activityLog)
-        .innerJoin(tasks, and(
-          eq(activityLog.entityType, 'task'),
-          eq(activityLog.entityId, tasks.id)
-        ))
-        .innerJoin(projects, eq(tasks.projectId, projects.id))
-        .where(and(
-          inArray(projects.clientId, clientIds),
-          isNotNull(projects.clientId)
-        ))
-        .groupBy(projects.clientId),
-      db.select({
-        clientId: projects.clientId,
-        count: sql<number>`count(*)::int`,
+        lastActivity: sql<string>`max(${tasks.updatedAt})`,
       })
         .from(tasks)
         .innerJoin(projects, eq(tasks.projectId, projects.id))
         .where(and(
           inArray(projects.clientId, clientIds),
-          isNotNull(projects.clientId),
-          inArray(tasks.status, ['todo', 'in_progress']),
-          sql`${tasks.dueDate} < now()`
+          isNotNull(projects.clientId)
         ))
         .groupBy(projects.clientId),
     ]);
@@ -2652,11 +2638,11 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const openTaskCountMap = new Map(openTaskCounts.map(t => [t.clientId!, t.count]));
+    const openTaskCountMap = new Map(taskAggregates.map(t => [t.clientId!, t.openCount]));
 
     const lastActivityMap = new Map(lastActivities.map(a => [a.clientId!, a.lastActivity]));
 
-    const overdueCountMap = new Map(overdueCounts.map(o => [o.clientId!, o.count]));
+    const overdueCountMap = new Map(taskAggregates.map(t => [t.clientId!, t.overdueCount]));
 
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);

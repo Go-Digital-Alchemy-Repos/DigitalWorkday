@@ -22,6 +22,13 @@ import {
 import { UserRole } from "@shared/schema";
 import type { Request } from "express";
 import { handleRouteError, AppError } from "../../lib/errors";
+import {
+  buildCacheKey,
+  getCached,
+  setCache,
+  shouldBypassCache,
+  setCacheHeaders,
+} from "../../lib/reportCache";
 
 function getCurrentUserId(req: Request): string {
   return req.user?.id || "demo-user-id";
@@ -63,6 +70,10 @@ router.get("/", async (req, res) => {
 });
 
 // Get clients with hierarchy information (depth and parent name)
+// Cache: 60s TTL, no active invalidation on client CRUD — stale data is acceptable
+// for list views. Use ?fresh=true to bypass for immediate consistency.
+const HIERARCHY_CACHE_TTL_MS = 60_000;
+
 router.get("/hierarchy/list", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
@@ -74,8 +85,20 @@ router.get("/hierarchy/list", async (req, res) => {
       console.error(`[GET /api/v1/clients/hierarchy/list] No tenant context, requestId=${requestId}, userId=${req.user?.id}`);
       throw AppError.tenantRequired();
     }
+
+    const cacheKey = buildCacheKey(tenantId, "clients-hierarchy");
+
+    if (!shouldBypassCache(req.query as Record<string, unknown>)) {
+      const cached = getCached<unknown[]>(cacheKey);
+      if (cached !== undefined) {
+        setCacheHeaders(res, true, 60);
+        return res.json(cached);
+      }
+    }
     
     const clients = await storage.getClientsByTenantWithHierarchy(tenantId);
+    setCache(cacheKey, clients, HIERARCHY_CACHE_TTL_MS);
+    setCacheHeaders(res, false, 60);
     console.log(`[GET /api/v1/clients/hierarchy/list] Found ${clients.length} clients for tenantId=${tenantId}, requestId=${requestId}`);
     return res.json(clients);
   } catch (error) {
@@ -83,13 +106,30 @@ router.get("/hierarchy/list", async (req, res) => {
   }
 });
 
+// Cache: 60s TTL, no active invalidation on client CRUD — stale data is acceptable
+// for list/summary views. Use ?fresh=true to bypass for immediate consistency.
+const SUMMARY_CACHE_TTL_MS = 60_000;
+
 router.get("/summary", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
     if (!tenantId) {
       throw AppError.tenantRequired();
     }
+
+    const cacheKey = buildCacheKey(tenantId, "clients-summary");
+
+    if (!shouldBypassCache(req.query as Record<string, unknown>)) {
+      const cached = getCached(cacheKey);
+      if (cached !== undefined) {
+        setCacheHeaders(res, true, 60);
+        return res.json(cached);
+      }
+    }
+
     const summary = await storage.getClientsSummaryByTenant(tenantId);
+    setCache(cacheKey, summary, SUMMARY_CACHE_TTL_MS);
+    setCacheHeaders(res, false, 60);
     return res.json(summary);
   } catch (error) {
     return handleRouteError(res, error, "GET /summary", req);

@@ -73,7 +73,7 @@ export function setCacheHeaders(
   cached: boolean,
   ttlSeconds: number = 60
 ): void {
-  res.setHeader("Cache-Control", `max-age=${ttlSeconds}`);
+  res.setHeader("Cache-Control", `private, max-age=${ttlSeconds}`);
   res.setHeader("X-Report-Cache", cached ? "HIT" : "MISS");
 }
 
