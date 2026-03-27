@@ -137,7 +137,7 @@ export async function getInvoiceDrafts(tenantId: string): Promise<InvoiceDraftWi
       notes: invoiceDrafts.notes,
       createdAt: invoiceDrafts.createdAt,
       updatedAt: invoiceDrafts.updatedAt,
-      clientName: clients.name,
+      clientName: clients.companyName,
       projectName: projects.name,
       creatorName: sql<string | null>`concat(${users.firstName}, ' ', ${users.lastName})`,
     })
@@ -174,7 +174,7 @@ export async function getInvoiceDraftById(id: string, tenantId: string): Promise
       notes: invoiceDrafts.notes,
       createdAt: invoiceDrafts.createdAt,
       updatedAt: invoiceDrafts.updatedAt,
-      clientName: clients.name,
+      clientName: clients.companyName,
       projectName: projects.name,
       creatorName: sql<string | null>`concat(${users.firstName}, ' ', ${users.lastName})`,
     })

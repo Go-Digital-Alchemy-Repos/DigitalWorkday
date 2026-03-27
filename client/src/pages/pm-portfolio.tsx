@@ -1,4 +1,5 @@
 import { useState, useEffect } from "react";
+import { toPlainText } from "@/components/richtext/richTextUtils";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Link } from "wouter";
 import {
@@ -915,7 +916,7 @@ function BillableTasksCard() {
                   <div className="min-w-0">
                     <p className="text-sm font-medium truncate" data-testid={`text-billable-title-${task.id}`}>{task.title}</p>
                     {task.description && (
-                      <p className="text-xs text-muted-foreground truncate mt-0.5" data-testid={`text-billable-desc-${task.id}`}>{task.description}</p>
+                      <p className="text-xs text-muted-foreground truncate mt-0.5" data-testid={`text-billable-desc-${task.id}`}>{toPlainText(task.description)}</p>
                     )}
                     {task.project_name && (
                       <p className="text-[10px] text-muted-foreground/70 mt-0.5">{task.project_name}</p>
