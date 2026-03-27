@@ -1,6 +1,14 @@
 import { useParams, useLocation, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useMemo } from "react";
+import {
+  startOfDay,
+  startOfWeek,
+  startOfMonth,
+  startOfYear,
+  endOfDay,
+  format,
+} from "date-fns";
 import {
   ChevronLeft,
   Building2,
@@ -16,6 +24,7 @@ import {
   Phone,
   Globe,
   Briefcase,
+  Timer,
 } from "lucide-react";
 import {
   Card,
@@ -190,6 +199,190 @@ function AgingBar({ aging }: { aging: ClientProfileData["taskAging"] }) {
         <span className="flex items-center gap-1"><span className="inline-block w-2.5 h-2.5 rounded-sm bg-red-500" /> &gt;30d</span>
       </div>
     </div>
+  );
+}
+
+type TimeRange = "day" | "week" | "month" | "ytd";
+
+interface TimeEntryRow {
+  id: string;
+  title: string | null;
+  description: string | null;
+  durationSeconds: number;
+  endTime: string | null;
+  createdAt: string;
+  user?: { firstName: string | null; lastName: string | null; email: string } | null;
+  task?: { title: string | null } | null;
+}
+
+function getTimeRangeDates(range: TimeRange): { start: Date; end: Date } {
+  const now = new Date();
+  const end = endOfDay(now);
+  switch (range) {
+    case "day":
+      return { start: startOfDay(now), end };
+    case "week":
+      return { start: startOfWeek(now, { weekStartsOn: 1 }), end };
+    case "month":
+      return { start: startOfMonth(now), end };
+    case "ytd":
+      return { start: startOfYear(now), end };
+  }
+}
+
+function formatDuration(seconds: number): string {
+  const h = Math.floor(seconds / 3600);
+  const m = Math.floor((seconds % 3600) / 60);
+  if (h === 0) return `${m}m`;
+  if (m === 0) return `${h}h`;
+  return `${h}h ${m}m`;
+}
+
+function formatTotalHours(seconds: number): string {
+  const hours = seconds / 3600;
+  return hours % 1 === 0 ? `${hours}` : hours.toFixed(1);
+}
+
+function getUserDisplayName(user?: { firstName: string | null; lastName: string | null; email: string } | null): string {
+  if (!user) return "Unknown";
+  const parts = [user.firstName, user.lastName].filter(Boolean);
+  return parts.length > 0 ? parts.join(" ") : user.email;
+}
+
+function TrackedTimeCard({ clientId }: { clientId: string }) {
+  const [timeRange, setTimeRange] = useState<TimeRange>("month");
+
+  const { start, end } = useMemo(() => getTimeRangeDates(timeRange), [timeRange]);
+  const startDate = start.toISOString();
+  const endDate = end.toISOString();
+
+  const { data: entries, isLoading, isError, refetch } = useQuery<TimeEntryRow[]>({
+    queryKey: ["/api/time-entries", { clientId, startDate, endDate }],
+    queryFn: async () => {
+      const params = new URLSearchParams({ clientId, startDate, endDate });
+      const res = await fetch(`/api/time-entries?${params}`, { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to load time entries");
+      return res.json();
+    },
+    enabled: !!clientId,
+  });
+
+  const totalSeconds = useMemo(
+    () => (entries ?? []).reduce((sum, e) => sum + (e.durationSeconds || 0), 0),
+    [entries]
+  );
+
+  const rangeOptions: { value: TimeRange; label: string }[] = [
+    { value: "day", label: "Day" },
+    { value: "week", label: "Week" },
+    { value: "month", label: "Month" },
+    { value: "ytd", label: "YTD" },
+  ];
+
+  return (
+    <Card data-testid="section-tracked-time">
+      <CardHeader>
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
+          <CardTitle className="text-lg flex items-center gap-2">
+            <Timer className="h-5 w-5 text-primary" />
+            Tracked Time
+          </CardTitle>
+          <div className="flex items-center gap-1 bg-muted rounded-lg p-1" data-testid="tracked-time-range-filter">
+            {rangeOptions.map((opt) => (
+              <Button
+                key={opt.value}
+                variant="ghost"
+                size="sm"
+                onClick={() => setTimeRange(opt.value)}
+                className={cn(
+                  "h-7 px-3 text-xs font-medium rounded-md",
+                  timeRange === opt.value
+                    ? "bg-background text-foreground shadow-sm hover:bg-background"
+                    : "text-muted-foreground hover:text-foreground hover:bg-transparent"
+                )}
+                data-testid={`button-time-range-${opt.value}`}
+              >
+                {opt.label}
+              </Button>
+            ))}
+          </div>
+        </div>
+      </CardHeader>
+      <CardContent>
+        {isLoading ? (
+          <div className="space-y-3">
+            {Array.from({ length: 4 }).map((_, i) => (
+              <Skeleton key={i} className="h-10 w-full" />
+            ))}
+          </div>
+        ) : isError ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center gap-3">
+            <AlertTriangle className="h-10 w-10 text-destructive opacity-40" />
+            <p className="text-sm text-muted-foreground" data-testid="text-time-entries-error">
+              Failed to load time entries
+            </p>
+            <Button variant="outline" size="sm" onClick={() => refetch()} data-testid="button-retry-time-entries">
+              Retry
+            </Button>
+          </div>
+        ) : !entries || entries.length === 0 ? (
+          <div className="flex flex-col items-center justify-center py-8 text-center">
+            <Timer className="h-10 w-10 text-muted-foreground opacity-20" />
+            <p className="text-sm text-muted-foreground mt-2" data-testid="text-no-time-entries">
+              No time entries for this period
+            </p>
+          </div>
+        ) : (
+          <>
+            <div className="overflow-x-auto -mx-6">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead className="pl-6">Task</TableHead>
+                    <TableHead className="hidden sm:table-cell">Description</TableHead>
+                    <TableHead className="text-right">Duration</TableHead>
+                    <TableHead className="hidden md:table-cell">Team Member</TableHead>
+                    <TableHead className="pr-6 text-right">Date</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {entries.map((entry) => (
+                    <TableRow key={entry.id} data-testid={`row-time-entry-${entry.id}`}>
+                      <TableCell className="pl-6 font-medium max-w-[200px] truncate" data-testid={`text-entry-task-${entry.id}`}>
+                        {entry.task?.title || entry.title || "No title"}
+                      </TableCell>
+                      <TableCell className="hidden sm:table-cell text-muted-foreground max-w-[250px] truncate" data-testid={`text-entry-desc-${entry.id}`}>
+                        {entry.description || "—"}
+                      </TableCell>
+                      <TableCell className="text-right font-mono text-sm" data-testid={`text-entry-duration-${entry.id}`}>
+                        {formatDuration(entry.durationSeconds || 0)}
+                      </TableCell>
+                      <TableCell className="hidden md:table-cell" data-testid={`text-entry-member-${entry.id}`}>
+                        {getUserDisplayName(entry.user)}
+                      </TableCell>
+                      <TableCell className="pr-6 text-right text-sm text-muted-foreground" data-testid={`text-entry-date-${entry.id}`}>
+                        {format(new Date(entry.endTime || entry.createdAt), "MMM d, yyyy")}
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </div>
+            <div className="flex flex-wrap items-center justify-between gap-2 pt-4 mt-4 border-t">
+              <span className="text-sm font-medium text-muted-foreground">
+                {entries.length} {entries.length === 1 ? "entry" : "entries"}
+              </span>
+              <div className="flex items-center gap-2" data-testid="text-total-hours">
+                <Clock className="h-4 w-4 text-primary" />
+                <span className="text-sm font-semibold">
+                  Total: {formatTotalHours(totalSeconds)} hours
+                </span>
+              </div>
+            </div>
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -709,6 +902,8 @@ export default function ClientProfileReportPage() {
                   </CardContent>
                 </Card>
               )}
+
+              <TrackedTimeCard clientId={clientId!} />
             </>
           ) : (
             <div className="container max-w-7xl p-3 sm:p-4 lg:p-6 text-center">
