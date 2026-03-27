@@ -45,6 +45,7 @@ interface ClientDrawerProps {
   client?: Client | null;
   isLoading?: boolean;
   mode: "create" | "edit";
+  defaultParentClientId?: string;
 }
 
 export function ClientDrawer({
@@ -54,6 +55,7 @@ export function ClientDrawer({
   client,
   isLoading = false,
   mode,
+  defaultParentClientId,
 }: ClientDrawerProps) {
   const [hasChanges, setHasChanges] = useState(false);
 
@@ -65,6 +67,10 @@ export function ClientDrawer({
   const topLevelClients = potentialParents?.filter(
     (c) => !c.parentClientId && c.status === "active" && c.id !== client?.id
   ) || [];
+
+  const defaultParentClient = defaultParentClientId
+    ? potentialParents?.find((c) => c.id === defaultParentClientId)
+    : undefined;
 
   const form = useForm<ClientFormData>({
     resolver: zodResolver(clientSchema),
@@ -95,14 +101,14 @@ export function ClientDrawer({
       form.reset({
         companyName: "",
         displayName: "",
-        parentClientId: "",
+        parentClientId: defaultParentClientId || "",
         status: "active",
         industry: "",
         website: "https://",
         notes: "",
       });
     }
-  }, [open, client, mode, form]);
+  }, [open, client, mode, form, defaultParentClientId]);
 
   useEffect(() => {
     const subscription = form.watch(() => {
@@ -194,7 +200,7 @@ export function ClientDrawer({
             />
           </div>
 
-          {topLevelClients.length > 0 && (
+          {(topLevelClients.length > 0 || defaultParentClientId) && (
             <FormField
               control={form.control}
               name="parentClientId"
@@ -214,6 +220,14 @@ export function ClientDrawer({
                       <SelectItem value="_none_">
                         <span className="text-muted-foreground">None (Top-level client)</span>
                       </SelectItem>
+                      {defaultParentClient && !topLevelClients.some((c) => c.id === defaultParentClient.id) && (
+                        <SelectItem key={defaultParentClient.id} value={defaultParentClient.id}>
+                          <div className="flex items-center gap-2">
+                            <Building2 className="h-4 w-4 text-muted-foreground" />
+                            {defaultParentClient.companyName}
+                          </div>
+                        </SelectItem>
+                      )}
                       {topLevelClients.map((parent) => (
                         <SelectItem key={parent.id} value={parent.id}>
                           <div className="flex items-center gap-2">

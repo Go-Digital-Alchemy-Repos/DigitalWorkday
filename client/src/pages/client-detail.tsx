@@ -2340,6 +2340,7 @@ export default function ClientDetailPage() {
         onSubmit={async (data) => { await createChildClientMutation.mutateAsync(data); }}
         isLoading={createChildClientMutation.isPending}
         mode="create"
+        defaultParentClientId={client?.id}
       />
 
       <Sheet open={addProjectOpen} onOpenChange={handleCloseProjectSheet}>
