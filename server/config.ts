@@ -175,8 +175,6 @@ export const config = {
     documentsUsingAssets: optionalEnvBool("DOCUMENTS_USING_ASSETS", false),
     clientProfileLayoutV2: optionalEnvBool("CLIENT_PROFILE_LAYOUT_V2", true),
     clientCommandPaletteV1: optionalEnvBool("CLIENT_COMMAND_PALETTE_V1", true),
-    clientControlCenterPremium: optionalEnvBool("CLIENT_CONTROL_CENTER_PREMIUM", true),
-    clientControlCenterPinnedWidgets: optionalEnvBool("CLIENT_CONTROL_CENTER_PINNED_WIDGETS", true),
     notificationsGroupingV1: optionalEnvBool("NOTIFICATIONS_GROUPING_V1", true),
     prefetchV1: optionalEnvBool("PREFETCH_V1", true),
     virtualizationV1: optionalEnvBool("VIRTUALIZATION_V1", true),

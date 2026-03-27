@@ -227,10 +227,6 @@ export const tenantSettings = pgTable("tenant_settings", {
   index("tenant_settings_tenant_idx").on(table.tenantId),
 ]);
 
-/**
- * Control Center Widget Layouts - stores per-tenant (optionally per-workspace)
- * widget layout configuration for the client profile Control Center.
- */
 export const controlCenterWidgetLayouts = pgTable("control_center_widget_layouts", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),

@@ -12,7 +12,6 @@ import {
   MessageSquare,
   Globe,
   PackageOpen,
-  Settings2,
 } from "lucide-react";
 
 export interface ClientProfileSection {
@@ -24,7 +23,6 @@ export interface ClientProfileSection {
   requiresCrmFlag?: keyof CrmFlagRequirements;
   requiresFeatureFlag?: keyof FeatureFlagRequirements;
   badgeText?: string;
-  isControlCenter?: boolean;
 }
 
 interface CrmFlagRequirements {
@@ -35,27 +33,19 @@ interface CrmFlagRequirements {
 
 interface FeatureFlagRequirements {
   assetLibraryV2: boolean;
-  clientControlCenterPremium: boolean;
 }
-
-export const CONTROL_CENTER_CHILD_IDS = new Set([
-  "activity",
-  "reports",
-  "portal",
-]);
 
 export const ALL_CLIENT_PROFILE_SECTIONS: ClientProfileSection[] = [
   { id: "overview", label: "Overview", icon: LayoutDashboard, testId: "tab-overview", primary: true },
-  { id: "control-center", label: "Control Center", icon: Settings2, testId: "tab-control-center", primary: true, isControlCenter: true },
   { id: "contacts", label: "Contacts", icon: Users, testId: "tab-contacts", primary: true },
   { id: "projects", label: "Projects", icon: FolderKanban, testId: "tab-projects", primary: true },
   { id: "divisions", label: "Divisions", icon: Layers, testId: "tab-divisions", primary: true },
   { id: "activity", label: "Activity", icon: Activity, testId: "tab-activity", primary: true },
-  { id: "reports", label: "Reports", icon: BarChart3, testId: "tab-reports", primary: false, requiresCrmFlag: "client360" },
+  { id: "reports", label: "Reports", icon: BarChart3, testId: "tab-reports", primary: true, requiresCrmFlag: "client360" },
   { id: "notes", label: "Notes", icon: StickyNote, testId: "tab-notes", primary: false },
   { id: "approvals", label: "Approvals", icon: ClipboardCheck, testId: "tab-approvals", primary: false, requiresCrmFlag: "approvals" },
   { id: "messages", label: "Messages", icon: MessageSquare, testId: "tab-messages", primary: false, requiresCrmFlag: "clientMessaging" },
-  { id: "portal", label: "Portal Users", icon: Globe, testId: "tab-portal", primary: false },
+  { id: "portal", label: "Portal Users", icon: Globe, testId: "tab-portal", primary: true },
   { id: "asset-library", label: "Asset Library", icon: PackageOpen, testId: "tab-asset-library", primary: true, requiresFeatureFlag: "assetLibraryV2" },
 ];
 

@@ -93,7 +93,6 @@ import {
   KeyRound,
   Copy,
   Check,
-  Settings2,
   ShieldCheck,
   DollarSign,
   TrendingUp,
@@ -106,7 +105,7 @@ import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { AssetLibraryPanel } from "@/features/assetLibrary/AssetLibraryPanel";
 import { StartTimerDrawer } from "@/features/timer/start-timer-drawer";
-import { ClientDrawer, ClientSectionSwitcher, getVisibleSections, CONTROL_CENTER_CHILD_IDS, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState, ControlCenterSection, ClientProfitabilityCard, ClientQuickBooksCard } from "@/features/clients";
+import { ClientDrawer, ClientSectionSwitcher, getVisibleSections, useClientProfileSection, ClientCommandPalette, ClientCommandPaletteMobileTrigger, useClientCommandPaletteState, ClientProfitabilityCard, ClientQuickBooksCard } from "@/features/clients";
 import { ClientPortalUsersTab } from "@/components/client-portal-users-tab";
 import { ClientNotesTab } from "@/components/client-notes-tab";
 import { ClientDocumentsPanel } from "@/components/client-documents-panel";
@@ -297,6 +296,7 @@ export default function ClientDetailPage() {
   const [convertToPortalOpen, setConvertToPortalOpen] = useState(false);
   const [generatedCredentials, setGeneratedCredentials] = useState<{ email: string; password: string } | null>(null);
   const [copiedField, setCopiedField] = useState<"email" | "password" | null>(null);
+  const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [childClientDrawerOpen, setChildClientDrawerOpen] = useState(false);
 
   const { user } = useAuth();
@@ -308,27 +308,12 @@ export default function ClientDetailPage() {
     [crmFlags, featureFlags],
   );
 
-  const hasControlCenter = useMemo(
-    () => allVisibleSections.some((s) => s.id === "control-center"),
-    [allVisibleSections],
-  );
-
-  const tabBarSections = useMemo(
-    () =>
-      allVisibleSections.filter((s) => s.id !== "control-center" && !CONTROL_CENTER_CHILD_IDS.has(s.id)),
-    [allVisibleSections],
-  );
+  const tabBarSections = allVisibleSections;
 
   const visibleSections = allVisibleSections;
   const { activeSection, setActiveSection } = useClientProfileSection(visibleSections, clientId || "");
   const cmdPalette = useClientCommandPaletteState();
   const useV2Layout = featureFlags.clientProfileLayoutV2;
-
-  useEffect(() => {
-    if (activeSection === "control-center") {
-      setActiveTab("control-center");
-    }
-  }, [activeSection]);
 
   const { data: client, isLoading } = useQuery<ClientWithContacts>({
     queryKey: ["/api/clients", clientId],
@@ -356,6 +341,22 @@ export default function ClientDetailPage() {
       setMailingSameAsPhysical(!hasMailingData);
     }
   }, [client?.id, client?.mailingAddressLine1, client?.mailingCity, client?.mailingState, client?.mailingPostalCode, client?.mailingCountry]);
+
+  const canDeleteClient = user?.role === "super_user" || user?.role === "tenant_owner" || user?.role === "admin";
+
+  const deleteClientMutation = useMutation({
+    mutationFn: async () => {
+      return apiRequest("DELETE", `/api/clients/${clientId}`);
+    },
+    onSuccess: () => {
+      toast({ title: "Client deleted successfully" });
+      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      navigate("/clients");
+    },
+    onError: () => {
+      toast({ title: "Failed to delete client", variant: "destructive" });
+    },
+  });
 
   const childClients = useMemo(() => {
     if (!clientId || !allClients.length) return [];
@@ -830,18 +831,6 @@ export default function ClientDetailPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          <Button
-            variant="default"
-            className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
-            onClick={() => {
-              setActiveSection("control-center");
-              setActiveTab("control-center");
-            }}
-            data-testid="button-control-center-client"
-          >
-            <Settings2 className="h-4 w-4 mr-2" />
-            Control Center
-          </Button>
           <Button 
             variant="default" 
             className="bg-blue-600 hover:bg-blue-700 text-white shadow-sm"
@@ -851,6 +840,18 @@ export default function ClientDetailPage() {
             <Play className="h-4 w-4 mr-2" />
             Start Timer
           </Button>
+          {canDeleteClient && (
+            <Button
+              variant="outline"
+              size="icon"
+              className="text-destructive hover:bg-destructive/10 border-destructive/30"
+              onClick={() => setDeleteDialogOpen(true)}
+              title="Delete client"
+              data-testid="button-delete-client"
+            >
+              <Trash2 className="h-4 w-4" />
+            </Button>
+          )}
         </div>
       </div>
 
@@ -873,22 +874,10 @@ export default function ClientDetailPage() {
           </div>
         )}
 
-        {activeSection === "control-center" && (
-          <div className="overflow-auto">
-            <ControlCenterSection
-              clientId={clientId || ""}
-              onNavigateTab={(tab) => {
-                setActiveTab(tab);
-                setActiveSection(tab);
-              }}
-            />
-          </div>
-        )}
-
         <Tabs value={useV2Layout ? activeSection : activeTab} onValueChange={(val) => {
           setActiveSection(val);
           setActiveTab(val);
-        }} className={activeSection === "control-center" ? "hidden" : "h-full"}>
+        }} className="h-full">
           {!useV2Layout && (
             <div className="px-6 py-4 border-b border-border">
               <TabsList>
@@ -941,17 +930,6 @@ export default function ClientDetailPage() {
                 )}
               </TabsList>
             </div>
-          )}
-
-          {!useV2Layout && (
-            <TabsContent value="control-center" className="overflow-auto">
-              <ControlCenterSection
-                clientId={clientId || ""}
-                onNavigateTab={(tab) => {
-                  setActiveTab(tab);
-                }}
-              />
-            </TabsContent>
           )}
 
           <TabsContent value="overview" className="p-6 overflow-auto">
@@ -2547,6 +2525,29 @@ export default function ClientDetailPage() {
         onOpenChange={setTimerDrawerOpen}
         initialClientId={clientId}
       />
+
+      <AlertDialog open={deleteDialogOpen} onOpenChange={setDeleteDialogOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Delete Client</AlertDialogTitle>
+            <AlertDialogDescription>
+              Are you sure you want to delete "{client?.companyName}"? This action cannot be undone.
+              All associated data will be removed, and any projects linked to this client will be unlinked.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel data-testid="button-cancel-delete-client">Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => deleteClientMutation.mutate()}
+              disabled={deleteClientMutation.isPending}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              data-testid="button-confirm-delete-client"
+            >
+              {deleteClientMutation.isPending ? "Deleting..." : "Delete Client"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <AlertDialog open={convertToPortalOpen} onOpenChange={setConvertToPortalOpen}>
         <AlertDialogContent>

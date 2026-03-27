@@ -29,7 +29,6 @@ import {
   DollarSign,
   Download,
   CalendarIcon,
-  ArrowLeft,
   BarChart3,
 } from "lucide-react";
 import { format } from "date-fns";
@@ -142,16 +141,6 @@ export function ClientReportsTab({ clientId }: { clientId: string }) {
           <BarChart3 className="h-5 w-5 text-muted-foreground" />
           Reports
         </h2>
-        <Button
-          variant="ghost"
-          size="sm"
-          onClick={() => window.dispatchEvent(new CustomEvent("navigate-client-tab", { detail: "control-center" }))}
-          className="text-muted-foreground hover:text-foreground"
-          data-testid="button-back-to-control-center"
-        >
-          <ArrowLeft className="h-4 w-4 mr-1" />
-          Back to Control Center
-        </Button>
       </div>
       <div className="flex flex-wrap items-end gap-3">
         <div>
