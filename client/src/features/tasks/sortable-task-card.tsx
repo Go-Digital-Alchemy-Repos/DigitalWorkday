@@ -1,10 +1,10 @@
 import { useSortable } from "@dnd-kit/sortable";
 import { CSS } from "@dnd-kit/utilities";
 import { TaskCard } from "./task-card";
-import type { TaskWithRelations } from "@shared/schema";
+import type { TaskWithRelations, TaskListItem } from "@shared/schema";
 
 interface SortableTaskCardProps {
-  task: TaskWithRelations;
+  task: TaskListItem | TaskWithRelations;
   view?: "list" | "board";
   onSelect?: () => void;
   onStatusChange?: (completed: boolean) => void;
@@ -12,6 +12,7 @@ interface SortableTaskCardProps {
   onDueDateChange?: (dueDate: Date | null) => void;
   showQuickActions?: boolean;
   projectId?: string;
+  workspaceId?: string;
 }
 
 export function SortableTaskCard({
@@ -23,6 +24,7 @@ export function SortableTaskCard({
   onDueDateChange,
   showQuickActions = false,
   projectId,
+  workspaceId,
 }: SortableTaskCardProps) {
   const {
     attributes,
@@ -51,6 +53,7 @@ export function SortableTaskCard({
         isDragging={isDragging}
         showQuickActions={showQuickActions}
         projectId={projectId}
+        workspaceId={workspaceId}
       />
     </div>
   );

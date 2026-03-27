@@ -33,14 +33,20 @@ import {
 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
-import type { TaskWithRelations, User, Tag } from "@shared/schema";
+import type { TaskWithRelations, TaskListItem, User, Tag } from "@shared/schema";
 import { getPreviewText } from "@/components/richtext/richTextUtils";
 import { usePrefetchTask } from "@/hooks/use-prefetch";
 import { useIsMobile } from "@/hooks/use-mobile";
 import { LogTimeOnCompleteDialog } from "@/components/log-time-on-complete-dialog";
 
+type TaskCardTask = TaskListItem | TaskWithRelations;
+
+function isFullTask(task: TaskCardTask): task is TaskWithRelations {
+  return !('subtaskCount' in task) || 'subtasks' in task;
+}
+
 interface TaskCardProps {
-  task: TaskWithRelations;
+  task: TaskCardTask;
   view?: "list" | "board";
   onSelect?: () => void;
   onStatusChange?: (completed: boolean) => void;
@@ -50,9 +56,10 @@ interface TaskCardProps {
   isDragging?: boolean;
   showQuickActions?: boolean;
   projectId?: string;
+  workspaceId?: string;
 }
 
-function useTaskLink(task: TaskWithRelations, projectId?: string) {
+function useTaskLink(task: TaskCardTask, projectId?: string) {
   const { toast } = useToast();
   const copyLink = (e: React.MouseEvent) => {
     e.stopPropagation();
@@ -67,7 +74,7 @@ function useTaskLink(task: TaskWithRelations, projectId?: string) {
 }
 
 export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function TaskCard(
-  { task, view = "list", onSelect, onStatusChange, onPriorityChange, onDueDateChange, dragHandleProps, isDragging, showQuickActions = false, projectId },
+  { task, view = "list", onSelect, onStatusChange, onPriorityChange, onDueDateChange, dragHandleProps, isDragging, showQuickActions = false, projectId, workspaceId: parentWorkspaceId },
   ref
 ) {
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
@@ -79,14 +86,23 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
   const [justCompleted, setJustCompleted] = useState(false);
   const [showTimeDialog, setShowTimeDialog] = useState(false);
   const timeoutRef = useRef<NodeJS.Timeout | null>(null);
-  const assigneeUsers: Partial<User>[] = task.assignees?.map((a: any) =>
-    a.user ?? (a.userId ? { id: a.userId, name: a.name } : null)
-  ).filter(Boolean) as Partial<User>[] || [];
-  const taskTags: Tag[] = task.tags?.map((tt: any) =>
-    tt.tag ?? (tt.id ? tt : null)
-  ).filter(Boolean) as Tag[] || [];
-  const subtaskCount = task.subtasks?.length || 0;
-  const completedSubtasks = task.subtasks?.filter((s) => s.completed).length || 0;
+  const full = isFullTask(task);
+  const assigneeUsers: Partial<User>[] = full
+    ? (task.assignees?.map((a: any) =>
+        a.user ?? (a.userId ? { id: a.userId, name: a.name } : null)
+      ).filter(Boolean) as Partial<User>[] || [])
+    : ((task as TaskListItem).assignees?.map(a => ({ id: a.userId, name: a.name })) || []);
+  const taskTags: Tag[] = full
+    ? (task.tags?.map((tt: any) =>
+        tt.tag ?? (tt.id ? tt : null)
+      ).filter(Boolean) as Tag[] || [])
+    : ((task as TaskListItem).tags as Tag[] || []);
+  const subtaskCount = full
+    ? (task.subtasks?.length || 0)
+    : ((task as TaskListItem).subtaskCount || 0);
+  const completedSubtasks = full
+    ? (task.subtasks?.filter((s) => s.completed).length || 0)
+    : ((task as TaskListItem).completedSubtaskCount || 0);
 
   useEffect(() => {
     return () => {
@@ -120,8 +136,8 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
       itemTitle={task.title}
       taskId={task.id}
       projectId={task.projectId ?? null}
-      clientId={task.project?.clientId ?? null}
-      workspaceId={task.project?.workspaceId ?? ""}
+      clientId={full ? (task.project?.clientId ?? null) : null}
+      workspaceId={full ? (task.project?.workspaceId ?? parentWorkspaceId ?? "") : (parentWorkspaceId ?? "")}
       onComplete={async () => { triggerComplete(); }}
       onSkip={async () => { triggerComplete(); }}
     />
@@ -228,7 +244,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
             </div>
           )}
 
-          {task.description && getPreviewText(task.description, 150) && (
+          {full && task.description && getPreviewText(task.description, 150) && (
             <p className="text-xs text-muted-foreground line-clamp-2 pl-6">
               {getPreviewText(task.description, 150)}
             </p>
@@ -364,9 +380,9 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
                 {completedSubtasks}/{subtaskCount}
               </span>
             )}
-            {task.project?.name && (
+            {(('projectName' in task ? task.projectName : null) || (full && task.project?.name)) && (
               <span className="text-xs text-muted-foreground truncate max-w-[120px]">
-                {task.project.name}
+                {('projectName' in task ? task.projectName : null) || (full ? task.project?.name : null)}
               </span>
             )}
           </div>
@@ -387,8 +403,8 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
     );
   }
 
-  const projectName = (task as any).projectName ?? (task as any).project?.name ?? null;
-  const clientName = (task as any).clientName ?? (task as any).project?.client?.companyName ?? null;
+  const projectName = ('projectName' in task ? task.projectName : null) ?? (full ? task.project?.name : null) ?? null;
+  const clientName = ('clientName' in task ? task.clientName : null) ?? (full ? (task as any).project?.client?.companyName : null) ?? null;
 
   return (
     <>
@@ -494,7 +510,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
               <div className="flex items-center gap-1.5 min-w-0">
                 <AvatarGroup users={assigneeUsers.slice(0, 1)} max={1} size="sm" />
                 <span className="text-xs text-foreground truncate">
-                  {assigneeUsers[0].name.split(" ")[0]}
+                  {assigneeUsers[0].name?.split(" ")[0]}
                 </span>
                 {assigneeUsers.length > 1 && (
                   <span className="text-xs text-muted-foreground/70 shrink-0">+{assigneeUsers.length - 1}</span>

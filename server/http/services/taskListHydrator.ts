@@ -109,6 +109,7 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
     db.select({
       taskId: subtasks.taskId,
       count: sql<number>`count(*)::int`.as('count'),
+      completedCount: sql<number>`count(*) filter (where ${subtasks.completed} = true)::int`.as('completedCount'),
     })
       .from(subtasks)
       .where(inArray(subtasks.taskId, taskIds))
@@ -155,9 +156,9 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
     }
   }
 
-  const subtaskCountByTask = new Map<string, number>();
+  const subtaskCountByTask = new Map<string, { count: number; completedCount: number }>();
   for (const row of subtaskCounts) {
-    subtaskCountByTask.set(row.taskId, row.count);
+    subtaskCountByTask.set(row.taskId, { count: row.count, completedCount: row.completedCount });
   }
 
   const result: TaskListItem[] = filteredTasks.map(task => {
@@ -186,7 +187,8 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
       isBillable: task.isBillable,
       createdAt: task.createdAt,
       updatedAt: task.updatedAt,
-      subtaskCount: subtaskCountByTask.get(task.id) ?? 0,
+      subtaskCount: subtaskCountByTask.get(task.id)?.count ?? 0,
+      completedSubtaskCount: subtaskCountByTask.get(task.id)?.completedCount ?? 0,
       commentCount: commentCountByTask.get(task.id) ?? 0,
       assigneeCount: taskAssigneeList.length,
       childTaskCount: childTaskCountByTask.get(task.id) ?? 0,

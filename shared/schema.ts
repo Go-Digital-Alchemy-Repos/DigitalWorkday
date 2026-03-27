@@ -3322,6 +3322,7 @@ export type TaskListItem = {
   createdAt: Date | null;
   updatedAt: Date | null;
   subtaskCount: number;
+  completedSubtaskCount: number;
   commentCount: number;
   assigneeCount: number;
   childTaskCount: number;

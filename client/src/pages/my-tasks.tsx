@@ -174,13 +174,14 @@ interface TaskSectionListProps {
   onAddTask?: () => void;
   supportsAddTask?: boolean;
   useVirtualization?: boolean;
+  workspaceId?: string;
 }
 
 const SECTION_INITIAL_SHOW = 20;
 
 const VIRTUALIZATION_THRESHOLD = 20;
 
-function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChange, onDueDateChange, localOrder, onDragEnd, onAddTask, supportsAddTask = false, useVirtualization = false }: TaskSectionListProps) {
+function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChange, onDueDateChange, localOrder, onDragEnd, onAddTask, supportsAddTask = false, useVirtualization = false, workspaceId }: TaskSectionListProps) {
   const [showAll, setShowAll] = useState(false);
   const [isOpen, setIsOpen] = useState(section.defaultOpen);
   const sensors = useSensors(
@@ -266,13 +267,14 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
                   itemContent={(_index, task) => (
                     <SortableTaskCard
                       key={task.id}
-                      task={task as TaskWithRelations}
+                      task={task}
                       view="list"
                       onSelect={() => onTaskSelect(task)}
                       onStatusChange={(completed) => onStatusChange(task.id, completed)}
                       onPriorityChange={(priority) => onPriorityChange(task.id, priority)}
                       onDueDateChange={(dueDate) => onDueDateChange(task.id, dueDate)}
                       showQuickActions
+                      workspaceId={workspaceId}
                     />
                   )}
                 />
@@ -281,13 +283,14 @@ function TaskSectionList({ section, onTaskSelect, onStatusChange, onPriorityChan
                   {visibleTasks.map((task) => (
                     <SortableTaskCard
                       key={task.id}
-                      task={task as TaskWithRelations}
+                      task={task}
                       view="list"
                       onSelect={() => onTaskSelect(task)}
                       onStatusChange={(completed) => onStatusChange(task.id, completed)}
                       onPriorityChange={(priority) => onPriorityChange(task.id, priority)}
                       onDueDateChange={(dueDate) => onDueDateChange(task.id, dueDate)}
                       showQuickActions
+                      workspaceId={workspaceId}
                     />
                   ))}
                 </div>
@@ -466,9 +469,12 @@ export default function MyTasks() {
   useEffect(() => {
     if (isLoading || selectedTask || !urlTaskId) return;
     
-    const taskInList = tasks?.find(t => t.id === urlTaskId);
-    if (taskInList || linkedTask) {
-      setSelectedTask((linkedTask || taskInList) as TaskWithRelations);
+    if (linkedTask) {
+      setSelectedTask(linkedTask);
+    } else if (tasks?.find(t => t.id === urlTaskId)) {
+      fetch(`/api/tasks/${urlTaskId}`)
+        .then(r => r.ok ? r.json() : null)
+        .then(fullTask => { if (fullTask) setSelectedTask(fullTask); });
     }
   }, [tasks, linkedTask, isLoading, selectedTask, urlTaskId]);
 
@@ -508,7 +514,7 @@ export default function MyTasks() {
   });
 
   const updateTaskMutation = useMutation({
-    mutationFn: async ({ taskId, data }: { taskId: string; data: Partial<TaskWithRelations> }) => {
+    mutationFn: async ({ taskId, data }: { taskId: string; data: Record<string, unknown> }) => {
       return apiRequest("PATCH", `/api/tasks/${taskId}`, data);
     },
     onSuccess: () => {
@@ -576,17 +582,14 @@ export default function MyTasks() {
     try {
       const response = await fetch(`/api/tasks/${task.id}`);
       if (response.ok) {
-        const fullTask = await response.json();
+        const fullTask: TaskWithRelations = await response.json();
         setSelectedTask(fullTask);
-      } else {
-        setSelectedTask(task as TaskWithRelations);
       }
     } catch {
-      setSelectedTask(task as TaskWithRelations);
     }
   };
 
-  const handleStatusChange = useCallback((taskId: string, completed: boolean) => {
+  const handleStatusChange = useCallback(async (taskId: string, completed: boolean) => {
     if (!completed) {
       updateTaskMutation.mutate({
         taskId,
@@ -604,8 +607,18 @@ export default function MyTasks() {
       return;
     }
 
-    setPendingCompleteTask(task as TaskWithRelations);
-    setShowLogTimeDialog(true);
+    try {
+      const response = await fetch(`/api/tasks/${taskId}`);
+      if (response.ok) {
+        const fullTask: TaskWithRelations = await response.json();
+        setPendingCompleteTask(fullTask);
+        setShowLogTimeDialog(true);
+      } else {
+        updateTaskMutation.mutate({ taskId, data: { status: "done" } });
+      }
+    } catch {
+      updateTaskMutation.mutate({ taskId, data: { status: "done" } });
+    }
   }, [tasks, updateTaskMutation]);
 
   const handleCompleteTask = useCallback(async () => {
@@ -633,7 +646,7 @@ export default function MyTasks() {
   const handleDueDateChange = useCallback((taskId: string, dueDate: Date | null) => {
     updateTaskMutation.mutate({ 
       taskId, 
-      data: { dueDate: dueDate ? dueDate.toISOString() : null } 
+      data: { dueDate: dueDate ? dueDate.toISOString() : null }
     });
   }, [updateTaskMutation]);
 
@@ -762,8 +775,8 @@ export default function MyTasks() {
       if (debouncedSearch) {
         const search = debouncedSearch.toLowerCase();
         const matchTitle = task.title.toLowerCase().includes(search);
-        const matchDescription = (task as any).description?.toLowerCase().includes(search);
-        const matchProject = (task as any).project?.name?.toLowerCase().includes(search);
+        const matchDescription = ('description' in task ? (task as { description?: string }).description : '')?.toLowerCase().includes(search);
+        const matchProject = ('projectName' in task ? task.projectName : '')?.toLowerCase().includes(search);
         if (!matchTitle && !matchDescription && !matchProject) return false;
       }
       
@@ -996,6 +1009,7 @@ export default function MyTasks() {
                   onAddTask={section.id === "personal" ? () => setShowNewTaskDrawer(true) : undefined}
                   supportsAddTask={section.id === "personal"}
                   useVirtualization={virtualizationV1}
+                  workspaceId={currentWorkspace?.id}
                 />
               ))}
               </div>
