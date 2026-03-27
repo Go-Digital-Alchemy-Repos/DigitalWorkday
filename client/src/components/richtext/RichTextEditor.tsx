@@ -400,8 +400,9 @@ export function RichTextEditor({
                 }
               }
             },
-            onUpdate: (props: { query: string; clientRect?: (() => DOMRect | null) | null }) => {
+            onUpdate: (props: { query: string; command: (attrs: Record<string, string>) => void; clientRect?: (() => DOMRect | null) | null }) => {
               setMentionQuery(props.query);
+              setMentionCommand(() => props.command);
               if (props.clientRect) {
                 const rect = props.clientRect();
                 if (rect) {
