@@ -259,7 +259,7 @@ export async function notifyTaskAssigned(
     `${assignerName} assigned you a task in ${projectName}`,
     { taskId, projectName },
     context,
-    { entityType: "task", entityId: taskId, href: `/tasks?taskId=${taskId}` }
+    { entityType: "task", entityId: taskId, href: `/my-tasks?taskId=${taskId}` }
   );
 }
 
@@ -277,7 +277,7 @@ export async function notifyTaskCompleted(
     `${completedByName} completed this task`,
     { taskId },
     context,
-    { entityType: "task", entityId: taskId, href: `/tasks?taskId=${taskId}` }
+    { entityType: "task", entityId: taskId, href: `/my-tasks?taskId=${taskId}` }
   );
 }
 
@@ -296,7 +296,7 @@ export async function notifyTaskStatusChanged(
     `${changedByName} changed status to ${newStatus}`,
     { taskId, status: newStatus },
     context,
-    { entityType: "task", entityId: taskId, href: `/tasks?taskId=${taskId}` }
+    { entityType: "task", entityId: taskId, href: `/my-tasks?taskId=${taskId}` }
   );
 }
 
@@ -319,7 +319,7 @@ export async function notifyCommentAdded(
     `${commenterName}: ${preview}`,
     { taskId },
     context,
-    { entityType: "task", entityId: taskId, href: `/tasks?taskId=${taskId}` }
+    { entityType: "task", entityId: taskId, href: `/my-tasks?taskId=${taskId}` }
   );
 }
 
@@ -342,7 +342,7 @@ export async function notifyCommentMention(
     `In task "${taskTitle}": ${preview}`,
     { taskId },
     context,
-    { entityType: "task", entityId: taskId, href: `/tasks?taskId=${taskId}`, severity: "warning" }
+    { entityType: "task", entityId: taskId, href: `/my-tasks?taskId=${taskId}`, severity: "warning" }
   );
 }
 
@@ -401,7 +401,7 @@ export async function notifyTaskDeadlineApproaching(
       severity: "warning",
       entityType: "task",
       entityId: taskId,
-      href: `/tasks?taskId=${taskId}`,
+      href: `/my-tasks?taskId=${taskId}`,
       dedupeKey: `deadline:${taskId}`,
     }
   );

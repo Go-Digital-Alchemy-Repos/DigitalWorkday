@@ -154,6 +154,8 @@ const TASK_NOTIFICATION_TYPES = [
   "task_assigned",
   "task_completed",
   "task_status_changed",
+  "comment_added",
+  "comment_mention",
 ];
 
 function isTaskNotification(type: string): boolean {
