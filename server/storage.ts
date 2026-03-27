@@ -186,6 +186,15 @@ export interface IStorage {
   getCalendarTasksByTenant(tenantId: string, workspaceId: string, startDate: Date, endDate: Date): Promise<CalendarTask[]>;
   getCalendarTasksByWorkspace(workspaceId: string, startDate: Date, endDate: Date): Promise<CalendarTask[]>;
   getChildTasks(parentTaskId: string): Promise<TaskWithRelations[]>;
+  getProjectAnalyticsSummary(projectIds: string[]): Promise<Map<string, {
+    openTasks: number;
+    completedTasks: number;
+    overdueTasks: number;
+    dueToday: number;
+    unassignedOpen: number;
+    completionPercent: number;
+    lastActivityAt: string | null;
+  }>>;
   createTask(task: InsertTask): Promise<Task>;
   createChildTask(parentTaskId: string, task: InsertTask): Promise<Task>;
   updateTask(id: string, task: Partial<InsertTask>): Promise<Task | undefined>;
@@ -3577,10 +3586,10 @@ export class DatabaseStorage implements IStorage {
     const [taskAggRows, unassignedRows] = await Promise.all([
       db.select({
         projectId: tasks.projectId,
-        openTasks: sql<number>`count(*) filter (where ${tasks.status} != 'done')::int`,
+        openTasks: sql<number>`count(*) filter (where ${tasks.status} is null or ${tasks.status} != 'done')::int`,
         completedTasks: sql<number>`count(*) filter (where ${tasks.status} = 'done')::int`,
-        overdueTasks: sql<number>`count(*) filter (where ${tasks.status} != 'done' and ${tasks.dueDate}::date < CURRENT_DATE)::int`,
-        dueToday: sql<number>`count(*) filter (where ${tasks.status} != 'done' and ${tasks.dueDate}::date = CURRENT_DATE)::int`,
+        overdueTasks: sql<number>`count(*) filter (where (${tasks.status} is null or ${tasks.status} != 'done') and ${tasks.dueDate}::date < CURRENT_DATE)::int`,
+        dueToday: sql<number>`count(*) filter (where (${tasks.status} is null or ${tasks.status} != 'done') and ${tasks.dueDate}::date = CURRENT_DATE)::int`,
         totalTasks: sql<number>`count(*)::int`,
         lastActivityAt: sql<string>`max(${tasks.updatedAt})`,
       })
@@ -3595,7 +3604,7 @@ export class DatabaseStorage implements IStorage {
         .leftJoin(taskAssignees, eq(taskAssignees.taskId, tasks.id))
         .where(and(
           inArray(tasks.projectId, projectIds),
-          sql`${tasks.status} != 'done'`,
+          sql`(${tasks.status} is null or ${tasks.status} != 'done')`,
           sql`${taskAssignees.id} is null`
         ))
         .groupBy(tasks.projectId),
