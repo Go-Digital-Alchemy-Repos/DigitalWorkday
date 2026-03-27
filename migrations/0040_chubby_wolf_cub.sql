@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS "time_entries_tenant_created_at_idx" ON "time_entries" USING btree ("tenant_id","created_at");

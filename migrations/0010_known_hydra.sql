@@ -1,0 +1,1 @@
+ALTER TABLE "tenant_settings" ADD COLUMN "default_theme_accent" text;

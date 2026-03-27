@@ -1,0 +1,1 @@
+ALTER TABLE "user_ui_preferences" ADD COLUMN "sidebar_project_order" text[];
