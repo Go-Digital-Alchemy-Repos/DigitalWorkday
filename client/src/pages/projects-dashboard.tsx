@@ -1,7 +1,7 @@
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { getPreviewText, toPlainText } from "@/components/richtext";
+import { getPreviewText } from "@/components/richtext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -70,21 +70,77 @@ interface ProjectAnalyticsSummary {
   }>;
 }
 
+const PAGE_SIZE = 25;
+
 export default function ProjectsDashboard() {
   const [searchQuery, setSearchQuery] = useState("");
+  const [debouncedSearch, setDebouncedSearch] = useState("");
   const [statusFilter, setStatusFilter] = useState<string>("active");
   const [clientFilter, setClientFilter] = useState<string>("all");
   const [teamFilter, setTeamFilter] = useState<string>("all");
   const [createProjectOpen, setCreateProjectOpen] = useState(false);
   const [editProjectOpen, setEditProjectOpen] = useState(false);
   const [editingProject, setEditingProject] = useState<ProjectWithCounts | null>(null);
+  const [currentOffset, setCurrentOffset] = useState(0);
+  const [accumulatedProjects, setAccumulatedProjects] = useState<ProjectWithCounts[]>([]);
   const { toast } = useToast();
   const { user } = useAuth();
   const isEmployee = user?.role === UserRole.EMPLOYEE;
 
-  const { data: projects, isLoading: projectsLoading, error: projectsError, refetch: refetchProjects } = useQuery<ProjectWithCounts[]>({
-    queryKey: ["/api/projects", { fields: "minimal", includeCounts: "true", limit: "200" }],
+  useEffect(() => {
+    const timer = setTimeout(() => setDebouncedSearch(searchQuery), 300);
+    return () => clearTimeout(timer);
+  }, [searchQuery]);
+
+  useEffect(() => {
+    setCurrentOffset(0);
+    setAccumulatedProjects([]);
+  }, [debouncedSearch, statusFilter, clientFilter, teamFilter]);
+
+  const queryParams = useMemo(() => {
+    const params: Record<string, string> = {
+      fields: "minimal",
+      includeCounts: "true",
+      limit: String(PAGE_SIZE),
+      offset: String(currentOffset),
+      sortBy: "name",
+      sortDir: "asc",
+    };
+    if (statusFilter !== "all") params.status = statusFilter;
+    if (clientFilter !== "all") params.clientId = clientFilter;
+    if (teamFilter !== "all") params.teamId = teamFilter;
+    if (debouncedSearch) params.search = debouncedSearch;
+    return params;
+  }, [statusFilter, clientFilter, teamFilter, debouncedSearch, currentOffset]);
+
+  const { data: projectPage, isLoading: projectsLoading, error: projectsError, isFetching, refetch: refetchProjects } = useQuery<ProjectWithCounts[]>({
+    queryKey: ["/api/projects", queryParams],
   });
+
+  useEffect(() => {
+    if (projectPage) {
+      if (currentOffset === 0) {
+        setAccumulatedProjects(projectPage);
+      } else {
+        setAccumulatedProjects(prev => {
+          const existingIds = new Set(prev.map(p => p.id));
+          const newProjects = projectPage.filter(p => !existingIds.has(p.id));
+          return [...prev, ...newProjects];
+        });
+      }
+    }
+  }, [projectPage, currentOffset]);
+
+  const hasMore = (projectPage?.length ?? 0) >= PAGE_SIZE;
+
+  const handleLoadMore = useCallback(() => {
+    setCurrentOffset(prev => prev + PAGE_SIZE);
+  }, []);
+
+  const resetPagination = useCallback(() => {
+    setCurrentOffset(0);
+    setAccumulatedProjects([]);
+  }, []);
 
   const { data: clients } = useQuery<{ id: string; companyName: string; displayName: string | null; status: string | null }[]>({
     queryKey: ["/api/clients", { fields: "minimal" }],
@@ -104,6 +160,7 @@ export default function ProjectsDashboard() {
       return apiRequest("POST", "/api/projects", data);
     },
     onSuccess: () => {
+      resetPagination();
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       setCreateProjectOpen(false);
       toast({ title: "Project created successfully" });
@@ -128,6 +185,7 @@ export default function ProjectsDashboard() {
       return { projectId, updatedProject };
     },
     onSuccess: ({ projectId }) => {
+      resetPagination();
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
       queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "members"] });
       setEditProjectOpen(false);
@@ -151,6 +209,7 @@ export default function ProjectsDashboard() {
       });
     },
     onSuccess: () => {
+      resetPagination();
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
     },
     onError: () => {
@@ -182,34 +241,15 @@ export default function ProjectsDashboard() {
   };
 
   const filteredProjects = useMemo(() => {
-    if (!projects) return [];
-    
-    return projects
-      .filter((project) => {
-        const matchesSearch = !searchQuery || 
-          project.name.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          toPlainText(project.description).toLowerCase().includes(searchQuery.toLowerCase());
-        
-        const isArchived = project.status === "archived";
-        const matchesStatus = statusFilter === "all" || 
-          (statusFilter === "active" && !isArchived) ||
-          (statusFilter === "archived" && isArchived);
-        
-        const matchesClient = clientFilter === "all" || project.clientId === clientFilter;
-        
-        const matchesTeam = teamFilter === "all" || project.teamId === teamFilter;
-        
-        return matchesSearch && matchesStatus && matchesClient && matchesTeam;
-      })
-      .sort((a, b) => {
-        const aSticky = a.stickyAt ? new Date(a.stickyAt).getTime() : 0;
-        const bSticky = b.stickyAt ? new Date(b.stickyAt).getTime() : 0;
-        if (aSticky && !bSticky) return -1;
-        if (!aSticky && bSticky) return 1;
-        if (aSticky && bSticky) return bSticky - aSticky;
-        return a.name.localeCompare(b.name);
-      });
-  }, [projects, searchQuery, statusFilter, clientFilter, teamFilter]);
+    return [...accumulatedProjects].sort((a, b) => {
+      const aSticky = a.stickyAt ? new Date(a.stickyAt).getTime() : 0;
+      const bSticky = b.stickyAt ? new Date(b.stickyAt).getTime() : 0;
+      if (aSticky && !bSticky) return -1;
+      if (!aSticky && bSticky) return 1;
+      if (aSticky && bSticky) return bSticky - aSticky;
+      return 0;
+    });
+  }, [accumulatedProjects]);
 
   const [, navigate] = useLocation();
 
@@ -223,7 +263,7 @@ export default function ProjectsDashboard() {
     return client?.companyName || "-";
   };
 
-  if (projectsLoading) {
+  if (projectsLoading && accumulatedProjects.length === 0) {
     return (
       <PageShell>
         <PageHeader
@@ -311,36 +351,6 @@ export default function ProjectsDashboard() {
       )}
 
       <div className="mb-6" data-testid="projects-pipeline-bar">
-        <div className="flex gap-0.5 h-2.5 rounded-full overflow-hidden bg-muted mb-3">
-          {projects && projects.length > 0 && (
-            <>
-              {(() => {
-                const total = projects.length;
-                const activeCount = projects.filter(p => p.status !== "archived").length;
-                const archivedCount = total - activeCount;
-                const activePct = (activeCount / total) * 100;
-                const archivedPct = (archivedCount / total) * 100;
-                
-                return (
-                  <>
-                    <div 
-                      className="bg-primary transition-all duration-300 cursor-pointer" 
-                      style={{ width: `${Math.max(activePct, 2)}%` }}
-                      onClick={() => setStatusFilter("active")}
-                      title={`Active: ${activeCount}`}
-                    />
-                    <div 
-                      className="bg-muted-foreground/30 transition-all duration-300 cursor-pointer" 
-                      style={{ width: `${Math.max(archivedPct, 2)}%` }}
-                      onClick={() => setStatusFilter("archived")}
-                      title={`Archived: ${archivedCount}`}
-                    />
-                  </>
-                );
-              })()}
-            </>
-          )}
-        </div>
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
           <Button
             variant={statusFilter === "all" ? "secondary" : "ghost"}
@@ -349,7 +359,6 @@ export default function ProjectsDashboard() {
             className="shrink-0 h-8"
           >
             All
-            <span className="ml-1.5 text-xs text-muted-foreground">{projects?.length || 0}</span>
           </Button>
           <Button
             variant={statusFilter === "active" ? "secondary" : "ghost"}
@@ -359,9 +368,11 @@ export default function ProjectsDashboard() {
           >
             <span className="h-2 w-2 rounded-full mr-1.5 shrink-0 bg-primary" />
             Active
-            <span className="ml-1.5 text-xs text-muted-foreground">
-              {projects?.filter(p => p.status !== "archived").length || 0}
-            </span>
+            {analytics?.totals && (
+              <span className="ml-1.5 text-xs text-muted-foreground">
+                {analytics.totals.activeProjects}
+              </span>
+            )}
           </Button>
           <Button
             variant={statusFilter === "archived" ? "secondary" : "ghost"}
@@ -371,9 +382,6 @@ export default function ProjectsDashboard() {
           >
             <span className="h-2 w-2 rounded-full mr-1.5 shrink-0 bg-muted-foreground/30" />
             Archived
-            <span className="ml-1.5 text-xs text-muted-foreground">
-              {projects?.filter(p => p.status === "archived").length || 0}
-            </span>
           </Button>
         </div>
       </div>
@@ -709,6 +717,26 @@ export default function ProjectsDashboard() {
               </TableBody>
             </Table>
           </div>
+
+          {hasMore && (
+            <div className="flex justify-center mt-6">
+              <Button
+                variant="outline"
+                onClick={handleLoadMore}
+                disabled={isFetching}
+                data-testid="button-load-more"
+              >
+                {isFetching && currentOffset > 0 ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  "Load More"
+                )}
+              </Button>
+            </div>
+          )}
         </>
       )}
 

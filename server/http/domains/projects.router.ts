@@ -68,7 +68,7 @@ import {
 } from "@shared/schema";
 import type { ProjectTemplateContent } from "@shared/schema";
 import { db } from "../../db";
-import { eq, and, inArray, ilike, asc, desc, sql, count } from "drizzle-orm";
+import { eq, ne, or, and, inArray, ilike, asc, desc, sql, count } from "drizzle-orm";
 import { config } from "../../config";
 import { canManageProjectAccess } from "../../lib/privateVisibility";
 import { getEffectiveTenantId } from "../../middleware/tenantContext";
@@ -131,10 +131,21 @@ router.get("/projects", async (req: Request, res: Response) => {
         if (config.features.enablePrivateProjects) {
           conditions.push(projectVisibilityFilter(userId, tenantId) as any);
         }
-        if (status) conditions.push(eq(projects.status, status));
+        if (status === 'active') {
+          conditions.push(ne(projects.status, 'archived'));
+        } else if (status) {
+          conditions.push(eq(projects.status, status));
+        }
         if (clientId) conditions.push(eq(projects.clientId, clientId));
         if (teamId) conditions.push(eq(projects.teamId, teamId));
-        if (search) conditions.push(ilike(projects.name, `%${search}%`));
+        if (search) {
+          conditions.push(
+            or(
+              ilike(projects.name, `%${search}%`),
+              ilike(projects.description, `%${search}%`)
+            ) as any
+          );
+        }
         
         if (cursor) {
           conditions.push(sql`${projects.createdAt} < ${cursor}` as any);
@@ -146,6 +157,7 @@ router.get("/projects", async (req: Request, res: Response) => {
           'createdAt': projects.createdAt,
           'updatedAt': projects.updatedAt,
           'dueDate': projects.createdAt,
+          'stickyAt': projects.stickyAt,
         } as Record<string, typeof projects.createdAt>)[sortBy] ?? projects.createdAt;
         const order = sortDir === 'asc' ? asc(sortCol) : desc(sortCol);
         
