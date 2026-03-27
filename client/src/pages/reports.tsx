@@ -1,6 +1,6 @@
-import { useState, lazy, Suspense } from "react";
+import { lazy, Suspense } from "react";
 import { useAuth } from "@/lib/auth";
-import { Redirect } from "wouter";
+import { Redirect, useLocation } from "wouter";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -24,6 +24,22 @@ const ClientCommandCenter = lazy(() => import("@/components/reports/client-comma
 const TimeWorkloadCommandCenter = lazy(() => import("@/components/reports/time-workload-command-center").then(m => ({ default: m.TimeWorkloadCommandCenter })));
 
 type ReportView = "landing" | "time-workload-cc" | "project-cc" | "messages" | "employee-cc" | "client-cc";
+
+const VIEW_TO_PATH: Record<Exclude<ReportView, "landing">, string> = {
+  "project-cc":       "/reports/projects",
+  "employee-cc":      "/reports/employees",
+  "client-cc":        "/reports/clients",
+  "time-workload-cc": "/reports/time-workload",
+  "messages":         "/reports/messages",
+};
+
+const PATH_TO_VIEW: Record<string, ReportView> = {
+  "/reports/projects":      "project-cc",
+  "/reports/employees":     "employee-cc",
+  "/reports/clients":       "client-cc",
+  "/reports/time-workload": "time-workload-cc",
+  "/reports/messages":      "messages",
+};
 
 const REPORT_TABS: Array<{ view: Exclude<ReportView, "landing">; label: string; Icon: React.ElementType; flag?: keyof import("@/hooks/use-feature-flags").FeatureFlags }> = [
   { view: "project-cc",        label: "Project Command Center",         Icon: BarChart3 },
@@ -67,7 +83,8 @@ function ReportCard({ icon, title, description, onClick, color }: ReportCardProp
 
 export default function ReportsPage() {
   const { user, isLoading } = useAuth();
-  const [currentView, setCurrentView] = useState<ReportView>("landing");
+  const [location, navigate] = useLocation();
+  const currentView: ReportView = PATH_TO_VIEW[location] || "landing";
   const flags = useFeatureFlags();
 
   const canAccessReports = 
@@ -148,7 +165,7 @@ export default function ReportsPage() {
                 icon={category.icon}
                 title={category.title}
                 description={category.description}
-                onClick={() => setCurrentView(category.view)}
+                onClick={() => navigate(VIEW_TO_PATH[category.view])}
                 color={category.color}
               />
             ))}
@@ -214,7 +231,7 @@ export default function ReportsPage() {
         <div className="mb-4 sm:mb-6">
           <div className="flex items-center gap-2 mb-2 sm:mb-3">
             <button
-              onClick={() => setCurrentView("landing")}
+              onClick={() => navigate("/reports")}
               data-testid="button-back-to-reports"
               className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors min-h-[44px] sm:min-h-0"
             >
@@ -237,7 +254,7 @@ export default function ReportsPage() {
               label: tab.label,
             }))}
             value={currentView}
-            onValueChange={(v) => setCurrentView(v as ReportView)}
+            onValueChange={(v) => navigate(VIEW_TO_PATH[v as Exclude<ReportView, "landing">])}
           />
           <div className="hidden md:flex items-center border-b overflow-x-auto">
             {REPORT_TABS.filter(tab => !tab.flag || flags[tab.flag]).map((tab) => {
@@ -245,7 +262,7 @@ export default function ReportsPage() {
               return (
                 <button
                   key={tab.view}
-                  onClick={() => setCurrentView(tab.view)}
+                  onClick={() => navigate(VIEW_TO_PATH[tab.view])}
                   data-testid={`tab-report-${tab.view}`}
                   className={cn(
                     "flex items-center gap-1.5 px-3.5 py-2.5 text-sm font-medium whitespace-nowrap border-b-2 -mb-px transition-colors shrink-0",

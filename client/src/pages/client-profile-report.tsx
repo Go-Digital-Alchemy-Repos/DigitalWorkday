@@ -460,10 +460,10 @@ export default function ClientProfileReportPage() {
       <div className="border-b bg-background/95 backdrop-blur shrink-0">
         <div className="container max-w-7xl p-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Link href="/reports">
+            <Link href="/reports/clients">
               <Button variant="ghost" size="sm" className="gap-1" data-testid="button-back-to-reports">
                 <ChevronLeft className="h-4 w-4" />
-                Back
+                Client Reports
               </Button>
             </Link>
             <h1 className="text-xl font-bold hidden sm:block">Client Intelligence Profile</h1>

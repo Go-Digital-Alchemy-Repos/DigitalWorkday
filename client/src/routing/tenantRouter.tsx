@@ -141,6 +141,21 @@ function TenantRouter() {
         <Route path="/reports/clients/:clientId">
           {() => <TenantRouteGuard component={ClientProfileReportPage} />}
         </Route>
+        <Route path="/reports/employees">
+          {() => <TenantRouteGuard component={ReportsPage} />}
+        </Route>
+        <Route path="/reports/clients">
+          {() => <TenantRouteGuard component={ReportsPage} />}
+        </Route>
+        <Route path="/reports/projects">
+          {() => <TenantRouteGuard component={ReportsPage} />}
+        </Route>
+        <Route path="/reports/time-workload">
+          {() => <TenantRouteGuard component={ReportsPage} />}
+        </Route>
+        <Route path="/reports/messages">
+          {() => <TenantRouteGuard component={ReportsPage} />}
+        </Route>
         <Route path="/reports">
           {() => <TenantRouteGuard component={ReportsPage} />}
         </Route>
