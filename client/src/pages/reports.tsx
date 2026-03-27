@@ -10,7 +10,6 @@ import {
   Clock, 
   Users, 
   ArrowLeft,
-  FileText,
   Building2,
 } from "lucide-react";
 import { MobileTabSelect } from "@/components/reports/mobile-tab-select";
@@ -166,22 +165,6 @@ export default function ReportsPage() {
             ))}
           </div>
 
-          <Card className="mb-8">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <FileText className="h-5 w-5" />
-                Quick Stats
-              </CardTitle>
-              <CardDescription>
-                Overview of your organization's key metrics
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="text-sm text-muted-foreground">
-                Select a report category above to view detailed analytics and export options.
-              </div>
-            </CardContent>
-          </Card>
         </div>
       </ScrollArea>
     );
