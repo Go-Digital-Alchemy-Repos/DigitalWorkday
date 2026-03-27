@@ -1,21 +1,6 @@
 import { build as esbuild } from "esbuild";
 import { build as viteBuild } from "vite";
 import { rm, readFile } from "fs/promises";
-import { execSync } from "child_process";
-
-function runPreDeployCleanup(): void {
-  try {
-    execSync("npx tsx scripts/pre-deploy-cleanup.ts", {
-      stdio: "inherit",
-      timeout: 30_000,
-    });
-  } catch (error: unknown) {
-    const message =
-      error instanceof Error ? error.message : String(error);
-    console.error("[build] Pre-deploy cleanup failed:", message);
-    process.exit(1);
-  }
-}
 
 const allowlist = [
   "@google/generative-ai",
@@ -46,7 +31,6 @@ const allowlist = [
 ];
 
 async function buildAll() {
-  runPreDeployCleanup();
   await rm("dist", { recursive: true, force: true });
 
   console.log("building client...");
