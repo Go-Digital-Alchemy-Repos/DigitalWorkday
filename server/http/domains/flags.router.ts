@@ -43,7 +43,6 @@ router.get("/features/flags", async (_req, res) => {
       reportClientAnalyticsV2: config.features.reportClientAnalyticsV2,
       reportTimeTrackingV2: config.features.reportTimeTrackingV2,
       reportProjectAnalysisV2: config.features.reportProjectAnalysisV2,
-      reportMessagesV2: config.features.reportMessagesV2,
       reportPipelineV2: config.features.reportPipelineV2,
       enableEmployeeCommandCenter: config.features.enableEmployeeCommandCenter,
       enableClientCommandCenter: config.features.enableClientCommandCenter,

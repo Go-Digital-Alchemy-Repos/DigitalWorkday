@@ -188,7 +188,6 @@ export const config = {
     reportClientAnalyticsV2: optionalEnvBool("REPORT_CLIENT_ANALYTICS_V2", false),
     reportTimeTrackingV2: optionalEnvBool("REPORT_TIME_TRACKING_V2", false),
     reportProjectAnalysisV2: optionalEnvBool("REPORT_PROJECT_ANALYSIS_V2", false),
-    reportMessagesV2: optionalEnvBool("REPORT_MESSAGES_V2", false),
     reportPipelineV2: optionalEnvBool("REPORT_PIPELINE_V2", false),
     enableEmployeeCommandCenter: optionalEnvBool("ENABLE_EMPLOYEE_COMMAND_CENTER", true),
     enableEmployeeProfileReport: optionalEnvBool("ENABLE_EMPLOYEE_PROFILE_REPORT", true),

@@ -153,9 +153,6 @@ function TenantRouter() {
         <Route path="/reports/time-workload">
           {() => <TenantRouteGuard component={ReportsPage} />}
         </Route>
-        <Route path="/reports/messages">
-          {() => <TenantRouteGuard component={ReportsPage} />}
-        </Route>
         <Route path="/reports">
           {() => <TenantRouteGuard component={ReportsPage} />}
         </Route>

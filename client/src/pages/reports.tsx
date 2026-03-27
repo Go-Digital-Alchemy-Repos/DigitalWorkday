@@ -11,26 +11,23 @@ import {
   Users, 
   ArrowLeft,
   FileText,
-  MessageSquare,
   Building2,
 } from "lucide-react";
 import { MobileTabSelect } from "@/components/reports/mobile-tab-select";
 import { cn } from "@/lib/utils";
 
 const ProjectCommandCenter = lazy(() => import("@/components/reports/project-command-center").then(m => ({ default: m.ProjectCommandCenter })));
-const MessagesReports = lazy(() => import("@/components/reports/messages-reports").then(m => ({ default: m.MessagesReports })));
 const EmployeeCommandCenter = lazy(() => import("@/components/reports/employee-command-center").then(m => ({ default: m.EmployeeCommandCenter })));
 const ClientCommandCenter = lazy(() => import("@/components/reports/client-command-center").then(m => ({ default: m.ClientCommandCenter })));
 const TimeWorkloadCommandCenter = lazy(() => import("@/components/reports/time-workload-command-center").then(m => ({ default: m.TimeWorkloadCommandCenter })));
 
-type ReportView = "landing" | "time-workload-cc" | "project-cc" | "messages" | "employee-cc" | "client-cc";
+type ReportView = "landing" | "time-workload-cc" | "project-cc" | "employee-cc" | "client-cc";
 
 const VIEW_TO_PATH: Record<Exclude<ReportView, "landing">, string> = {
   "project-cc":       "/reports/projects",
   "employee-cc":      "/reports/employees",
   "client-cc":        "/reports/clients",
   "time-workload-cc": "/reports/time-workload",
-  "messages":         "/reports/messages",
 };
 
 const PATH_TO_VIEW: Record<string, ReportView> = {
@@ -38,7 +35,6 @@ const PATH_TO_VIEW: Record<string, ReportView> = {
   "/reports/employees":     "employee-cc",
   "/reports/clients":       "client-cc",
   "/reports/time-workload": "time-workload-cc",
-  "/reports/messages":      "messages",
 };
 
 const REPORT_TABS: Array<{ view: Exclude<ReportView, "landing">; label: string; Icon: React.ElementType; flag?: keyof import("@/hooks/use-feature-flags").FeatureFlags }> = [
@@ -46,7 +42,6 @@ const REPORT_TABS: Array<{ view: Exclude<ReportView, "landing">; label: string; 
   { view: "employee-cc",       label: "Employee Command Center",        Icon: Users,         flag: "enableEmployeeCommandCenter" },
   { view: "client-cc",         label: "Client Command Center",          Icon: Building2,     flag: "enableClientCommandCenter" },
   { view: "time-workload-cc",  label: "Time & Workload Command Center", Icon: Clock },
-  { view: "messages",          label: "Messages",                       Icon: MessageSquare },
 ];
 
 
@@ -133,13 +128,6 @@ export default function ReportsPage() {
       view: "time-workload-cc" as ReportView,
       color: "bg-teal-600",
     },
-    {
-      icon: <MessageSquare className="h-6 w-6 text-white" />,
-      title: "Messages",
-      description: "Response times, resolution rates, overdue threads, and conversation volume by client",
-      view: "messages" as ReportView,
-      color: "bg-amber-500",
-    },
   ];
 
   const isDisabledRoute =
@@ -205,7 +193,6 @@ export default function ReportsPage() {
       case "client-cc":        return "Client Command Center";
       case "project-cc":       return "Project Command Center";
       case "time-workload-cc": return "Time & Workload Command Center";
-      case "messages":         return "Messages Reports";
       default:                 return "Reports";
     }
   };
@@ -216,7 +203,6 @@ export default function ReportsPage() {
       case "client-cc":        return "Client engagement, time, task load, SLA and risk analysis per client";
       case "project-cc":       return "Project health, task metrics, time distribution, and risk scoring";
       case "time-workload-cc": return "Unified time tracking, workload distribution, capacity planning and risk analysis";
-      case "messages":         return "Response times, SLA compliance, and conversation analytics";
       default:                 return "Detailed analytics and exportable reports";
     }
   };
@@ -227,7 +213,6 @@ export default function ReportsPage() {
       case "client-cc":        return <Building2 className="h-5 w-5 text-primary" />;
       case "project-cc":       return <BarChart3 className="h-5 w-5 text-primary" />;
       case "time-workload-cc": return <Clock className="h-5 w-5 text-primary" />;
-      case "messages":         return <MessageSquare className="h-5 w-5 text-primary" />;
       default:                 return <BarChart3 className="h-5 w-5 text-primary" />;
     }
   };
@@ -310,8 +295,6 @@ export default function ReportsPage() {
             <ProjectCommandCenter />
           ) : currentView === "time-workload-cc" ? (
             <TimeWorkloadCommandCenter />
-          ) : currentView === "messages" ? (
-            <MessagesReports />
           ) : null}
         </Suspense>
       </div>
