@@ -347,7 +347,7 @@ function TrackedTimeCard({ clientId }: { clientId: string }) {
                   {entries.map((entry) => (
                     <TableRow key={entry.id} data-testid={`row-time-entry-${entry.id}`}>
                       <TableCell className="pl-6 font-medium max-w-[200px] truncate" data-testid={`text-entry-task-${entry.id}`}>
-                        {entry.task?.title || entry.title || "No title"}
+                        {entry.title || entry.task?.title || "No title"}
                       </TableCell>
                       <TableCell className="hidden sm:table-cell text-muted-foreground max-w-[250px] truncate" data-testid={`text-entry-desc-${entry.id}`}>
                         {entry.description || "—"}
