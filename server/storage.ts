@@ -3562,6 +3562,75 @@ export class DatabaseStorage implements IStorage {
    * @param projectIds - Array of project IDs to fetch tasks for
    * @returns Map of projectId -> array of lightweight task objects
    */
+
+  async getProjectAnalyticsSummary(projectIds: string[]): Promise<Map<string, {
+    openTasks: number;
+    completedTasks: number;
+    overdueTasks: number;
+    dueToday: number;
+    unassignedOpen: number;
+    completionPercent: number;
+    lastActivityAt: string | null;
+  }>> {
+    if (projectIds.length === 0) return new Map();
+
+    const [taskAggRows, unassignedRows] = await Promise.all([
+      db.select({
+        projectId: tasks.projectId,
+        openTasks: sql<number>`count(*) filter (where ${tasks.status} != 'done')::int`,
+        completedTasks: sql<number>`count(*) filter (where ${tasks.status} = 'done')::int`,
+        overdueTasks: sql<number>`count(*) filter (where ${tasks.status} != 'done' and ${tasks.dueDate}::date < CURRENT_DATE)::int`,
+        dueToday: sql<number>`count(*) filter (where ${tasks.status} != 'done' and ${tasks.dueDate}::date = CURRENT_DATE)::int`,
+        totalTasks: sql<number>`count(*)::int`,
+        lastActivityAt: sql<string>`max(${tasks.updatedAt})`,
+      })
+        .from(tasks)
+        .where(inArray(tasks.projectId, projectIds))
+        .groupBy(tasks.projectId),
+      db.select({
+        projectId: tasks.projectId,
+        count: sql<number>`count(*)::int`,
+      })
+        .from(tasks)
+        .leftJoin(taskAssignees, eq(taskAssignees.taskId, tasks.id))
+        .where(and(
+          inArray(tasks.projectId, projectIds),
+          sql`${tasks.status} != 'done'`,
+          sql`${taskAssignees.id} is null`
+        ))
+        .groupBy(tasks.projectId),
+    ]);
+
+    const unassignedMap = new Map(unassignedRows.map(r => [r.projectId!, r.count]));
+
+    const result = new Map<string, {
+      openTasks: number;
+      completedTasks: number;
+      overdueTasks: number;
+      dueToday: number;
+      unassignedOpen: number;
+      completionPercent: number;
+      lastActivityAt: string | null;
+    }>();
+
+    for (const row of taskAggRows) {
+      if (!row.projectId) continue;
+      const total = row.totalTasks || 0;
+      const completed = row.completedTasks || 0;
+      result.set(row.projectId, {
+        openTasks: row.openTasks || 0,
+        completedTasks: completed,
+        overdueTasks: row.overdueTasks || 0,
+        dueToday: row.dueToday || 0,
+        unassignedOpen: unassignedMap.get(row.projectId) || 0,
+        completionPercent: total > 0 ? Math.round((completed / total) * 100) : 0,
+        lastActivityAt: row.lastActivityAt || null,
+      });
+    }
+
+    return result;
+  }
+
   async getTasksByProjectIds(projectIds: string[]): Promise<Map<string, Array<{
     id: string;
     title: string;

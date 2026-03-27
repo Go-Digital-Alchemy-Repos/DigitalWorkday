@@ -155,9 +155,8 @@ router.get("/projects/analytics/summary", async (req, res) => {
       projects = projects.filter(p => p.clientId === clientId);
     }
 
-    // Batch fetch all tasks for all projects at once
     const projectIds = projects.map(p => p.id);
-    const tasksByProject = await storage.getTasksByProjectIds(projectIds);
+    const analyticsMap = await storage.getProjectAnalyticsSummary(projectIds);
 
     let totalOpenTasks = 0;
     let totalOverdueTasks = 0;
@@ -176,43 +175,30 @@ router.get("/projects/analytics/summary", async (req, res) => {
     }> = [];
 
     for (const project of projects) {
-      const tasks = tasksByProject.get(project.id) || [];
-      
-      const openTasks = tasks.filter(t => t.status !== "done");
-      const completedTasks = tasks.filter(t => t.status === "done");
-      const overdueTasks = tasks.filter(isTaskOverdue);
-      const dueToday = tasks.filter(isTaskDueToday);
-      const unassignedOpen = openTasks.filter(t => t.assigneeUserIds.length === 0);
+      const stats = analyticsMap.get(project.id);
+      const openTasks = stats?.openTasks ?? 0;
+      const completedTasks = stats?.completedTasks ?? 0;
+      const overdueTasks = stats?.overdueTasks ?? 0;
+      const dueToday = stats?.dueToday ?? 0;
+      const unassignedOpen = stats?.unassignedOpen ?? 0;
 
-      totalOpenTasks += openTasks.length;
-      totalOverdueTasks += overdueTasks.length;
-      totalDueToday += dueToday.length;
-      totalUnassignedOpen += unassignedOpen.length;
+      totalOpenTasks += openTasks;
+      totalOverdueTasks += overdueTasks;
+      totalDueToday += dueToday;
+      totalUnassignedOpen += unassignedOpen;
 
-      if (overdueTasks.length > 0) {
+      if (overdueTasks > 0) {
         projectsWithOverdue++;
       }
 
-      const totalTasks = tasks.length;
-      const completionPercent = totalTasks > 0 
-        ? Math.round((completedTasks.length / totalTasks) * 100) 
-        : 0;
-
-      const lastActivityAt = tasks.length > 0 
-        ? tasks.reduce((latest, t) => {
-            const taskDate = new Date(t.updatedAt || t.createdAt);
-            return taskDate > latest ? taskDate : latest;
-          }, new Date(0)).toISOString()
-        : null;
-
       perProject.push({
         projectId: project.id,
-        openTasks: openTasks.length,
-        completedTasks: completedTasks.length,
-        overdueTasks: overdueTasks.length,
-        dueToday: dueToday.length,
-        completionPercent,
-        lastActivityAt,
+        openTasks,
+        completedTasks,
+        overdueTasks,
+        dueToday,
+        completionPercent: stats?.completionPercent ?? 0,
+        lastActivityAt: stats?.lastActivityAt ?? null,
       });
     }
 
