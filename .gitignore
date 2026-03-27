@@ -20,9 +20,8 @@ vite.config.ts.*
 service-account*.json
 credentials*.json
 
-# Local database dumps (not migration files)
+# Local database dumps
 *.sql
-!migrations/*.sql
 *.dump
 *.pgdump
 

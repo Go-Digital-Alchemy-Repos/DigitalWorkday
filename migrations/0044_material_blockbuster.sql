@@ -1,1 +1,0 @@
-ALTER TABLE "tasks" ADD COLUMN "is_billable" boolean DEFAULT true NOT NULL;
