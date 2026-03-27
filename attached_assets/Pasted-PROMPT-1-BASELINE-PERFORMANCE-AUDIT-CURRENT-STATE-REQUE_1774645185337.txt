@@ -1,0 +1,57 @@
+PROMPT 1 — BASELINE PERFORMANCE AUDIT + CURRENT-STATE REQUEST FLOW MAPPING
+
+[PASTE THE GLOBAL IMPLEMENTATION GUARDRAILS BLOCK ABOVE FIRST]
+
+TASK
+Perform a current-state performance audit of the Digital Workday app focused only on the following user-facing list experiences and their supporting endpoints:
+
+PRIMARY TARGETS
+- Clients page
+- Projects dashboard
+- My Tasks page
+
+RELATED ROUTES / FLOWS
+- /api/clients
+- client hierarchy / summary / stage summary flows
+- /api/v1/projects
+- /api/projects if present and already implemented
+- /api/tasks/my
+
+GOAL
+Produce a precise baseline of where the current slowness comes from WITHOUT rewriting behavior yet.
+
+YOU MUST DISTINGUISH BETWEEN
+1. Existing backend batching improvements that are already wins and must be preserved
+2. Remaining list-page over-fetching
+3. Remaining client-side filtering / sorting / pagination on large datasets
+4. Remaining heavy detail hydration being done too early
+5. Remaining expensive hierarchy / summary / last-activity backend computations
+
+REQUIRED STEPS
+- Inspect the Clients page request flow and identify every query fired on initial load.
+- Inspect the Projects dashboard request flow and identify every query fired on initial load.
+- Inspect the My Tasks request flow and identify every query fired on initial load.
+- Trace where filtering, sorting, pagination, and heavy relation hydration happen today.
+- Extend existing observability only where needed:
+  - request duration
+  - payload size estimate
+  - query timing if available
+  - route-level performance markers for the target flows
+- Do not alter response shapes or routing behavior yet unless required to add safe instrumentation.
+
+OUT OF SCOPE
+- No route rewrites
+- No DTO changes
+- No UI redesign
+- No service refactor beyond safe instrumentation
+
+SUCCESS CRITERIA
+- We have a route-by-route baseline
+- We know exactly which improvements should happen first
+- Existing batching wins are explicitly documented as preserved
+
+END REPORT MUST INCLUDE
+- Which slowness is payload-size related
+- Which slowness is client-side filtering related
+- Which slowness is backend aggregate-related
+- Recommended order of implementation based on user-perceived impact
