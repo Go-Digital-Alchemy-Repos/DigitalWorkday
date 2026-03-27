@@ -1821,15 +1821,8 @@ export default function ClientsPage() {
   ]);
 
   const handleOpenClientSheet = useCallback((clientId: string) => {
-    if (searchQuery.trim()) {
-      navigate(`/clients/${clientId}`);
-      return;
-    }
-    const listClient = hierarchyClients?.find(c => c.id === clientId);
-    setDetailSheetClientId(clientId);
-    setDetailSheetListItem(listClient ? { companyName: listClient.companyName, displayName: listClient.displayName || undefined, stage: listClient.stage } : null);
-    setDetailSheetOpen(true);
-  }, [hierarchyClients, searchQuery, navigate]);
+    navigate(`/clients/${clientId}`);
+  }, [navigate]);
 
   const handleExportCsv = useCallback(() => {
     if (!hierarchyClients) return;
