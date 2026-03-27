@@ -580,7 +580,7 @@ export default function EmployeeProfileReportPage() {
             <Link href="/reports/employees">
               <Button variant="ghost" size="sm" className="gap-1" data-testid="button-back-to-reports">
                 <ChevronLeft className="h-4 w-4" />
-                Employee Reports
+                Back to Employee Reports
               </Button>
             </Link>
             <h1 className="text-xl font-bold hidden sm:block">Employee Intelligence Profile</h1>

@@ -142,6 +142,13 @@ export default function ReportsPage() {
     },
   ];
 
+  const isDisabledRoute =
+    (currentView === "employee-cc" && !flags.enableEmployeeCommandCenter) ||
+    (currentView === "client-cc" && !flags.enableClientCommandCenter);
+  if (isDisabledRoute) {
+    return <Redirect to="/reports" />;
+  }
+
   if (currentView === "landing") {
     return (
       <ScrollArea className="h-full">

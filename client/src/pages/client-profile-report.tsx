@@ -463,7 +463,7 @@ export default function ClientProfileReportPage() {
             <Link href="/reports/clients">
               <Button variant="ghost" size="sm" className="gap-1" data-testid="button-back-to-reports">
                 <ChevronLeft className="h-4 w-4" />
-                Client Reports
+                Back to Client Reports
               </Button>
             </Link>
             <h1 className="text-xl font-bold hidden sm:block">Client Intelligence Profile</h1>
