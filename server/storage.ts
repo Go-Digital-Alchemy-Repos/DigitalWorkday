@@ -2532,7 +2532,7 @@ export class DatabaseStorage implements IStorage {
     
     const clientIds = allClients.map(c => c.id);
     
-    const [contactCounts, projectCounts, hoursRows] = await Promise.all([
+    const [contactCounts, projectCounts, hoursRows, openTaskCounts, lastActivities, overdueCounts] = await Promise.all([
       db.select({
         clientId: clientContacts.clientId,
         count: sql<number>`count(*)::int`,
@@ -2561,6 +2561,46 @@ export class DatabaseStorage implements IStorage {
           isNotNull(timeEntries.clientId)
         ))
         .groupBy(timeEntries.clientId),
+      db.select({
+        clientId: projects.clientId,
+        count: sql<number>`count(*)::int`,
+      })
+        .from(tasks)
+        .innerJoin(projects, eq(tasks.projectId, projects.id))
+        .where(and(
+          inArray(projects.clientId, clientIds),
+          isNotNull(projects.clientId),
+          inArray(tasks.status, ['todo', 'in_progress'])
+        ))
+        .groupBy(projects.clientId),
+      db.select({
+        clientId: projects.clientId,
+        lastActivity: sql<string>`max(${activityLog.createdAt})`,
+      })
+        .from(activityLog)
+        .innerJoin(tasks, and(
+          eq(activityLog.entityType, 'task'),
+          eq(activityLog.entityId, tasks.id)
+        ))
+        .innerJoin(projects, eq(tasks.projectId, projects.id))
+        .where(and(
+          inArray(projects.clientId, clientIds),
+          isNotNull(projects.clientId)
+        ))
+        .groupBy(projects.clientId),
+      db.select({
+        clientId: projects.clientId,
+        count: sql<number>`count(*)::int`,
+      })
+        .from(tasks)
+        .innerJoin(projects, eq(tasks.projectId, projects.id))
+        .where(and(
+          inArray(projects.clientId, clientIds),
+          isNotNull(projects.clientId),
+          inArray(tasks.status, ['todo', 'in_progress']),
+          sql`${tasks.dueDate} < now()`
+        ))
+        .groupBy(projects.clientId),
     ]);
     
     const contactCountMap = new Map(contactCounts.map(c => [c.clientId, c.count]));
@@ -2574,51 +2614,9 @@ export class DatabaseStorage implements IStorage {
       }
     }
 
-    const openTaskCounts = await db.select({
-      clientId: projects.clientId,
-      count: sql<number>`count(*)::int`,
-    })
-      .from(tasks)
-      .innerJoin(projects, eq(tasks.projectId, projects.id))
-      .where(and(
-        inArray(projects.clientId, clientIds),
-        isNotNull(projects.clientId),
-        inArray(tasks.status, ['todo', 'in_progress'])
-      ))
-      .groupBy(projects.clientId);
-
     const openTaskCountMap = new Map(openTaskCounts.map(t => [t.clientId!, t.count]));
 
-    const lastActivities = await db.select({
-      clientId: projects.clientId,
-      lastActivity: sql<string>`max(${activityLog.createdAt})`,
-    })
-      .from(activityLog)
-      .innerJoin(projects, and(
-        eq(activityLog.entityType, 'task'),
-        sql`${activityLog.entityId} IN (SELECT id FROM tasks WHERE project_id = ${projects.id})`
-      ))
-      .where(and(
-        inArray(projects.clientId, clientIds),
-        isNotNull(projects.clientId)
-      ))
-      .groupBy(projects.clientId);
-
     const lastActivityMap = new Map(lastActivities.map(a => [a.clientId!, a.lastActivity]));
-
-    const overdueCounts = await db.select({
-      clientId: projects.clientId,
-      count: sql<number>`count(*)::int`,
-    })
-      .from(tasks)
-      .innerJoin(projects, eq(tasks.projectId, projects.id))
-      .where(and(
-        inArray(projects.clientId, clientIds),
-        isNotNull(projects.clientId),
-        inArray(tasks.status, ['todo', 'in_progress']),
-        sql`${tasks.dueDate} < now()`
-      ))
-      .groupBy(projects.clientId);
 
     const overdueCountMap = new Map(overdueCounts.map(o => [o.clientId!, o.count]));
 
@@ -2689,36 +2687,38 @@ export class DatabaseStorage implements IStorage {
     let needsAttentionCount = 0;
 
     if (activeClientIds.length > 0) {
-      const overdueCounts = await db.select({
-        clientId: projects.clientId,
-        count: sql<number>`count(*)::int`,
-      })
-        .from(tasks)
-        .innerJoin(projects, eq(tasks.projectId, projects.id))
-        .where(and(
-          inArray(projects.clientId, activeClientIds),
-          isNotNull(projects.clientId),
-          inArray(tasks.status, ['todo', 'in_progress']),
-          sql`${tasks.dueDate} < now()`
-        ))
-        .groupBy(projects.clientId);
+      const [overdueCounts, lastActivities] = await Promise.all([
+        db.select({
+          clientId: projects.clientId,
+          count: sql<number>`count(*)::int`,
+        })
+          .from(tasks)
+          .innerJoin(projects, eq(tasks.projectId, projects.id))
+          .where(and(
+            inArray(projects.clientId, activeClientIds),
+            isNotNull(projects.clientId),
+            inArray(tasks.status, ['todo', 'in_progress']),
+            sql`${tasks.dueDate} < now()`
+          ))
+          .groupBy(projects.clientId),
+        db.select({
+          clientId: projects.clientId,
+          lastActivity: sql<string>`max(${activityLog.createdAt})`,
+        })
+          .from(activityLog)
+          .innerJoin(tasks, and(
+            eq(activityLog.entityType, 'task'),
+            eq(activityLog.entityId, tasks.id)
+          ))
+          .innerJoin(projects, eq(tasks.projectId, projects.id))
+          .where(and(
+            inArray(projects.clientId, activeClientIds),
+            isNotNull(projects.clientId)
+          ))
+          .groupBy(projects.clientId),
+      ]);
 
       const overdueSet = new Set(overdueCounts.map(o => o.clientId!));
-
-      const lastActivities = await db.select({
-        clientId: projects.clientId,
-        lastActivity: sql<string>`max(${activityLog.createdAt})`,
-      })
-        .from(activityLog)
-        .innerJoin(projects, and(
-          eq(activityLog.entityType, 'task'),
-          sql`${activityLog.entityId} IN (SELECT id FROM tasks WHERE project_id = ${projects.id})`
-        ))
-        .where(and(
-          inArray(projects.clientId, activeClientIds),
-          isNotNull(projects.clientId)
-        ))
-        .groupBy(projects.clientId);
 
       const lastActivityMap = new Map(lastActivities.map(a => [a.clientId!, a.lastActivity]));
 

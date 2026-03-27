@@ -1544,9 +1544,20 @@ export default function ClientsPage() {
     queryKey: ["/api/v1/clients/hierarchy/list"],
   });
 
-  const { data: summary, isLoading: summaryLoading } = useQuery<ClientSummary>({
-    queryKey: ["/api/v1/clients/summary"],
-  });
+  const summary = useMemo<ClientSummary | undefined>(() => {
+    if (!hierarchyClients) return undefined;
+    const now = new Date();
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+    return {
+      total: hierarchyClients.length,
+      active: hierarchyClients.filter(c => c.status === 'active').length,
+      inactive: hierarchyClients.filter(c => c.status === 'inactive').length,
+      prospect: hierarchyClients.filter(c => c.status === 'prospect').length,
+      newThisMonth: hierarchyClients.filter(c => new Date(c.createdAt) >= startOfMonth).length,
+      needsAttention: hierarchyClients.filter(c => c.needsAttention).length,
+    };
+  }, [hierarchyClients]);
+  const summaryLoading = isLoading;
 
   const { data: stageSummary, isLoading: stageSummaryLoading } = useQuery<StageSummaryItem[]>({
     queryKey: ["/api/v1/clients/stages/summary"],
@@ -1672,9 +1683,6 @@ export default function ClientsPage() {
         queryKey: ["/api/v1/clients/hierarchy/list"],
       });
       queryClient.invalidateQueries({
-        queryKey: ["/api/v1/clients/summary"],
-      });
-      queryClient.invalidateQueries({
         queryKey: ["/api/v1/clients/stages/summary"],
       });
     },
@@ -1703,9 +1711,6 @@ export default function ClientsPage() {
       queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       queryClient.invalidateQueries({
         queryKey: ["/api/v1/clients/hierarchy/list"],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["/api/v1/clients/summary"],
       });
       queryClient.invalidateQueries({
         queryKey: ["/api/v1/clients/stages/summary"],
