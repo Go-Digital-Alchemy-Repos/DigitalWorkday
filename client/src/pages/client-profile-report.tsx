@@ -233,8 +233,6 @@ function getTimeRangeDates(range: TimeRange): { start: Date; end: Date } {
 function formatDuration(seconds: number): string {
   const h = Math.floor(seconds / 3600);
   const m = Math.floor((seconds % 3600) / 60);
-  if (h === 0) return `${m}m`;
-  if (m === 0) return `${h}h`;
   return `${h}h ${m}m`;
 }
 
@@ -276,7 +274,7 @@ function TrackedTimeCard({ clientId }: { clientId: string }) {
     { value: "day", label: "Day" },
     { value: "week", label: "Week" },
     { value: "month", label: "Month" },
-    { value: "ytd", label: "YTD" },
+    { value: "ytd", label: "Year to Date" },
   ];
 
   return (
