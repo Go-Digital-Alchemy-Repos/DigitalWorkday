@@ -2138,7 +2138,7 @@ export default function ClientDetailPage() {
                         <Badge variant="secondary" className="text-xs">{activeProjects.length}</Badge>
                       </div>
                       {activeProjects.length > 0 ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                           {activeProjects.map((project: any) => (
                             <Link key={project.id} href={`/projects/${project.id}`}>
                               <Card className="cursor-pointer hover-elevate" data-testid={`card-project-${project.id}`}>
@@ -2179,7 +2179,7 @@ export default function ClientDetailPage() {
                         <Badge variant="secondary" className="text-xs">{archivedProjects.length}</Badge>
                       </div>
                       {archivedProjects.length > 0 ? (
-                        <div className="space-y-3">
+                        <div className="space-y-4">
                           {archivedProjects.map((project: any) => (
                             <Link key={project.id} href={`/projects/${project.id}`}>
                               <Card className="cursor-pointer hover-elevate opacity-60" data-testid={`card-project-${project.id}`}>
