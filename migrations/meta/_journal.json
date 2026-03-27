@@ -337,6 +337,13 @@
       "when": 1774549200000,
       "tag": "0047_remove_client_divisions",
       "breakpoints": true
+    },
+    {
+      "idx": 48,
+      "version": "7",
+      "when": 1774625290320,
+      "tag": "0048_naive_fat_cobra",
+      "breakpoints": true
     }
   ]
 }

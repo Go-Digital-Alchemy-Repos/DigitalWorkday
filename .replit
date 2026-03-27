@@ -82,3 +82,7 @@ CRM_CLIENT_360_ENABLED = "true"
 CRM_APPROVALS_ENABLED = "true"
 CRM_CLIENT_MESSAGING_ENABLED = "true"
 ASSET_LIBRARY_V2 = "true"
+
+[postMerge]
+path = "scripts/post-merge.sh"
+timeoutMs = 60000
