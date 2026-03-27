@@ -13,11 +13,6 @@ import { PresenceProvider } from "@/hooks/use-presence";
 import { TypingProvider } from "@/hooks/use-typing";
 import { FeaturesProvider } from "@/contexts/features-context";
 import { FeaturesBanner } from "@/components/features-banner";
-import { GuidedTourProvider } from "@/features/guidedTours/components/GuidedTourProvider";
-import { GuidanceCenter } from "@/features/guidedTours/components/GuidanceCenter";
-import { TourStepOverlay } from "@/features/guidedTours/components/TourStepOverlay";
-import { ContextualHintRenderer } from "@/features/guidedTours/components/ContextualHintRenderer";
-import { FirstRunModal } from "@/features/guidedTours/components/FirstRunModal";
 import { isAuthRoute, AuthRouter } from "@/routing/authRouter";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { ErrorBoundary } from "@/components/error-boundary";
@@ -108,18 +103,12 @@ function App() {
             <PresenceProvider>
               <TypingProvider>
                 <FeaturesProvider>
-                  <GuidedTourProvider>
                     <TenantThemeProvider>
                       <UserImpersonationWrapper>
                         <FeaturesBanner />
                         <AppLayout />
-                        <GuidanceCenter />
-                        <FirstRunModal />
-                        <TourStepOverlay />
-                        <ContextualHintRenderer />
                       </UserImpersonationWrapper>
                     </TenantThemeProvider>
-                  </GuidedTourProvider>
                 </FeaturesProvider>
               </TypingProvider>
             </PresenceProvider>

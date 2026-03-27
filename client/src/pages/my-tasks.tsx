@@ -854,7 +854,7 @@ export default function MyTasks() {
               <Button
                 onClick={() => setShowNewTaskDrawer(true)}
                 data-testid="button-add-personal-task-desktop"
-                data-tour="my-tasks-personal-task-btn"
+               
                 className="hidden md:flex"
               >
                 <Plus className="h-4 w-4 mr-1" />
@@ -863,7 +863,7 @@ export default function MyTasks() {
             </div>
           </div>
           <div className="flex flex-col gap-2 md:flex-row md:items-center md:justify-between">
-            <div className="flex-1" data-tour="my-tasks-search">
+            <div className="flex-1">
             <DataToolbar
               searchValue={searchQuery}
               onSearchChange={setSearchQuery}

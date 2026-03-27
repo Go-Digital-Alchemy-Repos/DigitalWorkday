@@ -29,10 +29,7 @@ import {
   DropdownMenuItem,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
-import { MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check, Search, Compass } from "lucide-react";
-import { useGuidedTours } from "@/features/guidedTours/hooks/useGuidedTours";
-import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
-import { useToast } from "@/hooks/use-toast";
+import { MessageCircle, MoreVertical, Moon, Sun, Building2, ChevronDown, Check, Search } from "lucide-react";
 import { GlobalSearchBar } from "@/components/global-search-bar";
 import { type Workspace } from "@shared/schema";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
@@ -201,49 +198,6 @@ function ChatToggleButton() {
   );
 }
 
-function TourToggleButton() {
-  const { toursEnabled, toggleToursEnabled, isRunning, stopTour } = useGuidedTours();
-  const { toast } = useToast();
-
-  const handleToggle = () => {
-    const next = !toursEnabled;
-    if (toursEnabled && isRunning) stopTour();
-    toggleToursEnabled(next);
-    toast({
-      title: next ? "Guided tours enabled" : "Guided tours disabled",
-      description: next
-        ? "Tours will appear as you navigate the app."
-        : "Tours are paused. Toggle again to re-enable.",
-      duration: 2500,
-    });
-  };
-
-  return (
-    <TooltipProvider delayDuration={300}>
-      <Tooltip>
-        <TooltipTrigger asChild>
-          <Button
-            variant={toursEnabled ? "secondary" : "ghost"}
-            size="icon"
-            onClick={handleToggle}
-            aria-label={toursEnabled ? "Disable guided tours" : "Enable guided tours"}
-            data-testid="button-tour-toggle"
-          >
-            <Compass
-              className={`h-4 w-4 transition-colors ${
-                toursEnabled ? "text-primary" : "text-muted-foreground"
-              }`}
-            />
-          </Button>
-        </TooltipTrigger>
-        <TooltipContent side="bottom">
-          Guided tours: {toursEnabled ? "On" : "Off"}
-        </TooltipContent>
-      </Tooltip>
-    </TooltipProvider>
-  );
-}
-
 function MobileHeaderMenu() {
   const { toggleDrawer } = useChatDrawer();
   const { mode, setMode, resolvedTheme } = useTheme();
@@ -361,7 +315,6 @@ export function TenantLayout() {
                     <GlobalActiveTimer />
                     <div className="hidden md:flex items-center gap-1">
                       <ChatToggleButton />
-                      <TourToggleButton />
                     </div>
                     <NotificationCenter />
                     <ThemeToggle className="hidden md:flex" />
