@@ -239,7 +239,7 @@ export function SubtaskDetailDrawer({
 
   const updateCommentMutation = useMutation({
     mutationFn: async ({ id, body }: { id: string; body: string }) => {
-      await apiRequest("PATCH", `/api/comments/${id}`, { body });
+      await apiRequest("PATCH", `/api/comments/${id}`, { content: body });
     },
     onSuccess: invalidateCommentQueries,
     onError: (error: any) => {
