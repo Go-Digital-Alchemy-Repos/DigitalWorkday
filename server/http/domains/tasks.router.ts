@@ -902,7 +902,7 @@ router.delete("/tasks/:id", async (req, res) => {
       return sendError(res, AppError.unauthorized("User not found"), req);
     }
 
-    const isAdmin = currentUser.role === "admin" || isSuperUser(req);
+    const isAdmin = currentUser.role === "admin" || currentUser.role === "tenant_owner" || isSuperUser(req);
     if (!isAdmin) {
       return sendError(res, AppError.forbidden("Only admins can delete tasks"), req);
     }
