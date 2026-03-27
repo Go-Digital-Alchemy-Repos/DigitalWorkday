@@ -100,7 +100,7 @@ import {
 import { SortableTaskCard } from "@/features/tasks/sortable-task-card";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { PersonalTaskCreateDrawer } from "@/features/tasks/personal-task-create-drawer";
-import { isToday, isPast, isFuture, subDays, isWithinInterval, addDays, startOfDay } from "date-fns";
+import { isToday, isPast, isFuture, subDays } from "date-fns";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { AccessInfoBanner } from "@/components/access-info-banner";
@@ -108,7 +108,7 @@ import { TaskProgressBar } from "@/components/task-progress-bar";
 import { PageShell, PageHeader, EmptyState, LoadingState, DataToolbar } from "@/components/layout";
 import { LogTimeOnCompleteDialog } from "@/components/log-time-on-complete-dialog";
 import type { FilterConfig, SortOption } from "@/components/layout";
-import type { TaskWithRelations, TaskListItem, Workspace, User as UserType, TimeEntry } from "@shared/schema";
+import type { TaskWithRelations, TaskListItem, TaskListResponse, Workspace, User as UserType, TimeEntry } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { Virtuoso } from "react-virtuoso";
@@ -137,19 +137,29 @@ function categorizeTasks(tasks: MyTaskItem[]): TaskSection[] {
       personalTasks.push(task);
     }
 
-    if (!task.dueDate) {
-      noDueDate.push(task);
+    const bucket = (task as TaskListItem).dueBucket;
+    if (bucket) {
+      switch (bucket) {
+        case "overdue": overdue.push(task); break;
+        case "today": today.push(task); break;
+        case "upcoming": upcoming.push(task); break;
+        case "no_date": noDueDate.push(task); break;
+      }
     } else {
-      const dueDate = new Date(task.dueDate);
-      const pastCheck = isPast(dueDate);
-      const todayCheck = isToday(dueDate);
-      const futureCheck = isFuture(dueDate);
-      if (pastCheck && !todayCheck) {
-        overdue.push(task);
-      } else if (todayCheck) {
-        today.push(task);
-      } else if (futureCheck) {
-        upcoming.push(task);
+      if (!task.dueDate) {
+        noDueDate.push(task);
+      } else {
+        const dueDate = new Date(task.dueDate);
+        const pastCheck = isPast(dueDate);
+        const todayCheck = isToday(dueDate);
+        const futureCheck = isFuture(dueDate);
+        if (pastCheck && !todayCheck) {
+          overdue.push(task);
+        } else if (todayCheck) {
+          today.push(task);
+        } else if (futureCheck) {
+          upcoming.push(task);
+        }
       }
     }
   });
@@ -439,14 +449,41 @@ export default function MyTasks() {
     saveOrders(sectionOrders);
   }, [sectionOrders]);
 
-  const { data: tasks, isLoading } = useQuery<MyTaskItem[]>({
-    queryKey: ["/api/tasks/my", { view: "list" }],
+  const PAGE_SIZE = 100;
+  const [pageLimit, setPageLimit] = useState(PAGE_SIZE);
+
+  const serverQueryParams = useMemo(() => {
+    const params: Record<string, string> = {
+      view: "list",
+      paginated: "true",
+      limit: String(pageLimit),
+      sortBy: sortBy,
+    };
+    if (statusFilter !== "all") params.status = statusFilter;
+    if (priorityFilter !== "all") params.priority = priorityFilter;
+    if (dueDateFilter !== "all") params.dueBucket = dueDateFilter;
+    if (debouncedSearch) params.search = debouncedSearch;
+    if (showCompleted) params.includeCompleted = "true";
+    return params;
+  }, [statusFilter, priorityFilter, dueDateFilter, debouncedSearch, showCompleted, sortBy, pageLimit]);
+
+  const queryString = useMemo(() => {
+    const sp = new URLSearchParams(serverQueryParams);
+    return sp.toString();
+  }, [serverQueryParams]);
+
+  const { data: taskListResponse, isLoading } = useQuery<TaskListResponse>({
+    queryKey: ["/api/tasks/my", serverQueryParams],
     queryFn: async () => {
-      const res = await fetch("/api/tasks/my?view=list");
+      const res = await fetch(`/api/tasks/my?${queryString}`);
       if (!res.ok) throw new Error("Failed to fetch tasks");
       return res.json();
     },
   });
+
+  const tasks = taskListResponse?.items ?? [];
+  const serverSummary = taskListResponse?.summary;
+  const pagination = taskListResponse?.pagination;
 
   const { data: pendingTaskTimeEntries = [] } = useQuery<TimeEntry[]>({
     queryKey: ["/api/tasks", pendingCompleteTask?.id, "time-entries"],
@@ -462,7 +499,7 @@ export default function MyTasks() {
   // Fetch individual task for deep linking if not in the main tasks list
   const { data: linkedTask } = useQuery<TaskWithRelations>({
     queryKey: ["/api/tasks", urlTaskId],
-    enabled: !!urlTaskId && !selectedTask && !!tasks && !tasks.find(t => t.id === urlTaskId),
+    enabled: !!urlTaskId && !selectedTask && !!taskListResponse && !tasks.find(t => t.id === urlTaskId),
   });
 
   // Deep linking: open task from URL param (from tasks list or dedicated fetch)
@@ -732,104 +769,56 @@ export default function MyTasks() {
   }), [statusFilter, priorityFilter, dueDateFilter]);
 
   const handleFilterChange = useCallback((key: string, value: string) => {
+    setPageLimit(PAGE_SIZE);
     if (key === "status") setStatusFilter(value);
     if (key === "priority") setPriorityFilter(value);
     if (key === "dueDate") setDueDateFilter(value);
   }, []);
 
   const handleClearFilters = useCallback(() => {
+    setPageLimit(PAGE_SIZE);
     setStatusFilter("all");
     setPriorityFilter("all");
     setDueDateFilter("all");
     setSearchQuery("");
   }, []);
 
-  const filteredTasks = useMemo(() => {
-    if (!tasks) return [];
-    
-    const now = startOfDay(new Date());
-    const weekEnd = addDays(now, 7);
+  const filteredTasks = tasks;
 
-    return tasks.filter((task) => {
-      // Status filter
-      if (task.status === "done" && !showCompleted && statusFilter !== "done") return false;
-      if (statusFilter !== "all" && task.status !== statusFilter) return false;
-      
-      // Priority filter
-      if (priorityFilter !== "all" && task.priority !== priorityFilter) return false;
-      
-      // Due date filter
-      if (dueDateFilter !== "all") {
-        const dueDate = task.dueDate ? new Date(task.dueDate) : null;
-        if (dueDateFilter === "overdue") {
-          if (!dueDate || !isPast(dueDate) || isToday(dueDate)) return false;
-        } else if (dueDateFilter === "today") {
-          if (!dueDate || !isToday(dueDate)) return false;
-        } else if (dueDateFilter === "this_week") {
-          if (!dueDate || !isWithinInterval(dueDate, { start: now, end: weekEnd })) return false;
-        } else if (dueDateFilter === "no_date") {
-          if (dueDate) return false;
-        }
-      }
-      
-      if (debouncedSearch) {
-        const search = debouncedSearch.toLowerCase();
-        const matchTitle = task.title.toLowerCase().includes(search);
-        const matchDescription = ('description' in task ? (task as { description?: string }).description : '')?.toLowerCase().includes(search);
-        const matchProject = ('projectName' in task ? task.projectName : '')?.toLowerCase().includes(search);
-        if (!matchTitle && !matchDescription && !matchProject) return false;
-      }
-      
-      return true;
-    });
-  }, [tasks, statusFilter, priorityFilter, dueDateFilter, showCompleted, debouncedSearch]);
+  const allSections = useMemo(() => categorizeTasks(tasks), [tasks]);
 
-  // Sort filtered tasks
-  const sortedTasks = useMemo(() => {
-    const priorityOrder = { urgent: 0, high: 1, medium: 2, low: 3, none: 4 };
-    
-    return [...filteredTasks].sort((a, b) => {
-      if (sortBy === "due_date") {
-        if (!a.dueDate && !b.dueDate) return 0;
-        if (!a.dueDate) return 1;
-        if (!b.dueDate) return -1;
-        return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-      }
-      if (sortBy === "updated") {
-        const aTime = (a as any).updatedAt ? new Date((a as any).updatedAt).getTime() : 0;
-        const bTime = (b as any).updatedAt ? new Date((b as any).updatedAt).getTime() : 0;
-        return bTime - aTime;
-      }
-      if (sortBy === "priority") {
-        const aPriority = priorityOrder[a.priority as keyof typeof priorityOrder] ?? 4;
-        const bPriority = priorityOrder[b.priority as keyof typeof priorityOrder] ?? 4;
-        return aPriority - bPriority;
-      }
-      if (sortBy === "title") {
-        return a.title.localeCompare(b.title);
-      }
-      return 0;
-    });
-  }, [filteredTasks, sortBy]);
-
-  const allSections = categorizeTasks(sortedTasks);
-
-  const totalTasks = filteredTasks.length;
+  const totalTasks = pagination?.totalFiltered ?? tasks.length;
 
   const taskStats = useMemo(() => {
-    const allTasks = tasks || [];
-    return {
-      total: allTasks.length,
-      done: allTasks.filter(t => t.status === "done").length,
-      inProgress: allTasks.filter(t => t.status === "in_progress").length,
-      todo: allTasks.filter(t => t.status === "todo").length,
-      blocked: allTasks.filter(t => t.status === "blocked").length,
-    };
-  }, [tasks]);
+    if (serverSummary) {
+      return {
+        total: serverSummary.total,
+        done: serverSummary.byStatus.done,
+        inProgress: serverSummary.byStatus.in_progress,
+        todo: serverSummary.byStatus.todo,
+        blocked: serverSummary.byStatus.blocked,
+      };
+    }
+    return { total: 0, done: 0, inProgress: 0, todo: 0, blocked: 0 };
+  }, [serverSummary]);
 
   const dashboardStats = useMemo(() => {
-    return computeDashboardStats(tasks || []);
-  }, [tasks]);
+    if (serverSummary) {
+      return {
+        todayCount: serverSummary.byDueBucket.today,
+        overdueCount: serverSummary.byDueBucket.overdue,
+        inProgressCount: serverSummary.byStatus.in_progress,
+        completedThisWeek: serverSummary.completedThisWeek,
+        recentlyAdded: [] as MyTaskItem[],
+        recentlyCompleted: [] as MyTaskItem[],
+        completionRate: serverSummary.completionRate,
+        highPriorityCount: serverSummary.highPriorityCount,
+        personalTaskCount: serverSummary.byDueBucket.personal,
+        projectTaskCount: serverSummary.total - serverSummary.byDueBucket.personal,
+      };
+    }
+    return computeDashboardStats([]);
+  }, [serverSummary]);
 
   return (
     <div className="flex flex-col h-full overflow-hidden">
@@ -848,7 +837,7 @@ export default function MyTasks() {
               <Button
                 variant={showCompleted ? "secondary" : "ghost"}
                 size="sm"
-                onClick={() => setShowCompleted(!showCompleted)}
+                onClick={() => { setPageLimit(PAGE_SIZE); setShowCompleted(!showCompleted); }}
                 className="gap-1 shrink-0"
                 data-testid="button-toggle-completed"
               >
@@ -879,7 +868,7 @@ export default function MyTasks() {
             <div className="flex-1">
             <DataToolbar
               searchValue={searchQuery}
-              onSearchChange={setSearchQuery}
+              onSearchChange={(value: string) => { setPageLimit(PAGE_SIZE); setSearchQuery(value); }}
               searchPlaceholder="Search tasks..."
               filters={filterConfigs}
               filterValues={filterValues}
@@ -887,7 +876,7 @@ export default function MyTasks() {
               onClearFilters={handleClearFilters}
               sortOptions={sortOptions}
               sortValue={sortBy}
-              onSortChange={setSortBy}
+              onSortChange={(value: string) => { setPageLimit(PAGE_SIZE); setSortBy(value); }}
               className="mb-0"
             />
             </div>
@@ -1013,6 +1002,18 @@ export default function MyTasks() {
                 />
               ))}
               </div>
+              {pagination?.hasMore && (
+                <div className="flex justify-center pt-4">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => setPageLimit(prev => prev + PAGE_SIZE)}
+                    data-testid="button-load-more-tasks"
+                  >
+                    Load more tasks
+                  </Button>
+                </div>
+              )}
             </div>
           ) : (
             <EmptyState

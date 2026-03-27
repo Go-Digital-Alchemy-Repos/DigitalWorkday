@@ -3328,6 +3328,50 @@ export type TaskListItem = {
   childTaskCount: number;
   assignees: TaskListItemAssignee[];
   tags: TaskListItemTag[];
+  dueBucket?: "overdue" | "today" | "upcoming" | "no_date" | null;
+};
+
+export type TaskListFilters = {
+  status?: string;
+  priority?: string;
+  dueBucket?: "overdue" | "today" | "this_week" | "upcoming" | "no_date";
+  search?: string;
+  includeCompleted?: boolean;
+  sortBy?: "due_date" | "updated" | "priority" | "title";
+  sortDir?: "asc" | "desc";
+  limit?: number;
+  cursor?: number;
+};
+
+export type TaskListSummary = {
+  total: number;
+  byStatus: {
+    todo: number;
+    in_progress: number;
+    blocked: number;
+    done: number;
+  };
+  byDueBucket: {
+    overdue: number;
+    today: number;
+    upcoming: number;
+    no_date: number;
+    personal: number;
+  };
+  highPriorityCount: number;
+  completionRate: number;
+  completedThisWeek: number;
+};
+
+export type TaskListResponse = {
+  items: TaskListItem[];
+  summary: TaskListSummary;
+  pagination: {
+    offset: number;
+    limit: number;
+    hasMore: boolean;
+    totalFiltered: number;
+  };
 };
 
 // Extended types for frontend use

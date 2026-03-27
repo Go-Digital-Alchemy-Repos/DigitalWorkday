@@ -1,7 +1,7 @@
 import { db } from "../../db";
 import { tasks, taskAssignees, taskTags, tags, comments, users, subtasks, projects, clients } from "@shared/schema";
-import { eq, inArray, and, isNull, sql } from "drizzle-orm";
-import type { TaskListItem } from "@shared/schema";
+import { eq, inArray, and, isNull, sql, not, ilike, desc, asc, lt, gte } from "drizzle-orm";
+import type { TaskListItem, TaskListFilters, TaskListSummary, TaskListResponse } from "@shared/schema";
 import { getAccessiblePrivateTaskIds } from "../../lib/privateVisibility";
 import { config } from "../../config";
 
@@ -11,7 +11,23 @@ function chunk<T>(arr: T[], size: number): T[][] {
   return result;
 }
 
-export async function getTaskListItemsByUser(userId: string, tenantId: string, includeArchived = false): Promise<TaskListItem[]> {
+const DEFAULT_PAGE_LIMIT = 50;
+const MAX_PAGE_LIMIT = 200;
+
+function computeDueBucket(dueDate: Date | null): "overdue" | "today" | "upcoming" | "no_date" {
+  if (!dueDate) return "no_date";
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + 1);
+
+  const d = new Date(dueDate);
+  if (d < todayStart) return "overdue";
+  if (d >= todayStart && d < todayEnd) return "today";
+  return "upcoming";
+}
+
+async function getUserTaskIds(userId: string, includeArchived: boolean): Promise<string[]> {
   const [assigneeRows, personalRows] = await Promise.all([
     db.select({ taskId: taskAssignees.taskId })
       .from(taskAssignees)
@@ -26,36 +42,153 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
   ]);
   const assignedIds = assigneeRows.map(r => r.taskId);
   const personalIds = personalRows.map(r => r.id);
+  return Array.from(new Set([...assignedIds, ...personalIds]));
+}
 
-  const allTaskIds = Array.from(new Set([...assignedIds, ...personalIds]));
-  if (allTaskIds.length === 0) return [];
+function buildFilterConditions(filters: TaskListFilters) {
+  const conditions: any[] = [];
 
-  const taskBatches = chunk(allTaskIds, 500);
-  const batchResults = await Promise.all(
-    taskBatches.map(batch => {
-      const conditions = [inArray(tasks.id, batch)];
-      if (!includeArchived) {
-        conditions.push(isNull(tasks.archivedAt));
+  if (filters.status && filters.status !== "all") {
+    conditions.push(eq(tasks.status, filters.status));
+  }
+
+  if (!filters.includeCompleted && (!filters.status || filters.status === "all")) {
+    conditions.push(not(eq(tasks.status, "done")));
+  }
+
+  if (filters.priority && filters.priority !== "all") {
+    conditions.push(eq(tasks.priority, filters.priority));
+  }
+
+  if (filters.search) {
+    const searchPattern = `%${filters.search}%`;
+    conditions.push(ilike(tasks.title, searchPattern));
+  }
+
+  if (filters.dueBucket) {
+    const now = new Date();
+    const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const todayEnd = new Date(todayStart);
+    todayEnd.setDate(todayEnd.getDate() + 1);
+
+    switch (filters.dueBucket) {
+      case "overdue":
+        conditions.push(lt(tasks.dueDate, sql`${todayStart.toISOString()}::timestamp`));
+        break;
+      case "today":
+        conditions.push(gte(tasks.dueDate, sql`${todayStart.toISOString()}::timestamp`));
+        conditions.push(lt(tasks.dueDate, sql`${todayEnd.toISOString()}::timestamp`));
+        break;
+      case "this_week": {
+        const weekEnd = new Date(todayStart);
+        weekEnd.setDate(weekEnd.getDate() + 7);
+        conditions.push(gte(tasks.dueDate, sql`${todayStart.toISOString()}::timestamp`));
+        conditions.push(lt(tasks.dueDate, sql`${weekEnd.toISOString()}::timestamp`));
+        break;
       }
-      return db.select().from(tasks).where(and(...conditions));
-    })
-  );
-  const baseTasks = batchResults.flat();
-  if (baseTasks.length === 0) return [];
+      case "upcoming":
+        conditions.push(gte(tasks.dueDate, sql`${todayEnd.toISOString()}::timestamp`));
+        break;
+      case "no_date":
+        conditions.push(isNull(tasks.dueDate));
+        break;
+    }
+  }
 
-  let filteredTasks = baseTasks;
+  return conditions;
+}
+
+function buildOrderBy(sortBy?: string, sortDir?: string) {
+  const direction = sortDir === "desc" ? desc : asc;
+
+  switch (sortBy) {
+    case "updated":
+      return direction(tasks.updatedAt);
+    case "priority":
+      if (sortDir === "desc") {
+        return sql`CASE ${tasks.priority} WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END DESC`;
+      }
+      return sql`CASE ${tasks.priority} WHEN 'urgent' THEN 0 WHEN 'high' THEN 1 WHEN 'medium' THEN 2 WHEN 'low' THEN 3 ELSE 4 END ASC`;
+    case "title":
+      return direction(tasks.title);
+    case "due_date":
+    default:
+      if (sortDir === "desc") {
+        return sql`${tasks.dueDate} DESC NULLS LAST`;
+      }
+      return sql`${tasks.dueDate} ASC NULLS LAST`;
+  }
+}
+
+export async function getTaskListItemsByUser(userId: string, tenantId: string, includeArchived = false): Promise<TaskListItem[]> {
+  const response = await getFilteredTaskListItems(userId, tenantId, includeArchived, {});
+  return response.items;
+}
+
+export async function getFilteredTaskListItems(
+  userId: string,
+  tenantId: string,
+  includeArchived: boolean,
+  filters: TaskListFilters
+): Promise<TaskListResponse> {
+  const allTaskIds = await getUserTaskIds(userId, includeArchived);
+  if (allTaskIds.length === 0) {
+    return {
+      items: [],
+      summary: emptySummary(),
+      pagination: { offset: 0, limit: filters.limit || DEFAULT_PAGE_LIMIT, hasMore: false, totalFiltered: 0 },
+    };
+  }
+
+  const filterConditions = buildFilterConditions(filters);
+  const baseConditions = [
+    inArray(tasks.id, allTaskIds),
+    ...(!includeArchived ? [isNull(tasks.archivedAt)] : []),
+    ...filterConditions,
+  ];
+
+  let accessibleSet: Set<string> | null = null;
   if (config.features.enablePrivateTasks) {
     const accessiblePrivateIds = await getAccessiblePrivateTaskIds(userId, tenantId);
-    const accessibleSet = new Set(accessiblePrivateIds);
+    accessibleSet = new Set(accessiblePrivateIds);
+  }
+
+  const summaryPromise = computeSummaryFromIds(allTaskIds, includeArchived, accessibleSet, userId, tenantId);
+
+  const limit = Math.min(filters.limit || DEFAULT_PAGE_LIMIT, MAX_PAGE_LIMIT);
+  const offset = filters.cursor || 0;
+  const orderBy = buildOrderBy(filters.sortBy, filters.sortDir);
+
+  const maxFetch = 2000;
+  const baseTasks = await db.select()
+    .from(tasks)
+    .where(and(...baseConditions))
+    .orderBy(orderBy)
+    .limit(maxFetch);
+
+  let filteredTasks = baseTasks;
+  if (accessibleSet) {
     filteredTasks = baseTasks.filter(t =>
-      (t as any).visibility !== 'private' || accessibleSet.has(t.id)
+      (t as any).visibility !== 'private' || accessibleSet!.has(t.id)
     );
   }
-  if (filteredTasks.length === 0) return [];
 
-  const taskIds = filteredTasks.map(t => t.id);
+  const totalFiltered = filteredTasks.length;
+  const paginatedTasks = filteredTasks.slice(0, limit);
+  const hasMore = limit < totalFiltered;
 
-  const projectIds = Array.from(new Set(filteredTasks.map(t => t.projectId).filter(Boolean))) as string[];
+  if (paginatedTasks.length === 0) {
+    const summary = await summaryPromise;
+    return {
+      items: [],
+      summary,
+      pagination: { offset: 0, limit, hasMore: false, totalFiltered },
+    };
+  }
+
+  const taskIds = paginatedTasks.map(t => t.id);
+
+  const projectIds = Array.from(new Set(paginatedTasks.map(t => t.projectId).filter(Boolean))) as string[];
 
   const projectNamePromise = projectIds.length > 0
     ? Promise.all(
@@ -68,7 +201,7 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
       ).then(batches => batches.flat())
     : Promise.resolve([] as { id: string; name: string; clientName: string | null }[]);
 
-  const [projectRows, assigneeRows2, tagRows, commentCounts, childTaskCounts, subtaskCounts] = await Promise.all([
+  const [projectRows, assigneeRows2, tagRows, commentCounts, childTaskCounts, subtaskCounts, summary] = await Promise.all([
     projectNamePromise,
 
     db.select({
@@ -114,6 +247,8 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
       .from(subtasks)
       .where(inArray(subtasks.taskId, taskIds))
       .groupBy(subtasks.taskId),
+
+    summaryPromise,
   ]);
 
   const projectNameMap = new Map<string, { name: string; clientName: string | null }>();
@@ -161,7 +296,7 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
     subtaskCountByTask.set(row.taskId, { count: row.count, completedCount: row.completedCount });
   }
 
-  const result: TaskListItem[] = filteredTasks.map(task => {
+  const items: TaskListItem[] = paginatedTasks.map(task => {
     const taskAssigneeList = assigneesByTask.get(task.id) ?? [];
     const projectInfo = task.projectId ? projectNameMap.get(task.projectId) : undefined;
     return {
@@ -194,13 +329,117 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
       childTaskCount: childTaskCountByTask.get(task.id) ?? 0,
       assignees: taskAssigneeList,
       tags: tagsByTask.get(task.id) ?? [],
+      dueBucket: computeDueBucket(task.dueDate),
     };
   });
 
-  return result.sort((a, b) => {
-    if (!a.dueDate && !b.dueDate) return 0;
-    if (!a.dueDate) return 1;
-    if (!b.dueDate) return -1;
-    return new Date(a.dueDate).getTime() - new Date(b.dueDate).getTime();
-  });
+  return {
+    items,
+    summary,
+    pagination: {
+      offset: 0,
+      limit,
+      hasMore,
+      totalFiltered,
+    },
+  };
+}
+
+async function computeSummaryFromIds(
+  allTaskIds: string[],
+  includeArchived: boolean,
+  accessibleSet: Set<string> | null,
+  userId: string,
+  tenantId: string,
+): Promise<TaskListSummary> {
+  const baseConditions = [
+    inArray(tasks.id, allTaskIds),
+    ...(!includeArchived ? [isNull(tasks.archivedAt)] : []),
+  ];
+
+  const now = new Date();
+  const todayStart = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+  const todayEnd = new Date(todayStart);
+  todayEnd.setDate(todayEnd.getDate() + 1);
+  const weekAgo = new Date(now);
+  weekAgo.setDate(weekAgo.getDate() - 7);
+
+  let privacyFilter = sql`TRUE`;
+  if (accessibleSet && accessibleSet.size > 0) {
+    const accessibleIds = Array.from(accessibleSet);
+    privacyFilter = sql`(${tasks.visibility} != 'private' OR ${tasks.id} IN (${sql.join(accessibleIds.map(id => sql`${id}`), sql`, `)}))`;
+  } else if (accessibleSet) {
+    privacyFilter = sql`${tasks.visibility} != 'private'`;
+  }
+
+  const summaryRows = await db.select({
+    status: tasks.status,
+    priority: tasks.priority,
+    dueDate: tasks.dueDate,
+    isPersonal: tasks.isPersonal,
+    projectId: tasks.projectId,
+    updatedAt: tasks.updatedAt,
+  })
+    .from(tasks)
+    .where(and(...baseConditions, privacyFilter));
+
+  let total = 0;
+  const byStatus = { todo: 0, in_progress: 0, blocked: 0, done: 0 };
+  const byDueBucket = { overdue: 0, today: 0, upcoming: 0, no_date: 0, personal: 0 };
+  let highPriorityCount = 0;
+  let doneCount = 0;
+  let completedThisWeek = 0;
+
+  for (const row of summaryRows) {
+    total++;
+
+    if (row.status === "todo") byStatus.todo++;
+    else if (row.status === "in_progress") byStatus.in_progress++;
+    else if (row.status === "blocked") byStatus.blocked++;
+    else if (row.status === "done") byStatus.done++;
+
+    if (row.status === "done") {
+      doneCount++;
+      if (row.updatedAt && new Date(row.updatedAt) >= weekAgo) {
+        completedThisWeek++;
+      }
+    }
+
+    if ((row.priority === "high" || row.priority === "urgent") && row.status !== "done") {
+      highPriorityCount++;
+    }
+
+    const isPersonalTask = row.isPersonal === true || (!row.projectId && row.isPersonal !== false);
+    if (isPersonalTask) {
+      byDueBucket.personal++;
+    }
+
+    const bucket = computeDueBucket(row.dueDate);
+    if (bucket === "overdue" && row.status !== "done") byDueBucket.overdue++;
+    else if (bucket === "today") byDueBucket.today++;
+    else if (bucket === "upcoming") byDueBucket.upcoming++;
+    else if (bucket === "no_date") byDueBucket.no_date++;
+  }
+
+  const completionRate = total > 0 ? Math.round((doneCount / total) * 100) : 0;
+
+  return {
+    total,
+    byStatus,
+    byDueBucket,
+    highPriorityCount,
+    completionRate,
+    completedThisWeek,
+  };
+}
+
+function emptySummary(): TaskListSummary {
+  return {
+    total: 0,
+    byStatus: { todo: 0, in_progress: 0, blocked: 0, done: 0 },
+    byDueBucket: { overdue: 0, today: 0, upcoming: 0, no_date: 0, personal: 0 },
+    highPriorityCount: 0,
+    completionRate: 0,
+    completedThisWeek: 0,
+  };
 }

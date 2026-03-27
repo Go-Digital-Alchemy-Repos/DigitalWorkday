@@ -59,7 +59,7 @@ import { getEffectiveTenantId } from "../../middleware/tenantContext";
 import { getCurrentUserId, getCurrentWorkspaceId, isSuperUser } from "../../routes/helpers";
 import { config } from "../../config";
 import { getTasksByUserBatched } from "../services/taskBatchHydrator";
-import { getTaskListItemsByUser } from "../services/taskListHydrator";
+import { getTaskListItemsByUser, getFilteredTaskListItems } from "../services/taskListHydrator";
 import {
   insertTaskSchema,
   updateTaskSchema,
@@ -230,6 +230,27 @@ router.get("/tasks/my", async (req, res) => {
 
     if (view === "list") {
       const tenantId = getEffectiveTenantId(req) ?? "";
+
+      const hasFilterParams = req.query.status || req.query.priority || req.query.dueBucket ||
+        req.query.search || req.query.includeCompleted || req.query.sortBy ||
+        req.query.sortDir || req.query.limit || req.query.cursor;
+
+      if (hasFilterParams || req.query.paginated === "true") {
+        const filters = {
+          status: req.query.status as string | undefined,
+          priority: req.query.priority as string | undefined,
+          dueBucket: req.query.dueBucket as any,
+          search: req.query.search as string | undefined,
+          includeCompleted: req.query.includeCompleted === "true",
+          sortBy: req.query.sortBy as any,
+          sortDir: req.query.sortDir as any,
+          limit: req.query.limit ? parseInt(req.query.limit as string, 10) : undefined,
+          cursor: req.query.cursor ? parseInt(req.query.cursor as string, 10) : undefined,
+        };
+        const result = await getFilteredTaskListItems(userId, tenantId, includeArchived, filters);
+        return res.json(result);
+      }
+
       const items = await getTaskListItemsByUser(userId, tenantId, includeArchived);
       return res.json(items);
     }
