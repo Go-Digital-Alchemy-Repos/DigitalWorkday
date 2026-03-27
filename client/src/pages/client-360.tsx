@@ -68,7 +68,6 @@ import {
   Plus,
   Mail,
   Phone,
-  Calendar,
   Clock,
   CheckCircle2,
   AlertCircle,
@@ -80,8 +79,6 @@ import {
   Upload,
   MessageSquare,
   Loader2,
-  User,
-  Target,
   Briefcase,
   UserPlus,
   ExternalLink,
@@ -166,48 +163,13 @@ const contactFormSchema = z.object({
 
 type ContactFormValues = z.infer<typeof contactFormSchema>;
 
-const CRM_STATUS_MAP: Record<string, { label: string; variant: "default" | "secondary" | "destructive" | "outline" }> = {
-  lead: { label: "Lead", variant: "outline" },
-  prospect: { label: "Prospect", variant: "secondary" },
-  active: { label: "Active", variant: "default" },
-  past: { label: "Past", variant: "outline" },
-  on_hold: { label: "On Hold", variant: "secondary" },
-};
-
 function OverviewTab({ clientId, summary, isLoading, onNavigateTab, onUpdate }: { clientId: string; summary?: CrmSummary; isLoading: boolean; onNavigateTab: (tab: string) => void; onUpdate?: () => void }) {
-  const { toast } = useToast();
   const crmFlags = useCrmFlags();
   const [showApprovalDialog, setShowApprovalDialog] = useState(false);
-
-  const { data: users = [] } = useQuery<any[]>({
-    queryKey: ["/api/users"],
-  });
-
-  const updateOwnerMutation = useMutation({
-    mutationFn: async (ownerUserId: string | null) => {
-      await apiRequest("PATCH", `/api/crm/clients/${clientId}/crm`, {
-        ownerUserId: ownerUserId === "__unassigned__" ? null : ownerUserId,
-      });
-    },
-    onSuccess: () => {
-      toast({ title: "Project Manager updated", description: "The client project manager has been updated successfully." });
-      queryClient.invalidateQueries({ queryKey: [`/api/crm/clients/${clientId}/summary`] });
-      if (onUpdate) onUpdate();
-    },
-    onError: (error: any) => {
-      const { title, description } = formatErrorForToast(error);
-      toast({ title, description, variant: "destructive" });
-    },
-  });
 
   if (isLoading) {
     return (
       <div className="space-y-6">
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {Array.from({ length: 6 }).map((_, i) => (
-            <Skeleton key={i} className="h-28" />
-          ))}
-        </div>
         <Skeleton className="h-40" />
       </div>
     );
@@ -215,121 +177,8 @@ function OverviewTab({ clientId, summary, isLoading, onNavigateTab, onUpdate }: 
 
   if (!summary) return null;
 
-  const crmStatus = summary.crm?.status || "none";
-  const statusInfo = CRM_STATUS_MAP[crmStatus];
-
   return (
     <div className="space-y-6">
-      <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-        <Card data-testid="card-crm-status">
-          <CardContent className="pt-5 pb-4 px-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1 rounded-md bg-indigo-500/10">
-                <Target className="h-4 w-4 text-indigo-500" />
-              </div>
-              <span className="text-sm text-muted-foreground">Pipeline Status</span>
-            </div>
-            {statusInfo ? (
-              <Badge variant={statusInfo.variant} data-testid="badge-crm-status">{statusInfo.label}</Badge>
-            ) : (
-              <span className="text-sm text-muted-foreground" data-testid="text-crm-status-none">Not set</span>
-            )}
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-crm-pm">
-          <CardContent className="pt-5 pb-4 px-4">
-            <div className="flex items-center justify-between mb-2">
-              <div className="flex items-center gap-2">
-                <div className="p-1 rounded-md bg-emerald-500/10">
-                  <User className="h-4 w-4 text-emerald-500" />
-                </div>
-                <span className="text-sm text-muted-foreground">Project Manager</span>
-              </div>
-              <Select
-                value={summary.crm?.ownerUserId || "__unassigned__"}
-                onValueChange={(val) => updateOwnerMutation.mutate(val)}
-                disabled={updateOwnerMutation.isPending}
-              >
-                <SelectTrigger className="h-7 w-[130px] text-xs" data-testid="select-crm-pm">
-                  <SelectValue placeholder="Select PM" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="__unassigned__">Unassigned</SelectItem>
-                  {users.map((user: any) => (
-                    <SelectItem key={user.id} value={user.id.toString()}>
-                      {user.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-            <span className="text-sm font-medium" data-testid="text-crm-pm">
-              {summary.ownerName || "Unassigned"}
-            </span>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-crm-followup">
-          <CardContent className="pt-5 pb-4 px-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1 rounded-md bg-amber-500/10">
-                <Calendar className="h-4 w-4 text-amber-500" />
-              </div>
-              <span className="text-sm text-muted-foreground">Next Follow-up</span>
-            </div>
-            <span className="text-sm font-medium" data-testid="text-crm-followup">
-              {summary.crm?.nextFollowUpAt
-                ? format(new Date(summary.crm.nextFollowUpAt), "MMM d, yyyy")
-                : "Not scheduled"}
-            </span>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-open-projects">
-          <CardContent className="pt-5 pb-4 px-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1 rounded-md bg-purple-500/10">
-                <FolderKanban className="h-4 w-4 text-purple-500" />
-              </div>
-              <span className="text-sm text-muted-foreground">Open Projects</span>
-            </div>
-            <span className="text-2xl font-semibold" data-testid="text-open-projects">{summary.counts.projects}</span>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-open-tasks">
-          <CardContent className="pt-5 pb-4 px-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1 rounded-md bg-blue-500/10">
-                <CheckCircle2 className="h-4 w-4 text-blue-500" />
-              </div>
-              <span className="text-sm text-muted-foreground">Open Tasks</span>
-            </div>
-            <span className="text-2xl font-semibold" data-testid="text-open-tasks">{summary.counts.openTasks}</span>
-          </CardContent>
-        </Card>
-
-        <Card data-testid="card-hours-tracked">
-          <CardContent className="pt-5 pb-4 px-4">
-            <div className="flex items-center gap-2 mb-2">
-              <div className="p-1 rounded-md bg-rose-500/10">
-                <Clock className="h-4 w-4 text-rose-500" />
-              </div>
-              <span className="text-sm text-muted-foreground">Hours Tracked</span>
-            </div>
-            <div data-testid="text-hours-tracked">
-              <span className="text-2xl font-semibold">{summary.counts.totalHours.toFixed(1)}</span>
-              {summary.counts.billableHours > 0 && (
-                <span className="text-xs text-muted-foreground ml-1">
-                  ({summary.counts.billableHours.toFixed(1)} billable)
-                </span>
-              )}
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
       <div className="bg-muted/30 rounded-lg p-4 border border-border/50">
         <h3 className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3 px-1">Quick Actions</h3>
         <div className="flex flex-wrap gap-2">
