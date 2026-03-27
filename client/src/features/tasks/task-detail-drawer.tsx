@@ -1018,16 +1018,16 @@ export function TaskDetailDrawer({
           )}
           {isAdmin && (
             <AlertDialog>
-              <AlertDialogTrigger asChild>
-                <Tooltip>
-                  <TooltipTrigger asChild>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <AlertDialogTrigger asChild>
                     <Button variant="ghost" size="icon" disabled={deleteTaskMutation.isPending} aria-label="Delete task" data-testid="button-delete-task">
                       <Trash2 className="h-4 w-4" />
                     </Button>
-                  </TooltipTrigger>
-                  <TooltipContent>Delete task</TooltipContent>
-                </Tooltip>
-              </AlertDialogTrigger>
+                  </AlertDialogTrigger>
+                </TooltipTrigger>
+                <TooltipContent>Delete task</TooltipContent>
+              </Tooltip>
               <AlertDialogContent>
                 <AlertDialogHeader>
                   <AlertDialogTitle>Delete Task</AlertDialogTitle>
