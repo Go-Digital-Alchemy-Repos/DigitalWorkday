@@ -314,7 +314,7 @@ export interface IStorage {
   getClientByIdAndTenant(id: string, tenantId: string): Promise<Client | undefined>;
   getClientsByTenant(tenantId: string, workspaceId?: string): Promise<ClientWithContacts[]>;
   getClientsByTenantBatched(tenantId: string): Promise<ClientWithContacts[]>;
-  getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean })[]>;
+  getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean; totalHoursWorked: number })[]>;
   getClientsSummaryByTenant(tenantId: string): Promise<{ total: number; active: number; inactive: number; prospect: number; newThisMonth: number; needsAttention: number }>;
   updateClientStage(clientId: string, tenantId: string, toStage: string, changedByUserId: string): Promise<Client | undefined>;
   getClientStageSummary(tenantId: string): Promise<{ stage: string; clientCount: number; projectCount: number }[]>;
@@ -2520,7 +2520,7 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean })[]> {
+  async getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean; totalHoursWorked: number })[]> {
     const allClients = await db.select()
       .from(clients)
       .where(eq(clients.tenantId, tenantId))
@@ -2532,28 +2532,47 @@ export class DatabaseStorage implements IStorage {
     
     const clientIds = allClients.map(c => c.id);
     
-    const contactCounts = await db.select({
-      clientId: clientContacts.clientId,
-      count: sql<number>`count(*)::int`,
-    })
-      .from(clientContacts)
-      .where(inArray(clientContacts.clientId, clientIds))
-      .groupBy(clientContacts.clientId);
+    const [contactCounts, projectCounts, hoursRows] = await Promise.all([
+      db.select({
+        clientId: clientContacts.clientId,
+        count: sql<number>`count(*)::int`,
+      })
+        .from(clientContacts)
+        .where(inArray(clientContacts.clientId, clientIds))
+        .groupBy(clientContacts.clientId),
+      db.select({
+        clientId: projects.clientId,
+        count: sql<number>`count(*)::int`,
+      })
+        .from(projects)
+        .where(and(
+          inArray(projects.clientId, clientIds),
+          isNotNull(projects.clientId)
+        ))
+        .groupBy(projects.clientId),
+      db.select({
+        clientId: timeEntries.clientId,
+        totalSeconds: sql<number>`coalesce(sum(${timeEntries.durationSeconds}), 0)::int`,
+      })
+        .from(timeEntries)
+        .where(and(
+          eq(timeEntries.tenantId, tenantId),
+          inArray(timeEntries.clientId, clientIds),
+          isNotNull(timeEntries.clientId)
+        ))
+        .groupBy(timeEntries.clientId),
+    ]);
     
     const contactCountMap = new Map(contactCounts.map(c => [c.clientId, c.count]));
     
-    const projectCounts = await db.select({
-      clientId: projects.clientId,
-      count: sql<number>`count(*)::int`,
-    })
-      .from(projects)
-      .where(and(
-        inArray(projects.clientId, clientIds),
-        isNotNull(projects.clientId)
-      ))
-      .groupBy(projects.clientId);
-    
     const projectCountMap = new Map(projectCounts.map(p => [p.clientId!, p.count]));
+
+    const hoursMap = new Map<string, number>();
+    for (const row of hoursRows) {
+      if (row.clientId) {
+        hoursMap.set(row.clientId, Math.round(((row.totalSeconds || 0) / 3600) * 100) / 100);
+      }
+    }
 
     const openTaskCounts = await db.select({
       clientId: projects.clientId,
@@ -2615,7 +2634,7 @@ export class DatabaseStorage implements IStorage {
       childrenMap.get(parentId)!.push(client);
     }
     
-    type ClientWithHierarchy = Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean };
+    type ClientWithHierarchy = Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean; totalHoursWorked: number };
     const result: ClientWithHierarchy[] = [];
     
     const addWithChildren = (client: Client, depth: number, parentName?: string) => {
@@ -2633,6 +2652,7 @@ export class DatabaseStorage implements IStorage {
         openTasksCount: openTaskCountMap.get(client.id) || 0,
         lastActivityAt: lastActivity,
         needsAttention,
+        totalHoursWorked: hoursMap.get(client.id) || 0,
       });
       
       const children = childrenMap.get(client.id) || [];
