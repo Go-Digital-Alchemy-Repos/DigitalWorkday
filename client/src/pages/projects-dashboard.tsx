@@ -225,7 +225,7 @@ export default function ProjectsDashboard() {
 
   if (projectsLoading) {
     return (
-      <PageShell className="max-w-7xl mx-auto">
+      <PageShell>
         <PageHeader
           title="Projects"
           subtitle="View and manage all projects across your workspace"
@@ -238,7 +238,7 @@ export default function ProjectsDashboard() {
 
   if (projectsError) {
     return (
-      <PageShell className="max-w-7xl mx-auto">
+      <PageShell>
         <PageHeader
           title="Projects"
           subtitle="View and manage all projects across your workspace"
@@ -254,7 +254,7 @@ export default function ProjectsDashboard() {
   }
 
   return (
-    <PageShell className="max-w-7xl mx-auto">
+    <PageShell>
       <PageHeader
         title="Projects"
         subtitle="View and manage all projects across your workspace"
