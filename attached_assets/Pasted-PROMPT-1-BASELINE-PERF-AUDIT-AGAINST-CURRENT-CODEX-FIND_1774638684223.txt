@@ -1,0 +1,55 @@
+PROMPT 1 — BASELINE PERF AUDIT AGAINST CURRENT CODEX FINDINGS
+
+Implementation rules:
+- Do not remove or break existing functionality.
+- Do not replace existing batching improvements that are already in place unless there is a clear bug or measurable regression.
+- Prefer additive changes, feature flags, compatibility wrappers, and incremental migrations.
+- Keep all existing auth, tenant scoping, permissions, and current UI behavior intact unless explicitly improving performance with no UX regression.
+- Preserve existing styling and component structure unless a small UI change is required to support pagination, lazy loading, or deferred queries.
+- Add or update App Docs / technical docs as each phase is completed.
+- Run typecheck after changes and fix any issues introduced.
+- Add lightweight instrumentation where useful so we can compare before/after performance.
+- Do not refactor unrelated areas.
+- Where a new “lite” or optimized mode is introduced, keep the current “full” mode available for detail views and backward compatibility.
+- Prefer server-side filtering, pagination, and SQL aggregation over large in-memory operations.
+- Return a concise completion report listing files changed, behavior preserved, performance improvements made, and any follow-up recommendations.
+
+Task:
+Start with a fresh performance audit aligned to the latest Codex review.
+
+Context from latest review:
+- /api/clients now has a batched backend path and should not be rewritten from scratch.
+- /api/v1/projects?includeCounts=true now uses batched task counts and should be preserved.
+- The remaining main bottlenecks are:
+  1. Clients page still over-fetches on first load.
+  2. Projects dashboard still fetches broad datasets and filters client-side.
+  3. My Tasks still fetches fully hydrated tasks and filters client-side.
+  4. Client hierarchy/summary logic is still expensive.
+
+Goals:
+1. Confirm the current request flow for Clients, Projects, and My Tasks.
+2. Strengthen observability around these routes without changing behavior yet.
+3. Produce a concise “current state” perf report that distinguishes:
+   - already-improved backend batching
+   - still-problematic frontend over-fetching / broad initial loads
+   - higher-risk backend aggregation hotspots
+
+Target routes and flows:
+- /api/clients
+- client hierarchy + summary + stage summary
+- /api/v1/projects
+- /api/projects if feature-flagged / available
+- /api/tasks/my
+
+Requirements:
+- Extend existing perf logging rather than replacing it.
+- Add route-level markers for request duration, payload size estimates, and query timing where practical.
+- Keep production-safe logging thresholds.
+- Document findings in App Docs under a new performance audit section.
+- Explicitly note where batching already exists and should be preserved.
+- Run typecheck.
+
+Deliverables:
+- Improved observability on the current hot paths.
+- A concise current-state performance audit.
+- No breaking behavior changes.
