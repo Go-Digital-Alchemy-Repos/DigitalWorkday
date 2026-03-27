@@ -71,6 +71,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useLocalStorage, useSavedViews } from "@/hooks/use-local-storage";
 import type { SavedView } from "@/hooks/use-local-storage";
+import type { Client, ClientWithContacts } from "@shared/schema";
 import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
@@ -891,18 +892,58 @@ function BulkActionBar({
   );
 }
 
+function ClientDetailSheetSkeleton() {
+  return (
+    <div className="space-y-4">
+      <div className="flex items-center gap-3">
+        <Skeleton className="h-12 w-12 rounded-full" />
+        <div className="flex-1 space-y-2">
+          <Skeleton className="h-5 w-40" />
+          <Skeleton className="h-4 w-24" />
+        </div>
+      </div>
+      <Skeleton className="h-6 w-24" />
+      <Separator />
+      <div className="grid grid-cols-3 gap-3">
+        <Skeleton className="h-16 rounded-lg" />
+        <Skeleton className="h-16 rounded-lg" />
+        <Skeleton className="h-16 rounded-lg" />
+      </div>
+      <Separator />
+      <div className="space-y-2">
+        <Skeleton className="h-4 w-32" />
+        <Skeleton className="h-4 w-48" />
+        <Skeleton className="h-4 w-36" />
+      </div>
+    </div>
+  );
+}
+
 function ClientDetailSheet({
-  client,
+  clientId,
+  listItem,
   open,
   onOpenChange,
 }: {
-  client: ClientWithHierarchy | null;
+  clientId: string | null;
+  listItem: { companyName: string; displayName?: string; stage: string } | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
 }) {
   const [, navigate] = useLocation();
 
-  if (!client) return null;
+  const { data: client, isLoading, isError } = useQuery<ClientWithContacts>({
+    queryKey: ["/api/clients", clientId],
+    enabled: open && !!clientId,
+  });
+
+  if (!clientId) return null;
+
+  const displayName = client?.companyName || listItem?.companyName || "";
+  const displaySubName = client?.displayName || listItem?.displayName;
+  const displayStage = client?.stage || listItem?.stage || "";
+  const projectCount = client?.projects?.length ?? 0;
+  const contactCount = client?.contacts?.length ?? 0;
 
   return (
     <Sheet open={open} onOpenChange={onOpenChange}>
@@ -911,32 +952,33 @@ function ClientDetailSheet({
           <div className="flex items-center gap-3">
             <Avatar className="h-12 w-12">
               <AvatarFallback className="bg-primary/10 text-primary text-lg">
-                {getInitials(client.companyName)}
+                {getInitials(displayName)}
               </AvatarFallback>
             </Avatar>
             <div className="flex-1 min-w-0">
               <SheetTitle className="text-lg truncate" data-testid="text-sheet-client-name">
-                {client.companyName}
+                {displayName}
               </SheetTitle>
-              {client.displayName && (
-                <p className="text-sm text-muted-foreground truncate">{client.displayName}</p>
+              {displaySubName && (
+                <p className="text-sm text-muted-foreground truncate">{displaySubName}</p>
               )}
             </div>
           </div>
         </SheetHeader>
 
+        {isError ? (
+          <div className="py-8 text-center text-sm text-muted-foreground" data-testid="text-sheet-error">
+            Failed to load client details. Please try again.
+          </div>
+        ) : isLoading || !client ? (
+          <ClientDetailSheetSkeleton />
+        ) : (
         <div className="space-y-4">
           <div className="flex items-center gap-2 flex-wrap">
-            <Badge variant="outline" className={STAGE_TEXT_COLORS[client.stage] || ""}>
-              <span className={cn("h-1.5 w-1.5 rounded-full mr-1.5 shrink-0", STAGE_COLORS[client.stage] || "bg-muted")} />
-              {CLIENT_STAGE_LABELS[client.stage as ClientStageType] || client.stage}
+            <Badge variant="outline" className={STAGE_TEXT_COLORS[displayStage] || ""}>
+              <span className={cn("h-1.5 w-1.5 rounded-full mr-1.5 shrink-0", STAGE_COLORS[displayStage] || "bg-muted")} />
+              {CLIENT_STAGE_LABELS[displayStage as ClientStageType] || displayStage}
             </Badge>
-            {client.needsAttention && (
-              <Badge variant="outline" className="text-amber-600 dark:text-amber-400 border-amber-300 dark:border-amber-600">
-                <AlertTriangle className="h-3 w-3 mr-1" />
-                Needs Attention
-              </Badge>
-            )}
             {client.industry && (
               <Badge variant="outline">{client.industry}</Badge>
             )}
@@ -944,33 +986,20 @@ function ClientDetailSheet({
 
           <Separator />
 
-          <div className="grid grid-cols-3 gap-3">
+          <div className="grid grid-cols-2 gap-3">
             <Card>
               <CardContent className="p-3 text-center">
-                <p className="text-2xl font-semibold">{client.projectCount}</p>
+                <p className="text-2xl font-semibold">{projectCount}</p>
                 <p className="text-xs text-muted-foreground">Projects</p>
               </CardContent>
             </Card>
             <Card>
               <CardContent className="p-3 text-center">
-                <p className="text-2xl font-semibold">{client.openTasksCount}</p>
-                <p className="text-xs text-muted-foreground">Open Tasks</p>
-              </CardContent>
-            </Card>
-            <Card>
-              <CardContent className="p-3 text-center">
-                <p className="text-2xl font-semibold">{client.contactCount}</p>
+                <p className="text-2xl font-semibold">{contactCount}</p>
                 <p className="text-xs text-muted-foreground">Contacts</p>
               </CardContent>
             </Card>
           </div>
-
-          {client.lastActivityAt && (
-            <div className="flex items-center gap-2 text-sm text-muted-foreground">
-              <Clock className="h-4 w-4" />
-              <span>Last activity {formatDistanceToNow(new Date(client.lastActivityAt), { addSuffix: true })}</span>
-            </div>
-          )}
 
           <Separator />
 
@@ -1032,6 +1061,7 @@ function ClientDetailSheet({
             View Full Details
           </Button>
         </div>
+        )}
       </SheetContent>
     </Sheet>
   );
@@ -1514,7 +1544,8 @@ export default function ClientsPage() {
   const [saveViewOpen, setSaveViewOpen] = useState(false);
   const [newViewName, setNewViewName] = useState("");
   const [activeSegment, setActiveSegment] = useState<SegmentTab>("all");
-  const [detailSheetClient, setDetailSheetClient] = useState<ClientWithHierarchy | null>(null);
+  const [detailSheetClientId, setDetailSheetClientId] = useState<string | null>(null);
+  const [detailSheetListItem, setDetailSheetListItem] = useState<{ companyName: string; displayName?: string; stage: string } | null>(null);
   const [detailSheetOpen, setDetailSheetOpen] = useState(false);
   const { toast } = useToast();
 
@@ -1790,8 +1821,11 @@ export default function ClientsPage() {
   ]);
 
   const handleOpenClientSheet = useCallback((clientId: string) => {
-    navigate(`/clients/${clientId}`);
-  }, [navigate]);
+    const listClient = hierarchyClients?.find(c => c.id === clientId);
+    setDetailSheetClientId(clientId);
+    setDetailSheetListItem(listClient ? { companyName: listClient.companyName, displayName: listClient.displayName || undefined, stage: listClient.stage } : null);
+    setDetailSheetOpen(true);
+  }, [hierarchyClients]);
 
   const handleExportCsv = useCallback(() => {
     if (!hierarchyClients) return;
@@ -2201,7 +2235,8 @@ export default function ClientsPage() {
       ) : null}
 
       <ClientDetailSheet
-        client={detailSheetClient}
+        clientId={detailSheetClientId}
+        listItem={detailSheetListItem}
         open={detailSheetOpen}
         onOpenChange={setDetailSheetOpen}
       />

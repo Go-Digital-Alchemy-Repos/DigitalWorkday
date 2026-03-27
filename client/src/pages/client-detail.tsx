@@ -340,9 +340,13 @@ export default function ClientDetailPage() {
     enabled: !!clientId && crmFlags.client360,
   });
 
-  // Fetch all clients for parent client selector (excluding the current client)
-  const { data: allClients = [] } = useQuery<ClientWithContacts[]>({
-    queryKey: ["/api/clients"],
+  const { data: allClients = [] } = useQuery<{ id: string; companyName: string; displayName: string | null; status: string | null; parentClientId: string | null }[]>({
+    queryKey: ["/api/clients", { fields: "minimal" }],
+    queryFn: async () => {
+      const res = await fetch("/api/clients?fields=minimal", { credentials: "include" });
+      if (!res.ok) throw new Error("Failed to fetch clients");
+      return res.json();
+    },
     enabled: !!clientId,
   });
 
