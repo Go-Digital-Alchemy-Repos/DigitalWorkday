@@ -659,6 +659,29 @@ export const clients = pgTable("clients", {
   index("clients_tenant_stage_idx").on(table.tenantId, table.stage),
 ]);
 
+export type ClientListItem = {
+  id: string;
+  companyName: string;
+  displayName: string | null;
+  status: string;
+  stage: string;
+  industry: string | null;
+  tags: string[] | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  parentClientId: string | null;
+  createdAt: Date;
+  depth: number;
+  parentName?: string;
+  contactCount: number;
+  projectCount: number;
+  openTasksCount: number;
+  lastActivityAt: string | null;
+  needsAttention: boolean;
+  totalHoursWorked: number;
+};
+
 export const clientDivisions = pgTable("client_divisions", {
   id: varchar("id").primaryKey().default(sql`gen_random_uuid()`),
   tenantId: varchar("tenant_id").references(() => tenants.id).notNull(),

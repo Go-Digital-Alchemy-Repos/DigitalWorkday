@@ -71,13 +71,24 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useLocalStorage, useSavedViews } from "@/hooks/use-local-storage";
 import type { SavedView } from "@/hooks/use-local-storage";
-import type { Client } from "@shared/schema";
 import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
 
-interface ClientWithHierarchy extends Client {
+interface ClientWithHierarchy {
+  id: string;
+  companyName: string;
+  displayName: string | null;
+  status: string;
+  stage: string;
+  industry: string | null;
+  tags: string[] | null;
+  email: string | null;
+  phone: string | null;
+  website: string | null;
+  parentClientId: string | null;
+  createdAt: string;
   depth: number;
   parentName?: string;
   contactCount: number;
@@ -1002,16 +1013,6 @@ function ClientDetailSheet({
                     </Badge>
                   ))}
                 </div>
-              </div>
-            </>
-          )}
-
-          {client.notes && (
-            <>
-              <Separator />
-              <div className="space-y-2">
-                <p className="font-medium">Notes</p>
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap">{client.notes}</p>
               </div>
             </>
           )}

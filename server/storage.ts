@@ -87,6 +87,7 @@ import {
   type SlaPolicy, type InsertSlaPolicy,
   type TicketFormSchema, type InsertTicketFormSchema,
   supportSlaPolicies, supportTicketFormSchemas,
+  type ClientListItem,
 } from "@shared/schema";
 import crypto from "crypto";
 import { db } from "./db";
@@ -324,7 +325,7 @@ export interface IStorage {
   getClientsByTenant(tenantId: string, workspaceId?: string): Promise<ClientWithContacts[]>;
   getClientsByTenantBatched(tenantId: string): Promise<ClientWithContacts[]>;
   getClientsMinimal(tenantId: string): Promise<{ id: string; companyName: string; displayName: string | null; status: string | null }[]>;
-  getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean; totalHoursWorked: number })[]>;
+  getClientsByTenantWithHierarchy(tenantId: string): Promise<ClientListItem[]>;
   getClientsSummaryByTenant(tenantId: string): Promise<{ total: number; active: number; inactive: number; prospect: number; newThisMonth: number; needsAttention: number }>;
   updateClientStage(clientId: string, tenantId: string, toStage: string, changedByUserId: string): Promise<Client | undefined>;
   getClientStageSummary(tenantId: string): Promise<{ stage: string; clientCount: number; projectCount: number }[]>;
@@ -2542,8 +2543,21 @@ export class DatabaseStorage implements IStorage {
     }));
   }
 
-  async getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean; totalHoursWorked: number })[]> {
-    const allClients = await db.select()
+  async getClientsByTenantWithHierarchy(tenantId: string): Promise<ClientListItem[]> {
+    const allClients = await db.select({
+      id: clients.id,
+      companyName: clients.companyName,
+      displayName: clients.displayName,
+      status: clients.status,
+      stage: clients.stage,
+      industry: clients.industry,
+      tags: clients.tags,
+      email: clients.email,
+      phone: clients.phone,
+      website: clients.website,
+      parentClientId: clients.parentClientId,
+      createdAt: clients.createdAt,
+    })
       .from(clients)
       .where(eq(clients.tenantId, tenantId))
       .orderBy(asc(clients.companyName));
@@ -2645,7 +2659,8 @@ export class DatabaseStorage implements IStorage {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const childrenMap = new Map<string | null, Client[]>();
+    type ClientRow = typeof allClients[number];
+    const childrenMap = new Map<string | null, ClientRow[]>();
     for (const client of allClients) {
       const parentId = client.parentClientId || null;
       if (!childrenMap.has(parentId)) {
@@ -2654,10 +2669,9 @@ export class DatabaseStorage implements IStorage {
       childrenMap.get(parentId)!.push(client);
     }
     
-    type ClientWithHierarchy = Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean; totalHoursWorked: number };
-    const result: ClientWithHierarchy[] = [];
+    const result: ClientListItem[] = [];
     
-    const addWithChildren = (client: Client, depth: number, parentName?: string) => {
+    const addWithChildren = (client: ClientRow, depth: number, parentName?: string) => {
       const lastActivity = lastActivityMap.get(client.id) || null;
       const overdueCount = overdueCountMap.get(client.id) || 0;
       const hasNoRecentActivity = !lastActivity || new Date(lastActivity) < thirtyDaysAgo;
