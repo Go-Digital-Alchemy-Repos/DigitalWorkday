@@ -1,6 +1,5 @@
-import { db } from "../../db";
-import { timeEntries, users } from "@shared/schema";
-import { eq, and, gte, lte, sql } from "drizzle-orm";
+import { sql } from "drizzle-orm";
+import { dbRows } from "../../lib/dbHelpers";
 
 export interface ClientProfitabilityResult {
   clientId: string;
@@ -25,63 +24,53 @@ export async function getClientProfitability(
   tenantId: string,
   range: ProfitabilityDateRange = {}
 ): Promise<ClientProfitabilityResult> {
-  const conditions = [
-    eq(timeEntries.clientId, clientId),
-    eq(timeEntries.tenantId, tenantId),
-  ];
-
+  const dateConditions: ReturnType<typeof sql>[] = [];
   if (range.startDate) {
-    conditions.push(gte(timeEntries.startTime, new Date(range.startDate)));
+    dateConditions.push(sql`AND te.start_time >= ${new Date(range.startDate)}`);
   }
   if (range.endDate) {
     const end = new Date(range.endDate);
     end.setHours(23, 59, 59, 999);
-    conditions.push(lte(timeEntries.startTime, end));
+    dateConditions.push(sql`AND te.start_time <= ${end}`);
   }
+  const dateFilter = dateConditions.length > 0 ? sql.join(dateConditions, sql` `) : sql``;
 
-  const rows = await db
-    .select({
-      durationSeconds: timeEntries.durationSeconds,
-      scope: timeEntries.scope,
-      costRate: users.costRate,
-      billableRate: users.billableRate,
-    })
-    .from(timeEntries)
-    .leftJoin(users, eq(timeEntries.userId, users.id))
-    .where(and(...conditions));
+  const rows = await dbRows<{
+    revenue: string;
+    labor_cost: string;
+    billable_seconds: string;
+    non_billable_seconds: string;
+  }>(sql`
+    SELECT
+      COALESCE(SUM(CASE WHEN te.scope = 'in_scope' THEN (te.duration_seconds / 3600.0) * COALESCE(u.billable_rate::numeric, 0) ELSE 0 END), 0) AS revenue,
+      COALESCE(SUM((te.duration_seconds / 3600.0) * COALESCE(u.cost_rate::numeric, 0)), 0) AS labor_cost,
+      COALESCE(SUM(CASE WHEN te.scope = 'in_scope' THEN te.duration_seconds ELSE 0 END), 0) AS billable_seconds,
+      COALESCE(SUM(CASE WHEN te.scope != 'in_scope' OR te.scope IS NULL THEN te.duration_seconds ELSE 0 END), 0) AS non_billable_seconds
+    FROM time_entries te
+    LEFT JOIN users u ON te.user_id = u.id
+    WHERE te.client_id = ${clientId}
+      AND te.tenant_id = ${tenantId}
+      ${dateFilter}
+  `);
 
-  let revenue = 0;
-  let laborCost = 0;
-  let billableSeconds = 0;
-  let nonBillableSeconds = 0;
+  const row = rows[0];
 
-  for (const row of rows) {
-    const hours = (row.durationSeconds ?? 0) / 3600;
-    const cost = parseFloat(row.costRate ?? "0");
-    const rate = parseFloat(row.billableRate ?? "0");
-    const isBillable = row.scope === "in_scope";
-
-    if (isBillable) {
-      revenue += hours * rate;
-      billableSeconds += row.durationSeconds ?? 0;
-    } else {
-      nonBillableSeconds += row.durationSeconds ?? 0;
-    }
-    laborCost += hours * cost;
-  }
-
-  const grossMargin = revenue - laborCost;
-  const marginPercent = revenue > 0 ? (grossMargin / revenue) * 100 : 0;
+  const revenueRaw = row ? Number(row.revenue) : 0;
+  const laborCostRaw = row ? Number(row.labor_cost) : 0;
+  const billableSeconds = row ? Number(row.billable_seconds) : 0;
+  const nonBillableSeconds = row ? Number(row.non_billable_seconds) : 0;
+  const grossMarginRaw = revenueRaw - laborCostRaw;
+  const marginPercentRaw = revenueRaw > 0 ? (grossMarginRaw / revenueRaw) * 100 : 0;
   const billableHours = parseFloat((billableSeconds / 3600).toFixed(2));
   const nonBillableHours = parseFloat((nonBillableSeconds / 3600).toFixed(2));
   const totalHours = parseFloat(((billableSeconds + nonBillableSeconds) / 3600).toFixed(2));
 
   return {
     clientId,
-    revenue: parseFloat(revenue.toFixed(2)),
-    laborCost: parseFloat(laborCost.toFixed(2)),
-    grossMargin: parseFloat(grossMargin.toFixed(2)),
-    marginPercent: parseFloat(marginPercent.toFixed(1)),
+    revenue: parseFloat(revenueRaw.toFixed(2)),
+    laborCost: parseFloat(laborCostRaw.toFixed(2)),
+    grossMargin: parseFloat(grossMarginRaw.toFixed(2)),
+    marginPercent: parseFloat(marginPercentRaw.toFixed(1)),
     billableHours,
     nonBillableHours,
     totalHours,
@@ -100,69 +89,60 @@ export async function getTenantClientsProfitability(
   range: ProfitabilityDateRange = {},
   marginThreshold?: number
 ): Promise<PortfolioClientProfitability[]> {
-  const conditions = [eq(timeEntries.tenantId, tenantId)];
-
+  const dateConditions: ReturnType<typeof sql>[] = [];
   if (range.startDate) {
-    conditions.push(gte(timeEntries.startTime, new Date(range.startDate)));
+    dateConditions.push(sql`AND te.start_time >= ${new Date(range.startDate)}`);
   }
   if (range.endDate) {
     const end = new Date(range.endDate);
     end.setHours(23, 59, 59, 999);
-    conditions.push(lte(timeEntries.startTime, end));
+    dateConditions.push(sql`AND te.start_time <= ${end}`);
   }
+  const dateFilter = dateConditions.length > 0 ? sql.join(dateConditions, sql` `) : sql``;
 
-  const rows = await db
-    .select({
-      clientId: timeEntries.clientId,
-      durationSeconds: timeEntries.durationSeconds,
-      scope: timeEntries.scope,
-      costRate: users.costRate,
-      billableRate: users.billableRate,
-    })
-    .from(timeEntries)
-    .leftJoin(users, eq(timeEntries.userId, users.id))
-    .where(and(...conditions));
-
-  const byClient = new Map<string, { revenue: number; laborCost: number; billableS: number; nonBillableS: number }>();
-
-  for (const row of rows) {
-    if (!row.clientId) continue;
-    const hours = (row.durationSeconds ?? 0) / 3600;
-    const cost = parseFloat(row.costRate ?? "0");
-    const rate = parseFloat(row.billableRate ?? "0");
-    const isBillable = row.scope === "in_scope";
-
-    if (!byClient.has(row.clientId)) {
-      byClient.set(row.clientId, { revenue: 0, laborCost: 0, billableS: 0, nonBillableS: 0 });
-    }
-    const acc = byClient.get(row.clientId)!;
-    if (isBillable) {
-      acc.revenue += hours * rate;
-      acc.billableS += row.durationSeconds ?? 0;
-    } else {
-      acc.nonBillableS += row.durationSeconds ?? 0;
-    }
-    acc.laborCost += hours * cost;
-  }
+  const resultRows = await dbRows<{
+    client_id: string;
+    revenue: string;
+    labor_cost: string;
+    billable_seconds: string;
+    non_billable_seconds: string;
+  }>(sql`
+    SELECT
+      te.client_id,
+      COALESCE(SUM(CASE WHEN te.scope = 'in_scope' THEN (te.duration_seconds / 3600.0) * COALESCE(u.billable_rate::numeric, 0) ELSE 0 END), 0) AS revenue,
+      COALESCE(SUM((te.duration_seconds / 3600.0) * COALESCE(u.cost_rate::numeric, 0)), 0) AS labor_cost,
+      COALESCE(SUM(CASE WHEN te.scope = 'in_scope' THEN te.duration_seconds ELSE 0 END), 0) AS billable_seconds,
+      COALESCE(SUM(CASE WHEN te.scope != 'in_scope' OR te.scope IS NULL THEN te.duration_seconds ELSE 0 END), 0) AS non_billable_seconds
+    FROM time_entries te
+    LEFT JOIN users u ON te.user_id = u.id
+    WHERE te.tenant_id = ${tenantId}
+      AND te.client_id IS NOT NULL
+      ${dateFilter}
+    GROUP BY te.client_id
+  `);
 
   const results: PortfolioClientProfitability[] = [];
 
-  for (const [cid, acc] of byClient.entries()) {
-    const grossMargin = acc.revenue - acc.laborCost;
-    const marginPercent = acc.revenue > 0 ? (grossMargin / acc.revenue) * 100 : 0;
+  for (const row of resultRows) {
+    const revenueRaw = Number(row.revenue);
+    const laborCostRaw = Number(row.labor_cost);
+    const billableSeconds = Number(row.billable_seconds);
+    const nonBillableSeconds = Number(row.non_billable_seconds);
+    const grossMarginRaw = revenueRaw - laborCostRaw;
+    const marginPercentRaw = revenueRaw > 0 ? (grossMarginRaw / revenueRaw) * 100 : 0;
 
-    if (marginThreshold !== undefined && marginPercent >= marginThreshold) continue;
+    if (marginThreshold !== undefined && marginPercentRaw >= marginThreshold) continue;
 
     results.push({
-      clientId: cid,
+      clientId: row.client_id,
       clientName: "",
-      revenue: parseFloat(acc.revenue.toFixed(2)),
-      laborCost: parseFloat(acc.laborCost.toFixed(2)),
-      grossMargin: parseFloat(grossMargin.toFixed(2)),
-      marginPercent: parseFloat(marginPercent.toFixed(1)),
-      billableHours: parseFloat((acc.billableS / 3600).toFixed(2)),
-      nonBillableHours: parseFloat((acc.nonBillableS / 3600).toFixed(2)),
-      totalHours: parseFloat(((acc.billableS + acc.nonBillableS) / 3600).toFixed(2)),
+      revenue: parseFloat(revenueRaw.toFixed(2)),
+      laborCost: parseFloat(laborCostRaw.toFixed(2)),
+      grossMargin: parseFloat(grossMarginRaw.toFixed(2)),
+      marginPercent: parseFloat(marginPercentRaw.toFixed(1)),
+      billableHours: parseFloat((billableSeconds / 3600).toFixed(2)),
+      nonBillableHours: parseFloat((nonBillableSeconds / 3600).toFixed(2)),
+      totalHours: parseFloat(((billableSeconds + nonBillableSeconds) / 3600).toFixed(2)),
       startDate: range.startDate ?? null,
       endDate: range.endDate ?? null,
     });

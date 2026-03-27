@@ -119,6 +119,7 @@ export type ProjectActivityItem = {
 };
 import { eq, and, desc, asc, inArray, notInArray, gte, lte, gt, isNull, isNotNull, sql, ilike, or } from "drizzle-orm";
 import { encryptValue, decryptValue } from "./lib/encryption";
+import { dbRows as dbRowsHelper } from "./lib/dbHelpers";
 import { SupportRepository } from "./storage/support.repo";
 import { ChatRepository } from "./storage/chat.repo";
 import { NotificationsRepository } from "./storage/notifications.repo";
@@ -2705,71 +2706,68 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getClientsSummaryByTenant(tenantId: string): Promise<{ total: number; active: number; inactive: number; prospect: number; newThisMonth: number; needsAttention: number }> {
-    const allClients = await db.select()
-      .from(clients)
-      .where(eq(clients.tenantId, tenantId));
+    const rows = await dbRowsHelper<{
+      total: string;
+      active: string;
+      inactive: string;
+      prospect: string;
+      new_this_month: string;
+      needs_attention: string;
+    }>(sql`
+      WITH client_counts AS (
+        SELECT
+          COUNT(*)::int AS total,
+          COUNT(*) FILTER (WHERE status = 'active')::int AS active,
+          COUNT(*) FILTER (WHERE status = 'inactive')::int AS inactive,
+          COUNT(*) FILTER (WHERE status = 'prospect')::int AS prospect,
+          COUNT(*) FILTER (WHERE created_at >= date_trunc('month', now()))::int AS new_this_month
+        FROM clients
+        WHERE tenant_id = ${tenantId}
+      ),
+      active_clients AS (
+        SELECT id FROM clients WHERE tenant_id = ${tenantId} AND status = 'active'
+      ),
+      overdue_clients AS (
+        SELECT DISTINCT p.client_id
+        FROM tasks t
+        INNER JOIN projects p ON t.project_id = p.id
+        WHERE p.client_id IN (SELECT id FROM active_clients)
+          AND p.client_id IS NOT NULL
+          AND t.status IN ('todo', 'in_progress')
+          AND t.due_date < now()
+      ),
+      last_activity AS (
+        SELECT p.client_id, MAX(al.created_at) AS last_act
+        FROM activity_log al
+        INNER JOIN tasks t ON al.entity_type = 'task' AND al.entity_id = t.id
+        INNER JOIN projects p ON t.project_id = p.id
+        WHERE p.client_id IN (SELECT id FROM active_clients)
+          AND p.client_id IS NOT NULL
+        GROUP BY p.client_id
+      ),
+      attention AS (
+        SELECT COUNT(*)::int AS needs_attention
+        FROM active_clients ac
+        WHERE ac.id IN (SELECT client_id FROM overdue_clients)
+          OR ac.id NOT IN (SELECT client_id FROM last_activity WHERE last_act >= now() - interval '30 days')
+      )
+      SELECT cc.*, a.needs_attention
+      FROM client_counts cc, attention a
+    `);
 
-    const now = new Date();
-    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-    const thirtyDaysAgo = new Date();
-    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
-
-    const total = allClients.length;
-    const active = allClients.filter(c => c.status === 'active').length;
-    const inactive = allClients.filter(c => c.status === 'inactive').length;
-    const prospect = allClients.filter(c => c.status === 'prospect').length;
-    const newThisMonth = allClients.filter(c => new Date(c.createdAt) >= startOfMonth).length;
-
-    const activeClientIds = allClients.filter(c => c.status === 'active').map(c => c.id);
-    let needsAttentionCount = 0;
-
-    if (activeClientIds.length > 0) {
-      const [overdueCounts, lastActivities] = await Promise.all([
-        db.select({
-          clientId: projects.clientId,
-          count: sql<number>`count(*)::int`,
-        })
-          .from(tasks)
-          .innerJoin(projects, eq(tasks.projectId, projects.id))
-          .where(and(
-            inArray(projects.clientId, activeClientIds),
-            isNotNull(projects.clientId),
-            inArray(tasks.status, ['todo', 'in_progress']),
-            sql`${tasks.dueDate} < now()`
-          ))
-          .groupBy(projects.clientId),
-        db.select({
-          clientId: projects.clientId,
-          lastActivity: sql<string>`max(${activityLog.createdAt})`,
-        })
-          .from(activityLog)
-          .innerJoin(tasks, and(
-            eq(activityLog.entityType, 'task'),
-            eq(activityLog.entityId, tasks.id)
-          ))
-          .innerJoin(projects, eq(tasks.projectId, projects.id))
-          .where(and(
-            inArray(projects.clientId, activeClientIds),
-            isNotNull(projects.clientId)
-          ))
-          .groupBy(projects.clientId),
-      ]);
-
-      const overdueSet = new Set(overdueCounts.map(o => o.clientId!));
-
-      const lastActivityMap = new Map(lastActivities.map(a => [a.clientId!, a.lastActivity]));
-
-      for (const clientId of activeClientIds) {
-        const hasOverdue = overdueSet.has(clientId);
-        const lastAct = lastActivityMap.get(clientId);
-        const hasNoRecentActivity = !lastAct || new Date(lastAct) < thirtyDaysAgo;
-        if (hasOverdue || hasNoRecentActivity) {
-          needsAttentionCount++;
-        }
-      }
+    const row = rows[0];
+    if (!row) {
+      return { total: 0, active: 0, inactive: 0, prospect: 0, newThisMonth: 0, needsAttention: 0 };
     }
 
-    return { total, active, inactive, prospect, newThisMonth, needsAttention: needsAttentionCount };
+    return {
+      total: Number(row.total),
+      active: Number(row.active),
+      inactive: Number(row.inactive),
+      prospect: Number(row.prospect),
+      newThisMonth: Number(row.new_this_month),
+      needsAttention: Number(row.needs_attention),
+    };
   }
 
   async updateClientStage(clientId: string, tenantId: string, toStage: string, changedByUserId: string): Promise<Client | undefined> {

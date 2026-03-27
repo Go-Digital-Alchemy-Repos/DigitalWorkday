@@ -537,6 +537,12 @@ router.get("/client/risk", async (req: Request, res: Response) => {
     const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
     const filters = normalizeFilters(params);
     const metaFilter = buildClientMetaFilters(filters);
+    const { limit, offset } = safePagination(params);
+
+    const countResult = await dbRows<{ cnt: string }>(sql`
+      SELECT COUNT(*)::int AS cnt FROM clients c WHERE c.tenant_id = ${tenantId} ${metaFilter}
+    `);
+    const totalClients = Number(countResult[0]?.cnt ?? 0);
 
     const rows = await dbRows<{
       client_id: string;
@@ -564,6 +570,8 @@ router.get("/client/risk", async (req: Request, res: Response) => {
       WHERE c.tenant_id = ${tenantId}
         ${metaFilter}
       GROUP BY c.id, c.company_name
+      ORDER BY c.company_name
+      LIMIT ${limit} OFFSET ${offset}
     `);
 
     const flagged = [];
@@ -623,7 +631,8 @@ router.get("/client/risk", async (req: Request, res: Response) => {
 
     res.json({
       flagged,
-      totalChecked: rows.length,
+      totalChecked: totalClients,
+      pagination: { limit, offset, total: totalClients },
       range: { startDate, endDate },
     });
   } catch (error) {
