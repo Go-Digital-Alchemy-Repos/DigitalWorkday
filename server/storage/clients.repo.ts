@@ -7,10 +7,10 @@ import {
   type Project,
   type ClientWithContacts,
   clients, clientContacts, clientInvites, clientUserAccess,
-  projects, users,
+  projects, users, timeEntries,
 } from "@shared/schema";
 import { db } from "../db";
-import { eq, and, desc, asc, inArray, isNull } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, isNull, sql, sum } from "drizzle-orm";
 import { assertInsertHasTenantId } from "../lib/errors";
 
 export class ClientsRepository {
@@ -275,41 +275,46 @@ export class ClientsRepository {
       .orderBy(asc(clients.companyName));
   }
 
-  async getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string })[]> {
-    // Get all clients for the tenant
-    const allClients = await db.select()
-      .from(clients)
-      .where(eq(clients.tenantId, tenantId))
-      .orderBy(asc(clients.companyName));
-    
-    // Build a map of clients by ID
-    const clientMap = new Map<string, Client>();
-    for (const client of allClients) {
-      clientMap.set(client.id, client);
+  async getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; totalHoursWorked: number })[]> {
+    const [allClients, hoursRows] = await Promise.all([
+      db.select()
+        .from(clients)
+        .where(eq(clients.tenantId, tenantId))
+        .orderBy(asc(clients.companyName)),
+      db.select({
+        clientId: timeEntries.clientId,
+        totalSeconds: sum(timeEntries.durationSeconds).mapWith(Number),
+      })
+        .from(timeEntries)
+        .where(eq(timeEntries.tenantId, tenantId))
+        .groupBy(timeEntries.clientId),
+    ]);
+
+    const hoursMap = new Map<string, number>();
+    for (const row of hoursRows) {
+      if (row.clientId) {
+        hoursMap.set(row.clientId, Math.round(((row.totalSeconds || 0) / 3600) * 100) / 100);
+      }
     }
     
-    // Build hierarchy with depth calculation
-    const result: (Client & { depth: number; parentName?: string })[] = [];
+    const result: (Client & { depth: number; parentName?: string; totalHoursWorked: number })[] = [];
     
-    // First, add all top-level clients
     const topLevel = allClients.filter(c => !c.parentClientId);
     
-    // Recursive function to add client and its children
     const addWithChildren = (client: Client, depth: number, parentName?: string) => {
       result.push({ 
         ...client, 
         depth, 
-        parentName 
+        parentName,
+        totalHoursWorked: hoursMap.get(client.id) || 0,
       });
       
-      // Find and add children
       const children = allClients.filter(c => c.parentClientId === client.id);
       for (const child of children) {
         addWithChildren(child, depth + 1, client.companyName);
       }
     };
     
-    // Process top-level clients first, then their children recursively
     for (const client of topLevel) {
       addWithChildren(client, 0);
     }

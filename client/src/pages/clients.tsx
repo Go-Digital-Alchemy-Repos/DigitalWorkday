@@ -85,6 +85,7 @@ interface ClientWithHierarchy extends Client {
   openTasksCount: number;
   lastActivityAt: string | null;
   needsAttention: boolean;
+  totalHoursWorked: number;
 }
 
 interface ClientSummary {
@@ -139,6 +140,8 @@ const STAGE_FILTER: FilterConfig = {
 };
 
 const SORT_OPTIONS: SortOption[] = [
+  { value: "hours-desc", label: "Most hours" },
+  { value: "hours-asc", label: "Fewest hours" },
   { value: "name-asc", label: "Name (A-Z)" },
   { value: "name-desc", label: "Name (Z-A)" },
   { value: "projects-desc", label: "Most projects" },
@@ -1527,7 +1530,7 @@ export default function ClientsPage() {
   >("clients-filters", {});
   const [sortValue, setSortValue] = useLocalStorage<string>(
     "clients-sort",
-    "name-asc"
+    "hours-desc"
   );
   const { views, saveView, deleteView } = useSavedViews("clients-saved-views");
   const [, navigate] = useLocation();
@@ -1830,6 +1833,10 @@ export default function ClientsPage() {
 
     result.sort((a, b) => {
       switch (sortValue) {
+        case "hours-desc":
+          return (b.totalHoursWorked || 0) - (a.totalHoursWorked || 0);
+        case "hours-asc":
+          return (a.totalHoursWorked || 0) - (b.totalHoursWorked || 0);
         case "name-asc":
           return a.companyName.localeCompare(b.companyName);
         case "name-desc":
