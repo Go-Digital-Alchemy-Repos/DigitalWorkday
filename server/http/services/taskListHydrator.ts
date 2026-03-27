@@ -12,33 +12,35 @@ function chunk<T>(arr: T[], size: number): T[][] {
 }
 
 export async function getTaskListItemsByUser(userId: string, tenantId: string, includeArchived = false): Promise<TaskListItem[]> {
-  const assigneeRows = await db.select({ taskId: taskAssignees.taskId })
-    .from(taskAssignees)
-    .where(eq(taskAssignees.userId, userId));
+  const [assigneeRows, personalRows] = await Promise.all([
+    db.select({ taskId: taskAssignees.taskId })
+      .from(taskAssignees)
+      .where(eq(taskAssignees.userId, userId)),
+    db.select({ id: tasks.id })
+      .from(tasks)
+      .where(and(
+        eq(tasks.isPersonal, true),
+        eq(tasks.createdBy, userId),
+        ...(!includeArchived ? [isNull(tasks.archivedAt)] : [])
+      )),
+  ]);
   const assignedIds = assigneeRows.map(r => r.taskId);
-
-  const personalConditions = [eq(tasks.isPersonal, true), eq(tasks.createdBy, userId)];
-  if (!includeArchived) {
-    personalConditions.push(isNull(tasks.archivedAt));
-  }
-
-  const personalRows = await db.select({ id: tasks.id })
-    .from(tasks)
-    .where(and(...personalConditions));
   const personalIds = personalRows.map(r => r.id);
 
   const allTaskIds = Array.from(new Set([...assignedIds, ...personalIds]));
   if (allTaskIds.length === 0) return [];
 
-  const baseTasks: (typeof tasks.$inferSelect)[] = [];
-  for (const batch of chunk(allTaskIds, 500)) {
-    const conditions = [inArray(tasks.id, batch)];
-    if (!includeArchived) {
-      conditions.push(isNull(tasks.archivedAt));
-    }
-    const rows = await db.select().from(tasks).where(and(...conditions));
-    baseTasks.push(...rows);
-  }
+  const taskBatches = chunk(allTaskIds, 500);
+  const batchResults = await Promise.all(
+    taskBatches.map(batch => {
+      const conditions = [inArray(tasks.id, batch)];
+      if (!includeArchived) {
+        conditions.push(isNull(tasks.archivedAt));
+      }
+      return db.select().from(tasks).where(and(...conditions));
+    })
+  );
+  const baseTasks = batchResults.flat();
   if (baseTasks.length === 0) return [];
 
   let filteredTasks = baseTasks;
@@ -54,21 +56,21 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
   const taskIds = filteredTasks.map(t => t.id);
 
   const projectIds = Array.from(new Set(filteredTasks.map(t => t.projectId).filter(Boolean))) as string[];
-  const projectNameMap = new Map<string, { name: string; clientName: string | null }>();
-  if (projectIds.length > 0) {
-    for (const batch of chunk(projectIds, 200)) {
-      const projectRows = await db
-        .select({ id: projects.id, name: projects.name, clientName: clients.companyName })
-        .from(projects)
-        .leftJoin(clients, eq(projects.clientId, clients.id))
-        .where(inArray(projects.id, batch));
-      for (const row of projectRows) {
-        projectNameMap.set(row.id, { name: row.name, clientName: row.clientName ?? null });
-      }
-    }
-  }
 
-  const [assigneeRows2, tagRows, commentCounts, childTaskCounts, subtaskCounts] = await Promise.all([
+  const projectNamePromise = projectIds.length > 0
+    ? Promise.all(
+        chunk(projectIds, 200).map(batch =>
+          db.select({ id: projects.id, name: projects.name, clientName: clients.companyName })
+            .from(projects)
+            .leftJoin(clients, eq(projects.clientId, clients.id))
+            .where(inArray(projects.id, batch))
+        )
+      ).then(batches => batches.flat())
+    : Promise.resolve([] as { id: string; name: string; clientName: string | null }[]);
+
+  const [projectRows, assigneeRows2, tagRows, commentCounts, childTaskCounts, subtaskCounts] = await Promise.all([
+    projectNamePromise,
+
     db.select({
       taskId: taskAssignees.taskId,
       userId: taskAssignees.userId,
@@ -112,6 +114,11 @@ export async function getTaskListItemsByUser(userId: string, tenantId: string, i
       .where(inArray(subtasks.taskId, taskIds))
       .groupBy(subtasks.taskId),
   ]);
+
+  const projectNameMap = new Map<string, { name: string; clientName: string | null }>();
+  for (const row of projectRows) {
+    projectNameMap.set(row.id, { name: row.name, clientName: row.clientName ?? null });
+  }
 
   const assigneesByTask = new Map<string, { userId: string; name: string }[]>();
   for (const row of assigneeRows2) {

@@ -86,8 +86,8 @@ export default function ProjectsDashboard() {
     queryKey: ["/api/projects", { fields: "minimal", includeCounts: "true", limit: "200" }],
   });
 
-  const { data: clients } = useQuery<Client[]>({
-    queryKey: ["/api/clients"],
+  const { data: clients } = useQuery<{ id: string; companyName: string; displayName: string | null; status: string | null }[]>({
+    queryKey: ["/api/clients", { fields: "minimal" }],
   });
 
   const { data: teams } = useQuery<Team[]>({

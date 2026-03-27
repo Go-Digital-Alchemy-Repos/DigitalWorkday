@@ -106,9 +106,15 @@ router.get("/clients", async (req, res) => {
     const tenantId = getEffectiveTenantId(req);
     const workspaceId = getCurrentWorkspaceId(req);
     const requestId = req.requestId || "unknown";
+    const fields = req.query.fields as string | undefined;
     
-    console.log(`[GET /api/clients] requestId=${requestId}, tenantId=${tenantId}, workspaceId=${workspaceId}, userId=${req.user?.id}`);
+    console.log(`[GET /api/clients] requestId=${requestId}, tenantId=${tenantId}, workspaceId=${workspaceId}, userId=${req.user?.id}, fields=${fields || 'full'}`);
     
+    if (fields === "minimal" && tenantId) {
+      const minimalClients = await storage.getClientsMinimal(tenantId);
+      return res.json(minimalClients);
+    }
+
     if (tenantId) {
       const clients = config.features.enableClientsBatchExpansion
         ? await storage.getClientsByTenantBatched(tenantId)

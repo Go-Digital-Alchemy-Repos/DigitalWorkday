@@ -323,6 +323,7 @@ export interface IStorage {
   getClientByIdAndTenant(id: string, tenantId: string): Promise<Client | undefined>;
   getClientsByTenant(tenantId: string, workspaceId?: string): Promise<ClientWithContacts[]>;
   getClientsByTenantBatched(tenantId: string): Promise<ClientWithContacts[]>;
+  getClientsMinimal(tenantId: string): Promise<{ id: string; companyName: string; displayName: string | null; status: string | null }[]>;
   getClientsByTenantWithHierarchy(tenantId: string): Promise<(Client & { depth: number; parentName?: string; contactCount: number; projectCount: number; openTasksCount: number; lastActivityAt: string | null; needsAttention: boolean; totalHoursWorked: number })[]>;
   getClientsSummaryByTenant(tenantId: string): Promise<{ total: number; active: number; inactive: number; prospect: number; newThisMonth: number; needsAttention: number }>;
   updateClientStage(clientId: string, tenantId: string, toStage: string, changedByUserId: string): Promise<Client | undefined>;
@@ -2471,6 +2472,18 @@ export class DatabaseStorage implements IStorage {
     const [client] = await db.select().from(clients)
       .where(and(eq(clients.id, id), eq(clients.tenantId, tenantId)));
     return client || undefined;
+  }
+
+  async getClientsMinimal(tenantId: string): Promise<{ id: string; companyName: string; displayName: string | null; status: string | null }[]> {
+    return db.select({
+      id: clients.id,
+      companyName: clients.companyName,
+      displayName: clients.displayName,
+      status: clients.status,
+    })
+      .from(clients)
+      .where(eq(clients.tenantId, tenantId))
+      .orderBy(asc(clients.companyName));
   }
 
   async getClientsByTenant(tenantId: string, _workspaceId?: string): Promise<ClientWithContacts[]> {
