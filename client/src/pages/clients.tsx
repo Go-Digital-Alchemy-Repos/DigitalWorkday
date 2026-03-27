@@ -71,7 +71,7 @@ import { Input } from "@/components/ui/input";
 import { Separator } from "@/components/ui/separator";
 import { useLocalStorage, useSavedViews } from "@/hooks/use-local-storage";
 import type { SavedView } from "@/hooks/use-local-storage";
-import type { ClientWithContacts, Client } from "@shared/schema";
+import type { Client } from "@shared/schema";
 import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from "@shared/schema";
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
@@ -1563,9 +1563,6 @@ export default function ClientsPage() {
     queryKey: ["/api/v1/clients/stages/summary"],
   });
 
-  const { data: clients } = useQuery<ClientWithContacts[]>({
-    queryKey: ["/api/clients"],
-  });
 
   const industries = useMemo(() => {
     if (!hierarchyClients) return [];
@@ -1616,9 +1613,9 @@ export default function ClientsPage() {
       return apiRequest("POST", "/api/clients", data);
     },
     onMutate: async (newClient) => {
-      await queryClient.cancelQueries({ queryKey: ["/api/clients"] });
-      const previousClients = queryClient.getQueryData<ClientWithContacts[]>([
-        "/api/clients",
+      await queryClient.cancelQueries({ queryKey: ["/api/v1/clients/hierarchy/list"] });
+      const previousHierarchyClients = queryClient.getQueryData<ClientWithHierarchy[]>([
+        "/api/v1/clients/hierarchy/list",
       ]);
       const optimisticClient = {
         id: `temp-${Date.now()}`,
@@ -1649,18 +1646,23 @@ export default function ClientsPage() {
         workspaceId: "",
         createdAt: new Date(),
         updatedAt: new Date(),
-        contacts: [],
-        projects: [],
-      } as ClientWithContacts;
-      queryClient.setQueryData<ClientWithContacts[]>(
-        ["/api/clients"],
+        depth: 0,
+        contactCount: 0,
+        projectCount: 0,
+        openTasksCount: 0,
+        lastActivityAt: null,
+        needsAttention: false,
+        totalHoursWorked: 0,
+      } as ClientWithHierarchy;
+      queryClient.setQueryData<ClientWithHierarchy[]>(
+        ["/api/v1/clients/hierarchy/list"],
         (old) => (old ? [optimisticClient, ...old] : [optimisticClient])
       );
-      return { previousClients };
+      return { previousHierarchyClients };
     },
     onError: (err: any, _newClient, context) => {
-      if (context?.previousClients) {
-        queryClient.setQueryData(["/api/clients"], context.previousClients);
+      if (context?.previousHierarchyClients) {
+        queryClient.setQueryData(["/api/v1/clients/hierarchy/list"], context.previousHierarchyClients);
       }
       const errorMessage = err?.message || err?.error || "Unknown error";
       console.error("Failed to create client:", err);
@@ -1678,7 +1680,6 @@ export default function ClientsPage() {
       setCreateDrawerOpen(false);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       queryClient.invalidateQueries({
         queryKey: ["/api/v1/clients/hierarchy/list"],
       });
@@ -1708,7 +1709,6 @@ export default function ClientsPage() {
       toast({ title: "Failed to update some clients", variant: "destructive" });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
       queryClient.invalidateQueries({
         queryKey: ["/api/v1/clients/hierarchy/list"],
       });
