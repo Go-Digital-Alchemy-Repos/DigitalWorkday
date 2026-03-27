@@ -29,6 +29,7 @@ import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { PageShell, PageHeader, EmptyState, LoadingState, ErrorState } from "@/components/layout";
+import { Skeleton } from "@/components/ui/skeleton";
 import type { Project, Client, Team } from "@shared/schema";
 import { UserRole } from "@shared/schema";
 import { format } from "date-fns";
@@ -150,9 +151,10 @@ export default function ProjectsDashboard() {
     queryKey: ["/api/teams"],
   });
 
-  const { data: analytics } = useQuery<ProjectAnalyticsSummary>({
+  const { data: analytics, isLoading: analyticsLoading } = useQuery<ProjectAnalyticsSummary>({
     queryKey: ["/api/v1/projects/analytics/summary"],
     staleTime: 30000,
+    enabled: !!projectPage,
   });
 
   const createProjectMutation = useMutation({
@@ -307,48 +309,73 @@ export default function ProjectsDashboard() {
         }
       />
 
-      {analytics?.totals && (
-        <div className="grid gap-3 grid-cols-2 md:grid-cols-4 mb-6">
-          <Card>
-            <CardContent className="pt-4 pb-3">
-              <div className="flex items-center gap-2">
-                <FolderKanban className="h-4 w-4 text-primary" />
-                <span className="text-sm text-muted-foreground">Active Projects</span>
-              </div>
-              <div className="text-2xl font-bold mt-1">{analytics.totals.activeProjects}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-3">
-              <div className="flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-destructive" />
-                <span className="text-sm text-muted-foreground">Projects at Risk</span>
-              </div>
-              <div className="text-2xl font-bold mt-1 text-destructive">
-                {analytics.totals.projectsWithOverdue}
-              </div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-3">
-              <div className="flex items-center gap-2">
-                <Clock className="h-4 w-4 text-orange-500" />
-                <span className="text-sm text-muted-foreground">Due Today</span>
-              </div>
-              <div className="text-2xl font-bold mt-1">{analytics.totals.tasksDueToday}</div>
-            </CardContent>
-          </Card>
-          <Card>
-            <CardContent className="pt-4 pb-3">
-              <div className="flex items-center gap-2">
-                <CircleOff className="h-4 w-4 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Unassigned Tasks</span>
-              </div>
-              <div className="text-2xl font-bold mt-1">{analytics.totals.unassignedOpenTasks}</div>
-            </CardContent>
-          </Card>
-        </div>
-      )}
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-4 mb-6" data-testid="analytics-summary-cards">
+        {analytics?.totals ? (
+          <>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2">
+                  <FolderKanban className="h-4 w-4 text-primary" />
+                  <span className="text-sm text-muted-foreground">Active Projects</span>
+                </div>
+                <div className="text-2xl font-bold mt-1">{analytics.totals.activeProjects}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <span className="text-sm text-muted-foreground">Projects at Risk</span>
+                </div>
+                <div className="text-2xl font-bold mt-1 text-destructive">
+                  {analytics.totals.projectsWithOverdue}
+                </div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4 text-orange-500" />
+                  <span className="text-sm text-muted-foreground">Due Today</span>
+                </div>
+                <div className="text-2xl font-bold mt-1">{analytics.totals.tasksDueToday}</div>
+              </CardContent>
+            </Card>
+            <Card>
+              <CardContent className="pt-4 pb-3">
+                <div className="flex items-center gap-2">
+                  <CircleOff className="h-4 w-4 text-muted-foreground" />
+                  <span className="text-sm text-muted-foreground">Unassigned Tasks</span>
+                </div>
+                <div className="text-2xl font-bold mt-1">{analytics.totals.unassignedOpenTasks}</div>
+              </CardContent>
+            </Card>
+          </>
+        ) : (
+          <>
+            {[
+              { icon: <FolderKanban className="h-4 w-4 text-primary" />, label: "Active Projects" },
+              { icon: <AlertTriangle className="h-4 w-4 text-destructive" />, label: "Projects at Risk" },
+              { icon: <Clock className="h-4 w-4 text-orange-500" />, label: "Due Today" },
+              { icon: <CircleOff className="h-4 w-4 text-muted-foreground" />, label: "Unassigned Tasks" },
+            ].map((card) => (
+              <Card key={card.label}>
+                <CardContent className="pt-4 pb-3">
+                  <div className="flex items-center gap-2">
+                    {card.icon}
+                    <span className="text-sm text-muted-foreground">{card.label}</span>
+                  </div>
+                  {analyticsLoading ? (
+                    <Skeleton className="h-8 w-12 mt-1" />
+                  ) : (
+                    <div className="text-2xl font-bold mt-1 text-muted-foreground">—</div>
+                  )}
+                </CardContent>
+              </Card>
+            ))}
+          </>
+        )}
+      </div>
 
       <div className="mb-6" data-testid="projects-pipeline-bar">
         <div className="flex gap-2 overflow-x-auto pb-1 scrollbar-hide">
@@ -528,7 +555,7 @@ export default function ProjectsDashboard() {
                               {getClientName(project.clientId)}
                             </span>
                           )}
-                          {stats && (
+                          {stats ? (
                             <>
                               <span className="flex items-center gap-1">
                                 <CheckSquare className="h-3 w-3" />
@@ -540,13 +567,24 @@ export default function ProjectsDashboard() {
                                 </Badge>
                               )}
                             </>
+                          ) : analyticsLoading ? (
+                            <Skeleton className="h-3.5 w-16" />
+                          ) : (
+                            <span className="flex items-center gap-1">
+                              <CheckSquare className="h-3 w-3" />
+                              {project.openTaskCount ?? 0} open
+                            </span>
                           )}
                         </div>
-                        {stats && (
+                        {stats ? (
                           <div className="mt-2">
                             <Progress value={stats.completionPercent} className="h-1.5" />
                           </div>
-                        )}
+                        ) : analyticsLoading ? (
+                          <div className="mt-2">
+                            <Skeleton className="h-1.5 w-full rounded-full" />
+                          </div>
+                        ) : null}
                       </div>
                     </div>
                   </CardContent>
@@ -658,59 +696,82 @@ export default function ProjectsDashboard() {
                       </div>
                     </TableCell>
                     <TableCell className="text-center">
-                      <span className="text-muted-foreground">
-                        {getProjectStats(project.id)?.openTasks ?? project.openTaskCount ?? "-"}
-                      </span>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {(getProjectStats(project.id)?.overdueTasks ?? 0) > 0 ? (
-                        <Badge variant="destructive" className="text-xs">
-                          {getProjectStats(project.id)?.overdueTasks}
-                        </Badge>
+                      {analyticsLoading ? (
+                        <Skeleton className="h-4 w-6 mx-auto" />
                       ) : (
-                        <span className="text-muted-foreground">0</span>
+                        <span className="text-muted-foreground">
+                          {getProjectStats(project.id)?.openTasks ?? project.openTaskCount ?? "0"}
+                        </span>
                       )}
                     </TableCell>
                     <TableCell className="text-center">
-                      {(getProjectStats(project.id)?.dueToday ?? 0) > 0 ? (
-                        <Badge variant="secondary" className="text-xs">
-                          {getProjectStats(project.id)?.dueToday}
-                        </Badge>
+                      {analyticsLoading ? (
+                        <Skeleton className="h-4 w-6 mx-auto" />
                       ) : (
-                        <span className="text-muted-foreground">0</span>
+                        (getProjectStats(project.id)?.overdueTasks ?? 0) > 0 ? (
+                          <Badge variant="destructive" className="text-xs">
+                            {getProjectStats(project.id)?.overdueTasks}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      {analyticsLoading ? (
+                        <Skeleton className="h-4 w-6 mx-auto" />
+                      ) : (
+                        (getProjectStats(project.id)?.dueToday ?? 0) > 0 ? (
+                          <Badge variant="secondary" className="text-xs">
+                            {getProjectStats(project.id)?.dueToday}
+                          </Badge>
+                        ) : (
+                          <span className="text-muted-foreground">0</span>
+                        )
                       )}
                     </TableCell>
                     <TableCell>
-                      {(() => {
-                        const stats = getProjectStats(project.id);
-                        if (!stats) return <span className="text-muted-foreground">-</span>;
-                        return (
-                          <Tooltip>
-                            <TooltipTrigger className="w-full">
-                              <div className="flex items-center gap-2">
-                                <Progress value={stats.completionPercent} className="h-2 flex-1" />
-                                <span className="text-xs text-muted-foreground w-8">
-                                  {stats.completionPercent}%
-                                </span>
-                              </div>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              {stats.completedTasks} of {stats.openTasks + stats.completedTasks} tasks completed
-                            </TooltipContent>
-                          </Tooltip>
-                        );
-                      })()}
+                      {analyticsLoading ? (
+                        <div className="flex items-center gap-2">
+                          <Skeleton className="h-2 flex-1" />
+                          <Skeleton className="h-3 w-8" />
+                        </div>
+                      ) : (
+                        (() => {
+                          const stats = getProjectStats(project.id);
+                          if (!stats) return <span className="text-muted-foreground">-</span>;
+                          return (
+                            <Tooltip>
+                              <TooltipTrigger className="w-full">
+                                <div className="flex items-center gap-2">
+                                  <Progress value={stats.completionPercent} className="h-2 flex-1" />
+                                  <span className="text-xs text-muted-foreground w-8">
+                                    {stats.completionPercent}%
+                                  </span>
+                                </div>
+                              </TooltipTrigger>
+                              <TooltipContent>
+                                {stats.completedTasks} of {stats.openTasks + stats.completedTasks} tasks completed
+                              </TooltipContent>
+                            </Tooltip>
+                          );
+                        })()
+                      )}
                     </TableCell>
                     <TableCell>
-                      {(() => {
-                        const stats = getProjectStats(project.id);
-                        if (!stats || !stats.lastActivityAt) return <span className="text-muted-foreground">-</span>;
-                        return (
-                          <span className="text-xs text-muted-foreground">
-                            {format(new Date(stats.lastActivityAt), "MMM d, yyyy")}
-                          </span>
-                        );
-                      })()}
+                      {analyticsLoading ? (
+                        <Skeleton className="h-3 w-20" />
+                      ) : (
+                        (() => {
+                          const stats = getProjectStats(project.id);
+                          if (!stats || !stats.lastActivityAt) return <span className="text-muted-foreground">-</span>;
+                          return (
+                            <span className="text-xs text-muted-foreground">
+                              {format(new Date(stats.lastActivityAt), "MMM d, yyyy")}
+                            </span>
+                          );
+                        })()
+                      )}
                     </TableCell>
                   </TableRow>
                 ))}
