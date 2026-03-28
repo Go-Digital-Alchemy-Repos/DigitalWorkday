@@ -20,6 +20,7 @@ import { Building2, BarChart3, Globe, MessageSquareText } from "lucide-react";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { cn } from "@/lib/utils";
+import { TenantIntelligencePanel } from "@/components/super-admin/tenant-intelligence-panel";
 
 const ReportsPage = lazy(() => import("@/pages/reports"));
 const SuperAdminPlatformReports = lazy(() => import("@/pages/super-admin-platform-reports"));
@@ -212,11 +213,14 @@ export default function SuperAdminReportsPage() {
         </div>
 
         {/* Report content area */}
-        <div className="flex-1 overflow-hidden">
+        <div className="flex-1 overflow-auto">
           {selectedTenantId && selectedTenant ? (
-            <Suspense fallback={<PageSkeleton />}>
-              <ReportsPage key={selectedTenantId} />
-            </Suspense>
+            <>
+              <TenantIntelligencePanel tenantId={selectedTenantId} />
+              <Suspense fallback={<PageSkeleton />}>
+                <ReportsPage key={selectedTenantId} />
+              </Suspense>
+            </>
           ) : (
             <NoTenantSelected />
           )}
