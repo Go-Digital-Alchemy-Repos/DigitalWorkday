@@ -14,8 +14,7 @@ export const queryKeys = {
       search
         ? (["/api/projects/unassigned", search] as const)
         : (["/api/projects/unassigned"] as const),
-    v1: ["/api/v1/projects"] as const,
-    v1WithCounts: ["/api/v1/projects", { includeCounts: true }] as const,
+    withCounts: ["/api/projects", { includeCounts: "true" }] as const,
     analyticsSummary: ["/api/v1/projects/analytics/summary"] as const,
   },
 
@@ -173,6 +172,5 @@ export function invalidateTaskCaches(
 
   if (opts.includeProjectLists) {
     qc.invalidateQueries({ queryKey: queryKeys.projects.all });
-    qc.invalidateQueries({ queryKey: queryKeys.projects.v1 });
   }
 }

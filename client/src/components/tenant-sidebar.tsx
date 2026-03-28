@@ -187,7 +187,7 @@ export function TenantSidebar() {
   });
 
   const { data: projects } = useQuery<Project[]>({
-    queryKey: ["/api/v1/projects"],
+    queryKey: ["/api/projects"],
   });
 
   const { data: teams } = useQuery<Team[]>({
@@ -327,7 +327,6 @@ export function TenantSidebar() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
       setCreateProjectOpen(false);
     },
   });

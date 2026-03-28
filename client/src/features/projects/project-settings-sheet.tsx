@@ -175,7 +175,7 @@ export function ProjectSettingsSheet({
       queryClient.setQueryData<Project>(queryKeys.projects.detail(project.id), (old) =>
         old ? { ...old, ...updatedProject } : old,
       );
-      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.projects.v1WithCounts, (old) => {
+      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.projects.withCounts, (old) => {
         if (!old) return old;
         return old.map((p: Record<string, unknown>) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
@@ -183,7 +183,6 @@ export function ProjectSettingsSheet({
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.v1 });
       toast({
         title: "Project updated",
         description: "Project details have been saved.",
@@ -232,7 +231,7 @@ export function ProjectSettingsSheet({
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
-      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.projects.v1WithCounts, (old) => {
+      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.projects.withCounts, (old) => {
         if (!old) return old;
         return old.map((p: Record<string, unknown>) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
@@ -240,7 +239,6 @@ export function ProjectSettingsSheet({
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.v1 });
       toast({
         title: status === "archived" ? "Project archived" : "Project restored",
         description: status === "archived" 
@@ -274,14 +272,13 @@ export function ProjectSettingsSheet({
       queryClient.setQueryData<Project>(queryKeys.projects.detail(project.id), (old) =>
         old ? { ...old, ...updatedProject } : old,
       );
-      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.projects.v1WithCounts, (old) => {
+      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.projects.withCounts, (old) => {
         if (!old) return old;
         return old.map((p: Record<string, unknown>) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.v1 });
       toast({
         title: updatedProject.stickyAt ? "Project pinned" : "Project unpinned",
         description: updatedProject.stickyAt
@@ -327,7 +324,6 @@ export function ProjectSettingsSheet({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.v1 });
       toast({
         title: "Project deleted",
         description: `"${project.name}" has been permanently deleted.`,

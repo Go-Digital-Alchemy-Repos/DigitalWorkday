@@ -223,6 +223,48 @@ router.get("/projects", async (req: Request, res: Response) => {
           (p as any).visibility !== 'private' || accessibleSet.has(p.id)
         );
       }
+
+      const { status, clientId, teamId, search, includeCounts } = req.query as Record<string, string>;
+      if (status === 'active') {
+        projectList = projectList.filter(p => p.status !== 'archived');
+      } else if (status && status !== 'all') {
+        projectList = projectList.filter(p => p.status === status);
+      }
+      if (clientId && clientId !== 'all') {
+        projectList = projectList.filter(p => p.clientId === clientId);
+      }
+      if (teamId && teamId !== 'all') {
+        projectList = projectList.filter(p => p.teamId === teamId);
+      }
+      if (search) {
+        const searchLower = search.toLowerCase();
+        projectList = projectList.filter(p =>
+          p.name.toLowerCase().includes(searchLower) ||
+          (p.description && p.description.toLowerCase().includes(searchLower))
+        );
+      }
+
+      if (includeCounts === 'true' && projectList.length > 0) {
+        const projectIds = projectList.map((p: any) => p.id);
+        const taskCounts = await db
+          .select({
+            projectId: tasks.projectId,
+            total: sql<number>`count(*)::int`,
+            completed: sql<number>`count(*) filter (where ${tasks.status} = 'done')::int`,
+          })
+          .from(tasks)
+          .where(and(
+            inArray(tasks.projectId, projectIds),
+            sql`${tasks.archivedAt} is null`
+          ))
+          .groupBy(tasks.projectId);
+
+        const countsMap = new Map(taskCounts.map(c => [c.projectId, { total: c.total, completed: c.completed }]));
+        for (const p of projectList) {
+          (p as any).taskCounts = countsMap.get(p.id) || { total: 0, completed: 0 };
+        }
+      }
+
       return res.json(projectList);
     }
     

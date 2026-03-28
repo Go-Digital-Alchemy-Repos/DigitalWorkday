@@ -89,7 +89,7 @@ export function GlobalActiveTimer() {
   });
 
   const { data: allProjects = [] } = useQuery<Array<{ id: string; name: string; clientId: string | null }>>({
-    queryKey: ["/api/v1/projects"],
+    queryKey: ["/api/projects"],
     enabled: isEligible,
   });
 

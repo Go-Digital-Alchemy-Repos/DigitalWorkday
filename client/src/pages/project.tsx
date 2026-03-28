@@ -273,7 +273,6 @@ export default function ProjectPage() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId!) });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.v1 });
       toast({ title: "Project restored", description: "This project is now active again." });
     },
     onError: () => {

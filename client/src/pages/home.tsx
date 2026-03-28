@@ -784,7 +784,6 @@ export default function Home() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.v1 });
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.analyticsSummary });
       setCreateProjectOpen(false);
     },

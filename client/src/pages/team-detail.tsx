@@ -69,7 +69,7 @@ export default function TeamDetailPage() {
   });
 
   const { data: teamProjects = [] } = useQuery<Project[]>({
-    queryKey: ["/api/v1/projects", { teamId }],
+    queryKey: ["/api/projects", { teamId }],
     enabled: !!teamId,
   });
 
