@@ -1,0 +1,169 @@
+POST-SPRINT VALIDATION + REGRESSION TRIAGE + FULL APP DOCS SYNCHRONIZATION
+
+GLOBAL IMPLEMENTATION GUARDRAILS — APPLY TO THIS ENTIRE PROMPT EXACTLY
+
+You are working in a production-minded multi-tenant application. This is a NON-DESTRUCTIVE validation and stabilization pass. Your job is to verify the recently completed performance sprint, fix regressions if any are found, and fully document all changes in the App Docs library without changing business behavior, UX expectations, route contracts, auth rules, tenant isolation, or architectural intent.
+
+MANDATORY RULES
+- Do not remove existing functionality.
+- Do not delete routes, services, components, hooks, schemas, DTOs, or query paths unless this prompt explicitly instructs you to do so.
+- Do not replace existing batching improvements unless you find a measured regression or correctness bug and document it clearly.
+- Do not perform broad cleanup refactors, naming refactors, folder moves, or architecture rewrites outside the exact scope of this prompt.
+- Do not change authentication behavior.
+- Do not change tenant scoping or permissions behavior.
+- Do not change visible UI behavior except where a minor loading-state, pagination, or regression fix is required.
+- Do not silently change API response shapes.
+- Do not break backward compatibility.
+- Do not touch unrelated modules.
+
+REQUIRED APPROACH
+- Focus on validation, regression detection, targeted fixes, and COMPLETE documentation.
+- Favor small, reviewable diffs.
+- Preserve all batching wins and all completed optimization work unless a measured issue requires adjustment.
+- Reuse existing utilities and patterns where possible.
+
+MEASUREMENT + VERIFICATION RULES
+- Verify:
+  - typecheck passes
+  - the affected pages still render correctly
+  - auth and tenant scoping remain intact
+  - filters/search/pagination still work
+  - loading states remain sane
+  - no duplicate requests were introduced
+  - lightweight list payloads are being used where intended
+  - heavy detail hydration is deferred where intended
+- Capture before/after notes for:
+  - request count
+  - payload size
+  - server/client filtering behavior
+  - expensive hydration removed or deferred
+- If you find a regression, fix only the smallest safe surface area.
+
+APP DOCS — MANDATORY FULL SYNCHRONIZATION REQUIREMENT
+
+You MUST perform a complete documentation pass in the App Docs library reflecting ALL changes from this performance sprint.
+
+This is NOT optional or partial.
+
+DOCUMENTATION REQUIREMENTS
+
+1. CREATE OR UPDATE DOC SECTIONS FOR:
+
+- Performance Optimization Overview (NEW OR UPDATED)
+- Clients Page Optimization
+- Projects Dashboard Optimization
+- My Tasks Optimization
+- Thin vs Full Payload Strategy (NEW CORE DOC)
+- Server-Side Filtering & Pagination Strategy
+- Lazy Loading & Deferred Hydration Patterns
+- Client Summary Optimization (SQL-first aggregation)
+- Client Hierarchy & Activity Optimization
+- Caching Strategy (including TTL behavior and tradeoffs)
+- Observability & Performance Logging (if applicable)
+
+2. EACH DOC ENTRY MUST INCLUDE:
+
+- Purpose / Overview
+- Before vs After Behavior
+- Technical Implementation Details
+- API / Endpoint Changes (if any)
+- Data Flow Explanation (request → service → DB → response)
+- Frontend Usage Patterns (how UI consumes the data)
+- Performance Impact Explanation (what improved and why)
+- Tradeoffs / Constraints
+- Backward Compatibility Notes
+- When to Use Thin vs Full payloads
+- Any Known Limitations or Future Improvements
+
+3. THIN VS FULL PAYLOAD DOC (CRITICAL)
+
+You MUST clearly define:
+- What qualifies as a “thin” payload
+- What qualifies as a “full” payload
+- Where each is used (list vs detail)
+- How developers should choose between them
+- Anti-patterns to avoid (e.g., using full payloads in lists)
+
+4. ARCHITECTURAL GUARDRAILS DOC UPDATE
+
+Update or create a section defining:
+- List pages MUST NOT load full relational datasets
+- Filtering/pagination MUST be server-driven where supported
+- Heavy relations MUST be lazy-loaded
+- Aggregations SHOULD be SQL-first when possible
+- Caching rules and when to apply TTL vs real-time
+
+5. DEVELOPER-FACING CLARITY
+
+Docs must be written so a new developer can:
+- Understand what changed
+- Understand why it changed
+- Correctly extend the system without reintroducing performance issues
+
+6. CONSISTENCY RULE
+
+- Ensure naming, structure, and formatting match existing App Docs standards
+- Organize docs by feature/domain (Clients, Projects, Tasks, Performance, etc.)
+- Avoid duplication — consolidate where appropriate
+
+RESPONSE FORMAT AT THE END OF THE TASK
+Return:
+1. Summary of validation completed
+2. Files changed
+3. Regressions found and fixed
+4. Before/after request-flow or payload-flow explanation
+5. Documentation sections created/updated (list them explicitly)
+6. Remaining hotspots
+7. Confirmation that typecheck was run
+
+TASK
+
+Perform a full post-sprint validation and regression-triage pass for the recently completed performance optimization work across:
+
+PRIMARY AREAS
+- Clients page
+- Projects dashboard
+- My Tasks page
+- Client summary flows
+- Client hierarchy / last-activity flows
+
+VALIDATE THE FOLLOWING
+
+1. Clients page
+- Confirm the initial load no longer eagerly fetches unnecessary expanded client data.
+- Confirm thin list payloads are used for list rendering.
+- Confirm full client detail is only loaded on interaction.
+- Confirm search, filters, counts, stage summary, hierarchy widgets, navigation, and detail interactions still work.
+
+2. Projects dashboard
+- Confirm filtering/search/pagination are request-driven.
+- Confirm batching improvements (task counts) remain intact.
+- Confirm analytics deferral behavior if implemented.
+- Confirm UX parity.
+
+3. My Tasks
+- Confirm thin task list mode is used.
+- Confirm heavy hydration is not happening unnecessarily.
+- Confirm all filters, grouping, and pagination still function.
+
+4. Client summary + hierarchy
+- Confirm summary correctness.
+- Confirm hierarchy/last-activity correctness.
+- Confirm caching behavior is safe and acceptable.
+
+5. Cross-cutting checks
+- Detect duplicate fetches, stale queries, unnecessary rerenders, loading issues, or compatibility drift.
+- Verify auth and tenant isolation everywhere.
+
+REQUIRED STEPS
+- Inspect all updated code paths.
+- Compare actual behavior to intended optimized design.
+- Measure request flow improvements.
+- Fix only real regressions or gaps.
+- Perform FULL App Docs synchronization as defined above.
+
+SUCCESS CRITERIA
+- Performance improvements are validated and safe
+- No regressions remain
+- App Docs fully reflect the current system state
+- The system is ready for the next development sprint without ambiguity

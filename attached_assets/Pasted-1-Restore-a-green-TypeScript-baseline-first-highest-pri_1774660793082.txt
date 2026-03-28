@@ -1,0 +1,81 @@
+1) Restore a “green” TypeScript baseline first (highest priority)
+npm run check is currently failing with a large set of errors across client and server, including real structural issues (not just style-level noise). This is now a delivery risk and slows all future refactors.
+Also, your tsconfig does not explicitly set target, which contributes to many downlevel/iteration-related errors in modern syntax usage. 
+
+Recommendation:
+
+Make “npm run check must pass” a hard CI gate.
+
+Add explicit target (e.g., ES2020/ES2022) and align module/runtime expectations.
+
+Burn down errors in batches by domain (chat, reports-v2, super-admin, storage).
+
+2) Consolidate duplicated Projects API behavior
+You currently have two different project list surfaces:
+
+/api/projects domain router with optional SQL filtering path behind a feature flag. 
+
+/api/v1/projects dashboard route that starts with full list and applies filtering in-memory. 
+
+On the frontend, Projects Dashboard still requests /api/v1/projects broadly, then filters in useMemo. 
+
+Recommendation:
+
+Pick a canonical list endpoint for project grids/tables (prefer DB-filtered + paginated).
+
+Standardize query params + response shape.
+
+Remove dual invalidation patterns once unified (currently invalidating both /api/projects and /api/v1/projects). 
+
+3) Continue reducing over-fetching on Clients/Tasks/Projects list views
+Clients
+Clients page still loads hierarchy + summary + stage summary + full /api/clients in the same screen flow. 
+/api/clients still returns expanded objects including contacts/projects. 
+
+My Tasks
+/api/tasks/my still returns full hydrated relations and has no query-level pagination/filter contract in route handling. 
+UI still starts with full list query then local handling. 
+
+Recommendation:
+
+Introduce strict “list DTO vs detail DTO” separation everywhere.
+
+Add server-side pagination/filtering for My Tasks and Projects.
+
+Keep detail hydration for drawers only.
+
+4) Eliminate duplicated logic in time-tracking drawers
+time-tracking.tsx contains repeated selection-cascade/query patterns in ManualEntryDialog and EditTimeEntryDrawer (clients/divisions/projects/tasks + cascade resets). 
+
+Recommendation:
+
+Extract a shared hook/component for client→division→project→task selection state and data fetching.
+
+This reduces bugs, query drift, and maintenance overhead.
+
+5) Remove obvious code debt/legacy leftovers
+server/routes/index.ts is explicitly marked deprecated and kept as a marker. If truly unused in production, consider removing or moving to docs to reduce confusion. 
+
+There is a concrete duplicate method implementation in tenantIntegrations (getDecryptedSecrets) that aligns with TypeScript errors and should be resolved immediately. 
+
+6) Tighten logging strategy in hot paths
+There are many console logs in auth/socket/client flows. Some are gated, some are not.
+Examples:
+
+server /auth/me has debug logs behind env flags (good pattern). 
+
+client auth and socket layers still log frequently, including connect/disconnect and request traces. 
+
+Recommendation:
+
+Move to a centralized logger abstraction with environment and level control.
+
+Suppress routine info logs in production by default.
+
+7) Strengthen cache isolation and key hygiene
+Your query client comments already call out best-effort prefix invalidation and suggest tenant namespacing in query keys. 
+
+Recommendation:
+
+Implement tenant-aware key prefixes (e.g., ["tenant", tenantId, "/api/..."]) to avoid cross-tenant stale leakage risks and reduce over-broad invalidations.
+
