@@ -152,13 +152,16 @@ tenantIntelligenceRouter.get(
                 THEN te.duration_seconds ELSE 0 END
             ), 0)::text AS billable_seconds,
             COALESCE(SUM(
-              CASE WHEN te.billing_status NOT IN ('non_billable')
+              CASE WHEN te.billing_status = 'approved'
                 THEN (te.duration_seconds / 3600.0) * COALESCE(u.billable_rate::numeric, 0)
                 ELSE 0
               END
             ), 0)::text AS estimated_revenue,
             COALESCE(SUM(
-              (te.duration_seconds / 3600.0) * COALESCE(u.cost_rate::numeric, 0)
+              CASE WHEN te.billing_status = 'approved'
+                THEN (te.duration_seconds / 3600.0) * COALESCE(u.cost_rate::numeric, 0)
+                ELSE 0
+              END
             ), 0)::text AS estimated_cost
           FROM time_entries te
           LEFT JOIN users u ON u.id = te.user_id
@@ -267,16 +270,27 @@ tenantIntelligenceRouter.get(
       const activeUserRatio = totalUsers > 0 ? activeUsers / totalUsers : 0;
       const avgTasksPerUser = activeUsers > 0 ? totalTasks / activeUsers : 0;
 
+      const taskCompletionRate = totalTasks > 0 ? completedTasks / totalTasks : 0;
+      const recentActivity = parseInt(recentStats.recent_tasks) + parseInt(recentStats.recent_time_entries);
+
       let healthScore = 100;
-      if (overdueRatio > 0.3) healthScore -= 30;
-      else if (overdueRatio > 0.15) healthScore -= 15;
+
+      if (overdueRatio > 0.3) healthScore -= 25;
+      else if (overdueRatio > 0.15) healthScore -= 12;
       else if (overdueRatio > 0) healthScore -= 5;
 
-      if (activeUserRatio < 0.5) healthScore -= 20;
-      else if (activeUserRatio < 0.7) healthScore -= 10;
+      if (activeUserRatio < 0.3) healthScore -= 20;
+      else if (activeUserRatio < 0.5) healthScore -= 12;
+      else if (activeUserRatio < 0.7) healthScore -= 5;
 
-      if (totalProjects === 0 && totalTasks === 0) healthScore -= 20;
-      if (totalHours === 0) healthScore -= 10;
+      if (taskCompletionRate < 0.1 && totalTasks > 5) healthScore -= 10;
+      else if (taskCompletionRate > 0.5) healthScore += 5;
+
+      if (recentActivity === 0) healthScore -= 15;
+      else if (recentActivity < 3) healthScore -= 5;
+
+      if (totalProjects === 0 && totalTasks === 0) healthScore -= 15;
+      if (totalHours === 0 && totalTasks > 0) healthScore -= 5;
 
       healthScore = Math.max(0, Math.min(100, healthScore));
 
