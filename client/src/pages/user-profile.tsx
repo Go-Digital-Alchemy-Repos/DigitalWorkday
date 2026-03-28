@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { S3Dropzone } from "@/components/common/S3Dropzone";
-import { User, Mail, Shield, Users, Save, Loader2, ArrowLeft, Key, Eye, EyeOff, Sun, Moon, Palette, Check, MapPin, MapPinOff } from "lucide-react";
+import { User, Mail, Shield, Users, Save, Loader2, ArrowLeft, Key, Eye, EyeOff, Sun, Moon, Palette, Check, MapPin } from "lucide-react";
 import { useLocation } from "wouter";
 import { useTheme } from "@/lib/theme-provider";
 import { type ThemePack } from "@/theme/themePacks";
@@ -411,7 +411,7 @@ function LocationSharingCard() {
   });
 
   const updateLocationMutation = useMutation({
-    mutationFn: async (coords: { lat: number; lng: number } | { lat: null; lng: null }) => {
+    mutationFn: async (coords: { lat: number; lng: number }) => {
       return apiRequest("POST", "/api/v1/me/location", coords);
     },
     onSuccess: () => {
@@ -448,16 +448,6 @@ function LocationSharingCard() {
     );
   };
 
-  const handleRevokeLocation = () => {
-    updateLocationMutation.mutate(
-      { lat: null, lng: null },
-      {
-        onSuccess: () => toast({ title: "Location removed" }),
-        onError: () => toast({ title: "Failed to remove location", variant: "destructive" }),
-      }
-    );
-  };
-
   return (
     <Card data-testid="card-location-sharing">
       <CardHeader>
@@ -466,7 +456,7 @@ function LocationSharingCard() {
           Location Sharing
         </CardTitle>
         <CardDescription>
-          Optionally share your location with your organization. Your location is only visible to platform administrators and is never shared externally.
+          Location sharing is required to use this platform. Your location is only visible to platform administrators and is never shared externally.
         </CardDescription>
       </CardHeader>
       <CardContent className="space-y-4">
@@ -485,33 +475,21 @@ function LocationSharingCard() {
                 </p>
               </div>
             </div>
-            <div className="flex gap-2">
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={handleShareLocation}
-                disabled={requesting || updateLocationMutation.isPending}
-                data-testid="button-update-location"
-              >
-                {requesting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <MapPin className="h-4 w-4 mr-1" />}
-                Update Location
-              </Button>
-              <Button
-                variant="ghost"
-                size="sm"
-                onClick={handleRevokeLocation}
-                disabled={updateLocationMutation.isPending}
-                data-testid="button-revoke-location"
-              >
-                <MapPinOff className="h-4 w-4 mr-1" />
-                Stop Sharing
-              </Button>
-            </div>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleShareLocation}
+              disabled={requesting || updateLocationMutation.isPending}
+              data-testid="button-update-location"
+            >
+              {requesting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <MapPin className="h-4 w-4 mr-1" />}
+              Update Location
+            </Button>
           </div>
         ) : (
           <div className="space-y-3">
             <p className="text-sm text-muted-foreground" data-testid="text-location-not-shared">
-              You have not shared your location. Sharing is completely optional and you can revoke it at any time.
+              You have not shared your location yet. Location sharing is required to use this platform.
             </p>
             <Button
               variant="outline"

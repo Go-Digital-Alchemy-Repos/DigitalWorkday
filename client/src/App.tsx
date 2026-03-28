@@ -16,6 +16,7 @@ import { FeaturesBanner } from "@/components/features-banner";
 import { isAuthRoute, AuthRouter } from "@/routing/authRouter";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { ErrorBoundary } from "@/components/error-boundary";
+import { LocationGate } from "@/components/location-gate";
 import { useDragDropFix } from "@/hooks/use-drag-fix";
 
 const TenantLayout = lazy(() => import("@/routing/tenantRouter").then(m => ({ default: m.TenantLayout })));
@@ -53,7 +54,7 @@ function AppLayout() {
     if (!isPortalRoute) {
       return <Redirect to="/portal" />;
     }
-    return <Suspense fallback={suspenseFallback}><ClientPortalLayout /></Suspense>;
+    return <Suspense fallback={suspenseFallback}><LocationGate><ClientPortalLayout /></LocationGate></Suspense>;
   }
 
   if (isPortalRoute && !isClientUser) {
@@ -64,14 +65,14 @@ function AppLayout() {
     if (!isSuperRoute) {
       return <Redirect to="/super-admin/dashboard" />;
     }
-    return <Suspense fallback={suspenseFallback}><SuperLayout /></Suspense>;
+    return <Suspense fallback={suspenseFallback}><LocationGate><SuperLayout /></LocationGate></Suspense>;
   }
 
   if (isSuperRoute && (!isSuperUser || appMode === "tenant")) {
     return <Redirect to="/" />;
   }
 
-  return <Suspense fallback={suspenseFallback}><TenantLayout /></Suspense>;
+  return <Suspense fallback={suspenseFallback}><LocationGate><TenantLayout /></LocationGate></Suspense>;
 }
 
 function UserImpersonationWrapper({ children }: { children: React.ReactNode }) {
