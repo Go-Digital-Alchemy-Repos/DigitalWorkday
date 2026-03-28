@@ -113,7 +113,7 @@ function MarkdownRenderer({ content }: { content: string }) {
       } else {
         elements.push(
           <pre key={`code-${i}`} className="bg-muted rounded-md p-4 overflow-x-auto my-4 text-sm font-mono">
-            <code>{codeBlockContent.join("\n")}</code>
+            <code className="text-[#2e2e30]">{codeBlockContent.join("\n")}</code>
           </pre>
         );
         inCodeBlock = false;
