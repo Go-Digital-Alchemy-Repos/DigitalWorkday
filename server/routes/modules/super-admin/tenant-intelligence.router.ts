@@ -2,6 +2,7 @@ import { Router } from 'express';
 import { requireSuperUser } from '../../../middleware/tenantContext';
 import { db } from '../../../db';
 import { sql } from 'drizzle-orm';
+import { getTenantHealthSummary } from '../../../services/tenancyHealth';
 
 export const tenantIntelligenceRouter = Router();
 
@@ -14,6 +15,13 @@ interface FinancialSummary {
   estimatedCost: number;
   estimatedMargin: number;
   marginPercent: number;
+  budgetBurn: {
+    totalBudgetMinutes: number;
+    totalUsedMinutes: number;
+    burnPercent: number;
+    projectsOverBudget: number;
+    totalProjectsWithBudget: number;
+  };
 }
 
 interface HealthScore {
@@ -23,6 +31,17 @@ interface HealthScore {
   activeUserRatio: number;
   avgTasksPerUser: number;
   riskLevel: 'healthy' | 'warning' | 'critical';
+  dataIntegrity: {
+    isClean: boolean;
+    issueCount: number;
+    criticalCount: number;
+    warningCount: number;
+  };
+  factors: {
+    name: string;
+    score: number;
+    weight: number;
+  }[];
 }
 
 interface ActivityMetrics {
@@ -52,6 +71,37 @@ interface PlatformBenchmark {
   tenantHoursVsAvg: number;
 }
 
+interface AdminActions {
+  recentNotes: {
+    id: string;
+    body: string;
+    category: string;
+    authorName: string;
+    createdAt: string;
+  }[];
+  recentAuditEvents: {
+    id: string;
+    eventType: string;
+    message: string;
+    actorName: string | null;
+    createdAt: string;
+  }[];
+  riskAcknowledgments: {
+    id: string;
+    projectId: string;
+    projectName: string;
+    riskLevel: string;
+    acknowledgedByName: string | null;
+    acknowledgedAt: string;
+    mitigationNote: string | null;
+  }[];
+  tenancyWarnings: {
+    checkName: string;
+    severity: string;
+    count: number;
+  }[];
+}
+
 interface TenantIntelligenceResponse {
   tenantId: string;
   tenantName: string;
@@ -60,6 +110,7 @@ interface TenantIntelligenceResponse {
   health: HealthScore;
   activity: ActivityMetrics;
   benchmark: PlatformBenchmark;
+  adminActions: AdminActions;
 }
 
 async function queryRows<T>(q: ReturnType<typeof sql>): Promise<T[]> {
@@ -91,6 +142,11 @@ tenantIntelligenceRouter.get(
         clientRows,
         recentActivityRows,
         benchmarkRows,
+        budgetBurnRows,
+        noteRows,
+        auditRows,
+        riskAckRows,
+        tenantHealthResult,
       ] = await Promise.all([
         queryRows<{ name: string; status: string }>(sql`
           SELECT name, status FROM tenants WHERE id = ${tenantId} LIMIT 1
@@ -219,6 +275,102 @@ tenantIntelligenceRouter.get(
             (SELECT ROUND(AVG(total_seconds / 3600.0), 1)::text FROM tenant_stats) AS avg_hours,
             COALESCE((SELECT rnk::text FROM ranked WHERE tid = ${tenantId}), '0') AS tenant_rank
         `),
+
+        queryRows<{
+          total_budget_minutes: string;
+          total_used_minutes: string;
+          projects_over_budget: string;
+          total_with_budget: string;
+        }>(sql`
+          WITH project_budgets AS (
+            SELECT
+              p.id,
+              p.budget_minutes,
+              COALESCE(
+                (SELECT SUM(te.duration_seconds) / 60.0
+                 FROM time_entries te
+                 WHERE te.project_id = p.id),
+                0
+              ) AS used_minutes
+            FROM projects p
+            WHERE p.tenant_id = ${tenantId}
+              AND p.budget_minutes IS NOT NULL
+              AND p.budget_minutes > 0
+          )
+          SELECT
+            COALESCE(SUM(budget_minutes), 0)::text AS total_budget_minutes,
+            COALESCE(SUM(used_minutes), 0)::text AS total_used_minutes,
+            COUNT(*) FILTER (WHERE used_minutes > budget_minutes)::text AS projects_over_budget,
+            COUNT(*)::text AS total_with_budget
+          FROM project_budgets
+        `),
+
+        queryRows<{
+          id: string;
+          body: string;
+          category: string;
+          author_name: string;
+          created_at: string;
+        }>(sql`
+          SELECT
+            tn.id,
+            tn.body,
+            COALESCE(tn.category, 'general') AS category,
+            COALESCE(u.name, 'System') AS author_name,
+            tn.created_at::text AS created_at
+          FROM tenant_notes tn
+          LEFT JOIN users u ON u.id = tn.author_user_id
+          WHERE tn.tenant_id = ${tenantId}
+          ORDER BY tn.created_at DESC
+          LIMIT 10
+        `),
+
+        queryRows<{
+          id: string;
+          event_type: string;
+          message: string;
+          actor_name: string | null;
+          created_at: string;
+        }>(sql`
+          SELECT
+            tae.id,
+            tae.event_type,
+            tae.message,
+            u.name AS actor_name,
+            tae.created_at::text AS created_at
+          FROM tenant_audit_events tae
+          LEFT JOIN users u ON u.id = tae.actor_user_id
+          WHERE tae.tenant_id = ${tenantId}
+          ORDER BY tae.created_at DESC
+          LIMIT 10
+        `),
+
+        queryRows<{
+          id: string;
+          project_id: string;
+          project_name: string;
+          risk_level: string;
+          acknowledged_by_name: string | null;
+          acknowledged_at: string;
+          mitigation_note: string | null;
+        }>(sql`
+          SELECT
+            pra.id,
+            pra.project_id,
+            COALESCE(p.name, 'Unknown Project') AS project_name,
+            pra.risk_level,
+            u.name AS acknowledged_by_name,
+            pra.acknowledged_at::text AS acknowledged_at,
+            pra.mitigation_note
+          FROM project_risk_acknowledgments pra
+          LEFT JOIN projects p ON p.id = pra.project_id
+          LEFT JOIN users u ON u.id = pra.acknowledged_by_user_id
+          WHERE pra.tenant_id = ${tenantId}
+          ORDER BY pra.acknowledged_at DESC
+          LIMIT 10
+        `),
+
+        getTenantHealthSummary(tenantId).catch(() => null),
       ]);
 
       const tenant = tenantRows[0];
@@ -233,6 +385,7 @@ tenantIntelligenceRouter.get(
       const clientStats = clientRows[0] || { total: '0' };
       const recentStats = recentActivityRows[0] || { recent_tasks: '0', recent_time_entries: '0' };
       const benchStats = benchmarkRows[0] || { tenant_count: '0', avg_users: '0', avg_projects: '0', avg_tasks: '0', avg_hours: '0', tenant_rank: '0' };
+      const budgetStats = budgetBurnRows[0] || { total_budget_minutes: '0', total_used_minutes: '0', projects_over_budget: '0', total_with_budget: '0' };
 
       const totalSeconds = parseFloat(timeStats.total_seconds) || 0;
       const billableSeconds = parseFloat(timeStats.billable_seconds) || 0;
@@ -244,6 +397,9 @@ tenantIntelligenceRouter.get(
       const estimatedCost = parseFloat(timeStats.estimated_cost) || 0;
       const estimatedMargin = estimatedRevenue - estimatedCost;
 
+      const totalBudgetMinutes = parseFloat(budgetStats.total_budget_minutes) || 0;
+      const totalUsedMinutes = parseFloat(budgetStats.total_used_minutes) || 0;
+
       const financial: FinancialSummary = {
         totalHoursTracked: Math.round(totalHours * 10) / 10,
         billableHours: Math.round(billableHours * 10) / 10,
@@ -253,6 +409,13 @@ tenantIntelligenceRouter.get(
         estimatedCost: Math.round(estimatedCost * 100) / 100,
         estimatedMargin: Math.round(estimatedMargin * 100) / 100,
         marginPercent: estimatedRevenue > 0 ? Math.round((estimatedMargin / estimatedRevenue) * 100) : 0,
+        budgetBurn: {
+          totalBudgetMinutes: Math.round(totalBudgetMinutes),
+          totalUsedMinutes: Math.round(totalUsedMinutes),
+          burnPercent: totalBudgetMinutes > 0 ? Math.round((totalUsedMinutes / totalBudgetMinutes) * 100) : 0,
+          projectsOverBudget: parseInt(budgetStats.projects_over_budget) || 0,
+          totalProjectsWithBudget: parseInt(budgetStats.total_with_budget) || 0,
+        },
       };
 
       const totalUsers = parseInt(userStats.total) || 0;
@@ -269,30 +432,53 @@ tenantIntelligenceRouter.get(
       const projCompletionRate = totalProjects > 0 ? completedProjects / totalProjects : 0;
       const activeUserRatio = totalUsers > 0 ? activeUsers / totalUsers : 0;
       const avgTasksPerUser = activeUsers > 0 ? totalTasks / activeUsers : 0;
-
       const taskCompletionRate = totalTasks > 0 ? completedTasks / totalTasks : 0;
       const recentActivity = parseInt(recentStats.recent_tasks) + parseInt(recentStats.recent_time_entries);
 
-      let healthScore = 100;
+      const dataIntegrityClean = tenantHealthResult ? tenantHealthResult.blockerCount === 0 : true;
+      const dataIntegrityCritical = tenantHealthResult ? tenantHealthResult.checks.filter(c => c.severity === 'critical').length : 0;
+      const dataIntegrityWarning = tenantHealthResult ? tenantHealthResult.checks.filter(c => c.severity === 'warning').length : 0;
+      const dataIntegrityIssueCount = dataIntegrityCritical + dataIntegrityWarning;
 
-      if (overdueRatio > 0.3) healthScore -= 25;
-      else if (overdueRatio > 0.15) healthScore -= 12;
-      else if (overdueRatio > 0) healthScore -= 5;
+      const factors: { name: string; score: number; weight: number }[] = [];
 
-      if (activeUserRatio < 0.3) healthScore -= 20;
-      else if (activeUserRatio < 0.5) healthScore -= 12;
-      else if (activeUserRatio < 0.7) healthScore -= 5;
+      let overdueScore = 100;
+      if (overdueRatio > 0.3) overdueScore = 25;
+      else if (overdueRatio > 0.15) overdueScore = 55;
+      else if (overdueRatio > 0) overdueScore = 80;
+      factors.push({ name: 'Overdue Tasks', score: overdueScore, weight: 25 });
 
-      if (taskCompletionRate < 0.1 && totalTasks > 5) healthScore -= 10;
-      else if (taskCompletionRate > 0.5) healthScore += 5;
+      let userActivityScore = 100;
+      if (activeUserRatio < 0.3) userActivityScore = 30;
+      else if (activeUserRatio < 0.5) userActivityScore = 55;
+      else if (activeUserRatio < 0.7) userActivityScore = 75;
+      factors.push({ name: 'User Activity', score: userActivityScore, weight: 20 });
 
-      if (recentActivity === 0) healthScore -= 15;
-      else if (recentActivity < 3) healthScore -= 5;
+      let completionScore = 60;
+      if (taskCompletionRate > 0.5) completionScore = 100;
+      else if (taskCompletionRate > 0.25) completionScore = 75;
+      else if (taskCompletionRate < 0.1 && totalTasks > 5) completionScore = 30;
+      factors.push({ name: 'Task Completion', score: completionScore, weight: 20 });
 
-      if (totalProjects === 0 && totalTasks === 0) healthScore -= 15;
-      if (totalHours === 0 && totalTasks > 0) healthScore -= 5;
+      let recencyScore = 100;
+      if (recentActivity === 0) recencyScore = 20;
+      else if (recentActivity < 3) recencyScore = 60;
+      factors.push({ name: 'Activity Recency', score: recencyScore, weight: 15 });
 
-      healthScore = Math.max(0, Math.min(100, healthScore));
+      let integrityScore = 100;
+      if (dataIntegrityCritical > 0) integrityScore = 30;
+      else if (dataIntegrityWarning > 0) integrityScore = 70;
+      factors.push({ name: 'Data Integrity', score: integrityScore, weight: 10 });
+
+      let presenceScore = 100;
+      if (totalProjects === 0 && totalTasks === 0) presenceScore = 20;
+      else if (totalHours === 0 && totalTasks > 0) presenceScore = 60;
+      factors.push({ name: 'Data Presence', score: presenceScore, weight: 10 });
+
+      const totalWeight = factors.reduce((sum, f) => sum + f.weight, 0);
+      const healthScore = Math.max(0, Math.min(100,
+        Math.round(factors.reduce((sum, f) => sum + (f.score * f.weight), 0) / totalWeight)
+      ));
 
       let riskLevel: 'healthy' | 'warning' | 'critical' = 'healthy';
       if (healthScore < 40) riskLevel = 'critical';
@@ -305,6 +491,13 @@ tenantIntelligenceRouter.get(
         activeUserRatio: Math.round(activeUserRatio * 100),
         avgTasksPerUser: Math.round(avgTasksPerUser * 10) / 10,
         riskLevel,
+        dataIntegrity: {
+          isClean: dataIntegrityClean,
+          issueCount: dataIntegrityIssueCount,
+          criticalCount: dataIntegrityCritical,
+          warningCount: dataIntegrityWarning,
+        },
+        factors,
       };
 
       const activity: ActivityMetrics = {
@@ -339,6 +532,41 @@ tenantIntelligenceRouter.get(
         tenantHoursVsAvg: avgHoursPerTenant > 0 ? Math.round((totalHours / avgHoursPerTenant) * 100) : 0,
       };
 
+      const tenancyWarnings = tenantHealthResult
+        ? tenantHealthResult.checks.map(c => ({
+            checkName: c.checkName,
+            severity: c.severity,
+            count: c.count,
+          }))
+        : [];
+
+      const adminActions: AdminActions = {
+        recentNotes: noteRows.map(n => ({
+          id: n.id,
+          body: n.body,
+          category: n.category,
+          authorName: n.author_name,
+          createdAt: n.created_at,
+        })),
+        recentAuditEvents: auditRows.map(a => ({
+          id: a.id,
+          eventType: a.event_type,
+          message: a.message,
+          actorName: a.actor_name,
+          createdAt: a.created_at,
+        })),
+        riskAcknowledgments: riskAckRows.map(r => ({
+          id: r.id,
+          projectId: r.project_id,
+          projectName: r.project_name,
+          riskLevel: r.risk_level,
+          acknowledgedByName: r.acknowledged_by_name,
+          acknowledgedAt: r.acknowledged_at,
+          mitigationNote: r.mitigation_note,
+        })),
+        tenancyWarnings,
+      };
+
       const response: TenantIntelligenceResponse = {
         tenantId,
         tenantName: tenant.name,
@@ -347,6 +575,7 @@ tenantIntelligenceRouter.get(
         health,
         activity,
         benchmark,
+        adminActions,
       };
 
       res.json(response);
