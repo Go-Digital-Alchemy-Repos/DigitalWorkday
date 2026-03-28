@@ -43,7 +43,7 @@ router.get("/reports/tasks/analytics", async (req, res) => {
     const breakdownOffset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
     const bypass = shouldBypassCache(req.query as Record<string, unknown>);
-    const cacheKey = buildCacheKey(tenantId, "tasks-analytics", { days, breakdownLimit, breakdownOffset });
+    const cacheKey = buildCacheKey(tenantId!, "tasks-analytics", { days, breakdownLimit, breakdownOffset });
 
     if (!bypass) {
       const cached = getCached(cacheKey);
@@ -211,7 +211,7 @@ router.get("/reports/clients/analytics", async (req, res) => {
     const breakdownOffset = Math.max(parseInt(req.query.offset as string) || 0, 0);
 
     const bypass = shouldBypassCache(req.query as Record<string, unknown>);
-    const cacheKey = buildCacheKey(tenantId, "clients-analytics", { breakdownLimit, breakdownOffset });
+    const cacheKey = buildCacheKey(tenantId!, "clients-analytics", { breakdownLimit, breakdownOffset });
 
     if (!bypass) {
       const cached = getCached(cacheKey);

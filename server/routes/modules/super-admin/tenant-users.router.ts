@@ -115,7 +115,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users", requireSuperUser, async (req,
       role: data.role === "admin" ? "admin" : "member",
     }).onConflictDoNothing();
 
-    if (data.role !== "client") {
+    if ((data.role as string) !== "client") {
       await storage.addUserToAllTenantProjects(newUser.id, tenantId);
     }
     
@@ -349,7 +349,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users/provision", requireSuperUser, a
         role: finalUser?.role,
         isActive: finalUser?.isActive,
         mustChangeOnNextLogin: finalUser?.mustChangePasswordOnNextLogin,
-        lastLoginAt: finalUser?.lastLoginAt,
+        lastLoginAt: (finalUser as any)?.lastLoginAt,
       },
       isNewUser,
       resetUrl,
@@ -377,10 +377,10 @@ async function sendProvisionResetEmail(tenantId: string, email: string, resetUrl
       expiryHours: "24",
       appName: "Digital Workday",
     };
-    const rendered = await emailTemplateService.renderByKey(tenantId, "user_provision", templateVars);
+    const rendered = await emailTemplateService.renderByKey(tenantId, "user_provision" as any, templateVars);
     await emailOutboxService.sendEmail({
       tenantId,
-      messageType: "user_provision",
+      messageType: "user_provision" as any,
       toEmail: email,
       subject: rendered?.subject || `Set Your Password for ${tenantName}`,
       textBody: rendered?.textBody || `Your account on ${tenantName} has been created.\n\nSet your password: ${resetUrl}\n\nThis link expires in 24 hours.`,
@@ -899,7 +899,7 @@ tenantUsersRouter.post("/tenants/:tenantId/users/:userId/send-invite", requireSu
     
     let emailSent = false;
     try {
-      const { sendInviteEmail } = await import("../../../email");
+      const { sendInviteEmail } = await import("../../../email" as any);
       const tenantSettingsData = await storage.getTenantSettings(tenantId);
       const appName = tenantSettingsData?.appName || "Digital Workday";
       

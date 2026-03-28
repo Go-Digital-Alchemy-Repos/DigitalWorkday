@@ -389,7 +389,7 @@ async function evaluateRule(rule: AlertRuleRow, now: Date): Promise<void> {
 
 export async function evaluateAlertRules(params: { tenantId: string; now?: Date }): Promise<void> {
   const now = params.now ?? new Date();
-  const rules = await dbRows<AlertRuleRow>(sql`
+  const rules = await dbRows<AlertRuleRow & Record<string, unknown>>(sql`
     SELECT * FROM alert_rules
     WHERE tenant_id = ${params.tenantId} AND is_enabled = true
   `);

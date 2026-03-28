@@ -307,7 +307,7 @@ function AgreementsManagementTab({
         ...form,
         tenantId: form.tenantId === "__all_tenants__" ? null : form.tenantId,
       };
-      createMutation.mutate(submitForm);
+      createMutation.mutate(submitForm as any);
     }
   };
 

@@ -496,13 +496,13 @@ export function ProvisionUserDrawer({
       open={open}
       onClose={onClose}
       title={
-        <div className="flex items-center gap-2">
+        (<div className="flex items-center gap-2">
           <UserPlus className="h-5 w-5" />
           Provision User Access
           {tenantName && (
             <Badge variant="outline" className="ml-2">{tenantName}</Badge>
           )}
-        </div>
+        </div>) as any
       }
     >
       <div className="flex-1 overflow-y-auto p-6">

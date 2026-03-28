@@ -245,17 +245,7 @@ router.post("/crm/portal/conversations", requireAuth, async (req: Request, res: 
           message: `A new conversation "${conversation.subject}" has been auto-assigned to you`,
           payloadJson: { conversationId: conversation.id, clientId: data.clientId } as any,
         });
-        emitNotificationNew(autoAssigneeId, {
-          id: notification.id,
-          tenantId: notification.tenantId,
-          userId: notification.userId,
-          type: notification.type,
-          title: notification.title,
-          message: notification.message,
-          payloadJson: notification.payloadJson,
-          readAt: notification.readAt,
-          createdAt: notification.createdAt,
-        });
+        emitNotificationNew(autoAssigneeId, notification as any);
       } catch {}
 
       emitToUser(autoAssigneeId, CLIENT_CONVERSATION_EVENTS.ASSIGNED, {

@@ -222,7 +222,7 @@ router.post(
         const { notifyDirectMessage } = await import("../../../features/notifications/notification.service");
         const senderName = author?.name || "Someone";
         const preview = req.body.body || "";
-        const recipientId = thread.user1Id === userId ? thread.user2Id : thread.user1Id;
+        const recipientId = (thread as any).user1Id === userId ? (thread as any).user2Id : (thread as any).user1Id;
         if (recipientId) {
           notifyDirectMessage(
             recipientId,

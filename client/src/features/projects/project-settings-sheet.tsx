@@ -301,7 +301,7 @@ export function ProjectSettingsSheet({
   const leaveProjectMutation = useMutation({
     mutationFn: async () => {
       if (!user) throw new Error("Not authenticated");
-      return apiRequest("DELETE", `/api/projects/${project.id}/members/${user.userId}`);
+      return apiRequest("DELETE", `/api/projects/${project.id}/members/${user.id}`);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });

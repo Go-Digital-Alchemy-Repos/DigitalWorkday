@@ -1648,7 +1648,7 @@ export default function ClientsPage() {
     onMutate: async (newClient) => {
       await queryClient.cancelQueries({ queryKey: queryKeys.clients.hierarchy });
       const previousHierarchyClients = queryClient.getQueryData<ClientWithHierarchy[]>(queryKeys.clients.hierarchy);
-      const optimisticClient = {
+      const optimisticClient: ClientWithHierarchy = {
         id: `temp-${Date.now()}`,
         companyName: newClient.companyName,
         displayName: newClient.displayName || null,
@@ -1684,10 +1684,10 @@ export default function ClientsPage() {
         lastActivityAt: null,
         needsAttention: false,
         totalHoursWorked: 0,
-      } as ClientWithHierarchy;
+      } as unknown as ClientWithHierarchy;
       queryClient.setQueryData<ClientWithHierarchy[]>(
         queryKeys.clients.hierarchy,
-        (old) => (old ? [optimisticClient, ...old] : [optimisticClient])
+        (old: any) => (old ? [optimisticClient, ...old] : [optimisticClient])
       );
       return { previousHierarchyClients };
     },

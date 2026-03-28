@@ -318,7 +318,7 @@ function AdminDashboardSection({
               </div>
             ) : recentMessages && recentMessages.length > 0 ? (
               <div className="space-y-2">
-                {recentMessages.slice(0, 5).map((msg) => (
+                {recentMessages.slice(0, 5).map((msg: any) => (
                   <Link 
                     key={msg.id} 
                     href={`/chat?type=${msg.channelId ? 'channel' : 'dm'}&id=${msg.channelId || msg.dmThreadId}`}

@@ -44,7 +44,7 @@ declare global {
        * Request ID for correlation across logs.
        * Attached by requestIdMiddleware.
        */
-      requestId?: string;
+      requestId: string;
       
       /**
        * Client access context for client portal users.
@@ -52,6 +52,11 @@ declare global {
        */
       clientAccess?: ClientAccessContext;
       
+      /**
+       * Effective tenant ID, set by tenant middleware for convenience.
+       */
+      effectiveTenantId?: string;
+
       /**
        * Workspace ID for demo/legacy routes.
        * @deprecated Use tenant.effectiveTenantId instead

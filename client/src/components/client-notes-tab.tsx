@@ -1117,7 +1117,7 @@ export function ClientNotesTab({ clientId }: ClientNotesTabProps) {
             <div className="flex items-center justify-between">
               <Label>Category</Label>
               <Button 
-                variant="link" 
+                variant="ghost" 
                 className="h-auto p-0 text-xs" 
                 onClick={(e) => {
                   e.preventDefault();

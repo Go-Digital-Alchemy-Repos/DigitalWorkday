@@ -164,7 +164,7 @@ export function formatZodErrors(error: ZodError): Record<string, string[]> {
  */
 export function validateBody<T>(
   body: unknown,
-  schema: z.ZodSchema<T>,
+  schema: z.ZodType<T, z.ZodTypeDef, unknown>,
   res: Response,
   req?: Request
 ): T | null {

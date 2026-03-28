@@ -52,7 +52,7 @@ const INTERVAL_MS = 60 * 60 * 1000;
 async function tick(): Promise<void> {
   const now = new Date();
   try {
-    const schedules = await dbRows<DigestScheduleRow>(sql`
+    const schedules = await dbRows<DigestScheduleRow & Record<string, unknown>>(sql`
       SELECT * FROM ops_digest_schedules WHERE is_enabled = true
     `);
 

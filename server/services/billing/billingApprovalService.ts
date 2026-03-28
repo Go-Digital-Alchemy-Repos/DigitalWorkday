@@ -24,21 +24,21 @@ export async function submitTimeForApproval(
   timeEntryIds: string[],
   tenantId: string
 ): Promise<{ updated: number }> {
-  if (!timeEntryIds.length) throw new AppError(400, "No time entry IDs provided");
+  if (!timeEntryIds.length) throw AppError.badRequest("No time entry IDs provided");
 
   const entries = await db
     .select({ id: timeEntries.id, billingStatus: timeEntries.billingStatus, tenantId: timeEntries.tenantId })
     .from(timeEntries)
     .where(and(inArray(timeEntries.id, timeEntryIds), eq(timeEntries.tenantId, tenantId)));
 
-  if (!entries.length) throw new AppError(404, "No matching time entries found");
+  if (!entries.length) throw AppError.notFound("No matching time entries found");
 
   const eligible = entries.filter(
     (e) => e.billingStatus === "draft" || e.billingStatus === "rejected"
   );
 
   if (!eligible.length) {
-    throw new AppError(400, "No entries eligible for approval submission (must be draft or rejected)");
+    throw AppError.badRequest("No entries eligible for approval submission (must be draft or rejected)");
   }
 
   const eligibleIds = eligible.map((e) => e.id);
@@ -55,7 +55,7 @@ export async function approveTimeEntries(
   timeEntryIds: string[],
   tenantId: string
 ): Promise<{ updated: number }> {
-  if (!timeEntryIds.length) throw new AppError(400, "No time entry IDs provided");
+  if (!timeEntryIds.length) throw AppError.badRequest("No time entry IDs provided");
 
   const result = await db
     .update(timeEntries)
@@ -75,7 +75,7 @@ export async function rejectTimeEntries(
   timeEntryIds: string[],
   tenantId: string
 ): Promise<{ updated: number }> {
-  if (!timeEntryIds.length) throw new AppError(400, "No time entry IDs provided");
+  if (!timeEntryIds.length) throw AppError.badRequest("No time entry IDs provided");
 
   const result = await db
     .update(timeEntries)

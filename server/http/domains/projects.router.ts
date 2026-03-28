@@ -66,7 +66,7 @@ import {
   comments,
   projectAccess,
 } from "@shared/schema";
-import type { ProjectTemplateContent } from "@shared/schema";
+import type { ProjectTemplateContent, InsertProject, Project } from "@shared/schema";
 import { db } from "../../db";
 import { eq, ne, or, and, inArray, ilike, asc, desc, sql, count } from "drizzle-orm";
 import { config } from "../../config";
@@ -158,7 +158,7 @@ router.get("/projects", async (req: Request, res: Response) => {
           'updatedAt': projects.updatedAt,
           'dueDate': projects.createdAt,
           'stickyAt': projects.stickyAt,
-        } as Record<string, typeof projects.createdAt>)[sortBy] ?? projects.createdAt;
+        } as Record<string, any>)[sortBy] ?? projects.createdAt;
         const order = sortDir === 'asc' ? asc(sortCol) : desc(sortCol);
         
         const parsedLimit = Math.min(parseInt(limit) || 100, 200);
@@ -412,8 +412,9 @@ router.post("/projects", async (req: Request, res: Response) => {
 
 router.patch("/projects/:id", async (req: Request, res: Response) => {
   try {
-    const data = validateBody(req.body, updateProjectSchema, res);
-    if (!data) return;
+    const rawData = validateBody(req.body, updateProjectSchema, res);
+    if (!rawData) return;
+    const data = rawData as Record<string, unknown>;
     
     const tenantId = getEffectiveTenantId(req);
     const currentUserId = getCurrentUserId(req);
@@ -428,7 +429,7 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
       return sendError(res, AppError.notFound("Project"), req);
     }
     
-    if ((data as any).projectManagerId !== undefined && (data as any).projectManagerId !== existingProject.projectManagerId) {
+    if (data.projectManagerId !== undefined && data.projectManagerId !== existingProject.projectManagerId) {
       const currentUser = await storage.getUser(currentUserId);
       const role = currentUser?.role;
       const canChangeProjectManager = role === "super_user" || role === "tenant_owner" || role === "admin";
@@ -437,7 +438,7 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
       }
     }
 
-    const effectiveClientId = data.clientId !== undefined ? data.clientId : existingProject.clientId;
+    const effectiveClientId = data.clientId !== undefined ? data.clientId as string : existingProject.clientId;
     
     if (effectiveClientId && tenantId) {
       const client = await storage.getClientByIdAndTenant(effectiveClientId, tenantId);
@@ -456,9 +457,9 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
 
     let project;
     if (tenantId) {
-      project = await storage.updateProjectWithTenant(req.params.id, tenantId, data);
+      project = await storage.updateProjectWithTenant(req.params.id, tenantId, data as Partial<InsertProject>);
     } else if (isSuperUser(req)) {
-      project = await storage.updateProject(req.params.id, data);
+      project = await storage.updateProject(req.params.id, data as Partial<InsertProject>);
     } else {
       return sendError(res, AppError.internal("User tenant not configured"), req);
     }
@@ -478,7 +479,7 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
     
     emitProjectUpdated(project!.id, data);
     const members = await storage.getProjectMembers(project!.id);
-    const updateDescription = getProjectUpdateDescription(data);
+    const updateDescription = getProjectUpdateDescription(data as Partial<Project>);
     const currentUser = await storage.getUser(currentUserId);
     
     if (updateDescription) {
@@ -504,7 +505,7 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
           clientId: project!.clientId,
           projectId: project!.id,
           triggerType: "project_marked_complete",
-          payload: { fromStatus: existingProject.status, toStatus: data.status },
+          payload: { fromStatus: existingProject.status, toStatus: data.status as string },
           userId: currentUserId,
         }).catch(() => {});
       } else {
@@ -514,7 +515,7 @@ router.patch("/projects/:id", async (req: Request, res: Response) => {
           clientId: project!.clientId,
           projectId: project!.id,
           triggerType: "project_status_changed",
-          payload: { fromStatus: existingProject.status, toStatus: data.status },
+          payload: { fromStatus: existingProject.status, toStatus: data.status as string },
           userId: currentUserId,
         }).catch(() => {});
       }

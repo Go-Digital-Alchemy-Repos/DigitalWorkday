@@ -146,7 +146,7 @@ router.get("/employee/overview", async (req: Request, res: Response) => {
     res.json({
       employees,
       pagination: {
-        total: Number(countRow?.total ?? 0),
+        total: Number((countRow as { total: string } | null)?.total ?? 0),
         limit,
         offset,
       },
@@ -242,7 +242,7 @@ router.get("/employee/workload", async (req: Request, res: Response) => {
     res.json({
       employees,
       pagination: {
-        total: Number(countRow?.total ?? 0),
+        total: Number((countRow as { total: string } | null)?.total ?? 0),
         limit,
         offset,
       },
@@ -338,7 +338,7 @@ router.get("/employee/time", async (req: Request, res: Response) => {
     res.json({
       employees,
       pagination: {
-        total: Number(countRow?.total ?? 0),
+        total: Number((countRow as { total: string } | null)?.total ?? 0),
         limit,
         offset,
       },

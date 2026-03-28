@@ -88,6 +88,18 @@ interface NotificationPreferences {
   supportTicket: boolean;
   workOrder: boolean;
   emailEnabled: boolean;
+  taskDeadlineEmail: boolean;
+  taskAssignedEmail: boolean;
+  taskCompletedEmail: boolean;
+  commentAddedEmail: boolean;
+  commentMentionEmail: boolean;
+  projectUpdateEmail: boolean;
+  projectMemberAddedEmail: boolean;
+  taskStatusChangedEmail: boolean;
+  chatMessageEmail: boolean;
+  clientMessageEmail: boolean;
+  supportTicketEmail: boolean;
+  workOrderEmail: boolean;
 }
 
 type NotificationType =
@@ -509,6 +521,18 @@ export function NotificationCenter() {
     supportTicket: true,
     workOrder: true,
     emailEnabled: false,
+    taskDeadlineEmail: false,
+    taskAssignedEmail: false,
+    taskCompletedEmail: false,
+    commentAddedEmail: false,
+    commentMentionEmail: false,
+    projectUpdateEmail: false,
+    projectMemberAddedEmail: false,
+    taskStatusChangedEmail: false,
+    chatMessageEmail: false,
+    clientMessageEmail: false,
+    supportTicketEmail: false,
+    workOrderEmail: false,
   };
 
   const { data: preferences = defaultPreferences, isLoading: preferencesLoading } = useQuery<NotificationPreferences>({

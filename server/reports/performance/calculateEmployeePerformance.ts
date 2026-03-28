@@ -134,7 +134,7 @@ export async function calculateEmployeePerformance(
   const normalizedRows = Array.isArray(rows)
     ? rows
     : (rows && typeof rows === "object" && "rows" in rows)
-      ? (rows as { rows: typeof rows }).rows
+      ? (rows as unknown as { rows: any[] }).rows
       : rows;
   const rowsArr = normalizedRows as any[];
 

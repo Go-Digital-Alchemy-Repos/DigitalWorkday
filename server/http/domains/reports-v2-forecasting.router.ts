@@ -318,7 +318,7 @@ router.get("/forecasting/project-deadline-risk", async (req: Request, res: Respo
       const overdueCount = Number(row.overdue_count);
       const openEstimatedHours = Math.round(Number(row.open_estimated_hours) * 10) / 10;
       const completedInHistory = Number(row.completed_in_history);
-      const recentActualHours = Math.round(Number(row.recent_actual_hours) * 10) / 10;
+      const recentActualHours = Math.round(Number((row as any).recent_actual_hours) * 10) / 10;
 
       const throughputPerWeek = Math.round((completedInHistory / 4) * 10) / 10;
       const predictedWeeksToClear = openTaskCount > 0

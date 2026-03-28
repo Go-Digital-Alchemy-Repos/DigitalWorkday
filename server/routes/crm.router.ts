@@ -171,7 +171,7 @@ router.get("/crm/clients/:clientId/metrics", requireAuth, async (req: Request, r
       action: activityLog.action,
       entityType: activityLog.entityType,
       entityId: activityLog.entityId,
-      description: activityLog.description,
+      description: (activityLog as any).description,
       actorUserId: activityLog.actorUserId,
       createdAt: activityLog.createdAt,
     })
@@ -708,7 +708,7 @@ router.post("/crm/clients/:clientId/access", requireAdmin, async (req: Request, 
       VALUES (${tenantId}, ${data.userId}, ${clientId}, ${client.workspaceId}, ${data.accessLevel || "view"})
       RETURNING *
     `);
-    const access = result.rows?.[0] ?? result[0];
+    const access = (result as any).rows?.[0] ?? (result as any)[0];
 
     res.status(201).json(access);
   } catch (error) {

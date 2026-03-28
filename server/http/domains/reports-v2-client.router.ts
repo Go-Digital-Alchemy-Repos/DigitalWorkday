@@ -155,7 +155,7 @@ router.get("/client/overview", async (req: Request, res: Response) => {
     res.json({
       clients,
       pagination: {
-        total: Number(countRow?.total ?? 0),
+        total: Number((countRow as { total: string } | null)?.total ?? 0),
         limit,
         offset,
       },
@@ -231,7 +231,7 @@ router.get("/client/activity", async (req: Request, res: Response) => {
     res.json({
       clients,
       pagination: {
-        total: Number(countRow?.total ?? 0),
+        total: Number((countRow as { total: string } | null)?.total ?? 0),
         limit,
         offset,
       },
@@ -345,7 +345,7 @@ router.get("/client/time", async (req: Request, res: Response) => {
     res.json({
       clients,
       pagination: {
-        total: Number(countRow?.total ?? 0),
+        total: Number((countRow as { total: string } | null)?.total ?? 0),
         limit,
         offset,
       },
@@ -433,7 +433,7 @@ router.get("/client/tasks", async (req: Request, res: Response) => {
     res.json({
       clients,
       pagination: {
-        total: Number(countRow?.total ?? 0),
+        total: Number((countRow as { total: string } | null)?.total ?? 0),
         limit,
         offset,
       },
@@ -520,7 +520,7 @@ router.get("/client/sla", async (req: Request, res: Response) => {
     res.json({
       clients,
       pagination: {
-        total: Number(countRow?.total ?? 0),
+        total: Number((countRow as { total: string } | null)?.total ?? 0),
         limit,
         offset,
       },

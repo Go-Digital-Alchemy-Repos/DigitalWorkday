@@ -72,7 +72,7 @@ export class NotificationsRepository {
             readAt: null,
             lastEventAt: now,
             eventCount: sql`${notifications.eventCount} + 1`,
-            groupMeta: updatedMeta as Record<string, unknown>,
+            groupMeta: updatedMeta as unknown as Record<string, unknown>,
           })
           .where(eq(notifications.id, existing.id))
           .returning();
@@ -98,7 +98,7 @@ export class NotificationsRepository {
       eventCount: 1,
       lastEventAt: new Date(),
       groupMeta: coalesceMeta
-        ? (buildGroupMeta(null, coalesceMeta.actorId, coalesceMeta.actorName, coalesceMeta.entityId, coalesceMeta.messagePreview) as Record<string, unknown>)
+        ? (buildGroupMeta(null, coalesceMeta.actorId, coalesceMeta.actorName, coalesceMeta.entityId, coalesceMeta.messagePreview) as unknown as Record<string, unknown>)
         : null,
     };
     return this.createNotification(insertData);
@@ -472,6 +472,18 @@ export class NotificationsRepository {
           supportTicket: true,
           workOrder: true,
           emailEnabled: false,
+          taskDeadlineEmail: false,
+          taskAssignedEmail: false,
+          taskCompletedEmail: false,
+          commentAddedEmail: false,
+          commentMentionEmail: false,
+          projectUpdateEmail: false,
+          projectMemberAddedEmail: false,
+          taskStatusChangedEmail: false,
+          chatMessageEmail: false,
+          clientMessageEmail: false,
+          supportTicketEmail: false,
+          workOrderEmail: false,
           createdAt: new Date(),
           updatedAt: new Date(),
         };

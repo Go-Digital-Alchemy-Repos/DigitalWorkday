@@ -3,6 +3,7 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Button } from "@/components/ui/button";
 import { Smile, Loader2 } from "lucide-react";
 import { useTheme } from "@/lib/theme-provider";
+import { Theme as EmojiTheme, type EmojiClickData } from "emoji-picker-react";
 
 const EmojiPickerModule = lazy(() =>
   import("emoji-picker-react").then((mod) => ({
@@ -57,11 +58,11 @@ export function LazyEmojiPicker({ onEmojiSelect, disabled, "data-testid": testId
             }
           >
             <EmojiPickerModule
-              onEmojiClick={(emojiData: any) => {
+              onEmojiClick={(emojiData: EmojiClickData) => {
                 onEmojiSelect(emojiData.emoji);
                 setOpen(false);
               }}
-              theme={theme === "dark" ? 1 : 0}
+              theme={theme === "dark" ? EmojiTheme.DARK : EmojiTheme.LIGHT}
               width={300}
               height={350}
               searchPlaceHolder="Search emoji..."

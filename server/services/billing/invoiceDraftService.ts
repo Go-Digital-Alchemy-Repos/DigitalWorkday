@@ -76,7 +76,7 @@ export async function generateInvoiceDraft(opts: GenerateDraftOptions): Promise<
     .where(and(...conditions));
 
   if (entries.length === 0) {
-    throw new AppError(404, "No approved billable time entries found for the specified criteria");
+    throw AppError.notFound("No approved billable time entries found for the specified criteria");
   }
 
   let totalSeconds = 0;
@@ -199,16 +199,16 @@ export async function exportInvoiceDraft(
   tenantId: string
 ): Promise<{ updated: number }> {
   const draft = await getInvoiceDraftById(draftId, tenantId);
-  if (!draft) throw new AppError(404, "Invoice draft not found");
+  if (!draft) throw AppError.notFound("Invoice draft not found");
   if (draft.status !== "draft") {
-    throw new AppError(400, `Cannot export a draft with status "${draft.status}"`);
+    throw AppError.badRequest(`Cannot export a draft with status "${draft.status}"`);
   }
 
   if (config.features.enableQuickbooksSync && config.features.enableQuickbooksClientMapping && draft.clientId) {
     const { getClientMapping } = await import("../../integrations/quickbooks/customerMappingService");
     const mapping = await getClientMapping(tenantId, draft.clientId);
     if (!mapping || mapping.mappingStatus !== "mapped") {
-      throw new AppError(400, "This client is not linked to a QuickBooks customer. Please map the client in Settings > QuickBooks before exporting.");
+      throw AppError.badRequest("This client is not linked to a QuickBooks customer. Please map the client in Settings > QuickBooks before exporting.");
     }
   }
 
@@ -248,9 +248,9 @@ export async function cancelInvoiceDraft(
     .from(invoiceDrafts)
     .where(and(eq(invoiceDrafts.id, draftId), eq(invoiceDrafts.tenantId, tenantId)));
 
-  if (!draft) throw new AppError(404, "Invoice draft not found");
+  if (!draft) throw AppError.notFound("Invoice draft not found");
   if (draft.status !== "draft") {
-    throw new AppError(400, `Cannot cancel a draft with status "${draft.status}"`);
+    throw AppError.badRequest(`Cannot cancel a draft with status "${draft.status}"`);
   }
 
   await db

@@ -397,7 +397,7 @@ async function fetchProjectData(tenantId: string, projectId: string): Promise<Pr
       AND p.id = ${projectId}
     LIMIT 1
   `);
-  return rows.rows as ProjectRow[];
+  return rows.rows as unknown as ProjectRow[];
 }
 
 async function fetchProjectTasks(

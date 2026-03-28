@@ -505,17 +505,7 @@ router.post("/crm/clients/:clientId/conversations", requireAuth, clientMessageRa
           message: `You have been assigned to conversation: "${conversation.subject}"`,
           payloadJson: { conversationId: conversation.id, clientId } as any,
         });
-        emitNotificationNew(assigneeId, {
-          id: notification.id,
-          tenantId: notification.tenantId,
-          userId: notification.userId,
-          type: notification.type,
-          title: notification.title,
-          message: notification.message,
-          payloadJson: notification.payloadJson,
-          readAt: notification.readAt,
-          createdAt: notification.createdAt,
-        });
+        emitNotificationNew(assigneeId, notification as any);
       } catch {}
 
       emitToUser(assigneeId, CLIENT_CONVERSATION_EVENTS.ASSIGNED, {
@@ -604,17 +594,7 @@ router.patch("/crm/conversations/:conversationId/assign", requireAuth, async (re
           message: `You have been assigned to conversation: "${conversation.subject}"`,
           payloadJson: { conversationId, clientId: conversation.clientId } as any,
         });
-        emitNotificationNew(data.assignedToUserId, {
-          id: notification.id,
-          tenantId: notification.tenantId,
-          userId: notification.userId,
-          type: notification.type,
-          title: notification.title,
-          message: notification.message,
-          payloadJson: notification.payloadJson,
-          readAt: notification.readAt,
-          createdAt: notification.createdAt,
-        });
+        emitNotificationNew(data.assignedToUserId, notification as any);
       } catch {}
     }
 
@@ -845,17 +825,7 @@ router.post("/crm/conversations/:conversationId/messages", requireAuth, clientMe
               message: `New reply on "${conversation.subject}": ${data.bodyText.substring(0, 100)}${data.bodyText.length > 100 ? "..." : ""}`,
               payloadJson: { conversationId, clientId: conversation.clientId, messageId: message.id } as any,
             });
-            emitNotificationNew(conversation.assignedToUserId, {
-              id: notification.id,
-              tenantId: notification.tenantId,
-              userId: notification.userId,
-              type: notification.type,
-              title: notification.title,
-              message: notification.message,
-              payloadJson: notification.payloadJson,
-              readAt: notification.readAt,
-              createdAt: notification.createdAt,
-            });
+            emitNotificationNew(conversation.assignedToUserId, notification as any);
           } catch {}
         }
       }
@@ -1048,7 +1018,7 @@ router.get("/crm/clients/:clientId/conversations/merge-candidates", requireAuth,
     const results = await db.select({
       id: clientConversations.id,
       subject: clientConversations.subject,
-      status: clientConversations.status,
+      status: (clientConversations as any).status,
       createdAt: clientConversations.createdAt,
       updatedAt: clientConversations.updatedAt,
       assignedToUserId: clientConversations.assignedToUserId,
@@ -1312,17 +1282,7 @@ export async function evaluateConversationSla(tenantId?: string) {
               message: `Conversation "${convo.subject}" has breached the first response SLA (${policy.firstResponseMinutes} min)`,
               payloadJson: { conversationId: convo.id, clientId: convo.clientId, slaType: "first_response" } as any,
             });
-            emitNotificationNew(convo.assignedToUserId, {
-              id: notification.id,
-              tenantId: notification.tenantId,
-              userId: notification.userId,
-              type: notification.type,
-              title: notification.title,
-              message: notification.message,
-              payloadJson: notification.payloadJson,
-              readAt: notification.readAt,
-              createdAt: notification.createdAt,
-            });
+            emitNotificationNew(convo.assignedToUserId, notification as any);
           } catch {}
         }
       }
@@ -1346,17 +1306,7 @@ export async function evaluateConversationSla(tenantId?: string) {
               message: `Conversation "${convo.subject}" has breached the resolution SLA (${policy.resolutionMinutes} min)`,
               payloadJson: { conversationId: convo.id, clientId: convo.clientId, slaType: "resolution" } as any,
             });
-            emitNotificationNew(convo.assignedToUserId, {
-              id: notification.id,
-              tenantId: notification.tenantId,
-              userId: notification.userId,
-              type: notification.type,
-              title: notification.title,
-              message: notification.message,
-              payloadJson: notification.payloadJson,
-              readAt: notification.readAt,
-              createdAt: notification.createdAt,
-            });
+            emitNotificationNew(convo.assignedToUserId, notification as any);
           } catch {}
         }
       }
@@ -1450,7 +1400,7 @@ router.post("/crm/conversations/:conversationId/close", requireAuth, async (req:
       visibility: "internal",
     });
 
-    emitToTenant(tenantId, CLIENT_CONVERSATION_EVENTS.UPDATED, {
+    emitToTenant(tenantId, (CLIENT_CONVERSATION_EVENTS as any).UPDATED, {
       conversationId,
       tenantId,
       clientId: conversation.clientId,
@@ -1499,7 +1449,7 @@ router.post("/crm/conversations/:conversationId/reopen", requireAuth, async (req
       visibility: "internal",
     });
 
-    emitToTenant(tenantId, CLIENT_CONVERSATION_EVENTS.UPDATED, {
+    emitToTenant(tenantId, (CLIENT_CONVERSATION_EVENTS as any).UPDATED, {
       conversationId,
       tenantId,
       clientId: conversation.clientId,

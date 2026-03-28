@@ -128,7 +128,7 @@ superUsersRouter.get("/users", requireSuperUser, async (req, res) => {
       if (search && typeof search === "string" && search.trim()) {
         const searchTerm = `%${search.trim().toLowerCase()}%`;
         inviteConditions.push(
-          sql`(LOWER(${invitations.email}) LIKE ${searchTerm} OR LOWER(${invitations.firstName}) LIKE ${searchTerm} OR LOWER(${invitations.lastName}) LIKE ${searchTerm})`
+          sql`(LOWER(${invitations.email}) LIKE ${searchTerm} OR LOWER(${(invitations as any).firstName}) LIKE ${searchTerm} OR LOWER(${(invitations as any).lastName}) LIKE ${searchTerm})`
         );
       }
 
@@ -148,8 +148,8 @@ superUsersRouter.get("/users", requireSuperUser, async (req, res) => {
       const inviteList = await db.select({
         id: invitations.id,
         email: invitations.email,
-        firstName: invitations.firstName,
-        lastName: invitations.lastName,
+        firstName: (invitations as any).firstName,
+        lastName: (invitations as any).lastName,
         role: invitations.role,
         tenantId: invitations.tenantId,
         tenantName: tenants.name,
@@ -583,10 +583,10 @@ superUsersRouter.post("/users/:userId/generate-reset-link", requireSuperUser, as
           expiryHours: "24",
           appName: "Digital Workday",
         };
-        const rendered = await emailTemplateService.renderByKey(existingUser.tenantId, "admin_password_reset", templateVars);
+        const rendered = await emailTemplateService.renderByKey(existingUser.tenantId, "admin_password_reset" as any, templateVars);
         await emailOutboxService.sendEmail({
           tenantId: existingUser.tenantId,
-          messageType: "admin_password_reset",
+          messageType: "admin_password_reset" as any,
           toEmail: existingUser.email,
           subject: rendered?.subject || "Reset Your Password",
           textBody: rendered?.textBody || `A password reset has been requested for your account.\n\nReset your password: ${resetUrl}\n\nThis link expires in 24 hours.`,

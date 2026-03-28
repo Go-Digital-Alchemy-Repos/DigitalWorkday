@@ -2583,7 +2583,7 @@ export default function ChatPage() {
                   channelId={selectedChannel?.id}
                   dmThreadId={selectedDm?.id}
                   threadParentMessageId={threadParentMessage?.id}
-                  onInsertDraft={(text) => setNewMessage(text)}
+                  onInsertDraft={(text: string) => setMessageInput(text)}
                 />
                 <Button
                   variant="ghost"
@@ -2668,11 +2668,11 @@ export default function ChatPage() {
               onUnpinMessage={(messageId) => unpinMessageMutation.mutate(messageId)}
               pinnedMessageIds={pinnedMessageIds}
               canPin={canPin}
-              onRetryMessage={retryFailedMessage}
-              onRemoveFailedMessage={removeFailedMessage}
+              onRetryMessage={retryFailedMessage as any}
+              onRemoveFailedMessage={removeFailedMessage as any}
               onCopyMessage={handleCopyMessage}
               onQuoteReply={handleQuoteReply}
-              onCreateTaskFromMessage={handleCreateTaskFromMessage}
+              onCreateTaskFromMessage={handleCreateTaskFromMessage as any}
               onOpenThread={handleOpenThread}
               threadSummaries={threadSummaries}
               readByMap={readByMap}
@@ -2684,7 +2684,7 @@ export default function ChatPage() {
             />
             {messages.length > 0 && (() => {
               const lastMsg = messages[messages.length - 1];
-              if (selectedDm && lastMsg.authorId === user?.id) {
+              if (selectedDm && lastMsg.authorUserId === user?.id) {
                 const otherReceipts = Array.from(readReceipts.values());
                 const seenByOther = otherReceipts.find(r => r.lastReadMessageId === lastMsg.id);
                 if (seenByOther) {

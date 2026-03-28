@@ -178,7 +178,7 @@ router.get("/v1/super/tenancy/health", requireAuth, requireSuperUser, async (req
 
 router.get("/v1/super/tenancy/warnings", requireAuth, requireSuperUser, async (req: Request, res: Response) => {
   if (!tenancyHealthTracker.isPersistenceEnabled()) {
-    throw new AppError(501, "NOT_IMPLEMENTED", "Warning persistence not enabled. Set TENANCY_WARN_PERSIST=true to enable warning storage");
+    throw new AppError(501, "NOT_IMPLEMENTED" as any, "Warning persistence not enabled. Set TENANCY_WARN_PERSIST=true to enable warning storage");
   }
 
   try {

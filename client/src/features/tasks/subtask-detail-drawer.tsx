@@ -200,7 +200,7 @@ export function SubtaskDetailDrawer({
       const commentsKey = queryKeys.subtasks.comments(subtask.id);
       await queryClient.cancelQueries({ queryKey: commentsKey });
       const previousComments = queryClient.getQueryData<(Comment & { user?: User })[]>(commentsKey);
-      const optimisticComment = {
+      const optimisticComment: any = {
         id: `temp-${Date.now()}`,
         body,
         subtaskId: subtask.id,
@@ -219,7 +219,7 @@ export function SubtaskDetailDrawer({
           name: `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() || currentUser.email,
           avatarUrl: currentUser.avatarUrl,
         },
-      } as Comment & { user?: User };
+      } as unknown as Comment & { user?: User };
       queryClient.setQueryData<(Comment & { user?: User })[]>(commentsKey, (old = []) => [...old, optimisticComment]);
       return { previousComments, commentsKey };
     },
@@ -572,8 +572,8 @@ export function SubtaskDetailDrawer({
           >
             {tab.icon}
             {tab.label}
-            {tab.count !== undefined && tab.count > 0 && (
-              <Badge variant="secondary" className="h-5 min-w-[20px] px-1 text-[10px]">{tab.count}</Badge>
+            {"count" in tab && (tab as { count: number }).count > 0 && (
+              <Badge variant="secondary" className="h-5 min-w-[20px] px-1 text-[10px]">{(tab as { count: number }).count}</Badge>
             )}
           </button>
         ))}
@@ -733,8 +733,8 @@ export function SubtaskDetailDrawer({
                 const tagId = isActualSubtask ? (st as SubtaskTag).tagId : (st as { tagId?: string }).tagId;
                 if (!tag) return null;
                 return (
-                  <Badge key={tagId} variant="secondary" className="gap-1 pr-1" style={{ backgroundColor: `${tag.color}20`, borderColor: tag.color }} data-testid={`subtask-tag-${tag.id}`}>
-                    <span style={{ color: tag.color }}>{tag.name}</span>
+                  <Badge key={tagId} variant="secondary" className="gap-1 pr-1" style={{ backgroundColor: `${tag.color}20`, borderColor: tag.color || undefined }} data-testid={`subtask-tag-${tag.id}`}>
+                    <span style={{ color: tag.color || undefined }}>{tag.name}</span>
                     {isActualSubtask && (
                       <button className="ml-1 h-3 w-3 rounded-full hover:bg-destructive/20 flex items-center justify-center" onClick={() => removeTagMutation.mutate(tag.id)} data-testid={`button-remove-tag-${tag.id}`}>
                         <X className="h-2 w-2" />

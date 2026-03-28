@@ -227,11 +227,10 @@ router.put("/integrations/r2", requireSuperUser, async (req: Request, res: Respo
       publicConfig: {
         bucketName: data.bucketName,
         region: "auto",
-        accountId: data.accountId,
         endpoint,
         keyPrefixTemplate: data.keyPrefixTemplate,
         publicUrl,
-      },
+      } as any,
       secretConfig: {
         accessKeyId: data.accessKeyId,
         secretAccessKey: data.secretAccessKey,

@@ -243,7 +243,7 @@ export function TaskDetailDrawer({
       const commentsKey = commentQueryKey;
       await queryClient.cancelQueries({ queryKey: commentsKey });
       const previousComments = queryClient.getQueryData<(Comment & { user?: User })[]>(commentsKey);
-      const optimisticComment = {
+      const optimisticComment: any = {
         id: `temp-${Date.now()}`,
         body,
         taskId: task.id,
@@ -262,7 +262,7 @@ export function TaskDetailDrawer({
           name: `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() || currentUser.email,
           avatarUrl: currentUser.avatarUrl,
         },
-      } as Comment & { user?: User };
+      } as unknown as Comment & { user?: User };
       queryClient.setQueryData<(Comment & { user?: User })[]>(commentsKey, (old = []) => [...old, optimisticComment]);
       return { previousComments, commentsKey };
     },

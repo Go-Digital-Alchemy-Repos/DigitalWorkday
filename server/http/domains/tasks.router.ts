@@ -802,9 +802,9 @@ router.patch("/tasks/:id", async (req, res) => {
     }
 
     if (task.isPersonal && task.createdBy) {
-      emitMyTaskUpdated(task.createdBy, task.id, data, getCurrentWorkspaceId(req));
+      emitMyTaskUpdated(task.createdBy, task.id, data as any, getCurrentWorkspaceId(req));
     } else if (task.projectId) {
-      emitTaskUpdated(task.id, task.projectId, task.parentTaskId, data);
+      emitTaskUpdated(task.id, task.projectId, task.parentTaskId, data as any);
     }
 
     if (taskBefore && !task.isPersonal) {

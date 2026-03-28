@@ -276,7 +276,7 @@ export function CommentThread({
                         <Button
                           size="sm"
                           variant="ghost"
-                          onClick={handleSaveEdit}
+                          onClick={() => handleSaveEdit()}
                           data-testid="button-save-edit"
                         >
                           <Check className="h-3.5 w-3.5" />

@@ -601,7 +601,7 @@ export async function createForecastSnapshot(params: {
 
   const confidence = (payload as { confidence: string }).confidence ?? "Medium";
 
-  const rows = await dbRows<ForecastSnapshotRow>(sql`
+  const rows = await dbRows<ForecastSnapshotRow & Record<string, unknown>>(sql`
     INSERT INTO forecast_snapshots (
       tenant_id, snapshot_type, horizon_weeks, as_of_date,
       range_start, range_end, entity_scope, entity_id,
@@ -632,7 +632,7 @@ export async function listForecastSnapshots(
 ): Promise<{ snapshots: ForecastSnapshotRow[]; hasMore: boolean }> {
   const limit = Math.min(opts.limit ?? 20, 50);
 
-  const rows = await dbRows<ForecastSnapshotRow>(sql`
+  const rows = await dbRows<ForecastSnapshotRow & Record<string, unknown>>(sql`
     SELECT * FROM forecast_snapshots
     WHERE tenant_id = ${tenantId}
       AND is_deleted = false
@@ -650,7 +650,7 @@ export async function getForecastSnapshot(
   tenantId: string,
   snapshotId: string
 ): Promise<ForecastSnapshotRow | null> {
-  const rows = await dbRows<ForecastSnapshotRow>(sql`
+  const rows = await dbRows<ForecastSnapshotRow & Record<string, unknown>>(sql`
     SELECT * FROM forecast_snapshots
     WHERE id = ${snapshotId} AND tenant_id = ${tenantId} AND is_deleted = false
     LIMIT 1

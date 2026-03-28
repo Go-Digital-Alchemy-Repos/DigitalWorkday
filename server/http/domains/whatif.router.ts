@@ -46,7 +46,7 @@ router.post("/whatif/project", async (req, res) => {
   }
 
   try {
-    const tenantId = req.tenantId!;
+    const tenantId = (req as any).tenantId!;
     const currentUser = req.user as any;
     const isAdmin = currentUser?.role === "admin" || currentUser?.role === "super_user";
 
@@ -91,7 +91,7 @@ router.post("/whatif/project/snapshot", async (req, res) => {
   }
 
   try {
-    const tenantId = req.tenantId!;
+    const tenantId = (req as any).tenantId!;
     const currentUser = req.user as any;
 
     const bodySchema = z.object({

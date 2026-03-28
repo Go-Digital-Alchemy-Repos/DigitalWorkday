@@ -130,7 +130,7 @@ impersonationRouter.post("/impersonate/start", requireSuperUser, async (req, res
         tenantName: tenant.name,
         timestamp: new Date().toISOString(),
       },
-    });
+    } as any);
     
     console.log(`[impersonate] Super user ${user.email} started impersonating tenant ${tenant.name} (${tenantId})`);
     
@@ -172,7 +172,7 @@ impersonationRouter.post("/impersonate/stop", requireSuperUser, async (req, res)
             tenantName: tenant.name,
             timestamp: new Date().toISOString(),
           },
-        });
+        } as any);
         
         console.log(`[impersonate] Super user ${user.email} stopped impersonating tenant ${tenant.name} (${tenantId})`);
       }

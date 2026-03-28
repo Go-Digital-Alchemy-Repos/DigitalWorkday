@@ -535,7 +535,7 @@ interface TenantDefaultsClientView {
 export function AssetLibraryPanel({ clientId }: Props) {
   const { toast } = useToast();
   const { user } = useAuth();
-  const { flags } = useFeatureFlags();
+  const flags = useFeatureFlags();
   const [currentFolderId, setCurrentFolderId] = useState<string | null>(null);
   const [defaultFolderId, setDefaultFolderId] = useState<string | null>(null);
   const [searchQuery, setSearchQuery] = useState("");

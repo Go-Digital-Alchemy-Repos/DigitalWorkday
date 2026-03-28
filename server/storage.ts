@@ -895,18 +895,21 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getProjectsForUser(userId: string, tenantId: string, _workspaceId?: string, _isAdmin?: boolean): Promise<Project[]> {
-    return db.select({
+    const rows = await db.select({
         id: projects.id,
         tenantId: projects.tenantId,
         workspaceId: projects.workspaceId,
         teamId: projects.teamId,
         clientId: projects.clientId,
+        divisionId: projects.divisionId,
         name: projects.name,
         description: projects.description,
         visibility: projects.visibility,
         status: projects.status,
         color: projects.color,
         budgetMinutes: projects.budgetMinutes,
+        stickyAt: projects.stickyAt,
+        projectManagerId: projects.projectManagerId,
         createdBy: projects.createdBy,
         createdAt: projects.createdAt,
         updatedAt: projects.updatedAt,
@@ -918,6 +921,7 @@ export class DatabaseStorage implements IStorage {
       ))
       .where(eq(projects.tenantId, tenantId))
       .orderBy(desc(projects.createdAt));
+    return rows;
   }
   
   async hideProject(projectId: string, userId: string): Promise<void> {
@@ -1826,7 +1830,8 @@ export class DatabaseStorage implements IStorage {
 
       for (const comment of recentComments) {
         userIds.add(comment.userId);
-        const task = taskCache.get(comment.taskId);
+        const taskId = comment.taskId || "";
+        const task = taskCache.get(taskId);
         activityItems.push({
           id: `comment-${comment.id}`,
           type: "comment_added",
@@ -1835,7 +1840,7 @@ export class DatabaseStorage implements IStorage {
           actorName: "",
           actorEmail: "",
           actorAvatarUrl: null,
-          entityId: comment.taskId,
+          entityId: taskId,
           entityTitle: task?.title || "Task",
           metadata: { commentBody: comment.body.substring(0, 100) },
         });
@@ -1949,7 +1954,8 @@ export class DatabaseStorage implements IStorage {
   }
 
   async getClientsByIds(ids: string[]): Promise<Client[]> {
-    return clientsRepo.getClientsByIds(ids);
+    if (!ids.length) return [];
+    return db.select().from(clients).where(inArray(clients.id, ids));
   }
 
   async getClientWithContacts(id: string): Promise<ClientWithContacts | undefined> {
@@ -3342,22 +3348,28 @@ export class DatabaseStorage implements IStorage {
   // =============================================================================
 
   async getTaskAttachmentByIdAndTenant(id: string, tenantId: string): Promise<TaskAttachment | undefined> {
-    const [attachment] = await db.select().from(taskAttachments)
-      .where(and(eq(taskAttachments.id, id), eq(taskAttachments.tenantId, tenantId)));
-    return attachment || undefined;
+    const rows = await db.select({ attachment: taskAttachments })
+      .from(taskAttachments)
+      .innerJoin(tasks, eq(tasks.id, taskAttachments.taskId))
+      .innerJoin(projects, eq(projects.id, taskAttachments.projectId))
+      .where(and(eq(taskAttachments.id, id), eq(projects.tenantId, tenantId)));
+    return rows[0]?.attachment || undefined;
   }
 
   async getTaskAttachmentsByTaskAndTenant(taskId: string, tenantId: string): Promise<TaskAttachmentWithUser[]> {
-    const attachments = await db.select()
+    const rows = await db.select({ attachment: taskAttachments })
       .from(taskAttachments)
-      .where(and(eq(taskAttachments.taskId, taskId), eq(taskAttachments.tenantId, tenantId)))
-      .orderBy(desc(taskAttachments.uploadedAt));
+      .innerJoin(tasks, eq(tasks.id, taskAttachments.taskId))
+      .innerJoin(projects, eq(projects.id, taskAttachments.projectId))
+      .where(and(eq(taskAttachments.taskId, taskId), eq(projects.tenantId, tenantId)))
+      .orderBy(desc(taskAttachments.createdAt));
+    const attachments = rows.map(r => r.attachment);
     
     const result: TaskAttachmentWithUser[] = [];
     for (const att of attachments) {
       const enriched: TaskAttachmentWithUser = { ...att };
-      if (att.uploadedBy) {
-        const [user] = await db.select().from(users).where(eq(users.id, att.uploadedBy));
+      if (att.uploadedByUserId) {
+        const [user] = await db.select().from(users).where(eq(users.id, att.uploadedByUserId));
         if (user) enriched.uploadedByUser = user;
       }
       result.push(enriched);
@@ -3774,7 +3786,7 @@ export class DatabaseStorage implements IStorage {
       const settings = settingsMap.get(tenant.id);
       return {
         ...tenant,
-        settings, // undefined when missing, preserving prior JSON serialization behavior
+        settings: settings ?? null,
         userCount: userCountMap.get(tenant.id) || 0,
       };
     });

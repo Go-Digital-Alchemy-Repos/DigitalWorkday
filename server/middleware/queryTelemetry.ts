@@ -20,7 +20,7 @@ export function instrumentPool(pool: import("pg").Pool): void {
     totalQueryCount++;
     const start = performance.now();
 
-    const result = origQuery(...args);
+    const result = (origQuery as any)(...args);
 
     if (result && typeof result.then === "function") {
       return result.then((res: any) => {

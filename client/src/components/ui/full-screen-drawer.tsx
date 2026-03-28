@@ -18,8 +18,9 @@ import {
 
 interface FullScreenDrawerProps {
   open: boolean
-  onOpenChange: (open: boolean) => void
-  title: string
+  onOpenChange?: (open: boolean) => void
+  onClose?: () => void
+  title: React.ReactNode
   description?: string
   children: React.ReactNode
   footer?: React.ReactNode
@@ -43,6 +44,7 @@ const widthClasses = {
 export function FullScreenDrawer({
   open,
   onOpenChange,
+  onClose,
   title,
   description,
   children,
@@ -55,18 +57,23 @@ export function FullScreenDrawer({
 }: FullScreenDrawerProps) {
   const [showDiscardDialog, setShowDiscardDialog] = React.useState(false)
 
+  const changeOpen = (newOpen: boolean) => {
+    if (onOpenChange) onOpenChange(newOpen);
+    if (!newOpen && onClose) onClose();
+  };
+
   const handleOpenChange = (newOpen: boolean) => {
     if (!newOpen && hasUnsavedChanges) {
       setShowDiscardDialog(true)
     } else {
-      onOpenChange(newOpen)
+      changeOpen(newOpen)
     }
   }
 
   const handleConfirmDiscard = () => {
     setShowDiscardDialog(false)
     onConfirmClose?.()
-    onOpenChange(false)
+    changeOpen(false)
   }
 
   const handleCancelDiscard = () => {

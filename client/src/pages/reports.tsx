@@ -159,7 +159,7 @@ export default function ReportsPage() {
                 icon={category.icon}
                 title={category.title}
                 description={category.description}
-                onClick={() => navigate(VIEW_TO_PATH[category.view])}
+                onClick={() => navigate((VIEW_TO_PATH as any)[category.view])}
                 color={category.color}
               />
             ))}

@@ -118,7 +118,7 @@ async function paginateAll<T>(token: string, path: string, params?: Record<strin
   const results: T[] = [];
   let offset: string | undefined;
 
-  const mergedParams = { ...params, limit: String(limit) };
+  const mergedParams: Record<string, string> = { ...params, limit: String(limit) };
 
   while (true) {
     if (offset) mergedParams.offset = offset;

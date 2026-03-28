@@ -82,7 +82,7 @@ export function getSocket(): TypedSocket {
           console.warn(`[Socket.IO] Duplicate handler registered for event: ${event}`);
         }
         handlers.add(handler);
-        return originalOn(event, handler);
+        return originalOn(event as any, handler);
       }) as any;
     }
   }

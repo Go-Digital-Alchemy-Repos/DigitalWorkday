@@ -51,13 +51,13 @@ async function seed() {
       id: tenantId,
       name: t.name,
       slug: t.slug,
-      status: t.status as any,
+      status: t.status,
       settings: {
         displayName: t.name,
         primaryColor: "#3b82f6",
         whiteLabelEnabled: Math.random() > 0.5,
       },
-    }).returning();
+    } as any).returning();
 
     console.log(`Created tenant: ${t.name} (${tenantId})`);
 
@@ -116,7 +116,7 @@ async function seed() {
         tenantId: tenant.id,
         healthScore: Math.floor(Math.random() * 100),
         lifecycleStage: i === 1 ? "customer" : "prospect",
-      });
+      } as any);
     }
 
     // Create projects and tasks for workload reports
@@ -170,7 +170,7 @@ async function seed() {
       status: "configured",
       secretConfigured: true,
       publicConfig: { enabled: true, model: "gpt-4o" },
-    });
+    } as any);
   }
 
   console.log("Comprehensive tenant seeding complete!");

@@ -439,7 +439,7 @@ adminsRouter.post("/admins/:id/invite", requireSuperUser, async (req, res) => {
         const rendered = await emailTemplateService.renderByKey(null, "platform_admin_invite", templateVars);
         await emailOutboxService.sendEmail({
           tenantId: null,
-          messageType: "platform_admin_invite",
+          messageType: "platform_admin_invite" as any,
           toEmail: admin.email,
           subject: rendered?.subject || "You've been invited as a Platform Administrator",
           textBody: rendered?.textBody || `You've been invited as a platform administrator.\n\nSet your password: ${inviteUrl}\n\nThis link expires in ${body.expiresInDays} day(s).`,
@@ -646,10 +646,10 @@ adminsRouter.post("/admins/:id/provision", requireSuperUser, async (req, res) =>
             expiryHours: "24",
             appName: "Digital Workday",
           };
-          const rendered = await emailTemplateService.renderByKey(null, "admin_password_reset", templateVars);
+          const rendered = await emailTemplateService.renderByKey(null, "admin_password_reset" as any, templateVars);
           await emailOutboxService.sendEmail({
             tenantId: null,
-            messageType: "admin_password_reset",
+            messageType: "admin_password_reset" as any,
             toEmail: admin.email,
             subject: rendered?.subject || "Reset Your Platform Admin Password",
             textBody: rendered?.textBody || `A password reset has been requested for your account.\n\nReset your password: ${resetUrl}\n\nThis link expires in 24 hours.`,

@@ -509,9 +509,9 @@ export default function ProjectPage() {
   };
 
   const handleCreateTask = async (data: Record<string, unknown>) => {
-    const { tagIds, subtaskTitles, queuedFiles, ...taskData } = data;
+    const { tagIds, subtaskTitles, queuedFiles, ...taskData } = data as any;
     return new Promise<void>((resolve, reject) => {
-      createTaskMutation.mutate({ ...taskData, projectId: projectId! } as CreateTaskData, {
+      createTaskMutation.mutate({ ...taskData, projectId: projectId! } as any, {
         onSuccess: async (createdTask: TaskWithRelations) => {
           toast({ title: "Task created successfully" });
 
@@ -630,7 +630,7 @@ export default function ProjectPage() {
   };
 
   const handleDueDateChange = (taskId: string, dueDate: Date | null) => {
-    updateTaskMutation.mutate({ taskId, data: { dueDate: dueDate ? dueDate.toISOString() : null } });
+    updateTaskMutation.mutate({ taskId, data: { dueDate: dueDate ? dueDate.toISOString() : null } as any });
   };
 
   const handleTimeTrackingNo = () => {

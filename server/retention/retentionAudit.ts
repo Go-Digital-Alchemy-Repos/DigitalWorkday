@@ -46,7 +46,7 @@ export async function getRetentionAuditSummary(tenantId: string): Promise<Retent
 
   // Chat stats
   const [chatTotal] = await db.select({ value: count() }).from(chatMessages).where(eq(chatMessages.tenantId, tenantId));
-  const [chatArchived] = await db.select({ value: count() }).from(chatMessages).where(and(eq(chatMessages.tenantId, tenantId), sql`archived_at IS NOT NULL`));
+  const [chatArchived] = await db.select({ value: count() }).from(chatMessages).where(and(eq(chatMessages.tenantId, tenantId), (sql as any)`archived_at IS NOT NULL`));
   
   const chatPolicy = policies.find(p => p.entityType === "chat_messages");
   const chatRetentionDays = chatPolicy?.retentionDays ?? 30;

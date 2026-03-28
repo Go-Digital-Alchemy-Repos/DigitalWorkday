@@ -56,7 +56,9 @@ interface ProjectDrawerProps {
   onSubmit: (data: ProjectFormData) => Promise<void>;
   project?: Project | null;
   isLoading?: boolean;
-  mode: "create" | "edit";
+  mode?: "create" | "edit";
+  clients?: { id: string; companyName: string; displayName?: string | null }[];
+  teams?: { id: string; name: string }[];
 }
 
 export function ProjectDrawer({

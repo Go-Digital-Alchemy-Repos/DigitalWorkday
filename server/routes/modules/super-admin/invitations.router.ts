@@ -104,9 +104,9 @@ superInvitationsRouter.post("/invitations/:invitationId/activate", requireSuperU
     
     const [newUser] = await db.insert(users).values({
       email: invitation.email,
-      firstName: invitation.firstName,
-      lastName: invitation.lastName,
-      name: `${invitation.firstName || ""} ${invitation.lastName || ""}`.trim() || invitation.email,
+      firstName: (invitation as any).firstName,
+      lastName: (invitation as any).lastName,
+      name: `${(invitation as any).firstName || ""} ${(invitation as any).lastName || ""}`.trim() || invitation.email,
       passwordHash,
       role: invitation.role as any,
       tenantId: invitation.tenantId,

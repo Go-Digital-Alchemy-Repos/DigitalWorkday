@@ -443,9 +443,9 @@ exportImportRouter.post("/tenants/:tenantId/import/user-client-summary", require
             email: userEmail,
             firstName,
             lastName,
-            role,
+            role: role as any,
             status: "pending",
-          }).returning();
+          } as any).returning();
           
           user = newUser;
           usersByEmail.set(userEmail, user);
