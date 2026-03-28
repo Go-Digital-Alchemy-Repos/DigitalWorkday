@@ -91,7 +91,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { RichTextRenderer } from "@/components/richtext";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { queryKeys, invalidateTaskCaches } from "@/lib/queryKeys";
 import { useProjectSocket } from "@/lib/realtime";
 import { useAuth } from "@/lib/auth";
@@ -164,28 +164,28 @@ export default function ProjectPage() {
   );
 
   const { data: project, isLoading: projectLoading } = useQuery<Project>({
-    queryKey: queryKeys.projects.detail(projectId!),
+    queryKey: tenantKey(queryKeys.projects.detail(projectId!)),
     enabled: !!projectId,
   });
 
   // Fetch client for breadcrumbs
   const { data: client } = useQuery<Client>({
-    queryKey: queryKeys.clients.detail(project?.clientId!),
+    queryKey: tenantKey(queryKeys.clients.detail(project?.clientId!)),
     enabled: !!project?.clientId,
   });
 
   const { data: sections, isLoading: sectionsLoading } = useQuery<SectionWithTasks[]>({
-    queryKey: queryKeys.projects.sections(projectId!),
+    queryKey: tenantKey(queryKeys.projects.sections(projectId!)),
     enabled: !!projectId,
   });
 
   const { data: tasks } = useQuery<TaskWithRelations[]>({
-    queryKey: queryKeys.projects.tasks(projectId!),
+    queryKey: tenantKey(queryKeys.projects.tasks(projectId!)),
     enabled: !!projectId,
   });
   
   const { data: tenantUsers = [] } = useQuery<{ id: string; email: string; firstName?: string | null; lastName?: string | null }[]>({
-    queryKey: queryKeys.users.all,
+    queryKey: tenantKey(queryKeys.users.all),
     enabled: !!projectId,
   });
 
@@ -202,7 +202,7 @@ export default function ProjectPage() {
   const [deepLinkHandled, setDeepLinkHandled] = useState(false);
 
   const { data: linkedTask } = useQuery<TaskWithRelations>({
-    queryKey: queryKeys.tasks.detail(urlTaskId!),
+    queryKey: tenantKey(queryKeys.tasks.detail(urlTaskId!)),
     enabled: !!urlTaskId && !deepLinkHandled && !selectedTask && !!tasks && !tasks.find(t => t.id === urlTaskId),
   });
 
@@ -262,7 +262,7 @@ export default function ProjectPage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.timeEntries.all) });
     },
   });
 
@@ -271,8 +271,8 @@ export default function ProjectPage() {
       return apiRequest("PATCH", `/api/projects/${projectId}`, { status: "active" });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId!) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.detail(projectId!)) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
       toast({ title: "Project restored", description: "This project is now active again." });
     },
     onError: () => {
@@ -285,7 +285,7 @@ export default function ProjectPage() {
       return apiRequest("PATCH", `/api/sections/${sectionId}`, { name });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId!) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.sections(projectId!)) });
       toast({ title: "Section updated successfully" });
     },
     onError: () => {
@@ -298,7 +298,7 @@ export default function ProjectPage() {
       return apiRequest("DELETE", `/api/sections/${sectionId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId!) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.sections(projectId!)) });
       toast({ title: "Section deleted successfully" });
     },
     onError: () => {
@@ -311,7 +311,7 @@ export default function ProjectPage() {
       return apiRequest("DELETE", `/api/sections/${sectionId}/tasks`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId!) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.sections(projectId!)) });
       toast({ title: "All tasks in section cleared" });
     },
     onError: () => {
@@ -324,7 +324,7 @@ export default function ProjectPage() {
       return apiRequest("PATCH", `/api/projects/${projectId}/tasks/reorder`, { moves });
     },
     onSuccess: async () => {
-      await queryClient.refetchQueries({ queryKey: queryKeys.projects.sections(projectId!) });
+      await queryClient.refetchQueries({ queryKey: tenantKey(queryKeys.projects.sections(projectId!)) });
       setLocalSections(null);
     },
     onError: () => {
@@ -343,7 +343,7 @@ export default function ProjectPage() {
       return apiRequest("POST", "/api/sections", { projectId, name, orderIndex: nextOrderIndex });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId!) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.sections(projectId!)) });
       toast({
         title: "Section created",
         description: "New section has been added to the project.",
@@ -359,7 +359,7 @@ export default function ProjectPage() {
   });
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<ProjectTemplate[]>({
-    queryKey: queryKeys.projectTemplates.all,
+    queryKey: tenantKey(queryKeys.projectTemplates.all),
     enabled: templatePopoverOpen,
   });
 
@@ -368,8 +368,8 @@ export default function ProjectPage() {
       return apiRequest("POST", `/api/projects/${projectId}/apply-template`, { templateId });
     },
     onSuccess: (_data, _templateId) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId!) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.tasks(projectId!) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.sections(projectId!)) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.tasks(projectId!)) });
       setTemplatePopoverOpen(false);
       toast({
         title: "Template applied",
@@ -554,8 +554,8 @@ export default function ProjectPage() {
 
           if (postOps.length > 0) {
             await Promise.allSettled(postOps);
-            queryClient.invalidateQueries({ queryKey: queryKeys.projects.tasks(projectId!) });
-            queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(createdTask.id) });
+            queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.tasks(projectId!)) });
+            queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.detail(createdTask.id)) });
           }
 
           resolve();

@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { getPreviewText } from "@/components/richtext";
 import { Button } from "@/components/ui/button";
@@ -117,7 +117,7 @@ export default function ProjectsDashboard() {
   }, [statusFilter, clientFilter, teamFilter, debouncedSearch, currentOffset]);
 
   const { data: projectPage, isLoading: projectsLoading, error: projectsError, isFetching, refetch: refetchProjects } = useQuery<ProjectWithCounts[]>({
-    queryKey: [...queryKeys.projects.all, queryParams],
+    queryKey: [...tenantKey(queryKeys.projects.all), queryParams],
   });
 
   useEffect(() => {
@@ -146,15 +146,15 @@ export default function ProjectsDashboard() {
   }, []);
 
   const { data: clients } = useQuery<{ id: string; companyName: string; displayName: string | null; status: string | null }[]>({
-    queryKey: queryKeys.clients.minimal,
+    queryKey: tenantKey(queryKeys.clients.minimal),
   });
 
   const { data: teams } = useQuery<Team[]>({
-    queryKey: queryKeys.teams.all,
+    queryKey: tenantKey(queryKeys.teams.all),
   });
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery<ProjectAnalyticsSummary>({
-    queryKey: queryKeys.projects.analyticsSummary,
+    queryKey: tenantKey(queryKeys.projects.analyticsSummary),
     staleTime: 30000,
     enabled: !!projectPage,
   });
@@ -165,7 +165,7 @@ export default function ProjectsDashboard() {
     },
     onSuccess: () => {
       resetPagination();
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
       setCreateProjectOpen(false);
       toast({ title: "Project created successfully" });
     },
@@ -190,8 +190,8 @@ export default function ProjectsDashboard() {
     },
     onSuccess: ({ projectId }) => {
       resetPagination();
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.members(projectId) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.members(projectId)) });
       setEditProjectOpen(false);
       setEditingProject(null);
       toast({ title: "Project updated successfully" });
@@ -214,7 +214,7 @@ export default function ProjectsDashboard() {
     },
     onSuccess: () => {
       resetPagination();
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
     },
     onError: () => {
       toast({ title: "Failed to update pin status", variant: "destructive" });

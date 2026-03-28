@@ -37,7 +37,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { queryKeys, invalidateTaskCaches } from "@/lib/queryKeys";
 import { SubtaskList } from "./subtask-list";
 import { SubtaskDetailDrawer } from "./subtask-detail-drawer";
@@ -141,7 +141,7 @@ export function TaskDetailDrawer({
   const renderStart = PERF_ENABLED ? performance.now() : 0;
 
   const { data: liveTask } = useQuery<TaskWithRelations>({
-    queryKey: queryKeys.tasks.detail(taskProp?.id!),
+    queryKey: tenantKey(queryKeys.tasks.detail(taskProp?.id!)),
     enabled: !!taskProp?.id && open,
     initialData: taskProp || undefined,
     staleTime: 5000,
@@ -149,7 +149,7 @@ export function TaskDetailDrawer({
   const task = liveTask || taskProp;
 
   const { data: tenantUsers = [] } = useQuery<User[]>({
-    queryKey: queryKeys.users.tenant,
+    queryKey: tenantKey(queryKeys.users.tenant),
     enabled: open && (!availableUsers || availableUsers.length === 0),
   });
   const mentionUsers = useMemo(
@@ -163,12 +163,12 @@ export function TaskDetailDrawer({
   const { enableTaskReviewQueue, enableProjectMilestones, enableBillingApprovalWorkflow } = useFeatureFlags();
 
   const { data: projectMembersData } = useQuery<Array<{ userId: string; role: string }>>({
-    queryKey: queryKeys.projects.members(task?.projectId!),
+    queryKey: tenantKey(queryKeys.projects.members(task?.projectId!)),
     enabled: !!task?.projectId && enableTaskReviewQueue && open,
   });
 
   const { data: projectMilestones = [] } = useQuery<MilestoneWithStats[]>({
-    queryKey: queryKeys.projects.milestones(task?.projectId!),
+    queryKey: tenantKey(queryKeys.projects.milestones(task?.projectId!)),
     enabled: !!task?.projectId && enableProjectMilestones && open,
   });
   const isProjectManager = useMemo(() => {
@@ -216,7 +216,7 @@ export function TaskDetailDrawer({
   const { isDirty, setDirty, markClean, confirmIfDirty, UnsavedChangesDialog } = useUnsavedChanges();
 
   const commentQueryKey = useMemo(
-    () => queryKeys.tasks.comments(task?.id ?? ""),
+    () => tenantKey(queryKeys.tasks.comments(task?.id ?? "")),
     [task?.id]
   );
 
@@ -334,7 +334,7 @@ export function TaskDetailDrawer({
     mutationFn: () => apiRequest("POST", `/api/tasks/${task?.id}/review/request`),
     onSuccess: () => {
       invalidateTaskQueries();
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.reviewQueue });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.dashboard.reviewQueue) });
       toast({ title: "Sent to PM for review" });
     },
     onError: (error: Error) => {
@@ -347,7 +347,7 @@ export function TaskDetailDrawer({
       apiRequest("POST", `/api/tasks/${task?.id}/review/clear`, data),
     onSuccess: () => {
       invalidateTaskQueries();
-      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.reviewQueue });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.dashboard.reviewQueue) });
       toast({ title: "Review cleared", description: "Assignees have been notified" });
     },
     onError: (error: Error) => {
@@ -356,7 +356,7 @@ export function TaskDetailDrawer({
   });
 
   const { data: workspaceTags = [] } = useQuery<TagType[]>({
-    queryKey: queryKeys.workspaces.tags(workspaceId!),
+    queryKey: tenantKey(queryKeys.workspaces.tags(workspaceId!)),
     enabled: !!workspaceId && open,
   });
 
@@ -396,7 +396,7 @@ export function TaskDetailDrawer({
       return res.json() as Promise<TagType>;
     },
     onSuccess: async (newTag: TagType) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.tags(workspaceId) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.workspaces.tags(workspaceId)) });
       // Auto-add the new tag to the task
       await addTagToTaskMutation.mutateAsync(newTag.id);
       setIsCreatingTag(false);
@@ -475,7 +475,7 @@ export function TaskDetailDrawer({
   });
 
   const timeEntriesQueryKey = useMemo(
-    () => task?.id ? queryKeys.timeEntries.byTask(task.id) : queryKeys.timeEntries.all,
+    () => task?.id ? tenantKey(queryKeys.timeEntries.byTask(task.id)) : tenantKey(queryKeys.timeEntries.all),
     [task?.id]
   );
 
@@ -490,7 +490,7 @@ export function TaskDetailDrawer({
   });
 
   const { data: projectContext, isLoading: projectContextLoading, isError: projectContextError } = useQuery<ProjectContext>({
-    queryKey: queryKeys.projects.context(task?.projectId!),
+    queryKey: tenantKey(queryKeys.projects.context(task?.projectId!)),
     queryFn: async () => {
       if (!task?.projectId) return null;
       const projectRes = await fetch(`/api/projects/${task.projectId}`, { credentials: "include" });
@@ -513,7 +513,7 @@ export function TaskDetailDrawer({
   const canQuickStartTimer = !task?.projectId || (projectContext && projectContext.clientId);
 
   const { data: activeTimer, isLoading: timerLoading } = useQuery<ActiveTimer | null>({
-    queryKey: queryKeys.timer.current,
+    queryKey: tenantKey(queryKeys.timer.current),
     enabled: open,
     refetchInterval: 30000,
   });
@@ -546,7 +546,7 @@ export function TaskDetailDrawer({
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.timer.current });
+      qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timer.current) });
       toast({ title: "Timer started", description: `Tracking time for "${task?.title}"` });
     },
     onError: (error: Error) => {
@@ -566,7 +566,7 @@ export function TaskDetailDrawer({
   const pauseTimerMutation = useMutation({
     mutationFn: async () => apiRequest("POST", "/api/timer/pause"),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.timer.current });
+      qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timer.current) });
       toast({ title: "Timer paused" });
     },
   });
@@ -574,7 +574,7 @@ export function TaskDetailDrawer({
   const resumeTimerMutation = useMutation({
     mutationFn: async () => apiRequest("POST", "/api/timer/resume"),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.timer.current });
+      qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timer.current) });
       toast({ title: "Timer resumed" });
     },
   });
@@ -582,7 +582,7 @@ export function TaskDetailDrawer({
   const stopTimerMutation = useMutation({
     mutationFn: async () => apiRequest("POST", "/api/timer/stop", { scope: "in_scope" }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: queryKeys.timer.current });
+      qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timer.current) });
       qc.invalidateQueries({ queryKey: timeEntriesQueryKey });
       toast({ title: "Timer stopped", description: "Time entry saved" });
     },
@@ -610,7 +610,7 @@ export function TaskDetailDrawer({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: timeEntriesQueryKey });
-      qc.invalidateQueries({ queryKey: queryKeys.timeEntries.all });
+      qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timeEntries.all) });
     },
   });
 
@@ -619,13 +619,13 @@ export function TaskDetailDrawer({
       return apiRequest("PATCH", `/api/tasks/${task!.id}`, { status });
     },
     onMutate: async (newStatus: string) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.tasks.my });
-      const previousMyTasks = queryClient.getQueryData(queryKeys.tasks.my);
-      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.tasks.my, (old) =>
+      await queryClient.cancelQueries({ queryKey: tenantKey(queryKeys.tasks.my) });
+      const previousMyTasks = queryClient.getQueryData(tenantKey(queryKeys.tasks.my));
+      queryClient.setQueryData<Record<string, unknown>[]>(tenantKey(queryKeys.tasks.my), (old) =>
         old?.map((t) => (t.id === task?.id ? { ...t, status: newStatus } : t))
       );
       if (task?.projectId) {
-        const projectTasksKey = queryKeys.projects.tasks(task.projectId);
+        const projectTasksKey = tenantKey(queryKeys.projects.tasks(task.projectId));
         await queryClient.cancelQueries({ queryKey: projectTasksKey });
         const previousProjectTasks = queryClient.getQueryData(projectTasksKey);
         queryClient.setQueryData<Record<string, unknown>[]>(projectTasksKey, (old) =>
@@ -635,9 +635,9 @@ export function TaskDetailDrawer({
       }
       return { previousMyTasks };
     },
-    onError: (_err: Error, _status: string, context: { previousMyTasks?: unknown; previousProjectTasks?: unknown; projectTasksKey?: readonly string[] } | undefined) => {
+    onError: (_err: Error, _status: string, context: { previousMyTasks?: unknown; previousProjectTasks?: unknown; projectTasksKey?: readonly unknown[] } | undefined) => {
       if (context?.previousMyTasks) {
-        queryClient.setQueryData(queryKeys.tasks.my, context.previousMyTasks);
+        queryClient.setQueryData(tenantKey(queryKeys.tasks.my), context.previousMyTasks);
       }
       if (context?.previousProjectTasks && context?.projectTasksKey) {
         queryClient.setQueryData(context.projectTasksKey, context.previousProjectTasks);

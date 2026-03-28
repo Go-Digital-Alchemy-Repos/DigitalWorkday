@@ -1,5 +1,5 @@
 import { useMutation, useQueryClient } from "@tanstack/react-query";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest , tenantKey } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatErrorForToast } from "@/lib/parseApiError";
 import { queryKeys, invalidateTaskCaches } from "@/lib/queryKeys";
@@ -52,7 +52,7 @@ export function useCreateTask(options?: {
       return response.json();
     },
     onMutate: async (data) => {
-      const myTasksKey = queryKeys.tasks.my;
+      const myTasksKey = tenantKey(queryKeys.tasks.my);
       await queryClient.cancelQueries({ queryKey: myTasksKey });
       const previousMyTasks = queryClient.getQueryData(myTasksKey);
       const optimisticTask = {
@@ -75,7 +75,7 @@ export function useCreateTask(options?: {
     },
     onError: (error: Error, _data, context: { previousMyTasks?: unknown } | undefined) => {
       if (context?.previousMyTasks) {
-        queryClient.setQueryData(queryKeys.tasks.my, context.previousMyTasks);
+        queryClient.setQueryData(tenantKey(queryKeys.tasks.my), context.previousMyTasks);
       }
       const { title, description } = formatErrorForToast(error);
       toast({

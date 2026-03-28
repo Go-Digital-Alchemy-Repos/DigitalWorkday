@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
@@ -934,7 +934,7 @@ function ClientDetailSheet({
   const [, navigate] = useLocation();
 
   const { data: client, isLoading, isError } = useQuery<ClientWithContacts>({
-    queryKey: queryKeys.clients.detail(clientId!),
+    queryKey: tenantKey(queryKeys.clients.detail(clientId!)),
     enabled: open && !!clientId,
   });
 
@@ -1574,7 +1574,7 @@ export default function ClientsPage() {
     error,
     refetch,
   } = useQuery<ClientWithHierarchy[]>({
-    queryKey: queryKeys.clients.hierarchy,
+    queryKey: tenantKey(queryKeys.clients.hierarchy),
   });
 
   const summary = useMemo<ClientSummary | undefined>(() => {
@@ -1593,7 +1593,7 @@ export default function ClientsPage() {
   const summaryLoading = isLoading;
 
   const { data: stageSummary, isLoading: stageSummaryLoading } = useQuery<StageSummaryItem[]>({
-    queryKey: queryKeys.clients.stagesSummary,
+    queryKey: tenantKey(queryKeys.clients.stagesSummary),
   });
 
 
@@ -1646,8 +1646,8 @@ export default function ClientsPage() {
       return apiRequest("POST", "/api/clients", data);
     },
     onMutate: async (newClient) => {
-      await queryClient.cancelQueries({ queryKey: queryKeys.clients.hierarchy });
-      const previousHierarchyClients = queryClient.getQueryData<ClientWithHierarchy[]>(queryKeys.clients.hierarchy);
+      await queryClient.cancelQueries({ queryKey: tenantKey(queryKeys.clients.hierarchy) });
+      const previousHierarchyClients = queryClient.getQueryData<ClientWithHierarchy[]>(tenantKey(queryKeys.clients.hierarchy));
       const optimisticClient: ClientWithHierarchy = {
         id: `temp-${Date.now()}`,
         companyName: newClient.companyName,
@@ -1686,14 +1686,14 @@ export default function ClientsPage() {
         totalHoursWorked: 0,
       } as unknown as ClientWithHierarchy;
       queryClient.setQueryData<ClientWithHierarchy[]>(
-        queryKeys.clients.hierarchy,
+        tenantKey(queryKeys.clients.hierarchy),
         (old: any) => (old ? [optimisticClient, ...old] : [optimisticClient])
       );
       return { previousHierarchyClients };
     },
     onError: (err: Error, _newClient, context) => {
       if (context?.previousHierarchyClients) {
-        queryClient.setQueryData(queryKeys.clients.hierarchy, context.previousHierarchyClients);
+        queryClient.setQueryData(tenantKey(queryKeys.clients.hierarchy), context.previousHierarchyClients);
       }
       const errorMessage = err?.message || "Unknown error";
       console.error("Failed to create client:", err);
@@ -1711,8 +1711,8 @@ export default function ClientsPage() {
       setCreateDrawerOpen(false);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.clients.hierarchy });
-      queryClient.invalidateQueries({ queryKey: queryKeys.clients.stagesSummary });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.hierarchy) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.stagesSummary) });
     },
   });
 
@@ -1736,8 +1736,8 @@ export default function ClientsPage() {
       toast({ title: "Failed to update some clients", variant: "destructive" });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.clients.hierarchy });
-      queryClient.invalidateQueries({ queryKey: queryKeys.clients.stagesSummary });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.hierarchy) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.stagesSummary) });
     },
   });
 

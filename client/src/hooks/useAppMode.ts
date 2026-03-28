@@ -22,6 +22,7 @@ import {
   clearTenantScopedCaches,
   validateTenantExists,
   queryClient,
+  setEffectiveTenantId,
 } from "@/lib/queryClient";
 import { UserRole } from "@shared/schema";
 import { prefetchTenantRoutes } from "@/lib/prefetch";
@@ -184,6 +185,10 @@ export function useAppMode(): AppModeHook {
   // - Super user with tenant impersonation: "tenant" mode
   // - Regular user: "tenant" mode
   const appMode: AppMode = (isSuperUser && !isUserImpersonating && !isTenantImpersonating) ? "super" : "tenant";
+
+  useEffect(() => {
+    setEffectiveTenantId(effectiveTenantId);
+  }, [effectiveTenantId]);
 
   return {
     appMode,

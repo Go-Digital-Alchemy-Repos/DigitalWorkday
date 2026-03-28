@@ -26,7 +26,7 @@ import { AttachmentUploader } from "@/components/attachment-uploader";
 import { CommentThread } from "@/components/comment-thread";
 import { MultiSelectAssignees } from "@/components/multi-select-assignees";
 import { format } from "date-fns";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { queryKeys, invalidateTaskCaches } from "@/lib/queryKeys";
 import { useToast } from "@/hooks/use-toast";
 import { useAuth } from "@/lib/auth";
@@ -116,7 +116,7 @@ export function SubtaskDetailDrawer({
   availableUsers = [],
 }: SubtaskDetailDrawerProps) {
   const { data: tenantUsers = [] } = useQuery<User[]>({
-    queryKey: queryKeys.users.tenant,
+    queryKey: tenantKey(queryKeys.users.tenant),
     enabled: open && (!availableUsers || availableUsers.length === 0),
   });
   const mentionUsers = availableUsers && availableUsers.length > 0 ? availableUsers : tenantUsers;
@@ -151,7 +151,7 @@ export function SubtaskDetailDrawer({
   const isActualSubtask = isSubtask(subtask);
 
   const { data: subtaskAssignees = [], isLoading: loadingAssignees } = useQuery<SubtaskAssignee[]>({
-    queryKey: queryKeys.subtasks.assignees(subtask?.id!),
+    queryKey: tenantKey(queryKeys.subtasks.assignees(subtask?.id!)),
     queryFn: async () => {
       if (!subtask?.id) return [];
       const res = await fetch(`/api/subtasks/${subtask.id}/assignees`, { credentials: "include" });
@@ -162,7 +162,7 @@ export function SubtaskDetailDrawer({
   });
 
   const { data: subtaskTags = [], refetch: refetchTags, isLoading: loadingTags } = useQuery<SubtaskTag[]>({
-    queryKey: queryKeys.subtasks.tags(subtask?.id!),
+    queryKey: tenantKey(queryKeys.subtasks.tags(subtask?.id!)),
     queryFn: async () => {
       if (!subtask?.id) return [];
       const res = await fetch(`/api/subtasks/${subtask.id}/tags`, { credentials: "include" });
@@ -173,18 +173,18 @@ export function SubtaskDetailDrawer({
   });
 
   const { data: subtaskComments = [] } = useQuery<(Comment & { user?: User })[]>({
-    queryKey: queryKeys.subtasks.comments(subtask?.id!),
+    queryKey: tenantKey(queryKeys.subtasks.comments(subtask?.id!)),
     enabled: !!subtask?.id && open && isActualSubtask,
   });
 
   const { data: workspaceTags = [] } = useQuery<TagType[]>({
-    queryKey: queryKeys.workspaces.tags(workspaceId!),
+    queryKey: tenantKey(queryKeys.workspaces.tags(workspaceId!)),
     enabled: !!workspaceId && open,
   });
 
   const invalidateCommentQueries = () => {
     if (subtask) {
-      queryClient.invalidateQueries({ queryKey: queryKeys.subtasks.comments(subtask.id) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.subtasks.comments(subtask.id)) });
     }
   };
 
@@ -197,7 +197,7 @@ export function SubtaskDetailDrawer({
     },
     onMutate: async ({ body }: { body: string; attachmentIds?: string[] }) => {
       if (!subtask?.id || !currentUser) return undefined;
-      const commentsKey = queryKeys.subtasks.comments(subtask.id);
+      const commentsKey = tenantKey(queryKeys.subtasks.comments(subtask.id));
       await queryClient.cancelQueries({ queryKey: commentsKey });
       const previousComments = queryClient.getQueryData<(Comment & { user?: User })[]>(commentsKey);
       const optimisticComment: any = {
@@ -223,7 +223,7 @@ export function SubtaskDetailDrawer({
       queryClient.setQueryData<(Comment & { user?: User })[]>(commentsKey, (old = []) => [...old, optimisticComment]);
       return { previousComments, commentsKey };
     },
-    onError: (error: Error, _body, context: { previousComments?: (Comment & { user?: User })[]; commentsKey?: readonly string[] } | undefined) => {
+    onError: (error: Error, _body, context: { previousComments?: (Comment & { user?: User })[]; commentsKey?: readonly unknown[] } | undefined) => {
       if (context?.previousComments !== undefined && context?.commentsKey) {
         queryClient.setQueryData(context.commentsKey, context.previousComments);
       }
@@ -307,7 +307,7 @@ export function SubtaskDetailDrawer({
       return res.json() as Promise<TagType>;
     },
     onSuccess: async (newTag: TagType) => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.tags(workspaceId!) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.workspaces.tags(workspaceId!)) });
       addTagMutation.mutate(newTag.id);
       setIsCreatingTag(false);
       setNewTagName("");
@@ -369,7 +369,7 @@ export function SubtaskDetailDrawer({
   }, [subtask?.id, subtask?.estimateMinutes]);
 
   const { data: activeTimer, isLoading: timerLoading } = useQuery<ActiveTimer | null>({
-    queryKey: queryKeys.timer.current,
+    queryKey: tenantKey(queryKeys.timer.current),
     enabled: open,
     refetchInterval: 30000,
   });
@@ -387,7 +387,7 @@ export function SubtaskDetailDrawer({
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.timer.current });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.timer.current) });
       toast({ title: "Timer started", description: `Tracking time for "${subtask?.title}"` });
     },
     onError: () => {
@@ -398,7 +398,7 @@ export function SubtaskDetailDrawer({
   const pauseTimerMutation = useMutation({
     mutationFn: async () => apiRequest("POST", "/api/timer/pause"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.timer.current });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.timer.current) });
       toast({ title: "Timer paused" });
     },
   });
@@ -406,7 +406,7 @@ export function SubtaskDetailDrawer({
   const resumeTimerMutation = useMutation({
     mutationFn: async () => apiRequest("POST", "/api/timer/resume"),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.timer.current });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.timer.current) });
       toast({ title: "Timer resumed" });
     },
   });
@@ -414,14 +414,14 @@ export function SubtaskDetailDrawer({
   const stopTimerMutation = useMutation({
     mutationFn: async () => apiRequest("POST", "/api/timer/stop", { scope: "in_scope" }),
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.timer.current });
-      queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.byTask(subtask?.id || "") });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.timer.current) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.timeEntries.byTask(subtask?.id || "")) });
       toast({ title: "Timer stopped", description: "Time entry saved" });
     },
   });
 
   const { data: timeEntries = [], isLoading: timeEntriesLoading } = useQuery<TimeEntry[]>({
-    queryKey: queryKeys.timeEntries.byTask(subtask?.id || ""),
+    queryKey: tenantKey(queryKeys.timeEntries.byTask(subtask?.id || "")),
     enabled: !!subtask?.id && open,
   });
 
@@ -704,9 +704,9 @@ export function SubtaskDetailDrawer({
                 assignees={assigneeUsers}
                 apiPrefix={`/api/subtasks/${subtask.id}`}
                 invalidateKeys={[
-                  queryKeys.subtasks.assignees(subtask.id),
-                  queryKeys.subtasks.detail(subtask.id),
-                  queryKeys.tasks.my,
+                  tenantKey(queryKeys.subtasks.assignees(subtask.id)),
+                  tenantKey(queryKeys.subtasks.detail(subtask.id)),
+                  tenantKey(queryKeys.tasks.my),
                 ]}
               />
             )

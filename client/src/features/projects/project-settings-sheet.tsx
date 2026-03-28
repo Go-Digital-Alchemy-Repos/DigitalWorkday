@@ -3,7 +3,7 @@ import { useQuery, useMutation } from "@tanstack/react-query";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -99,15 +99,15 @@ export function ProjectSettingsSheet({
   const [clientSearch, setClientSearch] = useState("");
 
   const { data: clients = [] } = useQuery<ClientWithContacts[]>({
-    queryKey: queryKeys.clients.all,
+    queryKey: tenantKey(queryKeys.clients.all),
   });
 
   const { data: teams = [] } = useQuery<Team[]>({
-    queryKey: queryKeys.teams.all,
+    queryKey: tenantKey(queryKeys.teams.all),
   });
 
   const { data: tenantUsers = [] } = useQuery<TenantUser[]>({
-    queryKey: queryKeys.users.all,
+    queryKey: tenantKey(queryKeys.users.all),
     enabled: open && canChangeProjectManager,
   });
 
@@ -166,23 +166,23 @@ export function ProjectSettingsSheet({
       return await res.json();
     },
     onSuccess: (updatedProject) => {
-      queryClient.setQueryData<Project[]>(queryKeys.projects.all, (old) => {
+      queryClient.setQueryData<Project[]>(tenantKey(queryKeys.projects.all), (old) => {
         if (!old) return old;
         return old.map((p) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
-      queryClient.setQueryData<Project>(queryKeys.projects.detail(project.id), (old) =>
+      queryClient.setQueryData<Project>(tenantKey(queryKeys.projects.detail(project.id)), (old) =>
         old ? { ...old, ...updatedProject } : old,
       );
-      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.projects.withCounts, (old) => {
+      queryClient.setQueryData<Record<string, unknown>[]>(tenantKey(queryKeys.projects.withCounts), (old) => {
         if (!old) return old;
         return old.map((p: Record<string, unknown>) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.detail(project.id)) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
       toast({
         title: "Project updated",
         description: "Project details have been saved.",
@@ -202,9 +202,9 @@ export function ProjectSettingsSheet({
       return apiRequest("PATCH", `/api/projects/${project.id}/client`, { clientId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.clients.all });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.detail(project.id)) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.clients.all) });
       toast({
         title: "Client updated",
         description: "Project client assignment has been updated.",
@@ -225,20 +225,20 @@ export function ProjectSettingsSheet({
       return await res.json();
     },
     onSuccess: (updatedProject, status) => {
-      queryClient.setQueryData<Project[]>(queryKeys.projects.all, (old) => {
+      queryClient.setQueryData<Project[]>(tenantKey(queryKeys.projects.all), (old) => {
         if (!old) return old;
         return old.map((p) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
-      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.projects.withCounts, (old) => {
+      queryClient.setQueryData<Record<string, unknown>[]>(tenantKey(queryKeys.projects.withCounts), (old) => {
         if (!old) return old;
         return old.map((p: Record<string, unknown>) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.detail(project.id)) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
       toast({
         title: status === "archived" ? "Project archived" : "Project restored",
         description: status === "archived" 
@@ -263,22 +263,22 @@ export function ProjectSettingsSheet({
       return await res.json();
     },
     onSuccess: (updatedProject) => {
-      queryClient.setQueryData<Project[]>(queryKeys.projects.all, (old) => {
+      queryClient.setQueryData<Project[]>(tenantKey(queryKeys.projects.all), (old) => {
         if (!old) return old;
         return old.map((p) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
-      queryClient.setQueryData<Project>(queryKeys.projects.detail(project.id), (old) =>
+      queryClient.setQueryData<Project>(tenantKey(queryKeys.projects.detail(project.id)), (old) =>
         old ? { ...old, ...updatedProject } : old,
       );
-      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.projects.withCounts, (old) => {
+      queryClient.setQueryData<Record<string, unknown>[]>(tenantKey(queryKeys.projects.withCounts), (old) => {
         if (!old) return old;
         return old.map((p: Record<string, unknown>) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
       toast({
         title: updatedProject.stickyAt ? "Project pinned" : "Project unpinned",
         description: updatedProject.stickyAt
@@ -301,8 +301,8 @@ export function ProjectSettingsSheet({
       return apiRequest("DELETE", `/api/projects/${project.id}/members/${user.id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.members(project.id) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.members(project.id)) });
       toast({
         title: "Left project",
         description: "You have been removed from this project. An admin or team member can add you back.",
@@ -323,7 +323,7 @@ export function ProjectSettingsSheet({
       return apiRequest("DELETE", `/api/projects/${project.id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
       toast({
         title: "Project deleted",
         description: `"${project.name}" has been permanently deleted.`,
@@ -345,7 +345,7 @@ export function ProjectSettingsSheet({
       return apiRequest("DELETE", `/api/projects/${project.id}/hide`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
     },
     onError: () => {
       toast({

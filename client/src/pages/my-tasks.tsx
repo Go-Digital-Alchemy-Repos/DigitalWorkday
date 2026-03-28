@@ -102,7 +102,7 @@ import { SortableTaskCard } from "@/features/tasks/sortable-task-card";
 import { TaskDetailDrawer } from "@/features/tasks/task-detail-drawer";
 import { PersonalTaskCreateDrawer } from "@/features/tasks/personal-task-create-drawer";
 import { isToday, isPast, isFuture, subDays } from "date-fns";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { AccessInfoBanner } from "@/components/access-info-banner";
 import { TaskProgressBar } from "@/components/task-progress-bar";
@@ -474,7 +474,7 @@ export default function MyTasks() {
   }, [serverQueryParams]);
 
   const { data: taskListResponse, isLoading } = useQuery<TaskListResponse>({
-    queryKey: [...queryKeys.tasks.my, serverQueryParams],
+    queryKey: [...tenantKey(queryKeys.tasks.my), serverQueryParams],
     queryFn: async () => {
       const res = await fetch(`/api/tasks/my?${queryString}`);
       if (!res.ok) throw new Error("Failed to fetch tasks");
@@ -487,7 +487,7 @@ export default function MyTasks() {
   const pagination = taskListResponse?.pagination;
 
   const { data: pendingTaskTimeEntries = [] } = useQuery<TimeEntry[]>({
-    queryKey: queryKeys.tasks.timeEntries(pendingCompleteTask?.id!),
+    queryKey: tenantKey(queryKeys.tasks.timeEntries(pendingCompleteTask?.id!)),
     enabled: !!pendingCompleteTask,
   });
 
@@ -499,7 +499,7 @@ export default function MyTasks() {
 
   // Fetch individual task for deep linking if not in the main tasks list
   const { data: linkedTask } = useQuery<TaskWithRelations>({
-    queryKey: queryKeys.tasks.detail(urlTaskId!),
+    queryKey: tenantKey(queryKeys.tasks.detail(urlTaskId!)),
     enabled: !!urlTaskId && !selectedTask && !!taskListResponse && !tasks.find(t => t.id === urlTaskId),
   });
 
@@ -538,11 +538,11 @@ export default function MyTasks() {
   }, []);
 
   const { data: currentWorkspace } = useQuery<Workspace>({
-    queryKey: queryKeys.workspaces.current,
+    queryKey: tenantKey(queryKeys.workspaces.current),
   });
 
   const { data: tenantUsers } = useQuery<UserType[]>({
-    queryKey: queryKeys.users.all,
+    queryKey: tenantKey(queryKeys.users.all),
   });
 
   const createPersonalTaskMutation = useCreatePersonalTask({
@@ -556,7 +556,7 @@ export default function MyTasks() {
       return apiRequest("PATCH", `/api/tasks/${taskId}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.my });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.my) });
       if (selectedTask) {
         refetchSelectedTask();
       }
@@ -576,7 +576,7 @@ export default function MyTasks() {
       return apiRequest("DELETE", `/api/subtasks/${subtaskId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.my });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.my) });
       if (selectedTask) {
         refetchSelectedTask();
       }

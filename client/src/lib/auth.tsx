@@ -1,7 +1,7 @@
 import { createContext, useContext, useState, useEffect, useCallback, type ReactNode } from "react";
 import { useLocation } from "wouter";
 import { type User, UserRole } from "@shared/schema";
-import { clearActingAsState, setSuperUserFlag, queryClient, markAuthenticated, clearAuthenticated } from "./queryClient";
+import { clearActingAsState, setSuperUserFlag, queryClient, markAuthenticated, clearAuthenticated, setEffectiveTenantId } from "./queryClient";
 import { prefetchPostLogin, resetPrefetchState, type PrefetchOptions } from "./prefetch";
 
 interface UserImpersonationData {
@@ -77,12 +77,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         setUser(data.user);
         setUserImpersonation(data.impersonation || null);
         setSuperUserFlag(data.user?.role === UserRole.SUPER_USER);
+        if (data.user?.role !== UserRole.SUPER_USER && data.user?.tenantId) {
+          setEffectiveTenantId(data.user.tenantId);
+        }
         markAuthenticated();
         triggerPrefetch(data.user?.role);
       } else {
         if (import.meta.env.DEV) console.log("[Auth] /api/auth/me failed:", response.status);
         setUser(null);
         setUserImpersonation(null);
+        setEffectiveTenantId(null);
         clearActingAsState();
       }
     } catch (err) {
@@ -93,6 +97,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (import.meta.env.DEV) console.error("[Auth] /api/auth/me error:", err);
       setUser(null);
       setUserImpersonation(null);
+      setEffectiveTenantId(null);
       clearActingAsState();
     } finally {
       setIsLoading(false);
@@ -127,6 +132,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           setUserImpersonation(meData.impersonation || null);
           setIsLoading(false);
           setSuperUserFlag(meData.user?.role === UserRole.SUPER_USER);
+          if (meData.user?.role !== UserRole.SUPER_USER && meData.user?.tenantId) {
+            setEffectiveTenantId(meData.user.tenantId);
+          }
           triggerPrefetch(meData.user?.role);
         }
         
@@ -147,6 +155,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     } finally {
       clearActingAsState();
       clearAuthenticated();
+      setEffectiveTenantId(null);
       queryClient.clear();
       resetPrefetchState();
       setUser(null);

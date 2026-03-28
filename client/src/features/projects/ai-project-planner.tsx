@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/com
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
-import { apiRequest } from "@/lib/queryClient";
+import { apiRequest , tenantKey } from "@/lib/queryClient";
 import { queryKeys, invalidateTaskCaches } from "@/lib/queryKeys";
 
 interface Phase {
@@ -72,7 +72,7 @@ export function AIProjectPlanner({
   const [sectionMap, setSectionMap] = useState<Map<string, string>>(new Map());
 
   const { data: aiStatus } = useQuery<{ enabled: boolean }>({
-    queryKey: queryKeys.ai.status,
+    queryKey: tenantKey(queryKeys.ai.status),
     queryFn: async () => {
       const res = await fetch("/api/v1/ai/status", { credentials: "include" });
       if (!res.ok) return { enabled: false };

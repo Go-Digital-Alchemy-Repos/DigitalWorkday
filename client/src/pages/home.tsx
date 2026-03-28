@@ -32,7 +32,7 @@ import { CreateProjectDialog } from "@/features/projects";
 import { TaskProgressBar } from "@/components/task-progress-bar";
 import { ReviewQueueCard } from "@/components/review-queue-card";
 import { ReassignmentSuggestionsCard } from "@/components/reassignment/ReassignmentSuggestionsCard";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { useTaskDrawer } from "@/lib/task-drawer-context";
@@ -734,47 +734,47 @@ export default function Home() {
   const { enableReassignmentSuggestions } = useFeatureFlags();
 
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
-    queryKey: queryKeys.projects.all,
+    queryKey: tenantKey(queryKeys.projects.all),
   });
 
   const { data: myTasks, isLoading: tasksLoading } = useQuery<TaskWithRelations[]>({
-    queryKey: queryKeys.tasks.my,
+    queryKey: tenantKey(queryKeys.tasks.my),
   });
 
   const { data: teams } = useQuery<Team[]>({
-    queryKey: queryKeys.teams.all,
+    queryKey: tenantKey(queryKeys.teams.all),
   });
 
   const { data: clients } = useQuery<Client[]>({
-    queryKey: queryKeys.clients.all,
+    queryKey: tenantKey(queryKeys.clients.all),
   });
 
   const { data: currentWorkspace } = useQuery<Workspace>({
-    queryKey: queryKeys.workspaces.current,
+    queryKey: tenantKey(queryKeys.workspaces.current),
   });
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsSummary>({
-    queryKey: queryKeys.projects.analyticsSummary,
+    queryKey: tenantKey(queryKeys.projects.analyticsSummary),
     enabled: !!user && isAdmin,
   });
 
   const { data: workload, isLoading: workloadLoading } = useQuery<EmployeeWorkload[]>({
-    queryKey: queryKeys.workload.tasksByEmployee,
+    queryKey: tenantKey(queryKeys.workload.tasksByEmployee),
     enabled: !!user && isAdmin,
   });
 
   const { data: unassigned, isLoading: unassignedLoading } = useQuery<{ tasks: UnassignedTask[]; totalCount: number }>({
-    queryKey: queryKeys.workload.unassigned,
+    queryKey: tenantKey(queryKeys.workload.unassigned),
     enabled: !!user && isAdmin,
   });
 
   const { data: recentMessages, isLoading: messagesLoading } = useQuery<Record<string, unknown>[]>({
-    queryKey: queryKeys.chat.recentSinceLogin,
+    queryKey: tenantKey(queryKeys.chat.recentSinceLogin),
     enabled: !!user && isAdmin,
   });
 
   const { data: timeStats, isLoading: timeStatsLoading } = useQuery<MyTimeStats>({
-    queryKey: queryKeys.timeEntries.myStats,
+    queryKey: tenantKey(queryKeys.timeEntries.myStats),
     enabled: !!user && !isAdmin,
   });
 
@@ -783,8 +783,8 @@ export default function Home() {
       return apiRequest("POST", "/api/projects", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
-      queryClient.invalidateQueries({ queryKey: queryKeys.projects.analyticsSummary });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.analyticsSummary) });
       setCreateProjectOpen(false);
     },
   });
@@ -794,7 +794,7 @@ export default function Home() {
       return apiRequest("PATCH", `/api/tasks/${taskId}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.my });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.my) });
       if (selectedTask) {
         refetchSelectedTask();
       }
@@ -806,7 +806,7 @@ export default function Home() {
       return apiRequest("POST", `/api/tasks/${taskId}/subtasks`, { title });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.my });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.my) });
       if (selectedTask) {
         refetchSelectedTask();
       }
@@ -818,7 +818,7 @@ export default function Home() {
       return apiRequest("DELETE", `/api/subtasks/${subtaskId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.my });
+      queryClient.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.my) });
       if (selectedTask) {
         refetchSelectedTask();
       }

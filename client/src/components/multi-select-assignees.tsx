@@ -9,7 +9,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import { Input } from "@/components/ui/input";
 import { AvatarGroup } from "@/components/avatar-group";
 import { cn } from "@/lib/utils";
-import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import type { User } from "@shared/schema";
 
@@ -20,7 +20,7 @@ interface MultiSelectAssigneesProps {
   disabled?: boolean;
   onAssigneeChange?: () => void;
   apiPrefix?: string;
-  invalidateKeys?: readonly (readonly string[])[];
+  invalidateKeys?: readonly (readonly unknown[])[];
 }
 
 function getInitials(name: string): string {
@@ -45,13 +45,13 @@ export function MultiSelectAssignees({
   const [search, setSearch] = useState("");
 
   const prefix = apiPrefix || `/api/tasks/${taskId}`;
-  const defaultCacheKeys: readonly (readonly string[])[] = apiPrefix 
+  const defaultCacheKeys: readonly (readonly unknown[])[] = apiPrefix 
     ? [] 
-    : [queryKeys.tasks.detail(taskId), queryKeys.tasks.my];
+    : [tenantKey(queryKeys.tasks.detail(taskId)), tenantKey(queryKeys.tasks.my)];
   const keysToInvalidate = invalidateKeys || defaultCacheKeys;
 
   const { data: tenantUsers = [] } = useQuery<User[]>({
-    queryKey: queryKeys.users.tenant,
+    queryKey: tenantKey(queryKeys.users.tenant),
     enabled: open,
   });
 

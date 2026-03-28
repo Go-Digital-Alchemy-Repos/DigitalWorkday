@@ -1,4 +1,5 @@
 import type { QueryClient } from "@tanstack/react-query";
+import { tenantKey } from "./queryClient";
 
 export const queryKeys = {
   projects: {
@@ -152,25 +153,25 @@ export function invalidateTaskCaches(
     includeProjectLists?: boolean;
   } = {},
 ): void {
-  qc.invalidateQueries({ queryKey: queryKeys.tasks.my });
-  qc.invalidateQueries({ queryKey: queryKeys.tasks.all });
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.my) });
+  qc.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.all) });
 
   if (opts.taskId) {
-    qc.invalidateQueries({ queryKey: queryKeys.tasks.detail(opts.taskId) });
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.detail(opts.taskId)) });
   }
 
   if (opts.projectId) {
-    qc.invalidateQueries({ queryKey: queryKeys.projects.sections(opts.projectId) });
-    qc.invalidateQueries({ queryKey: queryKeys.projects.tasks(opts.projectId) });
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.sections(opts.projectId)) });
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.tasks(opts.projectId)) });
   }
 
   if (opts.parentTaskId) {
-    qc.invalidateQueries({ queryKey: queryKeys.tasks.detail(opts.parentTaskId) });
-    qc.invalidateQueries({ queryKey: queryKeys.tasks.childTasks(opts.parentTaskId) });
-    qc.invalidateQueries({ queryKey: queryKeys.tasks.subtasks(opts.parentTaskId) });
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.detail(opts.parentTaskId)) });
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.childTasks(opts.parentTaskId)) });
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.tasks.subtasks(opts.parentTaskId)) });
   }
 
   if (opts.includeProjectLists) {
-    qc.invalidateQueries({ queryKey: queryKeys.projects.all });
+    qc.invalidateQueries({ queryKey: tenantKey(queryKeys.projects.all) });
   }
 }

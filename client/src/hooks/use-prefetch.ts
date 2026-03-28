@@ -1,6 +1,7 @@
 import { useCallback, useRef } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { queryKeys } from "@/lib/queryKeys";
+import { queryKeys } from "@/lib/queryKeys"
+import { tenantKey } from "@/lib/queryClient";
 
 interface PrefetchOptions {
   staleTime?: number;
@@ -20,7 +21,7 @@ export function usePrefetchTask() {
 
     timeoutRef.current = setTimeout(() => {
       queryClient.prefetchQuery({
-        queryKey: queryKeys.tasks.detail(taskId),
+        queryKey: tenantKey(queryKeys.tasks.detail(taskId)),
         staleTime,
       });
     }, delay);
@@ -49,7 +50,7 @@ export function usePrefetchProject() {
 
     timeoutRef.current = setTimeout(() => {
       queryClient.prefetchQuery({
-        queryKey: queryKeys.projects.detail(projectId),
+        queryKey: tenantKey(queryKeys.projects.detail(projectId)),
         staleTime,
       });
     }, delay);
@@ -78,7 +79,7 @@ export function usePrefetchClient() {
 
     timeoutRef.current = setTimeout(() => {
       queryClient.prefetchQuery({
-        queryKey: queryKeys.clients.detail(clientId),
+        queryKey: tenantKey(queryKeys.clients.detail(clientId)),
         staleTime,
       });
     }, delay);

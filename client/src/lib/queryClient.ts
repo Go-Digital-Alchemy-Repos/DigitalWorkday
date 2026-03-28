@@ -223,10 +223,15 @@ type UnauthorizedBehavior = "returnNull" | "throw";
  * String segments are joined with "/".
  */
 function buildUrlFromQueryKey(queryKey: readonly unknown[]): string {
+  let effectiveKey = queryKey;
+  if (queryKey[0] === "tenant" && typeof queryKey[1] === "string" && queryKey.length >= 3) {
+    effectiveKey = queryKey.slice(2);
+  }
+
   const pathParts: string[] = [];
   let queryParams: URLSearchParams | null = null;
 
-  for (const segment of queryKey) {
+  for (const segment of effectiveKey) {
     if (typeof segment === "string") {
       // Detect accidentally stringified objects (e.g., template literal with object)
       if (segment.includes("[object Object]")) {
@@ -362,79 +367,65 @@ export const STALE_TIMES = {
   static: Infinity,
 } as const;
 
-/**
- * Tenant-scoped query key prefixes.
- * These queries contain tenant-specific data and must be cleared on mode transitions.
- * 
- * IMPORTANT: This list must be comprehensive. Any tenant-specific API endpoint
- * should have its prefix listed here to ensure proper cache isolation.
- * 
- * Note: This is a best-effort prefix-based approach. For guaranteed isolation,
- * consider implementing tenantId namespacing in query keys (e.g., ["tenant", tenantId, "/api/..."]).
- */
-export const TENANT_SCOPED_QUERY_PREFIXES = [
-  "/api/projects",
-  "/api/clients",
-  "/api/teams",
-  "/api/workspaces",
-  "/api/tasks",
-  "/api/time-entries",
-  "/api/user",
-  "/api/auth/me",
-  "/api/v1/projects",
-  "/api/v1/tenant",
-  "/api/v1/workspaces",
-  "/api/v1/tasks",
-  "/api/v1/clients",
-  "/api/v1/teams",
-  "/api/v1/time",
-  "/api/v1/analytics",
-  "/api/v1/forecast",
-  "/api/v1/workload",
-  "/api/activities",
-  "/api/comments",
-  "/api/tags",
-  "/api/sections",
-  "/api/attachments",
-] as const;
+let _effectiveTenantId: string | null = null;
 
-/**
- * Super-scoped query key prefixes.
- * These queries contain super admin data and should be preserved during tenant mode.
- */
-export const SUPER_SCOPED_QUERY_PREFIXES = [
-  "/api/v1/super",
-] as const;
+export function setEffectiveTenantId(id: string | null): void {
+  _effectiveTenantId = id;
+}
+
+export function getEffectiveTenantId(): string | null {
+  return _effectiveTenantId;
+}
+
+const SUPER_SCOPE_PREFIX = "/api/v1/super";
+
+function isSuperScopedKey(key: readonly unknown[]): boolean {
+  const first = key[0];
+  return typeof first === "string" && first.startsWith(SUPER_SCOPE_PREFIX);
+}
+
+export function tenantKey<T extends readonly unknown[]>(key: T): readonly unknown[] {
+  const tenantId = _effectiveTenantId;
+  if (!tenantId || isSuperScopedKey(key)) {
+    return key;
+  }
+  return ["tenant", tenantId, ...key];
+}
 
 /**
  * Clear all tenant-scoped caches when switching between tenants or exiting impersonation.
- * This ensures no stale tenant data is visible after mode transitions.
+ *
+ * Uses a two-pronged approach for safety during incremental migration:
+ * 1. Remove all tenant-prefixed keys (["tenant", tenantId, ...])
+ * 2. Fallback: remove any /api/* query that isn't super-scoped (catches un-migrated inline keys)
+ *
+ * As migration to tenantKey() completes, the fallback becomes a no-op.
  */
 export function clearTenantScopedCaches(): void {
   queryClient.cancelQueries();
-  
-  TENANT_SCOPED_QUERY_PREFIXES.forEach(prefix => {
-    queryClient.removeQueries({
-      predicate: (query) => {
-        const key = query.queryKey[0];
-        return typeof key === "string" && key.startsWith(prefix);
-      },
-    });
+
+  queryClient.removeQueries({
+    predicate: (query) => {
+      const firstKey = query.queryKey[0];
+      if (firstKey === "tenant") return true;
+      if (typeof firstKey === "string" && firstKey.startsWith("/api") && !firstKey.startsWith(SUPER_SCOPE_PREFIX)) {
+        return true;
+      }
+      return false;
+    },
   });
 }
 
 /**
  * Clear super-scoped caches when entering tenant mode.
- * Typically not needed, but useful for complete isolation.
+ * Super-scoped queries use un-prefixed keys starting with /api/v1/super.
  */
 export function clearSuperScopedCaches(): void {
-  SUPER_SCOPED_QUERY_PREFIXES.forEach(prefix => {
-    queryClient.removeQueries({
-      predicate: (query) => {
-        const key = query.queryKey[0];
-        return typeof key === "string" && key.startsWith(prefix);
-      },
-    });
+  queryClient.removeQueries({
+    predicate: (query) => {
+      const key = query.queryKey[0];
+      return typeof key === "string" && key.startsWith(SUPER_SCOPE_PREFIX);
+    },
   });
 }
 
