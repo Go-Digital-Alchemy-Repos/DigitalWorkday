@@ -57,6 +57,7 @@ interface TaskCardProps {
   showQuickActions?: boolean;
   projectId?: string;
   workspaceId?: string;
+  hideAssignee?: boolean;
 }
 
 function useTaskLink(task: TaskCardTask, projectId?: string) {
@@ -74,7 +75,7 @@ function useTaskLink(task: TaskCardTask, projectId?: string) {
 }
 
 export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function TaskCard(
-  { task, view = "list", onSelect, onStatusChange, onPriorityChange, onDueDateChange, dragHandleProps, isDragging, showQuickActions = false, projectId, workspaceId: parentWorkspaceId },
+  { task, view = "list", onSelect, onStatusChange, onPriorityChange, onDueDateChange, dragHandleProps, isDragging, showQuickActions = false, projectId, workspaceId: parentWorkspaceId, hideAssignee = false },
   ref
 ) {
   const [dueDatePopoverOpen, setDueDatePopoverOpen] = useState(false);
@@ -345,7 +346,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
                   <Link2 className="h-3.5 w-3.5" />
                 </Button>
               )}
-              {assigneeUsers.length > 0 && (
+              {!hideAssignee && assigneeUsers.length > 0 && (
                 <AvatarGroup users={assigneeUsers} max={2} size="sm" />
               )}
             </div>
@@ -412,9 +413,13 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
       ref={ref}
       className={cn(
         "group relative grid items-center gap-2 px-4 py-2 min-h-[44px] border-b border-border hover-elevate cursor-pointer transition-premium",
-        showQuickActions 
-          ? (dragHandleProps ? "grid-cols-[16px_20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px_32px]" : "grid-cols-[20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px_32px]")
-          : (dragHandleProps ? "grid-cols-[16px_20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px]" : "grid-cols-[20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px]"),
+        hideAssignee
+          ? (showQuickActions
+            ? (dragHandleProps ? "grid-cols-[16px_20px_minmax(200px,2fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px_32px]" : "grid-cols-[20px_minmax(200px,2fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px_32px]")
+            : (dragHandleProps ? "grid-cols-[16px_20px_minmax(200px,2fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px]" : "grid-cols-[20px_minmax(200px,2fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px]"))
+          : (showQuickActions
+            ? (dragHandleProps ? "grid-cols-[16px_20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px_32px]" : "grid-cols-[20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px_32px]")
+            : (dragHandleProps ? "grid-cols-[16px_20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px]" : "grid-cols-[20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px]")),
         isCompleted && "opacity-60",
         isDragging && "opacity-50 shadow-lg bg-card",
         justCompleted && "task-complete-pulse"
@@ -503,6 +508,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
         )}
       </div>
 
+      {!hideAssignee && (
       <div className="flex items-center gap-1.5 overflow-hidden">
         {assigneeUsers.length > 0 ? (
           <Tooltip>
@@ -525,6 +531,7 @@ export const TaskCard = memo(forwardRef<HTMLDivElement, TaskCardProps>(function 
           <span className="text-xs text-muted-foreground/50 italic">Unassigned</span>
         )}
       </div>
+      )}
 
       <div className="flex items-center overflow-hidden">
         {clientName ? (

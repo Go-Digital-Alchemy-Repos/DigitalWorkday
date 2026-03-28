@@ -574,10 +574,9 @@ function EmployeeDashboardSection({
               </div>
             ) : focusTasks.length > 0 ? (
               <div>
-                <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px] bg-muted/30 border-b border-border">
+                <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[20px_minmax(200px,2fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px] bg-muted/30 border-b border-border">
                   <div />
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Task</span>
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Assignee</span>
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Client</span>
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Project</span>
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Due Date</span>
@@ -589,6 +588,7 @@ function EmployeeDashboardSection({
                     task={task}
                     view="list"
                     onSelect={() => onTaskClick(task)}
+                    hideAssignee
                     data-testid={`focus-task-${task.id}`}
                   />
                 ))}
@@ -621,10 +621,9 @@ function EmployeeDashboardSection({
               </div>
             ) : taskBreakdown.upcoming.length > 0 ? (
               <div>
-                <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px] bg-muted/30 border-b border-border">
+                <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[20px_minmax(200px,2fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px] bg-muted/30 border-b border-border">
                   <div />
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Task</span>
-                  <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Assignee</span>
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Client</span>
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Project</span>
                   <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Due Date</span>
@@ -636,6 +635,7 @@ function EmployeeDashboardSection({
                     task={task}
                     view="list"
                     onSelect={() => onTaskClick(task)}
+                    hideAssignee
                     data-testid={`upcoming-task-${task.id}`}
                   />
                 ))}
@@ -948,10 +948,9 @@ export default function Home() {
                   </div>
                 ) : myTasks && myTasks.length > 0 ? (
                   <div>
-                    <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[20px_minmax(200px,2fr)_minmax(120px,1.5fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px] bg-muted/30 border-b border-border">
+                    <div className="grid items-center gap-2 px-4 py-1.5 grid-cols-[20px_minmax(200px,2fr)_minmax(90px,1fr)_minmax(90px,1fr)_90px_76px] bg-muted/30 border-b border-border">
                       <div />
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Task</span>
-                      <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Assignee</span>
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Client</span>
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Project</span>
                       <span className="text-[11px] font-semibold uppercase tracking-wide text-muted-foreground">Due Date</span>
@@ -963,6 +962,7 @@ export default function Home() {
                         task={task}
                         view="list"
                         onSelect={() => handleTaskClick(task)}
+                        hideAssignee
                         data-testid={`dashboard-task-${task.id}`}
                       />
                     ))}
