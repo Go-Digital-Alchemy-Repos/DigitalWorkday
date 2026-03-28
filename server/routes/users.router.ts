@@ -346,15 +346,17 @@ router.patch("/users/:id", requireAdmin, async (req, res) => {
     const isSuperUser = currentRole === "super_user";
     const isTenantOwner = currentRole === "tenant_owner";
 
-    // Only super_user can assign or revoke tenant_owner role
-    if (updates.role === "tenant_owner" || (targetUser.role === "tenant_owner" && updates.role && updates.role !== "tenant_owner")) {
-      if (!isSuperUser) {
-        return res.status(403).json({ error: "Only Super Admins can assign or revoke the Tenant Owner role." });
+    // Only super_user can assign or revoke tenant_owner role (skip check if role is unchanged)
+    if ("role" in updates && updates.role !== targetUser.role) {
+      if (updates.role === "tenant_owner" || targetUser.role === "tenant_owner") {
+        if (!isSuperUser) {
+          return res.status(403).json({ error: "Only Super Admins can assign or revoke the Tenant Owner role." });
+        }
       }
     }
 
-    // Only tenant_owner or super_user can set isProjectManager
-    if ("isProjectManager" in updates) {
+    // Only tenant_owner or super_user can set isProjectManager (skip check if value is unchanged)
+    if ("isProjectManager" in updates && updates.isProjectManager !== targetUser.isProjectManager) {
       if (!isSuperUser && !isTenantOwner) {
         return res.status(403).json({ error: "Only Tenant Owners or Super Admins can assign Project Manager permissions." });
       }

@@ -1,4 +1,5 @@
 import { useState, useEffect, useRef } from "react";
+import { useToast } from "@/hooks/use-toast";
 import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
@@ -68,6 +69,7 @@ export function UserDrawer({
   userTeamIds = [],
   userClientIds = [],
 }: UserDrawerProps) {
+  const { toast } = useToast();
   const [hasChanges, setHasChanges] = useState(false);
   const prevOpenRef = useRef(false);
   const { user: currentUser } = useAuth();
@@ -179,8 +181,20 @@ export function UserDrawer({
       setAvatarChanged(false);
       setHasChanges(false);
       onOpenChange(false);
-    } catch (error) {
+    } catch (error: any) {
       console.error("Failed to save user:", error);
+      let message = "Failed to save user. Please try again.";
+      if (error?.body) {
+        try {
+          const parsed = JSON.parse(error.body);
+          message = parsed.error || parsed.message || message;
+        } catch {
+          message = error.body;
+        }
+      } else if (error?.message) {
+        message = error.message;
+      }
+      toast({ title: "Error", description: message, variant: "destructive" });
     }
   };
 
