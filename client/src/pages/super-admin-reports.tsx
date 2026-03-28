@@ -222,7 +222,7 @@ export default function SuperAdminReportsPage() {
                 <TeamLocationMap tenantId={selectedTenantId} />
               </div>
               <Suspense fallback={<PageSkeleton />}>
-                <ReportsPage key={selectedTenantId} />
+                <ReportsPage key={selectedTenantId} embedded />
               </Suspense>
             </>
           ) : (

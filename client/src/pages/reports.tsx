@@ -1,4 +1,4 @@
-import { lazy, Suspense } from "react";
+import { lazy, Suspense, useState } from "react";
 import { useAuth } from "@/lib/auth";
 import { Redirect, useLocation } from "wouter";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
@@ -75,11 +75,20 @@ function ReportCard({ icon, title, description, onClick, color }: ReportCardProp
 }
 
 
-export default function ReportsPage() {
+export default function ReportsPage({ embedded }: { embedded?: boolean } = {}) {
   const { user, isLoading } = useAuth();
-  const [location, navigate] = useLocation();
-  const currentView: ReportView = PATH_TO_VIEW[location] || "landing";
+  const [location, wouter_navigate] = useLocation();
+  const [embeddedView, setEmbeddedView] = useState<ReportView>("landing");
+  const currentView: ReportView = embedded ? embeddedView : (PATH_TO_VIEW[location] || "landing");
   const flags = useFeatureFlags();
+
+  const navigate = (path: string) => {
+    if (embedded) {
+      setEmbeddedView(PATH_TO_VIEW[path] || "landing");
+    } else {
+      wouter_navigate(path);
+    }
+  };
 
   const canAccessReports = 
     user?.role === "super_user" || 
