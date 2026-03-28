@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback, memo, useMemo } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { useTimeEntryCascade } from "@/hooks/use-time-entry-cascade";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { 
   Clock, Play, Pause, Square, Plus, Download, Filter, 
@@ -566,50 +567,14 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
   const [hours, setHours] = useState("0");
   const [minutes, setMinutes] = useState("30");
   const [date, setDate] = useState(format(new Date(), "yyyy-MM-dd"));
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [projectId, setProjectId] = useState<string | null>(null);
-  const [taskId, setTaskId] = useState<string | null>(null);
-  const [subtaskId, setSubtaskId] = useState<string | null>(null);
   const [scope, setScope] = useState<"in_scope" | "out_of_scope">("in_scope");
 
-  const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: ["/api/clients"],
-    enabled: open,
-  });
-
-  const { data: clientProjects = [] } = useQuery<Array<{ id: string; name: string; clientId: string | null }>>({
-    queryKey: ["/api/clients", clientId, "projects"],
-    queryFn: () => fetch(`/api/clients/${clientId}/projects`, { credentials: "include" }).then((r) => r.json()),
-    enabled: !!clientId && open,
-  });
-
-  const { data: projectTasks = [] } = useQuery<Array<{ id: string; title: string; parentTaskId: string | null; status: string }>>({
-    queryKey: ["/api/projects", projectId, "tasks"],
-    queryFn: () => fetch(`/api/projects/${projectId}/tasks`, { credentials: "include" }).then((r) => r.json()),
-    enabled: !!projectId && open,
-  });
-
-  const openTasks = projectTasks.filter((t) => t.status !== "done" && !t.parentTaskId);
-  const subtasks = projectTasks.filter((t) => t.parentTaskId === taskId && t.status !== "done");
-  const hasSubtasks = subtasks.length > 0;
-
-  const handleClientChange = (newClientId: string | null) => {
-    setClientId(newClientId);
-    setProjectId(null);
-    setTaskId(null);
-    setSubtaskId(null);
-  };
-
-  const handleProjectChange = (newProjectId: string | null) => {
-    setProjectId(newProjectId);
-    setTaskId(null);
-    setSubtaskId(null);
-  };
-
-  const handleTaskChange = (newTaskId: string | null) => {
-    setTaskId(newTaskId);
-    setSubtaskId(null);
-  };
+  const {
+    clientId, projectId, taskId, subtaskId,
+    clients, clientProjects, subtasks, hasSubtasks, finalTaskId,
+    handleClientChange, handleProjectChange, handleTaskChange,
+    handleSubtaskChange, resetAll,
+  } = useTimeEntryCascade({ enabled: open });
 
   const createMutation = useMutation({
     mutationFn: (data: {
@@ -631,10 +596,7 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
       setDescription("");
       setHours("0");
       setMinutes("30");
-      setClientId(null);
-      setProjectId(null);
-      setTaskId(null);
-      setSubtaskId(null);
+      resetAll();
       setScope("in_scope");
       setDate(format(new Date(), "yyyy-MM-dd"));
     },
@@ -654,7 +616,6 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
       return;
     }
     const startTime = new Date(`${date}T09:00:00`);
-    const finalTaskId = subtaskId || taskId;
     createMutation.mutate({
       title,
       description,
@@ -804,7 +765,7 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
               <Label>Subtask</Label>
               <Select 
                 value={subtaskId || "none"} 
-                onValueChange={(v) => setSubtaskId(v === "none" ? null : v)}
+                onValueChange={(v) => handleSubtaskChange(v === "none" ? null : v)}
               >
                 <SelectTrigger data-testid="select-manual-subtask">
                   <SelectValue placeholder="Select subtask (optional)" />
@@ -873,10 +834,6 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
   
-  const [clientId, setClientId] = useState<string | null>(null);
-  const [projectId, setProjectId] = useState<string | null>(null);
-  const [taskId, setTaskId] = useState<string | null>(null);
-  const [subtaskId, setSubtaskId] = useState<string | null>(null);
   const [title, setTitle] = useState("");
   const [description, setDescription] = useState("");
   const [entryDate, setEntryDate] = useState("");
@@ -887,12 +844,23 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
   const [scope, setScope] = useState<"in_scope" | "out_of_scope">("in_scope");
   const [useTimeRange, setUseTimeRange] = useState(false);
 
+  const markChanged = () => setHasChanges(true);
+
+  const {
+    clientId, projectId, taskId, subtaskId,
+    clients, clientProjects, subtasks, hasSubtasks, finalTaskId,
+    handleClientChange, handleProjectChange, handleTaskChange,
+    handleSubtaskChange, resetAll,
+  } = useTimeEntryCascade({ enabled: open, onChange: markChanged });
+
   useEffect(() => {
     if (entry && open) {
-      setClientId(entry.clientId);
-      setProjectId(entry.projectId);
-      setTaskId(entry.taskId);
-      setSubtaskId(null);
+      resetAll({
+        clientId: entry.clientId,
+        projectId: entry.projectId,
+        taskId: entry.taskId,
+        subtaskId: null,
+      });
       setTitle(entry.title || "");
       setDescription(entry.description || "");
       setScope(entry.scope);
@@ -916,29 +884,6 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
       setHasChanges(false);
     }
   }, [entry, open]);
-
-  const markChanged = () => setHasChanges(true);
-
-  const { data: clients = [] } = useQuery<Array<{ id: string; companyName: string; displayName: string | null }>>({
-    queryKey: ["/api/clients"],
-    enabled: open,
-  });
-
-  const { data: clientProjects = [] } = useQuery<Array<{ id: string; name: string }>>({
-    queryKey: ["/api/clients", clientId, "projects"],
-    queryFn: () => fetch(`/api/clients/${clientId}/projects`, { credentials: "include" }).then((r) => r.json()),
-    enabled: !!clientId && open,
-  });
-
-  const { data: projectTasks = [] } = useQuery<Array<{ id: string; title: string; parentTaskId: string | null; status: string }>>({
-    queryKey: ["/api/projects", projectId, "tasks"],
-    queryFn: () => fetch(`/api/projects/${projectId}/tasks`, { credentials: "include" }).then((r) => r.json()),
-    enabled: !!projectId && open,
-  });
-
-  const openTasks = projectTasks.filter((t) => t.status !== "done" && !t.parentTaskId);
-  const subtasks = projectTasks.filter((t) => t.parentTaskId === taskId && t.status !== "done");
-  const hasSubtasks = subtasks.length > 0;
 
   const updateMutation = useMutation({
     mutationFn: async (data: {
@@ -980,32 +925,6 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
     },
   });
 
-  const handleClientChange = (newClientId: string | null) => {
-    setClientId(newClientId);
-    setProjectId(null);
-    setTaskId(null);
-    setSubtaskId(null);
-    markChanged();
-  };
-
-  const handleProjectChange = (newProjectId: string | null) => {
-    setProjectId(newProjectId);
-    setTaskId(null);
-    setSubtaskId(null);
-    markChanged();
-  };
-
-  const handleTaskChange = (newTaskId: string | null) => {
-    setTaskId(newTaskId);
-    setSubtaskId(null);
-    markChanged();
-  };
-
-  const handleSubtaskChange = (newSubtaskId: string | null) => {
-    setSubtaskId(newSubtaskId);
-    markChanged();
-  };
-
   const handleSave = () => {
     if (!entryDate) {
       toast({ title: "Date is required", variant: "destructive" });
@@ -1034,8 +953,6 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
       toast({ title: "Duration must be greater than zero", variant: "destructive" });
       return;
     }
-
-    const finalTaskId = subtaskId || taskId;
 
     updateMutation.mutate({
       clientId,
