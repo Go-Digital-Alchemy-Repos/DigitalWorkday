@@ -216,7 +216,7 @@ export default function SuperAdminReportsPage() {
         <div className="flex-1 overflow-auto">
           {selectedTenantId && selectedTenant ? (
             <>
-              <TenantIntelligencePanel tenantId={selectedTenantId} />
+              <TenantIntelligencePanel tenantId={selectedTenantId} allTenants={tenants} />
               <Suspense fallback={<PageSkeleton />}>
                 <ReportsPage key={selectedTenantId} />
               </Suspense>

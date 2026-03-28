@@ -339,9 +339,16 @@ function InlineNoteForm({ tenantId, onCreated }: { tenantId: string; onCreated: 
   );
 }
 
-export function TenantIntelligencePanel({ tenantId }: { tenantId: string }) {
+interface TenantOption {
+  id: string;
+  name: string;
+}
+
+export function TenantIntelligencePanel({ tenantId, allTenants = [] }: { tenantId: string; allTenants?: TenantOption[] }) {
   const [expanded, setExpanded] = useState(true);
   const [activeTab, setActiveTab] = useState<"overview" | "admin">("overview");
+  const [compareTenantId, setCompareTenantId] = useState<string>("");
+  const [noteFilter, setNoteFilter] = useState<string>("all");
   const queryClient = useQueryClient();
 
   const { data, isLoading, error } = useQuery<TenantIntelligenceData>({
@@ -356,6 +363,20 @@ export function TenantIntelligencePanel({ tenantId }: { tenantId: string }) {
     },
     staleTime: 2 * 60_000,
     enabled: !!tenantId,
+  });
+
+  const { data: compareData } = useQuery<TenantIntelligenceData>({
+    queryKey: ["/api/v1/super/tenant-intelligence", compareTenantId],
+    queryFn: async () => {
+      const res = await fetch(`/api/v1/super/tenant-intelligence/${compareTenantId}`, {
+        credentials: "include",
+        headers: buildHeaders(),
+      });
+      if (!res.ok) throw new Error("Failed to fetch comparison tenant");
+      return res.json();
+    },
+    staleTime: 2 * 60_000,
+    enabled: !!compareTenantId && compareTenantId !== tenantId && compareTenantId !== "none",
   });
 
   const handleNoteCreated = () => {
@@ -379,7 +400,7 @@ export function TenantIntelligencePanel({ tenantId }: { tenantId: string }) {
       >
         <div className="flex items-center gap-2 text-sm font-medium">
           <BarChart3 className="h-4 w-4 text-primary" />
-          <span>Tenant Intelligence</span>
+          <span>Super Admin Intelligence</span>
           {data && (
             <Badge
               variant="outline"
@@ -624,23 +645,101 @@ export function TenantIntelligencePanel({ tenantId }: { tenantId: string }) {
                           </span>
                         </div>
                       )}
-                      <div className="space-y-2 text-xs">
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Users</span>
-                          <ComparisonBadge pct={data.benchmark.tenantUsersVsAvg} />
+                      {allTenants.length > 1 && (
+                        <div className="pb-2 border-b" data-testid="compare-tenant-selector">
+                          <Select value={compareTenantId} onValueChange={setCompareTenantId}>
+                            <SelectTrigger className="h-7 text-[10px]">
+                              <SelectValue placeholder="Compare with..." />
+                            </SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="none">No comparison</SelectItem>
+                              {allTenants
+                                .filter((t) => t.id !== tenantId)
+                                .map((t) => (
+                                  <SelectItem key={t.id} value={t.id}>{t.name}</SelectItem>
+                                ))}
+                            </SelectContent>
+                          </Select>
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Projects</span>
-                          <ComparisonBadge pct={data.benchmark.tenantProjectsVsAvg} />
+                      )}
+                      <div className="space-y-1.5 text-xs">
+                        <div className="grid grid-cols-[1fr_auto_auto_auto] gap-x-2 items-center text-[10px] text-muted-foreground font-medium pb-1 border-b">
+                          <span>KPI</span>
+                          <span className="text-right w-12">Tenant</span>
+                          <span className="text-right w-12">Avg</span>
+                          {compareData && <span className="text-right w-12">vs</span>}
                         </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Tasks</span>
-                          <ComparisonBadge pct={data.benchmark.tenantTasksVsAvg} />
-                        </div>
-                        <div className="flex items-center justify-between">
-                          <span className="text-muted-foreground">Hours</span>
-                          <ComparisonBadge pct={data.benchmark.tenantHoursVsAvg} />
-                        </div>
+                        {[
+                          {
+                            label: "Completion %",
+                            tenant: data.activity.totalTasks > 0
+                              ? Math.round((data.activity.completedTasks / data.activity.totalTasks) * 100)
+                              : 0,
+                            avg: data.benchmark.avgTasksPerTenant > 0 ? "—" : "—",
+                            compare: compareData && compareData.activity.totalTasks > 0
+                              ? Math.round((compareData.activity.completedTasks / compareData.activity.totalTasks) * 100)
+                              : null,
+                            badge: data.benchmark.tenantTasksVsAvg,
+                          },
+                          {
+                            label: "Overdue %",
+                            tenant: data.health.overdueTaskRatio,
+                            avg: "—",
+                            compare: compareData ? compareData.health.overdueTaskRatio : null,
+                            badge: 0,
+                          },
+                          {
+                            label: "Active Users",
+                            tenant: data.activity.activeUsers,
+                            avg: Math.round(data.benchmark.avgUsersPerTenant),
+                            compare: compareData ? compareData.activity.activeUsers : null,
+                            badge: data.benchmark.tenantUsersVsAvg,
+                          },
+                          {
+                            label: "Projects",
+                            tenant: data.activity.totalProjects,
+                            avg: Math.round(data.benchmark.avgProjectsPerTenant),
+                            compare: compareData ? compareData.activity.totalProjects : null,
+                            badge: data.benchmark.tenantProjectsVsAvg,
+                          },
+                          {
+                            label: "Hours Logged",
+                            tenant: data.financial.totalHoursTracked,
+                            avg: data.benchmark.avgHoursPerTenant,
+                            compare: compareData ? compareData.financial.totalHoursTracked : null,
+                            badge: data.benchmark.tenantHoursVsAvg,
+                          },
+                          {
+                            label: "Health Score",
+                            tenant: data.health.overall,
+                            avg: "—",
+                            compare: compareData ? compareData.health.overall : null,
+                            badge: 0,
+                          },
+                        ].map((row) => (
+                          <div key={row.label} className="grid grid-cols-[1fr_auto_auto_auto] gap-x-2 items-center text-xs">
+                            <span className="text-muted-foreground text-[10px] truncate">{row.label}</span>
+                            <span className="text-right w-12 font-medium">{row.tenant}{row.label.includes("%") ? "%" : ""}</span>
+                            <span className="text-right w-12 text-muted-foreground">{row.avg}</span>
+                            {compareData && (
+                              <span className="text-right w-12 text-muted-foreground">
+                                {row.compare !== null ? `${row.compare}${row.label.includes("%") ? "%" : ""}` : "—"}
+                              </span>
+                            )}
+                          </div>
+                        ))}
+                      </div>
+                      <div className="pt-2 border-t space-y-1.5">
+                        {[
+                          { label: "Users", pct: data.benchmark.tenantUsersVsAvg },
+                          { label: "Tasks", pct: data.benchmark.tenantTasksVsAvg },
+                          { label: "Hours", pct: data.benchmark.tenantHoursVsAvg },
+                        ].map((item) => (
+                          <div key={item.label} className="flex items-center justify-between text-xs">
+                            <span className="text-muted-foreground">{item.label}</span>
+                            <ComparisonBadge pct={item.pct} />
+                          </div>
+                        ))}
                       </div>
                     </CardContent>
                   </Card>
@@ -657,24 +756,48 @@ export function TenantIntelligencePanel({ tenantId }: { tenantId: string }) {
                       </CardTitle>
                     </CardHeader>
                     <CardContent className="px-4 pb-4">
-                      {data.adminActions.recentNotes.length === 0 ? (
-                        <p className="text-xs text-muted-foreground py-2">No notes yet.</p>
-                      ) : (
-                        <div className="space-y-2 max-h-48 overflow-y-auto" data-testid="notes-list">
-                          {data.adminActions.recentNotes.map((n) => (
-                            <div key={n.id} className="text-xs border-b pb-2 last:border-0 last:pb-0">
-                              <div className="flex items-center gap-1.5 mb-0.5">
-                                <Badge variant="outline" className="text-[9px] h-4 px-1 capitalize">
-                                  {n.category}
-                                </Badge>
-                                <span className="text-[10px] text-muted-foreground">{timeAgo(n.createdAt)}</span>
+                      <div className="flex gap-1 mb-2 flex-wrap" data-testid="note-category-filter">
+                        {["all", "general", "onboarding", "support", "billing", "technical"].map((cat) => (
+                          <button
+                            key={cat}
+                            onClick={() => setNoteFilter(cat)}
+                            className={cn(
+                              "text-[10px] px-2 py-0.5 rounded-full border transition-colors capitalize",
+                              noteFilter === cat
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "border-border text-muted-foreground hover:bg-muted"
+                            )}
+                            data-testid={`filter-note-${cat}`}
+                          >
+                            {cat}
+                          </button>
+                        ))}
+                      </div>
+                      {(() => {
+                        const filteredNotes = noteFilter === "all"
+                          ? data.adminActions.recentNotes
+                          : data.adminActions.recentNotes.filter((n) => n.category === noteFilter);
+                        return filteredNotes.length === 0 ? (
+                          <p className="text-xs text-muted-foreground py-2">
+                            {noteFilter === "all" ? "No notes yet." : `No ${noteFilter} notes.`}
+                          </p>
+                        ) : (
+                          <div className="space-y-2 max-h-48 overflow-y-auto" data-testid="notes-list">
+                            {filteredNotes.map((n) => (
+                              <div key={n.id} className="text-xs border-b pb-2 last:border-0 last:pb-0">
+                                <div className="flex items-center gap-1.5 mb-0.5">
+                                  <Badge variant="outline" className="text-[9px] h-4 px-1 capitalize">
+                                    {n.category}
+                                  </Badge>
+                                  <span className="text-[10px] text-muted-foreground">{timeAgo(n.createdAt)}</span>
+                                </div>
+                                <p className="text-xs line-clamp-2">{n.body}</p>
+                                <p className="text-[10px] text-muted-foreground mt-0.5">by {n.authorName}</p>
                               </div>
-                              <p className="text-xs line-clamp-2">{n.body}</p>
-                              <p className="text-[10px] text-muted-foreground mt-0.5">by {n.authorName}</p>
-                            </div>
-                          ))}
-                        </div>
-                      )}
+                            ))}
+                          </div>
+                        );
+                      })()}
                       <InlineNoteForm tenantId={tenantId} onCreated={handleNoteCreated} />
                     </CardContent>
                   </Card>
