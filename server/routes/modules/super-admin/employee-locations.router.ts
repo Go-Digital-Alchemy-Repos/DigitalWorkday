@@ -63,7 +63,7 @@ employeeLocationsRouter.get(
         totalWithLocation: withLocation.length,
         totalWithoutLocation: withoutLocation.length,
       });
-    } catch (error: any) {
+    } catch (error) {
       console.error('Employee locations error:', error);
       res.status(500).json({ error: 'Failed to fetch employee locations' });
     }
