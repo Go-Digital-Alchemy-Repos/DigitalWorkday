@@ -30,7 +30,7 @@ interface HealthScore {
   projectCompletionRate: number;
   activeUserRatio: number;
   avgTasksPerUser: number;
-  riskLevel: 'healthy' | 'warning' | 'critical';
+  riskLevel: 'stable' | 'at_risk' | 'critical';
   dataIntegrity: {
     isClean: boolean;
     issueCount: number;
@@ -65,6 +65,8 @@ interface PlatformBenchmark {
   avgProjectsPerTenant: number;
   avgTasksPerTenant: number;
   avgHoursPerTenant: number;
+  avgCompletionRate: number;
+  avgOverdueRatio: number;
   tenantUsersVsAvg: number;
   tenantProjectsVsAvg: number;
   tenantTasksVsAvg: number;
@@ -146,6 +148,7 @@ tenantIntelligenceRouter.get(
         noteRows,
         auditRows,
         riskAckRows,
+        projectHealthRows,
         tenantHealthResult,
       ] = await Promise.all([
         queryRows<{ name: string; status: string }>(sql`
@@ -249,6 +252,8 @@ tenantIntelligenceRouter.get(
           avg_projects: string;
           avg_tasks: string;
           avg_hours: string;
+          avg_completion_rate: string;
+          avg_overdue_ratio: string;
           tenant_rank: string;
         }>(sql`
           WITH tenant_stats AS (
@@ -257,6 +262,12 @@ tenantIntelligenceRouter.get(
               (SELECT COUNT(*) FROM users WHERE tenant_id = t.id AND role != 'super_user') AS user_count,
               (SELECT COUNT(*) FROM projects WHERE tenant_id = t.id) AS project_count,
               (SELECT COUNT(*) FROM tasks WHERE tenant_id = t.id) AS task_count,
+              (SELECT COUNT(*) FILTER (WHERE status IN ('done', 'completed')) FROM tasks WHERE tenant_id = t.id) AS completed_count,
+              (SELECT COUNT(*) FILTER (
+                WHERE due_date < NOW()
+                  AND status NOT IN ('done', 'completed', 'cancelled')
+                  AND archived_at IS NULL
+              ) FROM tasks WHERE tenant_id = t.id) AS overdue_count,
               (SELECT COALESCE(SUM(duration_seconds), 0) FROM time_entries WHERE tenant_id = t.id) AS total_seconds
             FROM tenants t
             WHERE t.status = 'active'
@@ -273,6 +284,8 @@ tenantIntelligenceRouter.get(
             (SELECT ROUND(AVG(project_count))::text FROM tenant_stats) AS avg_projects,
             (SELECT ROUND(AVG(task_count))::text FROM tenant_stats) AS avg_tasks,
             (SELECT ROUND(AVG(total_seconds / 3600.0), 1)::text FROM tenant_stats) AS avg_hours,
+            (SELECT ROUND(AVG(CASE WHEN task_count > 0 THEN (completed_count::numeric / task_count) * 100 ELSE 0 END), 1)::text FROM tenant_stats) AS avg_completion_rate,
+            (SELECT ROUND(AVG(CASE WHEN (task_count - completed_count) > 0 THEN (overdue_count::numeric / (task_count - completed_count)) * 100 ELSE 0 END), 1)::text FROM tenant_stats) AS avg_overdue_ratio,
             COALESCE((SELECT rnk::text FROM ranked WHERE tid = ${tenantId}), '0') AS tenant_rank
         `),
 
@@ -370,6 +383,21 @@ tenantIntelligenceRouter.get(
           LIMIT 10
         `),
 
+        queryRows<{
+          total_projects: string;
+          at_risk_projects: string;
+        }>(sql`
+          SELECT
+            COUNT(DISTINCT p.id)::text AS total_projects,
+            COUNT(DISTINCT pra.project_id) FILTER (
+              WHERE pra.acknowledged_at >= NOW() - INTERVAL '30 days'
+            )::text AS at_risk_projects
+          FROM projects p
+          LEFT JOIN project_risk_acknowledgments pra ON pra.project_id = p.id
+          WHERE p.tenant_id = ${tenantId}
+            AND p.status = 'active'
+        `),
+
         getTenantHealthSummary(tenantId).catch(() => null),
       ]);
 
@@ -384,7 +412,7 @@ tenantIntelligenceRouter.get(
       const timeStats = timeRows[0] || { total_entries: '0', total_seconds: '0', billable_seconds: '0', estimated_revenue: '0', estimated_cost: '0' };
       const clientStats = clientRows[0] || { total: '0' };
       const recentStats = recentActivityRows[0] || { recent_tasks: '0', recent_time_entries: '0' };
-      const benchStats = benchmarkRows[0] || { tenant_count: '0', avg_users: '0', avg_projects: '0', avg_tasks: '0', avg_hours: '0', tenant_rank: '0' };
+      const benchStats = benchmarkRows[0] || { tenant_count: '0', avg_users: '0', avg_projects: '0', avg_tasks: '0', avg_hours: '0', avg_completion_rate: '0', avg_overdue_ratio: '0', tenant_rank: '0' };
       const budgetStats = budgetBurnRows[0] || { total_budget_minutes: '0', total_used_minutes: '0', projects_over_budget: '0', total_with_budget: '0' };
 
       const totalSeconds = parseFloat(timeStats.total_seconds) || 0;
@@ -440,25 +468,36 @@ tenantIntelligenceRouter.get(
       const dataIntegrityWarning = tenantHealthResult ? tenantHealthResult.checks.filter(c => c.severity === 'warning').length : 0;
       const dataIntegrityIssueCount = dataIntegrityCritical + dataIntegrityWarning;
 
+      const projHealthStats = projectHealthRows[0] || { total_projects: '0', at_risk_projects: '0' };
+      const activeProjectCount = parseInt(projHealthStats.total_projects) || 0;
+      const atRiskProjectCount = parseInt(projHealthStats.at_risk_projects) || 0;
+      const projectHealthRatio = activeProjectCount > 0 ? atRiskProjectCount / activeProjectCount : 0;
+
       const factors: { name: string; score: number; weight: number }[] = [];
 
       let overdueScore = 100;
       if (overdueRatio > 0.3) overdueScore = 25;
       else if (overdueRatio > 0.15) overdueScore = 55;
       else if (overdueRatio > 0) overdueScore = 80;
-      factors.push({ name: 'Overdue Tasks', score: overdueScore, weight: 25 });
+      factors.push({ name: 'Overdue Tasks', score: overdueScore, weight: 20 });
+
+      let projHealthScore = 100;
+      if (projectHealthRatio > 0.5) projHealthScore = 25;
+      else if (projectHealthRatio > 0.25) projHealthScore = 55;
+      else if (projectHealthRatio > 0) projHealthScore = 80;
+      factors.push({ name: 'Project Health', score: projHealthScore, weight: 15 });
 
       let userActivityScore = 100;
       if (activeUserRatio < 0.3) userActivityScore = 30;
       else if (activeUserRatio < 0.5) userActivityScore = 55;
       else if (activeUserRatio < 0.7) userActivityScore = 75;
-      factors.push({ name: 'User Activity', score: userActivityScore, weight: 20 });
+      factors.push({ name: 'User Activity', score: userActivityScore, weight: 15 });
 
       let completionScore = 60;
       if (taskCompletionRate > 0.5) completionScore = 100;
       else if (taskCompletionRate > 0.25) completionScore = 75;
       else if (taskCompletionRate < 0.1 && totalTasks > 5) completionScore = 30;
-      factors.push({ name: 'Task Completion', score: completionScore, weight: 20 });
+      factors.push({ name: 'Task Completion', score: completionScore, weight: 15 });
 
       let recencyScore = 100;
       if (recentActivity === 0) recencyScore = 20;
@@ -480,9 +519,9 @@ tenantIntelligenceRouter.get(
         Math.round(factors.reduce((sum, f) => sum + (f.score * f.weight), 0) / totalWeight)
       ));
 
-      let riskLevel: 'healthy' | 'warning' | 'critical' = 'healthy';
+      let riskLevel: 'stable' | 'at_risk' | 'critical' = 'stable';
       if (healthScore < 40) riskLevel = 'critical';
-      else if (healthScore < 70) riskLevel = 'warning';
+      else if (healthScore < 70) riskLevel = 'at_risk';
 
       const health: HealthScore = {
         overall: healthScore,
@@ -519,6 +558,9 @@ tenantIntelligenceRouter.get(
       const avgTasksPerTenant = parseFloat(benchStats.avg_tasks) || 0;
       const avgHoursPerTenant = parseFloat(benchStats.avg_hours) || 0;
 
+      const avgCompletionRate = parseFloat(benchStats.avg_completion_rate) || 0;
+      const avgOverdueRatio = parseFloat(benchStats.avg_overdue_ratio) || 0;
+
       const benchmark: PlatformBenchmark = {
         tenantRank: parseInt(benchStats.tenant_rank) || 0,
         totalTenants: parseInt(benchStats.tenant_count) || 0,
@@ -526,6 +568,8 @@ tenantIntelligenceRouter.get(
         avgProjectsPerTenant,
         avgTasksPerTenant,
         avgHoursPerTenant,
+        avgCompletionRate: Math.round(avgCompletionRate * 10) / 10,
+        avgOverdueRatio: Math.round(avgOverdueRatio * 10) / 10,
         tenantUsersVsAvg: avgUsersPerTenant > 0 ? Math.round((totalUsers / avgUsersPerTenant) * 100) : 0,
         tenantProjectsVsAvg: avgProjectsPerTenant > 0 ? Math.round((totalProjects / avgProjectsPerTenant) * 100) : 0,
         tenantTasksVsAvg: avgTasksPerTenant > 0 ? Math.round((totalTasks / avgTasksPerTenant) * 100) : 0,

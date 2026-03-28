@@ -78,7 +78,7 @@ interface HealthScore {
   projectCompletionRate: number;
   activeUserRatio: number;
   avgTasksPerUser: number;
-  riskLevel: "healthy" | "warning" | "critical";
+  riskLevel: "stable" | "at_risk" | "critical";
   dataIntegrity: DataIntegrity;
   factors: HealthFactor[];
 }
@@ -104,6 +104,8 @@ interface PlatformBenchmark {
   avgProjectsPerTenant: number;
   avgTasksPerTenant: number;
   avgHoursPerTenant: number;
+  avgCompletionRate: number;
+  avgOverdueRatio: number;
   tenantUsersVsAvg: number;
   tenantProjectsVsAvg: number;
   tenantTasksVsAvg: number;
@@ -209,10 +211,16 @@ function ComparisonBadge({ pct }: { pct: number }) {
   );
 }
 
+function riskLabel(level: string): string {
+  if (level === "at_risk") return "At Risk";
+  if (level === "critical") return "Critical";
+  return "Stable";
+}
+
 function HealthIndicator({ score, riskLevel }: { score: number; riskLevel: string }) {
   const colorMap: Record<string, string> = {
-    healthy: "text-green-600 dark:text-green-400",
-    warning: "text-amber-600 dark:text-amber-400",
+    stable: "text-green-600 dark:text-green-400",
+    at_risk: "text-amber-600 dark:text-amber-400",
     critical: "text-red-600 dark:text-red-400",
   };
   return (
@@ -244,14 +252,14 @@ function HealthIndicator({ score, riskLevel }: { score: number; riskLevel: strin
         <Badge
           variant="outline"
           className={cn(
-            "capitalize text-xs",
+            "text-xs",
             riskLevel === "critical" && "border-red-300 text-red-600 dark:border-red-700 dark:text-red-400",
-            riskLevel === "warning" && "border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400",
-            riskLevel === "healthy" && "border-green-300 text-green-600 dark:border-green-700 dark:text-green-400"
+            riskLevel === "at_risk" && "border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400",
+            riskLevel === "stable" && "border-green-300 text-green-600 dark:border-green-700 dark:text-green-400"
           )}
           data-testid="health-risk-badge"
         >
-          {riskLevel}
+          {riskLabel(riskLevel)}
         </Badge>
       </div>
     </div>
@@ -405,14 +413,14 @@ export function TenantIntelligencePanel({ tenantId, allTenants = [] }: { tenantI
             <Badge
               variant="outline"
               className={cn(
-                "text-[10px] px-1.5 py-0 h-4 capitalize ml-1",
-                data.health.riskLevel === "healthy" && "border-green-300 text-green-600 dark:border-green-700 dark:text-green-400",
-                data.health.riskLevel === "warning" && "border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400",
+                "text-[10px] px-1.5 py-0 h-4 ml-1",
+                data.health.riskLevel === "stable" && "border-green-300 text-green-600 dark:border-green-700 dark:text-green-400",
+                data.health.riskLevel === "at_risk" && "border-amber-300 text-amber-600 dark:border-amber-700 dark:text-amber-400",
                 data.health.riskLevel === "critical" && "border-red-300 text-red-600 dark:border-red-700 dark:text-red-400"
               )}
               data-testid="badge-health-collapsed"
             >
-              {data.health.riskLevel} ({data.health.overall})
+              {riskLabel(data.health.riskLevel)} ({data.health.overall})
             </Badge>
           )}
         </div>
@@ -675,7 +683,7 @@ export function TenantIntelligencePanel({ tenantId, allTenants = [] }: { tenantI
                             tenant: data.activity.totalTasks > 0
                               ? Math.round((data.activity.completedTasks / data.activity.totalTasks) * 100)
                               : 0,
-                            avg: data.benchmark.avgTasksPerTenant > 0 ? "—" : "—",
+                            avg: `${data.benchmark.avgCompletionRate}%`,
                             compare: compareData && compareData.activity.totalTasks > 0
                               ? Math.round((compareData.activity.completedTasks / compareData.activity.totalTasks) * 100)
                               : null,
@@ -684,7 +692,7 @@ export function TenantIntelligencePanel({ tenantId, allTenants = [] }: { tenantI
                           {
                             label: "Overdue %",
                             tenant: data.health.overdueTaskRatio,
-                            avg: "—",
+                            avg: `${data.benchmark.avgOverdueRatio}%`,
                             compare: compareData ? compareData.health.overdueTaskRatio : null,
                             badge: 0,
                           },
