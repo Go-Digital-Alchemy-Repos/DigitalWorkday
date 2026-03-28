@@ -687,42 +687,36 @@ export function TenantIntelligencePanel({ tenantId, allTenants = [] }: { tenantI
                             compare: compareData && compareData.activity.totalTasks > 0
                               ? Math.round((compareData.activity.completedTasks / compareData.activity.totalTasks) * 100)
                               : null,
-                            badge: data.benchmark.tenantTasksVsAvg,
                           },
                           {
                             label: "Overdue %",
                             tenant: data.health.overdueTaskRatio,
                             avg: `${data.benchmark.avgOverdueRatio}%`,
                             compare: compareData ? compareData.health.overdueTaskRatio : null,
-                            badge: 0,
                           },
                           {
                             label: "Active Users",
                             tenant: data.activity.activeUsers,
                             avg: Math.round(data.benchmark.avgUsersPerTenant),
                             compare: compareData ? compareData.activity.activeUsers : null,
-                            badge: data.benchmark.tenantUsersVsAvg,
                           },
                           {
                             label: "Projects",
                             tenant: data.activity.totalProjects,
                             avg: Math.round(data.benchmark.avgProjectsPerTenant),
                             compare: compareData ? compareData.activity.totalProjects : null,
-                            badge: data.benchmark.tenantProjectsVsAvg,
                           },
                           {
                             label: "Hours Logged",
                             tenant: data.financial.totalHoursTracked,
                             avg: data.benchmark.avgHoursPerTenant,
                             compare: compareData ? compareData.financial.totalHoursTracked : null,
-                            badge: data.benchmark.tenantHoursVsAvg,
                           },
                           {
                             label: "Health Score",
                             tenant: data.health.overall,
                             avg: "—",
                             compare: compareData ? compareData.health.overall : null,
-                            badge: 0,
                           },
                         ].map((row) => (
                           <div key={row.label} className="grid grid-cols-[1fr_auto_auto_auto] gap-x-2 items-center text-xs">
