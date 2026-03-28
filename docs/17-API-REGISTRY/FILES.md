@@ -1,4 +1,4 @@
-# Super Chat API
+# files API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | files |
+| **Route File(s)** | `server/routes/modules/crm/files.router.ts` |
+| **Base Path(s)** | /api/v1/crm |
 
 ---
 
@@ -37,18 +37,18 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.365Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/routes/modules/crm/files.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| GET | `/api/v1/crm/clients/:clientId/files` |
+| POST | `/api/v1/crm/clients/:clientId/files` |
+| PATCH | `/api/v1/crm/files/:id` |
+| DELETE | `/api/v1/crm/files/:id` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

@@ -37,7 +37,7 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T02:15:12.280Z
+**Last Synced:** 2026-03-28T02:12:59.378Z
 
 **Synced From:**
 - `server/routes/systemIntegrations.ts`
@@ -55,10 +55,6 @@
 | PUT | `/api/v1/system/integrations/r2` |
 | POST | `/api/v1/system/integrations/r2/test` |
 | GET | `/api/v1/system/storage/status` |
-| GET | `/api/v1/system/integrations/sso/google` |
-| PUT | `/api/v1/system/integrations/sso/google` |
-| POST | `/api/v1/system/integrations/sso/google/test` |
-| GET | `/api/v1/system/integrations/sso/status` |
 | GET | `/api/v1/system/integrations/openai` |
 | PUT | `/api/v1/system/integrations/openai` |
 | POST | `/api/v1/system/integrations/openai/test` |

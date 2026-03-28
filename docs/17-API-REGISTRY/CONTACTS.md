@@ -1,4 +1,4 @@
-# Super Chat API
+# contacts API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | contacts |
+| **Route File(s)** | `server/routes/modules/crm/contacts.router.ts` |
+| **Base Path(s)** | /api/v1/crm |
 
 ---
 
@@ -37,18 +37,18 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.364Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/routes/modules/crm/contacts.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| GET | `/api/v1/crm/clients/:clientId/contacts` |
+| POST | `/api/v1/crm/clients/:clientId/contacts` |
+| PATCH | `/api/v1/crm/contacts/:id` |
+| DELETE | `/api/v1/crm/contacts/:id` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

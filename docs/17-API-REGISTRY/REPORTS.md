@@ -1,4 +1,4 @@
-# Super Chat API
+# reports API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | reports |
+| **Route File(s)** | `server/routes/modules/super-admin/reports.router.ts` |
+| **Base Path(s)** | /api/v1/reports |
 
 ---
 
@@ -37,18 +37,19 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.370Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/routes/modules/super-admin/reports.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| GET | `/api/v1/reports/tenants-summary` |
+| GET | `/api/v1/reports/projects-summary` |
+| GET | `/api/v1/reports/users-summary` |
+| GET | `/api/v1/reports/tasks-summary` |
+| GET | `/api/v1/reports/time-summary` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

@@ -37,15 +37,21 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T02:15:12.361Z
+**Last Synced:** 2026-03-28T02:12:59.365Z
 
 **Synced From:**
+- `server/routes/modules/crm/notes.router.ts`
 - `server/features/clients/notes.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
+| GET | `/api/clients/crm/clients/:clientId/notes` |
+| POST | `/api/clients/crm/clients/:clientId/notes` |
+| PUT | `/api/clients/crm/notes/:id` |
+| DELETE | `/api/clients/crm/notes/:id` |
+| GET | `/api/clients/crm/clients/:clientId/notes/categories` |
 | GET | `/api/clients/:clientId/notes/categories` |
 | POST | `/api/clients/:clientId/notes/categories` |
 | PUT | `/api/clients/:clientId/notes/categories/:categoryId` |
@@ -56,5 +62,8 @@
 | PUT | `/api/clients/:clientId/notes/:noteId` |
 | DELETE | `/api/clients/:clientId/notes/:noteId` |
 | GET | `/api/clients/:clientId/notes/:noteId/versions` |
+| POST | `/api/clients/:clientId/notes/:noteId/attachments/upload` |
+| GET | `/api/clients/:clientId/notes/:noteId/attachments/:attachmentId/download` |
+| DELETE | `/api/clients/:clientId/notes/:noteId/attachments/:attachmentId` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

@@ -37,9 +37,10 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T02:15:12.361Z
+**Last Synced:** 2026-03-28T02:12:59.362Z
 
 **Synced From:**
+- `server/routes/clients.router.ts`
 - `server/features/clients/router.ts`
 - `server/features/templates/router.ts`
 
@@ -47,8 +48,34 @@
 
 | Method | Path |
 |--------|------|
+| PATCH | `/api/v1/projects/:projectId/client` |
+| GET | `/api/v1/clients` |
+| GET | `/api/v1/clients/:id` |
+| POST | `/api/v1/clients` |
+| PATCH | `/api/v1/clients/:id` |
+| DELETE | `/api/v1/clients/:id` |
+| GET | `/api/v1/clients/:clientId/contacts` |
+| POST | `/api/v1/clients/:clientId/contacts` |
+| PATCH | `/api/v1/clients/:clientId/contacts/:contactId` |
+| DELETE | `/api/v1/clients/:clientId/contacts/:contactId` |
+| GET | `/api/v1/clients/:clientId/invites` |
+| POST | `/api/v1/clients/:clientId/invites` |
+| DELETE | `/api/v1/clients/:clientId/invites/:inviteId` |
+| GET | `/api/v1/clients/:clientId/projects` |
+| POST | `/api/v1/clients/:clientId/projects` |
+| GET | `/api/v1/clients/:clientId/notes` |
+| POST | `/api/v1/clients/:clientId/notes` |
+| PUT | `/api/v1/clients/:clientId/notes/:noteId` |
+| GET | `/api/v1/clients/:clientId/notes/:noteId/versions` |
+| DELETE | `/api/v1/clients/:clientId/notes/:noteId` |
+| GET | `/api/v1/clients/:clientId/note-categories` |
+| POST | `/api/v1/clients/:clientId/note-categories` |
 | GET | `/api/clients/` |
 | GET | `/api/clients/hierarchy/list` |
+| GET | `/api/clients/summary` |
+| GET | `/api/clients/stages/summary` |
+| PATCH | `/api/clients/:id/stage` |
+| GET | `/api/clients/:id/stage-history` |
 | GET | `/api/clients/:id` |
 | POST | `/api/clients/` |
 | PATCH | `/api/clients/:id` |

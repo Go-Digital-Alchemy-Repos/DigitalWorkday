@@ -1,4 +1,4 @@
-# Super Chat API
+# tenant-notes API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | tenant-notes |
+| **Route File(s)** | `server/routes/modules/super-admin/tenant-notes.router.ts` |
+| **Base Path(s)** | /api/v1/tenants |
 
 ---
 
@@ -37,18 +37,19 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.373Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/routes/modules/super-admin/tenant-notes.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| GET | `/api/v1/tenants/:tenantId/notes` |
+| POST | `/api/v1/tenants/:tenantId/notes` |
+| PATCH | `/api/v1/tenants/:tenantId/notes/:noteId` |
+| GET | `/api/v1/tenants/:tenantId/notes/:noteId/versions` |
+| DELETE | `/api/v1/tenants/:tenantId/notes/:noteId` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

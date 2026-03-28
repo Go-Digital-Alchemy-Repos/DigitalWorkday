@@ -1,4 +1,4 @@
-# Super Chat API
+# seeding API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | seeding |
+| **Route File(s)** | `server/routes/modules/super-admin/seeding.router.ts` |
+| **Base Path(s)** | /api/v1/tenants |
 
 ---
 
@@ -37,18 +37,16 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.370Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/routes/modules/super-admin/seeding.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| POST | `/api/v1/tenants/:tenantId/seed/welcome-project` |
+| POST | `/api/v1/tenants/:tenantId/projects/:projectId/seed/task-template` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

@@ -1,4 +1,4 @@
-# Super Chat API
+# message-templates API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | message-templates |
+| **Route File(s)** | `server/routes/modules/crm/message-templates.router.ts` |
+| **Base Path(s)** | /api/v1/crm |
 
 ---
 
@@ -37,18 +37,20 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.365Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/routes/modules/crm/message-templates.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| GET | `/api/v1/crm/message-templates` |
+| POST | `/api/v1/crm/message-templates` |
+| PATCH | `/api/v1/crm/message-templates/:templateId` |
+| DELETE | `/api/v1/crm/message-templates/:templateId` |
+| GET | `/api/v1/crm/portal/message-templates` |
+| POST | `/api/v1/crm/portal/conversations` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

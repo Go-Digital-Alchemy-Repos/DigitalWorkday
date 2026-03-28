@@ -1,4 +1,4 @@
-# Super Chat API
+# impersonation API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | impersonation |
+| **Route File(s)** | `server/routes/modules/super-admin/impersonation.router.ts` |
+| **Base Path(s)** | /api/v1/impersonation, /api/v1/impersonate |
 
 ---
 
@@ -37,18 +37,18 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.369Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/routes/modules/super-admin/impersonation.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| POST | `/api/v1/impersonation/exit` |
+| GET | `/api/v1/impersonation/status` |
+| POST | `/api/v1/impersonate/start` |
+| POST | `/api/v1/impersonate/stop` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

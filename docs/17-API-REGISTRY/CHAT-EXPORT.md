@@ -1,4 +1,4 @@
-# Super Chat API
+# chat Export API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | chat Export |
+| **Route File(s)** | `server/routes/super/chatExport.router.ts` |
+| **Base Path(s)** | /api/v1/exports |
 
 ---
 
@@ -37,18 +37,18 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.376Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/routes/super/chatExport.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| POST | `/api/v1/exports` |
+| GET | `/api/v1/exports` |
+| GET | `/api/v1/exports/:id` |
+| GET | `/api/v1/exports/:id/download` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

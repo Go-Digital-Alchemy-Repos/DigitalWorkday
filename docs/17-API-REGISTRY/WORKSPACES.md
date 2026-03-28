@@ -1,4 +1,4 @@
-# Super Chat API
+# workspaces API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | workspaces |
+| **Route File(s)** | `server/routes/workspaces.router.ts` |
+| **Base Path(s)** | /api/v1/workspaces, /api/v1/workspace-members |
 
 ---
 
@@ -37,18 +37,22 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.382Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/routes/workspaces.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| GET | `/api/v1/workspaces/current` |
+| GET | `/api/v1/workspaces/:id` |
+| POST | `/api/v1/workspaces` |
+| GET | `/api/v1/workspaces/:workspaceId/members` |
+| POST | `/api/v1/workspaces/:workspaceId/members` |
+| PATCH | `/api/v1/workspaces/:id` |
+| GET | `/api/v1/workspaces` |
+| GET | `/api/v1/workspace-members` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

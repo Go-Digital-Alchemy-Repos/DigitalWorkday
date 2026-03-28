@@ -1,4 +1,4 @@
-# Super Chat API
+# support API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | support |
+| **Route File(s)** | `server/features/client-portal/support.router.ts` |
+| **Base Path(s)** | /api/v1/tickets, /api/v1/form-schemas |
 
 ---
 
@@ -37,18 +37,19 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.382Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/features/client-portal/support.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| GET | `/api/v1/tickets` |
+| GET | `/api/v1/tickets/:id` |
+| POST | `/api/v1/tickets` |
+| POST | `/api/v1/tickets/:id/messages` |
+| GET | `/api/v1/form-schemas/:category` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

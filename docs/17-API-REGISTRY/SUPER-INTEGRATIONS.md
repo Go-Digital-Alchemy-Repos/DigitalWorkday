@@ -37,7 +37,7 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T02:15:12.094Z
+**Last Synced:** 2026-03-28T02:12:59.377Z
 
 **Synced From:**
 - `server/routes/super/integrations.router.ts`
@@ -52,9 +52,13 @@
 | POST | `/api/v1/super/integrations/mailgun/test` |
 | POST | `/api/v1/super/integrations/mailgun/send-test-email` |
 | DELETE | `/api/v1/super/integrations/mailgun/secret/:secretName` |
+| GET | `/api/v1/super/integrations/s3` |
+| PUT | `/api/v1/super/integrations/s3` |
+| DELETE | `/api/v1/super/integrations/s3/secret/:secretName` |
 | GET | `/api/v1/super/integrations/stripe` |
 | PUT | `/api/v1/super/integrations/stripe` |
 | POST | `/api/v1/super/integrations/stripe/test` |
 | DELETE | `/api/v1/super/integrations/stripe/secret/:secretName` |
+| GET | `/api/v1/super/integrations/quickbooks` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

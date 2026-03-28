@@ -1,4 +1,4 @@
-# Super Chat API
+# admins API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | admins |
+| **Route File(s)** | `server/routes/modules/super-admin/admins.router.ts` |
+| **Base Path(s)** | /api/v1/admins |
 
 ---
 
@@ -37,18 +37,22 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.366Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/routes/modules/super-admin/admins.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| GET | `/api/v1/admins` |
+| GET | `/api/v1/admins/:id` |
+| POST | `/api/v1/admins` |
+| PATCH | `/api/v1/admins/:id` |
+| DELETE | `/api/v1/admins/:id` |
+| POST | `/api/v1/admins/:id/invite` |
+| GET | `/api/v1/admins/:id/audit-events` |
+| POST | `/api/v1/admins/:id/provision` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

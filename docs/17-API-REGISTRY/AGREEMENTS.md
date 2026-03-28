@@ -1,4 +1,4 @@
-# Super Chat API
+# agreements API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | agreements |
+| **Route File(s)** | `server/routes/modules/super-admin/agreements.router.ts` |
+| **Base Path(s)** | /api/v1/agreements |
 
 ---
 
@@ -37,18 +37,23 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.367Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/routes/modules/super-admin/agreements.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| GET | `/api/v1/agreements/tenants-summary` |
+| GET | `/api/v1/agreements` |
+| GET | `/api/v1/agreements/:id` |
+| POST | `/api/v1/agreements` |
+| PATCH | `/api/v1/agreements/:id` |
+| POST | `/api/v1/agreements/:id/publish` |
+| POST | `/api/v1/agreements/:id/archive` |
+| DELETE | `/api/v1/agreements/:id` |
+| GET | `/api/v1/agreements/:id/signers` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

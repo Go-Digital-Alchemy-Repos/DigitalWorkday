@@ -37,7 +37,7 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T02:15:12.285Z
+**Last Synced:** 2026-03-28T02:12:59.382Z
 
 **Synced From:**
 - `server/features/client-portal/portal.router.ts`
@@ -56,6 +56,7 @@
 | GET | `/api/clients/profile` |
 | GET | `/api/clients/:clientId/users` |
 | POST | `/api/clients/:clientId/users/invite` |
+| POST | `/api/clients/:clientId/users/create` |
 | PATCH | `/api/clients/:clientId/users/:userId` |
 | DELETE | `/api/clients/:clientId/users/:userId` |
 | GET | `/api/clients/register/validate` |

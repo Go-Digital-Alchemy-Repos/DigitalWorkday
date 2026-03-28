@@ -1,4 +1,4 @@
-# Super Chat API
+# ai-config API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | ai-config |
+| **Route File(s)** | `server/routes/modules/super-admin/ai-config.router.ts` |
+| **Base Path(s)** | /api/v1/ai |
 
 ---
 
@@ -37,18 +37,18 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.367Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/routes/modules/super-admin/ai-config.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| GET | `/api/v1/ai/config` |
+| PUT | `/api/v1/ai/config` |
+| POST | `/api/v1/ai/test` |
+| DELETE | `/api/v1/ai/api-key` |
 
 <!-- === END AUTO-GENERATED SECTION === -->

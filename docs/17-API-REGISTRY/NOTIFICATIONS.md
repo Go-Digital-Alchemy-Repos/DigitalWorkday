@@ -37,7 +37,7 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-02-05T02:15:12.362Z
+**Last Synced:** 2026-03-28T02:12:59.383Z
 
 **Synced From:**
 - `server/features/notifications/notifications.router.ts`
@@ -50,6 +50,10 @@
 | GET | `/api/v1/notifications/notifications/unread-count` |
 | PATCH | `/api/v1/notifications/notifications/:id/read` |
 | POST | `/api/v1/notifications/notifications/mark-all-read` |
+| PATCH | `/api/v1/notifications/notifications/:id/dismiss` |
+| POST | `/api/v1/notifications/notifications/dismiss-all` |
+| POST | `/api/v1/notifications/notifications/group/read` |
+| POST | `/api/v1/notifications/notifications/group/dismiss` |
 | DELETE | `/api/v1/notifications/notifications/:id` |
 | GET | `/api/v1/notifications/notifications/preferences` |
 | PATCH | `/api/v1/notifications/notifications/preferences` |

@@ -1,4 +1,4 @@
-# Super Chat API
+# teams API
 
 **Status:** Draft
 
@@ -8,9 +8,9 @@
 
 | Field | Value |
 |-------|-------|
-| **Domain** | Super Chat |
-| **Route File(s)** | `server/routes/superChat.ts` |
-| **Base Path(s)** | /api/v1/super |
+| **Domain** | teams |
+| **Route File(s)** | `server/routes/teams.router.ts` |
+| **Base Path(s)** | /api/v1/teams |
 
 ---
 
@@ -37,18 +37,22 @@
 
 <!-- === AUTO-GENERATED SECTION (do not edit below this line) === -->
 
-**Last Synced:** 2026-03-28T02:12:59.378Z
+**Last Synced:** 2026-03-28T02:12:59.379Z
 
 **Synced From:**
-- `server/routes/superChat.ts`
+- `server/routes/teams.router.ts`
 
 ### Endpoints
 
 | Method | Path |
 |--------|------|
-| GET | `/api/v1/super/chat/tenants/:tenantId/threads` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/channels/:channelId/messages` |
-| GET | `/api/v1/super/chat/tenants/:tenantId/dms/:dmId/messages` |
-| GET | `/api/v1/super/chat/search` |
+| GET | `/api/v1/teams` |
+| GET | `/api/v1/teams/:id` |
+| POST | `/api/v1/teams` |
+| GET | `/api/v1/teams/:teamId/members` |
+| POST | `/api/v1/teams/:teamId/members` |
+| PATCH | `/api/v1/teams/:id` |
+| DELETE | `/api/v1/teams/:id` |
+| DELETE | `/api/v1/teams/:teamId/members/:userId` |
 
 <!-- === END AUTO-GENERATED SECTION === -->
