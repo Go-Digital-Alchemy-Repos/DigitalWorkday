@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { Link, useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 import { getPreviewText } from "@/components/richtext";
 import {
   FolderKanban,
@@ -121,7 +122,7 @@ function AdminDashboardSection({
   workloadLoading: boolean;
   unassigned?: { tasks: UnassignedTask[]; totalCount: number };
   unassignedLoading: boolean;
-  recentMessages?: any[];
+  recentMessages?: Record<string, unknown>[];
   messagesLoading: boolean;
   onTaskClick: (task: TaskWithRelations) => void;
 }) {
@@ -733,58 +734,58 @@ export default function Home() {
   const { enableReassignmentSuggestions } = useFeatureFlags();
 
   const { data: projects, isLoading: projectsLoading } = useQuery<Project[]>({
-    queryKey: ["/api/projects"],
+    queryKey: queryKeys.projects.all,
   });
 
   const { data: myTasks, isLoading: tasksLoading } = useQuery<TaskWithRelations[]>({
-    queryKey: ["/api/tasks/my"],
+    queryKey: queryKeys.tasks.my,
   });
 
   const { data: teams } = useQuery<Team[]>({
-    queryKey: ["/api/teams"],
+    queryKey: queryKeys.teams.all,
   });
 
   const { data: clients } = useQuery<Client[]>({
-    queryKey: ["/api/clients"],
+    queryKey: queryKeys.clients.all,
   });
 
   const { data: currentWorkspace } = useQuery<Workspace>({
-    queryKey: ["/api/workspaces/current"],
+    queryKey: queryKeys.workspaces.current,
   });
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery<AnalyticsSummary>({
-    queryKey: ["/api/v1/projects/analytics/summary"],
+    queryKey: queryKeys.projects.analyticsSummary,
     enabled: !!user && isAdmin,
   });
 
   const { data: workload, isLoading: workloadLoading } = useQuery<EmployeeWorkload[]>({
-    queryKey: ["/api/v1/workload/tasks-by-employee"],
+    queryKey: queryKeys.workload.tasksByEmployee,
     enabled: !!user && isAdmin,
   });
 
   const { data: unassigned, isLoading: unassignedLoading } = useQuery<{ tasks: UnassignedTask[]; totalCount: number }>({
-    queryKey: ["/api/v1/workload/unassigned"],
+    queryKey: queryKeys.workload.unassigned,
     enabled: !!user && isAdmin,
   });
 
-  const { data: recentMessages, isLoading: messagesLoading } = useQuery<any[]>({
-    queryKey: ["/api/v1/chat/messages/recent-since-login"],
+  const { data: recentMessages, isLoading: messagesLoading } = useQuery<Record<string, unknown>[]>({
+    queryKey: queryKeys.chat.recentSinceLogin,
     enabled: !!user && isAdmin,
   });
 
   const { data: timeStats, isLoading: timeStatsLoading } = useQuery<MyTimeStats>({
-    queryKey: ["/api/time-entries/my/stats"],
+    queryKey: queryKeys.timeEntries.myStats,
     enabled: !!user && !isAdmin,
   });
 
   const createProjectMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: Record<string, unknown>) => {
       return apiRequest("POST", "/api/projects", data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects/analytics/summary"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.v1 });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.analyticsSummary });
       setCreateProjectOpen(false);
     },
   });
@@ -794,7 +795,7 @@ export default function Home() {
       return apiRequest("PATCH", `/api/tasks/${taskId}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.my });
       if (selectedTask) {
         refetchSelectedTask();
       }
@@ -806,7 +807,7 @@ export default function Home() {
       return apiRequest("POST", `/api/tasks/${taskId}/subtasks`, { title });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.my });
       if (selectedTask) {
         refetchSelectedTask();
       }
@@ -818,7 +819,7 @@ export default function Home() {
       return apiRequest("DELETE", `/api/subtasks/${subtaskId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.my });
       if (selectedTask) {
         refetchSelectedTask();
       }
@@ -844,7 +845,7 @@ export default function Home() {
     }
   };
 
-  const handleCreateProject = (data: any) => {
+  const handleCreateProject = (data: Record<string, unknown>) => {
     createProjectMutation.mutate(data);
   };
 

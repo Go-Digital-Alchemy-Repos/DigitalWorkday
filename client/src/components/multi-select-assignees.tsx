@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { AvatarGroup } from "@/components/avatar-group";
 import { cn } from "@/lib/utils";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import type { User } from "@shared/schema";
 
 interface MultiSelectAssigneesProps {
@@ -19,7 +20,7 @@ interface MultiSelectAssigneesProps {
   disabled?: boolean;
   onAssigneeChange?: () => void;
   apiPrefix?: string;
-  invalidateKeys?: string[][];
+  invalidateKeys?: readonly (readonly string[])[];
 }
 
 function getInitials(name: string): string {
@@ -44,13 +45,13 @@ export function MultiSelectAssignees({
   const [search, setSearch] = useState("");
 
   const prefix = apiPrefix || `/api/tasks/${taskId}`;
-  const defaultCacheKeys: string[][] = apiPrefix 
+  const defaultCacheKeys: readonly (readonly string[])[] = apiPrefix 
     ? [] 
-    : [["/api/tasks", taskId], ["/api/tasks/my"]];
+    : [queryKeys.tasks.detail(taskId), queryKeys.tasks.my];
   const keysToInvalidate = invalidateKeys || defaultCacheKeys;
 
   const { data: tenantUsers = [] } = useQuery<User[]>({
-    queryKey: ["/api/tenant/users"],
+    queryKey: queryKeys.users.tenant,
     enabled: open,
   });
 

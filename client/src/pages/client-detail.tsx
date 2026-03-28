@@ -2,6 +2,7 @@ import { useState, useMemo, useEffect } from "react";
 import { useRoute, Link } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { getPreviewText } from "@/components/richtext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -316,17 +317,17 @@ export default function ClientDetailPage() {
   const useV2Layout = featureFlags.clientProfileLayoutV2;
 
   const { data: client, isLoading } = useQuery<ClientWithContacts>({
-    queryKey: ["/api/clients", clientId],
+    queryKey: queryKeys.clients.detail(clientId!),
     enabled: !!clientId,
   });
 
   const { data: crmSummary, isLoading: crmSummaryLoading } = useQuery<CrmSummary>({
-    queryKey: [`/api/crm/clients/${clientId}/summary`],
+    queryKey: queryKeys.clients.crmSummary(clientId!),
     enabled: !!clientId && crmFlags.client360,
   });
 
   const { data: allClients = [] } = useQuery<{ id: string; companyName: string; displayName: string | null; status: string | null; parentClientId: string | null }[]>({
-    queryKey: ["/api/clients", { fields: "minimal" }],
+    queryKey: queryKeys.clients.minimal,
     queryFn: async () => {
       const res = await fetch("/api/clients?fields=minimal", { credentials: "include" });
       if (!res.ok) throw new Error("Failed to fetch clients");
@@ -350,7 +351,7 @@ export default function ClientDetailPage() {
     },
     onSuccess: () => {
       toast({ title: "Client deleted successfully" });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.all });
       navigate("/clients");
     },
     onError: () => {
@@ -364,7 +365,7 @@ export default function ClientDetailPage() {
   }, [allClients, clientId]);
 
   const { data: unassignedProjects = [] } = useQuery<Project[]>({
-    queryKey: ["/api/projects/unassigned", projectSearchQuery],
+    queryKey: queryKeys.projects.unassigned(projectSearchQuery),
     enabled: addProjectOpen && projectView === "assign",
   });
 
@@ -373,8 +374,8 @@ export default function ClientDetailPage() {
       return apiRequest("POST", "/api/clients", { ...data, parentClientId: clientId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(clientId!) });
       setChildClientDrawerOpen(false);
       toast({ title: "Division created", description: "New subsidiary company has been created." });
     },
@@ -385,7 +386,7 @@ export default function ClientDetailPage() {
       return apiRequest("POST", `/api/clients/${clientId}/contacts`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(clientId!) });
       setAddContactOpen(false);
       contactForm.reset();
     },
@@ -396,10 +397,10 @@ export default function ClientDetailPage() {
       return apiRequest("PATCH", `/api/clients/${clientId}`, data);
     },
     onMutate: async (newData) => {
-      await queryClient.cancelQueries({ queryKey: ["/api/clients", clientId] });
-      const previousClient = queryClient.getQueryData<ClientWithContacts>(["/api/clients", clientId]);
+      await queryClient.cancelQueries({ queryKey: queryKeys.clients.detail(clientId!) });
+      const previousClient = queryClient.getQueryData<ClientWithContacts>(queryKeys.clients.detail(clientId!));
       if (previousClient) {
-        queryClient.setQueryData<ClientWithContacts>(["/api/clients", clientId], {
+        queryClient.setQueryData<ClientWithContacts>(queryKeys.clients.detail(clientId!), {
           ...previousClient,
           companyName: newData.companyName,
           displayName: newData.displayName || null,
@@ -437,7 +438,7 @@ export default function ClientDetailPage() {
     },
     onError: (err, _newData, context) => {
       if (context?.previousClient) {
-        queryClient.setQueryData(["/api/clients", clientId], context.previousClient);
+        queryClient.setQueryData(queryKeys.clients.detail(clientId!), context.previousClient);
       }
       toast({ title: "Failed to update client", variant: "destructive" });
     },
@@ -446,8 +447,8 @@ export default function ClientDetailPage() {
       setEditingCard(null);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(clientId!) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.all });
     },
   });
 
@@ -456,16 +457,16 @@ export default function ClientDetailPage() {
       return apiRequest("PATCH", `/api/v1/clients/${clientId}/stage`, { stage });
     },
     onMutate: async (newStage) => {
-      await queryClient.cancelQueries({ queryKey: ["/api/clients", clientId] });
-      const prev = queryClient.getQueryData<ClientWithContacts>(["/api/clients", clientId]);
+      await queryClient.cancelQueries({ queryKey: queryKeys.clients.detail(clientId!) });
+      const prev = queryClient.getQueryData<ClientWithContacts>(queryKeys.clients.detail(clientId!));
       if (prev) {
-        queryClient.setQueryData<ClientWithContacts>(["/api/clients", clientId], { ...prev, stage: newStage });
+        queryClient.setQueryData<ClientWithContacts>(queryKeys.clients.detail(clientId!), { ...prev, stage: newStage });
       }
       return { prev };
     },
     onError: (_err, _stage, context) => {
       if (context?.prev) {
-        queryClient.setQueryData(["/api/clients", clientId], context.prev);
+        queryClient.setQueryData(queryKeys.clients.detail(clientId!), context.prev);
       }
       toast({ title: "Failed to update stage", variant: "destructive" });
     },
@@ -473,9 +474,9 @@ export default function ClientDetailPage() {
       toast({ title: "Client stage updated" });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/clients/hierarchy/list"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/clients/stages/summary"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(clientId!) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.hierarchy });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.stagesSummary });
     },
   });
 
@@ -484,7 +485,7 @@ export default function ClientDetailPage() {
       return apiRequest("DELETE", `/api/clients/${clientId}/contacts/${contactId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(clientId!) });
     },
   });
 
@@ -493,7 +494,7 @@ export default function ClientDetailPage() {
       return apiRequest("PATCH", `/api/clients/${clientId}/contacts/${contactId}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(clientId!) });
       setEditContactOpen(false);
       setEditingContact(null);
     },
@@ -505,9 +506,9 @@ export default function ClientDetailPage() {
       return response.json() as Promise<Project>;
     },
     onSuccess: (project: Project) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(clientId!) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.v1 });
       setAddProjectOpen(false);
       setProjectView("options");
       projectForm.reset();
@@ -520,9 +521,9 @@ export default function ClientDetailPage() {
       return apiRequest("PATCH", `/api/projects/${projectId}/client`, { clientId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects/unassigned"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.detail(clientId!) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.unassigned() });
       setAddProjectOpen(false);
       setProjectView("options");
     },
@@ -539,7 +540,7 @@ export default function ClientDetailPage() {
     onSuccess: () => {
       toast({ title: "Portal invitation sent", description: "The contact has been invited to the client portal." });
       setPortalInviteContact(null);
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.portalUsers(clientId!) });
     },
     onError: (error: Error) => {
       toast({ title: "Failed to send invitation", description: error.message, variant: "destructive" });
@@ -547,7 +548,7 @@ export default function ClientDetailPage() {
   });
 
   const { data: portalUsers = [], isSuccess: portalUsersLoaded } = useQuery<Array<{ userId: string; user: { email: string } }>>({
-    queryKey: ["/api/clients", clientId, "users"],
+    queryKey: queryKeys.clients.portalUsers(clientId!),
     enabled: !!clientId,
   });
 
@@ -582,13 +583,13 @@ export default function ClientDetailPage() {
     onSuccess: (credentials) => {
       setGeneratedCredentials(credentials);
       setConvertToPortalOpen(false);
-      queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.portalUsers(clientId!) });
       toast({ title: "Portal user created", description: "The primary contact now has portal access." });
     },
     onError: (error: Error) => {
       setConvertToPortalOpen(false);
       if (error.message.includes("already exists") || error.message.includes("already has access")) {
-        queryClient.invalidateQueries({ queryKey: ["/api/clients", clientId, "users"] });
+        queryClient.invalidateQueries({ queryKey: queryKeys.clients.portalUsers(clientId!) });
         toast({ title: "This contact already has portal access", description: "Check the Portal Users section to manage their account." });
       } else {
         toast({ title: "Failed to create portal user", description: error.message, variant: "destructive" });
@@ -674,9 +675,9 @@ export default function ClientDetailPage() {
   };
 
   useEffect(() => {
-    const handleNavigate = (e: any) => {
-      if (e.detail) {
-        setActiveSection(e.detail);
+    const handleNavigate = (e: Event) => {
+      if ((e as CustomEvent).detail) {
+        setActiveSection((e as CustomEvent).detail);
       }
     };
     window.addEventListener("navigate-client-tab", handleNavigate);
@@ -1991,7 +1992,7 @@ export default function ClientDetailPage() {
                             <span>{contact.phone}</span>
                           </div>
                         )}
-                        {contact.email && portalUsersLoaded && !portalUsers.some((pu: any) => pu.user?.email === contact.email) && (
+                        {contact.email && portalUsersLoaded && !portalUsers.some((pu) => pu.user?.email === contact.email) && (
                           <Button
                             variant="outline"
                             size="sm"
@@ -2003,7 +2004,7 @@ export default function ClientDetailPage() {
                             Invite to Portal
                           </Button>
                         )}
-                        {contact.email && portalUsersLoaded && portalUsers.some((pu: any) => pu.user?.email === contact.email) && (
+                        {contact.email && portalUsersLoaded && portalUsers.some((pu) => pu.user?.email === contact.email) && (
                           <Badge variant="secondary" className="mt-2">
                             Portal User
                           </Badge>
@@ -2106,8 +2107,8 @@ export default function ClientDetailPage() {
 
             {client.projects && client.projects.length > 0 ? (
               (() => {
-                const activeProjects = client.projects.filter((p: any) => p.status !== "archived");
-                const archivedProjects = client.projects.filter((p: any) => p.status === "archived");
+                const activeProjects = client.projects.filter((p) => p.status !== "archived");
+                const archivedProjects = client.projects.filter((p) => p.status === "archived");
                 return (
                   <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
                     <div>
@@ -2117,7 +2118,7 @@ export default function ClientDetailPage() {
                       </div>
                       {activeProjects.length > 0 ? (
                         <div className="space-y-4">
-                          {activeProjects.map((project: any) => (
+                          {activeProjects.map((project) => (
                             <Link key={project.id} href={`/projects/${project.id}`}>
                               <Card className="cursor-pointer hover-elevate" data-testid={`card-project-${project.id}`}>
                                 <CardHeader className="pb-2">
@@ -2158,7 +2159,7 @@ export default function ClientDetailPage() {
                       </div>
                       {archivedProjects.length > 0 ? (
                         <div className="space-y-4">
-                          {archivedProjects.map((project: any) => (
+                          {archivedProjects.map((project) => (
                             <Link key={project.id} href={`/projects/${project.id}`}>
                               <Card className="cursor-pointer hover-elevate opacity-60" data-testid={`card-project-${project.id}`}>
                                 <CardHeader className="pb-2">

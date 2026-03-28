@@ -38,6 +38,7 @@ import {
 import { Label } from "@/components/ui/label";
 import { cn } from "@/lib/utils";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryKeys, invalidateTaskCaches } from "@/lib/queryKeys";
 import { SubtaskList } from "./subtask-list";
 import { SubtaskDetailDrawer } from "./subtask-detail-drawer";
 import { CommentThread } from "@/components/comment-thread";
@@ -62,7 +63,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
-import type { TaskWithRelations, User, Tag as TagType, Comment, Project, Client } from "@shared/schema";
+import type { TaskWithRelations, User, Tag as TagType, Comment, Project, Client, Subtask } from "@shared/schema";
 import type { MilestoneWithStats } from "@/features/projects/MilestonesTab";
 
 type ActiveTimer = {
@@ -97,7 +98,7 @@ function formatDurationShort(seconds: number): string {
   return `${minutes}m`;
 }
 
-const PERF_ENABLED = typeof window !== "undefined" && (window as any).__TASK_DRAWER_PERF === 1;
+const PERF_ENABLED = typeof window !== "undefined" && (window as unknown as { __TASK_DRAWER_PERF?: number }).__TASK_DRAWER_PERF === 1;
 
 function perfLog(label: string, startMs: number) {
   if (PERF_ENABLED) {
@@ -140,7 +141,7 @@ export function TaskDetailDrawer({
   const renderStart = PERF_ENABLED ? performance.now() : 0;
 
   const { data: liveTask } = useQuery<TaskWithRelations>({
-    queryKey: ["/api/tasks", taskProp?.id],
+    queryKey: queryKeys.tasks.detail(taskProp?.id!),
     enabled: !!taskProp?.id && open,
     initialData: taskProp || undefined,
     staleTime: 5000,
@@ -148,7 +149,7 @@ export function TaskDetailDrawer({
   const task = liveTask || taskProp;
 
   const { data: tenantUsers = [] } = useQuery<User[]>({
-    queryKey: ["/api/tenant/users"],
+    queryKey: queryKeys.users.tenant,
     enabled: open && (!availableUsers || availableUsers.length === 0),
   });
   const mentionUsers = useMemo(
@@ -162,12 +163,12 @@ export function TaskDetailDrawer({
   const { enableTaskReviewQueue, enableProjectMilestones, enableBillingApprovalWorkflow } = useFeatureFlags();
 
   const { data: projectMembersData } = useQuery<Array<{ userId: string; role: string }>>({
-    queryKey: ["/api/projects", task?.projectId, "members"],
+    queryKey: queryKeys.projects.members(task?.projectId!),
     enabled: !!task?.projectId && enableTaskReviewQueue && open,
   });
 
   const { data: projectMilestones = [] } = useQuery<MilestoneWithStats[]>({
-    queryKey: [`/api/projects/${task?.projectId}/milestones`],
+    queryKey: queryKeys.projects.milestones(task?.projectId!),
     enabled: !!task?.projectId && enableProjectMilestones && open,
   });
   const isProjectManager = useMemo(() => {
@@ -187,7 +188,7 @@ export function TaskDetailDrawer({
   const [estimateMinutesPart, setEstimateMinutesPart] = useState<number>(
     task?.estimateMinutes ? task.estimateMinutes % 60 : 0
   );
-  const [selectedSubtask, setSelectedSubtask] = useState<any | null>(null);
+  const [selectedSubtask, setSelectedSubtask] = useState<(Subtask | TaskWithRelations) | null>(null);
   const [subtaskDrawerOpen, setSubtaskDrawerOpen] = useState(false);
   const [timerDrawerOpen, setTimerDrawerOpen] = useState(false);
   const closingRef = useRef(false);
@@ -215,7 +216,7 @@ export function TaskDetailDrawer({
   const { isDirty, setDirty, markClean, confirmIfDirty, UnsavedChangesDialog } = useUnsavedChanges();
 
   const commentQueryKey = useMemo(
-    () => ["/api/tasks", task?.id, "comments"] as const,
+    () => queryKeys.tasks.comments(task?.id ?? ""),
     [task?.id]
   );
 
@@ -232,7 +233,7 @@ export function TaskDetailDrawer({
 
   const addCommentMutation = useMutation({
     mutationFn: async ({ body, attachmentIds }: { body: string; attachmentIds?: string[] }) => {
-      const payload: any = { body };
+      const payload: { body: string; attachmentIds?: string[] } = { body };
       if (attachmentIds && attachmentIds.length > 0) payload.attachmentIds = attachmentIds;
       const response = await apiRequest("POST", `/api/tasks/${task?.id}/comments`, payload);
       return response.json() as Promise<Comment & { user?: User }>;
@@ -261,11 +262,11 @@ export function TaskDetailDrawer({
           name: `${currentUser.firstName || ""} ${currentUser.lastName || ""}`.trim() || currentUser.email,
           avatarUrl: currentUser.avatarUrl,
         },
-      } as any;
+      } as Comment & { user?: User };
       queryClient.setQueryData<(Comment & { user?: User })[]>(commentsKey, (old = []) => [...old, optimisticComment]);
       return { previousComments, commentsKey };
     },
-    onError: (error: any, _body, context: any) => {
+    onError: (error: Error, _body, context: { previousComments?: (Comment & { user?: User })[]; commentsKey?: readonly string[] } | undefined) => {
       if (context?.previousComments !== undefined && context?.commentsKey) {
         queryClient.setQueryData(context.commentsKey, context.previousComments);
       }
@@ -285,7 +286,7 @@ export function TaskDetailDrawer({
       await apiRequest("PATCH", `/api/comments/${id}`, { content: body });
     },
     onSuccess: invalidateCommentQueries,
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: "Failed to update comment",
         description: error?.message || "Please try again",
@@ -299,7 +300,7 @@ export function TaskDetailDrawer({
       await apiRequest("DELETE", `/api/comments/${id}`);
     },
     onSuccess: invalidateCommentQueries,
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: "Failed to delete comment",
         description: error?.message || "Please try again",
@@ -323,24 +324,20 @@ export function TaskDetailDrawer({
   });
 
   const invalidateTaskQueries = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
-    if (task?.id) {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.id] });
-    }
-    if (task?.projectId) {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", task.projectId, "tasks"] });
-    }
+    invalidateTaskCaches(queryClient, {
+      taskId: task?.id,
+      projectId: task?.projectId,
+    });
   }, [task?.id, task?.projectId]);
 
   const requestReviewMutation = useMutation({
     mutationFn: () => apiRequest("POST", `/api/tasks/${task?.id}/review/request`),
     onSuccess: () => {
       invalidateTaskQueries();
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/review-queue"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.reviewQueue });
       toast({ title: "Sent to PM for review" });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({ title: "Failed to request review", description: error?.message || "Please try again", variant: "destructive" });
     },
   });
@@ -350,17 +347,16 @@ export function TaskDetailDrawer({
       apiRequest("POST", `/api/tasks/${task?.id}/review/clear`, data),
     onSuccess: () => {
       invalidateTaskQueries();
-      queryClient.invalidateQueries({ queryKey: ["/api/dashboard/review-queue"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.dashboard.reviewQueue });
       toast({ title: "Review cleared", description: "Assignees have been notified" });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({ title: "Failed to clear review", description: error?.message || "Please try again", variant: "destructive" });
     },
   });
 
-  // Workspace tags query for adding existing tags
   const { data: workspaceTags = [] } = useQuery<TagType[]>({
-    queryKey: ["/api/workspaces", workspaceId, "tags"],
+    queryKey: queryKeys.workspaces.tags(workspaceId!),
     enabled: !!workspaceId && open,
   });
 
@@ -377,7 +373,7 @@ export function TaskDetailDrawer({
       invalidateTaskQueries();
       setTagPopoverOpen(false);
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({ title: "Failed to add tag", description: error.message, variant: "destructive" });
     },
   });
@@ -389,7 +385,7 @@ export function TaskDetailDrawer({
     onSuccess: () => {
       invalidateTaskQueries();
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({ title: "Failed to remove tag", description: error.message, variant: "destructive" });
     },
   });
@@ -400,7 +396,7 @@ export function TaskDetailDrawer({
       return res.json() as Promise<TagType>;
     },
     onSuccess: async (newTag: TagType) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/workspaces", workspaceId, "tags"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.workspaces.tags(workspaceId) });
       // Auto-add the new tag to the task
       await addTagToTaskMutation.mutateAsync(newTag.id);
       setIsCreatingTag(false);
@@ -408,7 +404,7 @@ export function TaskDetailDrawer({
       setNewTagColor("#3b82f6");
       toast({ title: "Tag created and added" });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({ title: "Failed to create tag", description: error.message, variant: "destructive" });
     },
   });
@@ -426,7 +422,7 @@ export function TaskDetailDrawer({
       invalidateTaskQueries();
       onRefresh?.();
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({
         title: "Failed to add subtask",
         description: error.message || "An error occurred",
@@ -461,11 +457,7 @@ export function TaskDetailDrawer({
       return apiRequest("DELETE", `/api/tasks/${taskId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-      if (task?.projectId) {
-        queryClient.invalidateQueries({ queryKey: [`/api/projects/${task.projectId}/sections`] });
-      }
+      invalidateTaskCaches(queryClient, { projectId: task?.projectId, includeProjectLists: true });
       toast({
         title: "Task deleted",
         description: `"${task?.title}" has been permanently deleted.`,
@@ -483,7 +475,7 @@ export function TaskDetailDrawer({
   });
 
   const timeEntriesQueryKey = useMemo(
-    () => ["/api/time-entries", { taskId: task?.id }] as const,
+    () => task?.id ? queryKeys.timeEntries.byTask(task.id) : queryKeys.timeEntries.all,
     [task?.id]
   );
 
@@ -498,7 +490,7 @@ export function TaskDetailDrawer({
   });
 
   const { data: projectContext, isLoading: projectContextLoading, isError: projectContextError } = useQuery<ProjectContext>({
-    queryKey: ["/api/projects", task?.projectId, "context"],
+    queryKey: queryKeys.projects.context(task?.projectId!),
     queryFn: async () => {
       if (!task?.projectId) return null;
       const projectRes = await fetch(`/api/projects/${task.projectId}`, { credentials: "include" });
@@ -521,7 +513,7 @@ export function TaskDetailDrawer({
   const canQuickStartTimer = !task?.projectId || (projectContext && projectContext.clientId);
 
   const { data: activeTimer, isLoading: timerLoading } = useQuery<ActiveTimer | null>({
-    queryKey: ["/api/timer/current"],
+    queryKey: queryKeys.timer.current,
     enabled: open,
     refetchInterval: 30000,
   });
@@ -554,7 +546,7 @@ export function TaskDetailDrawer({
       });
     },
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      qc.invalidateQueries({ queryKey: queryKeys.timer.current });
       toast({ title: "Timer started", description: `Tracking time for "${task?.title}"` });
     },
     onError: (error: Error) => {
@@ -574,7 +566,7 @@ export function TaskDetailDrawer({
   const pauseTimerMutation = useMutation({
     mutationFn: async () => apiRequest("POST", "/api/timer/pause"),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      qc.invalidateQueries({ queryKey: queryKeys.timer.current });
       toast({ title: "Timer paused" });
     },
   });
@@ -582,7 +574,7 @@ export function TaskDetailDrawer({
   const resumeTimerMutation = useMutation({
     mutationFn: async () => apiRequest("POST", "/api/timer/resume"),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      qc.invalidateQueries({ queryKey: queryKeys.timer.current });
       toast({ title: "Timer resumed" });
     },
   });
@@ -590,7 +582,7 @@ export function TaskDetailDrawer({
   const stopTimerMutation = useMutation({
     mutationFn: async () => apiRequest("POST", "/api/timer/stop", { scope: "in_scope" }),
     onSuccess: () => {
-      qc.invalidateQueries({ queryKey: ["/api/timer/current"] });
+      qc.invalidateQueries({ queryKey: queryKeys.timer.current });
       qc.invalidateQueries({ queryKey: timeEntriesQueryKey });
       toast({ title: "Timer stopped", description: "Time entry saved" });
     },
@@ -618,7 +610,7 @@ export function TaskDetailDrawer({
     },
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: timeEntriesQueryKey });
-      qc.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      qc.invalidateQueries({ queryKey: queryKeys.timeEntries.all });
     },
   });
 
@@ -627,25 +619,25 @@ export function TaskDetailDrawer({
       return apiRequest("PATCH", `/api/tasks/${task!.id}`, { status });
     },
     onMutate: async (newStatus: string) => {
-      await queryClient.cancelQueries({ queryKey: ["/api/tasks/my"] });
-      const previousMyTasks = queryClient.getQueryData(["/api/tasks/my"]);
-      queryClient.setQueryData<any[]>(["/api/tasks/my"], (old) =>
-        old?.map((t: any) => (t.id === task?.id ? { ...t, status: newStatus } : t))
+      await queryClient.cancelQueries({ queryKey: queryKeys.tasks.my });
+      const previousMyTasks = queryClient.getQueryData(queryKeys.tasks.my);
+      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.tasks.my, (old) =>
+        old?.map((t) => (t.id === task?.id ? { ...t, status: newStatus } : t))
       );
       if (task?.projectId) {
-        const projectTasksKey = ["/api/projects", task.projectId, "tasks"];
+        const projectTasksKey = queryKeys.projects.tasks(task.projectId);
         await queryClient.cancelQueries({ queryKey: projectTasksKey });
         const previousProjectTasks = queryClient.getQueryData(projectTasksKey);
-        queryClient.setQueryData<any[]>(projectTasksKey, (old) =>
-          old?.map((t: any) => (t.id === task?.id ? { ...t, status: newStatus } : t))
+        queryClient.setQueryData<Record<string, unknown>[]>(projectTasksKey, (old) =>
+          old?.map((t) => (t.id === task?.id ? { ...t, status: newStatus } : t))
         );
         return { previousMyTasks, previousProjectTasks, projectTasksKey };
       }
       return { previousMyTasks };
     },
-    onError: (_err, _status, context: any) => {
+    onError: (_err: Error, _status: string, context: { previousMyTasks?: unknown; previousProjectTasks?: unknown; projectTasksKey?: readonly string[] } | undefined) => {
       if (context?.previousMyTasks) {
-        queryClient.setQueryData(["/api/tasks/my"], context.previousMyTasks);
+        queryClient.setQueryData(queryKeys.tasks.my, context.previousMyTasks);
       }
       if (context?.previousProjectTasks && context?.projectTasksKey) {
         queryClient.setQueryData(context.projectTasksKey, context.previousProjectTasks);
@@ -934,7 +926,7 @@ export function TaskDetailDrawer({
     <div className="px-4 sm:px-6 py-3 space-y-2">
       <div className="flex items-center justify-between gap-2 flex-wrap">
         <div className="flex items-center gap-2 min-w-0 flex-1">
-          <StatusBadge status={task.status as any} />
+          <StatusBadge status={task.status as "todo" | "in_progress" | "in_review" | "blocked" | "done" | "completed"} />
           {editingTitle ? (
             <Input
               value={title}
@@ -957,7 +949,7 @@ export function TaskDetailDrawer({
               {task.title}
             </h2>
           )}
-          {enableTaskReviewQueue && (task as any).needsPmReview && (
+          {enableTaskReviewQueue && task.needsPmReview && (
             <Badge
               className="bg-yellow-100 text-yellow-800 border-yellow-300 dark:bg-yellow-900/30 dark:text-yellow-400 dark:border-yellow-700 shrink-0"
               data-testid="badge-review-requested"
@@ -965,7 +957,7 @@ export function TaskDetailDrawer({
               Review Requested
             </Badge>
           )}
-          {enableTaskReviewQueue && !(task as any).needsPmReview && (task as any).pmReviewResolvedAt && (
+          {enableTaskReviewQueue && !task.needsPmReview && task.pmReviewResolvedAt && (
             <Badge
               className="bg-green-100 text-green-800 border-green-300 dark:bg-green-900/30 dark:text-green-400 dark:border-green-700 shrink-0"
               data-testid="badge-cleared-review"
@@ -975,7 +967,7 @@ export function TaskDetailDrawer({
           )}
         </div>
         <div className="flex items-center gap-1">
-          {(task as any).visibility === "private" && (
+          {task.visibility === "private" && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Badge variant="outline" className="gap-1 text-xs">
@@ -986,7 +978,7 @@ export function TaskDetailDrawer({
               <TooltipContent>Only you and invited members can see this task</TooltipContent>
             </Tooltip>
           )}
-          {(task as any).visibility === "private" && (
+          {task.visibility === "private" && (
             <Tooltip>
               <TooltipTrigger asChild>
                 <Button variant="ghost" size="icon" onClick={() => setShareModalOpen(true)} data-testid="button-share-task">
@@ -1102,7 +1094,7 @@ export function TaskDetailDrawer({
         </FormFieldWrapper>
 
         <FormFieldWrapper label="Due Date" labelIcon={<Calendar className="h-3.5 w-3.5 text-green-500" />}>
-          <DatePickerWithChips value={task.dueDate ? new Date(task.dueDate) : null} onChange={(date) => onUpdate?.(task.id, { dueDate: date as any })} className="w-full h-8" data-testid="button-due-date" />
+          <DatePickerWithChips value={task.dueDate ? new Date(task.dueDate) : null} onChange={(date) => onUpdate?.(task.id, { dueDate: date as Date | null })} className="w-full h-8" data-testid="button-due-date" />
         </FormFieldWrapper>
 
         <FormFieldWrapper label="Estimate" labelIcon={<Clock className="h-3.5 w-3.5 text-amber-500" />}>
@@ -1358,13 +1350,13 @@ export function TaskDetailDrawer({
       isIncompleting={isReopeningTask}
       extraActions={
         <>
-          {enableTaskReviewQueue && !isClientUser && !(task as any).needsPmReview && (
+          {enableTaskReviewQueue && !isClientUser && !task.needsPmReview && (
             <Button variant="outline" size="default" onClick={() => requestReviewMutation.mutate()} disabled={requestReviewMutation.isPending} className="bg-background hover:bg-muted border-border/60" data-testid="button-request-review">
               {requestReviewMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <SendHorizonal className="h-4 w-4 mr-1.5 text-violet-500" />}
               Send to PM for Review
             </Button>
           )}
-          {enableTaskReviewQueue && (task as any).needsPmReview && canClearReview && (
+          {enableTaskReviewQueue && task.needsPmReview && canClearReview && (
             <>
               <Button variant="outline" size="default" onClick={() => clearReviewMutation.mutate({})} disabled={clearReviewMutation.isPending} className="bg-background hover:bg-muted border-border/60" data-testid="button-clear-review">
                 {clearReviewMutation.isPending ? <Loader2 className="h-4 w-4 mr-1.5 animate-spin" /> : <CheckCircle className="h-4 w-4 mr-1.5 text-cyan-500" />}

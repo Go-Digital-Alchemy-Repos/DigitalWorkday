@@ -1,6 +1,7 @@
 import { useState, useEffect } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
+import { queryKeys } from "@/lib/queryKeys";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { FullScreenDrawer, FullScreenDrawerFooter } from "@/components/ui/full-screen-drawer";
@@ -60,7 +61,7 @@ export function ClientDrawer({
   const [hasChanges, setHasChanges] = useState(false);
 
   const { data: potentialParents } = useQuery<Client[]>({
-    queryKey: ["/api/clients"],
+    queryKey: queryKeys.clients.all,
     enabled: open,
   });
 

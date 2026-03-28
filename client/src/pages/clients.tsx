@@ -2,6 +2,7 @@ import { useState, useMemo, useCallback, useRef, useEffect } from "react";
 import { useLocation } from "wouter";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -933,7 +934,7 @@ function ClientDetailSheet({
   const [, navigate] = useLocation();
 
   const { data: client, isLoading, isError } = useQuery<ClientWithContacts>({
-    queryKey: ["/api/clients", clientId],
+    queryKey: queryKeys.clients.detail(clientId!),
     enabled: open && !!clientId,
   });
 
@@ -1573,7 +1574,7 @@ export default function ClientsPage() {
     error,
     refetch,
   } = useQuery<ClientWithHierarchy[]>({
-    queryKey: ["/api/v1/clients/hierarchy/list"],
+    queryKey: queryKeys.clients.hierarchy,
   });
 
   const summary = useMemo<ClientSummary | undefined>(() => {
@@ -1592,7 +1593,7 @@ export default function ClientsPage() {
   const summaryLoading = isLoading;
 
   const { data: stageSummary, isLoading: stageSummaryLoading } = useQuery<StageSummaryItem[]>({
-    queryKey: ["/api/v1/clients/stages/summary"],
+    queryKey: queryKeys.clients.stagesSummary,
   });
 
 
@@ -1641,14 +1642,12 @@ export default function ClientsPage() {
   }, [industries, allTags]);
 
   const createClientMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: Record<string, unknown>) => {
       return apiRequest("POST", "/api/clients", data);
     },
     onMutate: async (newClient) => {
-      await queryClient.cancelQueries({ queryKey: ["/api/v1/clients/hierarchy/list"] });
-      const previousHierarchyClients = queryClient.getQueryData<ClientWithHierarchy[]>([
-        "/api/v1/clients/hierarchy/list",
-      ]);
+      await queryClient.cancelQueries({ queryKey: queryKeys.clients.hierarchy });
+      const previousHierarchyClients = queryClient.getQueryData<ClientWithHierarchy[]>(queryKeys.clients.hierarchy);
       const optimisticClient = {
         id: `temp-${Date.now()}`,
         companyName: newClient.companyName,
@@ -1687,16 +1686,16 @@ export default function ClientsPage() {
         totalHoursWorked: 0,
       } as ClientWithHierarchy;
       queryClient.setQueryData<ClientWithHierarchy[]>(
-        ["/api/v1/clients/hierarchy/list"],
+        queryKeys.clients.hierarchy,
         (old) => (old ? [optimisticClient, ...old] : [optimisticClient])
       );
       return { previousHierarchyClients };
     },
-    onError: (err: any, _newClient, context) => {
+    onError: (err: Error, _newClient, context) => {
       if (context?.previousHierarchyClients) {
-        queryClient.setQueryData(["/api/v1/clients/hierarchy/list"], context.previousHierarchyClients);
+        queryClient.setQueryData(queryKeys.clients.hierarchy, context.previousHierarchyClients);
       }
-      const errorMessage = err?.message || err?.error || "Unknown error";
+      const errorMessage = err?.message || "Unknown error";
       console.error("Failed to create client:", err);
       toast({
         title: "Failed to create client",
@@ -1712,12 +1711,8 @@ export default function ClientsPage() {
       setCreateDrawerOpen(false);
     },
     onSettled: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/v1/clients/hierarchy/list"],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["/api/v1/clients/stages/summary"],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.hierarchy });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.stagesSummary });
     },
   });
 
@@ -1741,16 +1736,12 @@ export default function ClientsPage() {
       toast({ title: "Failed to update some clients", variant: "destructive" });
     },
     onSettled: () => {
-      queryClient.invalidateQueries({
-        queryKey: ["/api/v1/clients/hierarchy/list"],
-      });
-      queryClient.invalidateQueries({
-        queryKey: ["/api/v1/clients/stages/summary"],
-      });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.hierarchy });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.stagesSummary });
     },
   });
 
-  const handleCreateClient = async (data: any) => {
+  const handleCreateClient = async (data: Record<string, unknown>) => {
     await createClientMutation.mutateAsync(data);
   };
 

@@ -7,6 +7,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { cn } from "@/lib/utils";
 import { apiRequest } from "@/lib/queryClient";
+import { queryKeys, invalidateTaskCaches } from "@/lib/queryKeys";
 
 interface Phase {
   name: string;
@@ -71,7 +72,7 @@ export function AIProjectPlanner({
   const [sectionMap, setSectionMap] = useState<Map<string, string>>(new Map());
 
   const { data: aiStatus } = useQuery<{ enabled: boolean }>({
-    queryKey: ["/api/v1/ai/status"],
+    queryKey: queryKeys.ai.status,
     queryFn: async () => {
       const res = await fetch("/api/v1/ai/status", { credentials: "include" });
       if (!res.ok) return { enabled: false };
@@ -106,7 +107,7 @@ export function AIProjectPlanner({
       setSectionMap(new Map());
       toast({ title: "Project plan generated" });
     },
-    onError: (error: any) => {
+    onError: (error: Error) => {
       toast({ 
         title: "Failed to generate plan", 
         description: error.message,
@@ -121,10 +122,7 @@ export function AIProjectPlanner({
     sections.find(s => s.name.trim().toLowerCase() === name.trim().toLowerCase());
 
   const invalidateCaches = useCallback(() => {
-    queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
+    invalidateTaskCaches(queryClient, { projectId });
   }, [queryClient, projectId]);
 
   const ensureSectionExists = useCallback(async (phaseName: string): Promise<string> => {
@@ -220,12 +218,12 @@ export function AIProjectPlanner({
         setApplyStatus("done");
         toast({ title: "Plan added to project", description: `${plan.phases.length} sections and ${totalTasks} tasks created.` });
       }
-    } catch (error: any) {
+    } catch (error: unknown) {
       setApplyStatus("idle");
       invalidateCaches();
       toast({
         title: "Failed to apply plan",
-        description: error.message || "Section creation failed",
+        description: error instanceof Error ? error.message : "Section creation failed",
         variant: "destructive",
       });
     }
@@ -246,10 +244,10 @@ export function AIProjectPlanner({
       });
       setCreatedTasks(prev => new Set(Array.from(prev).concat(key)));
       invalidateCaches();
-    } catch (error: any) {
+    } catch (error: unknown) {
       toast({
         title: "Failed to add task",
-        description: error.message,
+        description: error instanceof Error ? error.message : "Unknown error",
         variant: "destructive",
       });
     }
@@ -279,8 +277,8 @@ export function AIProjectPlanner({
       }
 
       invalidateCaches();
-    } catch (error: any) {
-      toast({ title: "Failed to create section", description: error.message, variant: "destructive" });
+    } catch (error: unknown) {
+      toast({ title: "Failed to create section", description: error instanceof Error ? error.message : "Unknown error", variant: "destructive" });
     }
   }, [projectId, createdTasks, ensureSectionExists, invalidateCaches, toast]);
 

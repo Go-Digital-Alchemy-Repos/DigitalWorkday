@@ -2,6 +2,8 @@
 
 This document tracks N+1 query optimizations and recommended database indexes for the MyWorkDay application.
 
+> See also: [`sprint-optimization-guide.md`](./sprint-optimization-guide.md) for the comprehensive sprint performance guide covering thin/full payload loading, server-side filtering, deferred analytics, hierarchy caching, centralized query keys, and observability.
+
 ## N+1 Query Optimizations (Completed)
 
 ### Overview
@@ -136,3 +138,12 @@ npm test -- --grep "smoke|tenancy|workload"
 2. **Activity logs**: Could benefit from batch fetches in activity timeline
 3. **Comments/attachments**: Candidate for batch loading in task drawer
 4. **User lookups**: Frequently accessed, could use in-memory caching layer
+
+## Related Documentation
+
+- [`sprint-optimization-guide.md`](./sprint-optimization-guide.md) — Full sprint performance guide (10 topics)
+- [`db-indexes.md`](./db-indexes.md) — Database index strategy
+- [`frontend-bundle.md`](./frontend-bundle.md) — Frontend bundle analysis
+- [`list-virtualization.md`](./list-virtualization.md) — Virtual list rendering
+- [`prefetch.md`](./prefetch.md) — Query prefetching strategy
+- [`telemetry.md`](./telemetry.md) — Telemetry and observability

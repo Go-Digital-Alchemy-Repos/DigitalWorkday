@@ -1,6 +1,7 @@
 import { useState, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { getPreviewText } from "@/components/richtext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -49,6 +50,7 @@ import {
 
 interface ProjectWithCounts extends Project {
   openTaskCount?: number;
+  projectManager?: { id: string; name: string } | null;
 }
 
 interface ProjectAnalyticsSummary {
@@ -115,7 +117,7 @@ export default function ProjectsDashboard() {
   }, [statusFilter, clientFilter, teamFilter, debouncedSearch, currentOffset]);
 
   const { data: projectPage, isLoading: projectsLoading, error: projectsError, isFetching, refetch: refetchProjects } = useQuery<ProjectWithCounts[]>({
-    queryKey: ["/api/projects", queryParams],
+    queryKey: [...queryKeys.projects.all, queryParams],
   });
 
   useEffect(() => {
@@ -144,26 +146,26 @@ export default function ProjectsDashboard() {
   }, []);
 
   const { data: clients } = useQuery<{ id: string; companyName: string; displayName: string | null; status: string | null }[]>({
-    queryKey: ["/api/clients", { fields: "minimal" }],
+    queryKey: queryKeys.clients.minimal,
   });
 
   const { data: teams } = useQuery<Team[]>({
-    queryKey: ["/api/teams"],
+    queryKey: queryKeys.teams.all,
   });
 
   const { data: analytics, isLoading: analyticsLoading } = useQuery<ProjectAnalyticsSummary>({
-    queryKey: ["/api/v1/projects/analytics/summary"],
+    queryKey: queryKeys.projects.analyticsSummary,
     staleTime: 30000,
     enabled: !!projectPage,
   });
 
   const createProjectMutation = useMutation({
-    mutationFn: async (data: any) => {
+    mutationFn: async (data: Record<string, unknown>) => {
       return apiRequest("POST", "/api/projects", data);
     },
     onSuccess: () => {
       resetPagination();
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
       setCreateProjectOpen(false);
       toast({ title: "Project created successfully" });
     },
@@ -172,12 +174,12 @@ export default function ProjectsDashboard() {
     },
   });
 
-  const handleCreateProject = async (data: any) => {
+  const handleCreateProject = async (data: Record<string, unknown>) => {
     await createProjectMutation.mutateAsync(data);
   };
 
   const updateProjectMutation = useMutation({
-    mutationFn: async ({ projectId, data }: { projectId: string; data: any }) => {
+    mutationFn: async ({ projectId, data }: { projectId: string; data: Record<string, unknown> }) => {
       const { memberIds, ...projectData } = data;
       const res = await apiRequest("PATCH", `/api/projects/${projectId}`, projectData);
       const updatedProject = await res.json();
@@ -188,8 +190,8 @@ export default function ProjectsDashboard() {
     },
     onSuccess: ({ projectId }) => {
       resetPagination();
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "members"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.members(projectId) });
       setEditProjectOpen(false);
       setEditingProject(null);
       toast({ title: "Project updated successfully" });
@@ -199,7 +201,7 @@ export default function ProjectsDashboard() {
     },
   });
 
-  const handleUpdateProject = async (data: any) => {
+  const handleUpdateProject = async (data: Record<string, unknown>) => {
     if (!editingProject) return;
     await updateProjectMutation.mutateAsync({ projectId: editingProject.id, data });
   };
@@ -212,7 +214,7 @@ export default function ProjectsDashboard() {
     },
     onSuccess: () => {
       resetPagination();
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
     },
     onError: () => {
       toast({ title: "Failed to update pin status", variant: "destructive" });
@@ -671,8 +673,8 @@ export default function ProjectsDashboard() {
                     <TableCell>{getClientName(project.clientId)}</TableCell>
                     <TableCell>
                       <div className="flex items-center gap-2">
-                        {(project as any).projectManager ? (
-                          <span className="text-sm">{(project as any).projectManager.name}</span>
+                        {project.projectManager ? (
+                          <span className="text-sm">{project.projectManager.name}</span>
                         ) : (
                           <span className="text-xs text-muted-foreground italic">Unassigned</span>
                         )}

@@ -1,7 +1,7 @@
 import { useState, useCallback, useMemo, useEffect } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useRoute, useLocation } from "wouter";
-import { useCreateTask } from "@/hooks/use-create-task";
+import { useCreateTask, type CreateTaskData } from "@/hooks/use-create-task";
 import {
   DndContext,
   DragOverlay,
@@ -92,6 +92,7 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import { RichTextRenderer } from "@/components/richtext";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryKeys, invalidateTaskCaches } from "@/lib/queryKeys";
 import { useProjectSocket } from "@/lib/realtime";
 import { useAuth } from "@/lib/auth";
 import type { Project, SectionWithTasks, TaskWithRelations, Section, ProjectTemplate, ProjectTemplateContent } from "@shared/schema";
@@ -163,28 +164,28 @@ export default function ProjectPage() {
   );
 
   const { data: project, isLoading: projectLoading } = useQuery<Project>({
-    queryKey: ["/api/projects", projectId],
+    queryKey: queryKeys.projects.detail(projectId!),
     enabled: !!projectId,
   });
 
   // Fetch client for breadcrumbs
   const { data: client } = useQuery<Client>({
-    queryKey: ["/api/clients", project?.clientId],
+    queryKey: queryKeys.clients.detail(project?.clientId!),
     enabled: !!project?.clientId,
   });
 
   const { data: sections, isLoading: sectionsLoading } = useQuery<SectionWithTasks[]>({
-    queryKey: ["/api/projects", projectId, "sections"],
+    queryKey: queryKeys.projects.sections(projectId!),
     enabled: !!projectId,
   });
 
   const { data: tasks } = useQuery<TaskWithRelations[]>({
-    queryKey: ["/api/projects", projectId, "tasks"],
+    queryKey: queryKeys.projects.tasks(projectId!),
     enabled: !!projectId,
   });
   
   const { data: tenantUsers = [] } = useQuery<{ id: string; email: string; firstName?: string | null; lastName?: string | null }[]>({
-    queryKey: ["/api/users"],
+    queryKey: queryKeys.users.all,
     enabled: !!projectId,
   });
 
@@ -201,7 +202,7 @@ export default function ProjectPage() {
   const [deepLinkHandled, setDeepLinkHandled] = useState(false);
 
   const { data: linkedTask } = useQuery<TaskWithRelations>({
-    queryKey: ["/api/tasks", urlTaskId],
+    queryKey: queryKeys.tasks.detail(urlTaskId!),
     enabled: !!urlTaskId && !deepLinkHandled && !selectedTask && !!tasks && !tasks.find(t => t.id === urlTaskId),
   });
 
@@ -227,12 +228,10 @@ export default function ProjectPage() {
       return apiRequest("PATCH", `/api/tasks/${taskId}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
-      if (selectedTask) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", selectedTask.id] });
-      }
+      invalidateTaskCaches(queryClient, {
+        projectId,
+        taskId: selectedTask?.id,
+      });
     },
   });
 
@@ -263,7 +262,7 @@ export default function ProjectPage() {
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.timeEntries.all });
     },
   });
 
@@ -272,9 +271,9 @@ export default function ProjectPage() {
       return apiRequest("PATCH", `/api/projects/${projectId}`, { status: "active" });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(projectId!) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.v1 });
       toast({ title: "Project restored", description: "This project is now active again." });
     },
     onError: () => {
@@ -287,7 +286,7 @@ export default function ProjectPage() {
       return apiRequest("PATCH", `/api/sections/${sectionId}`, { name });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId!) });
       toast({ title: "Section updated successfully" });
     },
     onError: () => {
@@ -300,7 +299,7 @@ export default function ProjectPage() {
       return apiRequest("DELETE", `/api/sections/${sectionId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId!) });
       toast({ title: "Section deleted successfully" });
     },
     onError: () => {
@@ -313,7 +312,7 @@ export default function ProjectPage() {
       return apiRequest("DELETE", `/api/sections/${sectionId}/tasks`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId!) });
       toast({ title: "All tasks in section cleared" });
     },
     onError: () => {
@@ -326,7 +325,7 @@ export default function ProjectPage() {
       return apiRequest("PATCH", `/api/projects/${projectId}/tasks/reorder`, { moves });
     },
     onSuccess: async () => {
-      await queryClient.refetchQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      await queryClient.refetchQueries({ queryKey: queryKeys.projects.sections(projectId!) });
       setLocalSections(null);
     },
     onError: () => {
@@ -345,7 +344,7 @@ export default function ProjectPage() {
       return apiRequest("POST", "/api/sections", { projectId, name, orderIndex: nextOrderIndex });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId!) });
       toast({
         title: "Section created",
         description: "New section has been added to the project.",
@@ -361,7 +360,7 @@ export default function ProjectPage() {
   });
 
   const { data: templates = [], isLoading: templatesLoading } = useQuery<ProjectTemplate[]>({
-    queryKey: ["/api/project-templates"],
+    queryKey: queryKeys.projectTemplates.all,
     enabled: templatePopoverOpen,
   });
 
@@ -370,8 +369,8 @@ export default function ProjectPage() {
       return apiRequest("POST", `/api/projects/${projectId}/apply-template`, { templateId });
     },
     onSuccess: (_data, _templateId) => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.sections(projectId!) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.tasks(projectId!) });
       setTemplatePopoverOpen(false);
       toast({
         title: "Template applied",
@@ -509,14 +508,14 @@ export default function ProjectPage() {
     setCreateTaskOpen(true);
   };
 
-  const handleCreateTask = async (data: any) => {
+  const handleCreateTask = async (data: Record<string, unknown>) => {
     const { tagIds, subtaskTitles, queuedFiles, ...taskData } = data;
     return new Promise<void>((resolve, reject) => {
-      createTaskMutation.mutate({ ...taskData, projectId: projectId! }, {
-        onSuccess: async (createdTask: any) => {
+      createTaskMutation.mutate({ ...taskData, projectId: projectId! } as CreateTaskData, {
+        onSuccess: async (createdTask: TaskWithRelations) => {
           toast({ title: "Task created successfully" });
 
-          const postOps: Promise<any>[] = [];
+          const postOps: Promise<unknown>[] = [];
 
           if (tagIds && tagIds.length > 0) {
             for (const tagId of tagIds) {
@@ -556,8 +555,8 @@ export default function ProjectPage() {
 
           if (postOps.length > 0) {
             await Promise.allSettled(postOps);
-            queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
-            queryClient.invalidateQueries({ queryKey: ["/api/tasks", createdTask.id] });
+            queryClient.invalidateQueries({ queryKey: queryKeys.projects.tasks(projectId!) });
+            queryClient.invalidateQueries({ queryKey: queryKeys.tasks.detail(createdTask.id) });
           }
 
           resolve();

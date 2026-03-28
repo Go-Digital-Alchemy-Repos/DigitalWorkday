@@ -2,6 +2,8 @@ import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { apiRequest } from "@/lib/queryClient";
 import { useToast } from "@/hooks/use-toast";
 import { formatErrorForToast } from "@/lib/parseApiError";
+import { queryKeys, invalidateTaskCaches } from "@/lib/queryKeys";
+import type { TaskWithRelations } from "@shared/schema";
 
 export interface CreateTaskData {
   title: string;
@@ -37,35 +39,8 @@ export interface CreateSubtaskData {
   title: string;
 }
 
-function invalidateAllTaskCaches(
-  queryClient: ReturnType<typeof useQueryClient>,
-  projectId?: string | null,
-  parentTaskId?: string | null
-) {
-  queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
-  queryClient.invalidateQueries({ queryKey: ["/api/tasks"] });
-  
-  if (projectId) {
-    queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "sections"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/projects", projectId, "tasks"] });
-  }
-  
-  if (parentTaskId) {
-    queryClient.invalidateQueries({ queryKey: ["/api/tasks", parentTaskId] });
-    queryClient.invalidateQueries({ queryKey: ["/api/tasks", parentTaskId, "childtasks"] });
-    queryClient.invalidateQueries({ queryKey: ["/api/tasks", parentTaskId, "subtasks"] });
-  }
-  
-  queryClient.invalidateQueries({ 
-    predicate: (query) => {
-      const key = query.queryKey;
-      return Array.isArray(key) && key[0] === "/api/projects" && key[2] === "sections";
-    }
-  });
-}
-
 export function useCreateTask(options?: { 
-  onSuccess?: (task: any) => void;
+  onSuccess?: (task: TaskWithRelations) => void;
   onError?: (error: Error) => void;
 }) {
   const queryClient = useQueryClient();
@@ -77,7 +52,7 @@ export function useCreateTask(options?: {
       return response.json();
     },
     onMutate: async (data) => {
-      const myTasksKey = ["/api/tasks/my"];
+      const myTasksKey = queryKeys.tasks.my;
       await queryClient.cancelQueries({ queryKey: myTasksKey });
       const previousMyTasks = queryClient.getQueryData(myTasksKey);
       const optimisticTask = {
@@ -95,12 +70,12 @@ export function useCreateTask(options?: {
         tags: [],
         subtasks: [],
       };
-      queryClient.setQueryData<any[]>(myTasksKey, (old = []) => [optimisticTask, ...old]);
+      queryClient.setQueryData<Record<string, unknown>[]>(myTasksKey, (old = []) => [optimisticTask, ...old]);
       return { previousMyTasks };
     },
-    onError: (error: Error, _data, context: any) => {
+    onError: (error: Error, _data, context: { previousMyTasks?: unknown } | undefined) => {
       if (context?.previousMyTasks) {
-        queryClient.setQueryData(["/api/tasks/my"], context.previousMyTasks);
+        queryClient.setQueryData(queryKeys.tasks.my, context.previousMyTasks);
       }
       const { title, description } = formatErrorForToast(error);
       toast({
@@ -111,7 +86,7 @@ export function useCreateTask(options?: {
       options?.onError?.(error);
     },
     onSettled: (_data, _error, variables) => {
-      invalidateAllTaskCaches(queryClient, variables.projectId);
+      invalidateTaskCaches(queryClient, { projectId: variables.projectId, includeProjectLists: true });
     },
     onSuccess: (task) => {
       options?.onSuccess?.(task);
@@ -120,7 +95,7 @@ export function useCreateTask(options?: {
 }
 
 export function useCreatePersonalTask(options?: { 
-  onSuccess?: (task: any) => void;
+  onSuccess?: (task: TaskWithRelations) => void;
   onError?: (error: Error) => void;
 }) {
   const queryClient = useQueryClient();
@@ -132,7 +107,7 @@ export function useCreatePersonalTask(options?: {
       return response.json();
     },
     onSuccess: (task) => {
-      invalidateAllTaskCaches(queryClient, null);
+      invalidateTaskCaches(queryClient);
       options?.onSuccess?.(task);
     },
     onError: (error: Error) => {
@@ -149,7 +124,7 @@ export function useCreatePersonalTask(options?: {
 
 export function useCreateChildTask(options?: { 
   projectId?: string;
-  onSuccess?: (task: any) => void;
+  onSuccess?: (task: TaskWithRelations) => void;
   onError?: (error: Error) => void;
 }) {
   const queryClient = useQueryClient();
@@ -164,12 +139,10 @@ export function useCreateChildTask(options?: {
       return response.json();
     },
     onSuccess: (task) => {
-      invalidateAllTaskCaches(queryClient, options?.projectId || task.projectId);
-      
-      if (task.parentTaskId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.parentTaskId, "childtasks"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", task.parentTaskId] });
-      }
+      invalidateTaskCaches(queryClient, {
+        projectId: options?.projectId || task.projectId,
+        parentTaskId: task.parentTaskId,
+      });
       options?.onSuccess?.(task);
     },
     onError: (error: Error) => {
@@ -186,7 +159,7 @@ export function useCreateChildTask(options?: {
 
 export function useCreateSubtask(options?: { 
   projectId?: string;
-  onSuccess?: (subtask: any) => void;
+  onSuccess?: (subtask: Record<string, unknown>) => void;
   onError?: (error: Error) => void;
 }) {
   const queryClient = useQueryClient();
@@ -198,7 +171,10 @@ export function useCreateSubtask(options?: {
       return response.json();
     },
     onSuccess: (subtask, variables) => {
-      invalidateAllTaskCaches(queryClient, options?.projectId || subtask.projectId, variables.taskId);
+      invalidateTaskCaches(queryClient, {
+        projectId: options?.projectId || subtask.projectId,
+        parentTaskId: variables.taskId,
+      });
       options?.onSuccess?.(subtask);
     },
     onError: (error: Error) => {

@@ -2,6 +2,7 @@ import { useState, useRef, useMemo, useEffect, useCallback } from "react";
 import { useQuery, useMutation } from "@tanstack/react-query";
 import { useCreatePersonalTask, useCreateSubtask } from "@/hooks/use-create-task";
 import { useDebounce } from "@/hooks/use-debounce";
+import { queryKeys } from "@/lib/queryKeys";
 
 const MY_TASKS_FILTERS_KEY = "my-tasks-filters";
 const MY_TASKS_ORDERS_KEY = "my-tasks-section-orders";
@@ -113,7 +114,7 @@ import { UserRole } from "@shared/schema";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { Virtuoso } from "react-virtuoso";
 
-type MyTaskItem = TaskListItem | TaskWithRelations;
+type MyTaskItem = TaskListItem;
 
 type TaskSection = {
   id: string;
@@ -368,24 +369,24 @@ function computeDashboardStats(tasks: MyTaskItem[]): DashboardStats {
   const overdueTasks = tasks.filter(t => t.dueDate && isPast(new Date(t.dueDate)) && !isToday(new Date(t.dueDate)) && t.status !== "done");
   const inProgressTasks = tasks.filter(t => t.status === "in_progress");
   const completedThisWeek = tasks.filter(t => {
-    const updatedAt = (t as any).updatedAt;
+    const updatedAt = t.updatedAt;
     return t.status === "done" && updatedAt && new Date(updatedAt) >= weekAgo;
   });
   
   const recentlyAdded = tasks
     .filter(t => {
-      const createdAt = (t as any).createdAt;
+      const createdAt = t.createdAt;
       return createdAt && new Date(createdAt) >= weekAgo && t.status !== "done";
     })
-    .sort((a, b) => new Date((b as any).createdAt).getTime() - new Date((a as any).createdAt).getTime())
+    .sort((a, b) => new Date(b.createdAt!).getTime() - new Date(a.createdAt!).getTime())
     .slice(0, 5);
   
   const recentlyCompleted = tasks
     .filter(t => {
-      const updatedAt = (t as any).updatedAt;
+      const updatedAt = t.updatedAt;
       return t.status === "done" && updatedAt && new Date(updatedAt) >= weekAgo;
     })
-    .sort((a, b) => new Date((b as any).updatedAt).getTime() - new Date((a as any).updatedAt).getTime())
+    .sort((a, b) => new Date(b.updatedAt!).getTime() - new Date(a.updatedAt!).getTime())
     .slice(0, 5);
   
   const totalTasks = tasks.length;
@@ -473,7 +474,7 @@ export default function MyTasks() {
   }, [serverQueryParams]);
 
   const { data: taskListResponse, isLoading } = useQuery<TaskListResponse>({
-    queryKey: ["/api/tasks/my", serverQueryParams],
+    queryKey: [...queryKeys.tasks.my, serverQueryParams],
     queryFn: async () => {
       const res = await fetch(`/api/tasks/my?${queryString}`);
       if (!res.ok) throw new Error("Failed to fetch tasks");
@@ -486,7 +487,7 @@ export default function MyTasks() {
   const pagination = taskListResponse?.pagination;
 
   const { data: pendingTaskTimeEntries = [] } = useQuery<TimeEntry[]>({
-    queryKey: ["/api/tasks", pendingCompleteTask?.id, "time-entries"],
+    queryKey: queryKeys.tasks.timeEntries(pendingCompleteTask?.id!),
     enabled: !!pendingCompleteTask,
   });
 
@@ -498,7 +499,7 @@ export default function MyTasks() {
 
   // Fetch individual task for deep linking if not in the main tasks list
   const { data: linkedTask } = useQuery<TaskWithRelations>({
-    queryKey: ["/api/tasks", urlTaskId],
+    queryKey: queryKeys.tasks.detail(urlTaskId!),
     enabled: !!urlTaskId && !selectedTask && !!taskListResponse && !tasks.find(t => t.id === urlTaskId),
   });
 
@@ -537,11 +538,11 @@ export default function MyTasks() {
   }, []);
 
   const { data: currentWorkspace } = useQuery<Workspace>({
-    queryKey: ["/api/workspaces/current"],
+    queryKey: queryKeys.workspaces.current,
   });
 
   const { data: tenantUsers } = useQuery<UserType[]>({
-    queryKey: ["/api/users"],
+    queryKey: queryKeys.users.all,
   });
 
   const createPersonalTaskMutation = useCreatePersonalTask({
@@ -555,7 +556,7 @@ export default function MyTasks() {
       return apiRequest("PATCH", `/api/tasks/${taskId}`, data);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.my });
       if (selectedTask) {
         refetchSelectedTask();
       }
@@ -575,7 +576,7 @@ export default function MyTasks() {
       return apiRequest("DELETE", `/api/subtasks/${subtaskId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/tasks/my"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.tasks.my });
       if (selectedTask) {
         refetchSelectedTask();
       }

@@ -4,6 +4,7 @@ import { useForm } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { z } from "zod";
 import { queryClient, apiRequest } from "@/lib/queryClient";
+import { queryKeys } from "@/lib/queryKeys";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
@@ -98,15 +99,15 @@ export function ProjectSettingsSheet({
   const [clientSearch, setClientSearch] = useState("");
 
   const { data: clients = [] } = useQuery<ClientWithContacts[]>({
-    queryKey: ["/api/clients"],
+    queryKey: queryKeys.clients.all,
   });
 
   const { data: teams = [] } = useQuery<Team[]>({
-    queryKey: ["/api/teams"],
+    queryKey: queryKeys.teams.all,
   });
 
   const { data: tenantUsers = [] } = useQuery<TenantUser[]>({
-    queryKey: ["/api/users"],
+    queryKey: queryKeys.users.all,
     enabled: open && canChangeProjectManager,
   });
 
@@ -133,7 +134,7 @@ export function ProjectSettingsSheet({
       teamId: project.teamId || "",
       color: project.color || "#3B82F6",
       visibility: (project.visibility as "workspace" | "private") || "workspace",
-      projectManagerId: (project as any).projectManagerId || "",
+      projectManagerId: project.projectManagerId || "",
     },
   });
 
@@ -145,7 +146,7 @@ export function ProjectSettingsSheet({
         teamId: project.teamId || "",
         color: project.color || "#3B82F6",
         visibility: (project.visibility as "workspace" | "private") || "workspace",
-        projectManagerId: (project as any).projectManagerId || "",
+        projectManagerId: project.projectManagerId || "",
       });
       setClientSearch("");
     }
@@ -165,24 +166,24 @@ export function ProjectSettingsSheet({
       return await res.json();
     },
     onSuccess: (updatedProject) => {
-      queryClient.setQueryData<Project[]>(["/api/projects"], (old) => {
+      queryClient.setQueryData<Project[]>(queryKeys.projects.all, (old) => {
         if (!old) return old;
         return old.map((p) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
-      queryClient.setQueryData<Project>(["/api/projects", project.id], (old) =>
+      queryClient.setQueryData<Project>(queryKeys.projects.detail(project.id), (old) =>
         old ? { ...old, ...updatedProject } : old,
       );
-      queryClient.setQueryData<any[]>(["/api/v1/projects", { includeCounts: true }], (old) => {
+      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.projects.v1WithCounts, (old) => {
         if (!old) return old;
-        return old.map((p: any) =>
+        return old.map((p: Record<string, unknown>) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.v1 });
       toast({
         title: "Project updated",
         description: "Project details have been saved.",
@@ -202,9 +203,9 @@ export function ProjectSettingsSheet({
       return apiRequest("PATCH", `/api/projects/${project.id}/client`, { clientId });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/clients"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.clients.all });
       toast({
         title: "Client updated",
         description: "Project client assignment has been updated.",
@@ -225,21 +226,21 @@ export function ProjectSettingsSheet({
       return await res.json();
     },
     onSuccess: (updatedProject, status) => {
-      queryClient.setQueryData<Project[]>(["/api/projects"], (old) => {
+      queryClient.setQueryData<Project[]>(queryKeys.projects.all, (old) => {
         if (!old) return old;
         return old.map((p) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
-      queryClient.setQueryData<any[]>(["/api/v1/projects", { includeCounts: true }], (old) => {
+      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.projects.v1WithCounts, (old) => {
         if (!old) return old;
-        return old.map((p: any) =>
+        return old.map((p: Record<string, unknown>) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects", project.id] });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.detail(project.id) });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.v1 });
       toast({
         title: status === "archived" ? "Project archived" : "Project restored",
         description: status === "archived" 
@@ -264,23 +265,23 @@ export function ProjectSettingsSheet({
       return await res.json();
     },
     onSuccess: (updatedProject) => {
-      queryClient.setQueryData<Project[]>(["/api/projects"], (old) => {
+      queryClient.setQueryData<Project[]>(queryKeys.projects.all, (old) => {
         if (!old) return old;
         return old.map((p) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
-      queryClient.setQueryData<Project>(["/api/projects", project.id], (old) =>
+      queryClient.setQueryData<Project>(queryKeys.projects.detail(project.id), (old) =>
         old ? { ...old, ...updatedProject } : old,
       );
-      queryClient.setQueryData<any[]>(["/api/v1/projects", { includeCounts: true }], (old) => {
+      queryClient.setQueryData<Record<string, unknown>[]>(queryKeys.projects.v1WithCounts, (old) => {
         if (!old) return old;
-        return old.map((p: any) =>
+        return old.map((p: Record<string, unknown>) =>
           p.id === project.id ? { ...p, ...updatedProject } : p,
         );
       });
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.v1 });
       toast({
         title: updatedProject.stickyAt ? "Project pinned" : "Project unpinned",
         description: updatedProject.stickyAt
@@ -303,8 +304,8 @@ export function ProjectSettingsSheet({
       return apiRequest("DELETE", `/api/projects/${project.id}/members/${user.userId}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: [`/api/projects/${project.id}/members`] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.members(project.id) });
       toast({
         title: "Left project",
         description: "You have been removed from this project. An admin or team member can add you back.",
@@ -325,8 +326,8 @@ export function ProjectSettingsSheet({
       return apiRequest("DELETE", `/api/projects/${project.id}`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/v1/projects"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.v1 });
       toast({
         title: "Project deleted",
         description: `"${project.name}" has been permanently deleted.`,
@@ -348,7 +349,7 @@ export function ProjectSettingsSheet({
       return apiRequest("DELETE", `/api/projects/${project.id}/hide`);
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/projects"] });
+      queryClient.invalidateQueries({ queryKey: queryKeys.projects.all });
     },
     onError: () => {
       toast({
