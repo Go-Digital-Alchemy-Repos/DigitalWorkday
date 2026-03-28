@@ -22,6 +22,9 @@ import {
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Label } from "@/components/ui/label";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { S3Dropzone } from "@/components/common/S3Dropzone";
+import { getStorageUrl } from "@/lib/storageUrl";
 import type { User, Team, Client } from "@shared/schema";
 import { useAuth } from "@/lib/auth";
 
@@ -43,7 +46,7 @@ type UserFormData = z.infer<typeof userSchema>;
 interface UserDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: UserFormData) => Promise<void>;
+  onSubmit: (data: UserFormData & { avatarUrl?: string | null }) => Promise<void>;
   user?: User | null;
   isLoading?: boolean;
   mode: "create" | "edit";
@@ -68,11 +71,14 @@ export function UserDrawer({
   const [hasChanges, setHasChanges] = useState(false);
   const prevOpenRef = useRef(false);
   const { user: currentUser } = useAuth();
+  const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string | null | undefined>(undefined);
+  const [avatarChanged, setAvatarChanged] = useState(false);
 
   const currentUserRole = (currentUser as any)?.role;
   const isSuperUser = currentUserRole === "super_user";
   const isTenantOwner = currentUserRole === "tenant_owner";
   const canManageProjectManager = isTenantOwner || isSuperUser;
+  const canManageAvatar = isSuperUser || isTenantOwner;
 
   const form = useForm<UserFormData>({
     resolver: zodResolver(userSchema),
@@ -102,6 +108,8 @@ export function UserDrawer({
     prevOpenRef.current = open;
 
     if (open && !wasOpen) {
+      setPendingAvatarUrl(undefined);
+      setAvatarChanged(false);
       if (user && mode === "edit") {
         form.reset({
           firstName: user.firstName || "",
@@ -135,15 +143,40 @@ export function UserDrawer({
 
   useEffect(() => {
     const subscription = form.watch(() => {
-      setHasChanges(form.formState.isDirty);
+      setHasChanges(form.formState.isDirty || avatarChanged);
     });
     return () => subscription.unsubscribe();
-  }, [form]);
+  }, [form, avatarChanged]);
+
+  const rawAvatarUrl = pendingAvatarUrl !== undefined ? pendingAvatarUrl : user?.avatarUrl;
+  const displayAvatarUrl = getStorageUrl(rawAvatarUrl);
+
+  const userInitials = user
+    ? `${(user.firstName || "").charAt(0)}${(user.lastName || "").charAt(0)}`.toUpperCase() || user.email.charAt(0).toUpperCase()
+    : "";
+
+  const handleAvatarUploaded = (fileUrl: string) => {
+    setPendingAvatarUrl(fileUrl);
+    setAvatarChanged(true);
+    setHasChanges(true);
+  };
+
+  const handleAvatarRemove = () => {
+    setPendingAvatarUrl(null);
+    setAvatarChanged(true);
+    setHasChanges(true);
+  };
 
   const handleSubmit = async (data: UserFormData) => {
     try {
-      await onSubmit(data);
+      const submitData: UserFormData & { avatarUrl?: string | null } = { ...data };
+      if (avatarChanged) {
+        submitData.avatarUrl = pendingAvatarUrl !== undefined ? pendingAvatarUrl : undefined;
+      }
+      await onSubmit(submitData);
       form.reset();
+      setPendingAvatarUrl(undefined);
+      setAvatarChanged(false);
       setHasChanges(false);
       onOpenChange(false);
     } catch (error) {
@@ -153,6 +186,8 @@ export function UserDrawer({
 
   const handleClose = () => {
     form.reset();
+    setPendingAvatarUrl(undefined);
+    setAvatarChanged(false);
     setHasChanges(false);
     onOpenChange(false);
   };
@@ -181,6 +216,34 @@ export function UserDrawer({
     >
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+          {mode === "edit" && user && (
+            <div className="flex items-start gap-6 pb-2" data-testid="section-user-avatar">
+              <div className="flex-shrink-0">
+                <Avatar className="h-20 w-20" data-testid="avatar-user-preview">
+                  <AvatarImage src={displayAvatarUrl || undefined} alt={`${user.firstName} ${user.lastName}`} />
+                  <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+                    {userInitials}
+                  </AvatarFallback>
+                </Avatar>
+              </div>
+              {canManageAvatar && (
+                <div className="flex-1 w-full max-w-xs" data-testid="container-avatar-dropzone">
+                  <S3Dropzone
+                    category="user-avatar"
+                    label="Profile Picture"
+                    description="PNG, JPG, WebP or GIF. Max 2MB."
+                    valueUrl={displayAvatarUrl}
+                    onUploaded={handleAvatarUploaded}
+                    onRemoved={handleAvatarRemove}
+                    enableCropping
+                    cropShape="round"
+                    cropAspectRatio={1}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField
               control={form.control}

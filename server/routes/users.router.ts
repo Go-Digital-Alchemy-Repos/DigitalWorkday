@@ -360,6 +360,14 @@ router.patch("/users/:id", requireAdmin, async (req, res) => {
       }
     }
 
+    // Only super_user or tenant_owner can update another user's avatarUrl
+    if ("avatarUrl" in updates) {
+      const isSelf = currentUser?.id === id;
+      if (!isSelf && !isSuperUser && !isTenantOwner) {
+        return res.status(403).json({ error: "Only Super Admins or Tenant Owners can update another user's avatar." });
+      }
+    }
+
     const user = await storage.updateUser(id, updates);
     if (!user) throw AppError.notFound("User");
     res.json(user);
