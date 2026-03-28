@@ -21,6 +21,7 @@ import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { cn } from "@/lib/utils";
 import { TenantIntelligencePanel } from "@/components/super-admin/tenant-intelligence-panel";
+import { TeamLocationMap } from "@/components/super-admin/team-location-map";
 
 const ReportsPage = lazy(() => import("@/pages/reports"));
 const SuperAdminPlatformReports = lazy(() => import("@/pages/super-admin-platform-reports"));
@@ -217,6 +218,9 @@ export default function SuperAdminReportsPage() {
           {selectedTenantId && selectedTenant ? (
             <>
               <TenantIntelligencePanel tenantId={selectedTenantId} allTenants={tenants} />
+              <div className="px-4 sm:px-6 py-3">
+                <TeamLocationMap tenantId={selectedTenantId} />
+              </div>
               <Suspense fallback={<PageSkeleton />}>
                 <ReportsPage key={selectedTenantId} />
               </Suspense>

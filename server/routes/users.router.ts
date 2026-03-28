@@ -1022,4 +1022,79 @@ router.post("/v1/me/agreement/accept", requireAuth, async (req, res) => {
   }
 });
 
+router.post("/v1/me/location", async (req, res) => {
+  try {
+    const user = req.user as any;
+    if (!user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const { lat, lng } = req.body;
+
+    if (lat === null && lng === null) {
+      await db.update(users)
+        .set({
+          locationLat: null,
+          locationLng: null,
+          locationUpdatedAt: null,
+          updatedAt: new Date(),
+        })
+        .where(eq(users.id, user.id));
+      return res.json({ ok: true, message: "Location cleared" });
+    }
+
+    const latitude = parseFloat(lat);
+    const longitude = parseFloat(lng);
+
+    if (isNaN(latitude) || isNaN(longitude)) {
+      return res.status(400).json({ error: "Invalid coordinates" });
+    }
+    if (latitude < -90 || latitude > 90) {
+      return res.status(400).json({ error: "Latitude must be between -90 and 90" });
+    }
+    if (longitude < -180 || longitude > 180) {
+      return res.status(400).json({ error: "Longitude must be between -180 and 180" });
+    }
+
+    await db.update(users)
+      .set({
+        locationLat: latitude.toString(),
+        locationLng: longitude.toString(),
+        locationUpdatedAt: new Date(),
+        updatedAt: new Date(),
+      })
+      .where(eq(users.id, user.id));
+
+    res.json({ ok: true, lat: latitude, lng: longitude });
+  } catch (error) {
+    return handleRouteError(res, error, "POST /api/v1/me/location", req);
+  }
+});
+
+router.get("/v1/me/location", async (req, res) => {
+  try {
+    const user = req.user as any;
+    if (!user?.id) {
+      return res.status(401).json({ error: "Unauthorized" });
+    }
+
+    const [row] = await db.select({
+      locationLat: users.locationLat,
+      locationLng: users.locationLng,
+      locationUpdatedAt: users.locationUpdatedAt,
+    })
+    .from(users)
+    .where(eq(users.id, user.id))
+    .limit(1);
+
+    res.json({
+      lat: row?.locationLat ? parseFloat(row.locationLat) : null,
+      lng: row?.locationLng ? parseFloat(row.locationLng) : null,
+      updatedAt: row?.locationUpdatedAt || null,
+    });
+  } catch (error) {
+    return handleRouteError(res, error, "GET /api/v1/me/location", req);
+  }
+});
+
 export default router;

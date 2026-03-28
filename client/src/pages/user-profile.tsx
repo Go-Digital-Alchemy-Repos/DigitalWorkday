@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { useMutation } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { useAuth } from "@/lib/auth";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -11,7 +11,7 @@ import { Badge } from "@/components/ui/badge";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { useToast } from "@/hooks/use-toast";
 import { S3Dropzone } from "@/components/common/S3Dropzone";
-import { User, Mail, Shield, Users, Save, Loader2, ArrowLeft, Key, Eye, EyeOff, Sun, Moon, Palette, Check } from "lucide-react";
+import { User, Mail, Shield, Users, Save, Loader2, ArrowLeft, Key, Eye, EyeOff, Sun, Moon, Palette, Check, MapPin, MapPinOff } from "lucide-react";
 import { useLocation } from "wouter";
 import { useTheme } from "@/lib/theme-provider";
 import { type ThemePack } from "@/theme/themePacks";
@@ -387,10 +387,146 @@ export default function UserProfilePage() {
             </Card>
           </form>
 
+          {user?.role !== 'client' && user?.role !== 'client_viewer' && user?.role !== 'client_collaborator' && (
+            <LocationSharingCard />
+          )}
+
           <AppearanceCard />
         </div>
       </div>
     </ScrollArea>
+  );
+}
+
+function LocationSharingCard() {
+  const { toast } = useToast();
+  const [requesting, setRequesting] = useState(false);
+
+  const { data: locationData, isLoading: locationLoading } = useQuery<{
+    lat: number | null;
+    lng: number | null;
+    updatedAt: string | null;
+  }>({
+    queryKey: ["/api/v1/me/location"],
+  });
+
+  const updateLocationMutation = useMutation({
+    mutationFn: async (coords: { lat: number; lng: number } | { lat: null; lng: null }) => {
+      return apiRequest("POST", "/api/v1/me/location", coords);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ["/api/v1/me/location"] });
+    },
+  });
+
+  const hasLocation = locationData?.lat != null && locationData?.lng != null;
+
+  const handleShareLocation = () => {
+    if (!navigator.geolocation) {
+      toast({ title: "Geolocation not supported", description: "Your browser does not support location services.", variant: "destructive" });
+      return;
+    }
+    setRequesting(true);
+    navigator.geolocation.getCurrentPosition(
+      (position) => {
+        setRequesting(false);
+        updateLocationMutation.mutate(
+          { lat: position.coords.latitude, lng: position.coords.longitude },
+          {
+            onSuccess: () => toast({ title: "Location shared successfully" }),
+            onError: () => toast({ title: "Failed to save location", variant: "destructive" }),
+          }
+        );
+      },
+      (error) => {
+        setRequesting(false);
+        let msg = "Unable to retrieve your location.";
+        if (error.code === error.PERMISSION_DENIED) msg = "Location permission denied. Please allow location access in your browser settings.";
+        toast({ title: "Location error", description: msg, variant: "destructive" });
+      },
+      { enableHighAccuracy: false, timeout: 10000, maximumAge: 300000 }
+    );
+  };
+
+  const handleRevokeLocation = () => {
+    updateLocationMutation.mutate(
+      { lat: null, lng: null },
+      {
+        onSuccess: () => toast({ title: "Location removed" }),
+        onError: () => toast({ title: "Failed to remove location", variant: "destructive" }),
+      }
+    );
+  };
+
+  return (
+    <Card data-testid="card-location-sharing">
+      <CardHeader>
+        <CardTitle className="text-lg flex items-center gap-2">
+          <MapPin className="h-5 w-5" />
+          Location Sharing
+        </CardTitle>
+        <CardDescription>
+          Optionally share your location with your organization. Your location is only visible to platform administrators and is never shared externally.
+        </CardDescription>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        {locationLoading ? (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> Loading...
+          </div>
+        ) : hasLocation ? (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 p-3 rounded-lg bg-green-50 dark:bg-green-900/20 border border-green-200 dark:border-green-800">
+              <MapPin className="h-4 w-4 text-green-600 dark:text-green-400" />
+              <div className="flex-1">
+                <p className="text-sm font-medium text-green-700 dark:text-green-400" data-testid="text-location-status">Location shared</p>
+                <p className="text-xs text-green-600/70 dark:text-green-400/70">
+                  Last updated: {locationData?.updatedAt ? new Date(locationData.updatedAt).toLocaleString() : "Unknown"}
+                </p>
+              </div>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={handleShareLocation}
+                disabled={requesting || updateLocationMutation.isPending}
+                data-testid="button-update-location"
+              >
+                {requesting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <MapPin className="h-4 w-4 mr-1" />}
+                Update Location
+              </Button>
+              <Button
+                variant="ghost"
+                size="sm"
+                onClick={handleRevokeLocation}
+                disabled={updateLocationMutation.isPending}
+                data-testid="button-revoke-location"
+              >
+                <MapPinOff className="h-4 w-4 mr-1" />
+                Stop Sharing
+              </Button>
+            </div>
+          </div>
+        ) : (
+          <div className="space-y-3">
+            <p className="text-sm text-muted-foreground" data-testid="text-location-not-shared">
+              You have not shared your location. Sharing is completely optional and you can revoke it at any time.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={handleShareLocation}
+              disabled={requesting || updateLocationMutation.isPending}
+              data-testid="button-share-location"
+            >
+              {requesting ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <MapPin className="h-4 w-4 mr-1" />}
+              Share My Location
+            </Button>
+          </div>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 

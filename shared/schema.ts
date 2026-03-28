@@ -541,6 +541,9 @@ export const users = pgTable("users", {
   billableRate: numeric("billable_rate").notNull().default("0"),
   googleId: text("google_id").unique(),
   mustChangePasswordOnNextLogin: boolean("must_change_password_on_next_login").notNull().default(false),
+  locationLat: numeric("location_lat"),
+  locationLng: numeric("location_lng"),
+  locationUpdatedAt: timestamp("location_updated_at"),
   createdAt: timestamp("created_at").defaultNow().notNull(),
   updatedAt: timestamp("updated_at").defaultNow().notNull(),
 }, (table) => [

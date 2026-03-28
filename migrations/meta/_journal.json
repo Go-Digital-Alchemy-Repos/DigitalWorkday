@@ -344,6 +344,13 @@
       "when": 1774625290320,
       "tag": "0048_naive_fat_cobra",
       "breakpoints": true
+    },
+    {
+      "idx": 49,
+      "version": "7",
+      "when": 1774670704862,
+      "tag": "0049_lying_tarantula",
+      "breakpoints": true
     }
   ]
 }
