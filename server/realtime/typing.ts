@@ -10,7 +10,9 @@
  * - Tenant-scoped and membership-validated
  */
 
-import { log } from "../lib/log";
+import { createLogger } from "../lib/logger";
+
+const typingLog = createLogger("typing");
 
 const TYPING_EXPIRY_MS = 5000; // 5 seconds
 
@@ -210,7 +212,7 @@ export function startTypingCleanup(): void {
     }
   }, 1000);
 
-  log("[typing] Started typing cleanup interval", "typing");
+  typingLog.debug("Started typing cleanup interval");
 }
 
 /**
@@ -220,7 +222,7 @@ export function stopTypingCleanup(): void {
   if (cleanupInterval) {
     clearInterval(cleanupInterval);
     cleanupInterval = null;
-    log("[typing] Stopped typing cleanup interval", "typing");
+    typingLog.debug("Stopped typing cleanup interval");
   }
 }
 

@@ -236,8 +236,8 @@ app.use(apiJsonResponseGuard);
 // Payload size guard - warns on oversized API responses (gated by ENABLE_PAYLOAD_GUARDS)
 app.use(payloadGuardMiddleware);
 
-import { log } from "./lib/log";
-export { log };
+import { createLogger } from "./lib/logger";
+const log = createLogger("express");
 
 // Client performance telemetry endpoint (sampled, no PII)
 app.post("/api/v1/system/perf", (req, res) => {
@@ -432,7 +432,7 @@ app.use((req, res, next) => {
         logLine += ` :: ${JSON.stringify(capturedJsonResponse)}`;
       }
 
-      log(logLine);
+      log.info(logLine);
     }
   });
 

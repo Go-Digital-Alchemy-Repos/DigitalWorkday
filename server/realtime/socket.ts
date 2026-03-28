@@ -29,7 +29,6 @@ import {
   ChatTypingUpdatePayload
 } from '@shared/events';
 import { randomUUID } from 'crypto';
-import { log } from '../lib/log';
 import { createLogger } from '../lib/logger';
 import { getSessionMiddleware } from '../auth';
 
@@ -116,7 +115,7 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
   // Handle new client connections
   io.on('connection', (socket: Socket<ClientToServerEvents, ServerToClientEvents>) => {
     const authSocket = socket as AuthenticatedSocket;
-    log(`Client connected: ${socket.id} (userId: ${authSocket.userId || 'anonymous'})`, 'socket.io');
+    socketLog.debug(`Client connected: ${socket.id} (userId: ${authSocket.userId || 'anonymous'})`);
     
     chatDebugStore.logEvent({
       eventType: authSocket.userId ? 'socket_connected' : 'auth_session_missing',
@@ -138,14 +137,14 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
     if (authSocket.userId) {
       const userRoom = `user:${authSocket.userId}`;
       socket.join(userRoom);
-      log(`Client ${socket.id} joined personal room: ${userRoom}`, 'socket.io');
+      socketLog.debug(`Client ${socket.id} joined personal room: ${userRoom}`);
     }
 
     // Join tenant room for presence updates and tenant-wide broadcasts
     if (authSocket.tenantId) {
       const tenantRoom = `tenant:${authSocket.tenantId}`;
       socket.join(tenantRoom);
-      log(`Client ${socket.id} joined tenant room: ${tenantRoom}`, 'socket.io');
+      socketLog.debug(`Client ${socket.id} joined tenant room: ${tenantRoom}`);
     }
 
     // Track user presence on connection
@@ -250,7 +249,7 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
       (ctx, { projectId }) => {
         const roomName = `project:${projectId}`;
         socket.join(roomName);
-        log(`User ${ctx.userId} joined project room: ${roomName}`, 'socket.io');
+        socketLog.debug(`User ${ctx.userId} joined project room: ${roomName}`);
       }
     ));
 
@@ -261,7 +260,7 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
       (ctx, { projectId }) => {
         const roomName = `project:${projectId}`;
         socket.leave(roomName);
-        log(`User ${ctx.userId} left project room: ${roomName}`, 'socket.io');
+        socketLog.debug(`User ${ctx.userId} left project room: ${roomName}`);
       }
     ));
 
@@ -272,7 +271,7 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
       (ctx, { clientId }) => {
         const roomName = `client:${clientId}`;
         socket.join(roomName);
-        log(`User ${ctx.userId} joined client room: ${roomName}`, 'socket.io');
+        socketLog.debug(`User ${ctx.userId} joined client room: ${roomName}`);
       }
     ));
 
@@ -283,7 +282,7 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
       (ctx, { clientId }) => {
         const roomName = `client:${clientId}`;
         socket.leave(roomName);
-        log(`User ${ctx.userId} left client room: ${roomName}`, 'socket.io');
+        socketLog.debug(`User ${ctx.userId} left client room: ${roomName}`);
       }
     ));
 
@@ -294,7 +293,7 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
       (ctx, { workspaceId }) => {
         const roomName = `workspace:${workspaceId}`;
         socket.join(roomName);
-        log(`User ${ctx.userId} joined workspace room: ${roomName}`, 'socket.io');
+        socketLog.debug(`User ${ctx.userId} joined workspace room: ${roomName}`);
       }
     ));
 
@@ -305,7 +304,7 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
       (ctx, { workspaceId }) => {
         const roomName = `workspace:${workspaceId}`;
         socket.leave(roomName);
-        log(`User ${ctx.userId} left workspace room: ${roomName}`, 'socket.io');
+        socketLog.debug(`User ${ctx.userId} left workspace room: ${roomName}`);
       }
     ));
 
@@ -322,12 +321,12 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
 
         const chatRooms = [...socket.rooms].filter(r => r.startsWith("chat:"));
         if (chatRooms.length >= MAX_CHAT_ROOMS_PER_SOCKET) {
-          log(`[chat-security] Room join denied: max rooms (${MAX_CHAT_ROOMS_PER_SOCKET}) reached for socket=${socket.id} user=${ctx.userId}`, 'security');
+          socketLog.warn(`Room join denied: max rooms (${MAX_CHAT_ROOMS_PER_SOCKET}) reached`, { socketId: socket.id, userId: ctx.userId });
           return;
         }
 
         socket.join(roomName);
-        log(`Client ${socket.id} joined chat room: ${roomName}`, 'socket.io');
+        socketLog.debug(`Client ${socket.id} joined chat room: ${roomName}`);
         chatDebugStore.logEvent({
           eventType: 'room_joined',
           socketId: socket.id,
@@ -349,7 +348,7 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
         socket.leave(roomName);
         invalidateMembershipCache(socket.id, conversationId);
         
-        log(`Client ${socket.id} left chat room: ${roomName}`, 'socket.io');
+        socketLog.debug(`Client ${socket.id} left chat room: ${roomName}`);
         chatDebugStore.logEvent({
           eventType: 'room_left',
           socketId: socket.id,
@@ -364,7 +363,7 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
 
     // Handle client disconnection
     socket.on('disconnect', (reason) => {
-      log(`Client disconnected: ${socket.id} (${reason})`, 'socket.io');
+      socketLog.debug(`Client disconnected: ${socket.id} (${reason})`);
       chatDebugStore.logEvent({
         eventType: 'socket_disconnected',
         socketId: socket.id,
@@ -428,7 +427,7 @@ export function initializeSocketIO(httpServer: HttpServer): Server<ClientToServe
     }
   });
 
-  log('Socket.IO server initialized', 'socket.io');
+  socketLog.info('Socket.IO server initialized');
   return io;
 }
 

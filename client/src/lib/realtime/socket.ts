@@ -33,7 +33,7 @@ export function getSocket(): TypedSocket {
     });
 
     socket.on("connect", () => {
-      console.log("[Socket.IO] Connected:", socket?.id);
+      if (import.meta.env.DEV) console.log("[Socket.IO] Connected:", socket?.id);
       isConnected = true;
       notifyConnectionChange(true);
       
@@ -42,13 +42,13 @@ export function getSocket(): TypedSocket {
     });
 
     socket.on("disconnect", (reason) => {
-      console.log("[Socket.IO] Disconnected:", reason);
+      if (import.meta.env.DEV) console.log("[Socket.IO] Disconnected:", reason);
       isConnected = false;
       notifyConnectionChange(false);
     });
 
     socket.on("connect_error", (error) => {
-      console.error("[Socket.IO] Connection error:", error.message);
+      if (import.meta.env.DEV) console.error("[Socket.IO] Connection error:", error.message);
       isConnected = false;
       notifyConnectionChange(false);
     });
@@ -56,12 +56,12 @@ export function getSocket(): TypedSocket {
     // Heartbeat/ping handling - socket.io handles this automatically
     // but we can add explicit pong handling if needed
     socket.io.on("ping", () => {
-      console.debug("[Socket.IO] Ping received");
+      if (import.meta.env.DEV) console.debug("[Socket.IO] Ping received");
     });
 
     // Handle server connected ack with serverTime and requestId
     socket.on(CONNECTION_EVENTS.CONNECTED, (payload: ConnectionConnectedPayload) => {
-      console.log("[Socket.IO] Server ack received:", payload.requestId);
+      if (import.meta.env.DEV) console.log("[Socket.IO] Server ack received:", payload.requestId);
       lastServerTime = payload.serverTime;
       lastRequestId = payload.requestId;
       // Notify any listeners about the connected ack
@@ -110,13 +110,13 @@ export function joinChatRoom(targetType: 'channel' | 'dm', targetId: string): vo
   
   // Prevent duplicate joins
   if (joinedChatRooms.has(roomKey)) {
-    console.debug("[Socket.IO] Already in room:", roomKey);
+    if (import.meta.env.DEV) console.debug("[Socket.IO] Already in room:", roomKey);
     return;
   }
   
   s.emit("chat:join" as any, { targetType, targetId });
   joinedChatRooms.add(roomKey);
-  console.log("[Socket.IO] Joining chat room:", roomKey);
+  if (import.meta.env.DEV) console.log("[Socket.IO] Joining chat room:", roomKey);
 }
 
 export function leaveChatRoom(targetType: 'channel' | 'dm', targetId: string): void {
@@ -124,25 +124,25 @@ export function leaveChatRoom(targetType: 'channel' | 'dm', targetId: string): v
   const roomKey = `${targetType}:${targetId}`;
   
   if (!joinedChatRooms.has(roomKey)) {
-    console.debug("[Socket.IO] Not in room:", roomKey);
+    if (import.meta.env.DEV) console.debug("[Socket.IO] Not in room:", roomKey);
     return;
   }
   
   s.emit("chat:leave" as any, { targetType, targetId });
   joinedChatRooms.delete(roomKey);
-  console.log("[Socket.IO] Leaving chat room:", roomKey);
+  if (import.meta.env.DEV) console.log("[Socket.IO] Leaving chat room:", roomKey);
 }
 
 function rejoinChatRooms(): void {
   if (joinedChatRooms.size === 0) return;
   
-  console.log("[Socket.IO] Rejoining", joinedChatRooms.size, "chat rooms after reconnect");
+  if (import.meta.env.DEV) console.log("[Socket.IO] Rejoining", joinedChatRooms.size, "chat rooms after reconnect");
   const s = getSocket();
   
   joinedChatRooms.forEach(roomKey => {
     const [targetType, targetId] = roomKey.split(':') as ['channel' | 'dm', string];
     s.emit("chat:join" as any, { targetType, targetId });
-    console.log("[Socket.IO] Rejoined chat room:", roomKey);
+    if (import.meta.env.DEV) console.log("[Socket.IO] Rejoined chat room:", roomKey);
   });
 }
 
@@ -153,13 +153,13 @@ export function clearChatRooms(): void {
 export function joinProjectRoom(projectId: string): void {
   const s = getSocket();
   s.emit("room:join:project", { projectId });
-  console.log("[Socket.IO] Joining project room:", projectId);
+  if (import.meta.env.DEV) console.log("[Socket.IO] Joining project room:", projectId);
 }
 
 export function leaveProjectRoom(projectId: string): void {
   const s = getSocket();
   s.emit("room:leave:project", { projectId });
-  console.log("[Socket.IO] Leaving project room:", projectId);
+  if (import.meta.env.DEV) console.log("[Socket.IO] Leaving project room:", projectId);
 }
 
 export function disconnectSocket(): void {

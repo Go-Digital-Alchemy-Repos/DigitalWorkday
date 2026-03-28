@@ -64,7 +64,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       if (response.ok) {
         const data = await response.json();
         
-        if (import.meta.env.DEV || import.meta.env.VITE_DEBUG_AUTH === "true") {
+        if (import.meta.env.DEV) {
           console.log("[Auth] /api/auth/me response:", {
             userId: data.user?.id,
             email: data.user?.email,
@@ -80,7 +80,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         markAuthenticated();
         triggerPrefetch(data.user?.role);
       } else {
-        console.log("[Auth] /api/auth/me failed:", response.status);
+        if (import.meta.env.DEV) console.log("[Auth] /api/auth/me failed:", response.status);
         setUser(null);
         setUserImpersonation(null);
         clearActingAsState();
@@ -90,7 +90,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         await new Promise(r => setTimeout(r, 1000));
         return fetchUser(retries - 1);
       }
-      console.error("[Auth] /api/auth/me error:", err);
+      if (import.meta.env.DEV) console.error("[Auth] /api/auth/me error:", err);
       setUser(null);
       setUserImpersonation(null);
       clearActingAsState();

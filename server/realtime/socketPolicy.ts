@@ -1,6 +1,8 @@
 import type { Socket } from "socket.io";
-import { log } from "../lib/log";
+import { createLogger } from "../lib/logger";
 import { storage } from "../storage";
+
+const policyLog = createLogger("socketPolicy");
 import { parseConversationId } from "./typing";
 
 export interface AuthenticatedSocket extends Socket {
@@ -131,12 +133,12 @@ export function withSocketPolicy<TPayload = any>(
     const tenantId = socket.tenantId;
 
     if (requireAuth && !userId) {
-      log(`[socketPolicy] Denied: not authenticated (socket=${socket.id})`, "socket.io");
+      policyLog.warn(`Denied: not authenticated (socket=${socket.id})`);
       return;
     }
 
     if (requireTenant && !tenantId) {
-      log(`[socketPolicy] Denied: no tenant context (socket=${socket.id}, user=${userId})`, "socket.io");
+      policyLog.warn(`Denied: no tenant context (socket=${socket.id}, user=${userId})`);
       return;
     }
 
@@ -149,24 +151,24 @@ export function withSocketPolicy<TPayload = any>(
     if (requireChatMembership) {
       const conversationId = (payload as any)?.conversationId;
       if (!conversationId || typeof conversationId !== "string") {
-        log(`[socketPolicy] Denied: missing conversationId (socket=${socket.id})`, "socket.io");
+        policyLog.warn(`Denied: missing conversationId (socket=${socket.id})`);
         return;
       }
 
       const parsed = parseConversationId(conversationId);
       if (!parsed) {
-        log(`[socketPolicy] Denied: invalid conversationId=${conversationId} (socket=${socket.id})`, "socket.io");
+        policyLog.warn(`Denied: invalid conversationId=${conversationId} (socket=${socket.id})`);
         return;
       }
 
       try {
         const isMember = await checkMembership(ctx, parsed.type, parsed.id, socket.id);
         if (!isMember) {
-          log(`[socketPolicy] Denied: not a member of ${conversationId} (socket=${socket.id}, user=${ctx.userId})`, "socket.io");
+          policyLog.warn(`Denied: not a member of ${conversationId} (socket=${socket.id}, user=${ctx.userId})`);
           return;
         }
       } catch (err) {
-        log(`[socketPolicy] Error checking membership for ${conversationId}: ${err}`, "socket.io");
+        policyLog.warn(`Error checking membership for ${conversationId}: ${err}`);
         return;
       }
     }
@@ -175,11 +177,11 @@ export function withSocketPolicy<TPayload = any>(
       const targetType = (payload as any)?.targetType;
       const targetId = (payload as any)?.targetId;
       if (!targetType || !targetId) {
-        log(`[socketPolicy] Denied: missing targetType/targetId (socket=${socket.id})`, "socket.io");
+        policyLog.warn(`Denied: missing targetType/targetId (socket=${socket.id})`);
         return;
       }
       if (targetType !== "channel" && targetType !== "dm") {
-        log(`[socketPolicy] Denied: invalid targetType=${targetType} (socket=${socket.id})`, "socket.io");
+        policyLog.warn(`Denied: invalid targetType=${targetType} (socket=${socket.id})`);
         return;
       }
 
@@ -196,11 +198,11 @@ export function withSocketPolicy<TPayload = any>(
         }
 
         if (!hasAccess) {
-          log(`[socketPolicy] Denied: no room access ${targetType}:${targetId} (socket=${socket.id}, user=${ctx.userId})`, "socket.io");
+          policyLog.warn(`Denied: no room access ${targetType}:${targetId} (socket=${socket.id}, user=${ctx.userId})`);
           return;
         }
       } catch (err) {
-        log(`[socketPolicy] Error checking room access for ${targetType}:${targetId}: ${err}`, "socket.io");
+        policyLog.warn(`Error checking room access for ${targetType}:${targetId}: ${err}`);
         return;
       }
     }
@@ -208,7 +210,7 @@ export function withSocketPolicy<TPayload = any>(
     try {
       await handler(ctx, payload, socket);
     } catch (err) {
-      log(`[socketPolicy] Handler error (socket=${socket.id}): ${err}`, "socket.io");
+      policyLog.warn(`Handler error (socket=${socket.id}): ${err}`);
     }
   };
 }

@@ -18,7 +18,9 @@
  * lastActiveAt: Updated on connect, ping, and when returning from idle
  */
 
-import { log } from '../lib/log';
+import { createLogger } from '../lib/logger';
+
+const presenceLog = createLogger("presence");
 
 export type PresenceStatus = 'online' | 'idle' | 'offline';
 
@@ -113,7 +115,7 @@ export function markConnected(
     existing.lastActiveAt = now;
     existing.status = 'online';
     const statusChanged = previousStatus !== 'online';
-    log(`[presence] User ${userId} connected (sockets: ${existing.activeSocketCount})`, 'presence');
+    presenceLog.debug(`User ${userId} connected (sockets: ${existing.activeSocketCount})`);
     return { info: existing, statusChanged };
   } else {
     const info: PresenceInfo = {
@@ -125,7 +127,7 @@ export function markConnected(
       status: 'online',
     };
     presenceStore.set(key, info);
-    log(`[presence] User ${userId} connected (first socket)`, 'presence');
+    presenceLog.debug(`User ${userId} connected (first socket)`);
     return { info, statusChanged: true };
   }
 }
@@ -151,7 +153,7 @@ export function markDisconnected(
       existing.status = 'offline';
     }
     const statusChanged = wentOffline && previousStatus !== 'offline';
-    log(`[presence] User ${userId} disconnected (sockets: ${existing.activeSocketCount})`, 'presence');
+    presenceLog.debug(`User ${userId} disconnected (sockets: ${existing.activeSocketCount})`);
     return { info: existing, statusChanged };
   } else {
     // Shouldn't happen, but handle gracefully
@@ -238,11 +240,11 @@ export function setIdle(
   
   if (isIdle) {
     existing.status = 'idle';
-    log(`[presence] User ${userId} went idle`, 'presence');
+    presenceLog.debug(`User ${userId} went idle`);
   } else {
     existing.status = 'online';
     existing.lastActiveAt = now;
-    log(`[presence] User ${userId} returned from idle`, 'presence');
+    presenceLog.debug(`User ${userId} returned from idle`);
   }
   
   const statusChanged = previousStatus !== existing.status;
@@ -303,7 +305,7 @@ function sweepStalePresence(): void {
     if (info.status === 'online' && isStale && info.activeSocketCount === 0) {
       info.status = 'offline';
       staleUsers.push({ tenantId: info.tenantId, userId: info.userId, info });
-      log(`[presence] User ${info.userId} marked offline (stale session)`, 'presence');
+      presenceLog.debug(`User ${info.userId} marked offline (stale session)`);
     }
   });
 
@@ -313,7 +315,7 @@ function sweepStalePresence(): void {
       try {
         callback(tenantId, userId, info);
       } catch (err) {
-        log(`[presence] Error in offline callback: ${err}`, 'presence');
+        presenceLog.debug(`Error in offline callback: ${err}`);
       }
     }
   }
@@ -329,13 +331,13 @@ export function startPresenceCleanup(): void {
     sweepStalePresence();
   }, CLEANUP_INTERVAL_MS);
   
-  log('[presence] Started stale session cleanup interval', 'presence');
+  presenceLog.debug('Started stale session cleanup interval');
 }
 
 export function stopPresenceCleanup(): void {
   if (cleanupInterval) {
     clearInterval(cleanupInterval);
     cleanupInterval = null;
-    log('[presence] Stopped stale session cleanup interval', 'presence');
+    presenceLog.debug('Stopped stale session cleanup interval');
   }
 }

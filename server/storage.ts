@@ -120,6 +120,9 @@ export type ProjectActivityItem = {
 import { eq, and, desc, asc, inArray, notInArray, gte, lte, gt, isNull, isNotNull, sql, ilike, or } from "drizzle-orm";
 import { encryptValue, decryptValue } from "./lib/encryption";
 import { dbRows as dbRowsHelper } from "./lib/dbHelpers";
+import { createLogger } from "./lib/logger";
+
+const storageLog = createLogger("storage");
 import { SupportRepository } from "./storage/support.repo";
 import { ChatRepository } from "./storage/chat.repo";
 import { NotificationsRepository } from "./storage/notifications.repo";
@@ -668,7 +671,7 @@ export class DatabaseStorage implements IStorage {
     
     // Log error with requestId for debugging
     const reqIdInfo = requestId ? ` (requestId: ${requestId})` : '';
-    console.error(`[getPrimaryWorkspaceIdOrFail] No primary workspace found for tenant ${tenantId}${reqIdInfo}`);
+    storageLog.error(`No primary workspace found for tenant ${tenantId}`, { requestId });
     throw new Error(`No primary workspace found for tenant ${tenantId}`);
   }
 
@@ -2113,7 +2116,7 @@ export class DatabaseStorage implements IStorage {
     // Enforce strict tenant isolation for client portal access
     // Both user and client must have tenantId set and they must match
     if (!user.tenantId || !client.tenantId) {
-      console.warn("[storage] getClientUserAccessByUserAndClient: Missing tenantId", {
+      storageLog.warn("getClientUserAccessByUserAndClient: Missing tenantId", {
         userId: user.id,
         userTenantId: user.tenantId,
         clientId: client.id,
@@ -2123,7 +2126,7 @@ export class DatabaseStorage implements IStorage {
     }
     
     if (user.tenantId !== client.tenantId) {
-      console.warn("[storage] getClientUserAccessByUserAndClient: Tenant mismatch", {
+      storageLog.warn("getClientUserAccessByUserAndClient: Tenant mismatch", {
         userId: user.id,
         userTenantId: user.tenantId,
         clientId: client.id,
@@ -2182,7 +2185,7 @@ export class DatabaseStorage implements IStorage {
       // Both user and client should have matching tenantIds
       // If either is missing tenantId, this is a data integrity issue - skip for safety
       if (!user.tenantId || !client.tenantId) {
-        console.warn("[storage] getClientsForUser: Missing tenantId", {
+        storageLog.warn("getClientsForUser: Missing tenantId", {
           userId: user.id,
           userTenantId: user.tenantId,
           clientId: client.id,
@@ -2192,7 +2195,7 @@ export class DatabaseStorage implements IStorage {
       }
       
       if (user.tenantId !== client.tenantId) {
-        console.warn("[storage] getClientsForUser: Tenant mismatch", {
+        storageLog.warn("getClientsForUser: Tenant mismatch", {
           userId: user.id,
           userTenantId: user.tenantId,
           clientId: client.id,
@@ -2419,30 +2422,30 @@ export class DatabaseStorage implements IStorage {
   // =============================================================================
 
   async getAppSettings(workspaceId: string, key: string): Promise<any> {
-    console.log(`[settings] GET workspaceId=${workspaceId} key=${key}`);
+    storageLog.debug(`[settings] GET workspaceId=${workspaceId} key=${key}`);
     
     const [setting] = await db.select()
       .from(appSettings)
       .where(and(eq(appSettings.workspaceId, workspaceId), eq(appSettings.key, key)));
     
     if (!setting) {
-      console.log(`[settings] No record found for workspaceId=${workspaceId} key=${key}`);
+      storageLog.debug(`[settings] No record found for workspaceId=${workspaceId} key=${key}`);
       return null;
     }
     
     try {
       const decrypted = decryptValue(setting.valueEncrypted);
       const parsed = JSON.parse(decrypted);
-      console.log(`[settings] Successfully decrypted workspaceId=${workspaceId} key=${key}`);
+      storageLog.debug(`[settings] Successfully decrypted workspaceId=${workspaceId} key=${key}`);
       return parsed;
     } catch (error) {
-      console.error(`[settings] Decryption failed for workspaceId=${workspaceId} key=${key}:`, error instanceof Error ? error.message : error);
+      storageLog.error(`Decryption failed for workspaceId=${workspaceId} key=${key}`, { error: error instanceof Error ? error.message : String(error) });
       return null;
     }
   }
 
   async setAppSettings(workspaceId: string, key: string, value: any, userId?: string): Promise<void> {
-    console.log(`[settings] PUT workspaceId=${workspaceId} key=${key} userId=${userId || 'unknown'}`);
+    storageLog.debug(`[settings] PUT workspaceId=${workspaceId} key=${key} userId=${userId || 'unknown'}`);
     
     const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
     const encryptedValue = encryptValue(stringValue);
@@ -2459,7 +2462,7 @@ export class DatabaseStorage implements IStorage {
           updatedByUserId: userId || null,
         })
         .where(eq(appSettings.id, existing.id));
-      console.log(`[settings] Updated existing record id=${existing.id}`);
+      storageLog.debug(`[settings] Updated existing record id=${existing.id}`);
     } else {
       const [inserted] = await db.insert(appSettings).values({
         workspaceId,
@@ -2467,7 +2470,7 @@ export class DatabaseStorage implements IStorage {
         valueEncrypted: encryptedValue,
         updatedByUserId: userId || null,
       }).returning();
-      console.log(`[settings] Inserted new record id=${inserted.id}`);
+      storageLog.debug(`[settings] Inserted new record id=${inserted.id}`);
     }
   }
 
@@ -3098,7 +3101,7 @@ export class DatabaseStorage implements IStorage {
 
   // App Settings - tenant scoped
   async getAppSettingsByTenant(tenantId: string, workspaceId: string, key: string): Promise<any> {
-    console.log(`[settings] GET tenantId=${tenantId} workspaceId=${workspaceId} key=${key}`);
+    storageLog.debug(`[settings] GET tenantId=${tenantId} workspaceId=${workspaceId} key=${key}`);
     
     const [setting] = await db.select()
       .from(appSettings)
@@ -3109,23 +3112,23 @@ export class DatabaseStorage implements IStorage {
       ));
     
     if (!setting) {
-      console.log(`[settings] No record found for tenantId=${tenantId} workspaceId=${workspaceId} key=${key}`);
+      storageLog.debug(`[settings] No record found for tenantId=${tenantId} workspaceId=${workspaceId} key=${key}`);
       return null;
     }
     
     try {
       const decrypted = decryptValue(setting.valueEncrypted);
       const parsed = JSON.parse(decrypted);
-      console.log(`[settings] Successfully decrypted tenantId=${tenantId} workspaceId=${workspaceId} key=${key}`);
+      storageLog.debug(`[settings] Successfully decrypted tenantId=${tenantId} workspaceId=${workspaceId} key=${key}`);
       return parsed;
     } catch (error) {
-      console.error(`[settings] Decryption failed for tenantId=${tenantId} workspaceId=${workspaceId} key=${key}:`, error instanceof Error ? error.message : error);
+      storageLog.error(`Decryption failed for tenantId=${tenantId} workspaceId=${workspaceId} key=${key}`, { error: error instanceof Error ? error.message : String(error) });
       return null;
     }
   }
 
   async setAppSettingsByTenant(tenantId: string, workspaceId: string, key: string, value: any, userId?: string): Promise<void> {
-    console.log(`[settings] PUT tenantId=${tenantId} workspaceId=${workspaceId} key=${key} userId=${userId || 'unknown'}`);
+    storageLog.debug(`[settings] PUT tenantId=${tenantId} workspaceId=${workspaceId} key=${key} userId=${userId || 'unknown'}`);
     
     const stringValue = typeof value === 'string' ? value : JSON.stringify(value);
     const encryptedValue = encryptValue(stringValue);
@@ -3146,7 +3149,7 @@ export class DatabaseStorage implements IStorage {
           updatedByUserId: userId || null,
         })
         .where(eq(appSettings.id, existing.id));
-      console.log(`[settings] Updated existing record id=${existing.id}`);
+      storageLog.debug(`[settings] Updated existing record id=${existing.id}`);
     } else {
       const [inserted] = await db.insert(appSettings).values({
         tenantId,
@@ -3155,7 +3158,7 @@ export class DatabaseStorage implements IStorage {
         valueEncrypted: encryptedValue,
         updatedByUserId: userId || null,
       }).returning();
-      console.log(`[settings] Inserted new record id=${inserted.id}`);
+      storageLog.debug(`[settings] Inserted new record id=${inserted.id}`);
     }
   }
 
@@ -4042,7 +4045,7 @@ export class DatabaseStorage implements IStorage {
     } catch (error: any) {
       // Gracefully handle missing table - log to console but don't throw
       if (error?.message?.includes("does not exist") || error?.code === "42P01") {
-        console.warn("[storage] error_logs table not found - error not persisted:", log.message?.slice(0, 100));
+        storageLog.warn("error_logs table not found - error not persisted", { message: log.message?.slice(0, 100) });
         // Return a synthetic log object so callers don't break
         // Use special UUID format that's clearly not a real DB record
         return {
@@ -4124,7 +4127,7 @@ export class DatabaseStorage implements IStorage {
     } catch (error: any) {
       // Gracefully handle missing table
       if (error?.message?.includes("does not exist") || error?.code === "42P01") {
-        console.warn("[storage] error_logs table not found - returning empty list");
+        storageLog.warn("error_logs table not found - returning empty list");
         return { logs: [], total: 0 };
       }
       throw error;
@@ -4138,7 +4141,7 @@ export class DatabaseStorage implements IStorage {
     } catch (error: any) {
       // Gracefully handle missing table
       if (error?.message?.includes("does not exist") || error?.code === "42P01") {
-        console.warn("[storage] error_logs table not found - cannot fetch log");
+        storageLog.warn("error_logs table not found - cannot fetch log");
         return undefined;
       }
       throw error;
@@ -4155,7 +4158,7 @@ export class DatabaseStorage implements IStorage {
     } catch (error: any) {
       // Gracefully handle missing table
       if (error?.message?.includes("does not exist") || error?.code === "42P01") {
-        console.warn("[storage] error_logs table not found - cannot update log");
+        storageLog.warn("error_logs table not found - cannot update log");
         return undefined;
       }
       throw error;
@@ -4234,16 +4237,16 @@ export class DatabaseStorage implements IStorage {
         await db.execute(
           sql`DELETE FROM user_sessions WHERE sess->'passport'->>'user' = ${userId} AND sid != ${exceptSessionId}`
         );
-        console.log(`[storage] Invalidated sessions for user ${userId} (except ${exceptSessionId})`);
+        storageLog.debug(`Invalidated sessions for user ${userId} (except ${exceptSessionId})`);
       } else {
         await db.execute(
           sql`DELETE FROM user_sessions WHERE sess->'passport'->>'user' = ${userId}`
         );
-        console.log(`[storage] Invalidated all sessions for user ${userId}`);
+        storageLog.debug(` Invalidated all sessions for user ${userId}`);
       }
     } catch (error) {
       // Session invalidation is non-critical, log but don't throw
-      console.warn(`[storage] Failed to invalidate sessions for user ${userId}:`, error);
+      storageLog.warn(`Failed to invalidate sessions for user ${userId}`, { error: String(error) });
     }
   }
 

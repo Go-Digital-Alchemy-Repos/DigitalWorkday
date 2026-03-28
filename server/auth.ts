@@ -35,6 +35,9 @@ import {
   userCreateRateLimiter 
 } from "./middleware/rateLimit";
 
+import { createLogger } from "./lib/logger";
+
+const authLog = createLogger("auth");
 const scryptAsync = promisify(scrypt);
 
 export async function hashPassword(password: string): Promise<string> {
@@ -100,7 +103,7 @@ export function setupAuth(app: Express): void {
       CONSTRAINT "user_sessions_pkey" PRIMARY KEY ("sid")
     );
     CREATE INDEX IF NOT EXISTS "IDX_user_sessions_expire" ON "user_sessions" ("expire");
-  `).catch(err => console.error("Session table creation error:", err));
+  `).catch(err => authLog.error("Session table creation error", { error: String(err) }));
 
   const isProduction = process.env.NODE_ENV === "production";
   const isReplit = !!process.env.REPL_OWNER;
@@ -212,12 +215,12 @@ export function setupAuth(app: Express): void {
           
           req.session.save((saveErr) => {
             if (saveErr) {
-              console.error("Session save error:", saveErr);
+              authLog.error("Session save error", { error: String(saveErr) });
             }
             return res.json({ user, workspaceId });
           });
         } catch (workspaceErr) {
-          console.error("Workspace lookup error:", workspaceErr);
+          authLog.error("Workspace lookup error", { error: String(workspaceErr) });
           req.logout(() => {});
           return res.status(500).json({ error: "Failed to resolve workspace" });
         }
@@ -232,7 +235,7 @@ export function setupAuth(app: Express): void {
       }
       req.session.destroy((sessionErr) => {
         if (sessionErr) {
-          console.error("Session destroy error:", sessionErr);
+          authLog.error("Session destroy error", { error: String(sessionErr) });
         }
         const isProduction = process.env.NODE_ENV === "production";
         const isReplit = !!process.env.REPL_OWNER;
@@ -261,22 +264,22 @@ export function setupAuth(app: Express): void {
     const user = req.user as any;
     const session = req.session as any;
     
-    // Debug logging for tenant context issues
-    const debugTenantContext = process.env.DEBUG_TENANT_CONTEXT === "true";
-    if (debugTenantContext) {
-      console.log("[auth/me] Session ID:", req.sessionID);
-      console.log("[auth/me] User ID:", user?.id);
-      console.log("[auth/me] User email:", user?.email);
-      console.log("[auth/me] User role:", user?.role);
-      console.log("[auth/me] User tenantId:", user?.tenantId);
-      console.log("[auth/me] Session keys:", Object.keys(session || {}));
+    if (process.env.DEBUG_TENANT_CONTEXT === "true") {
+      authLog.debug("auth/me tenant context", {
+        sessionId: req.sessionID,
+        userId: user?.id,
+        email: user?.email,
+        role: user?.role,
+        tenantId: user?.tenantId,
+      });
     }
     
-    // Debug logging for avatar issues (enable with DEBUG_AVATAR=true)
     if (process.env.DEBUG_AVATAR === "true") {
-      console.log("[auth/me] Session ID:", req.sessionID);
-      console.log("[auth/me] User ID:", user?.id);
-      console.log("[auth/me] User avatarUrl:", user?.avatarUrl);
+      authLog.debug("auth/me avatar", {
+        sessionId: req.sessionID,
+        userId: user?.id,
+        avatarUrl: user?.avatarUrl,
+      });
     }
     
     // Include impersonation context if active
@@ -362,7 +365,7 @@ export function setupAuth(app: Express): void {
       // Don't expose password hash in response
       const { passwordHash: _, ...userWithoutPassword } = result.user;
 
-      console.log(`[auth] User registered: ${email}, role: ${result.user.role}${result.isFirstUser ? " (first user - auto super admin)" : ""}`);
+      authLog.info(`User registered: ${email}, role: ${result.user.role}${result.isFirstUser ? " (first user - auto super admin)" : ""}`);
 
       res.status(201).json({ 
         user: userWithoutPassword,
@@ -371,7 +374,7 @@ export function setupAuth(app: Express): void {
           : "Account created successfully."
       });
     } catch (error) {
-      console.error("[auth] Registration error:", error);
+      authLog.error("Registration error", { error: String(error) });
       res.status(500).json({ error: "Registration failed" });
     }
   });
@@ -423,7 +426,7 @@ export function setupBootstrapEndpoints(app: Express): void {
         bootstrapRequired: userCount === 0,
       });
     } catch (error) {
-      console.error("[auth] bootstrap-status error:", error);
+      authLog.error("Bootstrap status check error", { error: String(error) });
       res.status(500).json({ error: "Failed to check bootstrap status" });
     }
   });
@@ -472,7 +475,7 @@ export function setupBootstrapEndpoints(app: Express): void {
         primaryColor,
       });
     } catch (error) {
-      console.error("[auth] login-branding error:", error);
+      authLog.error("Login branding error", { error: String(error) });
       res.json({ appName: null, loginMessage: null, logoUrl: null, iconUrl: null, faviconUrl: null, primaryColor: null });
     }
   });
@@ -586,7 +589,7 @@ export function setupBootstrapEndpoints(app: Express): void {
       // Log in the user immediately
       req.logIn(userWithoutPassword as Express.User, (loginErr) => {
         if (loginErr) {
-          console.error("[auth] bootstrap login error:", loginErr);
+          authLog.error("Bootstrap login error", { error: String(loginErr) });
           return res.status(201).json({ 
             user: userWithoutPassword,
             message: "Account created but auto-login failed. Please log in manually.",
@@ -597,19 +600,14 @@ export function setupBootstrapEndpoints(app: Express): void {
         // Save session
         req.session.save((saveErr) => {
           if (saveErr) {
-            console.error("[auth] session save error:", saveErr);
+            authLog.error("Session save error", { error: String(saveErr) });
           }
 
-          // Log bootstrap event
-          console.log(JSON.stringify({
-            level: "info",
-            component: "auth",
-            event: "bootstrap_register_created_super_admin",
+          authLog.info("Bootstrap register created super admin", {
             userId: userWithoutPassword.id,
             email: userWithoutPassword.email,
             requestId: req.requestId || "unknown",
-            timestamp: new Date().toISOString(),
-          }));
+          });
 
           res.status(201).json({ 
             user: userWithoutPassword,
@@ -619,7 +617,7 @@ export function setupBootstrapEndpoints(app: Express): void {
         });
       });
     } catch (error) {
-      console.error("[auth] bootstrap-register error:", error);
+      authLog.error("Bootstrap register error", { error: String(error) });
       res.status(500).json({ 
         error: { code: "INTERNAL_ERROR", message: "Registration failed" },
         code: "INTERNAL_ERROR",
@@ -712,7 +710,7 @@ export function setupPlatformInviteEndpoints(app: Express): void {
         targetUser: targetUser || null,
       });
     } catch (error) {
-      console.error("[auth] platform-invite/verify error:", error);
+      authLog.error("Platform invite verify error", { error: String(error) });
       res.status(500).json({
         error: { code: "INTERNAL_ERROR", message: "Failed to verify invite" },
         code: "INTERNAL_ERROR",
@@ -822,7 +820,7 @@ export function setupPlatformInviteEndpoints(app: Express): void {
       
       req.logIn(userWithoutPassword as Express.User, (loginErr) => {
         if (loginErr) {
-          console.error("[auth] platform-invite login error:", loginErr);
+          authLog.error("Platform invite login error", { error: String(loginErr) });
           return res.status(200).json({
             success: true,
             user: userWithoutPassword,
@@ -833,17 +831,13 @@ export function setupPlatformInviteEndpoints(app: Express): void {
         
         req.session.save((saveErr) => {
           if (saveErr) {
-            console.error("[auth] session save error:", saveErr);
+            authLog.error("Session save error", { error: String(saveErr) });
           }
           
-          console.log(JSON.stringify({
-            level: "info",
-            component: "auth",
-            event: "platform_invite_accepted",
+          authLog.info("Platform invite accepted", {
             userId: userWithoutPassword.id,
             email: userWithoutPassword.email,
-            timestamp: new Date().toISOString(),
-          }));
+          });
           
           res.json({
             success: true,
@@ -854,7 +848,7 @@ export function setupPlatformInviteEndpoints(app: Express): void {
         });
       });
     } catch (error) {
-      console.error("[auth] platform-invite/accept error:", error);
+      authLog.error("Platform invite accept error", { error: String(error) });
       res.status(500).json({
         error: { code: "INTERNAL_ERROR", message: "Failed to accept invite" },
         code: "INTERNAL_ERROR",
@@ -983,7 +977,7 @@ export function setupTenantInviteEndpoints(app: Express): void {
         expiresAt: invite.expiresAt.toISOString(),
       });
     } catch (error) {
-      console.error("[auth] tenant-invite/validate error:", error);
+      authLog.error("Tenant invite validate error", { error: String(error) });
       res.status(500).json({
         ok: false,
         error: { code: "INTERNAL_ERROR", message: "Failed to validate invite" },
@@ -1125,7 +1119,7 @@ export function setupTenantInviteEndpoints(app: Express): void {
       
       req.login(userWithoutPassword, (loginErr) => {
         if (loginErr) {
-          console.error("[auth] tenant-invite login error:", loginErr);
+          authLog.error("Tenant invite login error", { error: String(loginErr) });
           return res.json({
             ok: true,
             success: true,
@@ -1140,19 +1134,15 @@ export function setupTenantInviteEndpoints(app: Express): void {
         
         req.session.save((saveErr) => {
           if (saveErr) {
-            console.error("[auth] session save error:", saveErr);
+            authLog.error("Session save error", { error: String(saveErr) });
           }
           
-          console.log(JSON.stringify({
-            level: "info",
-            component: "auth",
-            event: "tenant_invite_accepted",
+          authLog.info("Tenant invite accepted", {
             userId: userWithoutPassword.id,
             email: userWithoutPassword.email,
-            tenantId: invite.tenantId,
+            tenantId: invite.tenantId || undefined,
             workspaceId: invite.workspaceId,
-            timestamp: new Date().toISOString(),
-          }));
+          });
           
           res.json({
             ok: true,
@@ -1164,7 +1154,7 @@ export function setupTenantInviteEndpoints(app: Express): void {
         });
       });
     } catch (error) {
-      console.error("[auth] tenant-invite/accept error:", error);
+      authLog.error("Tenant invite accept error", { error: String(error) });
       res.status(500).json({
         ok: false,
         error: { code: "INTERNAL_ERROR", message: "Failed to accept invite" },
@@ -1217,13 +1207,13 @@ export function setupPasswordResetEndpoints(app: Express): void {
       
       if (!user) {
         // User doesn't exist, but we don't reveal this
-        console.log(`[auth] forgot-password: no user found for ${email}`);
+        authLog.info(`Forgot password: no user found for ${email}`);
         return res.json(genericResponse);
       }
       
       if (!user.isActive) {
         // User is deactivated, don't reveal this
-        console.log(`[auth] forgot-password: user ${email} is deactivated`);
+        authLog.info(`Forgot password: user ${email} is deactivated`);
         return res.json(genericResponse);
       }
       
@@ -1244,15 +1234,10 @@ export function setupPasswordResetEndpoints(app: Express): void {
       const appPublicUrl = process.env.APP_PUBLIC_URL || `${req.protocol}://${req.get("host")}`;
       const resetUrl = `${appPublicUrl}/auth/reset-password?token=${token}`;
       
-      // Log for audit
-      console.log(JSON.stringify({
-        level: "info",
-        component: "auth",
-        event: "password_reset_requested",
+      authLog.info("Password reset requested", {
         userId: user.id,
         email: user.email,
-        timestamp: new Date().toISOString(),
-      }));
+      });
       
       let emailSent = false;
       let emailError: string | null = null;
@@ -1292,28 +1277,24 @@ export function setupPasswordResetEndpoints(app: Express): void {
         }
       } catch (error: any) {
         emailError = error.message || "Failed to send email";
-        console.error("[auth] Password reset email error:", error);
+        authLog.error("Password reset email error", { error: String(error) });
       }
       
       // Always log email delivery outcome (never log reset URL in production)
       if (!emailSent) {
-        console.error(JSON.stringify({
-          level: "error",
-          component: "auth",
-          event: "password_reset_email_failed",
+        authLog.error("Password reset email failed", {
           userId: user.id,
           email: user.email,
           error: emailError,
-          timestamp: new Date().toISOString(),
-        }));
+        });
       }
       if (process.env.NODE_ENV !== "production" && !emailSent) {
-        console.log(`[auth] Password reset URL for ${email}: ${resetUrl}`);
+        authLog.info(`Password reset URL for ${email}: ${resetUrl}`);
       }
       
       res.json(genericResponse);
     } catch (error) {
-      console.error("[auth] forgot-password error:", error);
+      authLog.error("Forgot password error", { error: String(error) });
       res.status(500).json({
         ok: false,
         error: { code: "INTERNAL_ERROR", message: "Failed to process request" },
@@ -1395,7 +1376,7 @@ export function setupPasswordResetEndpoints(app: Express): void {
         expiresAt: resetToken.expiresAt.toISOString(),
       });
     } catch (error) {
-      console.error("[auth] reset-password/validate error:", error);
+      authLog.error("Reset password validate error", { error: String(error) });
       res.status(500).json({
         ok: false,
         error: { code: "INTERNAL_ERROR", message: "Failed to validate token" },
@@ -1485,23 +1466,18 @@ export function setupPasswordResetEndpoints(app: Express): void {
         .set({ usedAt: new Date() })
         .where(eq(passwordResetTokens.id, resetToken.id));
       
-      // Log for audit
-      console.log(JSON.stringify({
-        level: "info",
-        component: "auth",
-        event: "password_reset_completed",
+      authLog.info("Password reset completed", {
         userId: updatedUser.id,
         email: updatedUser.email,
         initiatedBy: resetToken.createdByUserId ? "admin" : "user",
-        timestamp: new Date().toISOString(),
-      }));
+      });
       
       res.json({
         ok: true,
         message: "Password reset successfully. You can now log in with your new password."
       });
     } catch (error) {
-      console.error("[auth] reset-password error:", error);
+      authLog.error("Reset password error", { error: String(error) });
       res.status(500).json({
         ok: false,
         error: { code: "INTERNAL_ERROR", message: "Failed to reset password" },

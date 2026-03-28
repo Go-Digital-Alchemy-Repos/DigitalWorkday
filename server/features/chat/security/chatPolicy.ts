@@ -3,7 +3,9 @@ import { AppError } from "../../../lib/errors";
 import { getEffectiveTenantId } from "../../../middleware/tenantContext";
 import { getCurrentUserId } from "../../../middleware/authContext";
 import { storage } from "../../../storage";
-import { log } from "../../../lib/log";
+import { createLogger } from "../../../lib/logger";
+
+const securityLog = createLogger("chat-security");
 
 export interface ChatContext {
   tenantId: string;
@@ -37,8 +39,5 @@ export function logSecurityEvent(
   ctx: ChatContext,
   details: Record<string, unknown> = {}
 ): void {
-  log(
-    `[chat-security] ${event} | tenant=${ctx.tenantId} user=${ctx.userId} ${Object.entries(details).map(([k, v]) => `${k}=${v}`).join(" ")}`,
-    "security"
-  );
+  securityLog.info(event, { tenantId: ctx.tenantId, userId: ctx.userId, ...details });
 }
