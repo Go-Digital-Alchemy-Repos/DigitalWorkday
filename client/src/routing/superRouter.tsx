@@ -21,7 +21,16 @@ const SuperChatMonitoringPage = lazy(trackChunkLoad("SuperChat", () => import("@
 const SuperAdminUsersPage = lazy(trackChunkLoad("SuperUsers", () => import("@/pages/super-admin-users")));
 const SuperAdminRetentionPage = lazy(trackChunkLoad("SuperRetention", () => import("@/pages/super-admin-retention")));
 const SuperAdminReportsPage = lazy(trackChunkLoad("SuperReports", () => import("@/pages/super-admin-reports")));
+const EmployeeProfileReportPage = lazy(trackChunkLoad("SuperEmployeeProfile", () => import("@/pages/employee-profile-report")));
+const ClientProfileReportPage = lazy(trackChunkLoad("SuperClientProfile", () => import("@/pages/client-profile-report")));
+const ProjectPage = lazy(trackChunkLoad("SuperProject", () => import("@/pages/project")));
 const UserProfilePage = lazy(trackChunkLoad("SuperProfile", () => import("@/pages/user-profile")));
+
+function ReportsViewRedirect({ view }: { view: string }) {
+  sessionStorage.setItem("superReports_embeddedView", view);
+  sessionStorage.setItem("superReports_activeTab", "tenant");
+  return <Redirect to="/super-admin/reports" />;
+}
 
 function SuperAdminRouter() {
   return (
@@ -35,6 +44,24 @@ function SuperAdminRouter() {
         </Route>
         <Route path="/super-admin/tenants">
           {() => <SuperRouteGuard component={SuperAdminPage} />}
+        </Route>
+        <Route path="/super-admin/reports/employees/:employeeId">
+          {() => <SuperRouteGuard component={EmployeeProfileReportPage} />}
+        </Route>
+        <Route path="/super-admin/reports/clients/:clientId">
+          {() => <SuperRouteGuard component={ClientProfileReportPage} />}
+        </Route>
+        <Route path="/super-admin/reports/projects/:id">
+          {() => <SuperRouteGuard component={ProjectPage} />}
+        </Route>
+        <Route path="/super-admin/reports/employees">
+          {() => <ReportsViewRedirect view="employee-cc" />}
+        </Route>
+        <Route path="/super-admin/reports/clients">
+          {() => <ReportsViewRedirect view="client-cc" />}
+        </Route>
+        <Route path="/super-admin/reports/projects">
+          {() => <ReportsViewRedirect view="project-cc" />}
         </Route>
         <Route path="/super-admin/reports">
           {() => <SuperRouteGuard component={SuperAdminReportsPage} />}

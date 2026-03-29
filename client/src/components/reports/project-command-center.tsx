@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { useReportLink } from "@/contexts/report-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -149,6 +150,7 @@ interface ProjectOverviewData {
 }
 
 function OverviewTab({ rangeDays }: { rangeDays: number }) {
+  const reportLink = useReportLink();
   const { data, isLoading } = useQuery<ProjectOverviewData>({
     queryKey: ["/api/reports/v2/project/overview", buildDateParams(rangeDays)],
     queryFn: async () => {
@@ -238,7 +240,7 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                             className="h-2.5 w-2.5 rounded-full shrink-0"
                             style={{ backgroundColor: p.project_color || "hsl(var(--primary))" }}
                           />
-                          <Link href={`/projects/${p.project_id}`} className="hover:underline text-primary truncate max-w-[150px]">
+                          <Link href={reportLink(`/projects/${p.project_id}`)} className="hover:underline text-primary truncate max-w-[150px]">
                             {p.project_name}
                           </Link>
                         </div>

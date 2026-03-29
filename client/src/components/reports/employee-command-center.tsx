@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { useReportLink } from "@/contexts/report-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
@@ -95,6 +96,7 @@ interface OverviewEmployee {
 }
 
 function OverviewTab({ rangeDays }: { rangeDays: number }) {
+  const reportLink = useReportLink();
   const [sortBy, setSortBy] = useState<OverviewSortField>("overdueCount");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -188,7 +190,7 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                   <AvatarImage src={getStorageUrl(e.avatarUrl) ?? ""} alt={userName(e)} />
                   <AvatarFallback className="text-xs">{userInitials(e)}</AvatarFallback>
                 </Avatar>
-                <Link href={`/reports/employees/${e.userId}`} className="text-sm font-semibold truncate hover:underline text-primary cursor-pointer">
+                <Link href={reportLink(`/reports/employees/${e.userId}`)} className="text-sm font-semibold truncate hover:underline text-primary cursor-pointer">
                   {userName(e)}
                 </Link>
               </div>
@@ -250,7 +252,7 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                             <AvatarImage src={getStorageUrl(e.avatarUrl) ?? ""} alt={userName(e)} />
                             <AvatarFallback className="text-xs">{userInitials(e)}</AvatarFallback>
                           </Avatar>
-                          <Link href={`/reports/employees/${e.userId}`} className="text-sm font-medium truncate max-w-[140px] hover:underline text-primary cursor-pointer">
+                          <Link href={reportLink(`/reports/employees/${e.userId}`)} className="text-sm font-medium truncate max-w-[140px] hover:underline text-primary cursor-pointer">
                             {userName(e)}
                           </Link>
                         </div>
@@ -308,6 +310,7 @@ interface WorkloadEmployee {
 }
 
 function WorkloadTab({ rangeDays }: { rangeDays: number }) {
+  const reportLink = useReportLink();
   const { data, isLoading } = useQuery<{
     employees: WorkloadEmployee[];
     pagination: { total: number };
@@ -347,7 +350,7 @@ function WorkloadTab({ rangeDays }: { rangeDays: number }) {
               {(data?.employees ?? []).map((e) => (
                 <TableRow key={e.userId} data-testid={`row-employee-workload-${e.userId}`}>
                   <TableCell>
-                    <Link href={`/reports/employees/${e.userId}`} className="text-sm font-medium hover:underline text-primary cursor-pointer">
+                    <Link href={reportLink(`/reports/employees/${e.userId}`)} className="text-sm font-medium hover:underline text-primary cursor-pointer">
                       {userName(e)}
                     </Link>
                   </TableCell>
@@ -407,6 +410,7 @@ interface TimeEmployee {
 }
 
 function TimeTab({ rangeDays }: { rangeDays: number }) {
+  const reportLink = useReportLink();
   const { data, isLoading } = useQuery<{
     employees: TimeEmployee[];
     pagination: { total: number };
@@ -447,7 +451,7 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
               {(data?.employees ?? []).map((e) => (
                 <TableRow key={e.userId} data-testid={`row-employee-time-${e.userId}`}>
                   <TableCell>
-                    <Link href={`/reports/employees/${e.userId}`} className="text-sm font-medium hover:underline text-primary cursor-pointer">
+                    <Link href={reportLink(`/reports/employees/${e.userId}`)} className="text-sm font-medium hover:underline text-primary cursor-pointer">
                       {userName(e)}
                     </Link>
                   </TableCell>
@@ -487,6 +491,7 @@ function TimeTab({ rangeDays }: { rangeDays: number }) {
 }
 
 function CapacityTab({ rangeDays }: { rangeDays: number }) {
+  const reportLink = useReportLink();
   const { data, isLoading } = useQuery<{
     users: Array<{
       userId: string;
@@ -562,7 +567,7 @@ function CapacityTab({ rangeDays }: { rangeDays: number }) {
                 {data.users.map((u) => (
                   <tr key={u.userId} className="border-b last:border-0">
                     <td className="p-3">
-                      <Link href={`/reports/employees/${u.userId}`} className="font-medium text-sm truncate max-w-[130px] block hover:underline text-primary cursor-pointer">
+                      <Link href={reportLink(`/reports/employees/${u.userId}`)} className="font-medium text-sm truncate max-w-[130px] block hover:underline text-primary cursor-pointer">
                         {userName(u)}
                       </Link>
                     </td>
@@ -595,6 +600,7 @@ function CapacityTab({ rangeDays }: { rangeDays: number }) {
 }
 
 function RiskTab({ rangeDays }: { rangeDays: number }) {
+  const reportLink = useReportLink();
   const { data, isLoading } = useQuery<{
     flagged: Array<{
       userId: string;
@@ -671,7 +677,7 @@ function RiskTab({ rangeDays }: { rangeDays: number }) {
                 </Avatar>
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-2">
-                    <Link href={`/reports/employees/${u.userId}`} className="font-semibold text-sm hover:underline text-primary cursor-pointer">
+                    <Link href={reportLink(`/reports/employees/${u.userId}`)} className="font-semibold text-sm hover:underline text-primary cursor-pointer">
                       {userName(u)}
                     </Link>
                     <Badge variant={variant}>{label}</Badge>
@@ -852,6 +858,7 @@ function ScoreBar({ value, color }: { value: number; color: string }) {
 }
 
 function PerformanceTab({ rangeDays }: { rangeDays: number }) {
+  const reportLink = useReportLink();
   const [sortBy, setSortBy] = useState<EpiSortField>("overallScore");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
 
@@ -987,7 +994,7 @@ function PerformanceTab({ rangeDays }: { rangeDays: number }) {
                           <AvatarImage src={getStorageUrl(e.avatarUrl) ?? ""} alt={userName(e)} />
                           <AvatarFallback className="text-xs">{userInitials(e)}</AvatarFallback>
                         </Avatar>
-                        <Link href={`/reports/employees/${e.userId}`} className="text-sm font-medium truncate max-w-[130px] hover:underline text-primary cursor-pointer">
+                        <Link href={reportLink(`/reports/employees/${e.userId}`)} className="text-sm font-medium truncate max-w-[130px] hover:underline text-primary cursor-pointer">
                           {userName(e)}
                         </Link>
                       </div>
@@ -1131,6 +1138,7 @@ function ExplanationsPanel({ explanations, dataQualityFlags }: { explanations: s
 }
 
 function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
+  const reportLink = useReportLink();
   const [expandedUser, setExpandedUser] = useState<string | null>(null);
   const [expandedProject, setExpandedProject] = useState<string | null>(null);
 
@@ -1248,7 +1256,7 @@ function ForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
                       >
                         <td className="py-2 px-3 font-medium">
                           <Link
-                            href={`/reports/employees/${u.userId}`}
+                            href={reportLink(`/reports/employees/${u.userId}`)}
                             className="hover:underline text-primary cursor-pointer"
                             onClick={(e: React.MouseEvent) => e.stopPropagation()}
                             data-testid={`link-forecast-employee-${u.userId}`}

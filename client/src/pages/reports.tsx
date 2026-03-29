@@ -75,16 +75,27 @@ function ReportCard({ icon, title, description, onClick, color }: ReportCardProp
 }
 
 
+const STORAGE_KEY_VIEW = "superReports_embeddedView";
+
 export default function ReportsPage({ embedded }: { embedded?: boolean } = {}) {
   const { user, isLoading } = useAuth();
   const [location, wouter_navigate] = useLocation();
-  const [embeddedView, setEmbeddedView] = useState<ReportView>("landing");
+  const [embeddedView, setEmbeddedView] = useState<ReportView>(() => {
+    if (!embedded) return "landing";
+    const stored = sessionStorage.getItem(STORAGE_KEY_VIEW);
+    if (stored && ["landing", "time-workload-cc", "project-cc", "employee-cc", "client-cc"].includes(stored)) {
+      return stored as ReportView;
+    }
+    return "landing";
+  });
   const currentView: ReportView = embedded ? embeddedView : (PATH_TO_VIEW[location] || "landing");
   const flags = useFeatureFlags();
 
   const navigate = (path: string) => {
     if (embedded) {
-      setEmbeddedView(PATH_TO_VIEW[path] || "landing");
+      const view = PATH_TO_VIEW[path] || "landing";
+      setEmbeddedView(view);
+      sessionStorage.setItem(STORAGE_KEY_VIEW, view);
     } else {
       wouter_navigate(path);
     }

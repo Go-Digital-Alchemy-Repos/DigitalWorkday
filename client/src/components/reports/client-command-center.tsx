@@ -1,6 +1,7 @@
 import { useState, useMemo } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { Link } from "wouter";
+import { useReportLink } from "@/contexts/report-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -213,6 +214,7 @@ interface ClientOverviewItem {
 }
 
 function OverviewTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
+  const reportLink = useReportLink();
   const [sortField, setSortField] = useState<"industry" | "engagement" | null>(null);
   const [sortDir, setSortDir] = useState<"asc" | "desc">("asc");
 
@@ -279,7 +281,7 @@ function OverviewTab({ rangeDays, filters }: { rangeDays: number; filters: Clien
             <Card key={c.clientId} data-testid={`mobile-card-client-${c.clientId}`}>
               <CardContent className="p-4">
                 <div className="flex items-start justify-between gap-2 mb-2">
-                  <Link href={`/reports/clients/${c.clientId}`} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-mobile-${c.clientId}`}>{c.companyName}</Link>
+                  <Link href={reportLink(`/reports/clients/${c.clientId}`)} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-mobile-${c.clientId}`}>{c.companyName}</Link>
                   <Badge variant={engagementBadgeVariant(c.engagementScore)} data-testid={`engagement-mobile-${c.clientId}`}>
                     {c.engagementScore}%
                   </Badge>
@@ -329,7 +331,7 @@ function OverviewTab({ rangeDays, filters }: { rangeDays: number; filters: Clien
                 <TableBody>
                   {sortedClients.map((c) => (
                     <TableRow key={c.clientId} data-testid={`row-client-${c.clientId}`}>
-                      <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-overview-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                      <TableCell className="font-medium text-sm"><Link href={reportLink(`/reports/clients/${c.clientId}`)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-overview-${c.clientId}`}>{c.companyName}</Link></TableCell>
                       <TableCell className="text-sm text-muted-foreground" data-testid={`industry-${c.clientId}`}>{c.industry ?? "—"}</TableCell>
                       <TableCell data-testid={`tags-${c.clientId}`}>
                         {c.tags.length > 0 ? (
@@ -381,6 +383,7 @@ interface ClientActivityItem {
 }
 
 function ActivityTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
+  const reportLink = useReportLink();
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientActivityItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/activity", rangeDays, filterParams],
@@ -415,7 +418,7 @@ function ActivityTab({ rangeDays, filters }: { rangeDays: number; filters: Clien
             <TableBody>
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-activity-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-activity-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                  <TableCell className="font-medium text-sm"><Link href={reportLink(`/reports/clients/${c.clientId}`)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-activity-${c.clientId}`}>{c.companyName}</Link></TableCell>
                   <TableCell className="text-sm">{c.tasksCreatedInRange}</TableCell>
                   <TableCell className="text-sm">{Math.round(c.timeLoggedInRange * 10) / 10}h</TableCell>
                   <TableCell className="text-sm">{c.commentsInRange}</TableCell>
@@ -450,6 +453,7 @@ interface ClientTimeItem {
 }
 
 function TimeTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
+  const reportLink = useReportLink();
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientTimeItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/time", rangeDays, filterParams],
@@ -490,7 +494,7 @@ function TimeTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFil
             <TableBody>
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-time-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-time-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                  <TableCell className="font-medium text-sm"><Link href={reportLink(`/reports/clients/${c.clientId}`)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-time-${c.clientId}`}>{c.companyName}</Link></TableCell>
                   <TableCell className="text-sm">{c.totalHours}h</TableCell>
                   <TableCell className="text-sm">{c.billableHours}h</TableCell>
                   <TableCell className="text-sm">{c.nonBillableHours}h</TableCell>
@@ -528,6 +532,7 @@ interface ClientTaskItem {
 }
 
 function TasksTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
+  const reportLink = useReportLink();
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientTaskItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/tasks", rangeDays, filterParams],
@@ -583,7 +588,7 @@ function TasksTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFi
               <TableBody>
                 {data?.clients.map((c) => (
                   <TableRow key={c.clientId} data-testid={`row-tasks-${c.clientId}`}>
-                    <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-tasks-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                    <TableCell className="font-medium text-sm"><Link href={reportLink(`/reports/clients/${c.clientId}`)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-tasks-${c.clientId}`}>{c.companyName}</Link></TableCell>
                     <TableCell className="text-sm">{c.openTaskCount}</TableCell>
                     <TableCell>
                       <span className={cn("text-sm font-medium", c.overdueCount > 0 ? "text-red-600 dark:text-red-400" : "text-muted-foreground")}>
@@ -620,6 +625,7 @@ interface ClientSlaItem {
 }
 
 function SlaTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
+  const reportLink = useReportLink();
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ clients: ClientSlaItem[]; pagination: { total: number; limit: number; offset: number }; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/sla", rangeDays, filterParams],
@@ -661,7 +667,7 @@ function SlaTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilt
             <TableBody>
               {data?.clients.map((c) => (
                 <TableRow key={c.clientId} data-testid={`row-sla-${c.clientId}`}>
-                  <TableCell className="font-medium text-sm"><Link href={`/reports/clients/${c.clientId}`} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-sla-${c.clientId}`}>{c.companyName}</Link></TableCell>
+                  <TableCell className="font-medium text-sm"><Link href={reportLink(`/reports/clients/${c.clientId}`)} className="hover:underline text-primary cursor-pointer" data-testid={`link-client-sla-${c.clientId}`}>{c.companyName}</Link></TableCell>
                   <TableCell className="text-sm">{c.totalTasks}</TableCell>
                   <TableCell>
                     <div className="flex items-center gap-2 min-w-[140px]">
@@ -709,6 +715,7 @@ interface ClientRiskItem {
 }
 
 function RiskTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
+  const reportLink = useReportLink();
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
   const { data, isLoading } = useQuery<{ flagged: ClientRiskItem[]; totalChecked: number; range: { startDate: string; endDate: string } }>({
     queryKey: ["/api/reports/v2/client/risk", rangeDays, filterParams],
@@ -764,7 +771,7 @@ function RiskTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFil
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-2 flex-wrap mb-2">
                     <Building2 className="h-4 w-4 text-muted-foreground shrink-0" />
-                    <Link href={`/reports/clients/${c.clientId}`} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-risk-${c.clientId}`}>{c.companyName}</Link>
+                    <Link href={reportLink(`/reports/clients/${c.clientId}`)} className="font-semibold text-sm hover:underline text-primary cursor-pointer" data-testid={`link-client-risk-${c.clientId}`}>{c.companyName}</Link>
                     <Badge variant={variant}>{label}</Badge>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-muted-foreground mb-3 flex-wrap">
@@ -852,6 +859,7 @@ function ChiScoreBar({ value, colorClass }: { value: number; colorClass: string 
 }
 
 function HealthTab({ rangeDays, filters }: { rangeDays: number; filters: ClientFilters }) {
+  const reportLink = useReportLink();
   const [sortBy, setSortBy] = useState<ChiSortField>("overallScore");
   const [sortDir, setSortDir] = useState<SortDir>("desc");
   const filterParams = useMemo(() => buildFilterParams(filters), [filters]);
@@ -959,7 +967,7 @@ function HealthTab({ rangeDays, filters }: { rangeDays: number; filters: ClientF
                 return (
                   <TableRow key={c.clientId} data-testid={`row-client-health-${c.clientId}`}>
                     <TableCell>
-                      <Link href={`/reports/clients/${c.clientId}`} className="text-sm font-medium hover:underline text-primary cursor-pointer" data-testid={`link-client-health-${c.clientId}`}>{c.companyName}</Link>
+                      <Link href={reportLink(`/reports/clients/${c.clientId}`)} className="text-sm font-medium hover:underline text-primary cursor-pointer" data-testid={`link-client-health-${c.clientId}`}>{c.companyName}</Link>
                     </TableCell>
                     <TableCell>
                       <span className={cn(
@@ -1107,6 +1115,7 @@ function ScoreBar({ current, predicted }: { current: number; predicted: number }
 }
 
 function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
+  const reportLink = useReportLink();
   const [expandedClient, setExpandedClient] = useState<string | null>(null);
 
   const { data, isLoading } = useQuery<{
@@ -1205,7 +1214,7 @@ function ClientForecastsTab({ horizonWeeks }: { horizonWeeks: number }) {
                         data-testid={`forecast-client-row-${c.clientId}`}
                       >
                         <TableCell className="font-medium max-w-[160px]">
-                          <Link href={`/reports/clients/${c.clientId}`} className="truncate block hover:underline text-primary cursor-pointer" data-testid={`link-client-forecast-${c.clientId}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>{c.companyName}</Link>
+                          <Link href={reportLink(`/reports/clients/${c.clientId}`)} className="truncate block hover:underline text-primary cursor-pointer" data-testid={`link-client-forecast-${c.clientId}`} onClick={(e: React.MouseEvent) => e.stopPropagation()}>{c.companyName}</Link>
                         </TableCell>
                         <TableCell className="text-center">
                           <ScoreBar current={c.currentHealthScore} predicted={c.predictedHealthScore} />

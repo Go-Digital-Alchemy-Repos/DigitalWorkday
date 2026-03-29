@@ -1,7 +1,8 @@
 import { useParams, useLocation, Link } from "wouter";
 import { useTaskDrawer } from "@/lib/task-drawer-context";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
-import { useState } from "react";
+import { useState, useEffect } from "react";
+import { buildHeaders, queryClient, setActingTenantId, clearTenantScopedCaches } from "@/lib/queryClient";
 import { 
   ChevronLeft, 
   Users, 
@@ -207,7 +208,7 @@ function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number 
     queryFn: async () => {
       const res = await fetch(
         `/api/v1/ai/employee/${employeeId}/summary?days=${days}`,
-        { credentials: "include" }
+        { credentials: "include", headers: buildHeaders() }
       );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -502,7 +503,7 @@ function AiSummaryCard({ employeeId, days }: { employeeId: string; days: number 
 export default function EmployeeProfileReportPage() {
   const { employeeId } = useParams<{ employeeId: string }>();
   const { openTask } = useTaskDrawer();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const range = searchParams.get("range") || "30d";
   const days = range === "7d" ? 7 : range === "90d" ? 90 : 30;
@@ -512,7 +513,7 @@ export default function EmployeeProfileReportPage() {
     queryFn: async () => {
       const res = await fetch(
         `/api/reports/v2/employee/${employeeId}/profile?range=${range}`,
-        { credentials: "include" }
+        { credentials: "include", headers: buildHeaders() }
       );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -523,8 +524,24 @@ export default function EmployeeProfileReportPage() {
     enabled: !!employeeId,
   });
 
+  useEffect(() => {
+    return () => {
+      if (location.startsWith("/super-admin") && !window.location.pathname.startsWith("/super-admin/reports")) {
+        setActingTenantId(null);
+        clearTenantScopedCaches();
+        queryClient.invalidateQueries({ queryKey: ["/api/features/flags"] });
+        sessionStorage.removeItem("superReports_activeTab");
+        sessionStorage.removeItem("superReports_tenantId");
+        sessionStorage.removeItem("superReports_embeddedView");
+      }
+    };
+  }, [location]);
+
   const handleRangeChange = (value: string) => {
-    setLocation(`/reports/employees/${employeeId}?range=${value}`);
+    const basePath = location.startsWith("/super-admin")
+      ? `/super-admin/reports/employees/${employeeId}`
+      : `/reports/employees/${employeeId}`;
+    setLocation(`${basePath}?range=${value}`);
   };
 
   if (error) {
@@ -577,7 +594,7 @@ export default function EmployeeProfileReportPage() {
       <div className="border-b bg-background/95 backdrop-blur shrink-0">
         <div className="container max-w-7xl p-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Link href="/reports/employees">
+            <Link href={location.startsWith("/super-admin") ? "/super-admin/reports/employees" : "/reports/employees"}>
               <Button variant="ghost" size="sm" className="gap-1" data-testid="button-back-to-reports">
                 <ChevronLeft className="h-4 w-4" />
                 Back to Employee Reports

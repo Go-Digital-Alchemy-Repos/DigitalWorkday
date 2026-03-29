@@ -1,4 +1,4 @@
-import { useState, useEffect, lazy, Suspense } from "react";
+import { useState, useEffect, useCallback, lazy, Suspense } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { useAuth } from "@/lib/auth";
 import { Redirect } from "wouter";
@@ -22,6 +22,7 @@ import { PageSkeleton } from "@/components/skeletons/page-skeleton";
 import { cn } from "@/lib/utils";
 import { TenantIntelligencePanel } from "@/components/super-admin/tenant-intelligence-panel";
 import { TeamLocationMap } from "@/components/super-admin/team-location-map";
+import { ReportContextProvider } from "@/contexts/report-context";
 
 const ReportsPage = lazy(() => import("@/pages/reports"));
 const SuperAdminPlatformReports = lazy(() => import("@/pages/super-admin-platform-reports"));
@@ -47,10 +48,19 @@ function NoTenantSelected() {
   );
 }
 
+const STORAGE_KEY_TAB = "superReports_activeTab";
+const STORAGE_KEY_TENANT = "superReports_tenantId";
+
 export default function SuperAdminReportsPage() {
   const { user } = useAuth();
-  const [activeTab, setActiveTab] = useState<"platform" | "tenant" | "chat">("platform");
-  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<"platform" | "tenant" | "chat">(() => {
+    const stored = sessionStorage.getItem(STORAGE_KEY_TAB);
+    if (stored === "platform" || stored === "tenant" || stored === "chat") return stored;
+    return "platform";
+  });
+  const [selectedTenantId, setSelectedTenantId] = useState<string | null>(() => {
+    return sessionStorage.getItem(STORAGE_KEY_TENANT);
+  });
 
   if (user?.role !== "super_user") {
     return <Redirect to="/" />;
@@ -69,18 +79,35 @@ export default function SuperAdminReportsPage() {
 
   const selectedTenant = tenants.find((t) => t.id === selectedTenantId) ?? null;
 
+  const handleTabChange = useCallback((tab: "platform" | "tenant" | "chat") => {
+    setActiveTab(tab);
+    sessionStorage.setItem(STORAGE_KEY_TAB, tab);
+  }, []);
+
   const handleTenantSelect = (tenantId: string) => {
     setActingTenantId(tenantId);
     clearTenantScopedCaches();
     queryClient.invalidateQueries({ queryKey: ["/api/features/flags"] });
     setSelectedTenantId(tenantId);
+    sessionStorage.setItem(STORAGE_KEY_TENANT, tenantId);
   };
 
   useEffect(() => {
+    if (activeTab === "tenant" && selectedTenantId) {
+      setActingTenantId(selectedTenantId);
+    }
+  }, []);
+
+  useEffect(() => {
     return () => {
-      setActingTenantId(null);
-      clearTenantScopedCaches();
-      queryClient.invalidateQueries({ queryKey: ["/api/features/flags"] });
+      if (!window.location.pathname.startsWith("/super-admin/reports")) {
+        setActingTenantId(null);
+        clearTenantScopedCaches();
+        queryClient.invalidateQueries({ queryKey: ["/api/features/flags"] });
+        sessionStorage.removeItem(STORAGE_KEY_TAB);
+        sessionStorage.removeItem(STORAGE_KEY_TENANT);
+        sessionStorage.removeItem("superReports_embeddedView");
+      }
     };
   }, []);
 
@@ -95,7 +122,7 @@ export default function SuperAdminReportsPage() {
   return (
     <Tabs
       value={activeTab}
-      onValueChange={(v) => setActiveTab(v as "platform" | "tenant" | "chat")}
+      onValueChange={(v) => handleTabChange(v as "platform" | "tenant" | "chat")}
       className="flex flex-col h-full overflow-hidden"
     >
       {/* Page header + tab list */}
@@ -221,9 +248,11 @@ export default function SuperAdminReportsPage() {
               <div className="px-4 sm:px-6 py-3">
                 <TeamLocationMap tenantId={selectedTenantId} />
               </div>
-              <Suspense fallback={<PageSkeleton />}>
-                <ReportsPage key={selectedTenantId} embedded />
-              </Suspense>
+              <ReportContextProvider isSuperAdmin>
+                <Suspense fallback={<PageSkeleton />}>
+                  <ReportsPage key={selectedTenantId} embedded />
+                </Suspense>
+              </ReportContextProvider>
             </>
           ) : (
             <NoTenantSelected />

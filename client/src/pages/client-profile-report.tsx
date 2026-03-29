@@ -1,6 +1,7 @@
 import { useParams, useLocation, Link } from "wouter";
 import { useQuery } from "@tanstack/react-query";
-import { useState, useMemo } from "react";
+import { useState, useMemo, useEffect } from "react";
+import { buildHeaders, queryClient, setActingTenantId, clearTenantScopedCaches } from "@/lib/queryClient";
 import {
   startOfDay,
   startOfWeek,
@@ -258,7 +259,7 @@ function TrackedTimeCard({ clientId }: { clientId: string }) {
     queryKey: ["/api/time-entries", { clientId, startDate, endDate }],
     queryFn: async () => {
       const params = new URLSearchParams({ clientId, startDate, endDate });
-      const res = await fetch(`/api/time-entries?${params}`, { credentials: "include" });
+      const res = await fetch(`/api/time-entries?${params}`, { credentials: "include", headers: buildHeaders() });
       if (!res.ok) throw new Error("Failed to load time entries");
       return res.json();
     },
@@ -386,7 +387,7 @@ function TrackedTimeCard({ clientId }: { clientId: string }) {
 
 export default function ClientProfileReportPage() {
   const { clientId } = useParams<{ clientId: string }>();
-  const [, setLocation] = useLocation();
+  const [location, setLocation] = useLocation();
   const searchParams = new URLSearchParams(window.location.search);
   const range = searchParams.get("range") || "30d";
 
@@ -395,7 +396,7 @@ export default function ClientProfileReportPage() {
     queryFn: async () => {
       const res = await fetch(
         `/api/reports/v2/client/${clientId}/profile?range=${range}`,
-        { credentials: "include" }
+        { credentials: "include", headers: buildHeaders() }
       );
       if (!res.ok) {
         const body = await res.json().catch(() => ({}));
@@ -406,8 +407,24 @@ export default function ClientProfileReportPage() {
     enabled: !!clientId,
   });
 
+  useEffect(() => {
+    return () => {
+      if (location.startsWith("/super-admin") && !window.location.pathname.startsWith("/super-admin/reports")) {
+        setActingTenantId(null);
+        clearTenantScopedCaches();
+        queryClient.invalidateQueries({ queryKey: ["/api/features/flags"] });
+        sessionStorage.removeItem("superReports_activeTab");
+        sessionStorage.removeItem("superReports_tenantId");
+        sessionStorage.removeItem("superReports_embeddedView");
+      }
+    };
+  }, [location]);
+
   const handleRangeChange = (value: string) => {
-    setLocation(`/reports/clients/${clientId}?range=${value}`);
+    const basePath = location.startsWith("/super-admin")
+      ? `/super-admin/reports/clients/${clientId}`
+      : `/reports/clients/${clientId}`;
+    setLocation(`${basePath}?range=${value}`);
   };
 
   if (error) {
@@ -460,7 +477,7 @@ export default function ClientProfileReportPage() {
       <div className="border-b bg-background/95 backdrop-blur shrink-0">
         <div className="container max-w-7xl p-4 flex items-center justify-between gap-4">
           <div className="flex items-center gap-4">
-            <Link href="/reports/clients">
+            <Link href={location.startsWith("/super-admin") ? "/super-admin/reports/clients" : "/reports/clients"}>
               <Button variant="ghost" size="sm" className="gap-1" data-testid="button-back-to-reports">
                 <ChevronLeft className="h-4 w-4" />
                 Back to Client Reports
