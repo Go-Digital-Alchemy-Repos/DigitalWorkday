@@ -43,7 +43,10 @@ router.get("/project/overview", async (req: Request, res: Response) => {
   try {
     const tenantId = getTenantId(req);
     const { startDate, endDate, params } = parseReportRange(req.query as Record<string, unknown>);
-    const { limit, offset } = safePagination(params);
+    const { limit: rawLimit, offset: rawOffset } = safePagination(params);
+    const hasExplicitLimit = Number(req.query.limit) > 0;
+    const limit = hasExplicitLimit ? rawLimit : 10000;
+    const offset = hasExplicitLimit ? rawOffset : 0;
     const bypass = shouldBypassCache(req.query as Record<string, unknown>);
     const cacheKey = buildCacheKey(tenantId, "project-overview", { startDate, endDate, limit, offset });
 

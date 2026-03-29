@@ -79,6 +79,10 @@ function formatHours(seconds: number) {
   return (seconds / 3600).toFixed(1) + "h";
 }
 
+function displayHours(hours: number) {
+  return hours.toFixed(1) + "h";
+}
+
 function getInitials(name: string) {
   return name
     .split(" ")
@@ -198,7 +202,7 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
         />
         <MetricCard
           label="Total Hours"
-          value={formatHours(data.summary.totalHours)}
+          value={displayHours(data.summary.totalHours)}
           icon={<Clock className="h-4 w-4 text-white" />}
           color="bg-violet-500"
           testId="metric-total-hours"
@@ -269,7 +273,7 @@ function OverviewTab({ rangeDays }: { rangeDays: number }) {
                         </div>
                       </TableCell>
                       <TableCell className="text-xs">
-                        {formatHours(p.total_hours)}
+                        {displayHours(p.total_hours)}
                       </TableCell>
                       <TableCell className="min-w-[100px]">
                         {p.budget_minutes > 0 ? (
