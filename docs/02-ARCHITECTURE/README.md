@@ -1,7 +1,7 @@
 # Architecture
 
 **Status:** Current  
-**Last Updated:** January 2026
+**Last Updated:** March 2026
 
 This section covers the system architecture, technology choices, and design patterns used in MyWorkDay.
 
@@ -92,6 +92,20 @@ myworkday/
 │   └── schema.ts         # Database schema & types
 └── docs/                 # Documentation
 ```
+
+---
+
+## Compiler Target Decision
+
+| Setting | Value | Rationale |
+|---------|-------|-----------|
+| `target` | ES2022 | Supports native iterators (Set, Map), top-level await, class fields, `Error.cause`. Eliminates TS2802 downlevelIteration errors without runtime polyfills. |
+| `module` | ESNext | Preserves ES module syntax for bundler (Vite) to handle. |
+| `moduleResolution` | bundler | Matches Vite's module resolution strategy. |
+| `lib` | esnext, dom, dom.iterable | Full ES library typings plus browser DOM APIs. |
+| Runtime | Node.js 20+ | Node 20 fully supports ES2022 features natively. No runtime compatibility risk. |
+
+The ES2022 target was chosen because the runtime environment (Node 20) supports all ES2022 features, and the frontend is processed by Vite which handles further transpilation for browser targets. This eliminates the need for `--downlevelIteration` and avoids unnecessary helper code emission.
 
 ---
 

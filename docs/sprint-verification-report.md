@@ -363,9 +363,11 @@ Post-merge re-validation confirming all sprint optimizations remain intact after
 ### Typecheck Status
 `npx tsc --noEmit` previously produced 246 errors across 82 files (none were sprint regressions). **As of Task #64, all TypeScript errors have been resolved — `npm run check` now exits with 0 errors.** Compiler target is ES2022. The table below shows the categories that were present at the time of the original report (all now resolved):
 
+*Historical snapshot — all categories below have been resolved as of Tasks #41 and #64.*
+
 | Error Category | Example Files (representative) | Sprint Regression? | Notes |
 |---|---|---|---|
-| `Set` iteration requires `--downlevelIteration` | storage.ts, chat.repo.ts, tasks.repo.ts, commentAttachments.ts, routeScanner.ts | **No** | Pre-existing tsconfig limitation (9+ occurrences) |
+| `Set` iteration requires `--downlevelIteration` | storage.ts, chat.repo.ts, tasks.repo.ts, commentAttachments.ts, routeScanner.ts | **No** | Resolved — ES2022 target supports native iterators (was 9+ occurrences) |
 | Missing `isNull` import | tasks.repo.ts:124, :163 | **No** | Pre-existing — `isNull` used but not imported from `drizzle-orm` |
 | Missing `clientsRepo` reference | storage.ts:1952 | **No** | Pre-existing — reference to extracted repo without import |
 | Billing service argument mismatch | billingApprovalService.ts (5 errors), invoiceDraftService.ts (6 errors) | **No** | Unrelated to sprint |
@@ -378,7 +380,7 @@ Post-merge re-validation confirming all sprint optimizations remain intact after
 | Home page component | home.tsx (11 errors) | **No** | Unrelated to sprint |
 | Import engine | importEngine.ts (8 errors) | **No** | Data import module, unrelated |
 
-**Sprint-touched files with errors** (all pre-existing, none introduced by the performance sprint):
+**Sprint-touched files with errors** (historical snapshot — all pre-existing, none introduced by the performance sprint; all resolved as of Tasks #41 and #64):
 
 | File | Error Count | Error Types | Sprint Regression? |
 |---|---|---|---|
@@ -387,10 +389,10 @@ Post-merge re-validation confirming all sprint optimizations remain intact after
 | `server/storage/tasks.repo.ts` | 3 | Missing `isNull` import, Set iteration | **No** |
 | `server/http/domains/tasks.router.ts` | 2 | Zod parsed type vs `Partial<MyTaskPayload>` mismatch | **No** |
 | `client/src/pages/projects-dashboard.tsx` | 2 | `ProjectDrawerProps` type mismatch (drawer component) | **No** |
-| `client/src/pages/clients.tsx` | 2 | Type conversion for hierarchy, MapIterator downlevelIteration | **No** |
+| `client/src/pages/clients.tsx` | 2 | Type conversion for hierarchy, MapIterator (resolved by ES2022 target) | **No** |
 | `client/src/features/tasks/task-detail-drawer.tsx` | 1 | Comment type conversion (Date vs string for createdAt) | **No** |
 
-All errors are type-narrowing issues (Zod vs Drizzle ORM type widths, `downlevelIteration` tsconfig limitation, component prop mismatches). They do not affect runtime behavior and were present before the sprint.
+All errors were type-narrowing issues (Zod vs Drizzle ORM type widths, `downlevelIteration` tsconfig limitation — now resolved by ES2022 target, component prop mismatches). They did not affect runtime behavior and were present before the sprint. All have since been resolved (Tasks #41, #64).
 
 ### Re-Validation of Five Target Areas
 
