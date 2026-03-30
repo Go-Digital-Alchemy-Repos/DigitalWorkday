@@ -118,7 +118,7 @@ export type ProjectActivityItem = {
   entityTitle: string;
   metadata?: Record<string, unknown>;
 };
-import { eq, and, desc, asc, inArray, notInArray, gte, lte, gt, isNull, isNotNull, sql, ilike, or } from "drizzle-orm";
+import { eq, and, desc, asc, inArray, notInArray, gte, lte, lt, gt, isNull, isNotNull, sql, ilike, or, count } from "drizzle-orm";
 import { encryptValue, decryptValue } from "./lib/encryption";
 import { dbRows as dbRowsHelper } from "./lib/dbHelpers";
 import { createLogger } from "./lib/logger";
@@ -317,6 +317,11 @@ export interface IStorage {
     endDate?: Date;
   }): Promise<TimeEntryListItem[]>;
   getTimeEntriesByUserFlat(userId: string, workspaceId: string): Promise<TimeEntryListItem[]>;
+  getTimeEntriesByWorkspaceFlatPaginated(workspaceId: string, pagination: { cursor?: string; limit: number }, filters?: {
+    userId?: string; clientId?: string; projectId?: string; taskId?: string;
+    scope?: 'in_scope' | 'out_of_scope'; startDate?: Date; endDate?: Date;
+  }): Promise<{ items: TimeEntryListItem[]; hasMore: boolean; nextCursor: string | null; totalCount: number }>;
+  getTimeEntriesByUserFlatPaginated(userId: string, workspaceId: string, pagination: { cursor?: string; limit: number }): Promise<{ items: TimeEntryListItem[]; hasMore: boolean; nextCursor: string | null; totalCount: number }>;
   createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry>;
   updateTimeEntry(id: string, entry: Partial<InsertTimeEntry>): Promise<TimeEntry | undefined>;
   deleteTimeEntry(id: string): Promise<void>;
@@ -409,6 +414,10 @@ export interface IStorage {
     startDate?: Date;
     endDate?: Date;
   }): Promise<TimeEntryListItem[]>;
+  getTimeEntriesByTenantFlatPaginated(tenantId: string, workspaceId: string, pagination: { cursor?: string; limit: number }, filters?: {
+    userId?: string; clientId?: string; projectId?: string; taskId?: string;
+    scope?: 'in_scope' | 'out_of_scope'; startDate?: Date; endDate?: Date;
+  }): Promise<{ items: TimeEntryListItem[]; hasMore: boolean; nextCursor: string | null; totalCount: number }>;
   createTimeEntryWithTenant(entry: InsertTimeEntry, tenantId: string): Promise<TimeEntry>;
   updateTimeEntryWithTenant(id: string, tenantId: string, entry: Partial<InsertTimeEntry>): Promise<TimeEntry | undefined>;
   deleteTimeEntryWithTenant(id: string, tenantId: string): Promise<boolean>;
@@ -2377,6 +2386,95 @@ export class DatabaseStorage implements IStorage {
     return this.getTimeEntriesByWorkspaceFlat(workspaceId, { userId });
   }
 
+  private async fetchAndFlattenEntriesPaginated(
+    conditions: any[],
+    pagination: { cursor?: string; limit: number },
+  ): Promise<{ items: TimeEntryListItem[]; hasMore: boolean; nextCursor: string | null; totalCount: number }> {
+    const paginatedConditions = [...conditions];
+    if (pagination.cursor) {
+      const parts = pagination.cursor.split("|");
+      const cursorDate = new Date(parts[0]);
+      if (isNaN(cursorDate.getTime())) {
+        throw new Error("Invalid cursor: must be a valid ISO-8601 timestamp");
+      }
+      const cursorId = parts[1];
+      if (cursorId) {
+        paginatedConditions.push(
+          or(
+            lt(timeEntries.startTime, cursorDate),
+            and(eq(timeEntries.startTime, cursorDate), lt(timeEntries.id, cursorId)),
+          )!,
+        );
+      } else {
+        paginatedConditions.push(lt(timeEntries.startTime, cursorDate));
+      }
+    }
+
+    const [rows, [countResult]] = await Promise.all([
+      db.select()
+        .from(timeEntries)
+        .where(and(...paginatedConditions))
+        .orderBy(desc(timeEntries.startTime), desc(timeEntries.id))
+        .limit(pagination.limit + 1),
+      db.select({ count: count() })
+        .from(timeEntries)
+        .where(and(...conditions)),
+    ]);
+
+    const hasMore = rows.length > pagination.limit;
+    const entries = hasMore ? rows.slice(0, pagination.limit) : rows;
+    const totalCount = countResult?.count ?? 0;
+
+    if (entries.length === 0) {
+      return { items: [], hasMore: false, nextCursor: null, totalCount };
+    }
+
+    const collectIds = (field: keyof TimeEntry) => {
+      const ids = new Set<string>();
+      for (const e of entries) { const v = e[field]; if (typeof v === "string" && v) ids.add(v); }
+      return Array.from(ids);
+    };
+
+    const [userList, clientList, projectList, taskList] = await Promise.all([
+      collectIds("userId").length > 0 ? db.select({ id: users.id, name: users.name }).from(users).where(inArray(users.id, collectIds("userId"))) : [],
+      collectIds("clientId").length > 0 ? db.select({ id: clients.id, companyName: clients.companyName }).from(clients).where(inArray(clients.id, collectIds("clientId"))) : [],
+      collectIds("projectId").length > 0 ? db.select({ id: projects.id, name: projects.name }).from(projects).where(inArray(projects.id, collectIds("projectId"))) : [],
+      collectIds("taskId").length > 0 ? db.select({ id: tasks.id, title: tasks.title }).from(tasks).where(inArray(tasks.id, collectIds("taskId"))) : [],
+    ]);
+
+    const userMap = new Map(userList.map(u => [u.id, u.name]));
+    const clientMap = new Map(clientList.map(c => [c.id, c.companyName]));
+    const projectMap = new Map(projectList.map(p => [p.id, p.name]));
+    const taskMap = new Map(taskList.map(t => [t.id, t.title]));
+
+    const items = entries.map(entry => ({
+      ...entry,
+      userName: entry.userId ? userMap.get(entry.userId) ?? null : null,
+      clientName: entry.clientId ? clientMap.get(entry.clientId) ?? null : null,
+      projectName: entry.projectId ? projectMap.get(entry.projectId) ?? null : null,
+      taskTitle: entry.taskId ? taskMap.get(entry.taskId) ?? null : null,
+    }));
+
+    const lastEntry = entries[entries.length - 1];
+    const nextCursor = hasMore && lastEntry
+      ? `${new Date(lastEntry.startTime).toISOString()}|${lastEntry.id}`
+      : null;
+
+    return { items, hasMore, nextCursor, totalCount };
+  }
+
+  async getTimeEntriesByWorkspaceFlatPaginated(workspaceId: string, pagination: { cursor?: string; limit: number }, filters?: {
+    userId?: string; clientId?: string; projectId?: string; taskId?: string;
+    scope?: 'in_scope' | 'out_of_scope'; startDate?: Date; endDate?: Date;
+  }): Promise<{ items: TimeEntryListItem[]; hasMore: boolean; nextCursor: string | null; totalCount: number }> {
+    const conditions = this.buildTimeEntryConditions([eq(timeEntries.workspaceId, workspaceId)], filters);
+    return this.fetchAndFlattenEntriesPaginated(conditions, pagination);
+  }
+
+  async getTimeEntriesByUserFlatPaginated(userId: string, workspaceId: string, pagination: { cursor?: string; limit: number }): Promise<{ items: TimeEntryListItem[]; hasMore: boolean; nextCursor: string | null; totalCount: number }> {
+    return this.getTimeEntriesByWorkspaceFlatPaginated(workspaceId, pagination, { userId });
+  }
+
   async createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry> {
     assertInsertHasTenantId(entry, "time_entries");
     const [created] = await db.insert(timeEntries).values(entry).returning();
@@ -3360,6 +3458,17 @@ export class DatabaseStorage implements IStorage {
       eq(timeEntries.workspaceId, workspaceId),
     ], filters);
     return this.fetchAndFlattenEntries(conditions);
+  }
+
+  async getTimeEntriesByTenantFlatPaginated(tenantId: string, workspaceId: string, pagination: { cursor?: string; limit: number }, filters?: {
+    userId?: string; clientId?: string; projectId?: string; taskId?: string;
+    scope?: 'in_scope' | 'out_of_scope'; startDate?: Date; endDate?: Date;
+  }): Promise<{ items: TimeEntryListItem[]; hasMore: boolean; nextCursor: string | null; totalCount: number }> {
+    const conditions = this.buildTimeEntryConditions([
+      eq(timeEntries.tenantId, tenantId),
+      eq(timeEntries.workspaceId, workspaceId),
+    ], filters);
+    return this.fetchAndFlattenEntriesPaginated(conditions, pagination);
   }
 
   async createTimeEntryWithTenant(entry: InsertTimeEntry, tenantId: string): Promise<TimeEntry> {

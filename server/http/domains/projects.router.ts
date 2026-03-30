@@ -163,40 +163,51 @@ router.get("/projects", async (req: Request, res: Response) => {
         
         const parsedLimit = Math.min(parseInt(limit) || 100, 200);
         
-        const selectColumns = fields === 'picker'
-          ? {
-              id: projects.id,
-              name: projects.name,
-              clientId: projects.clientId,
-              status: projects.status,
-            }
-          : fields === 'minimal'
-          ? {
-              id: projects.id,
-              name: projects.name,
-              clientId: projects.clientId,
-              status: projects.status,
-              updatedAt: projects.updatedAt,
-              createdAt: projects.createdAt,
-              color: projects.color,
-              teamId: projects.teamId,
-              workspaceId: projects.workspaceId,
-              tenantId: projects.tenantId,
-              stickyAt: projects.stickyAt,
-              visibility: projects.visibility,
-              description: projects.description,
-            }
-          : undefined;
-        
-        const query = selectColumns
-          ? db.select(selectColumns).from(projects)
-          : db.select().from(projects);
-        
-        const projectList = await (query as any)
-          .where(and(...conditions))
-          .orderBy(order)
-          .limit(parsedLimit)
-          .offset(parseInt(offset) || 0);
+        const whereClause = and(...conditions);
+        const parsedOffset = parseInt(offset) || 0;
+
+        let projectList;
+        if (fields === 'picker') {
+          projectList = await db.select({
+            id: projects.id,
+            name: projects.name,
+            clientId: projects.clientId,
+            status: projects.status,
+          })
+            .from(projects)
+            .where(whereClause)
+            .orderBy(order)
+            .limit(parsedLimit)
+            .offset(parsedOffset);
+        } else if (fields === 'minimal') {
+          projectList = await db.select({
+            id: projects.id,
+            name: projects.name,
+            clientId: projects.clientId,
+            status: projects.status,
+            updatedAt: projects.updatedAt,
+            createdAt: projects.createdAt,
+            color: projects.color,
+            teamId: projects.teamId,
+            workspaceId: projects.workspaceId,
+            tenantId: projects.tenantId,
+            stickyAt: projects.stickyAt,
+            visibility: projects.visibility,
+            description: projects.description,
+          })
+            .from(projects)
+            .where(whereClause)
+            .orderBy(order)
+            .limit(parsedLimit)
+            .offset(parsedOffset);
+        } else {
+          projectList = await db.select()
+            .from(projects)
+            .where(whereClause)
+            .orderBy(order)
+            .limit(parsedLimit)
+            .offset(parsedOffset);
+        }
         
         if (includeCounts === 'true' && projectList.length > 0) {
           const projectIds = projectList.map((p: any) => p.id);
