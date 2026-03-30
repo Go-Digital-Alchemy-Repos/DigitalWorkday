@@ -185,6 +185,25 @@ const mailgun = await getTenantMailgunConfig(tenantId);
 await sendViaTenantMailgun(mailgun, message);
 ```
 
+#### Secret Decryption Flow
+
+All secret decryption in `TenantIntegrationService` flows through a single canonical private method:
+
+```
+_decryptSecretConfig(configEncrypted) → parsed SecretConfig | null
+```
+
+This method handles the `isEncryptionAvailable()` guard, `decryptValue()` call, JSON parse, and error handling (returns `null` on failure). All read/accessor paths use this canonical method. The one exception is `clearSecret()`, which decrypts directly and throws on failure to preserve mutation-path error semantics.
+
+Two public accessor methods delegate to this path:
+
+| Method | Returns | Use case |
+|--------|---------|----------|
+| `getDecryptedSecrets<T>(tenantId, provider)` | `T \| null` | When only secrets are needed (e.g., building API clients) |
+| `getIntegrationWithSecrets(tenantId, provider)` | `{ publicConfig, secretConfig } \| null` | When both public config and secrets are needed |
+
+Both methods share a common `_fetchIntegrationRow()` helper for the DB query. Masking logic for `getIntegration()` and `listIntegrations()` also uses `_decryptSecretConfig()` via a `_buildSecretMasked()` helper.
+
 ---
 
 ## Related Sections

@@ -115,21 +115,66 @@ export interface IntegrationUpdateInput {
 }
 
 export class TenantIntegrationService {
+  private _buildProviderCondition(tenantId: string | null, provider: IntegrationProvider) {
+    return tenantId
+      ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
+      : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
+  }
+
+  private _decryptSecretConfig<T extends SecretConfig = SecretConfig>(configEncrypted: string | null, provider?: string): T | null {
+    if (!configEncrypted || !isEncryptionAvailable()) {
+      return null;
+    }
+    try {
+      return JSON.parse(decryptValue(configEncrypted)) as T;
+    } catch {
+      console.error(`[TenantIntegrations] Failed to decrypt secrets${provider ? ` for ${provider}` : ""}`);
+      return null;
+    }
+  }
+
+  private _buildSecretMasked(provider: IntegrationProvider, secrets: SecretConfig): SecretMaskedInfo {
+    if (provider === "mailgun") {
+      const mgSecrets = secrets as MailgunSecretConfig;
+      return { apiKeyMasked: maskSecret(mgSecrets.apiKey) };
+    } else if (provider === "s3") {
+      const s3Secrets = secrets as S3SecretConfig;
+      return {
+        accessKeyIdMasked: maskSecret(s3Secrets.accessKeyId),
+        secretAccessKeyMasked: maskSecret(s3Secrets.secretAccessKey),
+      };
+    } else if (provider === "r2") {
+      const r2Secrets = secrets as R2SecretConfig;
+      return {
+        accessKeyIdMasked: maskSecret(r2Secrets.accessKeyId),
+        secretAccessKeyMasked: maskSecret(r2Secrets.secretAccessKey),
+      };
+    } else if (provider === "openai") {
+      const aiSecrets = secrets as OpenAISecretConfig;
+      return { apiKeyMasked: maskSecret(aiSecrets.apiKey) };
+    } else if (provider === "asana") {
+      const asanaSecrets = secrets as AsanaSecretConfig;
+      return { apiKeyMasked: maskSecret(asanaSecrets.personalAccessToken) };
+    }
+    return {};
+  }
+
+  private async _fetchIntegrationRow(tenantId: string | null, provider: IntegrationProvider): Promise<typeof tenantIntegrations.$inferSelect | null> {
+    const condition = this._buildProviderCondition(tenantId, provider);
+    const [result] = await db
+      .select()
+      .from(tenantIntegrations)
+      .where(condition)
+      .limit(1);
+    return result || null;
+  }
+
   async getIntegration(tenantId: string | null, provider: IntegrationProvider): Promise<IntegrationResponse | null> {
     debugLog("getIntegration called", { tenantId, provider });
     
-    const condition = tenantId
-      ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
-      : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
-    
     let integration;
     try {
-      const [result] = await db
-        .select()
-        .from(tenantIntegrations)
-        .where(condition)
-        .limit(1);
-      integration = result;
+      integration = await this._fetchIntegrationRow(tenantId, provider);
     } catch (dbError: unknown) {
       const message = dbError instanceof Error ? dbError.message : String(dbError);
       if (message.includes("does not exist") || message.includes("column")) {
@@ -145,40 +190,9 @@ export class TenantIntegrationService {
     }
 
     let secretMasked: SecretMaskedInfo | undefined;
-    if (integration.configEncrypted && isEncryptionAvailable()) {
-      try {
-        const secrets = JSON.parse(decryptValue(integration.configEncrypted)) as SecretConfig;
-        if (provider === "mailgun") {
-          const mgSecrets = secrets as MailgunSecretConfig;
-          secretMasked = {
-            apiKeyMasked: maskSecret(mgSecrets.apiKey),
-          };
-        } else if (provider === "s3") {
-          const s3Secrets = secrets as S3SecretConfig;
-          secretMasked = {
-            accessKeyIdMasked: maskSecret(s3Secrets.accessKeyId),
-            secretAccessKeyMasked: maskSecret(s3Secrets.secretAccessKey),
-          };
-        } else if (provider === "r2") {
-          const r2Secrets = secrets as R2SecretConfig;
-          secretMasked = {
-            accessKeyIdMasked: maskSecret(r2Secrets.accessKeyId),
-            secretAccessKeyMasked: maskSecret(r2Secrets.secretAccessKey),
-          };
-        } else if (provider === "openai") {
-          const aiSecrets = secrets as OpenAISecretConfig;
-          secretMasked = {
-            apiKeyMasked: maskSecret(aiSecrets.apiKey),
-          };
-        } else if (provider === "asana") {
-          const asanaSecrets = secrets as AsanaSecretConfig;
-          secretMasked = {
-            apiKeyMasked: maskSecret(asanaSecrets.personalAccessToken),
-          };
-        }
-      } catch (err) {
-        debugLog("getIntegration - failed to decrypt secrets for masking", { tenantId, provider });
-      }
+    const secrets = this._decryptSecretConfig(integration.configEncrypted, provider);
+    if (secrets) {
+      secretMasked = this._buildSecretMasked(provider, secrets);
     }
 
     debugLog("getIntegration - found", { 
@@ -234,25 +248,9 @@ export class TenantIntegrationService {
       const existing = integrations.find(i => i.provider === provider);
       if (existing) {
         let secretMasked: SecretMaskedInfo | undefined;
-        if (existing.configEncrypted && isEncryptionAvailable()) {
-          try {
-            const secrets = JSON.parse(decryptValue(existing.configEncrypted)) as SecretConfig;
-            if (provider === "mailgun") {
-              const mgSecrets = secrets as MailgunSecretConfig;
-              secretMasked = { apiKeyMasked: maskSecret(mgSecrets.apiKey) };
-            } else if (provider === "s3") {
-              const s3Secrets = secrets as S3SecretConfig;
-              secretMasked = {
-                accessKeyIdMasked: maskSecret(s3Secrets.accessKeyId),
-                secretAccessKeyMasked: maskSecret(s3Secrets.secretAccessKey),
-              };
-            } else if (provider === "openai") {
-              const aiSecrets = secrets as OpenAISecretConfig;
-              secretMasked = { apiKeyMasked: maskSecret(aiSecrets.apiKey) };
-            }
-          } catch {
-            debugLog("listIntegrations - failed to decrypt secrets for masking", { tenantId, provider });
-          }
+        const secrets = this._decryptSecretConfig(existing.configEncrypted, provider);
+        if (secrets) {
+          secretMasked = this._buildSecretMasked(provider, secrets);
         }
         result.push({
           provider: existing.provider,
@@ -294,15 +292,7 @@ export class TenantIntegrationService {
       throw new Error("Encryption key not configured. Cannot save integration secrets.");
     }
 
-    const condition = tenantId
-      ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
-      : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
-
-    const [existing] = await db
-      .select()
-      .from(tenantIntegrations)
-      .where(condition)
-      .limit(1);
+    const existing = await this._fetchIntegrationRow(tenantId, provider);
 
     let publicConfig: PublicConfig | null = null;
     let configEncrypted: string | null = null;
@@ -330,14 +320,7 @@ export class TenantIntegrationService {
     if (input.secretConfig) {
       const hasNewSecret = Object.values(input.secretConfig).some(v => v && v.trim() !== "");
       if (hasNewSecret) {
-        let existingSecrets: SecretConfig = {};
-        if (configEncrypted && isEncryptionAvailable()) {
-          try {
-            existingSecrets = JSON.parse(decryptValue(configEncrypted));
-          } catch {
-            existingSecrets = {};
-          }
-        }
+        const existingSecrets: SecretConfig = this._decryptSecretConfig(configEncrypted, provider) ?? {};
         const newSecrets: SecretConfig = {
           ...existingSecrets,
           ...input.secretConfig,
@@ -388,55 +371,18 @@ export class TenantIntegrationService {
   }
 
   async getDecryptedSecrets<T extends SecretConfig = SecretConfig>(tenantId: string | null, provider: IntegrationProvider): Promise<T | null> {
-    const condition = tenantId
-      ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
-      : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
-    
-    const [integration] = await db
-      .select()
-      .from(tenantIntegrations)
-      .where(condition)
-      .limit(1);
-
-    if (!integration?.configEncrypted || !isEncryptionAvailable()) {
-      return null;
-    }
-
-    try {
-      return JSON.parse(decryptValue(integration.configEncrypted)) as T;
-    } catch {
-      console.error(`[TenantIntegrations] Failed to decrypt secrets for ${provider}`);
-      return null;
-    }
+    const integration = await this._fetchIntegrationRow(tenantId, provider);
+    return this._decryptSecretConfig<T>(integration?.configEncrypted ?? null, provider);
   }
 
   async getIntegrationWithSecrets(tenantId: string | null, provider: IntegrationProvider): Promise<{ publicConfig: PublicConfig | null; secretConfig: SecretConfig | null } | null> {
-    const condition = tenantId
-      ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
-      : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
-    
-    const [integration] = await db
-      .select()
-      .from(tenantIntegrations)
-      .where(condition)
-      .limit(1);
-
+    const integration = await this._fetchIntegrationRow(tenantId, provider);
     if (!integration) {
       return null;
     }
-
-    let secretConfig: SecretConfig | null = null;
-    if (integration.configEncrypted) {
-      try {
-        secretConfig = JSON.parse(decryptValue(integration.configEncrypted));
-      } catch {
-        console.error(`[TenantIntegrations] Failed to decrypt secrets for ${provider}`);
-      }
-    }
-
     return {
       publicConfig: integration.configPublic as PublicConfig | null,
-      secretConfig,
+      secretConfig: this._decryptSecretConfig(integration.configEncrypted, provider),
     };
   }
 
@@ -475,9 +421,7 @@ export class TenantIntegrationService {
           testResult = { success: false, message: `Unknown provider: ${provider}` };
       }
 
-      const updateCondition = tenantId
-        ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
-        : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
+      const updateCondition = this._buildProviderCondition(tenantId, provider);
       
       await db
         .update(tenantIntegrations)
@@ -492,9 +436,7 @@ export class TenantIntegrationService {
     } catch (error) {
       console.error(`[TenantIntegrations] Test failed for ${provider}:`, error);
       
-      const updateCondition = tenantId
-        ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
-        : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
+      const updateCondition = this._buildProviderCondition(tenantId, provider);
       
       await db
         .update(tenantIntegrations)
@@ -716,15 +658,7 @@ export class TenantIntegrationService {
   }
 
   async clearSecret(tenantId: string | null, provider: IntegrationProvider, secretName: string): Promise<void> {
-    const condition = tenantId
-      ? and(eq(tenantIntegrations.tenantId, tenantId), eq(tenantIntegrations.provider, provider))
-      : and(isNull(tenantIntegrations.tenantId), eq(tenantIntegrations.provider, provider));
-
-    const [integration] = await db
-      .select()
-      .from(tenantIntegrations)
-      .where(condition)
-      .limit(1);
+    const integration = await this._fetchIntegrationRow(tenantId, provider);
 
     if (!integration || !integration.configEncrypted) {
       return;

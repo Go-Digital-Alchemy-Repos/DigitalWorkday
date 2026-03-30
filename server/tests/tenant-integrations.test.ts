@@ -291,4 +291,147 @@ describe("Tenant Integrations", () => {
       expect((integration!.publicConfig as any).domain).toBe("new.example.com");
     });
   });
+
+  describe("Secret decryption flow", () => {
+    it("getDecryptedSecrets returns correct typed secrets after upsert", async () => {
+      await service.upsertIntegration(testTenant1Id, "mailgun", {
+        publicConfig: {
+          domain: "decrypt-test.example.com",
+          fromEmail: "decrypt@example.com",
+        },
+        secretConfig: { apiKey: "decrypt-test-api-key-123" },
+      });
+
+      const secrets = await service.getDecryptedSecrets<{ apiKey: string }>(testTenant1Id, "mailgun");
+
+      expect(secrets).not.toBeNull();
+      expect(secrets!.apiKey).toBe("decrypt-test-api-key-123");
+    });
+
+    it("getDecryptedSecrets returns correct S3 secrets after upsert", async () => {
+      await service.upsertIntegration(testTenant1Id, "s3", {
+        publicConfig: {
+          bucketName: "decrypt-bucket",
+          region: "us-west-2",
+          keyPrefixTemplate: "test/",
+        },
+        secretConfig: { accessKeyId: "AKIA_DECRYPT", secretAccessKey: "secret_decrypt_123" },
+      });
+
+      const secrets = await service.getDecryptedSecrets<{ accessKeyId: string; secretAccessKey: string }>(testTenant1Id, "s3");
+
+      expect(secrets).not.toBeNull();
+      expect(secrets!.accessKeyId).toBe("AKIA_DECRYPT");
+      expect(secrets!.secretAccessKey).toBe("secret_decrypt_123");
+    });
+
+    it("getIntegrationWithSecrets returns both public and secret config", async () => {
+      const publicConfig = {
+        domain: "with-secrets.example.com",
+        fromEmail: "ws@example.com",
+        replyTo: "reply@example.com",
+      };
+
+      await service.upsertIntegration(testTenant1Id, "mailgun", {
+        publicConfig,
+        secretConfig: { apiKey: "combined-api-key-456" },
+      });
+
+      const result = await service.getIntegrationWithSecrets(testTenant1Id, "mailgun");
+
+      expect(result).not.toBeNull();
+      expect(result!.publicConfig).toEqual(publicConfig);
+      expect(result!.secretConfig).not.toBeNull();
+      expect((result!.secretConfig as any).apiKey).toBe("combined-api-key-456");
+    });
+
+    it("getDecryptedSecrets returns null for missing integration", async () => {
+      const secrets = await service.getDecryptedSecrets(testTenant1Id, "mailgun");
+      expect(secrets).toBeNull();
+    });
+
+    it("getIntegrationWithSecrets returns null for missing integration", async () => {
+      const result = await service.getIntegrationWithSecrets(testTenant1Id, "mailgun");
+      expect(result).toBeNull();
+    });
+
+    it("handles partial secrets (only accessKeyId, no secretAccessKey)", async () => {
+      await service.upsertIntegration(testTenant1Id, "s3", {
+        publicConfig: {
+          bucketName: "partial-bucket",
+          region: "eu-west-1",
+          keyPrefixTemplate: "partial/",
+        },
+        secretConfig: { accessKeyId: "AKIA_PARTIAL_ONLY", secretAccessKey: "" },
+      });
+
+      const secrets = await service.getDecryptedSecrets<{ accessKeyId?: string; secretAccessKey?: string }>(testTenant1Id, "s3");
+
+      expect(secrets).not.toBeNull();
+      expect(secrets!.accessKeyId).toBe("AKIA_PARTIAL_ONLY");
+      expect(secrets!.secretAccessKey).toBeUndefined();
+    });
+
+    it("getIntegrationWithSecrets returns null secretConfig when no secrets stored", async () => {
+      await service.upsertIntegration(testTenant1Id, "s3", {
+        publicConfig: {
+          bucketName: "no-secret-bucket",
+          region: "us-east-1",
+          keyPrefixTemplate: "nosecret/",
+        },
+      });
+
+      const result = await service.getIntegrationWithSecrets(testTenant1Id, "s3");
+
+      expect(result).not.toBeNull();
+      expect(result!.publicConfig).not.toBeNull();
+      expect(result!.secretConfig).toBeNull();
+    });
+
+    it("corrupt encrypted data returns null without throwing", async () => {
+      await service.upsertIntegration(testTenant1Id, "mailgun", {
+        publicConfig: {
+          domain: "corrupt-test.example.com",
+          fromEmail: "corrupt@example.com",
+        },
+        secretConfig: { apiKey: "valid-key-before-corruption" },
+      });
+
+      await db
+        .update(tenantIntegrations)
+        .set({ configEncrypted: "not-valid-encrypted-data" })
+        .where(
+          and(
+            eq(tenantIntegrations.tenantId, testTenant1Id),
+            eq(tenantIntegrations.provider, "mailgun")
+          )
+        );
+
+      const secrets = await service.getDecryptedSecrets(testTenant1Id, "mailgun");
+      expect(secrets).toBeNull();
+
+      const withSecrets = await service.getIntegrationWithSecrets(testTenant1Id, "mailgun");
+      expect(withSecrets).not.toBeNull();
+      expect(withSecrets!.secretConfig).toBeNull();
+    });
+
+    it("encrypted storage round-trip preserves all secret fields", async () => {
+      const originalSecrets = { accessKeyId: "AKIA_ROUNDTRIP", secretAccessKey: "roundtrip_secret_xyz" };
+
+      await service.upsertIntegration(testTenant1Id, "s3", {
+        publicConfig: {
+          bucketName: "roundtrip-bucket",
+          region: "ap-southeast-1",
+          keyPrefixTemplate: "roundtrip/",
+        },
+        secretConfig: originalSecrets,
+      });
+
+      const decrypted = await service.getDecryptedSecrets<{ accessKeyId: string; secretAccessKey: string }>(testTenant1Id, "s3");
+      expect(decrypted).toEqual(originalSecrets);
+
+      const withSecrets = await service.getIntegrationWithSecrets(testTenant1Id, "s3");
+      expect(withSecrets!.secretConfig).toEqual(originalSecrets);
+    });
+  });
 });
