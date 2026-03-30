@@ -12,7 +12,7 @@ import {
   ClipboardCheck,
   LifeBuoy,
 } from "lucide-react";
-import appLogo from "@assets/Symbol_1767994625714.png";
+import appLogo from "@assets/3e831877-15a3-4721-93dc-ad0a971684d4-digitalworkdayicon_croppe_1774755241706.png";
 import {
   Sidebar,
   SidebarContent,

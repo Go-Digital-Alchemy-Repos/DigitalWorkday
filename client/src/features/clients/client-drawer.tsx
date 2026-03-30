@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { useForm } from "react-hook-form";
 import { useQuery } from "@tanstack/react-query";
 import { queryKeys } from "@/lib/queryKeys"
@@ -25,6 +25,9 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import { S3Dropzone } from "@/components/common/S3Dropzone";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { Building2 } from "lucide-react";
 import type { Client } from "@shared/schema";
 
@@ -43,7 +46,7 @@ type ClientFormData = z.infer<typeof clientSchema>;
 interface ClientDrawerProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  onSubmit: (data: ClientFormData) => Promise<void>;
+  onSubmit: (data: ClientFormData & { avatarUrl?: string | null }) => Promise<void>;
   client?: Client | null;
   isLoading?: boolean;
   mode: "create" | "edit";
@@ -60,6 +63,9 @@ export function ClientDrawer({
   defaultParentClientId,
 }: ClientDrawerProps) {
   const [hasChanges, setHasChanges] = useState(false);
+  const [pendingAvatarUrl, setPendingAvatarUrl] = useState<string | null | undefined>(undefined);
+  const [avatarChanged, setAvatarChanged] = useState(false);
+  const prevOpenRef = useRef(false);
 
   const { data: potentialParents } = useQuery<Client[]>({
     queryKey: tenantKey(queryKeys.clients.all),
@@ -89,40 +95,76 @@ export function ClientDrawer({
   });
 
   useEffect(() => {
-    if (open && client && mode === "edit") {
-      form.reset({
-        companyName: client.companyName,
-        displayName: client.displayName || "",
-        parentClientId: client.parentClientId || "",
-        status: client.status as "active" | "inactive" | "prospect",
-        industry: client.industry || "",
-        website: client.website || "https://",
-        notes: client.notes || "",
-      });
-    } else if (open && mode === "create") {
-      form.reset({
-        companyName: "",
-        displayName: "",
-        parentClientId: defaultParentClientId || "",
-        status: "active",
-        industry: "",
-        website: "https://",
-        notes: "",
-      });
+    const wasOpen = prevOpenRef.current;
+    prevOpenRef.current = open;
+
+    if (open && !wasOpen) {
+      setPendingAvatarUrl(undefined);
+      setAvatarChanged(false);
+      if (client && mode === "edit") {
+        form.reset({
+          companyName: client.companyName,
+          displayName: client.displayName || "",
+          parentClientId: client.parentClientId || "",
+          status: client.status as "active" | "inactive" | "prospect",
+          industry: client.industry || "",
+          website: client.website || "https://",
+          notes: client.notes || "",
+        });
+      } else if (mode === "create") {
+        form.reset({
+          companyName: "",
+          displayName: "",
+          parentClientId: defaultParentClientId || "",
+          status: "active",
+          industry: "",
+          website: "https://",
+          notes: "",
+        });
+      }
+      setHasChanges(false);
     }
   }, [open, client, mode, form, defaultParentClientId]);
 
   useEffect(() => {
     const subscription = form.watch(() => {
-      setHasChanges(form.formState.isDirty);
+      setHasChanges(form.formState.isDirty || avatarChanged);
     });
     return () => subscription.unsubscribe();
-  }, [form]);
+  }, [form, avatarChanged]);
+
+  const rawAvatarUrl = pendingAvatarUrl !== undefined ? pendingAvatarUrl : client?.avatarUrl;
+  const displayAvatarUrl = getStorageUrl(rawAvatarUrl);
+
+  const clientInitials = (client?.companyName || form.watch("companyName") || "")
+    .split(" ")
+    .map((w: string) => w[0])
+    .join("")
+    .toUpperCase()
+    .slice(0, 2);
+
+  const handleAvatarUploaded = (fileUrl: string) => {
+    setPendingAvatarUrl(fileUrl);
+    setAvatarChanged(true);
+    setHasChanges(true);
+  };
+
+  const handleAvatarRemove = () => {
+    setPendingAvatarUrl(null);
+    setAvatarChanged(true);
+    setHasChanges(true);
+  };
 
   const handleSubmit = async (data: ClientFormData) => {
     try {
-      await onSubmit(data);
+      const submitData: ClientFormData & { avatarUrl?: string | null } = { ...data };
+      if (avatarChanged) {
+        submitData.avatarUrl = pendingAvatarUrl !== undefined ? pendingAvatarUrl : undefined;
+      }
+      await onSubmit(submitData);
       form.reset();
+      setPendingAvatarUrl(undefined);
+      setAvatarChanged(false);
       setHasChanges(false);
       onOpenChange(false);
     } catch (error) {
@@ -132,6 +174,8 @@ export function ClientDrawer({
 
   const handleClose = () => {
     form.reset();
+    setPendingAvatarUrl(undefined);
+    setAvatarChanged(false);
     setHasChanges(false);
     onOpenChange(false);
   };
@@ -161,6 +205,30 @@ export function ClientDrawer({
     >
       <Form {...form}>
         <form onSubmit={form.handleSubmit(handleSubmit)} className="space-y-6">
+          <div className="flex items-start gap-6 pb-2" data-testid="section-client-avatar">
+            <div className="flex-shrink-0">
+              <Avatar className="h-20 w-20" data-testid="avatar-client-preview">
+                <AvatarImage src={displayAvatarUrl || undefined} alt={client?.companyName || "Client"} />
+                <AvatarFallback className="bg-primary text-primary-foreground text-xl">
+                  {clientInitials}
+                </AvatarFallback>
+              </Avatar>
+            </div>
+            <div className="flex-1 w-full max-w-xs" data-testid="container-client-avatar-dropzone">
+              <S3Dropzone
+                category="client-avatar"
+                label="Client Logo"
+                description="PNG, JPG, WebP or GIF. Max 2MB."
+                valueUrl={displayAvatarUrl}
+                onUploaded={handleAvatarUploaded}
+                onRemoved={handleAvatarRemove}
+                enableCropping
+                cropShape="round"
+                cropAspectRatio={1}
+              />
+            </div>
+          </div>
+
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
             <FormField
               control={form.control}

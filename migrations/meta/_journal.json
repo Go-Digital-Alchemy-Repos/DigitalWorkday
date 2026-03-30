@@ -351,6 +351,13 @@
       "when": 1774670704862,
       "tag": "0049_lying_tarantula",
       "breakpoints": true
+    },
+    {
+      "idx": 50,
+      "version": "7",
+      "when": 1774755998885,
+      "tag": "0050_add-client-avatar-url",
+      "breakpoints": true
     }
   ]
 }

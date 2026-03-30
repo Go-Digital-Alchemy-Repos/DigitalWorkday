@@ -7,7 +7,7 @@ import { getPreviewText } from "@/components/richtext";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Skeleton } from "@/components/ui/skeleton";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -102,6 +102,7 @@ import {
 } from "lucide-react";
 import { useLocation } from "wouter";
 import { useAuth } from "@/lib/auth";
+import { getStorageUrl } from "@/lib/storageUrl";
 import { useCrmFlags } from "@/hooks/use-crm-flags";
 import { useFeatureFlags } from "@/hooks/use-feature-flags";
 import { AssetLibraryPanel } from "@/features/assetLibrary/AssetLibraryPanel";
@@ -786,6 +787,7 @@ export default function ClientDetailPage() {
           </Link>
           <div className="flex items-center gap-3">
             <Avatar className="h-10 w-10">
+              {client.avatarUrl && <AvatarImage src={getStorageUrl(client.avatarUrl)} alt={client.companyName} />}
               <AvatarFallback className="bg-primary/10 text-primary">
                 {getInitials(client.companyName)}
               </AvatarFallback>

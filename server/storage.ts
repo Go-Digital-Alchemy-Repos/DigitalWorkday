@@ -2567,6 +2567,7 @@ export class DatabaseStorage implements IStorage {
       phone: clients.phone,
       website: clients.website,
       parentClientId: clients.parentClientId,
+      avatarUrl: clients.avatarUrl,
       createdAt: clients.createdAt,
     })
       .from(clients)

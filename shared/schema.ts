@@ -643,6 +643,7 @@ export const clients = pgTable("clients", {
   primaryContactPhone: text("primary_contact_phone"),
   status: text("status").notNull().default("active"),
   stage: text("stage").notNull().default("lead"),
+  avatarUrl: text("avatar_url"),
   notes: text("notes"),
   tags: text("tags").array(),
   createdAt: timestamp("created_at").defaultNow().notNull(),
@@ -670,6 +671,7 @@ export type ClientListItem = {
   phone: string | null;
   website: string | null;
   parentClientId: string | null;
+  avatarUrl: string | null;
   createdAt: Date;
   depth: number;
   parentName?: string;

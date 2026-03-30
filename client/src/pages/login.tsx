@@ -9,7 +9,7 @@ import { useToast } from "@/hooks/use-toast";
 import { Loader2, LogIn, UserPlus, Shield, Eye, EyeOff, FlaskConical, Crown, ShieldCheck, User } from "lucide-react";
 import { UserRole } from "@shared/schema";
 import { getStorageUrl } from "@/lib/storageUrl";
-import appIcon from "@assets/Symbol_1767994625714.png";
+import appIcon from "@assets/3e831877-15a3-4721-93dc-ad0a971684d4-digitalworkdayicon_croppe_1774755241706.png";
 
 const DEV_TEST_ACCOUNTS = [
   {

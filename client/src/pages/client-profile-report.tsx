@@ -34,7 +34,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -56,6 +56,7 @@ import {
 } from "@/components/ui/table";
 import { Alert, AlertDescription, AlertTitle } from "@/components/ui/alert";
 import { cn } from "@/lib/utils";
+import { getStorageUrl } from "@/lib/storageUrl";
 
 interface ClientProfileData {
   client: {
@@ -68,6 +69,7 @@ interface ClientProfileData {
     industry: string | null;
     website: string | null;
     createdAt: string;
+    avatarUrl: string | null;
   };
   summary: {
     healthScore: number;
@@ -524,6 +526,9 @@ export default function ClientProfileReportPage() {
                 <CardContent className="p-6">
                   <div className="flex flex-col sm:flex-row gap-6 items-start sm:items-center">
                     <Avatar className="h-20 w-20 border-2 border-muted" data-testid="avatar-client">
+                      {data.client.avatarUrl && (
+                        <AvatarImage src={getStorageUrl(data.client.avatarUrl)} alt={data.client.companyName} />
+                      )}
                       <AvatarFallback className="text-xl bg-primary/10 text-primary">
                         {data.client.companyName.split(" ").map(n => n[0]).join("").toUpperCase().slice(0, 2)}
                       </AvatarFallback>

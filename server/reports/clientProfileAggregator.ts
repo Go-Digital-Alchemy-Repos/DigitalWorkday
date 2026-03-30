@@ -33,6 +33,7 @@ export async function getClientProfileReport({
     industry: string | null;
     website: string | null;
     created_at: string;
+    avatar_url: string | null;
   }>(sql`
     SELECT
       c.id,
@@ -43,7 +44,8 @@ export async function getClientProfileReport({
       c.status,
       c.industry,
       c.website,
-      c.created_at
+      c.created_at,
+      c.avatar_url
     FROM clients c
     WHERE c.id = ${clientId} AND c.tenant_id = ${tenantId}
     LIMIT 1
@@ -303,6 +305,7 @@ export async function getClientProfileReport({
       industry: client.industry,
       website: client.website,
       createdAt: client.created_at,
+      avatarUrl: client.avatar_url,
     },
     summary: {
       healthScore: health?.overallScore ?? 0,

@@ -5,7 +5,7 @@ import { queryClient, apiRequest , tenantKey } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -77,6 +77,7 @@ import { CLIENT_STAGES_ORDERED, CLIENT_STAGE_LABELS, type ClientStageType } from
 import { cn } from "@/lib/utils";
 import { Link } from "wouter";
 import { formatDistanceToNow } from "date-fns";
+import { getStorageUrl } from "@/lib/storageUrl";
 
 interface ClientWithHierarchy {
   id: string;
@@ -90,6 +91,7 @@ interface ClientWithHierarchy {
   phone: string | null;
   website: string | null;
   parentClientId: string | null;
+  avatarUrl: string | null;
   createdAt: string;
   depth: number;
   parentName?: string;
@@ -381,6 +383,7 @@ function ClientGridCard({
                 </div>
               )}
               <Avatar className="h-10 w-10 shrink-0">
+                {client.avatarUrl && <AvatarImage src={getStorageUrl(client.avatarUrl)} alt={client.companyName} />}
                 <AvatarFallback className="bg-primary/10 text-primary">
                   {getInitials(client.companyName)}
                 </AvatarFallback>
@@ -520,6 +523,7 @@ function ClientGroupCard({
           <CardHeader className="pb-3">
             <div className="flex items-start gap-3 min-w-0">
               <Avatar className="h-10 w-10 shrink-0">
+                {parent.avatarUrl && <AvatarImage src={getStorageUrl(parent.avatarUrl)} alt={parent.companyName} />}
                 <AvatarFallback className="bg-primary/10 text-primary">
                   {getInitials(parent.companyName)}
                 </AvatarFallback>
@@ -612,6 +616,7 @@ function ClientGroupCard({
                   </div>
                 )}
                 <Avatar className="h-6 w-6 shrink-0">
+                  {child.avatarUrl && <AvatarImage src={getStorageUrl(child.avatarUrl)} alt={child.companyName} />}
                   <AvatarFallback className="bg-muted text-muted-foreground text-xs">
                     {getInitials(child.companyName)}
                   </AvatarFallback>
@@ -733,6 +738,7 @@ function ClientTableRow({
             />
           )}
           <Avatar className={compact ? "h-7 w-7" : "h-9 w-9"}>
+            {client.avatarUrl && <AvatarImage src={getStorageUrl(client.avatarUrl)} alt={client.companyName} />}
             <AvatarFallback
               className={cn(
                 "bg-primary/10 text-primary",
@@ -952,6 +958,7 @@ function ClientDetailSheet({
         <SheetHeader className="pb-4">
           <div className="flex items-center gap-3">
             <Avatar className="h-12 w-12">
+              {client?.avatarUrl && <AvatarImage src={getStorageUrl(client.avatarUrl)} alt={displayName} />}
               <AvatarFallback className="bg-primary/10 text-primary text-lg">
                 {getInitials(displayName)}
               </AvatarFallback>
@@ -1391,6 +1398,7 @@ function VipCarousel({
               <CardHeader className="pb-3">
                 <div className="flex items-start gap-3 min-w-0">
                   <Avatar className="h-10 w-10 shrink-0">
+                    {client.avatarUrl && <AvatarImage src={getStorageUrl(client.avatarUrl)} alt={client.companyName} />}
                     <AvatarFallback
                       style={{
                         backgroundColor: "hsl(var(--primary) / 0.12)",
@@ -1508,6 +1516,7 @@ function VipCarousel({
                         data-testid={`vip-card-division-${child.id}`}
                       >
                         <Avatar className="h-6 w-6 shrink-0">
+                          {child.avatarUrl && <AvatarImage src={getStorageUrl(child.avatarUrl)} alt={child.companyName} />}
                           <AvatarFallback className="bg-muted text-muted-foreground text-xs">
                             {getInitials(child.companyName)}
                           </AvatarFallback>
@@ -1672,6 +1681,7 @@ export default function ClientsPage() {
         primaryContactName: null,
         primaryContactEmail: null,
         primaryContactPhone: null,
+        avatarUrl: (newClient.avatarUrl as string) || null,
         parentClientId: null,
         tenantId: "",
         workspaceId: "",

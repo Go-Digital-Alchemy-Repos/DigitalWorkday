@@ -24,6 +24,7 @@ export type UploadCategory =
   | "tenant-branding-icon"
   | "tenant-branding-favicon"
   | "user-avatar"
+  | "client-avatar"
   | "task-attachment";
 
 export type AssetType = "logo" | "icon" | "favicon";

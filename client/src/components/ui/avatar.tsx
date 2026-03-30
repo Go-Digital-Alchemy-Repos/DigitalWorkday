@@ -4,7 +4,7 @@ import * as React from "react"
 import * as AvatarPrimitive from "@radix-ui/react-avatar"
 
 import { cn } from "@/lib/utils"
-import dwIcon from "@assets/Symbol_1767994625714.png"
+import dwIcon from "@assets/3e831877-15a3-4721-93dc-ad0a971684d4-digitalworkdayicon_croppe_1774755241706.png"
 
 const Avatar = React.forwardRef<
   React.ElementRef<typeof AvatarPrimitive.Root>,
@@ -46,11 +46,13 @@ const AvatarFallback = React.forwardRef<
     )}
     {...props}
   >
-    <img
-      src={dwIcon}
-      alt="Digital Workday"
-      className="h-full w-full object-cover rounded-full"
-    />
+    {React.Children.count(children) > 0 ? children : (
+      <img
+        src={dwIcon}
+        alt="Digital Workday"
+        className="h-full w-full object-cover rounded-full"
+      />
+    )}
   </AvatarPrimitive.Fallback>
 ))
 AvatarFallback.displayName = AvatarPrimitive.Fallback.displayName

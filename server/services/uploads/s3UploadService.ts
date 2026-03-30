@@ -32,6 +32,7 @@ export type UploadCategory =
   | "tenant-branding-icon"
   | "tenant-branding-favicon"
   | "user-avatar"
+  | "client-avatar"
   | "task-attachment";
 
 export type AssetType = "logo" | "icon" | "favicon";
@@ -106,6 +107,15 @@ const CATEGORY_CONFIGS: Record<UploadCategory, CategoryConfig> = {
     maxSizeBytes: 2 * 1024 * 1024, // 2MB
     requiresTenantId: false, // Can be null for super users
     requiresUserId: true,
+    requiresTaskContext: false,
+    requiresSuperUser: false,
+    requiresTenantAdmin: false,
+  },
+  "client-avatar": {
+    allowedMimeTypes: ["image/png", "image/jpeg", "image/webp", "image/gif"],
+    maxSizeBytes: 2 * 1024 * 1024,
+    requiresTenantId: true,
+    requiresUserId: false,
     requiresTaskContext: false,
     requiresSuperUser: false,
     requiresTenantAdmin: false,
@@ -252,6 +262,10 @@ export function generateS3Key(
         return `tenants/${context.tenantId}/users/${context.userId}/avatar/${year}/${month}/${uuid}-${sanitized}`;
       }
       return `system/users/${context.userId}/avatar/${year}/${month}/${uuid}-${sanitized}`;
+
+    case "client-avatar":
+      if (!context.tenantId) throw new Error("tenantId required for client avatar");
+      return `tenants/${context.tenantId}/clients/avatars/${year}/${month}/${uuid}-${sanitized}`;
 
     case "task-attachment":
       if (!context.tenantId) throw new Error("tenantId required for task attachment");
