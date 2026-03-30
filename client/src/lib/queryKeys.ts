@@ -80,6 +80,7 @@ export const queryKeys = {
   timeEntries: {
     all: ["/api/time-entries"] as const,
     list: ["/api/time-entries", { fields: "list" }] as const,
+    paginated: ["/api/time-entries", "paginated"] as const,
     myStats: ["/api/time-entries/my/stats"] as const,
     byTask: (taskId: string) => ["/api/time-entries", { taskId }] as const,
   },

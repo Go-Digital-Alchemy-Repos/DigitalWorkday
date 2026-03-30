@@ -22,6 +22,31 @@ const timeTrackingRepo = new TimeTrackingRepository();
 
 const router = Router();
 
+/**
+ * GET /api/time-entries
+ *
+ * Supports two response modes:
+ *
+ * 1. **Flat array (backward-compatible)** — When `limit` is NOT provided, returns
+ *    a flat JSON array of time entries. Existing consumers (task-detail-drawer,
+ *    client-profile-report, etc.) that pass date-range or entity filters rely on
+ *    this shape and are unaffected.
+ *
+ * 2. **Cursor-paginated** — When `limit` is provided (max 50), returns:
+ *    ```json
+ *    {
+ *      "items": [ ... ],      // TimeEntry[] for this page
+ *      "hasMore": true|false, // whether more pages exist
+ *      "nextCursor": "...",   // ISO-8601 startTime string for the next page, or null
+ *      "totalCount": 123      // total matching entries (ignoring cursor)
+ *    }
+ *    ```
+ *    Pass `cursor` (an ISO timestamp from a previous `nextCursor`) to fetch
+ *    subsequent pages. Entries are ordered by `startTime DESC`.
+ *
+ * Additional query params: userId, clientId, projectId, taskId, scope,
+ * startDate, endDate, fields ("list" for flat list items).
+ */
 router.get("/time-entries", async (req, res) => {
   try {
     const t0 = Date.now();
@@ -48,6 +73,24 @@ router.get("/time-entries", async (req, res) => {
 
     const useListMode = fields === "list";
 
+    const limitParam = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const usePagination = limitParam !== undefined && !isNaN(limitParam);
+
+    if (usePagination) {
+      const limit = Math.min(Math.max(limitParam, 1), 50);
+      const cursor = req.query.cursor as string | undefined;
+      const pagination = { cursor, limit };
+
+      let result;
+      if (tenantId && isStrictMode()) {
+        result = await storage.getTimeEntriesByTenantFlatPaginated(tenantId, workspaceId, pagination, filters);
+      } else {
+        result = await storage.getTimeEntriesByWorkspaceFlatPaginated(workspaceId, pagination, filters);
+      }
+      perfLog("GET /time-entries", `${result.items.length}/${result.totalCount} entries in ${Date.now() - t0}ms (paginated)`);
+      return res.json(result);
+    }
+
     let entries;
     if (tenantId && isStrictMode()) {
       entries = useListMode
@@ -68,6 +111,12 @@ router.get("/time-entries", async (req, res) => {
   }
 });
 
+/**
+ * GET /api/time-entries/my
+ *
+ * Same pagination contract as GET /api/time-entries (see above).
+ * Automatically scoped to the current authenticated user.
+ */
 router.get("/time-entries/my", async (req, res) => {
   try {
     const tenantId = getEffectiveTenantId(req);
@@ -75,6 +124,23 @@ router.get("/time-entries/my", async (req, res) => {
     const workspaceId = getCurrentWorkspaceId(req);
     const fields = req.query.fields as string | undefined;
     const useListMode = fields === "list";
+
+    const limitParam = req.query.limit ? parseInt(req.query.limit as string, 10) : undefined;
+    const usePagination = limitParam !== undefined && !isNaN(limitParam);
+
+    if (usePagination) {
+      const limit = Math.min(Math.max(limitParam, 1), 50);
+      const cursor = req.query.cursor as string | undefined;
+      const pagination = { cursor, limit };
+
+      let result;
+      if (tenantId && isStrictMode()) {
+        result = await storage.getTimeEntriesByTenantFlatPaginated(tenantId, workspaceId, pagination, { userId });
+      } else {
+        result = await storage.getTimeEntriesByUserFlatPaginated(userId, workspaceId, pagination);
+      }
+      return res.json(result);
+    }
     
     let entries;
     if (tenantId && isStrictMode()) {

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, memo, useMemo } from "react";
-import { useQuery, useMutation } from "@tanstack/react-query";
+import { useQuery, useMutation, useInfiniteQuery } from "@tanstack/react-query";
 import { useTimeEntryCascade } from "@/hooks/use-time-entry-cascade";
 import { queryClient, apiRequest } from "@/lib/queryClient";
 import { queryKeys } from "@/lib/queryKeys";
@@ -1259,10 +1259,14 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
   );
 });
 
+const PAGE_SIZE = 30;
+
 const TimeEntriesList = memo(function TimeEntriesList() {
   const [manualEntryOpen, setManualEntryOpen] = useState(false);
   const [editEntry, setEditEntry] = useState<TimeEntry | null>(null);
   const [dateFilter, setDateFilter] = useState<"all" | "today" | "week" | "month">("week");
+
+  const usePaginated = dateFilter === "all" || dateFilter === "month";
 
   const { startDate, endDate } = useMemo(() => {
     const now = new Date();
@@ -1277,16 +1281,60 @@ const TimeEntriesList = memo(function TimeEntriesList() {
         return {};
     }
   }, [dateFilter]);
-  const queryParams = new URLSearchParams();
-  if (startDate) queryParams.set("startDate", startDate);
-  if (endDate) queryParams.set("endDate", endDate);
 
-  queryParams.set("fields", "list");
-  const { data: entries = [], isLoading } = useQuery<TimeEntry[]>({
+  const flatQueryParams = useMemo(() => {
+    const qp = new URLSearchParams();
+    if (startDate) qp.set("startDate", startDate);
+    if (endDate) qp.set("endDate", endDate);
+    qp.set("fields", "list");
+    return qp.toString();
+  }, [startDate, endDate]);
+
+  const { data: flatEntries = [], isLoading: isFlatLoading } = useQuery<TimeEntry[]>({
     queryKey: [...queryKeys.timeEntries.list, dateFilter],
-    queryFn: () => 
-      fetch(`/api/time-entries?${queryParams.toString()}`).then(r => r.json()),
+    queryFn: () =>
+      fetch(`/api/time-entries?${flatQueryParams}`).then(r => r.json()),
+    enabled: !usePaginated,
   });
+
+  const paginatedQueryParams = useMemo(() => {
+    const qp = new URLSearchParams();
+    if (startDate) qp.set("startDate", startDate);
+    if (endDate) qp.set("endDate", endDate);
+    qp.set("fields", "list");
+    qp.set("limit", String(PAGE_SIZE));
+    return qp.toString();
+  }, [startDate, endDate]);
+
+  const {
+    data: paginatedData,
+    isLoading: isPaginatedLoading,
+    fetchNextPage,
+    hasNextPage,
+    isFetchingNextPage,
+  } = useInfiniteQuery({
+    queryKey: [...queryKeys.timeEntries.paginated, dateFilter],
+    queryFn: async ({ pageParam }: { pageParam: string | undefined }) => {
+      const url = pageParam
+        ? `/api/time-entries?${paginatedQueryParams}&cursor=${encodeURIComponent(pageParam)}`
+        : `/api/time-entries?${paginatedQueryParams}`;
+      const res = await fetch(url);
+      return res.json() as Promise<{ items: TimeEntry[]; hasMore: boolean; nextCursor: string | null; totalCount: number }>;
+    },
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (lastPage) => lastPage.nextCursor ?? undefined,
+    enabled: usePaginated,
+  });
+
+  const entries = useMemo(() => {
+    if (usePaginated) {
+      return paginatedData?.pages.flatMap(p => p.items) ?? [];
+    }
+    return flatEntries;
+  }, [usePaginated, paginatedData, flatEntries]);
+
+  const isLoading = usePaginated ? isPaginatedLoading : isFlatLoading;
+  const totalCount = usePaginated ? (paginatedData?.pages[0]?.totalCount ?? 0) : entries.length;
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/time-entries/${id}`),
@@ -1313,8 +1361,8 @@ const TimeEntriesList = memo(function TimeEntriesList() {
   const totalEntryCount = entries.length;
   const useVirtualized = totalEntryCount > VIRTUALIZE_THRESHOLD;
 
-  const { groupCounts, flatEntries, dayTotals } = useMemo(() => {
-    if (!useVirtualized) return { groupCounts: [] as number[], flatEntries: [] as TimeEntry[], dayTotals: [] as number[] };
+  const { groupCounts, virtuosoEntries, dayTotals } = useMemo(() => {
+    if (!useVirtualized) return { groupCounts: [] as number[], virtuosoEntries: [] as TimeEntry[], dayTotals: [] as number[] };
     const counts: number[] = [];
     const flat: TimeEntry[] = [];
     const totals: number[] = [];
@@ -1324,7 +1372,7 @@ const TimeEntriesList = memo(function TimeEntriesList() {
       totals.push(dayEntries.reduce((sum, e) => sum + e.durationSeconds, 0));
       flat.push(...dayEntries);
     }
-    return { groupCounts: counts, flatEntries: flat, dayTotals: totals };
+    return { groupCounts: counts, virtuosoEntries: flat, dayTotals: totals };
   }, [useVirtualized, sortedDates, groupedEntries]);
 
   const renderGroupHeader = useCallback((index: number) => {
@@ -1341,7 +1389,7 @@ const TimeEntriesList = memo(function TimeEntriesList() {
   }, [sortedDates, dayTotals]);
 
   const renderEntry = useCallback((index: number) => {
-    const entry = flatEntries[index];
+    const entry = virtuosoEntries[index];
     if (!entry) return null;
     return (
       <div
@@ -1415,7 +1463,7 @@ const TimeEntriesList = memo(function TimeEntriesList() {
         </div>
       </div>
     );
-  }, [flatEntries, deleteMutation, setEditEntry]);
+  }, [virtuosoEntries, deleteMutation, setEditEntry]);
 
   return (
     <>
@@ -1551,6 +1599,25 @@ const TimeEntriesList = memo(function TimeEntriesList() {
                   </div>
                 );
               })}
+            </div>
+          )}
+          {usePaginated && hasNextPage && !isLoading && (
+            <div className="flex flex-col items-center gap-2 pt-4">
+              <Button
+                variant="outline"
+                onClick={() => fetchNextPage()}
+                disabled={isFetchingNextPage}
+                data-testid="button-load-more"
+              >
+                {isFetchingNextPage ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Loading...
+                  </>
+                ) : (
+                  `Load more (${entries.length} of ${totalCount})`
+                )}
+              </Button>
             </div>
           )}
         </CardContent>

@@ -60,6 +60,18 @@ type TimeEntryFilters = {
   endDate?: Date;
 };
 
+export type PaginationParams = {
+  cursor?: string;
+  limit: number;
+};
+
+export type PaginatedResult<T> = {
+  items: T[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  totalCount: number;
+};
+
 function collectUniqueIds(entries: TimeEntry[], field: keyof TimeEntry): string[] {
   const ids = new Set<string>();
   for (const e of entries) {
@@ -153,6 +165,33 @@ export class TimeTrackingRepository {
       .orderBy(desc(timeEntries.startTime));
   }
 
+  private async fetchRawEntriesPaginated(conditions: any[], pagination: PaginationParams): Promise<{ entries: TimeEntry[]; hasMore: boolean }> {
+    const paginatedConditions = [...conditions];
+    if (pagination.cursor) {
+      const cursorDate = new Date(pagination.cursor);
+      if (isNaN(cursorDate.getTime())) {
+        throw new Error("Invalid cursor: must be a valid ISO-8601 timestamp");
+      }
+      paginatedConditions.push(lt(timeEntries.startTime, cursorDate));
+    }
+    const rows = await db.select()
+      .from(timeEntries)
+      .where(and(...paginatedConditions))
+      .orderBy(desc(timeEntries.startTime))
+      .limit(pagination.limit + 1);
+
+    const hasMore = rows.length > pagination.limit;
+    const entries = hasMore ? rows.slice(0, pagination.limit) : rows;
+    return { entries, hasMore };
+  }
+
+  private async countEntries(conditions: any[]): Promise<number> {
+    const [result] = await db.select({ count: count() })
+      .from(timeEntries)
+      .where(and(...conditions));
+    return result?.count ?? 0;
+  }
+
   async getTimeEntriesByWorkspace(workspaceId: string, filters?: TimeEntryFilters): Promise<TimeEntryWithRelations[]> {
     const conditions = this.buildFilterConditions([eq(timeEntries.workspaceId, workspaceId)], filters);
     const entries = await this.fetchRawEntries(conditions);
@@ -165,12 +204,29 @@ export class TimeTrackingRepository {
     return batchFlattenEntries(entries);
   }
 
+  async getTimeEntriesByWorkspaceFlatPaginated(workspaceId: string, pagination: PaginationParams, filters?: TimeEntryFilters): Promise<PaginatedResult<TimeEntryListItem>> {
+    const conditions = this.buildFilterConditions([eq(timeEntries.workspaceId, workspaceId)], filters);
+    const [{ entries, hasMore }, totalCount] = await Promise.all([
+      this.fetchRawEntriesPaginated(conditions, pagination),
+      this.countEntries(conditions),
+    ]);
+    const items = await batchFlattenEntries(entries);
+    const nextCursor = hasMore && entries.length > 0
+      ? new Date(entries[entries.length - 1].startTime).toISOString()
+      : null;
+    return { items, hasMore, nextCursor, totalCount };
+  }
+
   async getTimeEntriesByUser(userId: string, workspaceId: string): Promise<TimeEntryWithRelations[]> {
     return this.getTimeEntriesByWorkspace(workspaceId, { userId });
   }
 
   async getTimeEntriesByUserFlat(userId: string, workspaceId: string): Promise<TimeEntryListItem[]> {
     return this.getTimeEntriesByWorkspaceFlat(workspaceId, { userId });
+  }
+
+  async getTimeEntriesByUserFlatPaginated(userId: string, workspaceId: string, pagination: PaginationParams): Promise<PaginatedResult<TimeEntryListItem>> {
+    return this.getTimeEntriesByWorkspaceFlatPaginated(workspaceId, pagination, { userId });
   }
 
   async createTimeEntry(entry: InsertTimeEntry): Promise<TimeEntry> {
@@ -263,6 +319,22 @@ export class TimeTrackingRepository {
     ], filters);
     const entries = await this.fetchRawEntries(conditions);
     return batchFlattenEntries(entries);
+  }
+
+  async getTimeEntriesByTenantFlatPaginated(tenantId: string, workspaceId: string, pagination: PaginationParams, filters?: TimeEntryFilters): Promise<PaginatedResult<TimeEntryListItem>> {
+    const conditions = this.buildFilterConditions([
+      eq(timeEntries.tenantId, tenantId),
+      eq(timeEntries.workspaceId, workspaceId),
+    ], filters);
+    const [{ entries, hasMore }, totalCount] = await Promise.all([
+      this.fetchRawEntriesPaginated(conditions, pagination),
+      this.countEntries(conditions),
+    ]);
+    const items = await batchFlattenEntries(entries);
+    const nextCursor = hasMore && entries.length > 0
+      ? new Date(entries[entries.length - 1].startTime).toISOString()
+      : null;
+    return { items, hasMore, nextCursor, totalCount };
   }
 
   async createTimeEntryWithTenant(entry: InsertTimeEntry, tenantId: string): Promise<TimeEntry> {
