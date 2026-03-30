@@ -104,25 +104,89 @@ POST /api/timer/stop
 
 ---
 
+## Cache Invalidation Strategy
+
+Time entry mutations use targeted cache invalidation via the `invalidateTimeEntries` helper
+(`client/src/lib/queryKeys.ts`). This replaces broad prefix-based invalidation of all
+`/api/time-entries` query variants with narrower, filter-aware invalidation.
+
+### Helper: `invalidateTimeEntries(qc, opts)`
+
+| Option | Type | Description |
+|--------|------|-------------|
+| `dateFilter` | `"all" \| "today" \| "week" \| "month" \| null` | When set, only the query key for that specific filter is invalidated. When null/omitted, all time entry queries are invalidated. |
+| `includeStats` | `boolean` | Whether to also invalidate `/api/time-entries/my/stats`. Defaults to `true`. |
+| `taskId` | `string \| null` | When set, additionally invalidates the task-specific time entries cache. |
+
+### Mutation Invalidation Rules
+
+| Mutation | Invalidates entries | Invalidates stats | Notes |
+|----------|--------------------|--------------------|-------|
+| Timer start | No | No | No time entry created |
+| Timer pause/resume | No | No | Timer state only |
+| Timer stop (save) | All variants | Yes | New entry could appear in any filter |
+| Timer stop (discard) | No | No | No data change |
+| Manual entry create | Active filter only | Yes | |
+| Time entry update | Active filter only | Yes | |
+| Time entry delete | Active filter only | Yes | |
+
+### Optimistic Updates
+
+Timer pause/resume use optimistic cache patches on the timer query key only.
+Timer stop optimistically clears the timer from the cache with rollback on error.
+
+Time entry mutations in the My Time page use optimistic list patches with rollback:
+
+| Mutation | Optimistic Action | Rollback |
+|----------|------------------|----------|
+| Manual create | Insert placeholder entry at top of active filter cache | Restore previous cache on error |
+| Edit | Patch entry fields in active filter cache | Restore previous cache on error |
+| Delete | Remove entry from active filter cache | Restore previous cache on error |
+| Timer stop (save) | Timer cleared optimistically; response entry inserted into all matching filter caches | Timer restored on error |
+
+Helpers in `client/src/lib/queryKeys.ts`:
+- `optimisticInsertTimeEntry(qc, entry, dateFilter)` — prepends entry to flat or paginated cache
+- `optimisticUpdateTimeEntry(qc, entryId, dateFilter, patch)` — patches matching entry in cache
+- `optimisticRemoveTimeEntry(qc, entryId, dateFilter)` — removes entry from cache
+- `rollbackTimeEntryCache(qc, dateFilter, previousData)` — restores saved cache snapshot
+
+- `optimisticInsertTimeEntryBroad(qc, entry)` — inserts entry into all matching filter caches (used by timer stop)
+- `entryMatchesDateFilter(startTimeISO, dateFilter)` — checks if entry falls within filter range
+
+All helpers handle both flat (today/week) and paginated (month/all) cache shapes.
+Manual create guards insertion with `entryMatchesDateFilter` to avoid inserting out-of-range entries.
+Timer stop uses `optimisticInsertTimeEntryBroad` to insert the server response entry into all matching active caches.
+
+---
+
 ## Cross-Tab Synchronization
 
-Timer state is synchronized across browser tabs using BroadcastChannel:
+Timer state is synchronized across browser tabs using BroadcastChannel.
+Messages include an `eventType` field to distinguish timer state changes from data mutations:
 
 ```typescript
 const channel = new BroadcastChannel("active-timer-sync");
 
-// Broadcast timer update
-channel.postMessage({ type: "timer-updated" });
+// Broadcast: timer state change (pause/resume/start)
+channel.postMessage({ type: "timer-updated", eventType: "timer-state-change" });
 
-// Listen for updates
+// Broadcast: time entry data changed (stop with save, manual create)
+channel.postMessage({ type: "timer-updated", eventType: "time-entry-changed" });
+
+// Receiving tab
 channel.onmessage = (event) => {
   if (event.data.type === "timer-updated") {
-    refetchTimer();
+    refetchTimer(); // Always refetch timer state
+    if (event.data.eventType === "time-entry-changed") {
+      // Also invalidate time entry lists and stats
+      invalidateTimeEntries(queryClient, {});
+    }
   }
 };
 ```
 
-Fallback for older browsers uses `localStorage` events.
+Fallback for older browsers uses `localStorage` events with the same JSON payload
+(`{ eventType, ts }`).
 
 ---
 

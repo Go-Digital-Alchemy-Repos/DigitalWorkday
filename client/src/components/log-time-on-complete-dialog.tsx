@@ -15,6 +15,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { apiRequest, queryClient } from "@/lib/queryClient";
+import { invalidateTimeEntries, broadcastTimeEntryChanged } from "@/lib/queryKeys";
 
 interface LogTimeOnCompleteDialogProps {
   open: boolean;
@@ -69,10 +70,8 @@ export function LogTimeOnCompleteDialog({
       });
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
-      if (taskId) {
-        queryClient.invalidateQueries({ queryKey: ["/api/tasks", taskId, "time-entries"] });
-      }
+      invalidateTimeEntries(queryClient, { taskId });
+      broadcastTimeEntryChanged();
     },
   });
 

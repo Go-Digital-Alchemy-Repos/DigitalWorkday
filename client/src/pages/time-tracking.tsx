@@ -2,7 +2,7 @@ import { useState, useEffect, useCallback, memo, useMemo } from "react";
 import { useQuery, useMutation, useInfiniteQuery } from "@tanstack/react-query";
 import { useTimeEntryCascade } from "@/hooks/use-time-entry-cascade";
 import { queryClient, apiRequest } from "@/lib/queryClient";
-import { queryKeys } from "@/lib/queryKeys";
+import { queryKeys, invalidateTimeEntries, broadcastTimeEntryChanged, optimisticRemoveTimeEntry, optimisticUpdateTimeEntry, optimisticInsertTimeEntry, rollbackTimeEntryCache, timeEntryQueryKeyForFilter, entryMatchesDateFilter, type TimeEntryDateFilter, type CachedTimeEntry } from "@/lib/queryKeys";
 import { 
   Clock, Play, Pause, Square, Plus, Download, Filter, 
   ChevronDown, Timer, Calendar, BarChart3, Trash2, Edit2, MoreHorizontal, X, Loader2
@@ -211,8 +211,9 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
     },
     onSuccess: (_, variables) => {
       queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
+      if (!variables.discard) {
+        invalidateTimeEntries(queryClient, {});
+      }
       if (variables.discard) {
         toast({ title: "Timer discarded" });
       } else {
@@ -576,10 +577,12 @@ const ActiveTimerPanel = memo(function ActiveTimerPanel() {
  */
 const ManualEntryDialog = memo(function ManualEntryDialog({ 
   open, 
-  onOpenChange 
+  onOpenChange,
+  dateFilter = null,
 }: { 
   open: boolean; 
   onOpenChange: (open: boolean) => void;
+  dateFilter?: TimeEntryDateFilter | null;
 }) {
   const { toast } = useToast();
   const [title, setTitle] = useState("");
@@ -607,9 +610,31 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
       taskId: string | null;
       scope: string;
     }) => apiRequest("POST", "/api/time-entries", data),
+    onMutate: async (data) => {
+      if (!dateFilter || !entryMatchesDateFilter(data.startTime, dateFilter)) return;
+      await queryClient.cancelQueries({ queryKey: timeEntryQueryKeyForFilter(dateFilter) });
+      const optimisticEntry: CachedTimeEntry = {
+        id: `temp-${Date.now()}`,
+        workspaceId: "",
+        userId: "",
+        clientId: data.clientId,
+        projectId: data.projectId,
+        taskId: data.taskId,
+        title: data.title || null,
+        description: data.description || null,
+        startTime: data.startTime,
+        endTime: new Date(new Date(data.startTime).getTime() + data.durationSeconds * 1000).toISOString(),
+        durationSeconds: data.durationSeconds,
+        scope: data.scope as "in_scope" | "out_of_scope",
+        isManual: true,
+        createdAt: new Date().toISOString(),
+      };
+      const prev = optimisticInsertTimeEntry(queryClient, optimisticEntry, dateFilter);
+      return { prev };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
+      invalidateTimeEntries(queryClient, { dateFilter });
+      broadcastTimeEntryChanged();
       toast({ title: "Time entry created" });
       onOpenChange(false);
       setTitle("");
@@ -620,7 +645,10 @@ const ManualEntryDialog = memo(function ManualEntryDialog({
       setScope("in_scope");
       setDate(format(new Date(), "yyyy-MM-dd"));
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _, context) => {
+      if (context?.prev !== undefined && dateFilter) {
+        rollbackTimeEntryCache(queryClient, dateFilter, context.prev);
+      }
       toast({ title: "Failed to create entry", description: error.message, variant: "destructive" });
     },
   });
@@ -847,9 +875,10 @@ interface EditTimeEntryDrawerProps {
   entry: TimeEntry | null;
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  dateFilter: TimeEntryDateFilter;
 }
 
-const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onOpenChange }: EditTimeEntryDrawerProps) {
+const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onOpenChange, dateFilter }: EditTimeEntryDrawerProps) {
   const { toast } = useToast();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [hasChanges, setHasChanges] = useState(false);
@@ -919,28 +948,46 @@ const EditTimeEntryDrawer = memo(function EditTimeEntryDrawer({ entry, open, onO
     }) => {
       return apiRequest("PATCH", `/api/time-entries/${entry?.id}`, data);
     },
+    onMutate: async (data) => {
+      if (!entry?.id || !dateFilter) return;
+      await queryClient.cancelQueries({ queryKey: timeEntryQueryKeyForFilter(dateFilter) });
+      const prev = optimisticUpdateTimeEntry(queryClient, entry.id, dateFilter, data);
+      return { prev };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
+      invalidateTimeEntries(queryClient, { dateFilter });
+      broadcastTimeEntryChanged();
       toast({ title: "Time entry updated" });
       setHasChanges(false);
       onOpenChange(false);
     },
-    onError: (error: Error) => {
+    onError: (error: Error, _, context) => {
+      if (context?.prev !== undefined && dateFilter) {
+        rollbackTimeEntryCache(queryClient, dateFilter, context.prev);
+      }
       toast({ title: "Failed to update time entry", description: error.message, variant: "destructive" });
     },
   });
 
   const deleteMutation = useMutation({
     mutationFn: () => apiRequest("DELETE", `/api/time-entries/${entry?.id}`),
+    onMutate: async () => {
+      if (!entry?.id || !dateFilter) return;
+      await queryClient.cancelQueries({ queryKey: timeEntryQueryKeyForFilter(dateFilter) });
+      const prev = optimisticRemoveTimeEntry(queryClient, entry.id, dateFilter);
+      return { prev };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
+      invalidateTimeEntries(queryClient, { dateFilter });
+      broadcastTimeEntryChanged();
       toast({ title: "Time entry deleted" });
       setDeleteDialogOpen(false);
       onOpenChange(false);
     },
-    onError: () => {
+    onError: (_, __, context) => {
+      if (context?.prev !== undefined && dateFilter) {
+        rollbackTimeEntryCache(queryClient, dateFilter, context.prev);
+      }
       toast({ title: "Failed to delete time entry", variant: "destructive" });
     },
   });
@@ -1338,9 +1385,19 @@ const TimeEntriesList = memo(function TimeEntriesList() {
 
   const deleteMutation = useMutation({
     mutationFn: (id: string) => apiRequest("DELETE", `/api/time-entries/${id}`),
+    onMutate: async (id: string) => {
+      await queryClient.cancelQueries({ queryKey: timeEntryQueryKeyForFilter(dateFilter) });
+      const prev = optimisticRemoveTimeEntry(queryClient, id, dateFilter);
+      return { prev };
+    },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
+      invalidateTimeEntries(queryClient, { dateFilter });
+      broadcastTimeEntryChanged();
+    },
+    onError: (_, __, context) => {
+      if (context?.prev !== undefined) {
+        rollbackTimeEntryCache(queryClient, dateFilter, context.prev);
+      }
     },
   });
 
@@ -1623,11 +1680,12 @@ const TimeEntriesList = memo(function TimeEntriesList() {
         </CardContent>
       </Card>
 
-      <ManualEntryDialog open={manualEntryOpen} onOpenChange={setManualEntryOpen} />
+      <ManualEntryDialog open={manualEntryOpen} onOpenChange={setManualEntryOpen} dateFilter={dateFilter} />
       <EditTimeEntryDrawer 
         entry={editEntry} 
         open={!!editEntry} 
-        onOpenChange={(open: boolean) => !open && setEditEntry(null)} 
+        onOpenChange={(open: boolean) => !open && setEditEntry(null)}
+        dateFilter={dateFilter}
       />
     </>
   );
@@ -1780,8 +1838,9 @@ export function TimeTrackingContent() {
       broadcastChannel.onmessage = (event) => {
         if (event.data?.type === "timer-updated") {
           refetchTimer();
-          queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
-          queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
+          if (event.data.eventType === "time-entry-changed") {
+            invalidateTimeEntries(queryClient, {});
+          }
         }
       };
     } catch {
@@ -1792,8 +1851,14 @@ export function TimeTrackingContent() {
     const handleStorageEvent = (event: StorageEvent) => {
       if (event.key === "timer-sync") {
         refetchTimer();
-        queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
-        queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
+        try {
+          const data = event.newValue ? JSON.parse(event.newValue) : {};
+          if (data.eventType === "time-entry-changed") {
+            invalidateTimeEntries(queryClient, {});
+          }
+        } catch {
+          // ignore parse errors
+        }
       }
     };
     window.addEventListener("storage", handleStorageEvent);

@@ -584,6 +584,7 @@ export function TaskDetailDrawer({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timer.current) });
       qc.invalidateQueries({ queryKey: timeEntriesQueryKey });
+      qc.invalidateQueries({ queryKey: queryKeys.timeEntries.myStats });
       toast({ title: "Timer stopped", description: "Time entry saved" });
     },
   });
@@ -611,6 +612,7 @@ export function TaskDetailDrawer({
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: timeEntriesQueryKey });
       qc.invalidateQueries({ queryKey: tenantKey(queryKeys.timeEntries.all) });
+      qc.invalidateQueries({ queryKey: queryKeys.timeEntries.myStats });
     },
   });
 

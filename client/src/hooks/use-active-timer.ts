@@ -2,6 +2,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef, useCallback } from "react";
 import { useAuth } from "@/lib/auth";
 import { apiRequest } from "@/lib/queryClient";
+import { invalidateTimeEntries, optimisticInsertTimeEntryBroad, type CachedTimeEntry } from "@/lib/queryKeys";
 import { useToast } from "@/hooks/use-toast";
 
 export interface ActiveTimer {
@@ -59,17 +60,16 @@ export function useActiveTimer() {
     queryClient.invalidateQueries({ queryKey: [TIMER_QUERY_KEY] });
   }, [queryClient]);
 
-  const broadcastTimerUpdate = useCallback(() => {
+  const broadcastTimerUpdate = useCallback((eventType: "timer-state-change" | "time-entry-changed" = "timer-state-change") => {
     if (broadcastChannelRef.current) {
       try {
-        broadcastChannelRef.current.postMessage({ type: "timer-updated" });
+        broadcastChannelRef.current.postMessage({ type: "timer-updated", eventType });
       } catch {
         // BroadcastChannel may fail in some environments
       }
     }
-    // Fallback: localStorage event for older browsers
     try {
-      localStorage.setItem("timer-sync", Date.now().toString());
+      localStorage.setItem("timer-sync", JSON.stringify({ eventType, ts: Date.now() }));
       localStorage.removeItem("timer-sync");
     } catch {
       // localStorage may be unavailable
@@ -85,6 +85,9 @@ export function useActiveTimer() {
       broadcastChannelRef.current.onmessage = (event) => {
         if (event.data?.type === "timer-updated") {
           invalidateTimer();
+          if (event.data.eventType === "time-entry-changed") {
+            invalidateTimeEntries(queryClient, {});
+          }
         }
       };
     } catch {
@@ -95,6 +98,14 @@ export function useActiveTimer() {
     const handleStorageEvent = (event: StorageEvent) => {
       if (event.key === "timer-sync") {
         invalidateTimer();
+        try {
+          const data = event.newValue ? JSON.parse(event.newValue) : {};
+          if (data.eventType === "time-entry-changed") {
+            invalidateTimeEntries(queryClient, {});
+          }
+        } catch {
+          // ignore parse errors
+        }
       }
     };
     window.addEventListener("storage", handleStorageEvent);
@@ -104,7 +115,7 @@ export function useActiveTimer() {
       broadcastChannelRef.current = null;
       window.removeEventListener("storage", handleStorageEvent);
     };
-  }, [isEligible, invalidateTimer]);
+  }, [isEligible, invalidateTimer, queryClient]);
 
   // Periodic refetch based on timer status
   useEffect(() => {
@@ -295,11 +306,33 @@ export function useActiveTimer() {
       queryClient.setQueryData<ActiveTimer | null>([TIMER_QUERY_KEY], null);
       return { previousTimer };
     },
-    onSuccess: () => {
+    onSuccess: (responseData, variables) => {
       invalidateTimer();
-      broadcastTimerUpdate();
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
+      if (!variables?.discard) {
+        if (responseData && responseData.id) {
+          const entry: CachedTimeEntry = {
+            id: responseData.id,
+            workspaceId: responseData.workspaceId ?? "",
+            userId: responseData.userId ?? "",
+            clientId: responseData.clientId ?? null,
+            projectId: responseData.projectId ?? null,
+            taskId: responseData.taskId ?? null,
+            title: responseData.title ?? null,
+            description: responseData.description ?? null,
+            startTime: responseData.startTime ?? new Date().toISOString(),
+            endTime: responseData.endTime ?? null,
+            durationSeconds: responseData.durationSeconds ?? 0,
+            scope: responseData.scope ?? "in_scope",
+            isManual: false,
+            createdAt: responseData.createdAt ?? new Date().toISOString(),
+          };
+          optimisticInsertTimeEntryBroad(queryClient, entry);
+        }
+        invalidateTimeEntries(queryClient, {});
+        broadcastTimerUpdate("time-entry-changed");
+      } else {
+        broadcastTimerUpdate();
+      }
     },
     onError: (error: Error, _, context) => {
       if (context?.previousTimer) {

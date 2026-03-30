@@ -135,6 +135,260 @@ export const queryKeys = {
 
 export const TIMER_QUERY_KEY = queryKeys.timer.current;
 
+export type TimeEntryDateFilter = "all" | "today" | "week" | "month";
+
+export function timeEntryQueryKeyForFilter(
+  dateFilter: TimeEntryDateFilter,
+): readonly unknown[] {
+  const usePaginated = dateFilter === "all" || dateFilter === "month";
+  if (usePaginated) {
+    return [...queryKeys.timeEntries.paginated, dateFilter];
+  }
+  return [...queryKeys.timeEntries.list, dateFilter];
+}
+
+const TIME_ENTRY_BROADCAST_CHANNEL = "active-timer-sync";
+
+export function broadcastTimeEntryChanged(): void {
+  try {
+    const ch = new BroadcastChannel(TIME_ENTRY_BROADCAST_CHANNEL);
+    ch.postMessage({ type: "timer-updated", eventType: "time-entry-changed" });
+    ch.close();
+  } catch {
+    // BroadcastChannel not supported
+  }
+  try {
+    localStorage.setItem("timer-sync", JSON.stringify({ eventType: "time-entry-changed", ts: Date.now() }));
+    localStorage.removeItem("timer-sync");
+  } catch {
+    // localStorage may be unavailable
+  }
+}
+
+export interface CachedTimeEntry {
+  id: string;
+  workspaceId: string;
+  userId: string;
+  clientId: string | null;
+  projectId: string | null;
+  taskId: string | null;
+  title: string | null;
+  description: string | null;
+  startTime: string;
+  endTime: string | null;
+  durationSeconds: number;
+  scope: "in_scope" | "out_of_scope";
+  isManual: boolean;
+  createdAt: string;
+  client?: { id: string; companyName: string; displayName: string | null };
+  project?: { id: string; name: string };
+  task?: { id: string; title: string };
+  user?: { id: string; name: string; email: string };
+  userName?: string | null;
+  clientName?: string | null;
+  projectName?: string | null;
+  taskTitle?: string | null;
+}
+
+interface PaginatedTimeEntryPage {
+  items: CachedTimeEntry[];
+  hasMore: boolean;
+  nextCursor: string | null;
+  totalCount: number;
+}
+
+type FlatCache = CachedTimeEntry[];
+type PaginatedCache = { pages: PaginatedTimeEntryPage[]; pageParams: (string | null)[] };
+
+function isPaginated(dateFilter: TimeEntryDateFilter): boolean {
+  return dateFilter === "all" || dateFilter === "month";
+}
+
+export function entryMatchesDateFilter(
+  startTimeISO: string,
+  dateFilter: TimeEntryDateFilter,
+): boolean {
+  if (dateFilter === "all") return true;
+
+  const entryDate = new Date(startTimeISO);
+  const now = new Date();
+
+  switch (dateFilter) {
+    case "today": {
+      const todayStr = now.toISOString().slice(0, 10);
+      return entryDate.toISOString().slice(0, 10) === todayStr;
+    }
+    case "week": {
+      const day = now.getDay();
+      const monday = new Date(now);
+      monday.setDate(now.getDate() - ((day + 6) % 7));
+      monday.setHours(0, 0, 0, 0);
+      const sunday = new Date(monday);
+      sunday.setDate(monday.getDate() + 6);
+      sunday.setHours(23, 59, 59, 999);
+      return entryDate >= monday && entryDate <= sunday;
+    }
+    case "month": {
+      return (
+        entryDate.getFullYear() === now.getFullYear() &&
+        entryDate.getMonth() === now.getMonth()
+      );
+    }
+    default:
+      return true;
+  }
+}
+
+export function optimisticRemoveTimeEntry(
+  qc: QueryClient,
+  entryId: string,
+  dateFilter: TimeEntryDateFilter,
+): FlatCache | PaginatedCache | undefined {
+  const key = timeEntryQueryKeyForFilter(dateFilter);
+
+  if (isPaginated(dateFilter)) {
+    const prev = qc.getQueryData<PaginatedCache>(key);
+    if (prev) {
+      qc.setQueryData<PaginatedCache>(key, {
+        ...prev,
+        pages: prev.pages.map((page) => ({
+          ...page,
+          items: page.items.filter((e) => e.id !== entryId),
+          totalCount: Math.max(0, page.totalCount - 1),
+        })),
+      });
+    }
+    return prev;
+  } else {
+    const prev = qc.getQueryData<FlatCache>(key);
+    if (prev) {
+      qc.setQueryData<FlatCache>(key, prev.filter((e) => e.id !== entryId));
+    }
+    return prev;
+  }
+}
+
+export function optimisticUpdateTimeEntry(
+  qc: QueryClient,
+  entryId: string,
+  dateFilter: TimeEntryDateFilter,
+  patch: Partial<CachedTimeEntry>,
+): FlatCache | PaginatedCache | undefined {
+  const key = timeEntryQueryKeyForFilter(dateFilter);
+
+  if (isPaginated(dateFilter)) {
+    const prev = qc.getQueryData<PaginatedCache>(key);
+    if (prev) {
+      qc.setQueryData<PaginatedCache>(key, {
+        ...prev,
+        pages: prev.pages.map((page) => ({
+          ...page,
+          items: page.items.map((e) => (e.id === entryId ? { ...e, ...patch } : e)),
+        })),
+      });
+    }
+    return prev;
+  } else {
+    const prev = qc.getQueryData<FlatCache>(key);
+    if (prev) {
+      qc.setQueryData<FlatCache>(key, prev.map((e) => (e.id === entryId ? { ...e, ...patch } : e)));
+    }
+    return prev;
+  }
+}
+
+export function optimisticInsertTimeEntry(
+  qc: QueryClient,
+  entry: CachedTimeEntry,
+  dateFilter: TimeEntryDateFilter,
+): FlatCache | PaginatedCache | undefined {
+  const key = timeEntryQueryKeyForFilter(dateFilter);
+
+  if (isPaginated(dateFilter)) {
+    const prev = qc.getQueryData<PaginatedCache>(key);
+    if (prev && prev.pages.length > 0) {
+      const firstPage = prev.pages[0];
+      qc.setQueryData<PaginatedCache>(key, {
+        ...prev,
+        pages: [
+          { ...firstPage, items: [entry, ...firstPage.items], totalCount: firstPage.totalCount + 1 },
+          ...prev.pages.slice(1),
+        ],
+      });
+    }
+    return prev;
+  } else {
+    const prev = qc.getQueryData<FlatCache>(key);
+    if (prev) {
+      qc.setQueryData<FlatCache>(key, [entry, ...prev]);
+    }
+    return prev;
+  }
+}
+
+export function optimisticInsertTimeEntryBroad(
+  qc: QueryClient,
+  entry: CachedTimeEntry,
+): void {
+  const filters: TimeEntryDateFilter[] = ["today", "week", "month", "all"];
+  for (const filter of filters) {
+    if (entryMatchesDateFilter(entry.startTime, filter)) {
+      const key = timeEntryQueryKeyForFilter(filter);
+      if (isPaginated(filter)) {
+        const existing = qc.getQueryData<PaginatedCache>(key);
+        if (existing && existing.pages.length > 0) {
+          const firstPage = existing.pages[0];
+          qc.setQueryData<PaginatedCache>(key, {
+            ...existing,
+            pages: [
+              { ...firstPage, items: [entry, ...firstPage.items], totalCount: firstPage.totalCount + 1 },
+              ...existing.pages.slice(1),
+            ],
+          });
+        }
+      } else {
+        const existing = qc.getQueryData<FlatCache>(key);
+        if (existing) {
+          qc.setQueryData<FlatCache>(key, [entry, ...existing]);
+        }
+      }
+    }
+  }
+}
+
+export function rollbackTimeEntryCache(
+  qc: QueryClient,
+  dateFilter: TimeEntryDateFilter,
+  previousData: FlatCache | PaginatedCache | undefined,
+): void {
+  if (previousData !== undefined) {
+    qc.setQueryData(timeEntryQueryKeyForFilter(dateFilter), previousData);
+  }
+}
+
+export function invalidateTimeEntries(
+  qc: QueryClient,
+  opts: {
+    dateFilter?: TimeEntryDateFilter | null;
+    includeStats?: boolean;
+    taskId?: string | null;
+  } = {},
+): void {
+  if (opts.dateFilter) {
+    qc.invalidateQueries({ queryKey: timeEntryQueryKeyForFilter(opts.dateFilter) });
+  } else {
+    qc.invalidateQueries({ queryKey: queryKeys.timeEntries.all });
+  }
+
+  if (opts.includeStats !== false) {
+    qc.invalidateQueries({ queryKey: queryKeys.timeEntries.myStats });
+  }
+
+  if (opts.taskId) {
+    qc.invalidateQueries({ queryKey: queryKeys.tasks.timeEntries(opts.taskId) });
+  }
+}
+
 /**
  * Invalidate all task-related caches after a task mutation.
  *

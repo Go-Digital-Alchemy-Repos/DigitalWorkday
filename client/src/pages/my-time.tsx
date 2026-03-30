@@ -305,7 +305,6 @@ export default function MyTimePage() {
     onSuccess: () => {
       toast({ title: "Timer started" });
       queryClient.invalidateQueries({ queryKey: ["/api/timer/current"] });
-      queryClient.invalidateQueries({ queryKey: ["/api/time-entries/my/stats"] });
     },
     onError: (error: Error) => {
       toast({ 
