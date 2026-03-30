@@ -132,6 +132,10 @@ Run existing smoke tests to verify no regressions:
 npm test -- --grep "smoke|tenancy|workload"
 ```
 
+## SQL-First Aggregation (Completed)
+
+All 6 workload report endpoints have been migrated from N+1 patterns to single-query SQL aggregation. See [`sql-first-aggregation.md`](./sql-first-aggregation.md) for the full audit, strategy guide, and before/after notes.
+
 ## Future Optimization Candidates
 
 1. **Time entries batch fetch**: Similar pattern could be applied to time entry aggregations
@@ -142,6 +146,7 @@ npm test -- --grep "smoke|tenancy|workload"
 ## Related Documentation
 
 - [`sprint-optimization-guide.md`](./sprint-optimization-guide.md) — Full sprint performance guide (10 topics)
+- [`sql-first-aggregation.md`](./sql-first-aggregation.md) — SQL-first aggregation strategy and audit
 - [`db-indexes.md`](./db-indexes.md) — Database index strategy
 - [`frontend-bundle.md`](./frontend-bundle.md) — Frontend bundle analysis
 - [`list-virtualization.md`](./list-virtualization.md) — Virtual list rendering
